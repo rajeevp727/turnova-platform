@@ -304,3 +304,8 @@ Install dependencies in each app folder with `npm install` after pulling the bra
 - JWT validation is local and does not query TriSend on every request. Access tokens remain usable until expiry (15 minutes) if a session is revoked, so logout is not instant access-token revocation.
 - Ride records remain in-memory demo data; authentication and ownership checks do not make ride storage durable.
 - Driver onboarding/KYC approval is not implemented; authenticated Driver role alone is not production eligibility.
+
+
+## Cosmos DB runtime configuration and readiness
+
+Set `CosmosDb__Endpoint`, `CosmosDb__Key`, and optionally `CosmosDb__DatabaseName` in .NET User Secrets or the API hosting provider's secret store. The endpoint must use HTTPS and the account key must never be committed or exposed to mobile apps. `GET /health` is process-level health; `GET /health/ready` checks database reachability and returns 503 if Cosmos is unavailable. Local in-memory mode reports ready without Cosmos credentials. The migration lease currently expires after 30 minutes and is not renewed; keep migrations short until lease renewal is implemented. Cosmos migration concurrency and readiness failure-injection scenarios still require a real development account.
