@@ -26,7 +26,8 @@
     "expo-sharing": "~14.0.7",
     "react-native-svg": "~15.12.1",
     "sharp": "^0.34.2",
-    "expo-image-picker": "~17.0.8"
+    "expo-image-picker": "~17.0.8",
+    "expo-image-manipulator": "~14.0.7"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
