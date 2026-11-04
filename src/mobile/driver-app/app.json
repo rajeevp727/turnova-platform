@@ -16,6 +16,14 @@
         "backgroundColor": "#061D3D"
       }
     },
-    "icon": "./assets/icon.png"
+    "icon": "./assets/icon.png",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow TurnOva to take a driver profile selfie for union membership."
+        }
+      ]
+    ]
   }
 }

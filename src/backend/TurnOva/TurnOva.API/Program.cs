@@ -212,6 +212,18 @@ async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditForPeriodAsync(str
     return all.Where(item => item.OccurredAtUtc < end).OrderBy(item => item.OccurredAtUtc).ToArray();
 }
 
+bool IsValidDriverSelfie(string? base64)
+{
+    if (string.IsNullOrWhiteSpace(base64) || base64.Length > 410_000) return false;
+    try
+    {
+        var bytes = Convert.FromBase64String(base64);
+        return bytes.Length is > 0 and <= 300_000 &&
+            bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
+    }
+    catch (FormatException) { return false; }
+}
+
 bool IsOpsAuthorized(HttpContext context)
 {
     var configuredKey = app.Configuration["DriverOnboarding:AdminApiKey"];
@@ -460,10 +472,30 @@ onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
     var profile = await FindDriverProfileAsync(driverId, ct);
     return profile is null ? Results.NoContent() : Results.Ok(profile);
 });
+onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest request, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
+        return Results.BadRequest(new { message = "Provide a valid JPEG selfie no larger than 300 KB." });
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.NotFound(new { message = "Complete driver onboarding before adding a profile selfie." });
+    var updated = profile with
+    {
+        ProfilePhotoBase64 = request.ProfilePhotoBase64,
+        ProfilePhotoContentType = "image/jpeg",
+        ProfilePhotoCapturedAtUtc = DateTimeOffset.UtcNow
+    };
+    await SaveDriverProfileAsync(updated, ct);
+    return Results.Ok(updated);
+});
+
 onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest request, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
+        return Results.BadRequest(new { message = "A valid JPEG selfie is required. Capture it in the app; maximum decoded size is 300 KB." });
     if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length > 120 ||
         string.IsNullOrWhiteSpace(request.ZoneId) || request.ZoneId.Trim().Length > 80 ||
         string.IsNullOrWhiteSpace(request.PhoneNumber) || request.PhoneNumber.Any(c => !char.IsDigit(c) && c != '+') ||
@@ -490,9 +522,21 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         request.VehicleMake.Trim(), request.VehicleModel.Trim(), request.VehicleRegistration.Trim().ToUpperInvariant(),
         request.ServiceClass, request.PassengerCapacity,
         request.Documents.Select(document => new DriverDocumentReference(document.DocumentType, document.StorageReference)).ToArray(),
-        "Pending", existing?.SubmittedAtUtc ?? DateTimeOffset.UtcNow);
+        "Pending", existing?.SubmittedAtUtc ?? DateTimeOffset.UtcNow,
+        ProfilePhotoBase64: request.ProfilePhotoBase64,
+        ProfilePhotoContentType: "image/jpeg",
+        ProfilePhotoCapturedAtUtc: DateTimeOffset.UtcNow);
     await SaveDriverProfileAsync(profile, ct);
     return Results.Accepted("/api/v1/driver/onboarding/me", profile);
+});
+
+app.MapGet("/api/v1/ops/drivers/{driverId}", async (HttpContext context, string driverId, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.NotFound(new { message = "Driver profile not found." });
+    var assignment = await FindUnionAssignmentAsync(driverId, ct);
+    return Results.Ok(new { driver = profile, unionAssignment = assignment });
 });
 
 app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
@@ -587,13 +631,60 @@ opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionI
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
     var union = await FindUnionAsync(unionId, ct);
     if (union is null) return Results.NotFound();
+    IReadOnlyList<DriverUnionAssignment> assignments;
     if (unionAssignmentContainer is null)
-        return Results.Ok(unionAssignments.Values.Where(item => item.UnionId == unionId && item.Status == "Active"));
-    var query = new QueryDefinition("SELECT * FROM c WHERE c.unionId = @unionId AND c.status = 'Active'").WithParameter("@unionId", unionId);
-    var results = new List<DriverUnionAssignment>();
-    using var iterator = unionAssignmentContainer.GetItemQueryIterator<DriverUnionAssignment>(query);
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
-    return Results.Ok(results);
+        assignments = unionAssignments.Values.Where(item => item.UnionId == unionId && item.Status == "Active").ToArray();
+    else
+    {
+        var query = new QueryDefinition("SELECT * FROM c WHERE c.unionId = @unionId AND c.status = 'Active'").WithParameter("@unionId", unionId);
+        var results = new List<DriverUnionAssignment>();
+        using var iterator = unionAssignmentContainer.GetItemQueryIterator<DriverUnionAssignment>(query);
+        while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+        assignments = results;
+    }
+
+    var drivers = new List<object>();
+    foreach (var assignment in assignments)
+    {
+        var profile = await FindDriverProfileAsync(assignment.DriverId, ct);
+        if (profile is null) continue;
+        drivers.Add(new
+        {
+            assignment.DriverId, assignment.UnionId, assignment.UnionName, assignment.Status,
+            assignment.AssignedAtUtc, assignment.UpdatedAtUtc, assignment.AssignmentReason,
+            Driver = new
+            {
+                profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
+                profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
+                profile.ServiceClass, profile.PassengerCapacity, profile.Status,
+                profile.ProfilePhotoBase64, profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc
+            }
+        });
+    }
+    return Results.Ok(drivers);
+});
+
+opsUnions.MapGet("/{unionId}/drivers/{driverId}", async (HttpContext context, string unionId, string driverId, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    var union = await FindUnionAsync(unionId, ct);
+    if (union is null) return Results.NotFound(new { message = "Union not found." });
+    var assignment = await FindUnionAssignmentAsync(driverId, ct);
+    if (assignment is null || assignment.UnionId != unionId || assignment.Status != "Active")
+        return Results.NotFound(new { message = "Driver is not an active member of this union." });
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.NotFound(new { message = "Driver profile not found." });
+    return Results.Ok(new
+    {
+        assignment,
+        driver = new
+        {
+            profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
+            profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
+            profile.ServiceClass, profile.PassengerCapacity, profile.Status,
+            profile.ProfilePhotoBase64, profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc
+        }
+    });
 });
 
 app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
@@ -605,6 +696,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.NotFound(new { message = "Driver onboarding profile not found." });
     if (profile.Status != "Approved") return Results.Conflict(new { message = "Only approved drivers can be assigned to a union." });
+    if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
+        return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
     var union = await FindUnionAsync(request.UnionId, ct);
     if (union is null) return Results.NotFound(new { message = "Union not found." });
     if (union.Status != "Active") return Results.Conflict(new { message = "Drivers can only be assigned to an active union." });
@@ -977,7 +1070,8 @@ app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
-public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents);
+public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);
+public sealed record DriverSelfieRequest(string ProfilePhotoBase64);
 public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateUnionRequest(string Name, string Code, string? Location, string? ManagerName, string? ManagerPhone, IReadOnlyList<string> ZoneIds, IReadOnlyList<string> ServiceClasses);
 public sealed record UpdateUnionStatusRequest(string Status);

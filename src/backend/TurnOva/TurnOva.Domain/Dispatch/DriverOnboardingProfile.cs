@@ -20,4 +20,7 @@ public sealed record DriverOnboardingProfile(
     string Status,
     DateTimeOffset SubmittedAtUtc,
     DateTimeOffset? ReviewedAtUtc = null,
-    string? ReviewReason = null);
+    string? ReviewReason = null,
+    string? ProfilePhotoBase64 = null,
+    string? ProfilePhotoContentType = null,
+    DateTimeOffset? ProfilePhotoCapturedAtUtc = null);
