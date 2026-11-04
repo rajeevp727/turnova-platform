@@ -309,3 +309,15 @@ Install dependencies in each app folder with `npm install` after pulling the bra
 ## Cosmos DB runtime configuration and readiness
 
 Set `CosmosDb__Endpoint`, `CosmosDb__Key`, and optionally `CosmosDb__DatabaseName` in .NET User Secrets or the API hosting provider's secret store. The endpoint must use HTTPS and the account key must never be committed or exposed to mobile apps. `GET /health` is process-level health; `GET /health/ready` checks database reachability and returns 503 if Cosmos is unavailable. Local in-memory mode reports ready without Cosmos credentials. The migration lease currently expires after 30 minutes and is not renewed; keep migrations short until lease renewal is implemented. Cosmos migration concurrency and readiness failure-injection scenarios still require a real development account.
+
+
+## 11. Driver onboarding and eligibility (PR #10)
+
+- Driver profile submission: `POST /api/v1/driver/onboarding`.
+- Driver status: `GET /api/v1/driver/onboarding/me`.
+- Review decision: `POST /api/v1/ops/drivers/{driverId}/review` with `X-Driver-Admin-Key`.
+- Configure `DriverOnboarding__AdminApiKey` in the API host secret store (minimum 32 random characters recommended). Never place it in either mobile app.
+- Driver profile and vehicle/document metadata are stored in the existing Cosmos `Drivers` container (partition `/driverId`); local demo mode uses in-memory storage.
+- Queue join, available-ride discovery and ride acceptance are blocked unless the driver's profile status is `Approved`.
+- The API accepts only opaque private object-storage references; it does not upload, serve or verify identity documents.
+- The API-key review endpoint is temporary until authenticated Ops roles/permissions and an Ops portal are implemented.
