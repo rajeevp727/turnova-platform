@@ -25,6 +25,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("Home");
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [online, setOnline] = useState(true);
   const [message, setMessage] = useState("Ready for your next turn.");
   const [error, setError] = useState("");
 
@@ -79,6 +80,9 @@ export default function App() {
           <Text style={styles.title}>Good day, Driver</Text>
           <Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text>
           <View style={styles.card}>
+            <View style={styles.row}><Text style={styles.cardLabel}>DRIVER AVAILABILITY</Text><Text style={online ? styles.status : styles.offline}>{online ? "ONLINE" : "OFFLINE"}</Text></View>
+            <Pressable style={styles.availability} onPress={() => setOnline(!online)}><Text style={styles.availabilityText}>{online ? "Go offline" : "Go online"}</Text></Pressable>
+            <View style={styles.line} />
             <Text style={styles.cardLabel}>YOUR SERVICE ZONE</Text>
             <Text style={styles.cardTitle}>Hyderabad Central</Text>
             <Text style={styles.muted}>Auto · Standard queue</Text>
@@ -98,9 +102,9 @@ export default function App() {
             <View style={styles.row}><Text style={styles.cardTitle}>Queue status</Text><Pressable onPress={loadQueue}><Text style={styles.link}>Refresh</Text></Pressable></View>
             <Text style={styles.position}>{myPosition ? `#${myPosition}` : "Not joined"}</Text>
             <Text style={styles.muted}>{myPosition ? "Your current position" : "You are not in this queue yet."}</Text>
-            <Pressable style={styles.primary} onPress={joinQueue} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : myPosition ? "Refresh my position" : "Join FIFO queue"}</Text></Pressable>
+            <Pressable style={styles.primary} onPress={() => myPosition ? loadQueue() : joinQueue()} disabled={loading || !online}><Text style={styles.primaryText}>{loading ? "Please wait…" : myPosition ? "Refresh my position" : online ? "Join FIFO queue" : "Go online to join"}</Text></Pressable>
           </View>
-          <Text style={styles.sectionTitle}>Drivers ahead and in queue</Text>
+          <Text style={styles.sectionTitle}>Drivers in queue</Text>
           {queue.map(item => <View key={item.driverId} style={styles.queueItem}>
             <View style={styles.rank}><Text style={styles.rankText}>{item.position}</Text></View>
             <View style={{ flex: 1 }}><Text style={styles.driverName}>{item.driverId}</Text><Text style={styles.muted}>Joined {new Date(item.joinedAt).toLocaleTimeString()}</Text></View>
@@ -142,6 +146,8 @@ const styles = StyleSheet.create({
   infoTitle: { color: "#172B42", fontSize: 16, fontWeight: "800" },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   link: { color: "#C47A21", fontWeight: "800" },
+  availability: { alignSelf: "flex-start", backgroundColor: "#F0F3F6", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 9 },
+  availabilityText: { color: "#30445A", fontWeight: "800", fontSize: 12 },
   sectionTitle: { color: "#172B42", fontSize: 17, fontWeight: "800", marginTop: 10, marginBottom: 10 },
   queueItem: { backgroundColor: "#FFFFFF", borderRadius: 14, padding: 13, marginBottom: 9, flexDirection: "row", alignItems: "center", gap: 12 },
   rank: { width: 34, height: 34, borderRadius: 11, backgroundColor: "#F9EBD8", alignItems: "center", justifyContent: "center" },
@@ -149,10 +155,11 @@ const styles = StyleSheet.create({
   driverName: { color: "#20354B", fontWeight: "800" },
   you: { color: "#B66D1D", fontSize: 10, fontWeight: "900" },
   status: { color: "#21845A", fontWeight: "800", marginTop: 7, marginBottom: 8 },
+  offline: { color: "#B54708", fontWeight: "800", fontSize: 10 },
   error: { color: "#B42318", marginTop: 12, fontSize: 13 },
   success: { color: "#237A54", marginTop: 10, fontSize: 13 },
   tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E7EBEF", paddingTop: 10, paddingBottom: 16 },
   tab: { flex: 1, alignItems: "center", paddingVertical: 7 },
   tabText: { color: "#8793A2", fontSize: 12, fontWeight: "700" },
   tabActive: { color: "#C47A21" }
-});
+});`
