@@ -169,6 +169,27 @@ app.MapGet("/health", () => Results.Ok(new
     database = useCosmos ? databaseName : null
 }));
 
+app.MapGet("/health/ready", async (CancellationToken ct) =>
+{
+    if (!useCosmos)
+        return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode });
+
+    try
+    {
+        await app.Services.GetRequiredService<CosmosClient>()
+            .GetDatabase(databaseName).ReadAsync(cancellationToken: ct);
+        return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode, database = databaseName });
+    }
+    catch (CosmosException ex)
+    {
+        app.Logger.LogWarning(ex, "Cosmos DB readiness check failed.");
+        return Results.Problem(
+            "The configured Cosmos DB database is not reachable.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            title: "Storage dependency unavailable");
+    }
+});
+
 
 var authGroup = app.MapGroup("/api/v1/auth");
 authGroup.MapPost("/{role}/register", async (
