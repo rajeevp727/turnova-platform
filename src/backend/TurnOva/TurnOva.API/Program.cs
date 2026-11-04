@@ -344,7 +344,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         request.PassengerCapacity is < 1 or > 8 ||
         request.ServiceClass is not ("auto" or "mini" or "sedan" or "suv") ||
         request.Documents is null || request.Documents.Count is < 1 or > 8 ||
-        request.Documents.Any(document =>
+        request.Documents.Any(document => document is null ||
             document.DocumentType is not ("DrivingLicence" or "VehicleRegistration" or "Insurance" or "Permit" or "ProfilePhoto") ||
             string.IsNullOrWhiteSpace(document.StorageReference) || document.StorageReference.Length > 200 ||
             document.StorageReference.Contains("..", StringComparison.Ordinal) ||
