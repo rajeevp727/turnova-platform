@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using TurnOva.Domain.Dispatch;
 
 namespace TurnOva.Tests;
 
@@ -29,6 +30,77 @@ public sealed class RideApiIntegrationTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    [Fact]
+    public async Task DriverMustSubmitOnboardingAndBeApprovedBeforeJoiningQueue()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-onboarding-pending");
+
+        var submission = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest());
+        Assert.Equal(HttpStatusCode.Accepted, submission.StatusCode);
+
+        var profile = await driver.GetFromJsonAsync<DriverOnboardingProfile>("/api/v1/driver/onboarding/me");
+        Assert.NotNull(profile);
+        Assert.Equal("Pending", profile.Status);
+
+        var join = await driver.PostAsJsonAsync("/api/v1/queues/join",
+            new { zoneId = "hyderabad-central", serviceClass = "auto" });
+        Assert.Equal(HttpStatusCode.Conflict, join.StatusCode);
+
+        using var approval = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-onboarding-pending/review")
+        {
+            Content = JsonContent.Create(new { status = "Approved", reason = (string?)null })
+        };
+        approval.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key");
+        var approved = await driver.SendAsync(approval);
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+
+        var joined = await driver.PostAsJsonAsync("/api/v1/queues/join",
+            new { zoneId = "hyderabad-central", serviceClass = "auto" });
+        Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
+    }
+
+    [Fact]
+    public async Task InvalidOnboardingMetadataIsRejectedAndSuspendedDriverCannotAcceptRide()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-onboarding-suspended");
+        using var rider = factory.CreateClient("Rider", "rider-onboarding-suspended");
+
+        var invalid = await driver.PostAsJsonAsync("/api/v1/driver/onboarding",
+            new { fullName = "Driver", phoneNumber = "123", vehicleMake = "T", vehicleModel = "M",
+                vehicleRegistration = "TS01AA1234", serviceClass = "auto", passengerCapacity = 2,
+                documents = new[] { new { documentType = "DrivingLicence", storageReference = "https://example.com/doc.pdf" } } });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        var ride = await CreateRideAsync(rider, "request-suspended-driver-001");
+        using var review = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-onboarding-suspended/review")
+        {
+            Content = JsonContent.Create(new { status = "Suspended", reason = "Verification failed" })
+        };
+        review.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key");
+        Assert.Equal(HttpStatusCode.OK, (await driver.SendAsync(review)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null)).StatusCode);
+    }
+
+    private static object ValidOnboardingRequest() => new
+    {
+        fullName = "Test Driver",
+        phoneNumber = "+919876543210",
+        vehicleMake = "Bajaj",
+        vehicleModel = "RE",
+        vehicleRegistration = "TS09AB1234",
+        serviceClass = "auto",
+        passengerCapacity = 3,
+        documents = new[]
+        {
+            new { documentType = "DrivingLicence", storageReference = "drivers/test/licence" },
+            new { documentType = "VehicleRegistration", storageReference = "drivers/test/rc" }
+        }
+    };
 
     [Fact]
     public async Task RiderCanCreateRideAndRepeatRequestWithoutCreatingDuplicate()
@@ -202,7 +274,8 @@ public sealed class RideApiIntegrationTests
                     ["Auth:Jwt:Issuer"] = Issuer,
                     ["Auth:Jwt:Audience"] = Audience,
                     ["Auth:Jwt:SigningKey"] = SigningKey,
-                    ["TriSend:BaseUrl"] = "https://localhost:7443"
+                    ["TriSend:BaseUrl"] = "https://localhost:7443",
+                    ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key"
                 }));
         }
 
@@ -215,6 +288,15 @@ public sealed class RideApiIntegrationTests
             });
             client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", CreateToken(role, subject));
+            if (role == "Driver")
+            {
+                var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+                profiles[subject] = new DriverOnboardingProfile(
+                    subject, subject, "Approved Test Driver", "+919876543210",
+                    "Bajaj", "RE", "TS09AB1234", "auto", 3,
+                    [new DriverDocumentReference("DrivingLicence", "test/licence")],
+                    "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+            }
             return client;
         }
 
