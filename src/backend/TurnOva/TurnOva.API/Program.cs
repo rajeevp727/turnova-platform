@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
@@ -30,7 +31,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
-        options.Events = new JwtBearerEvents\n    {\n        OnMessageReceived = context =>\n        {\n            var accessToken = context.Request.Query["access_token"];\n            if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/rides"))\n                context.Token = accessToken;\n            return Task.CompletedTask;\n        }\n    };\n    options.TokenValidationParameters = new TokenValidationParameters
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/rides"))
+                    context.Token = accessToken;
+                return Task.CompletedTask;
+            }
+        };\n    options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidIssuer = jwtIssuer,
@@ -386,7 +396,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     {
         if (!rides.TryGetValue(rideId, out var current) || current.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
-        var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow };
+        var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         return rides.TryUpdate(rideId, acceptedInMemory, current)
             ? Results.Ok(acceptedInMemory)
             : Results.Conflict(new { message = "Another driver accepted this ride." });
@@ -396,7 +406,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         var response = await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct);
         if (response.Resource.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
-        var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow };
+        var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
         return Results.Ok(accepted);
@@ -407,13 +417,13 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     if (location.Latitude is < -90 or > 90 || location.Longitude is < -180 or > 180)
         return Results.BadRequest(new { message = "Invalid coordinates." });
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
-    if (ride is null || ride.DriverId != driverId || ride.Status is not ("Accepted" or "InProgress"))
+    if (ride is null || ride.DriverId != driverId || !ride.LocationSharingActive || ride.Status is not ("Accepted" or "Arrived" or "InProgress"))
         return Results.NotFound(new { message = "Active ride not found." });
     var updated = ride with { DriverLatitude = location.Latitude, DriverLongitude = location.Longitude, LocationUpdatedAt = DateTimeOffset.UtcNow };
     await SaveRideAsync(updated, ct);
@@ -421,15 +431,15 @@ app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, stri
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/arrive", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
-    TransitionRideAsync(user, rideId, "Accepted", "Arrived", true, ct))
+    TransitionRideAsync(user, rideId, "Accepted", "Arrived", ct))
     .RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/start", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
-    TransitionRideAsync(user, rideId, "Arrived", "InProgress", true, ct))
+    TransitionRideAsync(user, rideId, "Arrived", "InProgress", ct))
     .RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/complete", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
-    TransitionRideAsync(user, rideId, "InProgress", "Completed", true, ct))
+    TransitionRideAsync(user, rideId, "InProgress", "Completed", ct))
     .RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
@@ -445,7 +455,7 @@ app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string
     return Results.Ok(updated);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
-async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, string expected, string next, bool driverOnly, CancellationToken ct)
+async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, string expected, string next, CancellationToken ct)
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
@@ -488,7 +498,8 @@ app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null);
-public sealed record DriverLocationRequest(double Latitude, double Longitude);\npublic sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
+public sealed record DriverLocationRequest(double Latitude, double Longitude);
+public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
 public sealed record RefreshTokenRequest(string RefreshToken);
