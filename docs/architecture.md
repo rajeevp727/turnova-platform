@@ -184,3 +184,12 @@ Email/password only is in scope. Google/Microsoft OAuth and SSO are explicitly e
 ## 16. Ride persistence and location tracking
 
 Ride requests are written to the `Rides` Cosmos DB container (partition key `/rideId`) when Cosmos is configured; local demo mode uses process memory. Drivers can list requested rides and accept one. Only the authenticated assigned driver can submit GPS coordinates for an accepted ride. The rider can read its own ride and latest driver coordinates. The Rider app polls the authoritative ride resource every five seconds while the Activity screen is open and displays the driver and pickup markers on a native map. Driver foreground location collection is permission-gated and stops when the Trips screen is left or the app unmounts. This is a foreground/demo implementation: production requires ETag/conditional acceptance to prevent concurrent claims, a proper active-trip lifecycle, background location policy and permissions, throttling, retention, map-provider review, and device E2E tests.
+
+
+## 17. Ride lifecycle and realtime tracking
+
+Ride state transitions are server-authoritative: `Requested → Accepted → Arrived → InProgress → Completed`. A Rider may cancel only before the trip starts (`Requested`, `Accepted`, or `Arrived`). State changes use conditional Cosmos writes (ETags) and atomic in-memory updates. Location sharing is active only for `Accepted`, `Arrived`, and `InProgress`; terminal states disable it. Rider ride creation requires an `Idempotency-Key` header; Cosmos mode reserves the hashed key in the `RideIdempotency` container partitioned by rider, while local demo mode uses a concurrent in-memory key registry.
+
+The Rider connects to `/hubs/rides?rideId={rideId}` using its JWT. The hub verifies Rider role and ride ownership before joining the ride-specific SignalR group. Assigned Driver location updates and ride-state changes are broadcast to that group. The Driver app sends foreground GPS updates only while the Trips screen is active and the ride is in a location-sharing state. SignalR is used for rider updates; no periodic polling is required by the normal connected path.
+
+Operational safeguards still required before production: configure a restrictive CORS origin allow-list, rate-limit location updates, define location retention/deletion policy, monitor SignalR scale-out/backplane needs, and run multi-instance Cosmos concurrency and mobile-device acceptance tests.
