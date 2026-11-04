@@ -95,3 +95,18 @@ This repository currently contains product documentation and the agreed initial 
 ## MVP development notes
 
 See [DEV_NOTES.md](./DEV_NOTES.md) for the consolidated API, Cosmos DB, and Driver/Rider UI feature notes for the Monday demo. Current demo endpoints and screens use synthetic data and an in-memory backend store; they are not production-ready.
+
+## Authentication setup
+
+Email/password authentication uses the TriSend Auth API. SSO is intentionally out of scope.
+
+Configure the TurnOva API host with:
+
+```text
+TriSend__BaseUrl=https://auth.trisend.rajeevstech.in
+Auth__Jwt__Issuer=<same value as TriSend Auth:Jwt:Issuer>
+Auth__Jwt__Audience=<same value as TriSend Auth:Jwt:Audience>
+Auth__Jwt__SigningKey=<same secret as TriSend Auth:Jwt:SigningKey>
+```
+
+The JWT settings must match TriSend exactly. Keep the signing key in .NET User Secrets or the hosting provider's secret store; never add it to mobile `.env` files or source control. See [DEV_NOTES.md](./DEV_NOTES.md#10-emailpassword-authentication-feature-2) for API routes, local setup and security boundaries.
