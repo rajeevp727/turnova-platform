@@ -97,7 +97,7 @@ Model join, unavailable, on-trip, leave, rejoin, offer-pending, accepted, reject
 ## 7. Cosmos DB data design
 
 Candidate entities/containers:
-- Profiles and onboarding records.
+- Profiles and onboarding records, including a size-limited JPEG driver selfie stored as Base64 in the driver profile for authenticated union membership views.
 - Vehicles and document metadata.
 - Service zones and configuration.
 - Queue memberships and queue events.
