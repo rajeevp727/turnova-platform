@@ -335,9 +335,9 @@ export default function App() {
         <Text style={styles.eyebrow}>DRIVER PARTNER</Text><Text style={styles.title}>{mode === "login" ? "Welcome back" : "Create your account"}</Text>
         <Text style={styles.sub}>Sign in securely with your email and password.</Text>{themePicker}
         <View style={styles.card}>
-          {mode === "register" && <TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Full name" autoCapitalize="words" />}
-          <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-          <TextInput value={password} onChangeText={setPassword} style={styles.input} placeholder="Password" secureTextEntry />
+          {mode === "register" && <TextInput value={name} onChangeText={setName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full name" autoCapitalize="words" />}
+          <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholderTextColor={colors.muted} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+          <TextInput value={password} onChangeText={setPassword} style={styles.input} placeholderTextColor={colors.muted} placeholder="Password" secureTextEntry />
           <Pressable style={styles.primary} disabled={loading || !email.trim() || !password} onPress={() => void authenticate()}><Text style={styles.primaryText}>{loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create driver account"}</Text></Pressable>
           <Pressable onPress={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}><Text style={styles.link}>{mode === "login" ? "New to TurnOva? Create an account" : "Already registered? Sign in"}</Text></Pressable>
           {!!error && <Text style={styles.error}>{error}</Text>}
@@ -360,15 +360,15 @@ export default function App() {
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
         {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
           <Text style={styles.sub}>Complete your driver and vehicle details. Your application will remain pending until reviewed.</Text>
-          <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholder="Full legal name" />
-          <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholder="Phone number with country code" keyboardType="phone-pad" />
-          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholder="Vehicle make (e.g. Bajaj)" />
-          <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={styles.input} placeholder="Vehicle model" />
-          <TextInput value={vehicleRegistration} onChangeText={setVehicleRegistration} style={styles.input} placeholder="Vehicle registration number" autoCapitalize="characters" />
+          <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full legal name" />
+          <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholderTextColor={colors.muted} placeholder="Phone number with country code" keyboardType="phone-pad" />
+          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Bajaj)" />
+          <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle model" />
+          <TextInput value={vehicleRegistration} onChangeText={setVehicleRegistration} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle registration number" autoCapitalize="characters" />
           <Text style={styles.label}>PRIVATE DOCUMENT STORAGE REFERENCES</Text>
           <Text style={styles.muted}>Upload files to your approved private storage workflow first. Enter opaque object references, not public URLs.</Text>
-          <TextInput value={licenceReference} onChangeText={setLicenceReference} style={styles.input} placeholder="Driving licence object reference" autoCapitalize="none" />
-          <TextInput value={registrationReference} onChangeText={setRegistrationReference} style={styles.input} placeholder="Vehicle RC object reference" autoCapitalize="none" />
+          <TextInput value={licenceReference} onChangeText={setLicenceReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Driving licence object reference" autoCapitalize="none" />
+          <TextInput value={registrationReference} onChangeText={setRegistrationReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle RC object reference" autoCapitalize="none" />
           <Pressable style={styles.primary} disabled={loading || !driverName.trim() || !phoneNumber.trim() || !vehicleMake.trim() || !vehicleModel.trim() || !vehicleRegistration.trim() || !licenceReference.trim() || !registrationReference.trim()} onPress={() => void submitOnboarding()}><Text style={styles.primaryText}>{loading ? "Please wait…" : onboardingProfile ? "Resubmit for review" : "Submit for approval"}</Text></Pressable>
         </>}
       </View><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
