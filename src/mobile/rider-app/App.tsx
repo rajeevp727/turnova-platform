@@ -5,7 +5,7 @@ import {
   Text, TextInput, View
 } from "react-native";
 
-const API_BASE_URL = "http://10.0.2.2:5000"; // Android emulator; use your computer's LAN IP on a physical phone.
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000"; // Override in each app .env for your device.
 type Tab = "Book" | "Activity" | "Offers" | "Profile";
 type Ride = { rideId: string; pickup: string; dropoff: string; passengers: number; status: string; estimatedFareInr: number };
 
