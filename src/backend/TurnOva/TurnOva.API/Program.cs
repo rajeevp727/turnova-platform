@@ -530,6 +530,15 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
     return Results.Accepted("/api/v1/driver/onboarding/me", profile);
 });
 
+app.MapGet("/api/v1/ops/drivers/{driverId}", async (HttpContext context, string driverId, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.NotFound(new { message = "Driver profile not found." });
+    var assignment = await FindUnionAssignmentAsync(driverId, ct);
+    return Results.Ok(new { driver = profile, unionAssignment = assignment });
+});
+
 app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
     HttpContext context, string driverId, DriverReviewRequest request, QueueService queueService, CancellationToken ct) =>
 {
