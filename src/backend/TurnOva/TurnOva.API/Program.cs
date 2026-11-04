@@ -343,12 +343,29 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    var ride = await FindRideAsync(rideId, ct);
-    if (ride is null) return Results.NotFound();
-    if (ride.Status != "Requested") return Results.Conflict(new { message = "This ride is no longer available." });
-    var accepted = ride with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow };
-    await SaveRideAsync(accepted, ct);
-    return Results.Ok(accepted);
+    if (rideContainer is null)
+    {
+        if (!rides.TryGetValue(rideId, out var current) || current.Status != "Requested")
+            return Results.Conflict(new { message = "This ride is no longer available." });
+        var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow };
+        return rides.TryUpdate(rideId, acceptedInMemory, current)
+            ? Results.Ok(acceptedInMemory)
+            : Results.Conflict(new { message = "Another driver accepted this ride." });
+    }
+    try
+    {
+        var response = await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct);
+        if (response.Resource.Status != "Requested")
+            return Results.Conflict(new { message = "This ride is no longer available." });
+        var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow };
+        await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
+            new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+        return Results.Ok(accepted);
+    }
+    catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+    {
+        return Results.Conflict(new { message = "This ride is no longer available." });
+    }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, CancellationToken ct) =>
@@ -363,6 +380,17 @@ app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, stri
     await SaveRideAsync(updated, ct);
     return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+{
+    var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var ride = await FindRideAsync(rideId, ct);
+    if (ride is null || ride.RiderId != riderId) return Results.NotFound();
+    if (ride.Status is "Completed" or "Cancelled") return Results.Conflict(new { message = "Ride is already closed." });
+    var cancelled = ride with { Status = "Cancelled" };
+    await SaveRideAsync(cancelled, ct);
+    return Results.Ok(cancelled);
+}).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
 {
