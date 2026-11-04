@@ -320,3 +320,21 @@ Payslip output is PDF only. Monetary calculations are intentionally absent until
 | THEME-010 | Dark theme primary action | Text remains legible against the accent button |
 
 Validate on Android and iOS physical devices, including system appearance changes and map rendering.
+
+
+## Driver selfie and union membership profile
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| UNION-SELFIE-001 | Capture selfie during driver onboarding | Grant camera permission, use front camera, capture a clear face photo | JPEG is compressed, previewed and submitted with onboarding | Mobile | P0 |
+| UNION-SELFIE-002 | Camera permission denied | Deny camera permission | App explains permission is required; no empty or invalid image is submitted | Mobile | P1 |
+| UNION-SELFIE-003 | Missing selfie | Submit onboarding without a selfie | API returns HTTP 400; no profile is created | API + mobile | P0 |
+| UNION-SELFIE-004 | Invalid Base64 or non-JPEG content | Submit malformed Base64 or a non-JPEG payload | API returns HTTP 400 and does not persist the payload | API + security | P0 |
+| UNION-SELFIE-005 | Oversized selfie | Submit a decoded image larger than 300 KB | API returns HTTP 400; client asks driver to retake/compress | API + mobile | P1 |
+| UNION-SELFIE-006 | Existing approved driver adds selfie | Capture and save selfie through the authenticated selfie endpoint | Only the authenticated driver's own profile is updated | API + security | P0 |
+| UNION-SELFIE-007 | Union assignment without selfie | Attempt to assign an approved driver with no selfie | API returns HTTP 409 and explains selfie capture is required | API | P0 |
+| UNION-SELFIE-008 | Union driver list shows photo | Fetch active union members | Each result includes driver profile details and Base64 selfie for authorized operations clients | API + UI | P0 |
+| UNION-SELFIE-009 | Union driver details show photo | Fetch one active member by union and driver ID | Response includes profile, selfie metadata and active union assignment | API + UI | P0 |
+| UNION-SELFIE-010 | Transfer between unions | Transfer a driver with an existing selfie | Same profile photo remains attached to the driver across union assignments | API | P1 |
+| UNION-SELFIE-011 | Unauthorized profile access | Call operations driver/union detail endpoints without valid admin authorization | HTTP 401; no selfie data is returned | API + security | P0 |
+| UNION-SELFIE-012 | Driver profile displays selfie | Open the driver's Profile tab | Saved selfie is displayed; driver can retake/update it | Mobile | P1 |
