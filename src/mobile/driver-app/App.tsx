@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import * as SecureStore from "expo-secure-store";
 import * as Location from "expo-location";
+import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -164,6 +165,23 @@ export default function App() {
 
   const loadAvailableRides = async () => { try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); } catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); } };
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
+  useEffect(() => {
+    if (!user || tab !== "Trips" || !activeRide) return;
+    const connection = new HubConnectionBuilder()
+      .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
+        accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens?.accessToken ?? "",
+        transport: HttpTransportType.WebSockets
+      })
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
+    connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
+      if (update.rideId === activeRide.rideId) setActiveRide((current: any) => current ? { ...current, status: update.status, locationSharingActive: ["Accepted", "Arrived", "InProgress"].includes(update.status) } : current);
+    });
+    void connection.start().catch(() => {});
+    return () => { void connection.stop(); };
+  }, [user, tab, activeRide?.rideId, tokens?.accessToken]);
+
   useEffect(() => { if (!user || tab !== "Trips" || !activeRide || !activeRide.locationSharingActive || !["Accepted", "Arrived", "InProgress"].includes(activeRide.status)) return; let subscription: Location.LocationSubscription | undefined; let mounted = true; (async () => { const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) { setError("Location permission is required to share your position with the rider."); return; } subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 }, location => { if (mounted) void apiFetch(`/api/v1/rides/${activeRide.rideId}/location`, { method: "POST", body: JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }) }).catch(e => setError(e instanceof Error ? e.message : "Unable to update location.")); }); })(); return () => { mounted = false; subscription?.remove(); }; }, [user, tab, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
 
   const advanceRide = async (action: "arrive" | "start" | "complete") => { if (!activeRide) return; try { const updated = await apiFetch(`/api/v1/rides/${activeRide.rideId}/${action}`, { method: "POST" }); setActiveRide(updated); setNotice(action === "arrive" ? "Arrival confirmed." : action === "start" ? "Trip started." : "Trip completed. Location sharing stopped."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to update ride status."); } };
