@@ -284,6 +284,8 @@ These APIs currently use the temporary server-side admin API key and are not a s
 
 ## Monthly driver payslips (PDF only)
 
+| PAY-014 | Driver app lists recent completed months and downloads a PDF | File is shared as application/pdf; no HTML payslip view or alternate export is shown |
+
 | ID | Scenario | Expected result |
 |---|---|---|
 | PAY-001 | Driver requests a completed month with union history and activity | PDF is returned with application/pdf and a month-specific filename |
