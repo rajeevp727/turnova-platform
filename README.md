@@ -63,7 +63,7 @@ Prerequisites: .NET 10 SDK, Node.js LTS/npm, Expo tooling, Android Studio and/or
     git clone https://github.com/rajeevp727/turnova-platform.git
     cd turnova-platform
 
-The backend solution and mobile app projects are planned under src/. Once scaffolded, use the .NET 10 SDK and keep backend projects targeting net10.0.
+The backend solution and two Expo mobile apps are implemented under `src/`. Use the .NET 10 SDK and keep backend projects targeting `net10.0`.
 
 ## Roadmap
 
@@ -89,9 +89,24 @@ Use free tiers and low-cost services for development where practical. Production
 
 ## Status
 
-This repository currently contains product documentation and the agreed initial technical direction. Application code, infrastructure and CI/CD will be added incrementally.
+The repository contains the initial API, Driver and Rider demo clients, Cosmos DB queue adapter/migrations, and CI validation. Authentication now integrates with TriSend email/password endpoints. Ride storage and dispatch remain demo-level; do not treat the current build as production-ready.
 
 
 ## MVP development notes
 
 See [DEV_NOTES.md](./DEV_NOTES.md) for the consolidated API, Cosmos DB, and Driver/Rider UI feature notes for the Monday demo. Current demo endpoints and screens use synthetic data and an in-memory backend store; they are not production-ready.
+
+## Authentication setup
+
+Email/password authentication uses the TriSend Auth API. SSO is intentionally out of scope.
+
+Configure the TurnOva API host with:
+
+```text
+TriSend__BaseUrl=https://auth.trisend.rajeevstech.in
+Auth__Jwt__Issuer=<same value as TriSend Auth:Jwt:Issuer>
+Auth__Jwt__Audience=<same value as TriSend Auth:Jwt:Audience>
+Auth__Jwt__SigningKey=<same secret as TriSend Auth:Jwt:SigningKey>
+```
+
+The JWT settings must match TriSend exactly. Keep the signing key in .NET User Secrets or the hosting provider's secret store; never add it to mobile `.env` files or source control. See [DEV_NOTES.md](./DEV_NOTES.md#10-emailpassword-authentication-feature-2) for API routes, local setup and security boundaries.

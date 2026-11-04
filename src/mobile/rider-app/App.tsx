@@ -1,138 +1,48 @@
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
-import {
-  ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet,
-  Text, TextInput, View
-} from "react-native";
+import * as SecureStore from "expo-secure-store";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000"; // Override in each app .env for your device.
-type Tab = "Book" | "Activity" | "Offers" | "Profile";
+const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
+type Tokens = { accessToken: string; refreshToken: string };
+type User = { id: string; email: string; name?: string; role: string };
 type Ride = { rideId: string; pickup: string; dropoff: string; passengers: number; status: string; estimatedFareInr: number };
-
-export default function App() {
-  const [tab, setTab] = useState<Tab>("Book");
-  const [pickup, setPickup] = useState("KPHB, Hyderabad");
-  const [dropoff, setDropoff] = useState("HITEC City, Hyderabad");
-  const [passengers, setPassengers] = useState("1");
-  const [ride, setRide] = useState<Ride | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const requestRide = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/rides/request`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pickup, dropoff, passengers: Number(passengers) || 1 })
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message ?? "Unable to request ride.");
-      setRide(result);
-      setTab("Activity");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to connect to TurnOva API.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const tabs: Tab[] = ["Book", "Activity", "Offers", "Profile"];
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <View><Text style={styles.brand}>TurnOva</Text><Text style={styles.tagline}>Everyone’s Turn Matters.</Text></View>
-        <View style={styles.demoPill}><Text style={styles.demoText}>DEMO</Text></View>
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
-        {tab === "Book" && <>
-          <Text style={styles.eyebrow}>YOUR CITY, YOUR RIDE</Text>
-          <Text style={styles.title}>Where to?</Text>
-          <Text style={styles.sub}>A fair ride starts with a simple booking.</Text>
-          <View style={styles.card}>
-            <Text style={styles.label}>PICKUP LOCATION</Text>
-            <TextInput value={pickup} onChangeText={setPickup} style={styles.input} placeholder="Enter pickup location" placeholderTextColor="#9AA5B2"/>
-            <View style={styles.routeLine}><View style={styles.dotStart}/><View style={styles.routeDash}/><View style={styles.dotEnd}/></View>
-            <Text style={styles.label}>DROP-OFF LOCATION</Text>
-            <TextInput value={dropoff} onChangeText={setDropoff} style={styles.input} placeholder="Where are you going?" placeholderTextColor="#9AA5B2"/>
-            <View style={styles.divider}/>
-            <Text style={styles.label}>PASSENGERS</Text>
-            <View style={styles.passengerRow}>
-              <Text style={styles.muted}>Number of passengers</Text>
-              <View style={styles.stepper}>
-                <Pressable onPress={() => setPassengers(String(Math.max(1, Number(passengers) - 1)))} style={styles.step}><Text style={styles.stepText}>−</Text></Pressable>
-                <Text style={styles.count}>{passengers}</Text>
-                <Pressable onPress={() => setPassengers(String(Math.min(6, Number(passengers) + 1)))} style={styles.step}><Text style={styles.stepText}>+</Text></Pressable>
-              </View>
-            </View>
-            <Pressable style={styles.primary} onPress={requestRide} disabled={loading || !pickup.trim() || !dropoff.trim()}>
-              <Text style={styles.primaryText}>{loading ? "Requesting…" : "Find my ride"}</Text>
-            </Pressable>
-            {loading && <ActivityIndicator style={{ marginTop: 12 }} color="#E89A3B"/>}
-            {!!error && <Text style={styles.error}>{error}</Text>}
-          </View>
-          <View style={styles.infoCard}><Text style={styles.infoTitle}>Fair turns. Clear choices.</Text><Text style={styles.muted}>TurnOva uses a transparent zone-based queue to offer rides to eligible drivers in FIFO order.</Text></View>
-        </>}
-        {tab === "Activity" && <>
-          <Text style={styles.eyebrow}>YOUR RIDE</Text><Text style={styles.title}>Activity</Text>
-          {ride ? <View style={styles.card}>
-            <View style={styles.statusPill}><Text style={styles.statusText}>{ride.status.toUpperCase()}</Text></View>
-            <Text style={styles.cardTitle}>Ride requested</Text><Text style={styles.muted}>Reference · {ride.rideId}</Text>
-            <View style={styles.divider}/>
-            <Text style={styles.label}>PICKUP</Text><Text style={styles.location}>{ride.pickup}</Text>
-            <Text style={styles.label}>DROP-OFF</Text><Text style={styles.location}>{ride.dropoff}</Text>
-            <Text style={styles.muted}>{ride.passengers} passenger(s) · Demo estimate ₹{ride.estimatedFareInr}</Text>
-            <Text style={styles.demoNote}>Demo request only — no driver has been assigned and no payment has been taken.</Text>
-          </View> : <View style={styles.infoCard}><Text style={styles.infoTitle}>No rides yet</Text><Text style={styles.muted}>Your ride requests will appear here.</Text></View>}
-        </>}
-        {tab === "Offers" && <><Text style={styles.eyebrow}>RIDE OPTIONS</Text><Text style={styles.title}>Offers</Text><View style={styles.infoCard}><Text style={styles.infoTitle}>Options coming soon</Text><Text style={styles.muted}>Vehicle options and confirmed fare details will appear here once enabled.</Text></View></>}
-        {tab === "Profile" && <><Text style={styles.eyebrow}>ACCOUNT</Text><Text style={styles.title}>Your profile</Text><View style={styles.card}><Text style={styles.cardTitle}>Welcome to TurnOva</Text><Text style={styles.muted}>Your rider profile and preferences will be available here.</Text><View style={styles.divider}/><Text style={styles.demoNote}>This is a demonstration profile.</Text></View></>}
-      </ScrollView>
-      <View style={styles.tabBar}>{tabs.map(item => <Pressable key={item} style={styles.tab} onPress={() => setTab(item)}><Text style={[styles.tabText, tab === item && styles.tabActive]}>{item}</Text></Pressable>)}</View>
-    </SafeAreaView>
-  );
+async function saveTokens(t: Tokens) { await SecureStore.setItemAsync("turnova.access", t.accessToken); await SecureStore.setItemAsync("turnova.refresh", t.refreshToken); }
+async function clearTokens() { await SecureStore.deleteItemAsync("turnova.access"); await SecureStore.deleteItemAsync("turnova.refresh"); }
+async function request(path: string, init: RequestInit = {}, token?: string) {
+  const response = await fetch(`${API}${path}`, { ...init, headers: { "Content-Type":"application/json", ...(token ? { Authorization:`Bearer ${token}` } : {}), ...init.headers } });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message ?? body.title ?? "Request failed.");
+  return body;
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F4F6F8" },
-  header: { backgroundColor: "#14283F", paddingHorizontal: 22, paddingTop: 18, paddingBottom: 20, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  brand: { color: "#FFFFFF", fontSize: 27, fontWeight: "800" },
-  tagline: { color: "#B8C5D2", marginTop: 2, fontSize: 12 },
-  demoPill: { borderRadius: 20, backgroundColor: "#30445A", paddingHorizontal: 12, paddingVertical: 7 },
-  demoText: { color: "#F7B65F", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
-  content: { padding: 22, paddingBottom: 34 },
-  eyebrow: { color: "#D58B32", fontWeight: "800", fontSize: 11, letterSpacing: 1.4, marginTop: 8 },
-  title: { color: "#172B42", fontSize: 29, fontWeight: "800", marginTop: 8 },
-  sub: { color: "#718094", fontSize: 14, marginTop: 6, marginBottom: 20 },
-  card: { backgroundColor: "#FFFFFF", padding: 20, borderRadius: 20, marginBottom: 16, shadowColor: "#152B45", shadowOpacity: 0.06, shadowRadius: 12, elevation: 2 },
-  label: { color: "#8290A0", fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 8 },
-  input: { borderWidth: 1, borderColor: "#E2E8EE", backgroundColor: "#FAFBFC", borderRadius: 12, paddingHorizontal: 13, paddingVertical: 13, color: "#20354B", fontSize: 14, marginBottom: 12 },
-  routeLine: { flexDirection: "row", alignItems: "center", marginVertical: 1, marginLeft: 7, height: 18 },
-  dotStart: { width: 9, height: 9, borderRadius: 5, backgroundColor: "#26956C" },
-  routeDash: { width: 2, height: 15, backgroundColor: "#D5DDE5", marginLeft: 3 },
-  dotEnd: { width: 9, height: 9, borderRadius: 5, backgroundColor: "#E89A3B", marginLeft: 3 },
-  divider: { height: 1, backgroundColor: "#E9EDF1", marginVertical: 16 },
-  passengerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  muted: { color: "#758397", fontSize: 13, lineHeight: 19 },
-  stepper: { flexDirection: "row", alignItems: "center", gap: 14 },
-  step: { width: 30, height: 30, borderRadius: 10, backgroundColor: "#F7EBD9", alignItems: "center", justifyContent: "center" },
-  stepText: { color: "#B66D1D", fontWeight: "900", fontSize: 18 },
-  count: { color: "#172B42", fontWeight: "800", fontSize: 15 },
-  primary: { backgroundColor: "#E89A3B", borderRadius: 13, paddingVertical: 15, alignItems: "center", marginTop: 22 },
-  primaryText: { color: "#172B42", fontWeight: "800", fontSize: 14 },
-  infoCard: { backgroundColor: "#EAF0F5", padding: 18, borderRadius: 16, marginTop: 4 },
-  infoTitle: { color: "#172B42", fontSize: 16, fontWeight: "800", marginBottom: 5 },
-  statusPill: { alignSelf: "flex-start", backgroundColor: "#F9EBD8", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6 },
-  statusText: { color: "#B66D1D", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
-  cardTitle: { color: "#172B42", fontSize: 19, fontWeight: "800", marginTop: 12 },
-  location: { color: "#20354B", fontSize: 15, fontWeight: "700", marginBottom: 13 },
-  demoNote: { color: "#8A6B42", fontSize: 12, lineHeight: 18, marginTop: 12 },
-  error: { color: "#B42318", marginTop: 12, fontSize: 13 },
-  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E7EBEF", paddingTop: 10, paddingBottom: 16 },
-  tab: { flex: 1, alignItems: "center", paddingVertical: 7 },
-  tabText: { color: "#8793A2", fontSize: 12, fontWeight: "700" },
-  tabActive: { color: "#C47A21" }
-});
+export default function App() {
+  const [user,setUser]=useState<User|null>(null); const [tokens,setTokens]=useState<Tokens|null>(null);
+  const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
+  const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
+  const [pickup,setPickup]=useState("KPHB, Hyderabad"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [passengers,setPassengers]=useState("1");
+  const [ride,setRide]=useState<Ride|null>(null); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const accept=useCallback(async(result:any)=>{const t={accessToken:result.accessToken,refreshToken:result.refreshToken};await saveTokens(t);setTokens(t);setUser(result.user);setError("");},[]);
+  const refresh=useCallback(async(rt:string)=>{const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});await accept(result);return result.accessToken as string;},[accept]);
+  const apiFetch=useCallback(async(path:string,init:RequestInit={})=>{
+    if(!tokens)throw new Error("Please sign in again.");
+    let response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${tokens.accessToken}`,...init.headers}});
+    if(response.status===401){const rt=await SecureStore.getItemAsync("turnova.refresh");if(!rt){await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}let accessToken:string;try{accessToken=await refresh(rt);}catch{await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});}
+    const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
+  },[tokens,refresh]);
+  useEffect(()=>{let active=true;(async()=>{try{const at=await SecureStore.getItemAsync("turnova.access");const rt=await SecureStore.getItemAsync("turnova.refresh");if(at&&rt){try{const me=await request("/api/v1/auth/me",{},at);if(active){setTokens({accessToken:at,refreshToken:rt});setUser(me);}}catch{try{const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(active)await accept(result);}catch{await clearTokens();}}}}catch{if(active)setError("Unable to restore session.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[accept]);
+  const authenticate=async()=>{setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});await accept(result);}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
+  const logout=async()=>{try{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);}catch{}await clearTokens();setTokens(null);setUser(null);setRide(null);};
+  const book=async()=>{setLoading(true);setError("");try{const result=await apiFetch("/api/v1/rides/request",{method:"POST",body:JSON.stringify({pickup,dropoff,passengers:Number(passengers)||1})});setRide(result);setTab("Activity");}catch(e){setError(e instanceof Error?e.message:"Unable to request ride.");}finally{setLoading(false);}};
+  if(loading&&!user)return <SafeAreaView style={styles.safe}><ActivityIndicator color="#E89A3B" style={{marginTop:80}}/></SafeAreaView>;
+  if(!user)return <SafeAreaView style={styles.safe}><StatusBar style="light"/><View style={styles.header}><Text style={styles.brand}>TurnOva Rider</Text><Text style={styles.tagline}>Everyone’s Turn Matters.</Text></View><ScrollView contentContainerStyle={styles.content}><Text style={styles.eyebrow}>RIDER ACCOUNT</Text><Text style={styles.title}>{mode==="login"?"Welcome back":"Create your account"}</Text><Text style={styles.sub}>Sign in securely with your email and password.</Text><View style={styles.card}>{mode==="register"&&<TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Full name"/>}<TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false}/><TextInput value={password} onChangeText={setPassword} style={styles.input} placeholder="Password" secureTextEntry/><Pressable style={styles.primary} disabled={loading||!email.trim()||!password} onPress={()=>void authenticate()}><Text style={styles.primaryText}>{loading?"Please wait…":mode==="login"?"Sign in":"Create rider account"}</Text></Pressable><Pressable onPress={()=>{setMode(mode==="login"?"register":"login");setError("");}}><Text style={styles.link}>{mode==="login"?"New to TurnOva? Create an account":"Already registered? Sign in"}</Text></Pressable>{!!error&&<Text style={styles.error}>{error}</Text>}</View></ScrollView></SafeAreaView>;
+  const tabs=["Book","Activity","Offers","Profile"] as const;
+  return <SafeAreaView style={styles.safe}><StatusBar style="light"/><View style={styles.header}><Text style={styles.brand}>TurnOva</Text><Text style={styles.tagline}>Rider · {user.name||user.email}</Text></View><ScrollView contentContainerStyle={styles.content}>
+    {tab==="Book"&&<><Text style={styles.eyebrow}>YOUR CITY, YOUR RIDE</Text><Text style={styles.title}>Where to?</Text><Text style={styles.sub}>A fair ride starts with a simple booking.</Text><View style={styles.card}><Text style={styles.label}>PICKUP LOCATION</Text><TextInput value={pickup} onChangeText={setPickup} style={styles.input} placeholder="Pickup"/><Text style={styles.label}>DROP-OFF LOCATION</Text><TextInput value={dropoff} onChangeText={setDropoff} style={styles.input} placeholder="Drop-off"/><Text style={styles.label}>PASSENGERS (1–6)</Text><TextInput value={passengers} onChangeText={v=>setPassengers(String(Math.min(6,Math.max(1,Number(v)||1))))} keyboardType="number-pad" style={styles.input}/><Pressable style={styles.primary} onPress={()=>void book()} disabled={loading||!pickup.trim()||!dropoff.trim()}><Text style={styles.primaryText}>{loading?"Requesting…":"Find my ride"}</Text></Pressable></View></>}
+    {tab==="Activity"&&<><Text style={styles.title}>Activity</Text>{ride?<View style={styles.card}><Text style={styles.status}>{ride.status.toUpperCase()}</Text><Text style={styles.cardTitle}>Ride requested</Text><Text style={styles.muted}>Reference · {ride.rideId}</Text><Text style={styles.label}>PICKUP</Text><Text style={styles.cardTitle}>{ride.pickup}</Text><Text style={styles.label}>DROP-OFF</Text><Text style={styles.cardTitle}>{ride.dropoff}</Text><Text style={styles.muted}>{ride.passengers} passenger(s) · Demo estimate ₹{ride.estimatedFareInr}</Text><Text style={styles.muted}>Demo request only — no driver has been assigned and no payment has been taken.</Text></View>:<View style={styles.card}><Text style={styles.muted}>No rides yet. Book your first ride.</Text></View>}</>}
+    {tab==="Offers"&&<><Text style={styles.title}>Offers</Text><View style={styles.card}><Text style={styles.muted}>Vehicle options and confirmed fares will appear here when enabled.</Text></View></>}
+    {tab==="Profile"&&<><Text style={styles.title}>Your profile</Text><View style={styles.card}><Text style={styles.cardTitle}>{user.name||"Rider"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={()=>void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
+    {!!error&&<Text style={styles.error}>{error}</Text>}
+  </ScrollView><View style={styles.tabBar}>{tabs.map(item=><Pressable key={item} style={styles.tab} onPress={()=>setTab(item)}><Text style={[styles.tabText,tab===item&&styles.tabActive]}>{item}</Text></Pressable>)}</View></SafeAreaView>;
+}
+const styles=StyleSheet.create({safe:{flex:1,backgroundColor:"#F4F6F8"},header:{backgroundColor:"#14283F",padding:22,paddingTop:18},brand:{color:"#FFF",fontSize:25,fontWeight:"800"},tagline:{color:"#B8C5D2",marginTop:4,fontSize:12},content:{padding:22,paddingBottom:34},eyebrow:{color:"#D58B32",fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:"#172B42",fontSize:28,fontWeight:"800",marginTop:8},sub:{color:"#718094",fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:"#FFF",padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:"#E2E8EE",borderRadius:12,padding:14,color:"#20354B",marginBottom:12},label:{color:"#8290A0",fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},primary:{backgroundColor:"#E89A3B",borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:"#172B42",fontWeight:"800"},link:{color:"#B66D1D",fontWeight:"800",textAlign:"center",marginTop:18},muted:{color:"#758397",fontSize:13,marginTop:7,lineHeight:19},cardTitle:{color:"#172B42",fontSize:17,fontWeight:"800",marginTop:8},status:{color:"#B66D1D",fontWeight:"900"},error:{color:"#B42318",marginTop:12},secondary:{borderWidth:1,borderColor:"#D7DEE6",borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:"#30445A",fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:"#FFF",paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:"#8793A2",fontSize:12,fontWeight:"700"},tabActive:{color:"#C47A21"}});

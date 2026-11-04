@@ -169,3 +169,13 @@ Start with a low-cost development environment and separate development, staging 
 6. Maps, payment, OTP and push providers.
 7. Hosting region, availability targets, backup and disaster recovery.
 8. Monitoring, support tooling and regulatory controls.
+
+## 15. Authentication integration
+
+The Driver and Rider clients use email/password through the TurnOva API, which proxies registration, login, refresh, identity and logout requests to TriSend Auth. TurnOva fixes the `appId` to `turnova` and derives the allowed role from the route; clients cannot request another application's role.
+
+TriSend issues 15-minute JWT access tokens and rotating refresh tokens. Mobile clients store tokens using Expo SecureStore. TurnOva validates JWT signature, issuer, audience and expiry locally and applies Driver/Rider authorization policies. The API requires the exact same issuer, audience and symmetric signing key as TriSend; keep these values only in the backend secret store.
+
+Logout revokes the TriSend refresh session, but already-issued access tokens can remain valid until their 15-minute expiry because TurnOva validates them locally. This is an explicit MVP trade-off; immediate revocation requires an online session check or a distributed revocation mechanism.
+
+Email/password only is in scope. Google/Microsoft OAuth and SSO are explicitly excluded. Driver onboarding/KYC and durable ride persistence are also separate work items; a valid Driver role does not by itself prove production driver eligibility.
