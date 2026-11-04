@@ -194,3 +194,27 @@ The GitHub Actions workflow currently runs:
 | TRACK-004 | Rider Activity screen is open | Map refreshes from authoritative ride state while screen is active | Mobile E2E | P1 |
 | TRACK-005 | Driver leaves Trips screen | Foreground location subscription is removed | Mobile | P0 |
 | TRACK-006 | Location permission denied | Driver sees an actionable error; no false location-sharing state | Mobile | P1 |
+
+
+## 12. Ride lifecycle, idempotency and SignalR
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-LIFE-001 | Driver accepts requested ride | State changes to Accepted and location sharing becomes active | API | P0 |
+| RID-LIFE-002 | Driver marks arrival | Only assigned Driver can move Accepted to Arrived | API + security | P0 |
+| RID-LIFE-003 | Driver starts trip | Only assigned Driver can move Arrived to InProgress | API + security | P0 |
+| RID-LIFE-004 | Driver completes trip | Only assigned Driver can move InProgress to Completed and sharing stops | API + security | P0 |
+| RID-LIFE-005 | Invalid state transition | API returns 409 and state remains unchanged | API | P0 |
+| RID-LIFE-006 | Rider cancels before start | Owner can cancel Requested, Accepted or Arrived ride | API | P0 |
+| RID-LIFE-007 | Rider cancels after trip start | API returns 409; ride remains InProgress | API | P0 |
+| RID-LIFE-008 | Non-owner cancels or subscribes | Ride is not disclosed; request is denied | API + SignalR security | P0 |
+| RID-IDEM-001 | Repeat request with same rider and Idempotency-Key | Original ride is returned; no second ride is created | API + Cosmos | P0 |
+| RID-IDEM-002 | Same key used by different riders | Separate ride requests are allowed | API + Cosmos | P1 |
+| RID-IDEM-003 | Missing or oversized idempotency key | HTTP 400; no ride is created | API | P0 |
+| TRACK-007 | Assigned Driver posts location during active ride | Latest location is broadcast to the owning Rider's SignalR group | API + SignalR | P0 |
+| TRACK-008 | Driver posts location after completion/cancellation | HTTP 404/409; no location update or broadcast | API security | P0 |
+| TRACK-009 | Rider SignalR connection uses another Rider's ride ID | Connection is aborted before group membership | SignalR security | P0 |
+| TRACK-010 | Rider reconnects after network loss | SignalR reconnects and subsequent location/status events resume | Mobile | P1 |
+| TRACK-011 | Driver leaves Trips screen | Foreground GPS subscription is disposed | Mobile | P0 |
+
+The lifecycle state-machine unit tests are automated. The API, Cosmos, SignalR and device scenarios above remain planned until their corresponding integration/device test suites are executed.
