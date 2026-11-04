@@ -251,7 +251,7 @@ Automated tests cover Cosmos configuration validation. The migration lease, Cosm
 | DRV-ONB-006 | Pending or Rejected driver lists/accepts rides | HTTP 403; no dispatch action occurs | API integration | P0 |
 | DRV-ONB-007 | Reviewer approves a pending driver with DrivingLicence and VehicleRegistration references | Status becomes Approved; queue and ride actions are allowed | API integration | P0 |
 | DRV-ONB-008 | Reviewer rejects a profile without reason | HTTP 400 | API validation | P1 |
-| DRV-ONB-009 | Reviewer suspends an approved driver | Status becomes Suspended; subsequent queue/ride actions are denied | API integration | P0 |
+| DRV-ONB-009 | Reviewer suspends an approved driver | Status becomes Suspended, current queue membership is removed and subsequent queue/ride actions are denied | API integration | P0 |
 | DRV-ONB-010 | Invalid/missing operations key | HTTP 401; profile remains unchanged | API security | P0 |
 | DRV-ONB-011 | Driver attempts to overwrite Approved/Suspended profile | HTTP 409 | API | P0 |
 | DRV-ONB-012 | Driver attempts to read another Driver's profile | No other driver's data is returned | API security | P0 |
