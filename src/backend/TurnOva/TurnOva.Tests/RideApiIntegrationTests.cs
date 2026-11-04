@@ -174,7 +174,7 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
-    public async Task UnionAssignmentRejectsPendingDriversInactiveUnionsAndUnsupportedZones()
+    public async Task UnionAssignmentRejectsPendingAndZoneIncompatibleDrivers()
     {
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-union-invalid");
@@ -198,12 +198,29 @@ public sealed class RideApiIntegrationTests
         using var unionJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var unionId = unionJson.RootElement.GetProperty("unionId").GetString()!;
 
+        var submitted = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest());
+        Assert.Equal(HttpStatusCode.Accepted, submitted.StatusCode);
+
         using var pendingAssignment = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-union-invalid/union-assignment")
         {
-            Content = JsonContent.Create(new { unionId, reason = "Onboarding" })
+            Content = JsonContent.Create(new { unionId, reason = "Initial assignment" })
         };
         pendingAssignment.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
-        Assert.Equal(HttpStatusCode.NotFound, (await ops.SendAsync(pendingAssignment)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ops.SendAsync(pendingAssignment)).StatusCode);
+
+        using var review = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-union-invalid/review")
+        {
+            Content = JsonContent.Create(new { status = "Approved", reason = (string?)null })
+        };
+        review.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.OK, (await ops.SendAsync(review)).StatusCode);
+
+        using var incompatibleAssignment = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-union-invalid/union-assignment")
+        {
+            Content = JsonContent.Create(new { unionId, reason = "Zone mismatch" })
+        };
+        incompatibleAssignment.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.Conflict, (await ops.SendAsync(incompatibleAssignment)).StatusCode);
     }
 
     private sealed record DriverUnionAssignmentTest(string UnionId, string Status);
