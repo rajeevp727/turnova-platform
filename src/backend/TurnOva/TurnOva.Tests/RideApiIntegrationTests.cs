@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -81,11 +82,11 @@ public sealed class RideApiIntegrationTests
 
         Assert.Equal(HttpStatusCode.NotFound,
             (await otherRider.GetAsync($"/api/v1/rides/{ride.RideId}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await otherDriver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null)).StatusCode);
 
         Assert.Equal(HttpStatusCode.OK,
             (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await otherDriver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await otherDriver.PostAsync($"/api/v1/rides/{ride.RideId}/arrive", null)).StatusCode);
     }
