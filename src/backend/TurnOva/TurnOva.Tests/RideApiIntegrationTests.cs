@@ -1,3 +1,4 @@
+using TurnOva.API;
 using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -244,6 +245,44 @@ public sealed class RideApiIntegrationTests
             new { documentType = "VehicleRegistration", storageReference = "drivers/test/rc" }
         }
     };
+
+
+    [Fact]
+    public void MonthlyPayslipIsRenderedAsAValidPdfDocument()
+    {
+        var payslip = new DriverMonthlyPayslip(
+            "driver-pdf-2026-10", "driver-pdf", "PDF Test Driver",
+            "union-pdf", "Central Drivers Union", 2026, 10,
+            new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.FromHours(5.5)),
+            new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.FromHours(5.5)),
+            12, 18, 15, 2, DateTimeOffset.UtcNow);
+
+        var pdf = DriverPayslipPdf.Generate(payslip);
+        var text = Encoding.ASCII.GetString(pdf);
+
+        Assert.StartsWith("%PDF-1.4", text);
+        Assert.Contains("MONTHLY DRIVER PAYSLIP", text);
+        Assert.Contains("Total days worked: 12", text);
+        Assert.Contains("Rides accepted: 18", text);
+        Assert.Contains("Rides completed: 15", text);
+        Assert.Contains("Rides rejected: 2", text);
+        Assert.EndsWith("%%EOF", text);
+    }
+
+    [Fact]
+    public async Task PayslipEndpointIsDriverOnlyAndDoesNotReturnHtml()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-payslip-endpoint");
+        using var rider = factory.CreateClient("Rider", "rider-payslip-endpoint");
+
+        var futureMonth = DateTime.UtcNow.AddMonths(2);
+        var driverResponse = await driver.GetAsync($"/api/v1/driver/payslips/{futureMonth.Year}/{futureMonth.Month}.pdf");
+        Assert.Equal(HttpStatusCode.BadRequest, driverResponse.StatusCode);
+
+        var riderResponse = await rider.GetAsync($"/api/v1/driver/payslips/{futureMonth.Year}/{futureMonth.Month}.pdf");
+        Assert.Equal(HttpStatusCode.Forbidden, riderResponse.StatusCode);
+    }
 
     [Fact]
     public async Task RiderCanCreateRideAndRepeatRequestWithoutCreatingDuplicate()
