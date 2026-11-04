@@ -303,3 +303,20 @@ These APIs currently use the temporary server-side admin API key and are not a s
 | PAY-013 | PDF generation | Output begins with a valid PDF header and includes all work metrics |
 
 Payslip output is PDF only. Monetary calculations are intentionally absent until the compensation model is approved. Cosmos persistence, migration and crash-window reconciliation require validation with a development Cosmos account.
+
+## Light and dark application themes
+
+| ID | Scenario | Expected result |
+|---|---|---|
+| THEME-001 | First launch with device Light appearance | System mode resolves to Light |
+| THEME-002 | First launch with device Dark appearance | System mode resolves to Dark |
+| THEME-003 | Select Light from sign-in screen | All app surfaces switch to Light immediately |
+| THEME-004 | Select Dark from sign-in screen | All app surfaces and status bar switch to Dark immediately |
+| THEME-005 | Select System | App follows current device appearance and later system changes |
+| THEME-006 | Restart after explicit theme selection | Preference is restored from SecureStore |
+| THEME-007 | Change theme while authenticated | Current screen and navigation update without losing session or form state |
+| THEME-008 | Driver onboarding and payslip screens | Inputs, cards, borders, feedback and tab bar remain readable in both themes |
+| THEME-009 | Rider booking and activity screens | Inputs, cards, ride status, navigation and map adapt to selected theme |
+| THEME-010 | Dark theme primary action | Text remains legible against the accent button |
+
+Validate on Android and iOS physical devices, including system appearance changes and map rendering.
