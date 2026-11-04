@@ -250,6 +250,29 @@ app.MapGet("/api/v1/zones/{zoneId}/queues/{serviceClass}", async (
     }));
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
+app.MapGet("/api/v1/zones/{zoneId}/queues/{serviceClass}/me", async (
+    string zoneId, string serviceClass, ClaimsPrincipal user, QueueService service, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId))
+        return Results.Forbid();
+
+    var entries = await service.GetPositionedQueueAsync(zoneId, serviceClass, ct);
+    var position = entries.ToList().FindIndex(entry => entry.DriverId == driverId);
+    return Results.Ok(new { isQueued = position >= 0, position = position >= 0 ? position + 1 : (int?)null });
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapDelete("/api/v1/zones/{zoneId}/queues/{serviceClass}/me", async (
+    string zoneId, string serviceClass, ClaimsPrincipal user, QueueService service, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId))
+        return Results.Forbid();
+
+    await service.LeaveAsync(driverId, zoneId, serviceClass, ct);
+    return Results.NoContent();
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
 
 app.MapPost("/api/v1/queues/join", async (
     ClaimsPrincipal user, JoinQueueRequest request, QueueService service, CancellationToken ct) =>
@@ -301,7 +324,7 @@ app.MapGet("/api/v1/rides/{rideId}", (ClaimsPrincipal user, string rideId) =>
 
 app.Run();
 
-public sealed record JoinQueueRequest(string DriverId, string ZoneId, string? ServiceClass);
+public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);

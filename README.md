@@ -111,6 +111,15 @@ Auth__Jwt__SigningKey=<same secret as TriSend Auth:Jwt:SigningKey>
 
 The JWT settings must match TriSend exactly. Keep the signing key in .NET User Secrets or the hosting provider's secret store; never add it to mobile `.env` files or source control. See [DEV_NOTES.md](./DEV_NOTES.md#10-emailpassword-authentication-feature-2) for API routes, local setup and security boundaries.
 
+## Driver queue lifecycle API
+
+- `POST /api/v1/queues/join` — join the requested zone/service-class queue. Driver identity is always taken from the authenticated JWT.
+- `GET /api/v1/zones/{zoneId}/queues/{serviceClass}/me` — return the authenticated Driver's queue membership and current position.
+- `DELETE /api/v1/zones/{zoneId}/queues/{serviceClass}/me` — leave the queue. Repeating the request is safe.
+- Join again after leaving to create a new queue entry at the end of the FIFO order.
+
+Queue membership is persisted through the configured queue store (in-memory for local demo, Cosmos DB when configured). Cosmos DB operations are scoped to the zone/service-class partition.
+
 ## Test plan
 
 See [docs/test-plan.md](./docs/test-plan.md) for feature-wise positive, negative, security, and manual acceptance scenarios. Planned scenarios are not represented as executed tests.
