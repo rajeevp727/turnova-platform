@@ -1,165 +1,180 @@
 import { StatusBar } from "expo-status-bar";
+import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet,
-  Text, View
-} from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000"; // Override in each app .env for your device.
-const DRIVER_ID = "DRV-DEMO-004";
-const ZONE_ID = "hyderabad-central";
-const SERVICE_CLASS = "auto";
+const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
+const ZONE = "hyderabad-central";
+const SERVICE = "auto";
+type Tokens = { accessToken: string; refreshToken: string };
+type User = { id: string; email: string; name?: string; role: string };
+type QueueEntry = { driverId: string; position: number; joinedAt: string };
 
-type QueueEntry = {
-  driverId: string;
-  zoneId: string;
-  serviceClass: string;
-  position: number;
-  joinedAt: string;
-};
-
-const tabs = ["Home", "Queue", "Trips", "Profile"] as const;
-type Tab = typeof tabs[number];
+async function saveTokens(tokens: Tokens) {
+  await SecureStore.setItemAsync("turnova.access", tokens.accessToken);
+  await SecureStore.setItemAsync("turnova.refresh", tokens.refreshToken);
+}
+async function clearTokens() {
+  await SecureStore.deleteItemAsync("turnova.access");
+  await SecureStore.deleteItemAsync("turnova.refresh");
+}
+async function jsonRequest(path: string, init: RequestInit = {}, token?: string) {
+  const response = await fetch(`${API}${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message ?? body.title ?? "Request failed.");
+  return body;
+}
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("Home");
+  const [user, setUser] = useState<User | null>(null);
+  const [tokens, setTokens] = useState<Tokens | null>(null);
+  const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Profile">("Home");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [queue, setQueue] = useState<QueueEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [online, setOnline] = useState(true);
-  const [message, setMessage] = useState("Ready for your next turn.");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const loadQueue = useCallback(async () => {
-    setLoading(true);
+  const acceptSession = useCallback(async (result: any) => {
+    const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
+    await saveTokens(next);
+    setTokens(next);
+    setUser(result.user);
     setError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/zones/${ZONE_ID}/queues/${SERVICE_CLASS}`);
-      if (!response.ok) throw new Error("Could not load queue. Check that the API is running.");
-      setQueue(await response.json());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to connect to TurnOva API.");
-    } finally {
-      setLoading(false);
-    }
   }, []);
 
-  useEffect(() => { void loadQueue(); }, [loadQueue]);
+  const refreshSession = useCallback(async (refreshToken: string) => {
+    const result = await jsonRequest("/api/v1/auth/refresh", {
+      method: "POST", body: JSON.stringify({ refreshToken })
+    });
+    await acceptSession(result);
+    return result.accessToken as string;
+  }, [acceptSession]);
 
-  const joinQueue = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/queues/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverId: DRIVER_ID, zoneId: ZONE_ID, serviceClass: SERVICE_CLASS })
+  const apiFetch = useCallback(async (path: string, init: RequestInit = {}) => {
+    if (!tokens) throw new Error("Please sign in again.");
+    let response = await fetch(`${API}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens.accessToken}`, ...init.headers }
+    });
+    if (response.status === 401) {
+      const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
+      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); throw new Error("Session expired. Please sign in again."); }
+      const accessToken = await refreshSession(refreshToken);
+      response = await fetch(`${API}${path}`, {
+        ...init,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...init.headers }
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message ?? "Unable to join queue.");
-      setMessage(result.message ?? "You joined the queue.");
-      await loadQueue();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to join queue.");
-    } finally {
-      setLoading(false);
     }
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.message ?? body.title ?? "Request failed.");
+    return body;
+  }, [tokens, refreshSession]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const accessToken = await SecureStore.getItemAsync("turnova.access");
+        const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
+        if (accessToken && refreshToken) {
+          try {
+            const me = await jsonRequest("/api/v1/auth/me", {}, accessToken);
+            if (active) { setTokens({ accessToken, refreshToken }); setUser(me); }
+          } catch {
+            try {
+              const result = await jsonRequest("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) });
+              if (active) await acceptSession(result);
+            } catch { await clearTokens(); }
+          }
+        }
+      } catch (e) { if (active) setError("Unable to restore your session."); }
+      finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [acceptSession]);
+
+  const authenticate = async (replaceOldest = false) => {
+    setLoading(true); setError(""); setNotice("");
+    try {
+      const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
+      const result = await jsonRequest(path, {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), password, name: name.trim() || null, replaceOldest })
+      });
+      await acceptSession(result);
+    } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed."); }
+    finally { setLoading(false); }
   };
 
-  const myPosition = queue.find(x => x.driverId === DRIVER_ID)?.position;
+  const loadQueue = useCallback(async () => {
+    try {
+      const data = await apiFetch(`/api/v1/zones/${ZONE}/queues/${SERVICE}`);
+      setQueue(data);
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to load queue."); }
+  }, [apiFetch]);
+  useEffect(() => { if (user && tab === "Queue") void loadQueue(); }, [user, tab, loadQueue]);
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <View><Text style={styles.brand}>TurnOva</Text><Text style={styles.tagline}>Everyone’s Turn Matters.</Text></View>
-        <View style={styles.demoPill}><Text style={styles.demoText}>DEMO</Text></View>
-      </View>
+  const joinQueue = async () => {
+    if (!user) return;
+    setLoading(true); setError("");
+    try {
+      const result = await apiFetch("/api/v1/queues/join", {
+        method: "POST",
+        body: JSON.stringify({ driverId: user.id, zoneId: ZONE, serviceClass: SERVICE })
+      });
+      setNotice(result.message ?? "You joined the queue.");
+      await loadQueue();
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to join queue."); }
+    finally { setLoading(false); }
+  };
+
+  const logout = async () => {
+    try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
+    catch { /* Local credentials are cleared even if the network is unavailable. */ }
+    await clearTokens(); setTokens(null); setUser(null); setQueue([]);
+  };
+
+  if (loading && !user) return <SafeAreaView style={styles.safe}><ActivityIndicator color="#E89A3B" style={{ marginTop: 80 }} /></SafeAreaView>;
+  if (!user) return (
+    <SafeAreaView style={styles.safe}><StatusBar style="light" />
+      <View style={styles.header}><Text style={styles.brand}>TurnOva Driver</Text><Text style={styles.tagline}>Everyone’s Turn Matters.</Text></View>
       <ScrollView contentContainerStyle={styles.content}>
-        {tab === "Home" && <>
-          <Text style={styles.eyebrow}>DRIVER PARTNER</Text>
-          <Text style={styles.title}>Good day, Driver</Text>
-          <Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text>
-          <View style={styles.card}>
-            <View style={styles.row}><Text style={styles.cardLabel}>DRIVER AVAILABILITY</Text><Text style={online ? styles.status : styles.offline}>{online ? "ONLINE" : "OFFLINE"}</Text></View>
-            <Pressable style={styles.availability} onPress={() => setOnline(!online)}><Text style={styles.availabilityText}>{online ? "Go offline" : "Go online"}</Text></Pressable>
-            <View style={styles.line} />
-            <Text style={styles.cardLabel}>YOUR SERVICE ZONE</Text>
-            <Text style={styles.cardTitle}>Hyderabad Central</Text>
-            <Text style={styles.muted}>Auto · Standard queue</Text>
-            <View style={styles.line} />
-            <Text style={styles.cardLabel}>CURRENT QUEUE POSITION</Text>
-            <Text style={styles.position}>{myPosition ? `#${myPosition}` : "—"}</Text>
-            <Text style={styles.muted}>{myPosition ? "You are in the queue" : "Join the queue to get started"}</Text>
-            <Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>{myPosition ? "View my queue" : "Join the queue"}</Text></Pressable>
-          </View>
-          <View style={styles.infoCard}><Text style={styles.infoTitle}>Fair by design</Text><Text style={styles.muted}>TurnOva considers eligible drivers in first-in, first-out order within their service zone.</Text></View>
-        </>}
-        {tab === "Queue" && <>
-          <Text style={styles.eyebrow}>LIVE QUEUE · DEMO DATA</Text>
-          <Text style={styles.title}>Your queue</Text>
-          <Text style={styles.sub}>Hyderabad Central · Auto</Text>
-          <View style={styles.card}>
-            <View style={styles.row}><Text style={styles.cardTitle}>Queue status</Text><Pressable onPress={loadQueue}><Text style={styles.link}>Refresh</Text></Pressable></View>
-            <Text style={styles.position}>{myPosition ? `#${myPosition}` : "Not joined"}</Text>
-            <Text style={styles.muted}>{myPosition ? "Your current position" : "You are not in this queue yet."}</Text>
-            <Pressable style={styles.primary} onPress={() => myPosition ? loadQueue() : joinQueue()} disabled={loading || !online}><Text style={styles.primaryText}>{loading ? "Please wait…" : myPosition ? "Refresh my position" : online ? "Join FIFO queue" : "Go online to join"}</Text></Pressable>
-          </View>
-          <Text style={styles.sectionTitle}>Drivers in queue</Text>
-          {queue.map(item => <View key={item.driverId} style={styles.queueItem}>
-            <View style={styles.rank}><Text style={styles.rankText}>{item.position}</Text></View>
-            <View style={{ flex: 1 }}><Text style={styles.driverName}>{item.driverId}</Text><Text style={styles.muted}>Joined {new Date(item.joinedAt).toLocaleTimeString()}</Text></View>
-            {item.driverId === DRIVER_ID && <Text style={styles.you}>YOU</Text>}
-          </View>)}
-          {queue.length === 0 && <Text style={styles.muted}>No drivers in this queue yet.</Text>}
-        </>}
-        {tab === "Trips" && <><Text style={styles.eyebrow}>YOUR ACTIVITY</Text><Text style={styles.title}>Trips</Text><View style={styles.infoCard}><Text style={styles.infoTitle}>No active trips</Text><Text style={styles.muted}>Accepted ride offers and trip history will appear here.</Text></View></>}
-        {tab === "Profile" && <><Text style={styles.eyebrow}>ACCOUNT</Text><Text style={styles.title}>Driver profile</Text><View style={styles.card}><Text style={styles.cardTitle}>Demo Driver</Text><Text style={styles.muted}>Driver ID · {DRIVER_ID}</Text><View style={styles.line}/><Text style={styles.cardLabel}>APPROVAL STATUS</Text><Text style={styles.status}>Demo approved</Text><Text style={styles.muted}>Profile and verification are simulated for this MVP walkthrough.</Text></View></>}
-        {loading && <ActivityIndicator style={{ marginTop: 14 }} color="#F4A340" />}
-        {!!error && <Text style={styles.error}>{error}</Text>}
-        {!!message && tab === "Queue" && <Text style={styles.success}>{message}</Text>}
+        <Text style={styles.eyebrow}>DRIVER PARTNER</Text><Text style={styles.title}>{mode === "login" ? "Welcome back" : "Create your account"}</Text>
+        <Text style={styles.sub}>Sign in securely with your email and password.</Text>
+        <View style={styles.card}>
+          {mode === "register" && <TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Full name" autoCapitalize="words" />}
+          <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+          <TextInput value={password} onChangeText={setPassword} style={styles.input} placeholder="Password" secureTextEntry />
+          <Pressable style={styles.primary} disabled={loading || !email.trim() || !password} onPress={() => void authenticate()}><Text style={styles.primaryText}>{loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create driver account"}</Text></Pressable>
+          <Pressable onPress={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}><Text style={styles.link}>{mode === "login" ? "New to TurnOva? Create an account" : "Already registered? Sign in"}</Text></Pressable>
+          {!!error && <Text style={styles.error}>{error}</Text>}
+        </View>
       </ScrollView>
-      <View style={styles.tabBar}>{tabs.map(item => <Pressable key={item} style={styles.tab} onPress={() => setTab(item)}><Text style={[styles.tabText, tab === item && styles.tabActive]}>{item}</Text></Pressable>)}</View>
     </SafeAreaView>
   );
+
+  const position = queue.find(x => x.driverId === user.id)?.position;
+  const tabs = ["Home", "Queue", "Trips", "Profile"] as const;
+  return <SafeAreaView style={styles.safe}><StatusBar style="light" />
+    <View style={styles.header}><View><Text style={styles.brand}>TurnOva</Text><Text style={styles.tagline}>Driver partner · {user.name || user.email}</Text></View><Text style={styles.role}>DRIVER</Text></View>
+    <ScrollView contentContainerStyle={styles.content}>
+      {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · Auto</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>View queue</Text></Pressable></View></>}
+      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · AUTO</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void joinQueue()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : position ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable><Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
+      {tab === "Trips" && <><Text style={styles.title}>Trips</Text><View style={styles.card}><Text style={styles.muted}>Your accepted offers and trip history will appear here.</Text></View></>}
+      {tab === "Profile" && <><Text style={styles.title}>Your profile</Text><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
+      {!!error && <Text style={styles.error}>{error}</Text>}{!!notice && <Text style={styles.success}>{notice}</Text>}
+    </ScrollView>
+    <View style={styles.tabBar}>{tabs.map(item => <Pressable key={item} style={styles.tab} onPress={() => setTab(item)}><Text style={[styles.tabText, tab === item && styles.tabActive]}>{item}</Text></Pressable>)}</View>
+  </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F4F6F8" },
-  header: { backgroundColor: "#14283F", paddingHorizontal: 22, paddingTop: 18, paddingBottom: 20, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  brand: { color: "#FFFFFF", fontSize: 27, fontWeight: "800" },
-  tagline: { color: "#B8C5D2", marginTop: 2, fontSize: 12 },
-  demoPill: { borderRadius: 20, backgroundColor: "#30445A", paddingHorizontal: 12, paddingVertical: 7 },
-  demoText: { color: "#F7B65F", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
-  content: { padding: 22, paddingBottom: 34 },
-  eyebrow: { color: "#D58B32", fontWeight: "800", fontSize: 11, letterSpacing: 1.4, marginTop: 8 },
-  title: { color: "#172B42", fontSize: 29, fontWeight: "800", marginTop: 8 },
-  sub: { color: "#718094", fontSize: 14, marginTop: 6, marginBottom: 20 },
-  card: { backgroundColor: "#FFFFFF", padding: 20, borderRadius: 20, marginBottom: 16, shadowColor: "#152B45", shadowOpacity: 0.06, shadowRadius: 12, elevation: 2 },
-  cardLabel: { color: "#8290A0", fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
-  cardTitle: { color: "#172B42", fontSize: 19, fontWeight: "800", marginTop: 7 },
-  muted: { color: "#758397", fontSize: 13, lineHeight: 19, marginTop: 5 },
-  line: { height: 1, backgroundColor: "#E9EDF1", marginVertical: 18 },
-  position: { color: "#D98B2D", fontSize: 42, fontWeight: "900", marginTop: 8 },
-  primary: { backgroundColor: "#E89A3B", borderRadius: 13, paddingVertical: 14, alignItems: "center", marginTop: 18 },
-  primaryText: { color: "#172B42", fontWeight: "800", fontSize: 14 },
-  infoCard: { backgroundColor: "#EAF0F5", padding: 18, borderRadius: 16, marginTop: 4 },
-  infoTitle: { color: "#172B42", fontSize: 16, fontWeight: "800" },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  link: { color: "#C47A21", fontWeight: "800" },
-  availability: { alignSelf: "flex-start", backgroundColor: "#F0F3F6", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 9 },
-  availabilityText: { color: "#30445A", fontWeight: "800", fontSize: 12 },
-  sectionTitle: { color: "#172B42", fontSize: 17, fontWeight: "800", marginTop: 10, marginBottom: 10 },
-  queueItem: { backgroundColor: "#FFFFFF", borderRadius: 14, padding: 13, marginBottom: 9, flexDirection: "row", alignItems: "center", gap: 12 },
-  rank: { width: 34, height: 34, borderRadius: 11, backgroundColor: "#F9EBD8", alignItems: "center", justifyContent: "center" },
-  rankText: { color: "#B66D1D", fontWeight: "900" },
-  driverName: { color: "#20354B", fontWeight: "800" },
-  you: { color: "#B66D1D", fontSize: 10, fontWeight: "900" },
-  status: { color: "#21845A", fontWeight: "800", marginTop: 7, marginBottom: 8 },
-  offline: { color: "#B54708", fontWeight: "800", fontSize: 10 },
-  error: { color: "#B42318", marginTop: 12, fontSize: 13 },
-  success: { color: "#237A54", marginTop: 10, fontSize: 13 },
-  tabBar: { flexDirection: "row", backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E7EBEF", paddingTop: 10, paddingBottom: 16 },
-  tab: { flex: 1, alignItems: "center", paddingVertical: 7 },
-  tabText: { color: "#8793A2", fontSize: 12, fontWeight: "700" },
-  tabActive: { color: "#C47A21" }
-});`
+  safe:{flex:1,backgroundColor:"#F4F6F8"},header:{backgroundColor:"#14283F",padding:22,paddingTop:18},brand:{color:"#FFF",fontSize:25,fontWeight:"800"},tagline:{color:"#B8C5D2",marginTop:4,fontSize:12},role:{color:"#F7B65F",fontWeight:"800",marginTop:6},content:{padding:22,paddingBottom:34},eyebrow:{color:"#D58B32",fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:"#172B42",fontSize:28,fontWeight:"800",marginTop:8},sub:{color:"#718094",fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:"#FFF",padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:"#E2E8EE",borderRadius:12,padding:14,color:"#20354B",marginBottom:12},primary:{backgroundColor:"#E89A3B",borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:"#172B42",fontWeight:"800"},link:{color:"#B66D1D",fontWeight:"800",textAlign:"center",marginTop:18},label:{color:"#8290A0",fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},cardTitle:{color:"#172B42",fontSize:18,fontWeight:"800",marginVertical:8},position:{color:"#D98B2D",fontSize:42,fontWeight:"900",marginTop:6},muted:{color:"#758397",fontSize:13,marginTop:5},queueItem:{backgroundColor:"#FFF",padding:14,borderRadius:12,marginBottom:8},error:{color:"#B42318",marginTop:12},success:{color:"#237A54",marginTop:12},secondary:{borderWidth:1,borderColor:"#D7DEE6",borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:"#30445A",fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:"#FFF",paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:"#8793A2",fontSize:12,fontWeight:"700"},tabActive:{color:"#C47A21"}
+});
