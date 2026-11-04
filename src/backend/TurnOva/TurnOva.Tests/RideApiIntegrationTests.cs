@@ -20,6 +20,17 @@ public sealed class RideApiIntegrationTests
     private const string SigningKey = "turnova-integration-test-signing-key-32-bytes-minimum";
 
     [Fact]
+    public async Task ReadinessEndpointReturnsReadyInInMemoryMode()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var client = factory.CreateClient("Rider", "rider-health");
+
+        var response = await client.GetAsync("/health/ready");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task RiderCanCreateRideAndRepeatRequestWithoutCreatingDuplicate()
     {
         using var factory = new TurnOvaApiFactory();

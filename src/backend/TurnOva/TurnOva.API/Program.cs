@@ -79,7 +79,15 @@ if (useCosmos && (string.IsNullOrWhiteSpace(cosmosEndpoint) || string.IsNullOrWh
 
 if (useCosmos)
 {
-    var cosmosClient = new CosmosClient(cosmosEndpoint!, cosmosKey!, new CosmosClientOptions
+    var cosmosOptions = new CosmosDbOptions
+    {
+        Endpoint = cosmosEndpoint!,
+        Key = cosmosKey!,
+        DatabaseName = databaseName
+    };
+    cosmosOptions.Validate();
+
+    var cosmosClient = new CosmosClient(cosmosOptions.Endpoint, cosmosOptions.Key, new CosmosClientOptions
     {
         SerializerOptions = new CosmosSerializationOptions
         {
@@ -88,12 +96,7 @@ if (useCosmos)
     });
 
     builder.Services.AddSingleton(cosmosClient);
-    builder.Services.AddSingleton(new CosmosDbOptions
-    {
-        Endpoint = cosmosEndpoint!,
-        Key = cosmosKey!,
-        DatabaseName = databaseName
-    });
+    builder.Services.AddSingleton(cosmosOptions);
     builder.Services.AddSingleton<ICosmosMigration, InitialSchemaMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideIdempotencyMigration>();
     builder.Services.AddSingleton<CosmosMigrationRunner>();
@@ -168,6 +171,27 @@ app.MapGet("/health", () => Results.Ok(new
     storage = storageMode,
     database = useCosmos ? databaseName : null
 }));
+
+app.MapGet("/health/ready", async (CancellationToken ct) =>
+{
+    if (!useCosmos)
+        return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode });
+
+    try
+    {
+        await app.Services.GetRequiredService<CosmosClient>()
+            .GetDatabase(databaseName).ReadAsync(cancellationToken: ct);
+        return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode, database = databaseName });
+    }
+    catch (CosmosException ex)
+    {
+        app.Logger.LogWarning(ex, "Cosmos DB readiness check failed.");
+        return Results.Problem(
+            "The configured Cosmos DB database is not reachable.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            title: "Storage dependency unavailable");
+    }
+});
 
 
 var authGroup = app.MapGroup("/api/v1/auth");

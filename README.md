@@ -138,3 +138,14 @@ The ride lifecycle is `Requested → Accepted → Arrived → InProgress → Com
 ## API integration tests
 
 The backend test project includes authenticated end-to-end API tests using an in-memory ASP.NET Core test server. These cover Rider booking and idempotent retries, role restrictions, ride ownership, the complete lifecycle, cancellation rules, terminal location-sharing shutdown, and concurrent Driver acceptance. Cosmos-specific concurrency and SignalR WebSocket/device behavior still require integration environments and are tracked in the test plan.
+
+
+## Cosmos DB configuration and readiness
+
+When Cosmos DB is configured, set the API host's `CosmosDb__Endpoint`, `CosmosDb__Key`, and optional `CosmosDb__DatabaseName` values in its secret/configuration store. The endpoint must be HTTPS; never commit account keys. The API validates these settings at startup and applies schema migrations before accepting traffic.
+
+- `GET /health` reports the API process and selected storage mode.
+- `GET /health/ready` checks the configured Cosmos database and returns HTTP 503 if the dependency cannot be reached.
+- Schema migrations are serialized across API instances using a Cosmos-backed expiring lease in `MigrationLocks`; applied migration IDs are recorded in `MigrationHistory`.
+
+Local in-memory mode does not require Cosmos credentials. Cosmos readiness, migrations, partition behaviour and ETag concurrency still need validation against a real development Cosmos account before production use.
