@@ -184,11 +184,13 @@ public sealed class CosmosMigrationRunner(
         public string AppliedBy { get; set; } = string.Empty;
     }
 
+    private sealed record MigrationLockReadResult(MigrationLockDocument Document, string ETag);
+    private sealed record MigrationLockLease(string Id, string Owner, string ETag);
+
     private sealed record MigrationLockDocument
     {
         public string Id { get; init; } = string.Empty;
         public string Owner { get; init; } = string.Empty;
         public DateTimeOffset ExpiresAtUtc { get; init; }
-        [JsonIgnore] public string? ETag { get; init; }
     }
 }
