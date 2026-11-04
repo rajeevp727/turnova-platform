@@ -179,3 +179,8 @@ TriSend issues 15-minute JWT access tokens and rotating refresh tokens. Mobile c
 Logout revokes the TriSend refresh session, but already-issued access tokens can remain valid until their 15-minute expiry because TurnOva validates them locally. This is an explicit MVP trade-off; immediate revocation requires an online session check or a distributed revocation mechanism.
 
 Email/password only is in scope. Google/Microsoft OAuth and SSO are explicitly excluded. Driver onboarding/KYC and durable ride persistence are also separate work items; a valid Driver role does not by itself prove production driver eligibility.
+
+
+## 16. Ride persistence and location tracking
+
+Ride requests are written to the `Rides` Cosmos DB container (partition key `/rideId`) when Cosmos is configured; local demo mode uses process memory. Drivers can list requested rides and accept one. Only the authenticated assigned driver can submit GPS coordinates for an accepted ride. The rider can read its own ride and latest driver coordinates. The Rider app polls the authoritative ride resource every five seconds while the Activity screen is open and displays the driver and pickup markers on a native map. Driver foreground location collection is permission-gated and stops when the Trips screen is left or the app unmounts. This is a foreground/demo implementation: production requires ETag/conditional acceptance to prevent concurrent claims, a proper active-trip lifecycle, background location policy and permissions, throttling, retention, map-provider review, and device E2E tests.
