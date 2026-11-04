@@ -79,7 +79,15 @@ if (useCosmos && (string.IsNullOrWhiteSpace(cosmosEndpoint) || string.IsNullOrWh
 
 if (useCosmos)
 {
-    var cosmosClient = new CosmosClient(cosmosEndpoint!, cosmosKey!, new CosmosClientOptions
+    var cosmosOptions = new CosmosDbOptions
+    {
+        Endpoint = cosmosEndpoint!,
+        Key = cosmosKey!,
+        DatabaseName = databaseName
+    };
+    cosmosOptions.Validate();
+
+    var cosmosClient = new CosmosClient(cosmosOptions.Endpoint, cosmosOptions.Key, new CosmosClientOptions
     {
         SerializerOptions = new CosmosSerializationOptions
         {
@@ -88,12 +96,7 @@ if (useCosmos)
     });
 
     builder.Services.AddSingleton(cosmosClient);
-    builder.Services.AddSingleton(new CosmosDbOptions
-    {
-        Endpoint = cosmosEndpoint!,
-        Key = cosmosKey!,
-        DatabaseName = databaseName
-    });
+    builder.Services.AddSingleton(cosmosOptions);
     builder.Services.AddSingleton<ICosmosMigration, InitialSchemaMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideIdempotencyMigration>();
     builder.Services.AddSingleton<CosmosMigrationRunner>();
