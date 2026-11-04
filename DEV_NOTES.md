@@ -34,12 +34,12 @@ API prefix: `/api/v1`
 |---|---|---|---|
 | Health | `GET /health` | API status and environment | Implemented |
 | Queue status | `GET /api/v1/zones/{zoneId}/queues/{serviceClass}` | Ordered eligible drivers with position | Implemented |
-| Join queue | `POST /api/v1/queues/join` | Driver ID, zone ID and service class; server assigns sequence | Next |
+| Join queue | `POST /api/v1/queues/join` | Driver ID, zone ID and service class; server assigns sequence | Implemented (in-memory) |
 | Leave queue | `POST /api/v1/queues/leave` | Remove current driver's queue membership | Next |
 | Driver availability | `PATCH /api/v1/drivers/{driverId}/availability` | Online/offline/temporarily unavailable | Next |
 | Rider quote | `POST /api/v1/rides/quote` | Pickup, drop-off, service class, passenger count; demo estimate | Demo stub |
-| Create ride | `POST /api/v1/rides` | Persist ride request and return request ID/status | Next |
-| Ride status | `GET /api/v1/rides/{rideId}` | Current request/dispatch/trip state | Next |
+| Create ride | `POST /api/v1/rides/request` | Pickup, drop-off and passenger count; returns demo ride ID/status | Implemented (in-memory) |
+| Ride status | `GET /api/v1/rides/{rideId}` | Retrieve current demo ride request | Implemented (in-memory) |
 | Driver offers | SignalR `/hubs/driver` | Offer and queue notifications | Later |
 | Rider trip updates | SignalR `/hubs/rider` | Assignment and trip status notifications | Later |
 
@@ -79,7 +79,7 @@ Ride request:
 }
 ```
 
-These are illustrative contracts, not claims that the endpoints are already implemented.
+The API currently seeds three synthetic drivers in `hyderabad-central` / `auto` at startup. The ride endpoint returns a demo fare estimate of ₹85; this is not a production fare calculation.
 
 ## 3. DB tab — Cosmos DB design notes
 
@@ -144,9 +144,10 @@ The product remains two mobile apps (Android/iOS), not a web application. Each E
 
 Use visibly synthetic IDs and Hyderabad sample zones only:
 
-- Zone: `HYD-KPHB`
-- Service class: `standard`
-- Drivers: `DRV-DEMO-001`, `DRV-DEMO-002`, `DRV-DEMO-003`
+- Zone: `hyderabad-central`
+- Service class: `auto`
+- Seeded drivers: `DRV-1001`, `DRV-1002`, `DRV-1003`
+- Driver app demo identity: `DRV-DEMO-004`
 - Sample route: KPHB → HITEC City
 
 Never seed real personal information, phone numbers, licence numbers or vehicle registration numbers.
@@ -177,13 +178,12 @@ Run the relevant app on an Android emulator/device or iOS simulator. Configure t
 
 ## 7. Work sequence
 
-1. Complete queue join/leave API and validation.
-2. Add demo ride quote/create/status endpoints.
-3. Connect Driver Queue and Rider Book screens to the API.
-4. Add tab navigation and polished empty/loading/error states.
-5. Add API and domain tests for FIFO, duplicate membership and invalid requests.
-6. Run both apps against one local API and rehearse the end-to-end demo.
-7. Replace the in-memory store with Cosmos DB only after the database account/configuration is supplied.
+1. Add queue leave and availability endpoints.
+2. Add validation, error handling and API/domain tests for FIFO and duplicate membership.
+3. Add rider quote and dispatch/offer lifecycle endpoints.
+4. Test the mobile API URL on emulator and physical device; adjust the configured base URL as needed.
+5. Run both apps against one local API and rehearse the end-to-end demo.
+6. Replace the in-memory store with Cosmos DB only after the database account/configuration is supplied.
 
 ## 8. Open decisions
 
