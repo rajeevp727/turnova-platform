@@ -351,8 +351,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         return Results.BadRequest(new { message = "Provide valid driver, vehicle and document metadata. Upload files to private object storage and submit opaque storage references only." });
 
     var existing = await FindDriverProfileAsync(driverId, ct);
-    if (existing?.Status == "Approved")
-        return Results.Conflict(new { message = "An approved driver profile cannot be replaced through onboarding." });
+    if (existing?.Status is "Approved" or "Suspended")
+        return Results.Conflict(new { message = "An approved or suspended driver profile cannot be replaced through onboarding." });
 
     var profile = new DriverOnboardingProfile(
         driverId, driverId, request.FullName.Trim(), request.PhoneNumber.Trim(),
@@ -512,8 +512,11 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
     return Results.Created($"/api/v1/rides/{ride.RideId}", ride);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
-app.MapGet("/api/v1/driver/rides/available", async (CancellationToken ct) =>
+app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId) || !await IsDriverApprovedAsync(driverId, ct))
+        return Results.Forbid();
     if (rideContainer is null) return Results.Ok(rides.Values.Where(x => x.Status == "Requested"));
     var query = new QueryDefinition("SELECT * FROM c WHERE c.status = @status").WithParameter("@status", "Requested");
     var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
