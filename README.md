@@ -127,9 +127,14 @@ See [docs/test-plan.md](./docs/test-plan.md) for feature-wise positive, negative
 
 ## Ride persistence and tracking
 
-Feature branch `feature/persistent-rides-live-tracking` adds Cosmos-backed ride request persistence, driver ride acceptance, authenticated driver location updates, and a Rider map that polls for the assigned driver's latest position. Configure Cosmos DB and test on physical devices with location permissions enabled. The current flow is a foreground MVP foundation, not production dispatch or turn-by-turn navigation.
+Ride requests are persisted in Cosmos DB when configured, with an in-memory fallback for local demo. Drivers can accept rides and share foreground location; the Rider map receives live updates through SignalR. Configure Cosmos DB and validate on physical devices with location permissions enabled. The current flow is an MVP foundation, not production dispatch or turn-by-turn navigation.
 
 
 ## Ride lifecycle and realtime updates
 
 The ride lifecycle is `Requested → Accepted → Arrived → InProgress → Completed`, with Rider cancellation allowed before the trip starts. Ride requests require an `Idempotency-Key` header to prevent duplicate creation on retries. Driver location and ride-state updates are broadcast through an ownership-checked SignalR hub at `/hubs/rides`. The Driver app shares foreground location only while the active Trips screen is open; the Rider receives updates over SignalR.
+
+
+## API integration tests
+
+The backend test project includes authenticated end-to-end API tests using an in-memory ASP.NET Core test server. These cover Rider booking and idempotent retries, role restrictions, ride ownership, the complete lifecycle, cancellation rules, terminal location-sharing shutdown, and concurrent Driver acceptance. Cosmos-specific concurrency and SignalR WebSocket/device behavior still require integration environments and are tracked in the test plan.

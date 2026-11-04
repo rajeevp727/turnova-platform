@@ -217,4 +217,4 @@ The GitHub Actions workflow currently runs:
 | TRACK-010 | Rider reconnects after network loss | SignalR reconnects and subsequent location/status events resume | Mobile | P1 |
 | TRACK-011 | Driver leaves Trips screen | Foreground GPS subscription is disposed | Mobile | P0 |
 
-The lifecycle state-machine unit tests are automated. The API, Cosmos, SignalR and device scenarios above remain planned until their corresponding integration/device test suites are executed.
+The lifecycle state-machine unit tests and in-memory API integration tests are automated. API integration coverage includes Rider booking/idempotency, role restrictions, ownership, lifecycle transitions, cancellation rules, terminal location-sharing shutdown, and concurrent Driver acceptance. Cosmos-specific concurrency, SignalR WebSocket authorization/reconnect, and physical-device scenarios still require their corresponding integration/device environments.
