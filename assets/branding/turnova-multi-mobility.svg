@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">TurnOva Multi-Mobility Logo</title>
+  <desc id="desc">A navy rounded-square app icon with blue car and teal scooter panels, TurnOva wordmark, and a road motif.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#073A70"/><stop offset=".48" stop-color="#061D3D"/><stop offset="1" stop-color="#020D22"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#28C8FF"/><stop offset=".55" stop-color="#087BFA"/><stop offset="1" stop-color="#0648C8"/></linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#25F2C5"/><stop offset="1" stop-color="#00A98F"/></linearGradient>
+  </defs>
+  <rect x="24" y="24" width="976" height="976" rx="190" fill="url(#bg)"/>
+  <path d="M170 510 360 230Q380 200 420 200H680Q730 200 700 245L515 520Q495 550 455 550H205Q145 550 170 510Z" fill="url(#blue)"/>
+  <path d="M490 590 680 315Q700 285 740 285H850Q900 285 870 330L690 605Q670 635 630 635H525Q465 635 490 590Z" fill="url(#teal)"/>
+  <g fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M280 390 315 330Q327 310 350 310H500Q523 310 535 330L570 390"/>
+    <path d="M260 395Q260 375 282 375H570Q592 375 592 395V460Q592 480 570 480H282Q260 480 260 460Z" fill="#fff" stroke="none"/>
+    <path d="M300 405 330 400 355 425H305Z M550 405 520 400 495 425H545Z" fill="#0751B9" stroke="none"/>
+    <path d="M370 448H480" stroke="#0751B9" stroke-width="13"/>
+    <path d="M315 480 300 510M540 480 555 510"/>
+  </g>
+  <g fill="#fff" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="735" cy="390" r="24"/>
+    <path d="M718 425Q735 410 755 425L790 458 825 460Q840 461 836 476Q832 490 816 487L775 484 750 465 735 510 690 535 665 520 700 480Z"/>
+    <path d="M665 520 635 540 615 540 605 530 622 514 655 500Z"/>
+    <path d="M745 505 790 505 815 525 785 540 730 540Z"/>
+    <path d="M610 542H830" fill="none" stroke-width="15"/>
+    <circle cx="640" cy="550" r="28" fill="none" stroke-width="14"/>
+    <circle cx="820" cy="550" r="28" fill="none" stroke-width="14"/>
+  </g>
+  <text x="150" y="790" font-family="Arial, Helvetica, sans-serif" font-size="150" font-weight="800" font-style="italic" fill="#fff" letter-spacing="-8">Turn</text>
+  <text x="470" y="790" font-family="Arial, Helvetica, sans-serif" font-size="150" font-weight="800" font-style="italic" fill="#16DDB8" letter-spacing="-8">Ova</text>
+  <path d="M235 860Q500 790 785 850" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round"/>
+  <path d="M370 850 410 840M495 831 535 825M620 826 660 829" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-dasharray="30 22"/>
+</svg>
