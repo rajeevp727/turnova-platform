@@ -1,5 +1,6 @@
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
+using System.Text.Json.Serialization;
 
 namespace TurnOva.Infrastructure.Database;
 
@@ -167,7 +168,7 @@ public sealed class CosmosMigrationRunner(
             await locks.DeleteItemAsync<MigrationLockDocument>(
                 lease.Id, new PartitionKey(lease.Id),
                 new ItemRequestOptions { IfMatchEtag = lease.ETag },
-                cancellationToken);
+                CancellationToken.None);
         }
         catch (CosmosException ex) when (
             ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
@@ -189,6 +190,6 @@ public sealed class CosmosMigrationRunner(
         public string Id { get; init; } = string.Empty;
         public string Owner { get; init; } = string.Empty;
         public DateTimeOffset ExpiresAtUtc { get; init; }
-        public string? ETag { get; init; }
+        [JsonIgnore] public string? ETag { get; init; }
     }
 }
