@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Domain.Dispatch;
 
@@ -36,6 +38,8 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-onboarding-pending");
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            .TryRemove("driver-onboarding-pending", out _);
 
         var submission = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest());
         Assert.Equal(HttpStatusCode.Accepted, submission.StatusCode);
