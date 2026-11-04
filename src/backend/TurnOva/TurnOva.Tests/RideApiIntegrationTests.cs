@@ -56,7 +56,7 @@ public sealed class RideApiIntegrationTests
         {
             Content = JsonContent.Create(new { status = "Approved", reason = (string?)null })
         };
-        approval.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key");
+        approval.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         var approved = await driver.SendAsync(approval);
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
 
@@ -83,7 +83,7 @@ public sealed class RideApiIntegrationTests
         {
             Content = JsonContent.Create(new { status = "Suspended", reason = "Verification failed" })
         };
-        review.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key");
+        review.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         Assert.Equal(HttpStatusCode.OK, (await driver.SendAsync(review)).StatusCode);
 
         Assert.Equal(HttpStatusCode.Forbidden,
@@ -279,7 +279,7 @@ public sealed class RideApiIntegrationTests
                     ["Auth:Jwt:Audience"] = Audience,
                     ["Auth:Jwt:SigningKey"] = SigningKey,
                     ["TriSend:BaseUrl"] = "https://localhost:7443",
-                    ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key"
+                    ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars"
                 }));
         }
 
