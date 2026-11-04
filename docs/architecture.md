@@ -237,3 +237,8 @@ The PDF contains identity, employer, pay period and work metrics only. Monetary 
 ## 22. Mobile appearance and theming
 
 Both Expo applications implement a shared visual contract with equivalent local theme tokens: background, header, surface, text, muted text, borders, accent, status colors and navigation states. Theme preference is `system` by default and resolves using React Native `useColorScheme`; explicit `light` and `dark` choices override the system. The selected preference is persisted in Expo SecureStore under `turnova.theme`, so it survives app restarts and can be used by both TurnOva apps on the same device. Theme selection is available before sign-in and in Profile. The Rider map uses a dark map style when Dark is active. No backend preference endpoint or account-level synchronization is required.
+
+
+### Union approval for driver profile selfies
+
+A driver's selfie is private by default. The driver onboarding profile stores photo approval status, approving union ID, review timestamp and rejection reason. Uploading or replacing a selfie resets approval to Pending and clears the approving union. The review action is allowed only for the driver's currently active union assignment. Approval is scoped to that union: a transfer to another union automatically hides the old approval. Union member-list responses suppress the Base64 image unless the photo is Approved by the union that currently owns the assignment. The member-detail review endpoint remains operations-protected and can return a pending image for inspection. The current union review endpoint uses the shared operations admin key temporarily; authenticated union-manager RBAC and actor-level audit records are required before production.
