@@ -14,10 +14,11 @@ public sealed class InMemoryQueueStore : IQueueStore
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
         var key = Key(zoneId, serviceClass);
-        var entries = _queues.TryGetValue(key, out var queue)
-            ? queue.Entries
-            : Array.Empty<DriverQueueEntry>();
-        return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(entries);
+        if (!_queues.TryGetValue(key, out var queue))
+            return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(Array.Empty<DriverQueueEntry>());
+
+        lock (queue)
+            return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(queue.Entries);
     }
 
     public Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken)
