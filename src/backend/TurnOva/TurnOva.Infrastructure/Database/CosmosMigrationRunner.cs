@@ -113,7 +113,7 @@ public sealed class CosmosMigrationRunner(
                             replacement, replacement.Id, new PartitionKey(replacement.Id),
                             new ItemRequestOptions { IfMatchEtag = current.ETag },
                             cancellationToken);
-                        logger.LogWarning("Recovered expired Cosmos migration lock owned by {PreviousOwner}.", current.Owner);
+                        logger.LogWarning("Recovered expired Cosmos migration lock owned by {PreviousOwner}.", current.Document.Owner);
                         return new MigrationLockLease(replacement.Id, owner, response.ETag);
                     }
                     catch (CosmosException replaceException) when (
@@ -160,7 +160,7 @@ public sealed class CosmosMigrationRunner(
     }
 
     private static async Task ReleaseLockAsync(
-        Container locks, MigrationLockDocument lease, CancellationToken cancellationToken)
+        Container locks, MigrationLockLease lease)
     {
         try
         {
