@@ -248,6 +248,28 @@ public sealed class RideApiIntegrationTests
 
 
 
+
+    [Fact]
+    public async Task DriverCanDeclineRideWithoutCancellingItAndRejectionIsCountedOnce()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-decline-test");
+        using var driver = factory.CreateClient("Driver", "driver-decline-test");
+        var ride = await CreateRideAsync(rider, "request-driver-decline-001");
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null)).StatusCode);
+
+        var stillAvailable = await rider.GetFromJsonAsync<TestRide>($"/api/v1/rides/{ride.RideId}");
+        Assert.NotNull(stillAvailable);
+        Assert.Equal("Requested", stillAvailable.Status);
+
+        var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        Assert.Single(ledger.Values.Where(item => item.DriverId == "driver-decline-test" && item.ActivityType == "Rejected"));
+    }
+
     [Fact]
     public async Task DriverCanDownloadPersistedMonthlyPayslipAsPdfWithMetrics()
     {
