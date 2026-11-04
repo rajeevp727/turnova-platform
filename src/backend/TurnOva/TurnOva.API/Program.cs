@@ -130,7 +130,7 @@ app.UseCors();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization(policy => policy.RequireRole("Rider"));
+app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
