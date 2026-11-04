@@ -158,3 +158,13 @@ Drivers submit their profile, vehicle details and private document-storage refer
 An operations reviewer can approve, reject or suspend a driver through `POST /api/v1/ops/drivers/{driverId}/review`. This interim endpoint requires a 32+ character `DriverOnboarding__AdminApiKey` on the API host and the `X-Driver-Admin-Key` header. Approval requires DrivingLicence and VehicleRegistration references. Keep this secret server-side; it is a temporary operations integration, not a replacement for an authenticated Ops portal/RBAC.
 
 Document files are not uploaded or stored by this API. The request accepts opaque object-storage references only. Use private object storage, upload authorization, malware scanning, access auditing, retention and deletion controls before handling real identity documents.
+
+## Union management and driver allocation
+
+Operations can create and manage driver unions through the interim operations API. A union has a unique code, supported service zones and service classes, optional location/manager details, and an Active/Inactive/Suspended status. Only approved drivers can be assigned. The assignment must be compatible with the driver's approved zone and service class.
+
+Use POST /api/v1/ops/unions to create a union, GET /api/v1/ops/unions to list unions, and PUT /api/v1/ops/unions/{unionId}/status to change its status. Assign or transfer a driver with POST /api/v1/ops/drivers/{driverId}/union-assignment; every operation requires a reason. The current driver can read their assignment from GET /api/v1/driver/union. Operations can inspect the driver's transfer history at GET /api/v1/ops/drivers/{driverId}/union-history, and list active members at GET /api/v1/ops/unions/{unionId}/drivers.
+
+These interim operations endpoints use the server-side DriverOnboarding:AdminApiKey and X-Driver-Admin-Key header. Keep the key in backend secret storage only. This is not an Ops portal or a production RBAC model. Driver assignment history is retained as audit events; the assignment record represents the current union. Cosmos mode creates Unions, DriverUnionAssignments and DriverUnionAudit containers. Local demo mode uses in-memory stores.
+
+Union membership is currently an operational/employer association and is not yet a dispatch eligibility gate. Payroll, employment contracts, payslip generation and compensation calculations are separate follow-up work.
