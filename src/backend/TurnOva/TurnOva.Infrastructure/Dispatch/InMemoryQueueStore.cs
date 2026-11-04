@@ -31,5 +31,18 @@ public sealed class InMemoryQueueStore : IQueueStore
         return Task.CompletedTask;
     }
 
-    private static string Key(string zoneId, string serviceClass) => $"{zoneId}:{serviceClass}";
+    public Task<bool> RemoveAsync(
+        string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = Key(zoneId, serviceClass);
+        if (!_queues.TryGetValue(key, out var queue))
+            return Task.FromResult(false);
+
+        lock (queue)
+            return Task.FromResult(queue.Remove(driverId));
+    }
+
+    private static string Key(string zoneId, string serviceClass) =>
+        $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
 }
