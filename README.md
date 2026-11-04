@@ -63,7 +63,7 @@ Prerequisites: .NET 10 SDK, Node.js LTS/npm, Expo tooling, Android Studio and/or
     git clone https://github.com/rajeevp727/turnova-platform.git
     cd turnova-platform
 
-The backend solution and mobile app projects are planned under src/. Once scaffolded, use the .NET 10 SDK and keep backend projects targeting net10.0.
+The backend solution and two Expo mobile apps are implemented under `src/`. Use the .NET 10 SDK and keep backend projects targeting `net10.0`.
 
 ## Roadmap
 
@@ -89,7 +89,7 @@ Use free tiers and low-cost services for development where practical. Production
 
 ## Status
 
-This repository currently contains product documentation and the agreed initial technical direction. Application code, infrastructure and CI/CD will be added incrementally.
+The repository contains the initial API, Driver and Rider demo clients, Cosmos DB queue adapter/migrations, and CI validation. Authentication now integrates with TriSend email/password endpoints. Ride storage and dispatch remain demo-level; do not treat the current build as production-ready.
 
 
 ## MVP development notes
