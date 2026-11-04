@@ -5,8 +5,27 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { useCallback, useEffect, useState } from "react";
+import { useColorScheme } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+type ThemePreference = "light" | "dark" | "system";
+type ThemeColors = {
+  background: string; header: string; surface: string; text: string; muted: string;
+  border: string; accent: string; accentText: string; subtle: string; label: string;
+  danger: string; success: string; tabInactive: string; tabActive: string;
+};
+const lightColors: ThemeColors = {
+  background: "#F4F6F8", header: "#14283F", surface: "#FFFFFF", text: "#172B42",
+  muted: "#718094", border: "#E2E8EE", accent: "#E89A3B", accentText: "#172B42",
+  subtle: "#B8C5D2", label: "#8290A0", danger: "#B42318", success: "#237A54",
+  tabInactive: "#8793A2", tabActive: "#C47A21"
+};
+const darkColors: ThemeColors = {
+  background: "#0F1722", header: "#101D2B", surface: "#182536", text: "#E8EEF5",
+  muted: "#A6B3C2", border: "#344457", accent: "#E89A3B", accentText: "#172B42",
+  subtle: "#A6B3C2", label: "#A6B3C2", danger: "#FF8A80", success: "#70D6A0",
+  tabInactive: "#9AA9B9", tabActive: "#F7B65F"
+};
 const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
 const ZONE = "hyderabad-central";
 const SERVICE = "auto";
@@ -35,6 +54,8 @@ async function jsonRequest(path: string, init: RequestInit = {}, token?: string)
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
+  const systemColorScheme = useColorScheme();
   const [tokens, setTokens] = useState<Tokens | null>(null);
   const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Payslips" | "Profile">("Home");
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -56,6 +77,19 @@ export default function App() {
   const [vehicleRegistration, setVehicleRegistration] = useState("");
   const [licenceReference, setLicenceReference] = useState("");
   const [registrationReference, setRegistrationReference] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    void SecureStore.getItemAsync("turnova.theme").then(value => {
+      if (mounted && (value === "light" || value === "dark" || value === "system")) setThemePreference(value);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
+  const selectTheme = (preference: ThemePreference) => {
+    setThemePreference(preference);
+    void SecureStore.setItemAsync("turnova.theme", preference);
+  };
 
   const acceptSession = useCallback(async (result: any) => {
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
@@ -287,17 +321,23 @@ export default function App() {
     await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null });
   };
 
-  if (loading && !user) return <SafeAreaView style={styles.safe}><ActivityIndicator color="#E89A3B" style={{ marginTop: 80 }} /></SafeAreaView>;
+  const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
+  const colors = resolvedTheme === "dark" ? darkColors : lightColors;
+  const styles = createStyles(colors);
+  const themePicker = <View style={styles.themePicker}>
+    {(["system", "light", "dark"] as const).map(option => <Pressable key={option} onPress={() => selectTheme(option)} style={[styles.themeOption, themePreference === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, themePreference === option && styles.themeOptionTextSelected]}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</Text></Pressable>)}
+  </View>;
+  if (loading && !user) return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{ marginTop: 80 }} /></SafeAreaView>;
   if (!user) return (
-    <SafeAreaView style={styles.safe}><StatusBar style="light" />
+    <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
       <View style={styles.header}><Text style={styles.brand}>TurnOva Driver</Text><Text style={styles.tagline}>Everyone’s Turn Matters.</Text></View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>DRIVER PARTNER</Text><Text style={styles.title}>{mode === "login" ? "Welcome back" : "Create your account"}</Text>
-        <Text style={styles.sub}>Sign in securely with your email and password.</Text>
+        <Text style={styles.sub}>Sign in securely with your email and password.</Text>{themePicker}
         <View style={styles.card}>
-          {mode === "register" && <TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Full name" autoCapitalize="words" />}
-          <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-          <TextInput value={password} onChangeText={setPassword} style={styles.input} placeholder="Password" secureTextEntry />
+          {mode === "register" && <TextInput value={name} onChangeText={setName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full name" autoCapitalize="words" />}
+          <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholderTextColor={colors.muted} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+          <TextInput value={password} onChangeText={setPassword} style={styles.input} placeholderTextColor={colors.muted} placeholder="Password" secureTextEntry />
           <Pressable style={styles.primary} disabled={loading || !email.trim() || !password} onPress={() => void authenticate()}><Text style={styles.primaryText}>{loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create driver account"}</Text></Pressable>
           <Pressable onPress={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}><Text style={styles.link}>{mode === "login" ? "New to TurnOva? Create an account" : "Already registered? Sign in"}</Text></Pressable>
           {!!error && <Text style={styles.error}>{error}</Text>}
@@ -308,27 +348,27 @@ export default function App() {
 
   const position = membership.position;
   const tabs = ["Home", "Queue", "Trips", "Payslips", "Profile"] as const;
-  return <SafeAreaView style={styles.safe}><StatusBar style="light" />
+  return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
     <View style={styles.header}><View><Text style={styles.brand}>TurnOva</Text><Text style={styles.tagline}>Driver partner · {user.name || user.email}</Text></View><Text style={styles.role}>DRIVER</Text></View>
     <ScrollView contentContainerStyle={styles.content}>
       {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · Auto</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>View queue</Text></Pressable></View></>}
       {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · AUTO</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void (membership.isQueued ? loadQueue() : joinQueue())} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : membership.isQueued ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable>{membership.isQueued && <Pressable style={styles.secondary} onPress={() => void leaveQueue()} disabled={loading}><Text style={styles.secondaryText}>Leave queue</Text></Pressable>}<Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
       {tab === "Trips" && <><Text style={styles.title}>Ride requests</Text><View style={styles.card}><Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh requests</Text></Pressable>{availableRides.map(item=><View key={item.rideId} style={{marginTop:14}}><Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text><Text style={styles.muted}>{item.passengers} passenger(s) · {item.rideId}</Text><View style={{ flexDirection: "row", gap: 10 }}><Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void acceptRide(item.rideId)}><Text style={styles.secondaryText}>Accept ride</Text></Pressable><Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void rejectRide(item.rideId)}><Text style={styles.secondaryText}>Decline</Text></Pressable></View></View>)}{activeRide&&<><Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>{activeRide.status==="Accepted"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("arrive")}><Text style={styles.secondaryText}>Mark arrived</Text></Pressable>}{activeRide.status==="Arrived"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable>}{activeRide.status==="InProgress"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}</>}</View></>}
-      {tab === "Payslips" && <><Text style={styles.eyebrow}>MONTHLY PDF DOCUMENTS</Text><Text style={styles.title}>Your payslips</Text><Text style={styles.sub}>Download a completed month's payslip as a PDF. Only finalized months are available.</Text><View style={styles.card}><Text style={styles.cardTitle}>Recent months</Text>{Array.from({ length: 12 }, (_, index) => { const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - index - 1); const year = date.getFullYear(); const month = date.getMonth() + 1; const label = date.toLocaleDateString(undefined, { month: "long", year: "numeric" }); return <View key={`${year}-${month}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#EDF0F3" }}><Text style={styles.cardTitle}>{label}</Text><Pressable style={styles.secondary} disabled={loading} onPress={() => void downloadPayslip(year, month)}><Text style={styles.secondaryText}>Download PDF</Text></Pressable></View>; })}</View></>}
-      {tab === "Profile" && <><Text style={styles.title}>Driver onboarding</Text><View style={styles.card}>
+      {tab === "Payslips" && <><Text style={styles.eyebrow}>MONTHLY PDF DOCUMENTS</Text><Text style={styles.title}>Your payslips</Text><Text style={styles.sub}>Download a completed month's payslip as a PDF. Only finalized months are available.</Text><View style={styles.card}><Text style={styles.cardTitle}>Recent months</Text>{Array.from({ length: 12 }, (_, index) => { const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - index - 1); const year = date.getFullYear(); const month = date.getMonth() + 1; const label = date.toLocaleDateString(undefined, { month: "long", year: "numeric" }); return <View key={`${year}-${month}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}><Text style={styles.cardTitle}>{label}</Text><Pressable style={styles.secondary} disabled={loading} onPress={() => void downloadPayslip(year, month)}><Text style={styles.secondaryText}>Download PDF</Text></Pressable></View>; })}</View></>}
+      {tab === "Profile" && <><Text style={styles.title}>Driver onboarding</Text>{themePicker}<Text style={styles.label}>APP THEME</Text><View style={styles.card}>
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
         {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
           <Text style={styles.sub}>Complete your driver and vehicle details. Your application will remain pending until reviewed.</Text>
-          <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholder="Full legal name" />
-          <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholder="Phone number with country code" keyboardType="phone-pad" />
-          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholder="Vehicle make (e.g. Bajaj)" />
-          <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={styles.input} placeholder="Vehicle model" />
-          <TextInput value={vehicleRegistration} onChangeText={setVehicleRegistration} style={styles.input} placeholder="Vehicle registration number" autoCapitalize="characters" />
+          <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full legal name" />
+          <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholderTextColor={colors.muted} placeholder="Phone number with country code" keyboardType="phone-pad" />
+          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Bajaj)" />
+          <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle model" />
+          <TextInput value={vehicleRegistration} onChangeText={setVehicleRegistration} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle registration number" autoCapitalize="characters" />
           <Text style={styles.label}>PRIVATE DOCUMENT STORAGE REFERENCES</Text>
           <Text style={styles.muted}>Upload files to your approved private storage workflow first. Enter opaque object references, not public URLs.</Text>
-          <TextInput value={licenceReference} onChangeText={setLicenceReference} style={styles.input} placeholder="Driving licence object reference" autoCapitalize="none" />
-          <TextInput value={registrationReference} onChangeText={setRegistrationReference} style={styles.input} placeholder="Vehicle RC object reference" autoCapitalize="none" />
+          <TextInput value={licenceReference} onChangeText={setLicenceReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Driving licence object reference" autoCapitalize="none" />
+          <TextInput value={registrationReference} onChangeText={setRegistrationReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle RC object reference" autoCapitalize="none" />
           <Pressable style={styles.primary} disabled={loading || !driverName.trim() || !phoneNumber.trim() || !vehicleMake.trim() || !vehicleModel.trim() || !vehicleRegistration.trim() || !licenceReference.trim() || !registrationReference.trim()} onPress={() => void submitOnboarding()}><Text style={styles.primaryText}>{loading ? "Please wait…" : onboardingProfile ? "Resubmit for review" : "Submit for approval"}</Text></Pressable>
         </>}
       </View><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
@@ -338,6 +378,8 @@ export default function App() {
   </SafeAreaView>;
 }
 
-const styles = StyleSheet.create({
-  safe:{flex:1,backgroundColor:"#F4F6F8"},header:{backgroundColor:"#14283F",padding:22,paddingTop:18},brand:{color:"#FFF",fontSize:25,fontWeight:"800"},tagline:{color:"#B8C5D2",marginTop:4,fontSize:12},role:{color:"#F7B65F",fontWeight:"800",marginTop:6},content:{padding:22,paddingBottom:34},eyebrow:{color:"#D58B32",fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:"#172B42",fontSize:28,fontWeight:"800",marginTop:8},sub:{color:"#718094",fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:"#FFF",padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:"#E2E8EE",borderRadius:12,padding:14,color:"#20354B",marginBottom:12},primary:{backgroundColor:"#E89A3B",borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:"#172B42",fontWeight:"800"},link:{color:"#B66D1D",fontWeight:"800",textAlign:"center",marginTop:18},label:{color:"#8290A0",fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},cardTitle:{color:"#172B42",fontSize:18,fontWeight:"800",marginVertical:8},position:{color:"#D98B2D",fontSize:42,fontWeight:"900",marginTop:6},muted:{color:"#758397",fontSize:13,marginTop:5},queueItem:{backgroundColor:"#FFF",padding:14,borderRadius:12,marginBottom:8},error:{color:"#B42318",marginTop:12},success:{color:"#237A54",marginTop:12},secondary:{borderWidth:1,borderColor:"#D7DEE6",borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:"#30445A",fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:"#FFF",paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:"#8793A2",fontSize:12,fontWeight:"700"},tabActive:{color:"#C47A21"}
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  safe:{flex:1,backgroundColor:colors.background},header:{backgroundColor:colors.header,padding:22,paddingTop:18},brand:{color:"#FFFFFF",fontSize:25,fontWeight:"800"},tagline:{color:colors.subtle,marginTop:4,fontSize:12},role:{color:colors.tabActive,fontWeight:"800",marginTop:6},content:{padding:22,paddingBottom:34},eyebrow:{color:colors.tabActive,fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:colors.text,fontSize:28,fontWeight:"800",marginTop:8},sub:{color:colors.muted,fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:colors.surface,padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.text,marginBottom:12},primary:{backgroundColor:colors.accent,borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:colors.accentText,fontWeight:"800"},link:{color:colors.tabActive,fontWeight:"800",textAlign:"center",marginTop:18},label:{color:colors.label,fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},cardTitle:{color:colors.text,fontSize:18,fontWeight:"800",marginVertical:8},position:{color:colors.tabActive,fontSize:42,fontWeight:"900",marginTop:6},muted:{color:colors.muted,fontSize:13,marginTop:5},queueItem:{backgroundColor:colors.surface,padding:14,borderRadius:12,marginBottom:8},error:{color:colors.danger,marginTop:12},success:{color:colors.success,marginTop:12},secondary:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:colors.text,fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:colors.surface,paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:colors.tabInactive,fontSize:12,fontWeight:"700"},tabActive:{color:colors.tabActive},themePicker:{flexDirection:"row",gap:8,marginTop:10,marginBottom:10},themeOption:{flex:1,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,alignItems:"center",backgroundColor:colors.surface},themeOptionSelected:{backgroundColor:colors.header,borderColor:colors.header},themeOptionText:{color:colors.muted,fontWeight:"700",fontSize:12},themeOptionTextSelected:{color:"#FFFFFF",fontWeight:"800"}
 });
+}

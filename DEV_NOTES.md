@@ -335,3 +335,7 @@ The Driver app exposes a Payslips tab for recent completed months and downloads/
 PR #12 adds a driver-only monthly PDF payslip endpoint and immutable work activity/payslip records. Accepted, explicit driver rejection and completed ride events are counted separately. Distinct India-local dates with completed rides count as days worked; rider cancellations are not rejections. A completed ride contributes to both accepted and completed totals. Payslips are generated only for completed IST calendar months and persisted as immutable snapshots.
 
 Cosmos containers: DriverWorkActivities (/driverId) and DriverPayslips (/driverId). The PDF is the only payslip output format. No monetary amount is shown because compensation rules are not defined. If union membership changes within a month, this version rejects payslip generation rather than attributing the entire period to one employer. Activity appends are not atomic with ride state transitions; add an outbox/reconciliation strategy before production.
+
+## Application light and dark theme
+
+Both Driver and Rider Expo apps now support Light, Dark and System modes. System is the default and uses `useColorScheme`; explicit preferences are saved in SecureStore (`turnova.theme`). Theme controls are available on sign-in and Profile. Dynamic palette tokens cover app backgrounds, header, cards, text, inputs, borders, buttons, tabs, status bar, and feedback messages. Rider map switches to a dark map style. Validate visual contrast and map provider behavior on physical Android/iOS devices.

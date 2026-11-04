@@ -178,3 +178,7 @@ Drivers can download a finalized monthly payslip as a PDF from GET /api/v1/drive
 The PDF contains the driver and union/employer identity, pay period, distinct days with at least one completed ride, rides accepted, rides completed and explicitly rejected rides. A ride accepted and later completed contributes to both accepted and completed counts. Rider cancellations are not counted as driver rejections. A driver rejection is recorded through POST /api/v1/rides/{rideId}/reject and does not change the ride's availability for other drivers.
 
 Work activity is recorded as an append-only per-driver ledger and monthly payslip snapshots are persisted once generated. The Cosmos migration creates DriverWorkActivities and DriverPayslips containers, both partitioned by /driverId. In-memory stores support local tests. The current PDF explicitly states that monetary compensation is not configured; earnings, deductions and net payable are not fabricated. This increment is a work-metrics payslip until the union compensation model is agreed and implemented.
+
+## Application themes
+
+TurnOva Driver and TurnOva Rider support Light, Dark and System appearance modes. System is the default and follows the device appearance; Light and Dark can be selected from the sign-in screen or the Profile screen. The preference is persisted locally using Expo SecureStore and applied across the app shell, authentication screens, cards, inputs, navigation, status bar, feedback states and the Rider map. Theme selection does not change account/session data or backend APIs.
