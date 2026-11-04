@@ -274,7 +274,7 @@ export default function App() {
       {tab === "Profile" && <><Text style={styles.title}>Driver onboarding</Text><View style={styles.card}>
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
-        {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : <>
+        {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
           <Text style={styles.sub}>Complete your driver and vehicle details. Your application will remain pending until reviewed.</Text>
           <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholder="Full legal name" />
           <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholder="Phone number with country code" keyboardType="phone-pad" />
