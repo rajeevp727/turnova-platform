@@ -92,6 +92,7 @@ public sealed class RideApiIntegrationTests
 
     private static object ValidOnboardingRequest() => new
     {
+        zoneId = "hyderabad-central",
         fullName = "Test Driver",
         phoneNumber = "+919876543210",
         vehicleMake = "Bajaj",
@@ -296,7 +297,7 @@ public sealed class RideApiIntegrationTests
             {
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
                 profiles[subject] = new DriverOnboardingProfile(
-                    subject, subject, "Approved Test Driver", "+919876543210",
+                    subject, subject, "hyderabad-central", "Approved Test Driver", "+919876543210",
                     "Bajaj", "RE", "TS09AB1234", "auto", 3,
                     [new DriverDocumentReference("DrivingLicence", "test/licence")],
                     "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
