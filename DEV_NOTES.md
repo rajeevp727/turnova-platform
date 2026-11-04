@@ -185,6 +185,62 @@ Run the relevant app on an Android emulator/device or iOS simulator. Configure t
 5. Run both apps against one local API and rehearse the end-to-end demo.
 6. Replace the in-memory store with Cosmos DB only after the database account/configuration is supplied.
 
+
+## 9. Cosmos DB configuration and automatic migrations
+
+The API supports two storage modes:
+
+- **Cosmos DB mode:** enabled when both `CosmosDb:Endpoint` and `CosmosDb:Key` are configured. Startup runs pending migrations before the API begins accepting requests. Queue membership is persisted in Cosmos DB.
+- **Local demo mode:** when neither setting is configured, the API uses the seeded in-memory queue. This mode is for UI demos only and is not durable.
+
+### Configure local secrets
+
+From `src/backend/TurnOva/TurnOva.API`:
+
+```bash
+dotnet user-secrets init
+dotnet user-secrets set "CosmosDb:Endpoint" "https://YOUR-ACCOUNT.documents.azure.com:443/"
+dotnet user-secrets set "CosmosDb:Key" "YOUR-COSMOS-PRIMARY-KEY"
+dotnet user-secrets set "CosmosDb:DatabaseName" "TurnOvaDb"
+dotnet run
+```
+
+Do not put account keys in `appsettings.json`, source control, mobile apps, or screenshots. In hosted environments, use environment variables or a managed identity when configured.
+
+### Migration mechanism
+
+- Migration source: `TurnOva.Infrastructure/Database/Migrations`.
+- Migration contract: `ICosmosMigration`.
+- Runner: `CosmosMigrationRunner`.
+- History container: `MigrationHistory`, partition key `/id`.
+- Each migration has a stable, sortable ID and is recorded only after its `UpAsync` completes.
+- Applied migrations are skipped on subsequent API starts.
+- Container creation uses Cosmos `CreateContainerIfNotExistsAsync`, so the initial schema migration is safe to retry after an interrupted startup.
+- Startup fails fast if Cosmos credentials are partially configured or a migration fails; the API does not start in a partially migrated Cosmos mode.
+
+Initial migration `202611050001_InitialSchema` creates:
+`Drivers` (/driverId), `Riders` (/riderId), `Zones` (/zoneId), `QueueEntries` (/zoneServiceKey), and `Rides` (/rideId), plus `MigrationHistory` (/id).
+
+**Current persistence boundary:** the queue adapter uses Cosmos DB when configured. Ride requests are still stored in process memory in this MVP and will be moved to the `Rides` container in a subsequent migration/implementation. The API's local in-memory mode seeds synthetic queue drivers; Cosmos mode does not seed them.
+
+### Add a future migration
+
+1. Add a class implementing `ICosmosMigration` under `Database/Migrations`.
+2. Give it a unique sortable ID, e.g. `202611060001_AddDriverIndexes`.
+3. Implement idempotent schema/data changes in `UpAsync`.
+4. Register it with dependency injection in `TurnOva.API/Program.cs`.
+5. Never edit a migration that has already been applied to a shared environment; add a new migration instead.
+
+### Mobile API URL
+
+Both Expo apps read `EXPO_PUBLIC_API_BASE_URL` and fall back to `http://10.0.2.2:5000` for the Android emulator. Create a local `.env` in each app folder with the API URL reachable from that device, then restart Expo:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://YOUR-COMPUTER-LAN-IP:5000
+```
+
+Use the computer's LAN IP for a physical phone; Android emulator commonly uses `10.0.2.2`; iOS simulator can use `localhost`. The API port must match the URL printed by `dotnet run`.
+
 ## 8. Open decisions
 
 - Final zone boundaries and service/vehicle classes.
@@ -192,5 +248,4 @@ Run the relevant app on an Android emulator/device or iOS simulator. Configure t
 - Offer timeout and cross-zone fallback policy.
 - Fare calculation and cancellation policy.
 - Maps, OTP, payment and push-notification providers.
-- Cosmos DB account, database/container provisioning and partition-key validation.
 - Authentication provider and KYC workflow.
