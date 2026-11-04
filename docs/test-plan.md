@@ -237,3 +237,24 @@ The lifecycle state-machine unit tests and in-memory API integration tests are a
 | COSMOS-READY-003 | API runs in in-memory demo mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
 
 Automated tests cover Cosmos configuration validation. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
+
+
+## 14. Driver onboarding and eligibility
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DRV-ONB-001 | Driver submits valid profile, vehicle and document references | Profile is stored as Pending; client cannot set status | API | P0 |
+| DRV-ONB-002 | Driver reads own onboarding status | Only the authenticated Driver's profile is returned | API security | P0 |
+| DRV-ONB-003 | Driver submits invalid contact/vehicle/document metadata | HTTP 400; no profile is stored | API validation | P0 |
+| DRV-ONB-004 | Driver submits an external document URL | HTTP 400; only opaque storage references are accepted | API security | P0 |
+| DRV-ONB-005 | Pending or Rejected driver joins queue | HTTP 409; no queue membership is created | API integration | P0 |
+| DRV-ONB-006 | Pending or Rejected driver lists/accepts rides | HTTP 403; no dispatch action occurs | API integration | P0 |
+| DRV-ONB-007 | Reviewer approves a pending driver | Status becomes Approved; queue and ride actions are allowed | API integration | P0 |
+| DRV-ONB-008 | Reviewer rejects a profile without reason | HTTP 400 | API validation | P1 |
+| DRV-ONB-009 | Reviewer suspends an approved driver | Status becomes Suspended; subsequent queue/ride actions are denied | API integration | P0 |
+| DRV-ONB-010 | Invalid/missing operations key | HTTP 401; profile remains unchanged | API security | P0 |
+| DRV-ONB-011 | Driver attempts to overwrite Approved/Suspended profile | HTTP 409 | API | P0 |
+| DRV-ONB-012 | Driver attempts to read another Driver's profile | No other driver's data is returned | API security | P0 |
+| DRV-ONB-013 | Cosmos mode stores and reads profile | Profile survives API restart in Drivers container | Cosmos integration | P0 |
+
+Automated in-memory API integration coverage includes valid submission, pending queue denial, approval followed by queue admission, invalid document metadata and suspension preventing ride acceptance. Cosmos persistence and production operations identity integration remain unverified until a development Cosmos account and Ops authentication model are available.
