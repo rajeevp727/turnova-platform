@@ -327,3 +327,11 @@ Set `CosmosDb__Endpoint`, `CosmosDb__Key`, and optionally `CosmosDb__DatabaseNam
 PR #11 introduces union records, current driver-to-union assignments and per-driver assignment audit events. Only approved drivers can be assigned to active unions that support their approved service zone and service class. Every initial assignment or transfer requires an operations reason. Drivers can read only their own current union; Ops can list union members and inspect assignment history.
 
 Cosmos containers are Unions (/unionId), DriverUnionAssignments (/driverId) and DriverUnionAudit (/driverId). Local tests use in-memory dictionaries. Ops access temporarily reuses DriverOnboarding:AdminApiKey; never expose this key to mobile clients. The audit append and current-assignment upsert span separate Cosmos partitions/containers and are not atomic; add an outbox/reconciliation mechanism before production. Union membership is not yet a dispatch gate. Payroll and payslips are deferred to a separate increment.
+
+## Monthly driver payslip increment
+
+The Driver app exposes a Payslips tab for recent completed months and downloads/shares the PDF through native file handling. Available rides now expose an explicit Decline action; rider cancellation remains a separate event and is not counted as driver rejection.
+
+PR #12 adds a driver-only monthly PDF payslip endpoint and immutable work activity/payslip records. Accepted, explicit driver rejection and completed ride events are counted separately. Distinct India-local dates with completed rides count as days worked; rider cancellations are not rejections. A completed ride contributes to both accepted and completed totals. Payslips are generated only for completed IST calendar months and persisted as immutable snapshots.
+
+Cosmos containers: DriverWorkActivities (/driverId) and DriverPayslips (/driverId). The PDF is the only payslip output format. No monetary amount is shown because compensation rules are not defined. If union membership changes within a month, this version rejects payslip generation rather than attributing the entire period to one employer. Activity appends are not atomic with ride state transitions; add an outbox/reconciliation strategy before production.

@@ -1,3 +1,4 @@
+using TurnOva.API;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
@@ -63,6 +64,8 @@ builder.Services.AddSingleton<ConcurrentDictionary<string, DriverOnboardingProfi
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnion>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAssignment>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverWorkActivity>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
 builder.Services.AddHttpClient("TriSend", client =>
 {
     var baseUrl = builder.Configuration["TriSend:BaseUrl"];
@@ -104,6 +107,7 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, InitialSchemaMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideIdempotencyMigration>();
     builder.Services.AddSingleton<ICosmosMigration, UnionManagementMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<CosmosMigrationRunner>();
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
@@ -152,6 +156,61 @@ var unionAudit = app.Services.GetRequiredService<ConcurrentDictionary<string, Dr
 Container? unionContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Unions") : null;
 Container? unionAssignmentContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverUnionAssignments") : null;
 Container? unionAuditContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverUnionAudit") : null;
+var workActivities = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+var monthlyPayslips = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
+Container? workActivityContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverWorkActivities") : null;
+Container? payslipContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverPayslips") : null;
+
+async Task RecordWorkActivityAsync(string driverId, string rideId, string activityType, DateTimeOffset occurredAtUtc, CancellationToken ct)
+{
+    var activityId = $"{rideId}:{activityType}";
+    var activity = new DriverWorkActivity(activityId, driverId, rideId, activityType, occurredAtUtc);
+    if (workActivityContainer is null)
+    {
+        workActivities.TryAdd($"{driverId}|{activityId}", activity);
+        return;
+    }
+    try { await workActivityContainer.CreateItemAsync(activity, new PartitionKey(driverId), cancellationToken: ct); }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict) { }
+}
+
+async Task<IReadOnlyList<DriverWorkActivity>> GetWorkActivitiesAsync(string driverId, DateTimeOffset start, DateTimeOffset end, CancellationToken ct)
+{
+    if (workActivityContainer is null)
+        return workActivities.Values.Where(item => item.DriverId == driverId && item.OccurredAtUtc >= start && item.OccurredAtUtc < end).ToArray();
+    var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId AND c.occurredAtUtc >= @start AND c.occurredAtUtc < @end")
+        .WithParameter("@driverId", driverId).WithParameter("@start", start).WithParameter("@end", end);
+    var results = new List<DriverWorkActivity>();
+    using var iterator = workActivityContainer.GetItemQueryIterator<DriverWorkActivity>(query,
+        requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
+    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    return results;
+}
+
+async Task<DriverMonthlyPayslip?> FindPayslipAsync(string driverId, string payslipId, CancellationToken ct)
+{
+    if (payslipContainer is null)
+        return monthlyPayslips.TryGetValue($"{driverId}|{payslipId}", out var value) ? value : null;
+    try { return (await payslipContainer.ReadItemAsync<DriverMonthlyPayslip>(payslipId, new PartitionKey(driverId), cancellationToken: ct)).Resource; }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+}
+
+async Task SavePayslipIfAbsentAsync(DriverMonthlyPayslip payslip, CancellationToken ct)
+{
+    if (payslipContainer is null)
+    {
+        monthlyPayslips.TryAdd($"{payslip.DriverId}|{payslip.PayslipId}", payslip);
+        return;
+    }
+    try { await payslipContainer.CreateItemAsync(payslip, new PartitionKey(payslip.DriverId), cancellationToken: ct); }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict) { }
+}
+
+async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditForPeriodAsync(string driverId, DateTimeOffset end, CancellationToken ct)
+{
+    var all = await GetUnionAuditAsync(driverId, ct);
+    return all.Where(item => item.OccurredAtUtc < end).OrderBy(item => item.OccurredAtUtc).ToArray();
+}
 
 bool IsOpsAuthorized(HttpContext context)
 {
@@ -575,6 +634,54 @@ app.MapGet("/api/v1/ops/drivers/{driverId}/union-history", async (
     return Results.Ok(await GetUnionAuditAsync(driverId, ct));
 });
 
+
+app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
+    ClaimsPrincipal user, int year, int month, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (year < 2020 || year > DateTime.UtcNow.Year || month is < 1 or > 12)
+        return Results.BadRequest(new { message = "A valid payslip year and month are required." });
+    var indiaTimeZoneOffset = TimeSpan.FromMinutes(330);
+    var periodStartLocal = new DateTimeOffset(year, month, 1, 0, 0, 0, indiaTimeZoneOffset);
+    var periodEndLocal = periodStartLocal.AddMonths(1);
+    var periodStart = periodStartLocal.ToUniversalTime();
+    var periodEnd = periodEndLocal.ToUniversalTime();
+    if (periodStart >= DateTimeOffset.UtcNow)
+        return Results.BadRequest(new { message = "Payslips are available only for completed months." });
+
+    var payslipId = $"{driverId}-{year:D4}-{month:D2}";
+    var payslip = await FindPayslipAsync(driverId, payslipId, ct);
+    if (payslip is null)
+    {
+        var assignmentHistory = await GetUnionAuditForPeriodAsync(driverId, periodEnd, ct);
+        if (assignmentHistory.Any(item => item.OccurredAtUtc >= periodStart))
+            return Results.Conflict(new { message = "Union assignment changes within a pay period are not supported yet. Ask Operations to reconcile the period before requesting this PDF." });
+        var employerEvent = assignmentHistory.LastOrDefault();
+        if (employerEvent is null)
+            return Results.Conflict(new { message = "No union assignment was recorded for this pay period." });
+        var union = await FindUnionAsync(employerEvent.NewUnionId, ct);
+        if (union is null)
+            return Results.Conflict(new { message = "The employer union record for this pay period is unavailable." });
+        var profile = await FindDriverProfileAsync(driverId, ct);
+        if (profile is null) return Results.Conflict(new { message = "Driver profile is unavailable." });
+        var activities = await GetWorkActivitiesAsync(driverId, periodStart, periodEnd, ct);
+        var completedActivities = activities.Where(item => item.ActivityType == "Completed").ToArray();
+        payslip = new DriverMonthlyPayslip(
+            payslipId, driverId, profile.FullName, union.UnionId, union.Name,
+            year, month, periodStartLocal, periodEndLocal.AddTicks(-1),
+            completedActivities.Select(item => item.OccurredAtUtc.ToOffset(indiaTimeZoneOffset).Date).Distinct().Count(),
+            activities.Count(item => item.ActivityType == "Accepted"),
+            completedActivities.Length,
+            activities.Count(item => item.ActivityType == "Rejected"),
+            DateTimeOffset.UtcNow);
+        await SavePayslipIfAbsentAsync(payslip, ct);
+        payslip = await FindPayslipAsync(driverId, payslipId, ct) ?? payslip;
+    }
+    var pdf = DriverPayslipPdf.Generate(payslip);
+    return Results.File(pdf, "application/pdf", $"TurnOva-Payslip-{year:D4}-{month:D2}.pdf");
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
 app.MapGet("/api/v1/driver/union", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
@@ -735,6 +842,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         if (!rides.TryUpdate(rideId, acceptedInMemory, current))
             return Results.Conflict(new { message = "Another driver accepted this ride." });
+        await RecordWorkActivityAsync(driverId, rideId, "Accepted", acceptedInMemory.AcceptedAt!.Value, ct);
         await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = acceptedInMemory.Status }, ct);
         return Results.Ok(acceptedInMemory);
     }
@@ -748,6 +856,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+        await RecordWorkActivityAsync(driverId, rideId, "Accepted", accepted.AcceptedAt!.Value, ct);
         await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = accepted.Status }, ct);
         return Results.Ok(accepted);
     }
@@ -755,6 +864,20 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     {
         return Results.Conflict(new { message = "This ride is no longer available." });
     }
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+
+app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.Forbid();
+    var ride = await FindRideAsync(rideId, ct);
+    if (ride is null || ride.Status != "Requested" || ride.Passengers > profile.PassengerCapacity)
+        return Results.Conflict(new { message = "This ride is not available to reject." });
+    await RecordWorkActivityAsync(driverId, rideId, "Rejected", DateTimeOffset.UtcNow, ct);
+    return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
@@ -811,6 +934,7 @@ async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, str
     if (ride.Status != expected) return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to {next}." });
     var updated = await TryTransitionAsync(ride, next, ct);
     if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
+    if (next == "Completed") await RecordWorkActivityAsync(driverId!, rideId, "Completed", DateTimeOffset.UtcNow, ct);
     await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
         .SendAsync("RideStatusChanged", new { rideId, status = updated.Status }, ct);
     return Results.Ok(updated);

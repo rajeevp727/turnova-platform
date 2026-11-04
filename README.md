@@ -168,3 +168,13 @@ Use POST /api/v1/ops/unions to create a union, GET /api/v1/ops/unions to list un
 These interim operations endpoints use the server-side DriverOnboarding:AdminApiKey and X-Driver-Admin-Key header. Keep the key in backend secret storage only. This is not an Ops portal or a production RBAC model. Driver assignment history is retained as audit events; the assignment record represents the current union. Cosmos mode creates Unions, DriverUnionAssignments and DriverUnionAudit containers. Local demo mode uses in-memory stores.
 
 Union membership is currently an operational/employer association and is not yet a dispatch eligibility gate. Payroll, employment contracts, payslip generation and compensation calculations are separate follow-up work.
+
+## Monthly driver payslips (PDF only)
+
+The Driver app includes a Payslips tab for the most recent 12 completed months. Drivers can download and share the returned PDF using the device share sheet. The app does not render payslips as HTML or offer CSV/spreadsheet exports.
+
+Drivers can download a finalized monthly payslip as a PDF from GET /api/v1/driver/payslips/{year}/{month}.pdf. The endpoint is Driver-role only and returns application/pdf with a month-specific filename; there are no HTML, CSV or spreadsheet payslip representations. Only completed calendar months are available. The pay period uses India Standard Time calendar boundaries.
+
+The PDF contains the driver and union/employer identity, pay period, distinct days with at least one completed ride, rides accepted, rides completed and explicitly rejected rides. A ride accepted and later completed contributes to both accepted and completed counts. Rider cancellations are not counted as driver rejections. A driver rejection is recorded through POST /api/v1/rides/{rideId}/reject and does not change the ride's availability for other drivers.
+
+Work activity is recorded as an append-only per-driver ledger and monthly payslip snapshots are persisted once generated. The Cosmos migration creates DriverWorkActivities and DriverPayslips containers, both partitioned by /driverId. In-memory stores support local tests. The current PDF explicitly states that monetary compensation is not configured; earnings, deductions and net payable are not fabricated. This increment is a work-metrics payslip until the union compensation model is agreed and implemented.

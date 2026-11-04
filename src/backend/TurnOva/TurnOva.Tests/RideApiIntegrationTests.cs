@@ -1,3 +1,4 @@
+using TurnOva.API;
 using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -244,6 +245,114 @@ public sealed class RideApiIntegrationTests
             new { documentType = "VehicleRegistration", storageReference = "drivers/test/rc" }
         }
     };
+
+
+
+
+    [Fact]
+    public async Task DriverCanDeclineRideWithoutCancellingItAndRejectionIsCountedOnce()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-decline-test");
+        using var driver = factory.CreateClient("Driver", "driver-decline-test");
+        var ride = await CreateRideAsync(rider, "request-driver-decline-001");
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null)).StatusCode);
+
+        var stillAvailable = await rider.GetFromJsonAsync<TestRide>($"/api/v1/rides/{ride.RideId}");
+        Assert.NotNull(stillAvailable);
+        Assert.Equal("Requested", stillAvailable.Status);
+
+        var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        Assert.Single(ledger.Values.Where(item => item.DriverId == "driver-decline-test" && item.ActivityType == "Rejected"));
+    }
+
+    [Fact]
+    public async Task DriverCanDownloadPersistedMonthlyPayslipAsPdfWithMetrics()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-payslip-pdf");
+        var union = new DriverUnion(
+            "union-payslip", "Central Drivers Union", "HYD-CENTRAL", "Hyderabad",
+            "Union Manager", null, ["hyderabad-central"], ["auto"], "Active",
+            DateTimeOffset.UtcNow.AddYears(-1), DateTimeOffset.UtcNow);
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[union.UnionId] = union;
+
+        var assignmentEvent = new DriverUnionAuditEvent(
+            "assignment-payslip", "driver-payslip-pdf", null, null,
+            union.UnionId, union.Name, "Assigned", "Initial assignment", "Operations",
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            ["driver-payslip-pdf|assignment-payslip"] = assignmentEvent;
+
+        var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        var activities = new[]
+        {
+            new DriverWorkActivity("ride-1:Accepted", "driver-payslip-pdf", "ride-1", "Accepted", new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero)),
+            new DriverWorkActivity("ride-1:Completed", "driver-payslip-pdf", "ride-1", "Completed", new DateTimeOffset(2026, 10, 3, 5, 0, 0, TimeSpan.Zero)),
+            new DriverWorkActivity("ride-2:Accepted", "driver-payslip-pdf", "ride-2", "Accepted", new DateTimeOffset(2026, 10, 4, 4, 0, 0, TimeSpan.Zero)),
+            new DriverWorkActivity("ride-2:Completed", "driver-payslip-pdf", "ride-2", "Completed", new DateTimeOffset(2026, 10, 4, 5, 0, 0, TimeSpan.Zero)),
+            new DriverWorkActivity("ride-3:Rejected", "driver-payslip-pdf", "ride-3", "Rejected", new DateTimeOffset(2026, 10, 5, 4, 0, 0, TimeSpan.Zero))
+        };
+        foreach (var activity in activities)
+            ledger[$"driver-payslip-pdf|{activity.ActivityId}"] = activity;
+
+        using var response = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("TurnOva-Payslip-2026-10.pdf", response.Content.Headers.ContentDisposition?.FileName ?? "");
+
+        var pdf = Encoding.ASCII.GetString(await response.Content.ReadAsByteArrayAsync());
+        Assert.StartsWith("%PDF-1.4", pdf);
+        Assert.Contains("Total days worked: 2", pdf);
+        Assert.Contains("Rides accepted: 2", pdf);
+        Assert.Contains("Rides completed: 2", pdf);
+        Assert.Contains("Rides rejected: 1", pdf);
+
+        using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.Equal(pdf, Encoding.ASCII.GetString(await repeated.Content.ReadAsByteArrayAsync()));
+    }
+
+    [Fact]
+    public void MonthlyPayslipIsRenderedAsAValidPdfDocument()
+    {
+        var payslip = new DriverMonthlyPayslip(
+            "driver-pdf-2026-10", "driver-pdf", "PDF Test Driver",
+            "union-pdf", "Central Drivers Union", 2026, 10,
+            new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.FromHours(5.5)),
+            new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.FromHours(5.5)),
+            12, 18, 15, 2, DateTimeOffset.UtcNow);
+
+        var pdf = DriverPayslipPdf.Generate(payslip);
+        var text = Encoding.ASCII.GetString(pdf);
+
+        Assert.StartsWith("%PDF-1.4", text);
+        Assert.Contains("MONTHLY DRIVER PAYSLIP", text);
+        Assert.Contains("Total days worked: 12", text);
+        Assert.Contains("Rides accepted: 18", text);
+        Assert.Contains("Rides completed: 15", text);
+        Assert.Contains("Rides rejected: 2", text);
+        Assert.EndsWith("%%EOF", text);
+    }
+
+    [Fact]
+    public async Task PayslipEndpointIsDriverOnlyAndDoesNotReturnHtml()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-payslip-endpoint");
+        using var rider = factory.CreateClient("Rider", "rider-payslip-endpoint");
+
+        var futureMonth = DateTime.UtcNow.AddMonths(2);
+        var driverResponse = await driver.GetAsync($"/api/v1/driver/payslips/{futureMonth.Year}/{futureMonth.Month}.pdf");
+        Assert.Equal(HttpStatusCode.BadRequest, driverResponse.StatusCode);
+
+        var riderResponse = await rider.GetAsync($"/api/v1/driver/payslips/{futureMonth.Year}/{futureMonth.Month}.pdf");
+        Assert.Equal(HttpStatusCode.Forbidden, riderResponse.StatusCode);
+    }
 
     [Fact]
     public async Task RiderCanCreateRideAndRepeatRequestWithoutCreatingDuplicate()

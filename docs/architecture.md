@@ -221,3 +221,15 @@ The current assignment is stored separately from the onboarding profile so a dri
 Cosmos containers: Unions (partition key /unionId), DriverUnionAssignments (/driverId), and DriverUnionAudit (/driverId). In-memory equivalents support local tests. The interim Ops endpoints reuse the backend-only DriverOnboarding admin API key. This is an integration bridge, not production authorization; replace it with authenticated Ops identities, role/permission checks and actor identity before production. The driver app can read its current union assignment, while union creation, status management, assignment and transfer remain operations workflows. Union membership does not yet gate dispatch; that policy must be explicitly enabled after operational migration and rollout planning.
 
 Employment contracts, payroll rules, earnings/deductions and payslip generation are intentionally outside this increment. Future payslips must be based on immutable work activity and preserve the employer/union active during the relevant pay period.
+
+## 21. Monthly driver payslips (PDF only)
+
+The Driver app offers a Payslips tab with the most recent 12 completed months and downloads the authenticated PDF through the native file/share workflow. There is no HTML payslip view or CSV/spreadsheet export.
+
+A driver can request a finalized monthly payslip from GET /api/v1/driver/payslips/{year}/{month}.pdf. The route requires the Driver role and emits only application/pdf. No HTML, CSV or spreadsheet payslip format is exposed. Only completed months are generated, using India Standard Time calendar-month boundaries.
+
+Ride activity is captured in an append-only ledger: Accepted when the driver accepts a ride, Rejected when the driver explicitly declines an available ride, and Completed when the assigned driver completes the trip. Rider cancellation is not a driver rejection. Deterministic activity IDs (ride ID plus activity type) make ledger insertion idempotent. Days worked are distinct India-local calendar dates containing at least one completed activity. Accepted and completed are separate metrics, so a completed ride contributes to both.
+
+The monthly payslip is an immutable snapshot persisted in DriverPayslips after first generation. Work events are persisted in DriverWorkActivities. Both Cosmos containers are partitioned by /driverId; in-memory stores are used without Cosmos. A driver's union assignment history is used to identify the employer for the pay period. If multiple union assignments occur within one pay period, this initial version must reject generation rather than silently attribute all activity to the wrong employer; split-employer payroll is a later increment.
+
+The PDF contains identity, employer, pay period and work metrics only. Monetary earnings, deductions, incentives and net payable are intentionally not calculated until a compensation policy is agreed. Activity ledger writes happen after ride state changes and are not transactionally coupled to the ride write; production hardening should introduce an outbox or event-driven reconciliation to prevent a crash between ride transition and ledger append from omitting an activity.

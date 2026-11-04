@@ -281,3 +281,25 @@ Automated in-memory API integration coverage includes valid submission, pending 
 | UNI-016 | Cosmos migration | Unions, DriverUnionAssignments and DriverUnionAudit containers are created with documented partition keys |
 
 These APIs currently use the temporary server-side admin API key and are not a substitute for an authenticated Ops portal/RBAC implementation. Cosmos cross-container writes are not transactionally atomic: an assignment write and audit write can fail independently. Production rollout must add an outbox/reconciliation strategy or a transactional data model before relying on audit completeness.
+
+## Monthly driver payslips (PDF only)
+
+| PAY-014 | Driver app lists recent completed months and downloads a PDF | File is shared as application/pdf; no HTML payslip view or alternate export is shown |
+
+| ID | Scenario | Expected result |
+|---|---|---|
+| PAY-001 | Driver requests a completed month with union history and activity | PDF is returned with application/pdf and a month-specific filename |
+| PAY-002 | Rider requests a driver payslip | Forbidden |
+| PAY-003 | Request a future or current incomplete month | Bad request |
+| PAY-004 | Invalid year or month | Bad request |
+| PAY-005 | Driver has no union assignment during the period | Payslip generation is rejected |
+| PAY-006 | Driver transfers unions during a month | Generation is rejected until split-employer support exists |
+| PAY-007 | Accept then complete a ride | Accepted and completed each increment once |
+| PAY-008 | Driver explicitly rejects an available ride | Rejected increments once; ride remains available to other drivers |
+| PAY-009 | Rider cancels a ride | Driver rejected count does not increment |
+| PAY-010 | Multiple completed rides on one local date | Days worked increments once for that date |
+| PAY-011 | Repeated event delivery | Deterministic activity ID prevents duplicate ledger entries |
+| PAY-012 | Payslip requested more than once after snapshot | Same immutable snapshot and PDF metrics are returned |
+| PAY-013 | PDF generation | Output begins with a valid PDF header and includes all work metrics |
+
+Payslip output is PDF only. Monetary calculations are intentionally absent until the compensation model is approved. Cosmos persistence, migration and crash-window reconciliation require validation with a development Cosmos account.
