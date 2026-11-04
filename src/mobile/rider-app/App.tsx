@@ -16,15 +16,15 @@ type ThemeColors = {
 };
 const lightColors: ThemeColors = {
   background: "#F4F6F8", header: "#14283F", surface: "#FFFFFF", text: "#172B42",
-  muted: "#718094", border: "#E2E8EE", accent: "#E89A3B", accentText: "#172B42",
+  muted: "#718094", border: "#E2E8EE", accent: "#087BFA", accentText: "#FFFFFF",
   subtle: "#B8C5D2", label: "#8290A0", danger: "#B42318", success: "#237A54",
-  tabInactive: "#8793A2", tabActive: "#C47A21"
+  tabInactive: "#8793A2", tabActive: "#087BFA"
 };
 const darkColors: ThemeColors = {
   background: "#0F1722", header: "#101D2B", surface: "#182536", text: "#E8EEF5",
-  muted: "#A6B3C2", border: "#344457", accent: "#E89A3B", accentText: "#172B42",
+  muted: "#A6B3C2", border: "#344457", accent: "#18DDB9", accentText: "#06243D",
   subtle: "#A6B3C2", label: "#A6B3C2", danger: "#FF8A80", success: "#70D6A0",
-  tabInactive: "#9AA9B9", tabActive: "#F7B65F"
+  tabInactive: "#9AA9B9", tabActive: "#18DDB9"
 };
 const darkMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#182536" }] },
