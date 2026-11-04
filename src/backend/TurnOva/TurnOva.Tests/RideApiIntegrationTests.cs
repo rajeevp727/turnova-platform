@@ -247,6 +247,54 @@ public sealed class RideApiIntegrationTests
     };
 
 
+
+    [Fact]
+    public async Task DriverCanDownloadPersistedMonthlyPayslipAsPdfWithMetrics()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-payslip-pdf");
+        var union = new DriverUnion(
+            "union-payslip", "Central Drivers Union", "HYD-CENTRAL", "Hyderabad",
+            "Union Manager", null, ["hyderabad-central"], ["auto"], "Active",
+            DateTimeOffset.UtcNow.AddYears(-1), DateTimeOffset.UtcNow);
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[union.UnionId] = union;
+
+        var assignmentEvent = new DriverUnionAuditEvent(
+            "assignment-payslip", "driver-payslip-pdf", null, null,
+            union.UnionId, union.Name, "Assigned", "Initial assignment", "Operations",
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            ["driver-payslip-pdf|assignment-payslip"] = assignmentEvent;
+
+        var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        var activities = new[]
+        {
+            new DriverWorkActivity("ride-1:Accepted", "driver-payslip-pdf", "ride-1", "Accepted", new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero)),
+            new DriverWorkActivity("ride-1:Completed", "driver-payslip-pdf", "ride-1", "Completed", new DateTimeOffset(2026, 10, 3, 5, 0, 0, TimeSpan.Zero)),
+            new DriverWorkActivity("ride-2:Accepted", "driver-payslip-pdf", "ride-2", "Accepted", new DateTimeOffset(2026, 10, 4, 4, 0, 0, TimeSpan.Zero)),
+            new DriverWorkActivity("ride-2:Completed", "driver-payslip-pdf", "ride-2", "Completed", new DateTimeOffset(2026, 10, 4, 5, 0, 0, TimeSpan.Zero)),
+            new DriverWorkActivity("ride-3:Rejected", "driver-payslip-pdf", "ride-3", "Rejected", new DateTimeOffset(2026, 10, 5, 4, 0, 0, TimeSpan.Zero))
+        };
+        foreach (var activity in activities)
+            ledger[$"driver-payslip-pdf|{activity.ActivityId}"] = activity;
+
+        using var response = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("TurnOva-Payslip-2026-10.pdf", response.Content.Headers.ContentDisposition?.FileName ?? "");
+
+        var pdf = Encoding.ASCII.GetString(await response.Content.ReadAsByteArrayAsync());
+        Assert.StartsWith("%PDF-1.4", pdf);
+        Assert.Contains("Total days worked: 2", pdf);
+        Assert.Contains("Rides accepted: 2", pdf);
+        Assert.Contains("Rides completed: 2", pdf);
+        Assert.Contains("Rides rejected: 1", pdf);
+
+        using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.Equal(pdf, Encoding.ASCII.GetString(await repeated.Content.ReadAsByteArrayAsync()));
+    }
+
     [Fact]
     public void MonthlyPayslipIsRenderedAsAValidPdfDocument()
     {
