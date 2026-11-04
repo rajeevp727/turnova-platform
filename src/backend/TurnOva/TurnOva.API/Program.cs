@@ -60,6 +60,9 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DemoRide>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, string>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnion>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAssignment>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
 builder.Services.AddHttpClient("TriSend", client =>
 {
     var baseUrl = builder.Configuration["TriSend:BaseUrl"];
@@ -100,6 +103,7 @@ if (useCosmos)
     builder.Services.AddSingleton(cosmosOptions);
     builder.Services.AddSingleton<ICosmosMigration, InitialSchemaMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideIdempotencyMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, UnionManagementMigration>();
     builder.Services.AddSingleton<CosmosMigrationRunner>();
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
@@ -142,6 +146,73 @@ Container? rideContainer = useCosmos ? app.Services.GetRequiredService<CosmosCli
 Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
 Container? driverContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null;
 var driverProfiles = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+var unions = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+var unionAssignments = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+var unionAudit = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+Container? unionContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Unions") : null;
+Container? unionAssignmentContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverUnionAssignments") : null;
+Container? unionAuditContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverUnionAudit") : null;
+
+bool IsOpsAuthorized(HttpContext context)
+{
+    var configuredKey = app.Configuration["DriverOnboarding:AdminApiKey"];
+    var suppliedKey = context.Request.Headers["X-Driver-Admin-Key"].ToString();
+    if (string.IsNullOrWhiteSpace(configuredKey) || configuredKey.Length < 32) return false;
+    var expected = Encoding.UTF8.GetBytes(configuredKey);
+    var supplied = Encoding.UTF8.GetBytes(suppliedKey);
+    return expected.Length == supplied.Length && CryptographicOperations.FixedTimeEquals(expected, supplied);
+}
+
+async Task<DriverUnion?> FindUnionAsync(string unionId, CancellationToken ct)
+{
+    if (unionContainer is null) return unions.TryGetValue(unionId, out var value) ? value : null;
+    try { return (await unionContainer.ReadItemAsync<DriverUnion>(unionId, new PartitionKey(unionId), cancellationToken: ct)).Resource; }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+}
+
+async Task SaveUnionAsync(DriverUnion union, CancellationToken ct)
+{
+    if (unionContainer is null) { unions[union.UnionId] = union; return; }
+    await unionContainer.UpsertItemAsync(union, new PartitionKey(union.UnionId), cancellationToken: ct);
+}
+
+async Task<DriverUnionAssignment?> FindUnionAssignmentAsync(string driverId, CancellationToken ct)
+{
+    if (unionAssignmentContainer is null) return unionAssignments.TryGetValue(driverId, out var value) ? value : null;
+    try { return (await unionAssignmentContainer.ReadItemAsync<DriverUnionAssignment>(driverId, new PartitionKey(driverId), cancellationToken: ct)).Resource; }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+}
+
+async Task SaveUnionAssignmentAsync(DriverUnionAssignment assignment, CancellationToken ct)
+{
+    if (unionAssignmentContainer is null) { unionAssignments[assignment.DriverId] = assignment; return; }
+    await unionAssignmentContainer.UpsertItemAsync(assignment, new PartitionKey(assignment.DriverId), cancellationToken: ct);
+}
+
+async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct)
+{
+    if (unionAuditContainer is null) { unionAudit[audit.DriverId + "|" + audit.EventId] = audit; return; }
+    await unionAuditContainer.CreateItemAsync(audit, new PartitionKey(audit.DriverId), cancellationToken: ct);
+}
+
+async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
+{
+    if (unionContainer is null) return unions.Values.OrderBy(item => item.Name).ToArray();
+    var results = new List<DriverUnion>();
+    using var iterator = unionContainer.GetItemQueryIterator<DriverUnion>(new QueryDefinition("SELECT * FROM c"));
+    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    return results.OrderBy(item => item.Name).ToArray();
+}
+
+async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string driverId, CancellationToken ct)
+{
+    if (unionAuditContainer is null) return unionAudit.Values.Where(item => item.DriverId == driverId).OrderByDescending(item => item.OccurredAtUtc).ToArray();
+    var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId").WithParameter("@driverId", driverId);
+    var results = new List<DriverUnionAuditEvent>();
+    using var iterator = unionAuditContainer.GetItemQueryIterator<DriverUnionAuditEvent>(query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
+    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    return results.OrderByDescending(item => item.OccurredAtUtc).ToArray();
+}
 
 async Task<DriverOnboardingProfile?> FindDriverProfileAsync(string driverId, CancellationToken ct)
 {
@@ -368,14 +439,13 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
 app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
     HttpContext context, string driverId, DriverReviewRequest request, QueueService queueService, CancellationToken ct) =>
 {
-    var configuredKey = app.Configuration["DriverOnboarding:AdminApiKey"];
-    var suppliedKey = context.Request.Headers["X-Driver-Admin-Key"].ToString();
-    if (string.IsNullOrWhiteSpace(configuredKey) || configuredKey.Length < 32)
-        return Results.Problem("Driver onboarding review requires a configured admin key of at least 32 characters.", statusCode: 503);
-    var expected = Encoding.UTF8.GetBytes(configuredKey);
-    var supplied = Encoding.UTF8.GetBytes(suppliedKey);
-    if (expected.Length != supplied.Length || !CryptographicOperations.FixedTimeEquals(expected, supplied))
+    if (!IsOpsAuthorized(context))
+    {
+        if (string.IsNullOrWhiteSpace(app.Configuration["DriverOnboarding:AdminApiKey"]) ||
+            app.Configuration["DriverOnboarding:AdminApiKey"]!.Length < 32)
+            return Results.Problem("Operations review requires a configured admin key of at least 32 characters.", statusCode: 503);
         return Results.Unauthorized();
+    }
     if (request.Status is not ("Approved" or "Rejected" or "Suspended") ||
         (request.Status != "Approved" && string.IsNullOrWhiteSpace(request.Reason)))
         return Results.BadRequest(new { message = "Status must be Approved, Rejected or Suspended; a reason is required unless approving." });
@@ -400,6 +470,118 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
         await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
     return Results.Ok(reviewed);
 });
+
+
+var opsUnions = app.MapGroup("/api/v1/ops/unions");
+opsUnions.MapPost("/", async (HttpContext context, CreateUnionRequest request, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 120 ||
+        string.IsNullOrWhiteSpace(request.Code) || request.Code.Trim().Length > 24 ||
+        request.ZoneIds is null || request.ZoneIds.Count == 0 ||
+        request.ZoneIds.Any(zone => string.IsNullOrWhiteSpace(zone) || zone.Trim().Length > 80) ||
+        request.ServiceClasses is null || request.ServiceClasses.Count == 0 ||
+        request.ServiceClasses.Any(serviceClass => serviceClass is not ("auto" or "mini" or "sedan" or "suv")))
+        return Results.BadRequest(new { message = "Provide a name, unique code, at least one service zone and supported service class." });
+
+    var code = request.Code.Trim().ToUpperInvariant();
+    var existing = await ListUnionsAsync(ct);
+    if (existing.Any(item => item.Code.Equals(code, StringComparison.OrdinalIgnoreCase)))
+        return Results.Conflict(new { message = "A union with this code already exists." });
+
+    var union = new DriverUnion(Guid.NewGuid().ToString("N"), request.Name.Trim(), code,
+        request.Location?.Trim(), request.ManagerName?.Trim(), request.ManagerPhone?.Trim(),
+        request.ZoneIds.Select(zone => zone.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+        request.ServiceClasses.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+        "Active", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+    await SaveUnionAsync(union, ct);
+    return Results.Created($"/api/v1/ops/unions/{union.UnionId}", union);
+});
+
+opsUnions.MapGet("/", async (HttpContext context, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    return Results.Ok(await ListUnionsAsync(ct));
+});
+
+opsUnions.MapGet("/{unionId}", async (HttpContext context, string unionId, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    var union = await FindUnionAsync(unionId, ct);
+    return union is null ? Results.NotFound() : Results.Ok(union);
+});
+
+opsUnions.MapPut("/{unionId}/status", async (HttpContext context, string unionId, UpdateUnionStatusRequest request, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    if (request.Status is not ("Active" or "Inactive" or "Suspended"))
+        return Results.BadRequest(new { message = "Status must be Active, Inactive or Suspended." });
+    var union = await FindUnionAsync(unionId, ct);
+    if (union is null) return Results.NotFound();
+    var updated = union with { Status = request.Status, UpdatedAtUtc = DateTimeOffset.UtcNow };
+    await SaveUnionAsync(updated, ct);
+    return Results.Ok(updated);
+});
+
+opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionId, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    var union = await FindUnionAsync(unionId, ct);
+    if (union is null) return Results.NotFound();
+    if (unionAssignmentContainer is null)
+        return Results.Ok(unionAssignments.Values.Where(item => item.UnionId == unionId && item.Status == "Active"));
+    var query = new QueryDefinition("SELECT * FROM c WHERE c.unionId = @unionId AND c.status = 'Active'").WithParameter("@unionId", unionId);
+    var results = new List<DriverUnionAssignment>();
+    using var iterator = unionAssignmentContainer.GetItemQueryIterator<DriverUnionAssignment>(query);
+    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    return Results.Ok(results);
+});
+
+app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
+    HttpContext context, string driverId, AssignDriverUnionRequest request, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 300)
+        return Results.BadRequest(new { message = "A transfer/assignment reason of 1–300 characters is required." });
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.NotFound(new { message = "Driver onboarding profile not found." });
+    if (profile.Status != "Approved") return Results.Conflict(new { message = "Only approved drivers can be assigned to a union." });
+    var union = await FindUnionAsync(request.UnionId, ct);
+    if (union is null) return Results.NotFound(new { message = "Union not found." });
+    if (union.Status != "Active") return Results.Conflict(new { message = "Drivers can only be assigned to an active union." });
+    if (!union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase) ||
+        !union.ServiceClasses.Contains(profile.ServiceClass, StringComparer.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "The union does not support this driver's approved zone and service class." });
+
+    var previous = await FindUnionAssignmentAsync(driverId, ct);
+    if (previous?.UnionId == union.UnionId && previous.Status == "Active")
+        return Results.Conflict(new { message = "The driver is already assigned to this union." });
+
+    var now = DateTimeOffset.UtcNow;
+    var assignment = new DriverUnionAssignment(driverId, union.UnionId, union.Name, "Active",
+        previous?.AssignedAtUtc ?? now, now, request.Reason.Trim());
+    await SaveUnionAssignmentAsync(assignment, ct);
+    await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
+        previous?.UnionId, previous?.UnionName, union.UnionId, union.Name,
+        previous is null ? "Assigned" : "Transferred", request.Reason.Trim(),
+        context.User.Identity?.Name ?? "Operations", now), ct);
+    return Results.Ok(assignment);
+});
+
+app.MapGet("/api/v1/ops/drivers/{driverId}/union-history", async (
+    HttpContext context, string driverId, CancellationToken ct) =>
+{
+    if (!IsOpsAuthorized(context)) return Results.Unauthorized();
+    return Results.Ok(await GetUnionAuditAsync(driverId, ct));
+});
+
+app.MapGet("/api/v1/driver/union", async (ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var assignment = await FindUnionAssignmentAsync(driverId, ct);
+    return assignment is null || assignment.Status != "Active" ? Results.NoContent() : Results.Ok(assignment);
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapGet("/api/v1/zones", () => Results.Ok(new[]
 {
@@ -673,6 +855,9 @@ public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
 public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents);
 public sealed record DriverReviewRequest(string Status, string? Reason);
+public sealed record CreateUnionRequest(string Name, string Code, string? Location, string? ManagerName, string? ManagerPhone, IReadOnlyList<string> ZoneIds, IReadOnlyList<string> ServiceClasses);
+public sealed record UpdateUnionStatusRequest(string Status);
+public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
