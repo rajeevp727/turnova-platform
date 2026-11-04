@@ -4,6 +4,7 @@ import * as Location from "expo-location";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { useCallback, useEffect, useState } from "react";
 import { useColorScheme, Image } from "react-native";
@@ -307,8 +308,15 @@ export default function App() {
         base64: true
       });
       if (result.canceled) return;
-      const photo = result.assets[0]?.base64;
-      if (!photo) throw new Error("Unable to read the captured selfie. Please try again.");
+      const asset = result.assets[0];
+      if (!asset?.uri) throw new Error("Unable to read the captured selfie. Please try again.");
+      const compressed = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 512, height: 512 } }],
+        { compress: 0.55, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      const photo = compressed.base64;
+      if (!photo) throw new Error("Unable to compress the captured selfie. Please try again.");
       if (photo.length > 410_000) throw new Error("Selfie is too large. Retake it in good lighting.");
       setProfilePhotoBase64(photo);
       if (onboardingProfile?.driverId) {
