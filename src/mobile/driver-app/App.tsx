@@ -3,9 +3,10 @@ import * as SecureStore from "expo-secure-store";
 import * as Location from "expo-location";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import * as ImagePicker from "expo-image-picker";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { useCallback, useEffect, useState } from "react";
-import { useColorScheme } from "react-native";
+import { useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 
@@ -78,6 +79,7 @@ export default function App() {
   const [vehicleRegistration, setVehicleRegistration] = useState("");
   const [licenceReference, setLicenceReference] = useState("");
   const [registrationReference, setRegistrationReference] = useState("");
+  const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -277,6 +279,7 @@ export default function App() {
       const profile = await apiFetch("/api/v1/driver/onboarding/me");
       if (profile?.driverId) {
         setOnboardingProfile(profile);
+        setProfilePhotoBase64(profile.profilePhotoBase64 ?? "");
         setDriverName(profile.fullName ?? "");
         setPhoneNumber(profile.phoneNumber ?? "");
         setVehicleMake(profile.vehicleMake ?? "");
@@ -289,6 +292,39 @@ export default function App() {
   }, [apiFetch]);
 
   useEffect(() => { if (user && tab === "Profile") void loadOnboarding(); }, [user, tab, loadOnboarding]);
+
+  const captureSelfie = async () => {
+    setError(""); setNotice("");
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) throw new Error("Camera permission is required to capture your driver selfie.");
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        cameraType: ImagePicker.CameraType.front,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.55,
+        base64: true
+      });
+      if (result.canceled) return;
+      const photo = result.assets[0]?.base64;
+      if (!photo) throw new Error("Unable to read the captured selfie. Please try again.");
+      if (photo.length > 410_000) throw new Error("Selfie is too large. Retake it in good lighting.");
+      setProfilePhotoBase64(photo);
+      if (onboardingProfile?.driverId) {
+        const updated = await apiFetch("/api/v1/driver/onboarding/selfie", {
+          method: "PUT",
+          body: JSON.stringify({ profilePhotoBase64: photo })
+        });
+        setOnboardingProfile(updated);
+        setNotice("Driver selfie saved to your profile.");
+      } else {
+        setNotice("Selfie captured. It will be saved when you submit onboarding.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to capture driver selfie.");
+    }
+  };
 
   const submitOnboarding = async () => {
     setLoading(true); setError(""); setNotice("");
@@ -360,7 +396,7 @@ export default function App() {
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
         {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
-          <Text style={styles.sub}>Complete your driver and vehicle details. Your application will remain pending until reviewed.</Text>
+          <Text style={styles.sub}>Complete your driver and vehicle details and capture a clear front-facing selfie. Your application will remain pending until reviewed.</Text>
           <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full legal name" />
           <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholderTextColor={colors.muted} placeholder="Phone number with country code" keyboardType="phone-pad" />
           <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Bajaj)" />
@@ -370,7 +406,7 @@ export default function App() {
           <Text style={styles.muted}>Upload files to your approved private storage workflow first. Enter opaque object references, not public URLs.</Text>
           <TextInput value={licenceReference} onChangeText={setLicenceReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Driving licence object reference" autoCapitalize="none" />
           <TextInput value={registrationReference} onChangeText={setRegistrationReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle RC object reference" autoCapitalize="none" />
-          <Pressable style={styles.primary} disabled={loading || !driverName.trim() || !phoneNumber.trim() || !vehicleMake.trim() || !vehicleModel.trim() || !vehicleRegistration.trim() || !licenceReference.trim() || !registrationReference.trim()} onPress={() => void submitOnboarding()}><Text style={styles.primaryText}>{loading ? "Please wait…" : onboardingProfile ? "Resubmit for review" : "Submit for approval"}</Text></Pressable>
+          <Pressable style={styles.primary} disabled={loading || !driverName.trim() || !phoneNumber.trim() || !vehicleMake.trim() || !vehicleModel.trim() || !vehicleRegistration.trim() || !licenceReference.trim() || !registrationReference.trim() || !profilePhotoBase64} onPress={() => void submitOnboarding()}><Text style={styles.primaryText}>{loading ? "Please wait…" : onboardingProfile ? "Resubmit for review" : "Submit for approval"}</Text></Pressable>
         </>}
       </View><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
       {!!error && <Text style={styles.error}>{error}</Text>}{!!notice && <Text style={styles.success}>{notice}</Text>}
