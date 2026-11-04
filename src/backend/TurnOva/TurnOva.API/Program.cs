@@ -472,6 +472,24 @@ onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
     var profile = await FindDriverProfileAsync(driverId, ct);
     return profile is null ? Results.NoContent() : Results.Ok(profile);
 });
+onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest request, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
+        return Results.BadRequest(new { message = "Provide a valid JPEG selfie no larger than 300 KB." });
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.NotFound(new { message = "Complete driver onboarding before adding a profile selfie." });
+    var updated = profile with
+    {
+        ProfilePhotoBase64 = request.ProfilePhotoBase64,
+        ProfilePhotoContentType = "image/jpeg",
+        ProfilePhotoCapturedAtUtc = DateTimeOffset.UtcNow
+    };
+    await SaveDriverProfileAsync(updated, ct);
+    return Results.Ok(updated);
+});
+
 onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest request, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
@@ -669,6 +687,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.NotFound(new { message = "Driver onboarding profile not found." });
     if (profile.Status != "Approved") return Results.Conflict(new { message = "Only approved drivers can be assigned to a union." });
+    if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
+        return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
     var union = await FindUnionAsync(request.UnionId, ct);
     if (union is null) return Results.NotFound(new { message = "Union not found." });
     if (union.Status != "Active") return Results.Conflict(new { message = "Drivers can only be assigned to an active union." });
@@ -1041,7 +1061,7 @@ app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
-public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);
+public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);\npublic sealed record DriverSelfieRequest(string ProfilePhotoBase64);
 public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateUnionRequest(string Name, string Code, string? Location, string? ManagerName, string? ManagerPhone, IReadOnlyList<string> ZoneIds, IReadOnlyList<string> ServiceClasses);
 public sealed record UpdateUnionStatusRequest(string Status);
