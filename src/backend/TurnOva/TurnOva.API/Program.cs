@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Security.Claims;
-using System.Text.Json;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Azure.Cosmos;
@@ -139,7 +139,7 @@ app.MapGet("/health", () => Results.Ok(new
 var authGroup = app.MapGroup("/api/v1/auth");
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
-    IConfiguration configuration, CancellationToken ct) =>
+    CancellationToken ct) =>
 {
     if (role is not ("driver" or "rider"))
         return Results.NotFound();
@@ -182,6 +182,9 @@ authGroup.MapPost("/refresh", async (
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
+        context.Request.Headers.Authorization.ToString(), ct));
+authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
+    await ForwardAuthRequest(clients, HttpMethod.Get, "/auth/me", null,
         context.Request.Headers.Authorization.ToString(), ct));
 
 static async Task<IResult> ForwardAuthRequest(
