@@ -149,3 +149,12 @@ When Cosmos DB is configured, set the API host's `CosmosDb__Endpoint`, `CosmosDb
 - Schema migrations are serialized across API instances using a Cosmos-backed expiring lease in `MigrationLocks`; applied migration IDs are recorded in `MigrationHistory`.
 
 Local in-memory mode does not require Cosmos credentials. Cosmos readiness, migrations, partition behaviour and ETag concurrency still need validation against a real development Cosmos account before production use.
+
+
+## Driver onboarding and eligibility
+
+Drivers submit their profile, vehicle details and private document-storage references through `POST /api/v1/driver/onboarding`; they can inspect their own status with `GET /api/v1/driver/onboarding/me`. New submissions enter `Pending` and cannot join queues, discover available rides or accept rides until approved.
+
+An operations reviewer can approve, reject or suspend a driver through `POST /api/v1/ops/drivers/{driverId}/review`. This interim endpoint requires a 32+ character `DriverOnboarding__AdminApiKey` on the API host and the `X-Driver-Admin-Key` header. Approval requires DrivingLicence and VehicleRegistration references. Keep this secret server-side; it is a temporary operations integration, not a replacement for an authenticated Ops portal/RBAC.
+
+Document files are not uploaded or stored by this API. The request accepts opaque object-storage references only. Use private object storage, upload authorization, malware scanning, access auditing, retention and deletion controls before handling real identity documents.
