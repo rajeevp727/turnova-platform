@@ -193,3 +193,12 @@ Ride state transitions are server-authoritative: `Requested → Accepted → Arr
 The Rider connects to `/hubs/rides?rideId={rideId}` using its JWT. The hub verifies Rider role and ride ownership before joining the ride-specific SignalR group. Assigned Driver location updates and ride-state changes are broadcast to that group. The Driver app sends foreground GPS updates only while the Trips screen is active and the ride is in a location-sharing state. SignalR is used for rider updates; no periodic polling is required by the normal connected path.
 
 Operational safeguards still required before production: configure a restrictive CORS origin allow-list, rate-limit location updates, define location retention/deletion policy, monitor SignalR scale-out/backplane needs, and run multi-instance Cosmos concurrency and mobile-device acceptance tests.
+
+
+## 18. Cosmos DB startup and migration reliability
+
+When Cosmos mode is enabled, API startup validates the HTTPS endpoint, account key and database identifier, then runs migrations before the host begins accepting requests. Migration execution is serialized across instances with a single Cosmos-backed lease document in `MigrationLocks`. The lease is acquired using create-if-absent semantics; an expired lease can be replaced with an ETag conditional write. Release also uses the acquired ETag so one instance cannot delete a successor's lease. Applied migration IDs remain in `MigrationHistory`; a conflicting history insert is treated as success only after the record is read back.
+
+`GET /health` is a process-level health endpoint. `GET /health/ready` performs a Cosmos database read in Cosmos mode and returns 503 when the configured database is unavailable. In-memory demo mode reports ready without a Cosmos dependency. The readiness endpoint does not replace monitoring of request-level Cosmos throttling, latency, RU consumption, or data-plane operations.
+
+The migration lease currently has a 30-minute expiry and is not renewed. Keep migrations short and controlled; migrations expected to exceed this duration require lease renewal before rollout to multiple API instances. Validate the lease and migration behaviour against a real Cosmos development account before production deployment.
