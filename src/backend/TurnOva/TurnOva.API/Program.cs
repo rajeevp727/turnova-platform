@@ -168,10 +168,10 @@ async Task SaveDriverProfileAsync(DriverOnboardingProfile profile, CancellationT
     await driverContainer.UpsertItemAsync(profile, new PartitionKey(profile.DriverId), cancellationToken: ct);
 }
 
-async Task<bool> IsDriverApprovedAsync(string driverId, CancellationToken ct)
+async Task<DriverOnboardingProfile?> GetApprovedDriverProfileAsync(string driverId, CancellationToken ct)
 {
     var profile = await FindDriverProfileAsync(driverId, ct);
-    return profile?.Status == "Approved";
+    return profile?.Status == "Approved" ? profile : null;
 }
 
 async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
@@ -390,6 +390,7 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
     var reviewed = profile with
     {
         Status = request.Status,
+        Documents = profile.Documents.Select(document => document with { Status = request.Status }).ToArray(),
         ReviewedAtUtc = DateTimeOffset.UtcNow,
         ReviewReason = request.Reason?.Trim()
     };
@@ -447,12 +448,15 @@ app.MapPost("/api/v1/queues/join", async (
     if (string.IsNullOrWhiteSpace(driverId) || string.IsNullOrWhiteSpace(request.ZoneId))
         return Results.BadRequest(new { message = "A valid driver identity and zone are required." });
 
-    if (!await IsDriverApprovedAsync(driverId, ct))
+    var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (approvedProfile is null)
         return Results.Conflict(new { message = "Driver onboarding must be approved before joining a queue." });
 
     try
     {
         var serviceClass = string.IsNullOrWhiteSpace(request.ServiceClass) ? "auto" : request.ServiceClass.Trim();
+        if (!string.Equals(serviceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
+            return Results.Forbid();
         await service.JoinAsync(new DriverQueueEntry(
             driverId, request.ZoneId.Trim(), serviceClass,
             DateTimeOffset.UtcNow, 0, true), ct);
@@ -519,26 +523,29 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
 app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
-    if (string.IsNullOrWhiteSpace(driverId) || !await IsDriverApprovedAsync(driverId, ct))
-        return Results.Forbid();
-    if (rideContainer is null) return Results.Ok(rides.Values.Where(x => x.Status == "Requested"));
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (approvedProfile is null) return Results.Forbid();
+    if (rideContainer is null) return Results.Ok(rides.Values.Where(x => x.Status == "Requested" && x.Passengers <= approvedProfile.PassengerCapacity));
     var query = new QueryDefinition("SELECT * FROM c WHERE c.status = @status").WithParameter("@status", "Requested");
     var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
     var results = new List<DemoRide>();
     while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
-    return Results.Ok(results);
+    return Results.Ok(results.Where(ride => ride.Passengers <= approvedProfile.PassengerCapacity));
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    if (!await IsDriverApprovedAsync(driverId, ct))
-        return Results.Forbid();
+    var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (approvedProfile is null) return Results.Forbid();
     if (rideContainer is null)
     {
         if (!rides.TryGetValue(rideId, out var current) || current.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
+        if (current.Passengers > approvedProfile.PassengerCapacity)
+            return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
         var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         if (!rides.TryUpdate(rideId, acceptedInMemory, current))
             return Results.Conflict(new { message = "Another driver accepted this ride." });
@@ -550,6 +557,8 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         var response = await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct);
         if (response.Resource.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
+        if (response.Resource.Passengers > approvedProfile.PassengerCapacity)
+            return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
         var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
