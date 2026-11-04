@@ -171,6 +171,8 @@ Union membership is currently an operational/employer association and is not yet
 
 ## Monthly driver payslips (PDF only)
 
+The Driver app includes a Payslips tab for the most recent 12 completed months. Drivers can download and share the returned PDF using the device share sheet. The app does not render payslips as HTML or offer CSV/spreadsheet exports.
+
 Drivers can download a finalized monthly payslip as a PDF from GET /api/v1/driver/payslips/{year}/{month}.pdf. The endpoint is Driver-role only and returns application/pdf with a month-specific filename; there are no HTML, CSV or spreadsheet payslip representations. Only completed calendar months are available. The pay period uses India Standard Time calendar boundaries.
 
 The PDF contains the driver and union/employer identity, pay period, distinct days with at least one completed ride, rides accepted, rides completed and explicitly rejected rides. A ride accepted and later completed contributes to both accepted and completed counts. Rider cancellations are not counted as driver rejections. A driver rejection is recorded through POST /api/v1/rides/{rideId}/reject and does not change the ride's availability for other drivers.
