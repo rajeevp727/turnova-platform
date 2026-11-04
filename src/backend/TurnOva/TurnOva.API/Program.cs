@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
+using Microsoft.Azure.Cosmos;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Database;
+using TurnOva.Infrastructure.Database.Migrations;
 using TurnOva.Infrastructure.Dispatch;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,30 +12,74 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
-var queueStore = new InMemoryQueueStore();
-var demoDrivers = new[]
-{
-    new DriverQueueEntry("DRV-1001", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
-    new DriverQueueEntry("DRV-1002", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
-    new DriverQueueEntry("DRV-1003", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
-};
-foreach (var driver in demoDrivers)
-    await queueStore.AddAsync(driver, CancellationToken.None);
+var cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"];
+var cosmosKey = builder.Configuration["CosmosDb:Key"];
+var databaseName = builder.Configuration["CosmosDb:DatabaseName"] ?? "TurnOvaDb";
+var useCosmos = !string.IsNullOrWhiteSpace(cosmosEndpoint) || !string.IsNullOrWhiteSpace(cosmosKey);
 
-builder.Services.AddSingleton<IQueueStore>(queueStore);
+if (useCosmos && (string.IsNullOrWhiteSpace(cosmosEndpoint) || string.IsNullOrWhiteSpace(cosmosKey)))
+    throw new InvalidOperationException("Both CosmosDb:Endpoint and CosmosDb:Key must be configured.");
+
+if (useCosmos)
+{
+    var cosmosClient = new CosmosClient(cosmosEndpoint!, cosmosKey!, new CosmosClientOptions
+    {
+        SerializerOptions = new CosmosSerializationOptions
+        {
+            PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
+        }
+    });
+
+    builder.Services.AddSingleton(cosmosClient);
+    builder.Services.AddSingleton(new CosmosDbOptions
+    {
+        Endpoint = cosmosEndpoint!,
+        Key = cosmosKey!,
+        DatabaseName = databaseName
+    });
+    builder.Services.AddSingleton<ICosmosMigration, InitialSchemaMigration>();
+    builder.Services.AddSingleton<CosmosMigrationRunner>();
+    builder.Services.AddSingleton<IQueueStore>(sp =>
+        new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
+            .GetContainer(databaseName, "QueueEntries")));
+}
+else
+{
+    var queueStore = new InMemoryQueueStore();
+    var demoDrivers = new[]
+    {
+        new DriverQueueEntry("DRV-1001", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
+        new DriverQueueEntry("DRV-1002", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
+        new DriverQueueEntry("DRV-1003", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
+    };
+    foreach (var driver in demoDrivers)
+        await queueStore.AddAsync(driver, CancellationToken.None);
+
+    builder.Services.AddSingleton<IQueueStore>(queueStore);
+}
+
 builder.Services.AddScoped<QueueService>();
 
 var app = builder.Build();
+
+if (useCosmos)
+{
+    // Do not accept traffic until all pending schema migrations have completed.
+    await app.Services.GetRequiredService<CosmosMigrationRunner>().RunAsync();
+}
+
 app.UseCors();
 app.UseHttpsRedirection();
 
 var rides = new ConcurrentDictionary<string, DemoRide>();
+var storageMode = useCosmos ? "cosmos-db" : "demo-in-memory";
 
 app.MapGet("/", () => Results.Ok(new
 {
     name = "TurnOva API",
     version = "v1",
-    mode = "demo",
+    mode = storageMode,
+    database = useCosmos ? databaseName : null,
     message = "Everyone's Turn Matters."
 }));
 
@@ -41,7 +88,8 @@ app.MapGet("/health", () => Results.Ok(new
     service = "TurnOva.API",
     status = "healthy",
     environment = app.Environment.EnvironmentName,
-    mode = "demo"
+    storage = storageMode,
+    database = useCosmos ? databaseName : null
 }));
 
 app.MapGet("/api/v1/zones", () => Results.Ok(new[]
@@ -71,11 +119,11 @@ app.MapPost("/api/v1/queues/join", async (
 
     try
     {
+        var serviceClass = string.IsNullOrWhiteSpace(request.ServiceClass) ? "auto" : request.ServiceClass.Trim();
         await service.JoinAsync(new DriverQueueEntry(
-            request.DriverId.Trim(), request.ZoneId.Trim(),
-            string.IsNullOrWhiteSpace(request.ServiceClass) ? "auto" : request.ServiceClass.Trim(),
+            request.DriverId.Trim(), request.ZoneId.Trim(), serviceClass,
             DateTimeOffset.UtcNow, 0, true), ct);
-        var entries = await service.GetPositionedQueueAsync(request.ZoneId, request.ServiceClass ?? "auto", ct);
+        var entries = await service.GetPositionedQueueAsync(request.ZoneId.Trim(), serviceClass, ct);
         var position = entries.ToList().FindIndex(x => x.DriverId == request.DriverId.Trim()) + 1;
         return Results.Ok(new { message = "You joined the queue.", driverId = request.DriverId, position });
     }
