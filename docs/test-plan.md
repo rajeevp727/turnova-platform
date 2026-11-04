@@ -258,3 +258,26 @@ Automated tests cover Cosmos configuration validation. The migration lease, Cosm
 | DRV-ONB-013 | Cosmos mode stores and reads profile | Profile survives API restart in Drivers container | Cosmos integration | P0 |
 
 Automated in-memory API integration coverage includes valid submission, pending queue denial, approval followed by queue admission, invalid document metadata and suspension preventing ride acceptance. Cosmos persistence and production operations identity integration remain unverified until a development Cosmos account and Ops authentication model are available.
+
+## Union management and driver allocation
+
+| ID | Scenario | Expected result |
+|---|---|---|
+| UNI-001 | Create a union with unique code and valid zone/service classes | Created with Active status |
+| UNI-002 | Create a union using an existing code | Conflict; no duplicate union |
+| UNI-003 | Create a union with missing name/code/zones/classes or unsupported service class | Bad request |
+| UNI-004 | List and retrieve unions using a valid Ops key | Only persisted union records are returned |
+| UNI-005 | Create or manage a union without a valid Ops key | Unauthorized |
+| UNI-006 | Assign an approved driver to an active compatible union | Current assignment is returned to that driver |
+| UNI-007 | Assign a Pending/Rejected/Suspended or unknown driver | Assignment rejected |
+| UNI-008 | Assign a driver where union does not support approved zone/service class | Conflict |
+| UNI-009 | Assign a driver to an inactive or suspended union | Conflict |
+| UNI-010 | Assign a driver to the same active union again | Conflict; no duplicate audit event |
+| UNI-011 | Transfer a driver to another compatible active union | Current assignment changes and transfer audit is appended |
+| UNI-012 | Transfer without a reason | Bad request |
+| UNI-013 | Read driver's union from another driver's token | Only caller's assignment is returned |
+| UNI-014 | Read union members and driver transfer history as Ops | Active members and chronological audit history are returned |
+| UNI-015 | Change union status | Status is persisted; new assignments to non-active unions are blocked |
+| UNI-016 | Cosmos migration | Unions, DriverUnionAssignments and DriverUnionAudit containers are created with documented partition keys |
+
+These APIs currently use the temporary server-side admin API key and are not a substitute for an authenticated Ops portal/RBAC implementation. Cosmos cross-container writes are not transactionally atomic: an assignment write and audit write can fail independently. Production rollout must add an outbox/reconciliation strategy or a transactional data model before relying on audit completeness.
