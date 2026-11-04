@@ -11,19 +11,19 @@ type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
   background: string; header: string; surface: string; text: string; muted: string;
   border: string; accent: string; accentText: string; subtle: string; label: string;
-  danger: string; success: string; tabInactive: string; tabActive: string; queueSurface: string;
+  danger: string; success: string; tabInactive: string; tabActive: string;
 };
 const lightColors: ThemeColors = {
   background: "#F4F6F8", header: "#14283F", surface: "#FFFFFF", text: "#172B42",
   muted: "#718094", border: "#E2E8EE", accent: "#E89A3B", accentText: "#172B42",
   subtle: "#B8C5D2", label: "#8290A0", danger: "#B42318", success: "#237A54",
-  tabInactive: "#8793A2", tabActive: "#C47A21", queueSurface: "#FFFFFF"
+  tabInactive: "#8793A2", tabActive: "#C47A21"
 };
 const darkColors: ThemeColors = {
   background: "#0F1722", header: "#101D2B", surface: "#182536", text: "#E8EEF5",
   muted: "#A6B3C2", border: "#344457", accent: "#E89A3B", accentText: "#172B42",
   subtle: "#A6B3C2", label: "#A6B3C2", danger: "#FF8A80", success: "#70D6A0",
-  tabInactive: "#9AA9B9", tabActive: "#F7B65F", queueSurface: "#1D2C3E"
+  tabInactive: "#9AA9B9", tabActive: "#F7B65F"
 };
 const darkMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#182536" }] },
@@ -118,5 +118,5 @@ export default function App() {
   </ScrollView><View style={styles.tabBar}>{tabs.map(item=><Pressable key={item} style={styles.tab} onPress={()=>setTab(item)}><Text style={[styles.tabText,tab===item&&styles.tabActive]}>{item}</Text></Pressable>)}</View></SafeAreaView>;
 }
 function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({safe:{flex:1,backgroundColor:colors.background},header:{backgroundColor:colors.header,padding:22,paddingTop:18},brand:{color:colors.surface,fontSize:25,fontWeight:"800"},tagline:{color:colors.subtle,marginTop:4,fontSize:12},content:{padding:22,paddingBottom:34},eyebrow:{color:colors.tabActive,fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:colors.text,fontSize:28,fontWeight:"800",marginTop:8},sub:{color:colors.muted,fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:colors.surface,padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.text,marginBottom:12},label:{color:colors.label,fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},primary:{backgroundColor:colors.accent,borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:colors.text,fontWeight:"800"},link:{color:colors.tabActive,fontWeight:"800",textAlign:"center",marginTop:18},muted:{color:colors.muted,fontSize:13,marginTop:7,lineHeight:19},cardTitle:{color:colors.text,fontSize:17,fontWeight:"800",marginTop:8},status:{color:colors.tabActive,fontWeight:"900"},error:{color:colors.danger,marginTop:12},secondary:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:colors.text,fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:colors.surface,paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:colors.tabInactive,fontSize:12,fontWeight:"700"},tabActive:{color:colors.tabActive},themePicker:{flexDirection:"row",gap:8,marginTop:10,marginBottom:10},themeOption:{flex:1,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,alignItems:"center",backgroundColor:colors.surface},themeOptionSelected:{backgroundColor:colors.header,borderColor:colors.header},themeOptionText:{color:colors.muted,fontWeight:"700",fontSize:12},themeOptionTextSelected:{color:"#FFFFFF",fontWeight:"800"}});
+  return StyleSheet.create({safe:{flex:1,backgroundColor:colors.background},header:{backgroundColor:colors.header,padding:22,paddingTop:18},brand:{color:"#FFFFFF",fontSize:25,fontWeight:"800"},tagline:{color:colors.subtle,marginTop:4,fontSize:12},content:{padding:22,paddingBottom:34},eyebrow:{color:colors.tabActive,fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:colors.text,fontSize:28,fontWeight:"800",marginTop:8},sub:{color:colors.muted,fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:colors.surface,padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.text,marginBottom:12},label:{color:colors.label,fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},primary:{backgroundColor:colors.accent,borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:colors.accentText,fontWeight:"800"},link:{color:colors.tabActive,fontWeight:"800",textAlign:"center",marginTop:18},muted:{color:colors.muted,fontSize:13,marginTop:7,lineHeight:19},cardTitle:{color:colors.text,fontSize:17,fontWeight:"800",marginTop:8},status:{color:colors.tabActive,fontWeight:"900"},error:{color:colors.danger,marginTop:12},secondary:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:colors.text,fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:colors.surface,paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:colors.tabInactive,fontSize:12,fontWeight:"700"},tabActive:{color:colors.tabActive},themePicker:{flexDirection:"row",gap:8,marginTop:10,marginBottom:10},themeOption:{flex:1,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,alignItems:"center",backgroundColor:colors.surface},themeOptionSelected:{backgroundColor:colors.header,borderColor:colors.header},themeOptionText:{color:colors.muted,fontWeight:"700",fontSize:12},themeOptionTextSelected:{color:"#FFFFFF",fontWeight:"800"}});
 }
