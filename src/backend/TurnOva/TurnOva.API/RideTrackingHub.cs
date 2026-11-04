@@ -11,10 +11,12 @@ public sealed class RideTrackingHub(
     public override async Task OnConnectedAsync()
     {
         var user = Context.User;
-        var riderId = user?.FindFirstValue(ClaimTypes.NameIdentifier) ?? user?.FindFirstValue("sub");
+        var userId = user?.FindFirstValue(ClaimTypes.NameIdentifier) ?? user?.FindFirstValue("sub");
+        var isRider = user?.IsInRole("Rider") == true;
+        var isDriver = user?.IsInRole("Driver") == true;
         var rideId = Context.GetHttpContext()?.Request.Query["rideId"].ToString();
 
-        if (user?.IsInRole("Rider") != true || string.IsNullOrWhiteSpace(riderId) ||
+        if ((!isRider && !isDriver) || string.IsNullOrWhiteSpace(userId) ||
             string.IsNullOrWhiteSpace(rideId))
         {
             Context.Abort();
@@ -41,7 +43,7 @@ public sealed class RideTrackingHub(
             }
         }
 
-        if (ride is null || ride.RiderId != riderId)
+        if (ride is null || (isRider && ride.RiderId != userId) || (isDriver && ride.DriverId != userId))
         {
             Context.Abort();
             return;
