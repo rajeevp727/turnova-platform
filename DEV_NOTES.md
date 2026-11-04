@@ -218,6 +218,8 @@ Do not put account keys in `appsettings.json`, source control, mobile apps, or s
 - Container creation uses Cosmos `CreateContainerIfNotExistsAsync`, so the initial schema migration is safe to retry after an interrupted startup.
 - Startup fails fast if Cosmos credentials are partially configured or a migration fails; the API does not start in a partially migrated Cosmos mode.
 
+The migration runner creates `TurnOvaDb` with **400 RU/s database-level shared throughput** (not per-container throughput), then creates the containers. This is intended to stay within the account's 1,000 RU/s Lifetime Free Tier allowance when the account is eligible and the rest of the account's provisioned throughput remains within the allowance. Existing databases are not resized by this runner.
+
 Initial migration `202611050001_InitialSchema` creates:
 `Drivers` (/driverId), `Riders` (/riderId), `Zones` (/zoneId), `QueueEntries` (/zoneServiceKey), and `Rides` (/rideId), plus `MigrationHistory` (/id).
 
