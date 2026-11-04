@@ -226,7 +226,9 @@ public sealed class RideApiIntegrationTests
     private sealed record DriverUnionAssignmentTest(string UnionId, string Status);
     private sealed record DriverUnionAuditTest(string EventType, string? PreviousUnionId, string NewUnionId, string Reason);
 
-    private sealed record QueueMembershipTest(bool IsQueued, int? Position);\n\n    private static object ValidOnboardingRequest() => new
+    private sealed record QueueMembershipTest(bool IsQueued, int? Position);
+
+    private static object ValidOnboardingRequest() => new
     {
         zoneId = "hyderabad-central",
         fullName = "Test Driver",
