@@ -186,7 +186,7 @@ authGroup.MapPost("/logout", async (
         context.Request.Headers.Authorization.ToString(), null, ct));
 authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Get, "/auth/me", null,
-        context.Request.Headers.Authorization.ToString(), ct));
+        context.Request.Headers.Authorization.ToString(), null, ct));
 
 static async Task<IResult> ForwardAuthRequest(
     IHttpClientFactory clients, HttpMethod method, string path, object? body,
