@@ -90,3 +90,8 @@ Use free tiers and low-cost services for development where practical. Production
 ## Status
 
 This repository currently contains product documentation and the agreed initial technical direction. Application code, infrastructure and CI/CD will be added incrementally.
+
+
+## MVP development notes
+
+See [DEV_NOTES.md](./DEV_NOTES.md) for the consolidated API, Cosmos DB, and Driver/Rider UI feature notes for the Monday demo. Current demo endpoints and screens use synthetic data and an in-memory backend store; they are not production-ready.
