@@ -1,3 +1,4 @@
+using TurnOva.API;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
@@ -641,7 +642,8 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     if (year < 2020 || year > DateTime.UtcNow.Year || month is < 1 or > 12)
         return Results.BadRequest(new { message = "A valid payslip year and month are required." });
-    var periodStart = new DateTimeOffset(year, month, 1, 0, 0, 0, TimeSpan.Zero);
+    var indiaTimeZoneOffset = TimeSpan.FromMinutes(330);
+    var periodStart = new DateTimeOffset(year, month, 1, 0, 0, 0, indiaTimeZoneOffset);
     var periodEnd = periodStart.AddMonths(1);
     if (periodStart >= DateTimeOffset.UtcNow)
         return Results.BadRequest(new { message = "Payslips are available only for completed months." });
@@ -664,7 +666,7 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
         payslip = new DriverMonthlyPayslip(
             payslipId, driverId, profile.FullName, union.UnionId, union.Name,
             year, month, periodStart, periodEnd.AddTicks(-1),
-            completedActivities.Select(item => item.OccurredAtUtc.UtcDateTime.Date).Distinct().Count(),
+            completedActivities.Select(item => item.OccurredAtUtc.ToOffset(indiaTimeZoneOffset).Date).Distinct().Count(),
             activities.Count(item => item.ActivityType == "Accepted"),
             completedActivities.Length,
             activities.Count(item => item.ActivityType == "Rejected"),
