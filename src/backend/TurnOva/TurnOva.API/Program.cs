@@ -116,6 +116,20 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 var rides = new ConcurrentDictionary<string, DemoRide>();
+Container? rideContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null;
+
+async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
+{
+    if (rideContainer is null) { rides[ride.RideId] = ride; return; }
+    await rideContainer.UpsertItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
+}
+
+async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
+{
+    if (rideContainer is null) return rides.TryGetValue(rideId, out var item) ? item : null;
+    try { return (await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource; }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+}
 var storageMode = useCosmos ? "cosmos-db" : "demo-in-memory";
 
 app.MapGet("/", () => Results.Ok(new
@@ -297,40 +311,78 @@ app.MapPost("/api/v1/queues/join", async (
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/request", (ClaimsPrincipal user, CreateRideRequest request) =>
+app.MapPost("/api/v1/rides/request", async (ClaimsPrincipal user, CreateRideRequest request, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request.Pickup) || string.IsNullOrWhiteSpace(request.Dropoff))
         return Results.BadRequest(new { message = "Pickup and drop-off are required." });
-
-    var ride = new DemoRide(
-        $"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
-        request.Pickup.Trim(), request.Dropoff.Trim(),
-        Math.Clamp(request.Passengers, 1, 6), "Requested",
-        DateTimeOffset.UtcNow, 85m, user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub") ?? string.Empty);
-    rides[ride.RideId] = ride;
-    return Results.Created($"/api/v1/rides/{ride.RideId}", new
-    {
-        ride.RideId, ride.Pickup, ride.Dropoff, ride.Passengers,
-        ride.Status, ride.RequestedAt, ride.EstimatedFareInr
-    });
+    if (request.Passengers is < 1 or > 6)
+        return Results.BadRequest(new { message = "Passenger count must be between 1 and 6." });
+    if (request.PickupLatitude is null or < -90 or > 90 || request.PickupLongitude is null or < -180 or > 180)
+        return Results.BadRequest(new { message = "Valid pickup coordinates are required." });
+    var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
+    var ride = new DemoRide($"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
+        request.Pickup.Trim(), request.Dropoff.Trim(), request.Passengers, "Requested",
+        DateTimeOffset.UtcNow, 85m, riderId, null, request.PickupLatitude, request.PickupLongitude,
+        null, null, null, null);
+    await SaveRideAsync(ride, ct);
+    return Results.Created($"/api/v1/rides/{ride.RideId}", ride);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
-app.MapGet("/api/v1/rides/{rideId}", (ClaimsPrincipal user, string rideId) =>
-    rides.TryGetValue(rideId, out var ride) &&
-    ride.RiderId == (user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub"))
-        ? Results.Ok(new { ride.RideId, ride.Pickup, ride.Dropoff, ride.Passengers, ride.Status, ride.RequestedAt, ride.EstimatedFareInr })
-        : Results.NotFound(new { message = "Ride not found." }))
-    .RequireAuthorization(policy => policy.RequireRole("Rider"));
+app.MapGet("/api/v1/driver/rides/available", async (CancellationToken ct) =>
+{
+    if (rideContainer is null) return Results.Ok(rides.Values.Where(x => x.Status == "Requested"));
+    var query = new QueryDefinition("SELECT * FROM c WHERE c.status = @status").WithParameter("@status", "Requested");
+    var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
+    var results = new List<DemoRide>();
+    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    return Results.Ok(results);
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var ride = await FindRideAsync(rideId, ct);
+    if (ride is null) return Results.NotFound();
+    if (ride.Status != "Requested") return Results.Conflict(new { message = "This ride is no longer available." });
+    var accepted = ride with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow };
+    await SaveRideAsync(accepted, ct);
+    return Results.Ok(accepted);
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, CancellationToken ct) =>
+{
+    if (location.Latitude is < -90 or > 90 || location.Longitude is < -180 or > 180)
+        return Results.BadRequest(new { message = "Invalid coordinates." });
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var ride = await FindRideAsync(rideId, ct);
+    if (ride is null || ride.DriverId != driverId || ride.Status is not ("Accepted" or "InProgress"))
+        return Results.NotFound(new { message = "Active ride not found." });
+    var updated = ride with { DriverLatitude = location.Latitude, DriverLongitude = location.Longitude, LocationUpdatedAt = DateTimeOffset.UtcNow };
+    await SaveRideAsync(updated, ct);
+    return Results.NoContent();
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+{
+    var ride = await FindRideAsync(rideId, ct);
+    var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    return ride is not null && ride.RiderId == riderId
+        ? Results.Ok(ride)
+        : Results.NotFound(new { message = "Ride not found." });
+}).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
-public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1);
+public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null);
+public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
 public sealed record RefreshTokenRequest(string RefreshToken);
 public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
-    string Status, DateTimeOffset RequestedAt, decimal EstimatedFareInr, string RiderId);
+    string Status, DateTimeOffset RequestedAt, decimal EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt);
 
 public partial class Program;
