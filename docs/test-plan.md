@@ -338,3 +338,17 @@ Validate on Android and iOS physical devices, including system appearance change
 | UNION-SELFIE-010 | Transfer between unions | Transfer a driver with an existing selfie | Same profile photo remains attached to the driver across union assignments | API | P1 |
 | UNION-SELFIE-011 | Unauthorized profile access | Call operations driver/union detail endpoints without valid admin authorization | HTTP 401; no selfie data is returned | API + security | P0 |
 | UNION-SELFIE-012 | Driver profile displays selfie | Open the driver's Profile tab | Saved selfie is displayed; driver can retake/update it | Mobile | P1 |
+
+
+## Union selfie approval and visibility
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| UNION-SELFIE-013 | New selfie awaits union approval | Submit onboarding with a valid selfie | Photo status is Pending; no union member-list image is returned | API + mobile | P0 |
+| UNION-SELFIE-014 | Union approves selfie | Active assigned union reviews with Approved | Status and approving union are saved; union member list now includes Base64 image | API | P0 |
+| UNION-SELFIE-015 | Union rejects selfie | Review with Rejected and a reason | Rejection reason is stored; member-list image remains null/hidden | API | P0 |
+| UNION-SELFIE-016 | Replacement selfie resets approval | Upload a replacement after prior approval | Status returns to Pending, previous union approval is cleared, image hidden | API + mobile | P0 |
+| UNION-SELFIE-017 | Wrong union cannot approve | Another union attempts to review the driver | HTTP 409; profile review state is unchanged | API + security | P0 |
+| UNION-SELFIE-018 | Transfer requires new union approval | Transfer driver after photo was approved by prior union | New union member list hides photo until new union approves | API | P0 |
+| UNION-SELFIE-019 | Driver sees own approval state | Open driver Profile after union decision | Driver sees current photo, approval state and rejection reason when present | Mobile | P1 |
+| UNION-SELFIE-020 | Pending image not exposed in member list | Query active union members before approval | Photo Base64 is null; no pending photo is exposed in list results | API + security | P0 |

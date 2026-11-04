@@ -23,4 +23,8 @@ public sealed record DriverOnboardingProfile(
     string? ReviewReason = null,
     string? ProfilePhotoBase64 = null,
     string? ProfilePhotoContentType = null,
-    DateTimeOffset? ProfilePhotoCapturedAtUtc = null);
+    DateTimeOffset? ProfilePhotoCapturedAtUtc = null,
+    string ProfilePhotoApprovalStatus = "Pending",
+    string? ProfilePhotoApprovedByUnionId = null,
+    DateTimeOffset? ProfilePhotoReviewedAtUtc = null,
+    string? ProfilePhotoReviewReason = null);
