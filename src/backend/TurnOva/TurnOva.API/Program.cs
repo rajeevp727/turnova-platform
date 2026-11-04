@@ -59,6 +59,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DemoRide>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, string>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverOnboardingProfile>>();
 builder.Services.AddHttpClient("TriSend", client =>
 {
     var baseUrl = builder.Configuration["TriSend:BaseUrl"];
@@ -139,6 +140,39 @@ var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRid
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
 Container? rideContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null;
 Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
+Container? driverContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null;
+var driverProfiles = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+
+async Task<DriverOnboardingProfile?> FindDriverProfileAsync(string driverId, CancellationToken ct)
+{
+    if (driverContainer is null)
+        return driverProfiles.TryGetValue(driverId, out var profile) ? profile : null;
+    try
+    {
+        return (await driverContainer.ReadItemAsync<DriverOnboardingProfile>(driverId,
+            new PartitionKey(driverId), cancellationToken: ct)).Resource;
+    }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+    {
+        return null;
+    }
+}
+
+async Task SaveDriverProfileAsync(DriverOnboardingProfile profile, CancellationToken ct)
+{
+    if (driverContainer is null)
+    {
+        driverProfiles[profile.DriverId] = profile;
+        return;
+    }
+    await driverContainer.UpsertItemAsync(profile, new PartitionKey(profile.DriverId), cancellationToken: ct);
+}
+
+async Task<bool> IsDriverApprovedAsync(string driverId, CancellationToken ct)
+{
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    return profile?.Status == "Approved";
+}
 
 async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
 {
@@ -288,6 +322,77 @@ static async Task<IResult> ForwardAuthRequest(
     }
 }
 
+var onboarding = app.MapGroup("/api/v1/driver/onboarding").RequireAuthorization(policy => policy.RequireRole("Driver"));
+onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    return profile is null ? Results.NoContent() : Results.Ok(profile);
+});
+onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest request, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length > 120 ||
+        string.IsNullOrWhiteSpace(request.PhoneNumber) || request.PhoneNumber.Any(c => !char.IsDigit(c) && c != '+') ||
+        request.PhoneNumber.Length is < 10 or > 16 ||
+        string.IsNullOrWhiteSpace(request.VehicleMake) || request.VehicleMake.Trim().Length > 60 ||
+        string.IsNullOrWhiteSpace(request.VehicleModel) || request.VehicleModel.Trim().Length > 60 ||
+        string.IsNullOrWhiteSpace(request.VehicleRegistration) || request.VehicleRegistration.Trim().Length > 20 ||
+        request.PassengerCapacity is < 1 or > 8 ||
+        request.ServiceClass is not ("auto" or "mini" or "sedan" or "suv") ||
+        request.Documents is null || request.Documents.Count is < 1 or > 8 ||
+        request.Documents.Any(document =>
+            document.DocumentType is not ("DrivingLicence" or "VehicleRegistration" or "Insurance" or "Permit" or "ProfilePhoto") ||
+            string.IsNullOrWhiteSpace(document.StorageReference) || document.StorageReference.Length > 200 ||
+            document.StorageReference.Contains("..", StringComparison.Ordinal) ||
+            Uri.TryCreate(document.StorageReference, UriKind.Absolute, out _)))
+        return Results.BadRequest(new { message = "Provide valid driver, vehicle and document metadata. Upload files to private object storage and submit opaque storage references only." });
+
+    var existing = await FindDriverProfileAsync(driverId, ct);
+    if (existing?.Status == "Approved")
+        return Results.Conflict(new { message = "An approved driver profile cannot be replaced through onboarding." });
+
+    var profile = new DriverOnboardingProfile(
+        driverId, driverId, request.FullName.Trim(), request.PhoneNumber.Trim(),
+        request.VehicleMake.Trim(), request.VehicleModel.Trim(), request.VehicleRegistration.Trim().ToUpperInvariant(),
+        request.ServiceClass, request.PassengerCapacity,
+        request.Documents.Select(document => new DriverDocumentReference(document.DocumentType, document.StorageReference)).ToArray(),
+        "Pending", existing?.SubmittedAtUtc ?? DateTimeOffset.UtcNow);
+    await SaveDriverProfileAsync(profile, ct);
+    return Results.Accepted("/api/v1/driver/onboarding/me", profile);
+});
+
+app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
+    HttpContext context, string driverId, DriverReviewRequest request, CancellationToken ct) =>
+{
+    var configuredKey = app.Configuration["DriverOnboarding:AdminApiKey"];
+    var suppliedKey = context.Request.Headers["X-Driver-Admin-Key"].ToString();
+    if (string.IsNullOrWhiteSpace(configuredKey))
+        return Results.Problem("Driver onboarding review is not configured.", statusCode: 503);
+    var expected = Encoding.UTF8.GetBytes(configuredKey);
+    var supplied = Encoding.UTF8.GetBytes(suppliedKey);
+    if (expected.Length != supplied.Length || !CryptographicOperations.FixedTimeEquals(expected, supplied))
+        return Results.Unauthorized();
+    if (request.Status is not ("Approved" or "Rejected" or "Suspended") ||
+        (request.Status != "Approved" && string.IsNullOrWhiteSpace(request.Reason)))
+        return Results.BadRequest(new { message = "Status must be Approved, Rejected or Suspended; a reason is required unless approving." });
+
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.NotFound();
+    if (profile.Status == "Suspended" && request.Status == "Approved")
+        return Results.Conflict(new { message = "A suspended driver cannot be re-approved through this endpoint." });
+    var reviewed = profile with
+    {
+        Status = request.Status,
+        ReviewedAtUtc = DateTimeOffset.UtcNow,
+        ReviewReason = request.Reason?.Trim()
+    };
+    await SaveDriverProfileAsync(reviewed, ct);
+    return Results.Ok(reviewed);
+});
+
 app.MapGet("/api/v1/zones", () => Results.Ok(new[]
 {
     new { id = "hyderabad-central", name = "Hyderabad Central", serviceClasses = new[] { "auto" } }
@@ -337,6 +442,9 @@ app.MapPost("/api/v1/queues/join", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId) || string.IsNullOrWhiteSpace(request.ZoneId))
         return Results.BadRequest(new { message = "A valid driver identity and zone are required." });
+
+    if (!await IsDriverApprovedAsync(driverId, ct))
+        return Results.Conflict(new { message = "Driver onboarding must be approved before joining a queue." });
 
     try
     {
@@ -418,6 +526,8 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!await IsDriverApprovedAsync(driverId, ct))
+        return Results.Forbid();
     if (rideContainer is null)
     {
         if (!rides.TryGetValue(rideId, out var current) || current.Status != "Requested")
@@ -540,6 +650,9 @@ app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId,
 app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
+public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
+public sealed record DriverOnboardingRequest(string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents);
+public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
