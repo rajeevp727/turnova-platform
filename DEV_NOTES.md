@@ -321,3 +321,9 @@ Set `CosmosDb__Endpoint`, `CosmosDb__Key`, and optionally `CosmosDb__DatabaseNam
 - Queue join, available-ride discovery and ride acceptance are blocked unless the driver's profile status is `Approved`.
 - Approval requires DrivingLicence and VehicleRegistration references. The API accepts only opaque private object-storage references; it does not upload, serve or verify identity documents.
 - The API-key review endpoint is temporary until authenticated Ops roles/permissions and an Ops portal are implemented.
+
+## Union management increment
+
+PR #11 introduces union records, current driver-to-union assignments and per-driver assignment audit events. Only approved drivers can be assigned to active unions that support their approved service zone and service class. Every initial assignment or transfer requires an operations reason. Drivers can read only their own current union; Ops can list union members and inspect assignment history.
+
+Cosmos containers are Unions (/unionId), DriverUnionAssignments (/driverId) and DriverUnionAudit (/driverId). Local tests use in-memory dictionaries. Ops access temporarily reuses DriverOnboarding:AdminApiKey; never expose this key to mobile clients. The audit append and current-assignment upsert span separate Cosmos partitions/containers and are not atomic; add an outbox/reconciliation mechanism before production. Union membership is not yet a dispatch gate. Payroll and payslips are deferred to a separate increment.
