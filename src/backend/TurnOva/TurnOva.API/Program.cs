@@ -1070,7 +1070,8 @@ app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
-public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);\npublic sealed record DriverSelfieRequest(string ProfilePhotoBase64);
+public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);
+public sealed record DriverSelfieRequest(string ProfilePhotoBase64);
 public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateUnionRequest(string Name, string Code, string? Location, string? ManagerName, string? ManagerPhone, IReadOnlyList<string> ZoneIds, IReadOnlyList<string> ServiceClasses);
 public sealed record UpdateUnionStatusRequest(string Status);
