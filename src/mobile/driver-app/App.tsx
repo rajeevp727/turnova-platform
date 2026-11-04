@@ -1,5 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import * as SecureStore from "expo-secure-store";
+import * as Location from "expo-location";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -42,6 +43,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [availableRides, setAvailableRides] = useState<any[]>([]);
+  const [activeRide, setActiveRide] = useState<any>(null);
 
   const acceptSession = useCallback(async (result: any) => {
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
@@ -159,6 +162,10 @@ export default function App() {
     finally { setLoading(false); }
   };
 
+  const loadAvailableRides = async () => { try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); } catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); } };
+  const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
+  useEffect(() => { if (!user || !activeRide) return; let subscription: Location.LocationSubscription | undefined; let mounted = true; (async () => { const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) { setError("Location permission is required to share your position with the rider."); return; } subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 }, location => { if (mounted) void apiFetch(`/api/v1/rides/${activeRide.rideId}/location`, { method: "POST", body: JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }) }).catch(e => setError(e instanceof Error ? e.message : "Unable to update location.")); }); })(); return () => { mounted = false; subscription?.remove(); }; }, [user, activeRide?.rideId, apiFetch]);
+
   const logout = async () => {
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
@@ -191,7 +198,7 @@ export default function App() {
     <ScrollView contentContainerStyle={styles.content}>
       {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · Auto</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>View queue</Text></Pressable></View></>}
       {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · AUTO</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void (membership.isQueued ? loadQueue() : joinQueue())} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : membership.isQueued ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable>{membership.isQueued && <Pressable style={styles.secondary} onPress={() => void leaveQueue()} disabled={loading}><Text style={styles.secondaryText}>Leave queue</Text></Pressable>}<Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
-      {tab === "Trips" && <><Text style={styles.title}>Trips</Text><View style={styles.card}><Text style={styles.muted}>Your accepted offers and trip history will appear here.</Text></View></>}
+      {tab === "Trips" && <><Text style={styles.title}>Ride requests</Text><View style={styles.card}><Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh requests</Text></Pressable>{availableRides.map(item=><View key={item.rideId} style={{marginTop:14}}><Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text><Text style={styles.muted}>{item.passengers} passenger(s) · {item.rideId}</Text><Pressable style={styles.secondary} onPress={()=>void acceptRide(item.rideId)}><Text style={styles.secondaryText}>Accept ride</Text></Pressable></View>)}{activeRide&&<Text style={styles.success}>Sharing live location for {activeRide.rideId}</Text>}</View></>}
       {tab === "Profile" && <><Text style={styles.title}>Your profile</Text><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
       {!!error && <Text style={styles.error}>{error}</Text>}{!!notice && <Text style={styles.success}>{notice}</Text>}
     </ScrollView>

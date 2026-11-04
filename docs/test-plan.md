@@ -177,3 +177,20 @@ The GitHub Actions workflow currently runs:
 - Add request idempotency for ride creation.
 - Add durable ride persistence, driver eligibility/onboarding and production CORS policy.
 - Add session revocation strategy if immediate access-token invalidation is required.
+
+
+## 11. Ride persistence, acceptance and live tracking (planned until CI/device validation)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-PERSIST-001 | Create ride with valid pickup coordinates | Ride is stored and survives API restart in Cosmos mode | API + Cosmos integration | P0 |
+| RID-PERSIST-002 | Invalid passenger count or coordinates | HTTP 400; no ride is created | API | P0 |
+| RID-DRV-001 | Driver lists requested rides | Only Requested rides are returned to authenticated Drivers | API | P0 |
+| RID-DRV-002 | Driver accepts a requested ride | Ride becomes Accepted and is assigned to JWT subject | API | P0 |
+| RID-DRV-003 | Two drivers accept the same ride concurrently | Exactly one driver wins; other receives conflict | Concurrency + Cosmos integration | P0 |
+| TRACK-001 | Assigned driver posts valid coordinates | Latest coordinates and timestamp are persisted | API + Cosmos | P0 |
+| TRACK-002 | Unassigned driver posts coordinates | Request is denied; no location is changed | API security | P0 |
+| TRACK-003 | Rider reads another rider's ride | HTTP 404; no ride or location data is disclosed | API security | P0 |
+| TRACK-004 | Rider Activity screen is open | Map refreshes from authoritative ride state while screen is active | Mobile E2E | P1 |
+| TRACK-005 | Driver leaves Trips screen | Foreground location subscription is removed | Mobile | P0 |
+| TRACK-006 | Location permission denied | Driver sees an actionable error; no false location-sharing state | Mobile | P1 |

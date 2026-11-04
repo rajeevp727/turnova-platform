@@ -123,3 +123,8 @@ Queue membership is persisted through the configured queue store (in-memory for 
 ## Test plan
 
 See [docs/test-plan.md](./docs/test-plan.md) for feature-wise positive, negative, security, and manual acceptance scenarios. Planned scenarios are not represented as executed tests.
+
+
+## Ride persistence and tracking
+
+Feature branch `feature/persistent-rides-live-tracking` adds Cosmos-backed ride request persistence, driver ride acceptance, authenticated driver location updates, and a Rider map that polls for the assigned driver's latest position. Configure Cosmos DB and test on physical devices with location permissions enabled. The current flow is a foreground MVP foundation, not production dispatch or turn-by-turn navigation.
