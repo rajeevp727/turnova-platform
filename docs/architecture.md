@@ -202,3 +202,12 @@ When Cosmos mode is enabled, API startup validates the HTTPS endpoint, account k
 `GET /health` is a process-level health endpoint. `GET /health/ready` performs a Cosmos database read in Cosmos mode and returns 503 when the configured database is unavailable. In-memory demo mode reports ready without a Cosmos dependency. The readiness endpoint does not replace monitoring of request-level Cosmos throttling, latency, RU consumption, or data-plane operations.
 
 The migration lease currently has a 30-minute expiry and is not renewed. Keep migrations short and controlled; migrations expected to exceed this duration require lease renewal before rollout to multiple API instances. Validate the lease and migration behaviour against a real Cosmos development account before production deployment.
+
+
+## 19. Driver onboarding and dispatch eligibility
+
+Driver onboarding metadata is stored in the existing `Drivers` Cosmos container (partition key `/driverId`); local demo mode uses an in-memory profile registry. The authenticated Driver can submit and read only their own profile. A submission contains identity/contact fields, vehicle attributes, service class, passenger capacity and opaque references to documents in private object storage. New or resubmitted profiles are `Pending`; the client cannot set verification status.
+
+The interim operations review endpoint supports `Approved`, `Rejected` and `Suspended` decisions. It is protected by a server-side `DriverOnboarding:AdminApiKey` compared in constant time. This is a limited integration bridge until an authenticated Ops portal and role/permission model are implemented. Never ship this key in a mobile app or public client.
+
+Queue joining, available-ride discovery and ride acceptance require an `Approved` profile. Rejected drivers may resubmit; approved and suspended profiles cannot be overwritten by the driver onboarding endpoint. Suspension immediately removes eligibility at the next API request. This is not full KYC: document upload, verification provider/manual evidence review, expiry monitoring, audit trail, vehicle ownership checks and regulatory validation remain future work.
