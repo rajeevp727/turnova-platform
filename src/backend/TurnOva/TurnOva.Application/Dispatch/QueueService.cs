@@ -16,4 +16,14 @@ public sealed class QueueService(IQueueStore store)
 
         await store.AddAsync(entry, cancellationToken);
     }
+
+    public Task<bool> LeaveAsync(
+        string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(driverId) || string.IsNullOrWhiteSpace(zoneId) ||
+            string.IsNullOrWhiteSpace(serviceClass))
+            throw new ArgumentException("Driver, zone and service class are required.");
+
+        return store.RemoveAsync(driverId, zoneId, serviceClass, cancellationToken);
+    }
 }
