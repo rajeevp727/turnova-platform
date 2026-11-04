@@ -162,7 +162,7 @@ export default function App() {
   const logout = async () => {
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
-    await clearTokens(); setTokens(null); setUser(null); setQueue([]);
+    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null });
   };
 
   if (loading && !user) return <SafeAreaView style={styles.safe}><ActivityIndicator color="#E89A3B" style={{ marginTop: 80 }} /></SafeAreaView>;
