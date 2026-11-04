@@ -330,6 +330,8 @@ Cosmos containers are Unions (/unionId), DriverUnionAssignments (/driverId) and 
 
 ## Monthly driver payslip increment
 
+The Driver app exposes a Payslips tab for recent completed months and downloads/shares the PDF through native file handling. Available rides now expose an explicit Decline action; rider cancellation remains a separate event and is not counted as driver rejection.
+
 PR #12 adds a driver-only monthly PDF payslip endpoint and immutable work activity/payslip records. Accepted, explicit driver rejection and completed ride events are counted separately. Distinct India-local dates with completed rides count as days worked; rider cancellations are not rejections. A completed ride contributes to both accepted and completed totals. Payslips are generated only for completed IST calendar months and persisted as immutable snapshots.
 
 Cosmos containers: DriverWorkActivities (/driverId) and DriverPayslips (/driverId). The PDF is the only payslip output format. No monetary amount is shown because compensation rules are not defined. If union membership changes within a month, this version rejects payslip generation rather than attributing the entire period to one employer. Activity appends are not atomic with ride state transitions; add an outbox/reconciliation strategy before production.
