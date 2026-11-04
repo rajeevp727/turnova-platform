@@ -8,6 +8,7 @@ public sealed record DriverDocumentReference(
 public sealed record DriverOnboardingProfile(
     string Id,
     string DriverId,
+    string ZoneId,
     string FullName,
     string PhoneNumber,
     string VehicleMake,
