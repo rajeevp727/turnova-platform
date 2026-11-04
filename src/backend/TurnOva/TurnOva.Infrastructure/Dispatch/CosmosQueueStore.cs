@@ -53,6 +53,22 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         }
     }
 
+    public async Task<bool> RemoveAsync(
+        string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
+    {
+        var key = QueueKey(zoneId, serviceClass);
+        try
+        {
+            await queueContainer.DeleteItemAsync<QueueEntryDocument>(
+                driverId, new PartitionKey(key), cancellationToken: cancellationToken);
+            return true;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
 
