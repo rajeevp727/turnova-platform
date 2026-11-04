@@ -1,6 +1,5 @@
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
-using System.Text.Json.Serialization;
 
 namespace TurnOva.Infrastructure.Database;
 
@@ -74,11 +73,11 @@ public sealed class CosmosMigrationRunner(
         }
         finally
         {
-            await ReleaseLockAsync(locks, lease, cancellationToken);
+            await ReleaseLockAsync(locks, lease);
         }
     }
 
-    private async Task<MigrationLockDocument> AcquireLockAsync(
+    private async Task<MigrationLockLease> AcquireLockAsync(
         Container locks, CancellationToken cancellationToken)
     {
         var owner = Guid.NewGuid().ToString("N");
@@ -97,7 +96,7 @@ public sealed class CosmosMigrationRunner(
                 var created = await locks.CreateItemAsync(
                     lease, new PartitionKey(lease.Id), cancellationToken: cancellationToken);
                 logger.LogInformation("Acquired Cosmos migration lock {Owner}.", owner);
-                return lease with { ETag = created.ETag };
+                return new MigrationLockLease(lease.Id, owner, created.ETag);
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
@@ -105,17 +104,17 @@ public sealed class CosmosMigrationRunner(
                 if (current is null)
                     continue;
 
-                if (current.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+                if (current.Document.ExpiresAtUtc <= DateTimeOffset.UtcNow)
                 {
                     try
                     {
-                        var replacement = lease with { ETag = null };
+                        var replacement = lease;
                         var response = await locks.ReplaceItemAsync(
                             replacement, replacement.Id, new PartitionKey(replacement.Id),
                             new ItemRequestOptions { IfMatchEtag = current.ETag },
                             cancellationToken);
                         logger.LogWarning("Recovered expired Cosmos migration lock owned by {PreviousOwner}.", current.Owner);
-                        return replacement with { ETag = response.ETag };
+                        return new MigrationLockLease(replacement.Id, owner, response.ETag);
                     }
                     catch (CosmosException replaceException) when (
                         replaceException.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -129,7 +128,7 @@ public sealed class CosmosMigrationRunner(
         }
     }
 
-    private static async Task<MigrationLockDocument?> ReadLockAsync(
+    private static async Task<MigrationLockReadResult?> ReadLockAsync(
         Container locks, CancellationToken cancellationToken)
     {
         try
@@ -137,7 +136,7 @@ public sealed class CosmosMigrationRunner(
             var response = await locks.ReadItemAsync<MigrationLockDocument>(
                 "schema-migrations", new PartitionKey("schema-migrations"),
                 cancellationToken: cancellationToken);
-            return response.Resource with { ETag = response.ETag };
+            return new MigrationLockReadResult(response.Resource, response.ETag);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
