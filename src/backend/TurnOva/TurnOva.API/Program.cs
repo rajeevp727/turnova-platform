@@ -643,8 +643,10 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
     if (year < 2020 || year > DateTime.UtcNow.Year || month is < 1 or > 12)
         return Results.BadRequest(new { message = "A valid payslip year and month are required." });
     var indiaTimeZoneOffset = TimeSpan.FromMinutes(330);
-    var periodStart = new DateTimeOffset(year, month, 1, 0, 0, 0, indiaTimeZoneOffset);
-    var periodEnd = periodStart.AddMonths(1);
+    var periodStartLocal = new DateTimeOffset(year, month, 1, 0, 0, 0, indiaTimeZoneOffset);
+    var periodEndLocal = periodStartLocal.AddMonths(1);
+    var periodStart = periodStartLocal.ToUniversalTime();
+    var periodEnd = periodEndLocal.ToUniversalTime();
     if (periodStart >= DateTimeOffset.UtcNow)
         return Results.BadRequest(new { message = "Payslips are available only for completed months." });
 
@@ -665,7 +667,7 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
         var completedActivities = activities.Where(item => item.ActivityType == "Completed").ToArray();
         payslip = new DriverMonthlyPayslip(
             payslipId, driverId, profile.FullName, union.UnionId, union.Name,
-            year, month, periodStart, periodEnd.AddTicks(-1),
+            year, month, periodStartLocal, periodEndLocal.AddTicks(-1),
             completedActivities.Select(item => item.OccurredAtUtc.ToOffset(indiaTimeZoneOffset).Date).Distinct().Count(),
             activities.Count(item => item.ActivityType == "Accepted"),
             completedActivities.Length,
