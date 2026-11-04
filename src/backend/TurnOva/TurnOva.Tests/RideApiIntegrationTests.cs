@@ -105,6 +105,110 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null)).StatusCode);
     }
 
+
+    [Fact]
+    public async Task OperationsCanCreateUnionAssignDriverTransferAndReadAuditHistory()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-union-transfer");
+        using var ops = factory.CreateClient("Rider", "ops-union-test");
+
+        async Task<string> CreateUnionAsync(string name, string code)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
+            {
+                Content = JsonContent.Create(new
+                {
+                    name,
+                    code,
+                    location = "Hyderabad",
+                    managerName = "Union Manager",
+                    managerPhone = "+919876543210",
+                    zoneIds = new[] { "hyderabad-central" },
+                    serviceClasses = new[] { "auto" }
+                })
+            };
+            request.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+            using var response = await ops.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return json.RootElement.GetProperty("unionId").GetString()!;
+        }
+
+        var firstUnionId = await CreateUnionAsync("Central Drivers Union", "HYD-CENTRAL");
+        var secondUnionId = await CreateUnionAsync("Metro Drivers Union", "HYD-METRO");
+
+        using var assign = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-union-transfer/union-assignment")
+        {
+            Content = JsonContent.Create(new { unionId = firstUnionId, reason = "Initial driver onboarding" })
+        };
+        assign.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.OK, (await ops.SendAsync(assign)).StatusCode);
+
+        var current = await driver.GetFromJsonAsync<DriverUnionAssignmentTest>("/api/v1/driver/union");
+        Assert.NotNull(current);
+        Assert.Equal(firstUnionId, current.UnionId);
+
+        using var transfer = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-union-transfer/union-assignment")
+        {
+            Content = JsonContent.Create(new { unionId = secondUnionId, reason = "Operational capacity balancing" })
+        };
+        transfer.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.OK, (await ops.SendAsync(transfer)).StatusCode);
+
+        current = await driver.GetFromJsonAsync<DriverUnionAssignmentTest>("/api/v1/driver/union");
+        Assert.NotNull(current);
+        Assert.Equal(secondUnionId, current.UnionId);
+
+        using var historyRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/ops/drivers/driver-union-transfer/union-history");
+        historyRequest.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var historyResponse = await ops.SendAsync(historyRequest);
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        var history = await historyResponse.Content.ReadFromJsonAsync<List<DriverUnionAuditTest>>();
+        Assert.NotNull(history);
+        Assert.Equal(2, history.Count);
+        Assert.Contains(history, item => item.EventType == "Assigned" && item.NewUnionId == firstUnionId);
+        Assert.Contains(history, item => item.EventType == "Transferred" &&
+            item.PreviousUnionId == firstUnionId && item.NewUnionId == secondUnionId &&
+            item.Reason == "Operational capacity balancing");
+    }
+
+    [Fact]
+    public async Task UnionAssignmentRejectsPendingDriversInactiveUnionsAndUnsupportedZones()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-union-invalid");
+        using var ops = factory.CreateClient("Rider", "ops-union-invalid");
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            .TryRemove("driver-union-invalid", out _);
+
+        using var create = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "North Drivers Union",
+                code = "HYD-NORTH",
+                zoneIds = new[] { "hyderabad-north" },
+                serviceClasses = new[] { "auto" }
+            })
+        };
+        create.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var created = await ops.SendAsync(create);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var unionJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var unionId = unionJson.RootElement.GetProperty("unionId").GetString()!;
+
+        using var pendingAssignment = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-union-invalid/union-assignment")
+        {
+            Content = JsonContent.Create(new { unionId, reason = "Onboarding" })
+        };
+        pendingAssignment.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.NotFound, (await ops.SendAsync(pendingAssignment)).StatusCode);
+    }
+
+    private sealed record DriverUnionAssignmentTest(string UnionId, string Status);
+    private sealed record DriverUnionAuditTest(string EventType, string? PreviousUnionId, string NewUnionId, string Reason);
+
     private sealed record QueueMembershipTest(bool IsQueued, int? Position);\n\n    private static object ValidOnboardingRequest() => new
     {
         zoneId = "hyderabad-central",
