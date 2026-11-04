@@ -423,10 +423,18 @@ app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, stri
         return Results.BadRequest(new { message = "Invalid coordinates." });
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
-    if (ride is null || ride.DriverId != driverId || !ride.LocationSharingActive || ride.Status is not ("Accepted" or "Arrived" or "InProgress"))
+    if (ride is null || ride.DriverId != driverId || !ride.LocationSharingActive || !RideLifecycle.IsLocationSharingActive(ride.Status))
         return Results.NotFound(new { message = "Active ride not found." });
     var updated = ride with { DriverLatitude = location.Latitude, DriverLongitude = location.Longitude, LocationUpdatedAt = DateTimeOffset.UtcNow };
-    await SaveRideAsync(updated, ct);
+    if (!await TryReplaceRideAsync(ride, updated, ct))
+        return Results.Conflict(new { message = "Ride state changed. Refresh before sending another location update." });
+    await hub.Clients.Group(rideId).SendAsync("DriverLocationUpdated", new
+    {
+        rideId,
+        latitude = updated.DriverLatitude,
+        longitude = updated.DriverLongitude,
+        updated.LocationUpdatedAt
+    }, ct);
     return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
@@ -470,19 +478,26 @@ async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, str
 
 async Task<DemoRide?> TryTransitionAsync(DemoRide current, string next, CancellationToken ct)
 {
-    var updated = current with { Status = next, LocationSharingActive = next is "Accepted" or "Arrived" or "InProgress" };
+    if (!RideLifecycle.CanTransition(current.Status, next)) return null;
+    var updated = current with { Status = next, LocationSharingActive = RideLifecycle.IsLocationSharingActive(next) };
+    return await TryReplaceRideAsync(current, updated, ct) ? updated : null;
+}
+
+async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, CancellationToken ct)
+{
     if (rideContainer is null)
-        return rides.TryUpdate(current.RideId, updated, current) ? updated : null;
+        return rides.TryUpdate(current.RideId, updated, current);
     try
     {
         var response = await rideContainer.ReadItemAsync<DemoRide>(current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
-        if (response.Resource.Status != current.Status) return null;
+        if (response.Resource.Status != current.Status || response.Resource.DriverId != current.DriverId)
+            return false;
         await rideContainer.ReplaceItemAsync(updated, current.RideId, new PartitionKey(current.RideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
-        return updated;
+        return true;
     }
     catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
-    { return null; }
+    { return false; }
 }
 
 app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
