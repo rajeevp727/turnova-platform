@@ -63,6 +63,8 @@ builder.Services.AddSingleton<ConcurrentDictionary<string, DriverOnboardingProfi
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnion>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAssignment>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverWorkActivity>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
 builder.Services.AddHttpClient("TriSend", client =>
 {
     var baseUrl = builder.Configuration["TriSend:BaseUrl"];
@@ -104,6 +106,7 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, InitialSchemaMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideIdempotencyMigration>();
     builder.Services.AddSingleton<ICosmosMigration, UnionManagementMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<CosmosMigrationRunner>();
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
@@ -152,6 +155,61 @@ var unionAudit = app.Services.GetRequiredService<ConcurrentDictionary<string, Dr
 Container? unionContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Unions") : null;
 Container? unionAssignmentContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverUnionAssignments") : null;
 Container? unionAuditContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverUnionAudit") : null;
+var workActivities = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+var monthlyPayslips = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
+Container? workActivityContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverWorkActivities") : null;
+Container? payslipContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverPayslips") : null;
+
+async Task RecordWorkActivityAsync(string driverId, string rideId, string activityType, DateTimeOffset occurredAtUtc, CancellationToken ct)
+{
+    var activityId = $"{rideId}:{activityType}";
+    var activity = new DriverWorkActivity(activityId, driverId, rideId, activityType, occurredAtUtc);
+    if (workActivityContainer is null)
+    {
+        workActivities.TryAdd($"{driverId}|{activityId}", activity);
+        return;
+    }
+    try { await workActivityContainer.CreateItemAsync(activity, new PartitionKey(driverId), cancellationToken: ct); }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict) { }
+}
+
+async Task<IReadOnlyList<DriverWorkActivity>> GetWorkActivitiesAsync(string driverId, DateTimeOffset start, DateTimeOffset end, CancellationToken ct)
+{
+    if (workActivityContainer is null)
+        return workActivities.Values.Where(item => item.DriverId == driverId && item.OccurredAtUtc >= start && item.OccurredAtUtc < end).ToArray();
+    var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId AND c.occurredAtUtc >= @start AND c.occurredAtUtc < @end")
+        .WithParameter("@driverId", driverId).WithParameter("@start", start).WithParameter("@end", end);
+    var results = new List<DriverWorkActivity>();
+    using var iterator = workActivityContainer.GetItemQueryIterator<DriverWorkActivity>(query,
+        requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
+    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    return results;
+}
+
+async Task<DriverMonthlyPayslip?> FindPayslipAsync(string driverId, string payslipId, CancellationToken ct)
+{
+    if (payslipContainer is null)
+        return monthlyPayslips.TryGetValue($"{driverId}|{payslipId}", out var value) ? value : null;
+    try { return (await payslipContainer.ReadItemAsync<DriverMonthlyPayslip>(payslipId, new PartitionKey(driverId), cancellationToken: ct)).Resource; }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+}
+
+async Task SavePayslipIfAbsentAsync(DriverMonthlyPayslip payslip, CancellationToken ct)
+{
+    if (payslipContainer is null)
+    {
+        monthlyPayslips.TryAdd($"{payslip.DriverId}|{payslip.PayslipId}", payslip);
+        return;
+    }
+    try { await payslipContainer.CreateItemAsync(payslip, new PartitionKey(payslip.DriverId), cancellationToken: ct); }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict) { }
+}
+
+async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditForPeriodAsync(string driverId, DateTimeOffset end, CancellationToken ct)
+{
+    var all = await GetUnionAuditAsync(driverId, ct);
+    return all.Where(item => item.OccurredAtUtc < end).OrderBy(item => item.OccurredAtUtc).ToArray();
+}
 
 bool IsOpsAuthorized(HttpContext context)
 {
