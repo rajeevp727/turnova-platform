@@ -63,6 +63,21 @@ public sealed class RideApiIntegrationTests
         var joined = await driver.PostAsJsonAsync("/api/v1/queues/join",
             new { zoneId = "hyderabad-central", serviceClass = "auto" });
         Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
+
+        var wrongZone = await driver.PostAsJsonAsync("/api/v1/queues/join",
+            new { zoneId = "hyderabad-north", serviceClass = "auto" });
+        Assert.Equal(HttpStatusCode.Forbidden, wrongZone.StatusCode);
+
+        using var suspension = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-onboarding-pending/review")
+        {
+            Content = JsonContent.Create(new { status = "Suspended", reason = "Policy review" })
+        };
+        suspension.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.OK, (await driver.SendAsync(suspension)).StatusCode);
+        var membership = await driver.GetFromJsonAsync<QueueMembershipTest>(
+            "/api/v1/zones/hyderabad-central/queues/auto/me");
+        Assert.NotNull(membership);
+        Assert.False(membership.IsQueued);
     }
 
     [Fact]
@@ -90,7 +105,7 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null)).StatusCode);
     }
 
-    private static object ValidOnboardingRequest() => new
+    private sealed record QueueMembershipTest(bool IsQueued, int? Position);\n\n    private static object ValidOnboardingRequest() => new
     {
         zoneId = "hyderabad-central",
         fullName = "Test Driver",
