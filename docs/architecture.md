@@ -224,6 +224,8 @@ Employment contracts, payroll rules, earnings/deductions and payslip generation 
 
 ## 21. Monthly driver payslips (PDF only)
 
+The Driver app offers a Payslips tab with the most recent 12 completed months and downloads the authenticated PDF through the native file/share workflow. There is no HTML payslip view or CSV/spreadsheet export.
+
 A driver can request a finalized monthly payslip from GET /api/v1/driver/payslips/{year}/{month}.pdf. The route requires the Driver role and emits only application/pdf. No HTML, CSV or spreadsheet payslip format is exposed. Only completed months are generated, using India Standard Time calendar-month boundaries.
 
 Ride activity is captured in an append-only ledger: Accepted when the driver accepts a ride, Rejected when the driver explicitly declines an available ride, and Completed when the assigned driver completes the trip. Rider cancellation is not a driver rejection. Deterministic activity IDs (ride ID plus activity type) make ledger insertion idempotent. Days worked are distinct India-local calendar dates containing at least one completed activity. Accepted and completed are separate metrics, so a completed ride contributes to both.
