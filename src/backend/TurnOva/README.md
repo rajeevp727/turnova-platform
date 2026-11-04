@@ -17,7 +17,7 @@ Install the .NET 10 SDK, then from this directory:
     dotnet restore
     dotnet run --project TurnOva.API
 
-Open /swagger in Development or call /health.
+Call /health to verify the API is running.
 
 ## Important
 
