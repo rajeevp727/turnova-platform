@@ -1,19 +1,22 @@
 # TurnOva production app icons
 
-This directory contains the selected Multi-Mobility app-icon artwork.
+This directory contains the source artwork for the selected Multi-Mobility brand.
 
-- `turnova-app-icon.svg`: full-bleed square icon artwork (navy background).
-- `turnova-adaptive-foreground.svg`: transparent foreground artwork for Android adaptive icons.
-- `icon.png`: generated 1024×1024 PNG used by iOS/App Store and Expo.
-- `adaptive-icon.png`: generated 432×432 transparent foreground used by Android adaptive icons.
+- `turnova-app-icon.svg`: full-bleed square artwork for iOS and Expo.
+- `turnova-adaptive-foreground.svg`: transparent artwork scaled into Android's adaptive-icon safe zone.
+- `icon.png`: generated 1024×1024 opaque PNG for iOS/App Store and Expo.
+- `adaptive-icon.png`: generated 432×432 transparent PNG for Android adaptive icons.
 
-Generate the PNG files after installing dependencies:
+The PNGs are generated automatically by the package `postinstall` hook (and can be regenerated manually with `npm run generate-icons`). Sharp is a runtime build dependency so clean EAS build environments can generate the files before Expo resolves the app config.
+
+Android uses native adaptive-icon background color `#061D3D`; launchers apply different masks. iOS artwork is full-bleed square with no pre-rounded corners because iOS applies its own mask.
+
+## EAS builds
+
+Run these from this app directory:
 
 ```bash
-npm install
-npm run generate-icons
+npx eas build --platform android --profile preview
+npx eas build --platform android --profile production
+npx eas build --platform ios --profile production
 ```
-
-Android uses the native adaptive icon background color `#061D3D`; keep the foreground artwork inside the central safe area because launchers apply different masks. iOS uses a full-bleed 1024×1024 icon; do not add rounded corners because iOS applies its own mask.
-
-The SVG sources are the source of truth. Re-run the generator after changing the artwork.
