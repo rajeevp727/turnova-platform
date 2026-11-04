@@ -1,4 +1,5 @@
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Logging;
 
 namespace TurnOva.Infrastructure.Database;
 
@@ -13,7 +14,7 @@ public sealed class CosmosMigrationRunner(
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
         var databaseResponse = await client.CreateDatabaseIfNotExistsAsync(
-            options.DatabaseName, cancellationToken: cancellationToken);
+            options.DatabaseName, throughput: 400, cancellationToken: cancellationToken);
         var database = databaseResponse.Database;
 
         var historyResponse = await database.CreateContainerIfNotExistsAsync(
