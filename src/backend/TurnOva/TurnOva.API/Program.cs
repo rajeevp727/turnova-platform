@@ -369,8 +369,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
 {
     var configuredKey = app.Configuration["DriverOnboarding:AdminApiKey"];
     var suppliedKey = context.Request.Headers["X-Driver-Admin-Key"].ToString();
-    if (string.IsNullOrWhiteSpace(configuredKey))
-        return Results.Problem("Driver onboarding review is not configured.", statusCode: 503);
+    if (string.IsNullOrWhiteSpace(configuredKey) || configuredKey.Length < 32)
+        return Results.Problem("Driver onboarding review requires a configured admin key of at least 32 characters.", statusCode: 503);
     var expected = Encoding.UTF8.GetBytes(configuredKey);
     var supplied = Encoding.UTF8.GetBytes(suppliedKey);
     if (expected.Length != supplied.Length || !CryptographicOperations.FixedTimeEquals(expected, supplied))
@@ -383,6 +383,10 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
     if (profile is null) return Results.NotFound();
     if (profile.Status == "Suspended" && request.Status == "Approved")
         return Results.Conflict(new { message = "A suspended driver cannot be re-approved through this endpoint." });
+    if (request.Status == "Approved" &&
+        (!profile.Documents.Any(document => document.DocumentType == "DrivingLicence") ||
+         !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration")))
+        return Results.Conflict(new { message = "A driving licence and vehicle registration reference are required before approval." });
     var reviewed = profile with
     {
         Status = request.Status,
