@@ -5,7 +5,7 @@ import {
   Text, View
 } from "react-native";
 
-const API_BASE_URL = "http://10.0.2.2:5000"; // Android emulator; use your computer's LAN IP on a physical phone.
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000"; // Override in each app .env for your device.
 const DRIVER_ID = "DRV-DEMO-004";
 const ZONE_ID = "hyderabad-central";
 const SERVICE_CLASS = "auto";
