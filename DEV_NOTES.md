@@ -316,8 +316,8 @@ Set `CosmosDb__Endpoint`, `CosmosDb__Key`, and optionally `CosmosDb__DatabaseNam
 - Driver profile submission: `POST /api/v1/driver/onboarding`.
 - Driver status: `GET /api/v1/driver/onboarding/me`.
 - Review decision: `POST /api/v1/ops/drivers/{driverId}/review` with `X-Driver-Admin-Key`.
-- Configure `DriverOnboarding__AdminApiKey` in the API host secret store (minimum 32 random characters recommended). Never place it in either mobile app.
+- Configure `DriverOnboarding__AdminApiKey` in the API host secret store (minimum 32 random characters required). Never place it in either mobile app.
 - Driver profile and vehicle/document metadata are stored in the existing Cosmos `Drivers` container (partition `/driverId`); local demo mode uses in-memory storage.
 - Queue join, available-ride discovery and ride acceptance are blocked unless the driver's profile status is `Approved`.
-- The API accepts only opaque private object-storage references; it does not upload, serve or verify identity documents.
+- Approval requires DrivingLicence and VehicleRegistration references. The API accepts only opaque private object-storage references; it does not upload, serve or verify identity documents.
 - The API-key review endpoint is temporary until authenticated Ops roles/permissions and an Ops portal are implemented.
