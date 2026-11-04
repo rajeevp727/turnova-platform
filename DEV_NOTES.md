@@ -251,3 +251,56 @@ Use the computer's LAN IP for a physical phone; Android emulator commonly uses `
 - Fare calculation and cancellation policy.
 - Maps, OTP, payment and push-notification providers.
 - Authentication provider and KYC workflow.
+## 10. Email/password authentication (Feature 2)
+
+Authentication is provided by the existing TriSend Auth API. TurnOva does not store passwords or refresh tokens server-side.
+
+### Mobile-to-service flow
+
+1. Driver and Rider apps register/sign in through the TurnOva API.
+2. TurnOva API proxies the request to TriSend `/auth/register` or `/auth/login`, forcing `appId=turnova` and the appropriate `Driver` or `Rider` role from the route (the client cannot choose a role).
+3. TriSend returns a 15-minute JWT access token and a rotating refresh token (30-day session).
+4. Apps store both tokens using Expo SecureStore. Refresh is attempted after an API 401; the rotated tokens replace the old values.
+5. TurnOva validates JWT signature, issuer, audience and lifetime using the same signing key configured in TriSend. Driver-only and Rider-only endpoints enforce the JWT role claim.
+
+### TurnOva auth endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/auth/driver/register` | Register a Driver account |
+| POST | `/api/v1/auth/driver/login` | Driver email/password login |
+| POST | `/api/v1/auth/rider/register` | Register a Rider account |
+| POST | `/api/v1/auth/rider/login` | Rider email/password login |
+| POST | `/api/v1/auth/refresh` | Rotate refresh token through TriSend |
+| GET | `/api/v1/auth/me` | Read current token identity from TriSend |
+| POST | `/api/v1/auth/logout` | Revoke current TriSend session |
+
+Protected product endpoints:
+- Driver: `GET /api/v1/zones/{zoneId}/queues/{serviceClass}`, `POST /api/v1/queues/join`.
+- Rider: `POST /api/v1/rides/request`, `GET /api/v1/rides/{rideId}` (ride owner only).
+- Zone discovery requires an authenticated TurnOva account.
+
+### Required API configuration
+
+Set these values as .NET User Secrets locally or environment variables in the API host. Never place the JWT signing key in either mobile app or source control:
+
+```text
+TriSend__BaseUrl=https://auth.trisend.rajeevstech.in
+Auth__Jwt__Issuer=<exact TriSend Auth:Jwt:Issuer>
+Auth__Jwt__Audience=<exact TriSend Auth:Jwt:Audience>
+Auth__Jwt__SigningKey=<exact TriSend Auth:Jwt:SigningKey>
+```
+
+The issuer, audience and signing key must exactly match TriSend. The signing key must be at least 32 characters. TurnOva calls TriSend over HTTPS. Local API HTTP URLs are for development only; production must use HTTPS.
+
+### Mobile setup
+
+Install dependencies in each app folder with `npm install` after pulling the branch. `expo-secure-store` stores access/refresh tokens in platform secure storage. Configure `EXPO_PUBLIC_API_BASE_URL` to the API URL reachable from the emulator/device, then restart Expo.
+
+### Explicit exclusions and limitations
+
+- SSO, Google login, Microsoft login and OAuth are not part of this feature.
+- Passwords are forwarded to TriSend over HTTPS; TurnOva does not persist them.
+- JWT validation is local and does not query TriSend on every request. Access tokens remain usable until expiry (15 minutes) if a session is revoked, so logout is not instant access-token revocation.
+- Ride records remain in-memory demo data; authentication and ownership checks do not make ride storage durable.
+- Driver onboarding/KYC approval is not implemented; authenticated Driver role alone is not production eligibility.
