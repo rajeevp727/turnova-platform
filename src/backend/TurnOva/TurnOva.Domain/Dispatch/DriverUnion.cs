@@ -11,7 +11,10 @@ public sealed record DriverUnion(
     IReadOnlyList<string> ServiceClasses,
     string Status,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc)
+{
+    public string id => UnionId;
+}
 
 public sealed record DriverUnionAssignment(
     string DriverId,
@@ -20,7 +23,10 @@ public sealed record DriverUnionAssignment(
     string Status,
     DateTimeOffset AssignedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    string AssignmentReason);
+    string AssignmentReason)
+{
+    public string id => DriverId;
+}
 
 public sealed record DriverUnionAuditEvent(
     string EventId,
@@ -32,4 +38,7 @@ public sealed record DriverUnionAuditEvent(
     string EventType,
     string Reason,
     string Actor,
-    DateTimeOffset OccurredAtUtc);
+    DateTimeOffset OccurredAtUtc)
+{
+    public string id => EventId;
+}
