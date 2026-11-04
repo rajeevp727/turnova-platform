@@ -156,7 +156,7 @@ authGroup.MapPost("/{role}/register", async (
         role = role == "driver" ? "Driver" : "Rider",
         replaceOldest = request.ReplaceOldest
     };
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/register", payload, null, ct);
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/register", payload, null, role == "driver" ? "Driver" : "Rider", ct);
 });
 authGroup.MapPost("/{role}/login", async (
     string role, PasswordLoginRequest request, IHttpClientFactory clients,
@@ -174,23 +174,23 @@ authGroup.MapPost("/{role}/login", async (
         appId = "turnova",
         replaceOldest = request.ReplaceOldest
     };
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/login", payload, null, ct);
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/login", payload, null, role == "driver" ? "Driver" : "Rider", ct);
 });
 authGroup.MapPost("/refresh", async (
     RefreshTokenRequest request, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/refresh",
-        new { refreshToken = request.RefreshToken }, null, ct));
+        new { refreshToken = request.RefreshToken }, null, null, ct));
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
-        context.Request.Headers.Authorization.ToString(), ct));
+        context.Request.Headers.Authorization.ToString(), null, ct));
 authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Get, "/auth/me", null,
         context.Request.Headers.Authorization.ToString(), ct));
 
 static async Task<IResult> ForwardAuthRequest(
     IHttpClientFactory clients, HttpMethod method, string path, object? body,
-    string? authorization, CancellationToken ct)
+    string? authorization, string? expectedRole, CancellationToken ct)
 {
     using var request = new HttpRequestMessage(method, path);
     if (body is not null)
@@ -203,6 +203,22 @@ static async Task<IResult> ForwardAuthRequest(
     {
         using var response = await clients.CreateClient("TriSend").SendAsync(request, ct);
         var content = await response.Content.ReadAsStringAsync(ct);
+        if (response.IsSuccessStatusCode && expectedRole is not null)
+        {
+            using var json = JsonDocument.Parse(content);
+            var actualRole = json.RootElement.GetProperty("user").GetProperty("role").GetString();
+            if (!string.Equals(actualRole, expectedRole, StringComparison.Ordinal))
+            {
+                var accessToken = json.RootElement.GetProperty("accessToken").GetString();
+                if (!string.IsNullOrWhiteSpace(accessToken))
+                {
+                    using var logout = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
+                    logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                    using var ignored = await clients.CreateClient("TriSend").SendAsync(logout, ct);
+                }
+                return Results.Problem($"This account is registered as {actualRole}, not {expectedRole}.", statusCode: 403);
+            }
+        }
         return Results.Content(content, "application/json", Encoding.UTF8, (int)response.StatusCode);
     }
     catch (HttpRequestException)
@@ -266,16 +282,20 @@ app.MapPost("/api/v1/rides/request", (ClaimsPrincipal user, CreateRideRequest re
     var ride = new DemoRide(
         $"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
         request.Pickup.Trim(), request.Dropoff.Trim(),
-        Math.Max(1, request.Passengers), "Requested",
+        Math.Clamp(request.Passengers, 1, 6), "Requested",
         DateTimeOffset.UtcNow, 85m, user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub") ?? string.Empty);
     rides[ride.RideId] = ride;
-    return Results.Created($"/api/v1/rides/{ride.RideId}", ride);
+    return Results.Created($"/api/v1/rides/{ride.RideId}", new
+    {
+        ride.RideId, ride.Pickup, ride.Dropoff, ride.Passengers,
+        ride.Status, ride.RequestedAt, ride.EstimatedFareInr
+    });
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.MapGet("/api/v1/rides/{rideId}", (ClaimsPrincipal user, string rideId) =>
     rides.TryGetValue(rideId, out var ride) &&
     ride.RiderId == (user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub"))
-        ? Results.Ok(ride)
+        ? Results.Ok(new { ride.RideId, ride.Pickup, ride.Dropoff, ride.Passengers, ride.Status, ride.RequestedAt, ride.EstimatedFareInr })
         : Results.NotFound(new { message = "Ride not found." }))
     .RequireAuthorization(policy => policy.RequireRole("Rider"));
 
