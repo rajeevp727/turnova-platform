@@ -655,6 +655,8 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
     if (payslip is null)
     {
         var assignmentHistory = await GetUnionAuditForPeriodAsync(driverId, periodEnd, ct);
+        if (assignmentHistory.Any(item => item.OccurredAtUtc >= periodStart))
+            return Results.Conflict(new { message = "Union assignment changes within a pay period are not supported yet. Ask Operations to reconcile the period before requesting this PDF." });
         var employerEvent = assignmentHistory.LastOrDefault();
         if (employerEvent is null)
             return Results.Conflict(new { message = "No union assignment was recorded for this pay period." });
