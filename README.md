@@ -39,7 +39,8 @@ TurnOva is a mobile-first ride-hailing platform focused on transparent, fair dri
     turnova-platform/
     ├── docs/
     │   ├── architecture.md
-    │   └── fifo-allocation.md
+    │   ├── fifo-allocation.md
+    │   └── test-plan.md
     ├── src/
     │   ├── backend/TurnOva/
     │   │   ├── TurnOva.API/
@@ -91,7 +92,6 @@ Use free tiers and low-cost services for development where practical. Production
 
 The repository contains the initial API, Driver and Rider demo clients, Cosmos DB queue adapter/migrations, and CI validation. Authentication now integrates with TriSend email/password endpoints. Ride storage and dispatch remain demo-level; do not treat the current build as production-ready.
 
-
 ## MVP development notes
 
 See [DEV_NOTES.md](./DEV_NOTES.md) for the consolidated API, Cosmos DB, and Driver/Rider UI feature notes for the Monday demo. Current demo endpoints and screens use synthetic data and an in-memory backend store; they are not production-ready.
@@ -110,3 +110,7 @@ Auth__Jwt__SigningKey=<same secret as TriSend Auth:Jwt:SigningKey>
 ```
 
 The JWT settings must match TriSend exactly. Keep the signing key in .NET User Secrets or the hosting provider's secret store; never add it to mobile `.env` files or source control. See [DEV_NOTES.md](./DEV_NOTES.md#10-emailpassword-authentication-feature-2) for API routes, local setup and security boundaries.
+
+## Test plan
+
+See [docs/test-plan.md](./docs/test-plan.md) for feature-wise positive, negative, security, and manual acceptance scenarios. Planned scenarios are not represented as executed tests.
