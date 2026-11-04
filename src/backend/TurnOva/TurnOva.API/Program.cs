@@ -335,6 +335,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length > 120 ||
+        string.IsNullOrWhiteSpace(request.ZoneId) || request.ZoneId.Trim().Length > 80 ||
         string.IsNullOrWhiteSpace(request.PhoneNumber) || request.PhoneNumber.Any(c => !char.IsDigit(c) && c != '+') ||
         request.PhoneNumber.Length is < 10 or > 16 ||
         string.IsNullOrWhiteSpace(request.VehicleMake) || request.VehicleMake.Trim().Length > 60 ||
@@ -355,7 +356,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         return Results.Conflict(new { message = "An approved or suspended driver profile cannot be replaced through onboarding." });
 
     var profile = new DriverOnboardingProfile(
-        driverId, driverId, request.FullName.Trim(), request.PhoneNumber.Trim(),
+        driverId, driverId, request.ZoneId.Trim(), request.FullName.Trim(), request.PhoneNumber.Trim(),
         request.VehicleMake.Trim(), request.VehicleModel.Trim(), request.VehicleRegistration.Trim().ToUpperInvariant(),
         request.ServiceClass, request.PassengerCapacity,
         request.Documents.Select(document => new DriverDocumentReference(document.DocumentType, document.StorageReference)).ToArray(),
@@ -365,7 +366,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
 });
 
 app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
-    HttpContext context, string driverId, DriverReviewRequest request, CancellationToken ct) =>
+    HttpContext context, string driverId, DriverReviewRequest request, QueueService queueService, CancellationToken ct) =>
 {
     var configuredKey = app.Configuration["DriverOnboarding:AdminApiKey"];
     var suppliedKey = context.Request.Headers["X-Driver-Admin-Key"].ToString();
@@ -395,6 +396,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
         ReviewReason = request.Reason?.Trim()
     };
     await SaveDriverProfileAsync(reviewed, ct);
+    if (request.Status is "Rejected" or "Suspended")
+        await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
     return Results.Ok(reviewed);
 });
 
@@ -455,7 +458,8 @@ app.MapPost("/api/v1/queues/join", async (
     try
     {
         var serviceClass = string.IsNullOrWhiteSpace(request.ServiceClass) ? "auto" : request.ServiceClass.Trim();
-        if (!string.Equals(serviceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(serviceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(request.ZoneId.Trim(), approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
             return Results.Forbid();
         await service.JoinAsync(new DriverQueueEntry(
             driverId, request.ZoneId.Trim(), serviceClass,
@@ -667,7 +671,7 @@ app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
-public sealed record DriverOnboardingRequest(string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents);
+public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents);
 public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
