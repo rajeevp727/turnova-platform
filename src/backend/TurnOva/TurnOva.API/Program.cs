@@ -95,6 +95,7 @@ if (useCosmos)
         DatabaseName = databaseName
     });
     builder.Services.AddSingleton<ICosmosMigration, InitialSchemaMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, RideIdempotencyMigration>();
     builder.Services.AddSingleton<CosmosMigrationRunner>();
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
