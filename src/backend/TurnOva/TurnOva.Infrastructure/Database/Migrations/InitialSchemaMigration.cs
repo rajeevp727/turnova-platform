@@ -15,7 +15,8 @@ public sealed class InitialSchemaMigration : ICosmosMigration
             new ContainerProperties("Riders", "/riderId"),
             new ContainerProperties("Zones", "/zoneId"),
             new ContainerProperties("QueueEntries", "/zoneServiceKey"),
-            new ContainerProperties("Rides", "/rideId")
+            new ContainerProperties("Rides", "/rideId"),
+            new ContainerProperties("RideIdempotency", "/riderId")
         };
 
         foreach (var properties in containers)
