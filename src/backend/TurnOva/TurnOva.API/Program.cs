@@ -2,8 +2,10 @@ using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
@@ -29,6 +31,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/rides"))
+                    context.Token = accessToken;
+                return Task.CompletedTask;
+            }
+        };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -44,6 +56,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DemoRide>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, string>>();
 builder.Services.AddHttpClient("TriSend", client =>
 {
     var baseUrl = builder.Configuration["TriSend:BaseUrl"];
@@ -80,6 +95,7 @@ if (useCosmos)
         DatabaseName = databaseName
     });
     builder.Services.AddSingleton<ICosmosMigration, InitialSchemaMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, RideIdempotencyMigration>();
     builder.Services.AddSingleton<CosmosMigrationRunner>();
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
@@ -114,9 +130,12 @@ app.UseCors();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 
-var rides = new ConcurrentDictionary<string, DemoRide>();
+var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
 Container? rideContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null;
+Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
 
 async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
 {
@@ -311,7 +330,7 @@ app.MapPost("/api/v1/queues/join", async (
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/request", async (ClaimsPrincipal user, CreateRideRequest request, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal user, CreateRideRequest request, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request.Pickup) || string.IsNullOrWhiteSpace(request.Dropoff))
         return Results.BadRequest(new { message = "Pickup and drop-off are required." });
@@ -320,12 +339,44 @@ app.MapPost("/api/v1/rides/request", async (ClaimsPrincipal user, CreateRideRequ
     if (request.PickupLatitude is null or < -90 or > 90 || request.PickupLongitude is null or < -180 or > 180)
         return Results.BadRequest(new { message = "Valid pickup coordinates are required." });
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var key = context.Request.Headers["Idempotency-Key"].ToString().Trim();
     if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
-    var ride = new DemoRide($"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
-        request.Pickup.Trim(), request.Dropoff.Trim(), request.Passengers, "Requested",
-        DateTimeOffset.UtcNow, 85m, riderId, null, request.PickupLatitude, request.PickupLongitude,
+    if (string.IsNullOrWhiteSpace(key) || key.Length > 128)
+        return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
+
+    var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+    var rideId = $"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+    var reservation = new RideIdempotencyRecord(keyId, riderId, rideId);
+    if (idempotencyContainer is null)
+    {
+        if (!idempotencyKeys.TryAdd($"{riderId}:{keyId}", rideId))
+        {
+            var existingId = idempotencyKeys[$"{riderId}:{keyId}"];
+            var existingRide = await FindRideAsync(existingId, ct);
+            return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(existingRide);
+        }
+    }
+    else
+    {
+        try { await idempotencyContainer.CreateItemAsync(reservation, new PartitionKey(riderId), cancellationToken: ct); }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            var existing = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
+            var existingRide = await FindRideAsync(existing.Resource.RideId, ct);
+            return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(existingRide);
+        }
+    }
+
+    var ride = new DemoRide(rideId, request.Pickup.Trim(), request.Dropoff.Trim(), request.Passengers,
+        "Requested", DateTimeOffset.UtcNow, 85m, riderId, null, request.PickupLatitude, request.PickupLongitude,
         null, null, null, null);
-    await SaveRideAsync(ride, ct);
+    try { await SaveRideAsync(ride, ct); }
+    catch
+    {
+        if (idempotencyContainer is null) idempotencyKeys.TryRemove($"{riderId}:{keyId}", out _);
+        else await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
+        throw;
+    }
     return Results.Created($"/api/v1/rides/{ride.RideId}", ride);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
@@ -339,7 +390,7 @@ app.MapGet("/api/v1/driver/rides/available", async (CancellationToken ct) =>
     return Results.Ok(results);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
@@ -347,19 +398,21 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     {
         if (!rides.TryGetValue(rideId, out var current) || current.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
-        var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow };
-        return rides.TryUpdate(rideId, acceptedInMemory, current)
-            ? Results.Ok(acceptedInMemory)
-            : Results.Conflict(new { message = "Another driver accepted this ride." });
+        var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
+        if (!rides.TryUpdate(rideId, acceptedInMemory, current))
+            return Results.Conflict(new { message = "Another driver accepted this ride." });
+        await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = acceptedInMemory.Status }, ct);
+        return Results.Ok(acceptedInMemory);
     }
     try
     {
         var response = await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct);
         if (response.Resource.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
-        var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow };
+        var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+        await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = accepted.Status }, ct);
         return Results.Ok(accepted);
     }
     catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
@@ -368,29 +421,88 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     if (location.Latitude is < -90 or > 90 || location.Longitude is < -180 or > 180)
         return Results.BadRequest(new { message = "Invalid coordinates." });
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
-    if (ride is null || ride.DriverId != driverId || ride.Status is not ("Accepted" or "InProgress"))
+    if (ride is null || ride.DriverId != driverId || !ride.LocationSharingActive || !RideLifecycle.IsLocationSharingActive(ride.Status))
         return Results.NotFound(new { message = "Active ride not found." });
     var updated = ride with { DriverLatitude = location.Latitude, DriverLongitude = location.Longitude, LocationUpdatedAt = DateTimeOffset.UtcNow };
-    await SaveRideAsync(updated, ct);
+    if (!await TryReplaceRideAsync(ride, updated, ct))
+        return Results.Conflict(new { message = "Ride state changed. Refresh before sending another location update." });
+    await hub.Clients.Group(rideId).SendAsync("DriverLocationUpdated", new
+    {
+        rideId,
+        latitude = updated.DriverLatitude,
+        longitude = updated.DriverLongitude,
+        updated.LocationUpdatedAt
+    }, ct);
     return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/arrive", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+    TransitionRideAsync(user, rideId, "Accepted", "Arrived", ct))
+    .RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/rides/{rideId}/start", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+    TransitionRideAsync(user, rideId, "Arrived", "InProgress", ct))
+    .RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/rides/{rideId}/complete", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+    TransitionRideAsync(user, rideId, "InProgress", "Completed", ct))
+    .RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.RiderId != riderId) return Results.NotFound();
-    if (ride.Status is "Completed" or "Cancelled") return Results.Conflict(new { message = "Ride is already closed." });
-    var cancelled = ride with { Status = "Cancelled" };
-    await SaveRideAsync(cancelled, ct);
-    return Results.Ok(cancelled);
+    if (ride.Status is not ("Requested" or "Accepted" or "Arrived"))
+        return Results.Conflict(new { message = "A ride can only be cancelled before it starts." });
+    var updated = await TryTransitionAsync(ride, "Cancelled", ct);
+    if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
+    await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = updated.Status }, ct);
+    return Results.Ok(updated);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
+
+async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, string expected, string next, CancellationToken ct)
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var ride = await FindRideAsync(rideId, ct);
+    if (ride is null || ride.DriverId != driverId) return Results.NotFound();
+    if (ride.Status != expected) return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to {next}." });
+    var updated = await TryTransitionAsync(ride, next, ct);
+    if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
+    await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
+        .SendAsync("RideStatusChanged", new { rideId, status = updated.Status }, ct);
+    return Results.Ok(updated);
+}
+
+async Task<DemoRide?> TryTransitionAsync(DemoRide current, string next, CancellationToken ct)
+{
+    if (!RideLifecycle.CanTransition(current.Status, next)) return null;
+    var updated = current with { Status = next, LocationSharingActive = RideLifecycle.IsLocationSharingActive(next) };
+    return await TryReplaceRideAsync(current, updated, ct) ? updated : null;
+}
+
+async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, CancellationToken ct)
+{
+    if (rideContainer is null)
+        return rides.TryUpdate(current.RideId, updated, current);
+    try
+    {
+        var response = await rideContainer.ReadItemAsync<DemoRide>(current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
+        if (response.Resource.Status != current.Status || response.Resource.DriverId != current.DriverId)
+            return false;
+        await rideContainer.ReplaceItemAsync(updated, current.RideId, new PartitionKey(current.RideId),
+            new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+        return true;
+    }
+    catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+    { return false; }
+}
 
 app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
 {
@@ -406,11 +518,12 @@ app.Run();
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
+public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
 public sealed record RefreshTokenRequest(string RefreshToken);
 public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
-    string Status, DateTimeOffset RequestedAt, decimal EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt);
+    string Status, DateTimeOffset RequestedAt, decimal EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false);
 
 public partial class Program;

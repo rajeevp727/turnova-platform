@@ -128,3 +128,8 @@ See [docs/test-plan.md](./docs/test-plan.md) for feature-wise positive, negative
 ## Ride persistence and tracking
 
 Feature branch `feature/persistent-rides-live-tracking` adds Cosmos-backed ride request persistence, driver ride acceptance, authenticated driver location updates, and a Rider map that polls for the assigned driver's latest position. Configure Cosmos DB and test on physical devices with location permissions enabled. The current flow is a foreground MVP foundation, not production dispatch or turn-by-turn navigation.
+
+
+## Ride lifecycle and realtime updates
+
+The ride lifecycle is `Requested → Accepted → Arrived → InProgress → Completed`, with Rider cancellation allowed before the trip starts. Ride requests require an `Idempotency-Key` header to prevent duplicate creation on retries. Driver location and ride-state updates are broadcast through an ownership-checked SignalR hub at `/hubs/rides`. The Driver app shares foreground location only while the active Trips screen is open; the Rider receives updates over SignalR.

@@ -16,7 +16,8 @@
     "react-native": "0.81.4",
     "expo-secure-store": "~15.0.7",
     "expo-location": "~19.0.7",
-    "react-native-maps": "1.20.1"
+    "react-native-maps": "1.20.1",
+    "@microsoft/signalr": "10.0.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
