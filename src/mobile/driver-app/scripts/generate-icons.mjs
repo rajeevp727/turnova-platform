@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { mkdir } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const assets = fileURLToPath(new URL("../assets/", import.meta.url));
