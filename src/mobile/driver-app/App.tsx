@@ -218,6 +218,7 @@ export default function App() {
       const profile = await apiFetch("/api/v1/driver/onboarding", {
         method: "POST",
         body: JSON.stringify({
+          zoneId: ZONE,
           fullName: driverName,
           phoneNumber,
           vehicleMake,
