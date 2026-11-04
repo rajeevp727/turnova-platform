@@ -46,6 +46,14 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [availableRides, setAvailableRides] = useState<any[]>([]);
   const [activeRide, setActiveRide] = useState<any>(null);
+  const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
+  const [driverName, setDriverName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [vehicleMake, setVehicleMake] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [vehicleRegistration, setVehicleRegistration] = useState("");
+  const [licenceReference, setLicenceReference] = useState("");
+  const [registrationReference, setRegistrationReference] = useState("");
 
   const acceptSession = useCallback(async (result: any) => {
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
@@ -186,6 +194,49 @@ export default function App() {
 
   const advanceRide = async (action: "arrive" | "start" | "complete") => { if (!activeRide) return; try { const updated = await apiFetch(`/api/v1/rides/${activeRide.rideId}/${action}`, { method: "POST" }); setActiveRide(updated); setNotice(action === "arrive" ? "Arrival confirmed." : action === "start" ? "Trip started." : "Trip completed. Location sharing stopped."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to update ride status."); } };
 
+  const loadOnboarding = useCallback(async () => {
+    try {
+      const profile = await apiFetch("/api/v1/driver/onboarding/me");
+      if (profile?.driverId) {
+        setOnboardingProfile(profile);
+        setDriverName(profile.fullName ?? "");
+        setPhoneNumber(profile.phoneNumber ?? "");
+        setVehicleMake(profile.vehicleMake ?? "");
+        setVehicleModel(profile.vehicleModel ?? "");
+        setVehicleRegistration(profile.vehicleRegistration ?? "");
+        setLicenceReference(profile.documents?.find((document: any) => document.documentType === "DrivingLicence")?.storageReference ?? "");
+        setRegistrationReference(profile.documents?.find((document: any) => document.documentType === "VehicleRegistration")?.storageReference ?? "");
+      }
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to load onboarding profile."); }
+  }, [apiFetch]);
+
+  useEffect(() => { if (user && tab === "Profile") void loadOnboarding(); }, [user, tab, loadOnboarding]);
+
+  const submitOnboarding = async () => {
+    setLoading(true); setError(""); setNotice("");
+    try {
+      const profile = await apiFetch("/api/v1/driver/onboarding", {
+        method: "POST",
+        body: JSON.stringify({
+          fullName: driverName,
+          phoneNumber,
+          vehicleMake,
+          vehicleModel,
+          vehicleRegistration,
+          serviceClass: SERVICE,
+          passengerCapacity: 3,
+          documents: [
+            { documentType: "DrivingLicence", storageReference: licenceReference },
+            { documentType: "VehicleRegistration", storageReference: registrationReference }
+          ]
+        })
+      });
+      setOnboardingProfile(profile);
+      setNotice("Onboarding submitted. Queue and ride access will unlock after approval.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to submit onboarding."); }
+    finally { setLoading(false); }
+  };
+
   const logout = async () => {
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
@@ -219,7 +270,23 @@ export default function App() {
       {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · Auto</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>View queue</Text></Pressable></View></>}
       {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · AUTO</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void (membership.isQueued ? loadQueue() : joinQueue())} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : membership.isQueued ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable>{membership.isQueued && <Pressable style={styles.secondary} onPress={() => void leaveQueue()} disabled={loading}><Text style={styles.secondaryText}>Leave queue</Text></Pressable>}<Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
       {tab === "Trips" && <><Text style={styles.title}>Ride requests</Text><View style={styles.card}><Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh requests</Text></Pressable>{availableRides.map(item=><View key={item.rideId} style={{marginTop:14}}><Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text><Text style={styles.muted}>{item.passengers} passenger(s) · {item.rideId}</Text><Pressable style={styles.secondary} onPress={()=>void acceptRide(item.rideId)}><Text style={styles.secondaryText}>Accept ride</Text></Pressable></View>)}{activeRide&&<><Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>{activeRide.status==="Accepted"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("arrive")}><Text style={styles.secondaryText}>Mark arrived</Text></Pressable>}{activeRide.status==="Arrived"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable>}{activeRide.status==="InProgress"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}</>}</View></>}
-      {tab === "Profile" && <><Text style={styles.title}>Your profile</Text><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
+      {tab === "Profile" && <><Text style={styles.title}>Driver onboarding</Text><View style={styles.card}>
+        <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
+        {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
+        {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : <>
+          <Text style={styles.sub}>Complete your driver and vehicle details. Your application will remain pending until reviewed.</Text>
+          <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholder="Full legal name" />
+          <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholder="Phone number with country code" keyboardType="phone-pad" />
+          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholder="Vehicle make (e.g. Bajaj)" />
+          <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={styles.input} placeholder="Vehicle model" />
+          <TextInput value={vehicleRegistration} onChangeText={setVehicleRegistration} style={styles.input} placeholder="Vehicle registration number" autoCapitalize="characters" />
+          <Text style={styles.label}>PRIVATE DOCUMENT STORAGE REFERENCES</Text>
+          <Text style={styles.muted}>Upload files to your approved private storage workflow first. Enter opaque object references, not public URLs.</Text>
+          <TextInput value={licenceReference} onChangeText={setLicenceReference} style={styles.input} placeholder="Driving licence object reference" autoCapitalize="none" />
+          <TextInput value={registrationReference} onChangeText={setRegistrationReference} style={styles.input} placeholder="Vehicle RC object reference" autoCapitalize="none" />
+          <Pressable style={styles.primary} disabled={loading || !driverName.trim() || !phoneNumber.trim() || !vehicleMake.trim() || !vehicleModel.trim() || !vehicleRegistration.trim() || !licenceReference.trim() || !registrationReference.trim()} onPress={() => void submitOnboarding()}><Text style={styles.primaryText}>{loading ? "Please wait…" : onboardingProfile ? "Resubmit for review" : "Submit for approval"}</Text></Pressable>
+        </>}
+      </View><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
       {!!error && <Text style={styles.error}>{error}</Text>}{!!notice && <Text style={styles.success}>{notice}</Text>}
     </ScrollView>
     <View style={styles.tabBar}>{tabs.map(item => <Pressable key={item} style={styles.tab} onPress={() => setTab(item)}><Text style={[styles.tabText, tab === item && styles.tabActive]}>{item}</Text></Pressable>)}</View>
