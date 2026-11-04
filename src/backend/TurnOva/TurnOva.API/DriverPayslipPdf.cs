@@ -39,12 +39,12 @@ public static class DriverPayslipPdf
 
         // Low-contrast, page-level TurnOva brand watermark behind the payslip content.
         DrawBrandMark(commands, 205, 385, 2.7, "0.94 0.97 1", "0.92 0.99 0.97");
-        commands.Append("BT /F2 66 Tf 0.94 0.96 0.98 rg 170 330 Td (TurnOva) Tj ET\n");
+        commands.Append("0.94 0.96 0.98 rg BT /F2 66 Tf 170 330 Td (TurnOva) Tj ET\n");
 
         // Brand mark and company name in the document header.
         DrawBrandMark(commands, 50, 770, 0.62, "0.03 0.42 0.91", "0.05 0.82 0.68");
-        commands.Append("BT /F2 23 Tf 0.04 0.13 0.25 rg 91 782 Td (TurnOva) Tj ET\n");
-        commands.Append("BT /F1 9 Tf 0.35 0.42 0.50 rg 92 766 Td (MOBILITY PLATFORM) Tj ET\n");
+        commands.Append("0.04 0.13 0.25 rg BT /F2 23 Tf 91 782 Td (TurnOva) Tj ET\n");
+        commands.Append("0.35 0.42 0.50 rg BT /F1 9 Tf 92 766 Td (MOBILITY PLATFORM) Tj ET\n");
 
         var y = 728;
         foreach (var line in lines)
@@ -57,8 +57,8 @@ public static class DriverPayslipPdf
             };
             var font = fontSize == 16 || fontSize == 12 ? "/F2" : "/F1";
             var color = fontSize == 12 ? "0.03 0.42 0.75 rg " : "0.10 0.16 0.23 rg ";
-            commands.Append("BT ").Append(font).Append(' ').Append(fontSize).Append(" Tf ")
-                .Append(color).Append("50 ").Append(y)
+            commands.Append(color).Append("BT ").Append(font).Append(' ').Append(fontSize).Append(" Tf ")
+                .Append("50 ").Append(y)
                 .Append(" Td (").Append(Escape(line)).Append(") Tj ET\n");
             y -= line.Length == 0 ? 12 : fontSize == 16 ? 26 : 20;
         }
@@ -93,7 +93,6 @@ public static class DriverPayslipPdf
 
     private static void DrawBrandMark(StringBuilder commands, double x, double y, double scale, string blue, string teal)
     {
-        string N(double value) => (value * scale).ToString("0.###", CultureInfo.InvariantCulture);
         string X(double value) => (x + value * scale).ToString("0.###", CultureInfo.InvariantCulture);
         string Y(double value) => (y + value * scale).ToString("0.###", CultureInfo.InvariantCulture);
 
