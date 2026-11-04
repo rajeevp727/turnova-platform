@@ -218,3 +218,22 @@ The GitHub Actions workflow currently runs:
 | TRACK-011 | Driver leaves Trips screen | Foreground GPS subscription is disposed | Mobile | P0 |
 
 The lifecycle state-machine unit tests and in-memory API integration tests are automated. API integration coverage includes Rider booking/idempotency, role restrictions, ownership, lifecycle transitions, cancellation rules, terminal location-sharing shutdown, and concurrent Driver acceptance. Cosmos-specific concurrency, SignalR WebSocket authorization/reconnect, and physical-device scenarios still require their corresponding integration/device environments.
+
+
+## 13. Cosmos DB configuration, migration and readiness
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-CONFIG-001 | Configure valid HTTPS endpoint, key and database ID | API starts and Cosmos client is configured | Unit + startup | P0 |
+| COSMOS-CONFIG-002 | Configure HTTP/invalid endpoint or missing key | API fails startup with a clear configuration error | Unit + startup | P0 |
+| COSMOS-CONFIG-003 | Configure invalid database ID | API fails startup before attempting schema changes | Unit + startup | P1 |
+| COSMOS-MIG-001 | Two API instances start and run migrations together | Only one instance holds the migration lease at a time | Cosmos integration | P0 |
+| COSMOS-MIG-002 | A migration lease expires after an instance stops | Another instance conditionally acquires the expired lease | Cosmos integration | P0 |
+| COSMOS-MIG-003 | Lease owner releases after migration | Only the owner ETag can delete the lease document | Cosmos integration | P0 |
+| COSMOS-MIG-004 | Migration history record already exists | Migration is skipped without reapplying schema changes | Cosmos integration | P0 |
+| COSMOS-MIG-005 | Migration fails before history is recorded | Startup fails; a later startup can retry the idempotent migration | Cosmos integration | P0 |
+| COSMOS-READY-001 | Cosmos database is reachable | `GET /health/ready` returns HTTP 200 | API + Cosmos | P0 |
+| COSMOS-READY-002 | Cosmos database is unavailable | `GET /health/ready` returns HTTP 503 | API + failure injection | P0 |
+| COSMOS-READY-003 | API runs in in-memory demo mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
+
+Automated tests cover Cosmos configuration validation. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
