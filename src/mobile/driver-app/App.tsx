@@ -66,7 +66,15 @@ export default function App() {
     if (response.status === 401) {
       const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
       if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); throw new Error("Session expired. Please sign in again."); }
-      const accessToken = await refreshSession(refreshToken);
+      let accessToken: string;
+      try {
+        accessToken = await refreshSession(refreshToken);
+      } catch {
+        await clearTokens();
+        setTokens(null);
+        setUser(null);
+        throw new Error("Session expired. Please sign in again.");
+      }
       response = await fetch(`${API}${path}`, {
         ...init,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...init.headers }
@@ -166,7 +174,7 @@ export default function App() {
     <View style={styles.header}><View><Text style={styles.brand}>TurnOva</Text><Text style={styles.tagline}>Driver partner · {user.name || user.email}</Text></View><Text style={styles.role}>DRIVER</Text></View>
     <ScrollView contentContainerStyle={styles.content}>
       {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · Auto</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>View queue</Text></Pressable></View></>}
-      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · AUTO</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void joinQueue()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : position ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable><Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
+      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · AUTO</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void (position ? loadQueue() : joinQueue())} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : position ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable><Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
       {tab === "Trips" && <><Text style={styles.title}>Trips</Text><View style={styles.card}><Text style={styles.muted}>Your accepted offers and trip history will appear here.</Text></View></>}
       {tab === "Profile" && <><Text style={styles.title}>Your profile</Text><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
       {!!error && <Text style={styles.error}>{error}</Text>}{!!notice && <Text style={styles.success}>{notice}</Text>}
