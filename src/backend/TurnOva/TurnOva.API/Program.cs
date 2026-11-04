@@ -727,7 +727,9 @@ opsUnions.MapGet("/{unionId}/drivers/{driverId}", async (HttpContext context, st
             profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
             profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
             profile.ServiceClass, profile.PassengerCapacity, profile.Status,
-            profile.ProfilePhotoBase64, profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc
+            profile.ProfilePhotoBase64, profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
+            profile.ProfilePhotoApprovalStatus, profile.ProfilePhotoApprovedByUnionId,
+            profile.ProfilePhotoReviewedAtUtc, profile.ProfilePhotoReviewReason
         }
     });
 });
