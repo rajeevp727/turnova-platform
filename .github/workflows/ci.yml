@@ -37,4 +37,5 @@ jobs:
           cache: npm
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
       - run: npm install
+      - run: npx expo config --type public
       - run: npm run typecheck
