@@ -1007,7 +1007,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 
-app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string rideId, QueueService queueService, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
@@ -1016,8 +1016,41 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.Status != "Requested" || ride.Passengers > profile.PassengerCapacity)
         return Results.Conflict(new { message = "This ride is not available to reject." });
+
+    var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
+    if (queue.FirstOrDefault()?.DriverId == driverId)
+        await queueService.MoveToBackAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
+
     await RecordWorkActivityAsync(driverId, rideId, "Rejected", DateTimeOffset.UtcNow, ct);
     return Results.NoContent();
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/queues/{zoneId}/{serviceClass}/offer-timeout", async (
+    string zoneId, string serviceClass, ClaimsPrincipal user, QueueService queueService, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+
+    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.Forbid();
+    if (!string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(profile.ServiceClass, serviceClass, StringComparison.OrdinalIgnoreCase))
+        return Results.Forbid();
+
+    var queue = await queueService.GetPositionedQueueAsync(zoneId, serviceClass, ct);
+    if (queue.FirstOrDefault()?.DriverId != driverId)
+        return Results.Conflict(new { message = "Only the driver currently at the front of this queue can time out an offer." });
+
+    if (!await queueService.MoveToBackAsync(driverId, zoneId, serviceClass, ct))
+        return Results.Conflict(new { message = "Queue membership changed. Refresh and try again." });
+
+    var nextQueue = await queueService.GetPositionedQueueAsync(zoneId, serviceClass, ct);
+    return Results.Ok(new
+    {
+        message = "Offer timed out. Driver moved to the back of the queue.",
+        nextDriverId = nextQueue.FirstOrDefault()?.DriverId,
+        driverPosition = nextQueue.ToList().FindIndex(entry => entry.DriverId == driverId) + 1
+    });
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
