@@ -31,7 +31,7 @@ const darkColors: ThemeColors = {
 };
 const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
 const ZONE = "hyderabad-central";
-const SERVICE = "auto";
+const DEFAULT_SERVICE_CLASS = "auto";
 type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
@@ -81,6 +81,7 @@ export default function App() {
   const [licenceReference, setLicenceReference] = useState("");
   const [registrationReference, setRegistrationReference] = useState("");
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
+  const [serviceClass, setServiceClass] = useState(DEFAULT_SERVICE_CLASS);
 
   useEffect(() => {
     let mounted = true;
@@ -178,13 +179,13 @@ export default function App() {
   const loadQueue = useCallback(async () => {
     try {
       const [data, current] = await Promise.all([
-        apiFetch(`/api/v1/zones/${ZONE}/queues/${SERVICE}`),
-        apiFetch(`/api/v1/zones/${ZONE}/queues/${SERVICE}/me`)
+        apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}`),
+        apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}/me`)
       ]);
       setQueue(data);
       setMembership(current);
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to load queue."); }
-  }, [apiFetch]);
+  }, [apiFetch, serviceClass]);
   useEffect(() => { if (user && tab === "Queue") void loadQueue(); }, [user, tab, loadQueue]);
 
   const joinQueue = async () => {
@@ -193,7 +194,7 @@ export default function App() {
     try {
       const result = await apiFetch("/api/v1/queues/join", {
         method: "POST",
-        body: JSON.stringify({ zoneId: ZONE, serviceClass: SERVICE })
+        body: JSON.stringify({ zoneId: ZONE, serviceClass })
       });
       setNotice(result.message ?? "You joined the queue.");
       await loadQueue();
@@ -204,7 +205,7 @@ export default function App() {
   const leaveQueue = async () => {
     setLoading(true); setError(""); setNotice("");
     try {
-      await apiFetch(`/api/v1/zones/${ZONE}/queues/${SERVICE}/me`, { method: "DELETE" });
+      await apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}/me`, { method: "DELETE" });
       setNotice("You left the queue. You can join again whenever you're ready.");
       await loadQueue();
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to leave queue."); }
@@ -281,6 +282,7 @@ export default function App() {
       if (profile?.driverId) {
         setOnboardingProfile(profile);
         setProfilePhotoBase64(profile.profilePhotoBase64 ?? "");
+        setServiceClass(profile.serviceClass ?? DEFAULT_SERVICE_CLASS);
         setDriverName(profile.fullName ?? "");
         setPhoneNumber(profile.phoneNumber ?? "");
         setVehicleMake(profile.vehicleMake ?? "");
@@ -292,7 +294,7 @@ export default function App() {
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to load onboarding profile."); }
   }, [apiFetch]);
 
-  useEffect(() => { if (user && tab === "Profile") void loadOnboarding(); }, [user, tab, loadOnboarding]);
+  useEffect(() => { if (user) void loadOnboarding(); }, [user, loadOnboarding]);
 
   const captureSelfie = async () => {
     setError(""); setNotice("");
@@ -346,7 +348,7 @@ export default function App() {
           vehicleMake,
           vehicleModel,
           vehicleRegistration,
-          serviceClass: SERVICE,
+          serviceClass,
           passengerCapacity: 3,
           profilePhotoBase64,
           documents: [
@@ -397,8 +399,8 @@ export default function App() {
   return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
     <View style={styles.header}><TurnOvaLogo subtitle={`Driver partner · ${user.name || user.email}`} compact /><Text style={styles.role}>DRIVER</Text></View>
     <ScrollView contentContainerStyle={styles.content}>
-      {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · Auto</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>View queue</Text></Pressable></View></>}
-      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · AUTO</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void (membership.isQueued ? loadQueue() : joinQueue())} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : membership.isQueued ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable>{membership.isQueued && <Pressable style={styles.secondary} onPress={() => void leaveQueue()} disabled={loading}><Text style={styles.secondaryText}>Leave queue</Text></Pressable>}<Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
+      {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · {serviceClass.toUpperCase()}</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>View queue</Text></Pressable></View></>}
+      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · {serviceClass.toUpperCase()}</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void (membership.isQueued ? loadQueue() : joinQueue())} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : membership.isQueued ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable>{membership.isQueued && <Pressable style={styles.secondary} onPress={() => void leaveQueue()} disabled={loading}><Text style={styles.secondaryText}>Leave queue</Text></Pressable>}<Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
       {tab === "Trips" && <><Text style={styles.title}>Ride requests</Text><View style={styles.card}><Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh requests</Text></Pressable>{availableRides.map(item=><View key={item.rideId} style={{marginTop:14}}><Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text><Text style={styles.muted}>{item.passengers} passenger(s) · {item.rideId}</Text><View style={{ flexDirection: "row", gap: 10 }}><Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void acceptRide(item.rideId)}><Text style={styles.secondaryText}>Accept ride</Text></Pressable><Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void rejectRide(item.rideId)}><Text style={styles.secondaryText}>Decline</Text></Pressable></View></View>)}{activeRide&&<><Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>{activeRide.status==="Accepted"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("arrive")}><Text style={styles.secondaryText}>Mark arrived</Text></Pressable>}{activeRide.status==="Arrived"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable>}{activeRide.status==="InProgress"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}</>}</View></>}
       {tab === "Payslips" && <><Text style={styles.eyebrow}>MONTHLY PDF DOCUMENTS</Text><Text style={styles.title}>Your payslips</Text><Text style={styles.sub}>Download a completed month's payslip as a PDF. Only finalized months are available.</Text><View style={styles.card}><Text style={styles.cardTitle}>Recent months</Text>{Array.from({ length: 12 }, (_, index) => { const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - index - 1); const year = date.getFullYear(); const month = date.getMonth() + 1; const label = date.toLocaleDateString(undefined, { month: "long", year: "numeric" }); return <View key={`${year}-${month}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}><Text style={styles.cardTitle}>{label}</Text><Pressable style={styles.secondary} disabled={loading} onPress={() => void downloadPayslip(year, month)}><Text style={styles.secondaryText}>Download PDF</Text></Pressable></View>; })}</View></>}
       {tab === "Profile" && <><Text style={styles.title}>Driver onboarding</Text>{themePicker}<Text style={styles.label}>APP THEME</Text><View style={styles.card}>
@@ -409,6 +411,10 @@ export default function App() {
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
         {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
           <Text style={styles.sub}>Complete your driver and vehicle details and capture a clear front-facing selfie. Your application will remain pending until reviewed.</Text>
+          <Text style={styles.label}>VEHICLE CATEGORY</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {(["scooty", "bike", "auto", "cab"] as const).map(option => <Pressable key={option} onPress={() => setServiceClass(option)} style={[styles.themeOption, { minWidth: "45%" }, serviceClass === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, serviceClass === option && styles.themeOptionTextSelected]}>{option === "scooty" ? "Scooty" : option === "bike" ? "Bike" : option === "auto" ? "Auto" : "Cab"}</Text></Pressable>)}
+          </View>
           <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full legal name" />
           <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholderTextColor={colors.muted} placeholder="Phone number with country code" keyboardType="phone-pad" />
           <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Bajaj)" />

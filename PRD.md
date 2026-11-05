@@ -137,6 +137,7 @@ A free-tier-first approach is intended for development. Production hosting, maps
 ## 12. MVP acceptance criteria
 
 - Riders can request rides, explicitly choose Scooty, Bike, Auto or Cab, and see clear booking states.
+- Drivers select the same supported vehicle category during onboarding; queue membership, ride eligibility and union service-class support use the same Scooty, Bike, Auto and Cab values.
 - Pickup coordinates resolve to a configured dispatch zone; rides are visible only to drivers in the matching zone and vehicle-class queue.
 - Only approved, eligible and compatible drivers are considered.
 - Queue order is server-controlled and reproducible from persisted events.
