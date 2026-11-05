@@ -279,3 +279,10 @@ The API persists an initial ride offer for the current FIFO head before sending 
 ### Idempotent rejection of a persisted offer
 
 For a ride with a durable pending offer, only the assigned driver may reject it, and the offer must still be pending and unexpired. The API rotates the queue using the persisted offer ID as an idempotency key, then conditionally marks the offer and its matching attempt Rejected using the aggregate ETag. If the process stops after queue rotation but before the offer update, retrying the same rejection is safe: the queue store recognizes the offer ID and does not rotate the driver a second time. Legacy rides without a persisted offer retain the previous rotation path. This is retry-safe client recovery, not a durable outbox or autonomous reconciliation; automatic next-driver offer creation and recovery without a client retry remain outstanding.
+
+
+## Automatic next-driver offer advancement
+
+After a durable offer is rejected or expires, the same ride-partitioned aggregate advances to the next eligible FIFO driver. The service verifies that the ride remains Requested, revalidates candidate approval, Online status, zone, service class and passenger capacity, and removes stale/ineligible queue entries. It appends the next attempt and conditionally persists it with the aggregate ETag before sending SignalR. Rejection and expiry use the same advancer; concurrent calls race on the ETag, so at most one next offer is persisted. If no eligible candidate remains, the ride remains Requested without an active offer.
+
+This is not a transactional outbox. A process stop after offer persistence but before SignalR delivery can lose the realtime event; reconnect can recover through the pending-offer endpoint. Queue/profile coordination spans Cosmos containers and is not transactional. Multi-instance integration tests, autonomous reconciliation and durable notification outbox remain production blockers. Offer lifetime currently uses a 30-second default pending central configuration.

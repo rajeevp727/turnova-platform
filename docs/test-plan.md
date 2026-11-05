@@ -463,3 +463,17 @@ This retry path depends on the driver retrying after an interrupted response. Au
 | QUEUE-IDEMP-004 | Rotate with an empty offer ID | Argument validation rejects the call | Unit | P1 |
 
 These tests exercise the in-memory adapter. Cosmos ETag conflict and persistence behavior still require integration tests against a development Cosmos account. API-level rejection crash/retry behavior also remains a separate integration-test gap.
+
+
+## Automatic next-driver offer advancement
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| OFFER-NEXT-001 | Rejected offer with an eligible next FIFO driver | New Pending attempt is appended and persisted before SignalR notification | API/store/SignalR | P0 |
+| OFFER-NEXT-002 | Expired offer | Expiry worker advances to next eligible driver after marking prior attempt Expired | Worker/API | P0 |
+| OFFER-NEXT-003 | Next queue entry is offline, unapproved or incompatible | Entry is removed and selection continues | API/store | P0 |
+| OFFER-NEXT-004 | Two advancement calls race | At most one ETag replacement succeeds and one next offer is persisted | Concurrency | P0 |
+| OFFER-NEXT-005 | No eligible queue entry remains | No new attempt or notification; ride remains Requested with no pending offer | API | P0 |
+| OFFER-NEXT-006 | Process stops after persistence but before SignalR send | Pending-offer fetch returns authoritative offer after reconnect; outbox remains a gap | Failure injection | P0 |
+
+These scenarios still need API/SignalR and multi-instance Cosmos integration coverage; no such integration execution is claimed by in-memory CI.
