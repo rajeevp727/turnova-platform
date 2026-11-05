@@ -103,3 +103,10 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Cosmos driver-profile persistence uses the existing Drivers container; queue changes use the existing queue store. Cross-container writes are not atomic.
 - CI is the validation gate; no local build/test is claimed.
 - Next: exclusive driver reservation is in PR #27; then implement durable FIFO offer orchestration and delivery.
+
+
+## FIFO offer delivery increment (in review)
+- Initial ride offer is created for the current FIFO queue head in the ride-partitioned `RideOffers` store before the SignalR `RideOfferReceived` event is sent.
+- Drivers can reconnect and retrieve their pending offer through `GET /api/v1/driver/offers/pending`; SignalR driver groups are joined only when the authenticated driver ID matches the requested group ID.
+- Ride acceptance checks the persisted offer owner, pending state and expiry before applying the existing driver reservation and ride ETag protections.
+- Offer creation and ride creation are separate Cosmos operations. A durable outbox/reconciliation workflow and automatic next-driver progression after rejection/expiry remain required before production.
