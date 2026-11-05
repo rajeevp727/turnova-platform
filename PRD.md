@@ -136,7 +136,8 @@ A free-tier-first approach is intended for development. Production hosting, maps
 
 ## 12. MVP acceptance criteria
 
-- Riders can request rides and see clear booking states.
+- Riders can request rides, explicitly choose Scooty, Bike, Auto or Cab, and see clear booking states.
+- Pickup coordinates resolve to a configured dispatch zone; rides are visible only to drivers in the matching zone and vehicle-class queue.
 - Only approved, eligible and compatible drivers are considered.
 - Queue order is server-controlled and reproducible from persisted events.
 - Eligible drivers are considered in FIFO order within the configured zone/service class, subject to documented exceptions.
