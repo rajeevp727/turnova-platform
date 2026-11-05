@@ -66,6 +66,7 @@ builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAssignment
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverWorkActivity>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, DriverRideReservation>>();
 builder.Services.AddHttpClient("TriSend", client =>
 {
     var baseUrl = builder.Configuration["TriSend:BaseUrl"];
@@ -109,6 +110,8 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, UnionManagementMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
+    builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
     builder.Services.AddSingleton<IRideOfferStore>(sp =>
         new CosmosRideOfferStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideOffers")));
     builder.Services.AddSingleton<CosmosMigrationRunner>();
@@ -130,6 +133,7 @@ else
 
     builder.Services.AddSingleton<IQueueStore>(queueStore);
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
+    builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
 }
 
 builder.Services.AddSingleton(TimeProvider.System);
@@ -155,6 +159,7 @@ app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
 Container? rideContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null;
+var driverRideReservations = app.Services.GetRequiredService<IDriverRideReservationStore>();
 Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
 Container? driverContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null;
 var driverProfiles = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -1077,9 +1082,14 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
             return Results.Conflict(new { message = "This ride belongs to a different dispatch zone or vehicle queue." });
         if (current.Passengers > approvedProfile.PassengerCapacity)
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
+        if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct))
+            return Results.Conflict(new { message = "You already have an active ride. Complete or cancel it before accepting another ride." });
         var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         if (!rides.TryUpdate(rideId, acceptedInMemory, current))
+        {
+            await driverRideReservations.TryReleaseAsync(driverId, rideId, ct);
             return Results.Conflict(new { message = "Another driver accepted this ride." });
+        }
         await RecordWorkActivityAsync(driverId, rideId, "Accepted", acceptedInMemory.AcceptedAt!.Value, ct);
         await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = acceptedInMemory.Status }, ct);
         return Results.Ok(acceptedInMemory);
@@ -1094,6 +1104,8 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
             return Results.Conflict(new { message = "This ride belongs to a different dispatch zone or vehicle queue." });
         if (response.Resource.Passengers > approvedProfile.PassengerCapacity)
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
+        if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct))
+            return Results.Conflict(new { message = "You already have an active ride. Complete or cancel it before accepting another ride." });
         var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
@@ -1103,6 +1115,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     }
     catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
     {
+        await driverRideReservations.TryReleaseAsync(driverId, rideId, ct);
         return Results.Conflict(new { message = "This ride is no longer available." });
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
@@ -1200,6 +1213,8 @@ app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string
         return Results.Conflict(new { message = "A ride can only be cancelled before it starts." });
     var updated = await TryTransitionAsync(ride, "Cancelled", ct);
     if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
+    if (!string.IsNullOrWhiteSpace(updated.DriverId))
+        await driverRideReservations.TryReleaseAsync(updated.DriverId, rideId, ct);
     await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = updated.Status }, ct);
     return Results.Ok(updated);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
@@ -1212,7 +1227,11 @@ async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, str
     if (ride.Status != expected) return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to {next}." });
     var updated = await TryTransitionAsync(ride, next, ct);
     if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
-    if (next == "Completed") await RecordWorkActivityAsync(driverId!, rideId, "Completed", DateTimeOffset.UtcNow, ct);
+    if (next == "Completed")
+    {
+        await RecordWorkActivityAsync(driverId!, rideId, "Completed", DateTimeOffset.UtcNow, ct);
+        await driverRideReservations.TryReleaseAsync(driverId!, rideId, ct);
+    }
     await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
         .SendAsync("RideStatusChanged", new { rideId, status = updated.Status }, ct);
     return Results.Ok(updated);
