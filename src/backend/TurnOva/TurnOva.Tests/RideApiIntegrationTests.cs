@@ -270,6 +270,34 @@ public sealed class RideApiIntegrationTests
         Assert.Single(ledger.Values.Where(item => item.DriverId == "driver-decline-test" && item.ActivityType == "Rejected"));
     }
 
+
+    [Fact]
+    public async Task RejectedOrTimedOutFrontDriverMovesBehindOtherDrivers()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-fifo-rotation");
+        using var firstDriver = factory.CreateClient("Driver", "driver-fifo-first");
+        using var secondDriver = factory.CreateClient("Driver", "driver-fifo-second");
+        var queue = factory.Services.GetRequiredService<IQueueStore>();
+        var joinedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        await queue.AddAsync(new DriverQueueEntry("driver-fifo-first", "hyderabad-central", "auto", joinedAt, 0, true), CancellationToken.None);
+        await queue.AddAsync(new DriverQueueEntry("driver-fifo-second", "hyderabad-central", "auto", joinedAt.AddMinutes(1), 0, true), CancellationToken.None);
+
+        var ride = await CreateRideAsync(rider, "request-fifo-reject-001");
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await firstDriver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null)).StatusCode);
+        var afterReject = await queue.GetEligibleAsync("hyderabad-central", "auto", CancellationToken.None);
+        Assert.Equal(new[] { "driver-fifo-second", "driver-fifo-first" }, afterReject.Select(entry => entry.DriverId));
+
+        using var timeout = await firstDriver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null);
+        Assert.Equal(HttpStatusCode.Conflict, timeout.StatusCode);
+
+        using var secondTimeout = await secondDriver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null);
+        Assert.Equal(HttpStatusCode.OK, secondTimeout.StatusCode);
+        var afterTimeout = await queue.GetEligibleAsync("hyderabad-central", "auto", CancellationToken.None);
+        Assert.Equal(new[] { "driver-fifo-first", "driver-fifo-second" }, afterTimeout.Select(entry => entry.DriverId));
+    }
+
     [Fact]
     public async Task DriverCanDownloadPersistedMonthlyPayslipAsPdfWithMetrics()
     {
