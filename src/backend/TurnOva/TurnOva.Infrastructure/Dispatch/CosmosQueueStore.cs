@@ -91,28 +91,6 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         }
     }
 
-    public async Task<bool> MoveToBackAsync(
-        string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
-    {
-        var key = QueueKey(zoneId, serviceClass);
-        try
-        {
-            var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(
-                driverId, new PartitionKey(key), cancellationToken: cancellationToken);
-            var document = response.Resource;
-            document.JoinedAt = DateTimeOffset.UtcNow;
-            document.Sequence = document.JoinedAt.UtcTicks;
-            await queueContainer.ReplaceItemAsync(
-                document, driverId, new PartitionKey(key),
-                new ItemRequestOptions { IfMatchEtag = response.ETag }, cancellationToken);
-            return true;
-        }
-        catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
-        {
-            return false;
-        }
-    }
-
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
 
