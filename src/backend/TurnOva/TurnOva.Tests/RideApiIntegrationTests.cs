@@ -62,6 +62,8 @@ public sealed class RideApiIntegrationTests
         var approved = await driver.SendAsync(approval);
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
 
+        var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true });
+        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
         var joined = await driver.PostAsJsonAsync("/api/v1/queues/join",
             new { zoneId = "hyderabad-central", serviceClass = "auto" });
         Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
@@ -80,6 +82,37 @@ public sealed class RideApiIntegrationTests
             "/api/v1/zones/hyderabad-central/queues/auto/me");
         Assert.NotNull(membership);
         Assert.False(membership.IsQueued);
+    }
+
+    [Fact]
+    public async Task DriverAvailabilityControlsQueueEligibilityAndRejoinsAtBack()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var first = factory.CreateClient("Driver", "availability-first");
+        using var second = factory.CreateClient("Driver", "availability-second");
+
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await first.PostAsJsonAsync("/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "auto" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await second.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true })).StatusCode);
+
+        var before = await first.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        Assert.NotNull(before);
+        Assert.Equal(new[] { "availability-first", "availability-second" }, before.Select(x => x.DriverId));
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = false })).StatusCode);
+        var afterOffline = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        Assert.NotNull(afterOffline);
+        Assert.Equal(new[] { "availability-second" }, afterOffline.Select(x => x.DriverId));
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true })).StatusCode);
+        var rejoined = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        Assert.NotNull(rejoined);
+        Assert.Equal(new[] { "availability-second", "availability-first" }, rejoined.Select(x => x.DriverId));
     }
 
     [Fact]
@@ -543,6 +576,7 @@ public sealed class RideApiIntegrationTests
     }
 
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive);
+    private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {

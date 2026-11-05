@@ -27,4 +27,5 @@ public sealed record DriverOnboardingProfile(
     string ProfilePhotoApprovalStatus = "Pending",
     string? ProfilePhotoApprovedByUnionId = null,
     DateTimeOffset? ProfilePhotoReviewedAtUtc = null,
-    string? ProfilePhotoReviewReason = null);
+    string? ProfilePhotoReviewReason = null,
+    string AvailabilityStatus = "Offline");
