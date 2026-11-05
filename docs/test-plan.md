@@ -381,3 +381,18 @@ The timeout endpoint is a client acknowledgement, not a server-side timer. Serve
 | FIFO-HEAD-007 | Queue membership changes during rejection rotation | HTTP 409; client is instructed to refresh | API/concurrency | P0 |
 
 This increment enforces queue-head access at the API boundary. Durable offers, server-owned timers, automatic expiry/retry, exclusive offer delivery and multi-instance dispatch coordination remain separate production-critical work.
+
+
+## Durable ride-offer persistence foundation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| OFFER-STORE-001 | Create the first offer aggregate for a ride | Create succeeds | Unit/store | P0 |
+| OFFER-STORE-002 | Create a second aggregate for the same ride | Create-if-absent returns false; no second active aggregate is created | Unit/store | P0 |
+| OFFER-STORE-003 | Replace using the current ETag | Update succeeds and returns a new version | Unit/store | P0 |
+| OFFER-STORE-004 | Replace using a stale ETag | Update returns false; concurrent state is not overwritten | Unit/store | P0 |
+| OFFER-STORE-005 | Query expired offers | Only Pending offers with deadline <= now are returned, bounded by requested batch size | Unit/store | P0 |
+| OFFER-STORE-006 | Query a driver's pending offer | Returns only that driver's current Pending offer | Unit/store | P0 |
+| OFFER-STORE-007 | Cosmos item replacement races across API instances | One ETag writer succeeds; stale writer retries from authoritative state | Cosmos integration | P0 |
+
+The current increment adds the persistence contract, in-memory/Cosmos adapters and schema migration. API dispatch orchestration and server-owned expiry remain separate increments.
