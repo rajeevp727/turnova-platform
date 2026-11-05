@@ -850,9 +850,9 @@ app.MapGet("/api/v1/driver/availability", async (ClaimsPrincipal user, Cancellat
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (profile is null) return Results.Forbid();
-    return Results.Ok(new { availabilityStatus = profile.AvailabilityStatus, isOnline = profile.AvailabilityStatus == "Online" });
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    var status = profile?.Status == "Approved" ? profile.AvailabilityStatus : "Offline";
+    return Results.Ok(new { availabilityStatus = status, isOnline = status == "Online" });
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/driver/availability", async (
