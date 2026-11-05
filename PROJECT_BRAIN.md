@@ -86,11 +86,9 @@ Durable offer persistence foundation was introduced on `feature/durable-ride-off
 
 This stage is persistence groundwork, not end-to-end dispatch. Next: implement the server-owned offer state machine/orchestrator and expiry worker; then wire driver offer endpoints and SignalR notifications. Preserve one pending offer per ride and one pending offer per driver. Use conditional writes and explicit recovery for cross-partition ride/queue coordination.
 
-
 ## Server-owned expiry increment (merged in PR #25)
 
 A hosted worker polls overdue durable offers in bounded batches in Cosmos and in-memory modes. Queue rotation is idempotent by offer ID; the Cosmos queue entry persists the last applied offer ID and uses ETag conditional replacement. The offer is marked Expired only after queue rotation succeeds. If the process stops between those operations, replay observes the marker and safely completes offer resolution. Missing queue membership leaves the offer pending for retry. This is not a cross-container transaction and the legacy ride accept/reject endpoints are not yet fenced by durable offer IDs; automatic next-driver dispatch and exclusive reservation remain future work.
-
 
 ## Driver availability increment (merged in PR #26)
 
@@ -103,7 +101,6 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Cosmos driver-profile persistence uses the existing Drivers container; queue changes use the existing queue store. Cross-container writes are not atomic.
 - CI is the validation gate; no local build/test is claimed.
 - Next: exclusive driver reservation is in PR #27; then implement durable FIFO offer orchestration and delivery.
-
 
 ## FIFO offer delivery increment (in review)
 - Initial ride offer is created for the current FIFO queue head in the ride-partitioned `RideOffers` store before the SignalR `RideOfferReceived` event is sent.
