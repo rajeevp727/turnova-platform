@@ -57,6 +57,32 @@ public sealed class QueueStoreTests
             store.AddAsync(entry, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task MoveToBackAsync_PreservesFifoOrderAndMovesDriverBehindExistingMembers()
+    {
+        var store = new InMemoryQueueStore();
+        var start = DateTimeOffset.Parse("2026-11-05T00:00:00Z");
+        await store.AddAsync(Entry("driver-a", "zone-a", "auto", start), CancellationToken.None);
+        await store.AddAsync(Entry("driver-b", "zone-a", "auto", start.AddMinutes(1)), CancellationToken.None);
+        await store.AddAsync(Entry("driver-c", "zone-a", "auto", start.AddMinutes(2)), CancellationToken.None);
+
+        var moved = await store.MoveToBackAsync("driver-a", "zone-a", "auto", CancellationToken.None);
+
+        Assert.True(moved);
+        var queue = await store.GetEligibleAsync("zone-a", "auto", CancellationToken.None);
+        Assert.Equal(new[] { "driver-b", "driver-c", "driver-a" }, queue.Select(entry => entry.DriverId));
+    }
+
+    [Fact]
+    public async Task MoveToBackAsync_ReturnsFalse_WhenDriverIsNotInQueue()
+    {
+        var store = new InMemoryQueueStore();
+
+        var moved = await store.MoveToBackAsync("missing-driver", "zone-a", "auto", CancellationToken.None);
+
+        Assert.False(moved);
+    }
+
     private static DriverQueueEntry Entry(
         string driverId, string zoneId, string serviceClass, DateTimeOffset joinedAt) =>
         new(driverId, zoneId, serviceClass, joinedAt, 0, true);
