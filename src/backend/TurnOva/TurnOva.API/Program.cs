@@ -516,7 +516,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         string.IsNullOrWhiteSpace(request.VehicleModel) || request.VehicleModel.Trim().Length > 60 ||
         string.IsNullOrWhiteSpace(request.VehicleRegistration) || request.VehicleRegistration.Trim().Length > 20 ||
         request.PassengerCapacity is < 1 or > 8 ||
-        request.ServiceClass is not ("scooty" or "bike" or "auto" or "cab") ||
+        request.ServiceClass is not ("auto" or "mini" or "sedan" or "suv") ||
         request.Documents is null || request.Documents.Count is < 1 or > 8 ||
         request.Documents.Any(document => document is null ||
             document.DocumentType is not ("DrivingLicence" or "VehicleRegistration" or "Insurance" or "Permit" or "ProfilePhoto") ||
@@ -597,7 +597,7 @@ opsUnions.MapPost("/", async (HttpContext context, CreateUnionRequest request, C
         request.ZoneIds is null || request.ZoneIds.Count == 0 ||
         request.ZoneIds.Any(zone => string.IsNullOrWhiteSpace(zone) || zone.Trim().Length > 80) ||
         request.ServiceClasses is null || request.ServiceClasses.Count == 0 ||
-        request.ServiceClasses.Any(serviceClass => serviceClass is not ("scooty" or "bike" or "auto" or "cab")))
+        request.ServiceClasses.Any(serviceClass => serviceClass is not ("auto" or "mini" or "sedan" or "suv")))
         return Results.BadRequest(new { message = "Provide a name, unique code, at least one service zone and supported service class." });
 
     var code = request.Code.Trim().ToUpperInvariant();
@@ -840,7 +840,7 @@ app.MapGet("/api/v1/driver/union", async (ClaimsPrincipal user, CancellationToke
 
 app.MapGet("/api/v1/zones", () => Results.Ok(new[]
 {
-    new { id = "hyderabad-central", name = "Hyderabad Central", serviceClasses = new[] { "scooty", "bike", "auto", "cab" } }
+    new { id = "hyderabad-central", name = "Hyderabad Central", serviceClasses = new[] { "auto" } }
 })).RequireAuthorization();
 
 app.MapGet("/api/v1/zones/{zoneId}/queues/{serviceClass}", async (
