@@ -294,7 +294,7 @@ export default function App() {
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to load onboarding profile."); }
   }, [apiFetch]);
 
-  useEffect(() => { if (user && tab === "Profile") void loadOnboarding(); }, [user, tab, loadOnboarding]);
+  useEffect(() => { if (user) void loadOnboarding(); }, [user, loadOnboarding]);
 
   const captureSelfie = async () => {
     setError(""); setNotice("");
