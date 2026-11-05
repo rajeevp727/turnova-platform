@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD at start of this increment:** `53f1bd8b78e6472a7c977baa0ccb4ecae6299ed3` (PR #31)
+**Current main HEAD at start of this increment:** `72ee4c7fc146469eff12da6c74e3f1c587dcb618` (PR #32)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -43,6 +43,10 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #24: merged — durable ride-offer aggregate, Cosmos/in-memory stores, migration and state/store tests. Merge commit `1c10ccdb5d191b3dd635135dedad954807a78a47`; GitHub Actions CI passed.
 - PR #25: merged — server-owned offer expiry worker and idempotent FIFO recovery. Merge commit `332bd5df8e99d290db98403b08bdca8b704202ce`.
 - PR #26: merged — driver Online/Offline availability and FIFO eligibility enforcement. Merge commit `373cdad94006c1b742d15b4a8207a8a9d50f5e20`.
+- PR #27–#29: merged — exclusive driver reservations, durable initial FIFO offer delivery/reconnect lookup, and repository cleanup.
+- PR #30: merged — retry-safe durable offer rejection and idempotent queue rotation.
+- PR #31: merged — queue rotation idempotency regression tests.
+- PR #32: merged — automatic next-driver offer advancement after rejection/expiry.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
@@ -123,10 +127,18 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - These tests are CI coverage only until the PR workflow completes; no local build or test execution is claimed.
 
 
-## Automatic next-driver offer advancement (in review)
+## Automatic next-driver offer advancement (merged in PR #32)
 - Shared advancer handles durable rejection and expiry. It verifies the ride is still Requested and validates candidate approval, Online status, zone, service class and passenger capacity.
 - Appends the next pending attempt to the same ride aggregate with ETag protection and persists before SignalR notification.
 - Rejection endpoint and expiry processor invoke the same service; competing calls cannot both replace the same ETag.
 - Invalid queue entries are removed. No eligible candidate leaves the ride Requested with no pending offer.
 - Known gaps: no transactional notification outbox; reconnect pending-offer fetch is recovery after a lost SignalR event. Cosmos cross-container coordination and multi-instance concurrency require integration tests. Offer lifetime currently uses 30 seconds pending configuration unification.
 - No local build/test claimed; CI is the validation gate.
+
+
+## Durable offer notification outbox + unified lifetime (in PR)
+- Initial and advanced offers share clamped `Dispatch:OfferLifetimeSeconds` configuration (10–120 seconds; default 30).
+- Offer aggregate stores notification state; newly created offers start Pending and are persisted before delivery.
+- Hosted outbox worker reads bounded pending batches, rechecks current offer identity/status, sends `RideOfferReceived`, then ETag-marks notification Sent.
+- Delivery is at-least-once: a crash after SignalR send but before the Sent marker can duplicate an event. Clients must de-duplicate by offerId and refresh authoritative pending state after reconnect.
+- Multi-instance duplicate delivery and Cosmos failure-injection tests remain required. No local build/test claimed; CI is the validation gate.

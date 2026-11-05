@@ -1,4 +1,5 @@
 using TurnOva.API;
+using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
@@ -142,8 +143,10 @@ builder.Services.AddSingleton<IRideOfferAdvancer>(sp => new RideOfferAdvancer(
     sp.GetRequiredService<ConcurrentDictionary<string, DemoRide>>(),
     useCosmos ? sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null,
     useCosmos ? sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null,
-    sp.GetRequiredService<IHubContext<RideTrackingHub>>(), sp.GetRequiredService<TimeProvider>()));
+    sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<IOptions<DispatchOfferOptions>>()));
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.Configure<DispatchOfferOptions>(builder.Configuration.GetSection("Dispatch"));
+builder.Services.AddHostedService<OfferNotificationOutboxWorker>();
 builder.Services.AddSingleton<IRideOfferExpiryProcessor, RideOfferExpiryProcessor>();
 builder.Services.Configure<DispatchOfferExpiryOptions>(builder.Configuration.GetSection("Dispatch:OfferExpiry"));
 builder.Services.AddHostedService<RideOfferExpiryWorker>();
@@ -1056,16 +1059,14 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
             string.Equals(profile.ServiceClass, serviceClass, StringComparison.OrdinalIgnoreCase))
         {
             var now = TimeProvider.System.GetUtcNow();
-            var lifetimeSeconds = Math.Clamp(app.Configuration.GetValue<int?>("Dispatch:OfferLifetimeSeconds") ?? 30, 10, 120);
+            var lifetimeSeconds = app.Services.GetRequiredService<IOptions<DispatchOfferOptions>>().Value.LifetimeSeconds;
             var offerId = Guid.NewGuid().ToString("N");
             var expiresAt = now.AddSeconds(lifetimeSeconds);
             var attempt = new RideOfferAttempt(offerId, candidate.DriverId, now, expiresAt, RideOfferStatuses.Pending);
             var offer = new RideOfferState(ride.RideId, dispatchZoneId, serviceClass, offerId,
                 candidate.DriverId, now, expiresAt, RideOfferStatuses.Pending, [attempt]);
             var store = app.Services.GetRequiredService<IRideOfferStore>();
-            if (await store.TryCreateAsync(offer, ct))
-                await hub.Clients.Group($"driver:{candidate.DriverId}").SendAsync(
-                    "RideOfferReceived", new { rideId = ride.RideId, offerId, expiresAtUtc = expiresAt }, ct);
+            await store.TryCreateAsync(offer, ct);
         }
     }
     return Results.Created($"/api/v1/rides/{ride.RideId}", ride);

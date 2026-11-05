@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Options;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
 
@@ -11,7 +12,7 @@ public sealed class RideOfferAdvancer(
     ConcurrentDictionary<string, DriverOnboardingProfile> inMemoryProfiles,
     ConcurrentDictionary<string, global::DemoRide> inMemoryRides,
     Container? driverContainer, Container? rideContainer,
-    IHubContext<RideTrackingHub> hub, TimeProvider timeProvider) : IRideOfferAdvancer
+    TimeProvider timeProvider, IOptions<DispatchOfferOptions> offerOptions) : IRideOfferAdvancer
 {
     public async Task<bool> AdvanceAsync(string rideId, CancellationToken cancellationToken = default)
     {
@@ -41,7 +42,7 @@ public sealed class RideOfferAdvancer(
 
             var now = timeProvider.GetUtcNow();
             var offerId = Guid.NewGuid().ToString("N");
-            var expiresAt = now.AddSeconds(30);
+            var expiresAt = now.AddSeconds(offerOptions.Value.LifetimeSeconds);
             var attempt = new RideOfferAttempt(offerId, candidate.DriverId, now, expiresAt, RideOfferStatuses.Pending);
             var next = current with
             {
@@ -51,9 +52,6 @@ public sealed class RideOfferAdvancer(
                 Attempts = current.Attempts.Append(attempt).ToArray(), ETag = null
             };
             if (!await offers.TryReplaceAsync(next, current.ETag, cancellationToken)) return false;
-
-            await hub.Clients.Group($"driver:{candidate.DriverId}").SendAsync(
-                "RideOfferReceived", new { rideId = current.RideId, offerId, expiresAtUtc = expiresAt }, cancellationToken);
             return true;
         }
         return false;

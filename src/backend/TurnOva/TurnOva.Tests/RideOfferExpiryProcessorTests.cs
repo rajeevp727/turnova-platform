@@ -57,6 +57,29 @@ public sealed class RideOfferExpiryProcessorTests
         Assert.Equal(RideOfferStatuses.Expired, (await offers.GetByRideAsync(state.RideId))!.Status);
     }
 
+    [Fact]
+    public async Task PendingNotifications_ReturnOnlyCurrentPendingOffersAndCanBeMarkedSent()
+    {
+        var now = DateTimeOffset.Parse("2026-11-06T10:00:00Z");
+        var store = new InMemoryRideOfferStore();
+        var state = new RideOfferState("ride-notification", "zone-a", "auto", "offer-notification", "driver-a",
+            now, now.AddSeconds(30), RideOfferStatuses.Pending,
+            [new RideOfferAttempt("offer-notification", "driver-a", now, now.AddSeconds(30), RideOfferStatuses.Pending)]);
+        Assert.True(await store.TryCreateAsync(state));
+
+        var pending = await store.GetPendingNotificationsAsync(10);
+        var current = Assert.Single(pending);
+        Assert.Equal("Pending", current.NotificationStatus);
+        Assert.NotNull(current.ETag);
+        Assert.True(await store.TryReplaceAsync(current with
+        {
+            NotificationStatus = "Sent",
+            NotificationSentAtUtc = now
+        }, current.ETag!));
+
+        Assert.Empty(await store.GetPendingNotificationsAsync(10));
+    }
+
     private sealed class RecordingAdvancer : IRideOfferAdvancer
     {
         public List<string> AdvancedRideIds { get; } = [];
