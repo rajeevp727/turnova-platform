@@ -39,6 +39,34 @@ public sealed class RideOfferExpiryProcessorTests
         Assert.Equal(RideOfferStatuses.Pending, (await offers.GetByRideAsync(state.RideId))!.Status);
     }
 
+
+    [Fact]
+    public async Task ProcessBatchAsync_AdvancesAfterOfferIsMarkedExpired()
+    {
+        var now = DateTimeOffset.Parse("2026-11-06T10:00:00Z");
+        var offers = new InMemoryRideOfferStore();
+        var queue = new InMemoryQueueStore();
+        await queue.AddAsync(new DriverQueueEntry("driver-a", "zone-a", "auto", now.AddMinutes(-5), 0, true), default);
+        var state = State(now);
+        Assert.True(await offers.TryCreateAsync(state));
+        var advancer = new RecordingAdvancer();
+        var processor = new RideOfferExpiryProcessor(offers, queue, new FixedTimeProvider(now), advancer);
+
+        Assert.Equal(1, await processor.ProcessBatchAsync(10));
+        Assert.Equal(new[] { state.RideId }, advancer.AdvancedRideIds);
+        Assert.Equal(RideOfferStatuses.Expired, (await offers.GetByRideAsync(state.RideId))!.Status);
+    }
+
+    private sealed class RecordingAdvancer : IRideOfferAdvancer
+    {
+        public List<string> AdvancedRideIds { get; } = [];
+        public Task<bool> AdvanceAsync(string rideId, CancellationToken cancellationToken = default)
+        {
+            AdvancedRideIds.Add(rideId);
+            return Task.FromResult(true);
+        }
+    }
+
     private static RideOfferState State(DateTimeOffset now) =>
         new("ride-expiry", "zone-a", "auto", "offer-expiry", "driver-a",
             now.AddMinutes(-2), now.AddMinutes(-1), RideOfferStatuses.Pending,

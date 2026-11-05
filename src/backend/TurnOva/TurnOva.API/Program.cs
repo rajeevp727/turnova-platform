@@ -1216,7 +1216,10 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
         if (offer.DriverId != driverId)
             return Results.Conflict(new { message = "This ride offer is not assigned to you." });
         if (offer.Status == RideOfferStatuses.Rejected)
+        {
+            await offerAdvancer.AdvanceAsync(rideId, ct);
             return Results.NoContent();
+        }
         if (!offer.IsPending || offer.IsExpiredAt(TimeProvider.System.GetUtcNow()))
             return Results.Conflict(new { message = "This ride offer is no longer pending." });
     }
