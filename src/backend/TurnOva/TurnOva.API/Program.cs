@@ -203,6 +203,14 @@ async Task<DriverMonthlyPayslip?> FindPayslipAsync(string driverId, string paysl
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
+async Task<bool> HasActiveRideAsync(Container container, QueryDefinition query, CancellationToken ct)
+{
+    using var iterator = container.GetItemQueryIterator<DemoRide>(query, requestOptions: new QueryRequestOptions { MaxItemCount = 1 });
+    while (iterator.HasMoreResults)
+        if ((await iterator.ReadNextAsync(ct)).Count > 0) return true;
+    return false;
+}
+
 async Task SavePayslipIfAbsentAsync(DriverMonthlyPayslip payslip, CancellationToken ct)
 {
     if (payslipContainer is null)
@@ -838,6 +846,54 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
     return Results.File(pdf, "application/pdf", $"TurnOva-Payslip-{year:D4}-{month:D2}.pdf");
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
+app.MapGet("/api/v1/driver/availability", async (ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.Forbid();
+    return Results.Ok(new { availabilityStatus = profile.AvailabilityStatus, isOnline = profile.AvailabilityStatus == "Online" });
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/driver/availability", async (
+    ClaimsPrincipal user, DriverAvailabilityRequest request, QueueService queueService, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (profile is null) return Results.Conflict(new { message = "Only an approved driver can change availability." });
+
+    if (request.IsOnline)
+    {
+        await SaveDriverProfileAsync(profile with { AvailabilityStatus = "Online" }, ct);
+        try
+        {
+            var current = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
+            if (!current.Any(entry => entry.DriverId == driverId))
+                await queueService.JoinAsync(new DriverQueueEntry(driverId, profile.ZoneId, profile.ServiceClass, DateTimeOffset.UtcNow, 0, true), ct);
+        }
+        catch
+        {
+            await SaveDriverProfileAsync(profile with { AvailabilityStatus = "Offline" }, ct);
+            throw;
+        }
+        var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
+        var position = queue.ToList().FindIndex(entry => entry.DriverId == driverId) + 1;
+        return Results.Ok(new { availabilityStatus = "Online", isOnline = true, isQueued = position > 0, position });
+    }
+
+    var activeRideQuery = new QueryDefinition("SELECT TOP 1 * FROM c WHERE c.driverId = @driverId AND c.status IN ('Accepted', 'Arrived', 'InProgress')")
+        .WithParameter("@driverId", driverId);
+    var hasActiveRide = rideContainer is null
+        ? rides.Values.Any(ride => ride.DriverId == driverId && (ride.Status is "Accepted" or "Arrived" or "InProgress"))
+        : await HasActiveRideAsync(rideContainer, activeRideQuery, ct);
+    if (hasActiveRide) return Results.Conflict(new { message = "Complete your active ride before going offline." });
+
+    await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
+    await SaveDriverProfileAsync(profile with { AvailabilityStatus = "Offline" }, ct);
+    return Results.Ok(new { availabilityStatus = "Offline", isOnline = false, isQueued = false, position = (int?)null });
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
 app.MapGet("/api/v1/driver/union", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
@@ -899,6 +955,8 @@ app.MapPost("/api/v1/queues/join", async (
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (approvedProfile is null)
         return Results.Conflict(new { message = "Driver onboarding must be approved before joining a queue." });
+    if (approvedProfile.AvailabilityStatus != "Online")
+        return Results.Conflict(new { message = "Go online before joining the FIFO queue." });
 
     try
     {
@@ -980,7 +1038,7 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueS
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (approvedProfile is null) return Results.Forbid();
+    if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online") return Results.Forbid();
 
     // Only the current FIFO head may see actionable ride requests.
     var queue = await queueService.GetPositionedQueueAsync(approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
@@ -1006,7 +1064,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (approvedProfile is null) return Results.Forbid();
+    if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online") return Results.Forbid();
     var queue = await queueService.GetPositionedQueueAsync(approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
     if (queue.FirstOrDefault()?.DriverId != driverId)
         return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can accept a ride." });
@@ -1055,7 +1113,7 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (profile is null) return Results.Forbid();
+    if (profile is null || profile.AvailabilityStatus != "Online") return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.Status != "Requested" || ride.Passengers > profile.PassengerCapacity ||
         !string.Equals(ride.DispatchZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
@@ -1079,7 +1137,7 @@ app.MapPost("/api/v1/queues/{zoneId}/{serviceClass}/offer-timeout", async (
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
 
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (profile is null) return Results.Forbid();
+    if (profile is null || profile.AvailabilityStatus != "Online") return Results.Forbid();
     if (!string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(profile.ServiceClass, serviceClass, StringComparison.OrdinalIgnoreCase))
         return Results.Forbid();
@@ -1196,6 +1254,7 @@ app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId,
 app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
+public sealed record DriverAvailabilityRequest(bool IsOnline);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
 public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);
 public sealed record DriverSelfieRequest(string ProfilePhotoBase64);

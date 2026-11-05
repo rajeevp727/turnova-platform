@@ -405,3 +405,21 @@ The current increment adds the persistence contract, in-memory/Cosmos adapters a
 - Missing queue membership leaves the offer pending for retry.
 - ETag conflicts never overwrite a concurrently resolved offer.
 - Worker polls bounded batches and stops promptly on host cancellation.
+
+
+## Driver availability management
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AVAIL-001 | Unapproved driver goes online | HTTP 409; no queue membership is created | API/security | P0 |
+| AVAIL-002 | Approved driver goes online | Availability is persisted as Online and driver joins the back of the configured zone/service-class FIFO queue | API | P0 |
+| AVAIL-003 | Driver repeats online request | HTTP 200; no duplicate queue membership or position change | API | P0 |
+| AVAIL-004 | Driver goes offline | Availability is persisted as Offline and queue membership is removed | API | P0 |
+| AVAIL-005 | Offline driver attempts queue join | HTTP 409; no queue entry is created | API/security | P0 |
+| AVAIL-006 | Offline driver requests available rides or accepts/rejects | Request is forbidden; offline driver cannot dispatch | API/security | P0 |
+| AVAIL-007 | Driver goes offline with active ride | HTTP 409; availability and queue state remain unchanged | API | P0 |
+| AVAIL-008 | Driver comes online after offline period | Driver rejoins at the back of the FIFO queue | API | P0 |
+| AVAIL-009 | Driver app restarts | Availability is loaded from the server profile, not assumed from local UI state | Mobile/API | P1 |
+| AVAIL-010 | Cosmos mode availability change | Availability is persisted in the Drivers profile document and queue changes use the configured queue store | Cosmos integration | P0 |
+
+Online/offline availability is server-authoritative. Mobile controls are presentation only; dispatch and queue APIs enforce the persisted state. Cosmos cross-container writes are not transactional and require operational reconciliation before production.

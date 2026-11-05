@@ -61,7 +61,7 @@ All apps are Android/iOS mobile apps. They share one backend and dispatch engine
 ### TurnOva Driver
 - Registration and onboarding with identity, licence, vehicle and required documents.
 - Approval status and eligibility feedback.
-- Online/offline availability controls.
+- Explicit Online/Offline availability controls; going online joins the back of the eligible FIFO queue, and going offline removes queue membership. A driver with an active ride cannot go offline.
 - Join the FIFO queue for an eligible service zone.
 - View current zone, queue position and queue state.
 - Receive trip offers and accept/reject within a defined response window.

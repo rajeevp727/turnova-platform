@@ -76,7 +76,7 @@ Create logical queues by service zone and compatible service/vehicle class. Avoi
 ### Ordering and eligibility
 The server assigns queue-entry order. A deterministic sequence and stable tie-breaker establish ordering. Clients cannot submit or modify queue rank.
 
-Candidates must be approved, online, available, active in the relevant queue, document-valid, service/capacity compatible and free of conflicting assignments. Revalidate immediately before assignment.
+Candidates must be approved, explicitly Online, active in the relevant queue, document-valid, service/capacity compatible and free of conflicting assignments. Online is persisted on the driver profile; the API adds the driver to the queue when they go online and removes them when they go offline. Rejoining appends at the back. A driver with an active ride cannot go offline. Revalidate immediately before assignment.
 
 ### Current API enforcement
 The Driver available-rides endpoint returns actionable requested rides only to the current head of the driver's approved zone/service-class FIFO queue. Ride acceptance rechecks that queue-head condition on the server; clients cannot self-assign by calling the endpoint directly. Explicit rejection is also restricted to the current queue head and moves that driver to the back. These checks are a transitional fairness safeguard, not a complete offer system: there is not yet a durable offer ID/deadline, a server-owned expiry worker, or exclusive per-ride offer state. The timeout acknowledgement endpoint is not automatic expiry.
@@ -85,7 +85,7 @@ The Driver available-rides endpoint returns actionable requested rides only to t
 Prevent assigning one driver to multiple active rides and prevent assigning one ride to multiple drivers. Use Cosmos DB transactional batches or conditional writes within an appropriate logical partition where possible. Cosmos DB transactions are scoped to a logical partition; do not assume cross-partition atomic transactions. Use ETags/optimistic concurrency, idempotency keys and bounded conflict retries. If invariants span partitions, revise the partition model or add a dedicated coordination mechanism before production.
 
 ### Queue lifecycle
-Model join, unavailable, on-trip, leave, rejoin, offer-pending, accepted, rejected and timed-out states explicitly. Define whether decline/timeout retains, advances or resets position. Record every exception with reason, actor and timestamp. Never silently alter priority.
+Model Online/Offline availability, join, unavailable, on-trip, leave, rejoin, offer-pending, accepted, rejected and timed-out states explicitly. Define whether decline/timeout retains, advances or resets position. Record every exception with reason, actor and timestamp. Never silently alter priority.
 
 ### Dispatch flow
 1. Validate and persist the ride request.

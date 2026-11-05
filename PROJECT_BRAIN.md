@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD at start of this increment:** `1c10ccdb5d191b3dd635135dedad954807a78a47` (PR #24)
+**Current main HEAD at start of this increment:** `332bd5df8e99d290db98403b08bdca8b704202ce` (PR #25)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -41,12 +41,13 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #22 CI: GitHub Actions `TurnOva CI` completed successfully. Its PR description notes no local build/test was run by the author; CI is the validation evidence.
 - PR #23: merged — added this project brain; its GitHub Actions `TurnOva CI` completed successfully.
 - PR #24: merged — durable ride-offer aggregate, Cosmos/in-memory stores, migration and state/store tests. Merge commit `1c10ccdb5d191b3dd635135dedad954807a78a47`; GitHub Actions CI passed.
+- PR #25: merged — server-owned offer expiry worker and idempotent FIFO recovery. Merge commit `332bd5df8e99d290db98403b08bdca8b704202ce`.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
 1. **Server-owned offer expiry and FIFO recovery (P0):** worker scans overdue durable offers, rotates the target driver once per offer ID and resolves the offer with ETag protection. This increment does not yet dispatch the next driver.
 2. **Exclusive assignment/concurrency:** prevent one driver taking multiple active rides and one ride being assigned twice; use Cosmos ETags/partition-aware coordination.
-3. **Driver availability:** explicit online/offline/temporarily-unavailable state must participate in eligibility.
+3. **Driver availability:** explicit Online/Offline status is implemented in the current PR; temporary-unavailable and on-trip state integration remain follow-up work.
 4. **Offer notifications:** SignalR/push delivery only after durable state is written; reconnect must fetch authoritative state.
 5. **Production hardening:** replace demo/in-memory boundaries, secure Ops/union-manager RBAC, audit, privacy/retention, observability and device/Cosmos integration tests.
 
@@ -73,8 +74,8 @@ Priority/Normal driver tiers and commission model are intentionally parked until
 - Do not commit secrets or real personal data.
 - If a decision depends on partner input, park it rather than guessing.
 
-## Current implementation increment (PR in progress)
-Durable offer persistence foundation is being introduced on `feature/durable-ride-offer-foundation`:
+## Current implementation increment (merged)
+Durable offer persistence foundation was introduced on `feature/durable-ride-offer-foundation`:
 - One aggregate document per ride in `RideOffers` (`/rideId`), with current offer identity/deadline/status and retained attempt history.
 - Create-if-absent prevents a second aggregate for the same ride.
 - ETag-conditional replacement protects concurrent transitions.
@@ -85,6 +86,19 @@ Durable offer persistence foundation is being introduced on `feature/durable-rid
 This stage is persistence groundwork, not end-to-end dispatch. Next: implement the server-owned offer state machine/orchestrator and expiry worker; then wire driver offer endpoints and SignalR notifications. Preserve one pending offer per ride and one pending offer per driver. Use conditional writes and explicit recovery for cross-partition ride/queue coordination.
 
 
-## Server-owned expiry increment (PR in progress)
+## Server-owned expiry increment (merged in PR #25)
 
 A hosted worker polls overdue durable offers in bounded batches in Cosmos and in-memory modes. Queue rotation is idempotent by offer ID; the Cosmos queue entry persists the last applied offer ID and uses ETag conditional replacement. The offer is marked Expired only after queue rotation succeeds. If the process stops between those operations, replay observes the marker and safely completes offer resolution. Missing queue membership leaves the offer pending for retry. This is not a cross-container transaction and the legacy ride accept/reject endpoints are not yet fenced by durable offer IDs; automatic next-driver dispatch and exclusive reservation remain future work.
+
+
+## Driver availability increment (PR in progress)
+
+- Driver profiles persist AvailabilityStatus (Offline by default for existing and new profiles).
+- Approved drivers can go Online/Offline through authenticated driver endpoints.
+- Going Online appends the driver to the back of their approved zone/service-class FIFO queue; repeating the request is idempotent.
+- Going Offline removes queue membership and is blocked while the driver has an active ride.
+- Queue join, available-rides, accept, reject and timeout paths require Online status.
+- Driver app displays server-loaded availability and exposes Go Online/Go Offline controls.
+- Cosmos driver-profile persistence uses the existing Drivers container; queue changes use the existing queue store. Cross-container writes are not atomic.
+- CI is the validation gate; no local build/test is claimed.
+- Next: review CI and manual API/mobile acceptance, then continue exclusive driver/ride reservation and dispatch offer delivery.
