@@ -13,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
 
 namespace TurnOva.Tests;
