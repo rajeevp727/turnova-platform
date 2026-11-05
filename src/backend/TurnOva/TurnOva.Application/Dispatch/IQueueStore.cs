@@ -8,4 +8,5 @@ public interface IQueueStore
     Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken);
     Task<bool> RemoveAsync(string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken);
     Task<bool> MoveToBackAsync(string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken);
+    Task<bool> MoveToBackOnceAsync(string driverId, string zoneId, string serviceClass, string offerId, CancellationToken cancellationToken);
 }

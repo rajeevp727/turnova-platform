@@ -91,6 +91,26 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         }
     }
 
+    public async Task<bool> MoveToBackOnceAsync(string driverId, string zoneId, string serviceClass, string offerId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(offerId)) throw new ArgumentException("Offer ID is required.", nameof(offerId));
+        var key = QueueKey(zoneId, serviceClass);
+        try
+        {
+            var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(driverId, new PartitionKey(key), cancellationToken: cancellationToken);
+            var document = response.Resource;
+            if (document.LastRotationOfferId == offerId) return true;
+            document.JoinedAt = DateTimeOffset.UtcNow;
+            document.Sequence = document.JoinedAt.UtcTicks;
+            document.LastRotationOfferId = offerId;
+            await queueContainer.ReplaceItemAsync(document, driverId, new PartitionKey(key),
+                new ItemRequestOptions { IfMatchEtag = response.ETag }, cancellationToken);
+            return true;
+        }
+        catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+        { return false; }
+    }
+
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
 
@@ -104,5 +124,6 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         public DateTimeOffset JoinedAt { get; set; }
         public long Sequence { get; set; }
         public bool IsEligible { get; set; }
+        public string? LastRotationOfferId { get; set; }
     }
 }

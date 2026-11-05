@@ -9,6 +9,7 @@ public sealed class InMemoryQueueStore : IQueueStore
 {
     private readonly ConcurrentDictionary<string, FifoQueue> _queues = new();
     private long _sequence;
+    private readonly ConcurrentDictionary<string, string> _rotations = new(StringComparer.Ordinal);
 
     public Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
@@ -62,6 +63,26 @@ public sealed class InMemoryQueueStore : IQueueStore
                 JoinedAt = DateTimeOffset.UtcNow,
                 Sequence = Interlocked.Increment(ref _sequence)
             });
+            return Task.FromResult(true);
+        }
+    }
+
+    public Task<bool> MoveToBackOnceAsync(string driverId, string zoneId, string serviceClass, string offerId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(offerId)) throw new ArgumentException("Offer ID is required.", nameof(offerId));
+        var key = Key(zoneId, serviceClass);
+        if (!_queues.TryGetValue(key, out var queue)) return Task.FromResult(false);
+        lock (queue)
+        {
+            var current = queue.Entries.FirstOrDefault(entry => entry.DriverId == driverId);
+            if (current is null) return Task.FromResult(false);
+            var rotationKey = $"{key}|{driverId}";
+            if (_rotations.TryGetValue(rotationKey, out var lastOfferId) && lastOfferId == offerId)
+                return Task.FromResult(true);
+            queue.Remove(driverId);
+            queue.Enqueue(current with { JoinedAt = DateTimeOffset.UtcNow, Sequence = Interlocked.Increment(ref _sequence) });
+            _rotations[rotationKey] = offerId;
             return Task.FromResult(true);
         }
     }

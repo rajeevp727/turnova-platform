@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `89854a7f088b131363c2ff44e71e0d29aa974152` (PR #22)
+**Current main HEAD at start of this increment:** `1c10ccdb5d191b3dd635135dedad954807a78a47` (PR #24)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -40,11 +40,11 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #22: merged — FIFO queue-head enforcement at available-rides, accept and reject API boundaries.
 - PR #22 CI: GitHub Actions `TurnOva CI` completed successfully. Its PR description notes no local build/test was run by the author; CI is the validation evidence.
 - PR #23: merged — added this project brain; its GitHub Actions `TurnOva CI` completed successfully.
-- Current feature branch `feature/durable-ride-offer-foundation`: adds the durable offer aggregate contract, Cosmos and in-memory stores, `RideOffers` migration, and store/state tests. Not yet merged; API dispatch orchestration and expiry worker are intentionally not wired in this stage.
+- PR #24: merged — durable ride-offer aggregate, Cosmos/in-memory stores, migration and state/store tests. Merge commit `1c10ccdb5d191b3dd635135dedad954807a78a47`; GitHub Actions CI passed.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
-1. **Durable server-controlled dispatch offers (P0):** persistent offer identity, one active offer per ride, expiry deadline, server-owned timeout worker, automatic retry/rotation, and recovery after process restart.
+1. **Server-owned offer expiry and FIFO recovery (P0):** worker scans overdue durable offers, rotates the target driver once per offer ID and resolves the offer with ETag protection. This increment does not yet dispatch the next driver.
 2. **Exclusive assignment/concurrency:** prevent one driver taking multiple active rides and one ride being assigned twice; use Cosmos ETags/partition-aware coordination.
 3. **Driver availability:** explicit online/offline/temporarily-unavailable state must participate in eligibility.
 4. **Offer notifications:** SignalR/push delivery only after durable state is written; reconnect must fetch authoritative state.
@@ -83,3 +83,8 @@ Durable offer persistence foundation is being introduced on `feature/durable-rid
 - PRD, architecture, test plan and this brain are updated in the same branch.
 
 This stage is persistence groundwork, not end-to-end dispatch. Next: implement the server-owned offer state machine/orchestrator and expiry worker; then wire driver offer endpoints and SignalR notifications. Preserve one pending offer per ride and one pending offer per driver. Use conditional writes and explicit recovery for cross-partition ride/queue coordination.
+
+
+## Server-owned expiry increment (PR in progress)
+
+A hosted worker polls overdue durable offers in bounded batches in Cosmos and in-memory modes. Queue rotation is idempotent by offer ID; the Cosmos queue entry persists the last applied offer ID and uses ETag conditional replacement. The offer is marked Expired only after queue rotation succeeds. If the process stops between those operations, replay observes the marker and safely completes offer resolution. Missing queue membership leaves the offer pending for retry. This is not a cross-container transaction and the legacy ride accept/reject endpoints are not yet fenced by durable offer IDs; automatic next-driver dispatch and exclusive reservation remain future work.

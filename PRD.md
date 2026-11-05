@@ -164,3 +164,8 @@ A free-tier-first approach is intended for development. Production hosting, maps
 ## 14. Open decisions before launch
 
 Initial zones and boundaries; vehicle categories and capacity; fares, taxes, commissions and cancellations; driver offer timeout and re-entry rules; cross-zone fallback; KYC requirements; maps, routing, OTP, payment and notification providers; safety/support escalation; retention and privacy policy; and applicable transport/aggregator requirements. These require product, legal and operational validation.
+
+
+### Server-owned expiry increment
+
+The API host runs a bounded background expiry worker in both Cosmos and in-memory modes. Expired offers are resolved by conditional state replacement and the associated driver is moved to the back of the same zone/service-class queue at most once for a given offer ID. A missing queue membership is retried rather than silently resolving the offer. This is an incremental recovery workflow; automatic next-driver delivery and atomic ride/driver reservation are not included.

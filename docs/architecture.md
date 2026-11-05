@@ -273,3 +273,8 @@ The dispatch-offer aggregate is stored in a dedicated `RideOffers` Cosmos contai
 The store contract supports lookup by ride, lookup of a driver's pending offer, bounded expiry scans, create-if-absent and ETag-conditional replacement. The local adapter is process-memory only; the Cosmos adapter uses item create/replace and ETags. The migration creates the container automatically.
 
 This is the persistence foundation only. API issuance/acceptance/rejection, a server-owned expiry worker, FIFO retry orchestration, durable ride/driver reservation coordination and SignalR/push delivery are not yet wired to this store. Do not claim production dispatch until those stages and Cosmos multi-instance integration tests are complete. Cross-partition atomicity with `Rides` and `QueueEntries` is not assumed.
+
+
+## Server-owned offer expiry (incremental)
+
+A hosted worker polls the durable offer store in bounded batches. For each overdue pending offer it performs queue rotation through an offer-ID-idempotent operation, then marks the offer and matching attempt Expired using the offer aggregate ETag. If the process stops after queue rotation but before offer resolution, replay sees the same offer ID marker and does not rotate twice. Missing queue membership or ETag conflict leaves the offer unresolved for a later retry. This workflow is not a cross-container transaction and does not yet fence legacy ride acceptance by offer ID; do not treat it as complete assignment/next-driver dispatch.
