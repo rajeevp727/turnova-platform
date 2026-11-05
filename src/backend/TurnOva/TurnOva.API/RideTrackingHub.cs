@@ -14,7 +14,19 @@ public sealed class RideTrackingHub(
         var userId = user?.FindFirstValue(ClaimTypes.NameIdentifier) ?? user?.FindFirstValue("sub");
         var isRider = user?.IsInRole("Rider") == true;
         var isDriver = user?.IsInRole("Driver") == true;
-        var rideId = Context.GetHttpContext()?.Request.Query["rideId"].ToString();
+        var httpContext = Context.GetHttpContext();
+        var rideId = httpContext?.Request.Query["rideId"].ToString();
+        var requestedDriverId = httpContext?.Request.Query["driverId"].ToString();
+
+        // Driver offer subscriptions are scoped to the authenticated driver's own identity.
+        if (isDriver && !string.IsNullOrWhiteSpace(userId) &&
+            string.Equals(requestedDriverId, userId, StringComparison.Ordinal) &&
+            string.IsNullOrWhiteSpace(rideId))
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"driver:{userId}");
+            await base.OnConnectedAsync();
+            return;
+        }
 
         if ((!isRider && !isDriver) || string.IsNullOrWhiteSpace(userId) ||
             string.IsNullOrWhiteSpace(rideId))

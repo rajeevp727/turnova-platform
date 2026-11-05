@@ -438,3 +438,16 @@ Online/offline availability is server-authoritative. Mobile controls are present
 | RESERVE-007 | API process stops between reservation and ride update | Reservation may remain held; reconciliation is a tracked production blocker | Failure injection | P0 |
 
 In-memory store concurrency tests are included in CI. Multi-instance Cosmos races and crash-window recovery require a real development Cosmos account and are not claimed as executed by CI unless separately configured.
+
+
+## FIFO offer delivery checks
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| OFFER-001 | Ride request with an eligible online FIFO head | Offer is persisted before `RideOfferReceived` is emitted | API/SignalR integration | P0 |
+| OFFER-002 | No eligible FIFO driver | Ride remains requested and no offer notification is sent | API integration | P0 |
+| OFFER-003 | Driver connects with its own authenticated driverId | Connection joins only its own offer group | SignalR security | P0 |
+| OFFER-004 | Driver requests another driver's group | Connection is aborted | SignalR security | P0 |
+| OFFER-005 | Driver reconnects with pending offer | Pending-offer endpoint returns offer and expiry | API | P0 |
+| OFFER-006 | Wrong driver, resolved offer or expired offer accepts | HTTP 409 and no assignment | API/security | P0 |
+
+Cross-document atomicity, outbox retries, and next-driver progression after rejection/expiry remain production blockers.

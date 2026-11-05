@@ -281,3 +281,7 @@ This is the persistence foundation only. API issuance/acceptance/rejection, a se
 ## Server-owned offer expiry (incremental)
 
 A hosted worker polls the durable offer store in bounded batches. For each overdue pending offer it performs queue rotation through an offer-ID-idempotent operation, then marks the offer and matching attempt Expired using the offer aggregate ETag. If the process stops after queue rotation but before offer resolution, replay sees the same offer ID marker and does not rotate twice. Missing queue membership or ETag conflict leaves the offer unresolved for a later retry. This workflow is not a cross-container transaction and does not yet fence legacy ride acceptance by offer ID; do not treat it as complete assignment/next-driver dispatch.
+
+
+## FIFO offer delivery (incremental)
+The API persists an initial ride offer for the current FIFO head before sending a SignalR event to that driver's authenticated group. The driver can recover the pending offer after reconnect via an authenticated API read. Acceptance verifies offer ownership, pending status and deadline before the existing ride reservation/ETag guards. Ride and offer documents are separate Cosmos aggregates; their writes are not atomic. Durable outbox delivery, automatic progression after rejection/expiry, and crash recovery are still production blockers.
