@@ -352,3 +352,17 @@ Validate on Android and iOS physical devices, including system appearance change
 | UNION-SELFIE-018 | Transfer requires new union approval | Transfer driver after photo was approved by prior union | New union member list hides photo until new union approves | API | P0 |
 | UNION-SELFIE-019 | Driver sees own approval state | Open driver Profile after union decision | Driver sees current photo, approval state and rejection reason when present | Mobile | P1 |
 | UNION-SELFIE-020 | Pending image not exposed in member list | Query active union members before approval | Photo Base64 is null; no pending photo is exposed in list results | API + security | P0 |
+
+
+## FIFO rejection and offer-timeout rotation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| FIFO-ROT-001 | Front driver rejects an available ride | Driver moves behind existing queue members; next eligible driver becomes first | API integration | P0 |
+| FIFO-ROT-002 | Front driver acknowledges an expired offer | Driver moves to the back and API returns next driver ID and updated position | API integration | P0 |
+| FIFO-ROT-003 | Non-front driver reports offer timeout | HTTP 409; queue order remains unchanged | API security | P0 |
+| FIFO-ROT-004 | Driver reports timeout for another zone/service class | HTTP 403; no queue membership changes | API security | P0 |
+| FIFO-ROT-005 | Move a driver not present in queue | Returns false; queue remains unchanged | Unit | P1 |
+| FIFO-ROT-006 | Concurrent Cosmos queue update conflicts with rotation | ETag precondition failure is reported as unsuccessful rotation; caller must refresh queue | Cosmos integration | P0 |
+
+The timeout endpoint is a client acknowledgement, not a server-side timer. Server-owned offer expiry, offer IDs and retry/recovery behavior remain unimplemented and must be completed before production dispatch.
