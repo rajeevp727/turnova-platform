@@ -242,3 +242,10 @@ Both Expo applications implement a shared visual contract with equivalent local 
 ### Union approval for driver profile selfies
 
 A driver's selfie is private by default. The driver onboarding profile stores photo approval status, approving union ID, review timestamp and rejection reason. Uploading or replacing a selfie resets approval to Pending and clears the approving union. The review action is allowed only for the driver's currently active union assignment. Approval is scoped to that union: a transfer to another union automatically hides the old approval. Union member-list responses suppress the Base64 image unless the photo is Approved by the union that currently owns the assignment. The member-detail review endpoint remains operations-protected and can return a pending image for inspection. The current union review endpoint uses the shared operations admin key temporarily; authenticated union-manager RBAC and actor-level audit records are required before production.
+
+
+## 23. FIFO queue rotation after rejection and offer timeout
+
+A driver who rejects an available ride while at the head of their zone/service-class queue is moved to the back of that same queue. The next eligible member becomes the head. An offer-timeout acknowledgement follows the same rule: only the currently queued head driver can submit it, and the API returns the next driver ID and the caller's new position. Drivers cannot rotate another driver's membership. In-memory rotation is serialized under the queue lock. Cosmos rotation uses an ETag-conditional item replacement so concurrent queue changes do not silently overwrite each other.
+
+The timeout endpoint is an authenticated acknowledgement from the Driver client after its offer timer expires; it is not yet an independent server-side offer scheduler. A later dispatch-offer increment must persist offer IDs, deadlines and delivery state, and have the server expire offers even when a mobile client is offline. Ride-to-zone matching, automated offer delivery and server-owned timeout scheduling remain separate dispatch-engine work.
