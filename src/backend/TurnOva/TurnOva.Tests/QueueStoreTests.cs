@@ -86,4 +86,57 @@ public sealed class QueueStoreTests
     private static DriverQueueEntry Entry(
         string driverId, string zoneId, string serviceClass, DateTimeOffset joinedAt) =>
         new(driverId, zoneId, serviceClass, joinedAt, 0, true);
+
+    [Fact]
+    public async Task MoveToBackOnceAsync_DoesNotRotateTwiceForTheSameOffer()
+    {
+        var store = new InMemoryQueueStore();
+        var start = DateTimeOffset.Parse("2026-11-05T00:00:00Z");
+        await store.AddAsync(Entry("driver-a", "zone-a", "auto", start), CancellationToken.None);
+        await store.AddAsync(Entry("driver-b", "zone-a", "auto", start.AddMinutes(1)), CancellationToken.None);
+        await store.AddAsync(Entry("driver-c", "zone-a", "auto", start.AddMinutes(2)), CancellationToken.None);
+
+        Assert.True(await store.MoveToBackOnceAsync("driver-a", "zone-a", "auto", "offer-1", CancellationToken.None));
+        var afterFirstRotation = await store.GetEligibleAsync("zone-a", "auto", CancellationToken.None);
+        Assert.Equal(new[] { "driver-b", "driver-c", "driver-a" }, afterFirstRotation.Select(entry => entry.DriverId));
+
+        Assert.True(await store.MoveToBackOnceAsync("driver-a", "zone-a", "auto", "offer-1", CancellationToken.None));
+        var afterRetry = await store.GetEligibleAsync("zone-a", "auto", CancellationToken.None);
+
+        Assert.Equal(afterFirstRotation.Select(entry => entry.DriverId), afterRetry.Select(entry => entry.DriverId));
+    }
+
+    [Fact]
+    public async Task MoveToBackOnceAsync_AllowsANewOfferToRotateTheDriverAgain()
+    {
+        var store = new InMemoryQueueStore();
+        var start = DateTimeOffset.Parse("2026-11-05T00:00:00Z");
+        await store.AddAsync(Entry("driver-a", "zone-a", "auto", start), CancellationToken.None);
+        await store.AddAsync(Entry("driver-b", "zone-a", "auto", start.AddMinutes(1)), CancellationToken.None);
+        await store.AddAsync(Entry("driver-c", "zone-a", "auto", start.AddMinutes(2)), CancellationToken.None);
+
+        Assert.True(await store.MoveToBackOnceAsync("driver-a", "zone-a", "auto", "offer-1", CancellationToken.None));
+        Assert.True(await store.MoveToBackAsync("driver-b", "zone-a", "auto", CancellationToken.None));
+        Assert.True(await store.MoveToBackOnceAsync("driver-a", "zone-a", "auto", "offer-2", CancellationToken.None));
+
+        var queue = await store.GetEligibleAsync("zone-a", "auto", CancellationToken.None);
+        Assert.Equal(new[] { "driver-c", "driver-b", "driver-a" }, queue.Select(entry => entry.DriverId));
+    }
+
+    [Fact]
+    public async Task MoveToBackOnceAsync_ReturnsFalse_WhenDriverIsNotInQueue()
+    {
+        var store = new InMemoryQueueStore();
+        var moved = await store.MoveToBackOnceAsync("missing-driver", "zone-a", "auto", "offer-1", CancellationToken.None);
+        Assert.False(moved);
+    }
+
+    [Fact]
+    public async Task MoveToBackOnceAsync_RejectsAnEmptyOfferId()
+    {
+        var store = new InMemoryQueueStore();
+        await store.AddAsync(Entry("driver-a", "zone-a", "auto", DateTimeOffset.UtcNow), CancellationToken.None);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.MoveToBackOnceAsync("driver-a", "zone-a", "auto", " ", CancellationToken.None));
+    }
 }
