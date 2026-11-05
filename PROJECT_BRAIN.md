@@ -39,6 +39,8 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #21: merged — Copilot agent profiles and repository engineering guardrails.
 - PR #22: merged — FIFO queue-head enforcement at available-rides, accept and reject API boundaries.
 - PR #22 CI: GitHub Actions `TurnOva CI` completed successfully. Its PR description notes no local build/test was run by the author; CI is the validation evidence.
+- PR #23: merged — added this project brain; its GitHub Actions `TurnOva CI` completed successfully.
+- Current feature branch `feature/durable-ride-offer-foundation`: adds the durable offer aggregate contract, Cosmos and in-memory stores, `RideOffers` migration, and store/state tests. Not yet merged; API dispatch orchestration and expiry worker are intentionally not wired in this stage.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
@@ -71,5 +73,13 @@ Priority/Normal driver tiers and commission model are intentionally parked until
 - Do not commit secrets or real personal data.
 - If a decision depends on partner input, park it rather than guessing.
 
-## Next recommended increment
-Design and implement durable server-owned ride offers. First inspect current ride and queue stores, Cosmos container partition keys, DI and test seams. Prefer an explicit offer state machine and concurrency design before editing endpoints. Ensure only the current driver's active offer is actionable; do not broadcast all requested rides to all drivers.
+## Current implementation increment (PR in progress)
+Durable offer persistence foundation is being introduced on `feature/durable-ride-offer-foundation`:
+- One aggregate document per ride in `RideOffers` (`/rideId`), with current offer identity/deadline/status and retained attempt history.
+- Create-if-absent prevents a second aggregate for the same ride.
+- ETag-conditional replacement protects concurrent transitions.
+- Bounded expired-offer scan and driver-pending-offer lookup are part of the store contract.
+- Cosmos migration and in-memory adapter are included.
+- PRD, architecture, test plan and this brain are updated in the same branch.
+
+This stage is persistence groundwork, not end-to-end dispatch. Next: implement the server-owned offer state machine/orchestrator and expiry worker; then wire driver offer endpoints and SignalR notifications. Preserve one pending offer per ride and one pending offer per driver. Use conditional writes and explicit recovery for cross-partition ride/queue coordination.
