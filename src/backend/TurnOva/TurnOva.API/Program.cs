@@ -1111,12 +1111,17 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueS
         string.Equals(ride.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)));
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, QueueService queueService, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, QueueService queueService, IHubContext<RideTrackingHub> hub, IRideOfferStore offerStore, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online") return Results.Forbid();
+    var pendingOffer = await offerStore.GetByRideAsync(rideId, ct);
+    if (pendingOffer is not null &&
+        (!pendingOffer.IsPending || pendingOffer.DriverId != driverId ||
+         pendingOffer.IsExpiredAt(TimeProvider.System.GetUtcNow())))
+        return Results.Conflict(new { message = "This ride offer is no longer assigned to you or has expired." });
     var queue = await queueService.GetPositionedQueueAsync(approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
     if (queue.FirstOrDefault()?.DriverId != driverId)
         return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can accept a ride." });
@@ -1137,6 +1142,15 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
             await driverRideReservations.TryReleaseAsync(driverId, rideId, ct);
             return Results.Conflict(new { message = "Another driver accepted this ride." });
         }
+        if (pendingOffer is not null && !string.IsNullOrWhiteSpace(pendingOffer.ETag))
+        {
+            var resolvedAttempts = pendingOffer.Attempts.Select(attempt =>
+                attempt.OfferId == pendingOffer.CurrentOfferId
+                    ? attempt with { Status = RideOfferStatuses.Accepted, ResolvedAtUtc = TimeProvider.System.GetUtcNow() }
+                    : attempt).ToArray();
+            await offerStore.TryReplaceAsync(pendingOffer with
+                { Status = RideOfferStatuses.Accepted, Attempts = resolvedAttempts }, pendingOffer.ETag, ct);
+        }
         await RecordWorkActivityAsync(driverId, rideId, "Accepted", acceptedInMemory.AcceptedAt!.Value, ct);
         await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = acceptedInMemory.Status }, ct);
         return Results.Ok(acceptedInMemory);
@@ -1156,6 +1170,15 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
         await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+        if (pendingOffer is not null && !string.IsNullOrWhiteSpace(pendingOffer.ETag))
+        {
+            var resolvedAttempts = pendingOffer.Attempts.Select(attempt =>
+                attempt.OfferId == pendingOffer.CurrentOfferId
+                    ? attempt with { Status = RideOfferStatuses.Accepted, ResolvedAtUtc = TimeProvider.System.GetUtcNow() }
+                    : attempt).ToArray();
+            await offerStore.TryReplaceAsync(pendingOffer with
+                { Status = RideOfferStatuses.Accepted, Attempts = resolvedAttempts }, pendingOffer.ETag, ct);
+        }
         await RecordWorkActivityAsync(driverId, rideId, "Accepted", accepted.AcceptedAt!.Value, ct);
         await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = accepted.Status }, ct);
         return Results.Ok(accepted);
