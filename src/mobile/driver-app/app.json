@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "TurnOva Driver",
+    "slug": "turnova-driver",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "icon": "./assets/icon.png"
+    },
+    "android": {
+      "package": "com.turnova.driver",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#061D3D"
+      }
+    },
+    "icon": "./assets/icon.png",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow TurnOva to take a driver profile selfie for union membership."
+        }
+      ]
+    ]
+  }
+}

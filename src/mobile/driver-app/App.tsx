@@ -1,0 +1,440 @@
+import { StatusBar } from "expo-status-bar";
+import * as SecureStore from "expo-secure-store";
+import * as Location from "expo-location";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
+import { useCallback, useEffect, useState } from "react";
+import { useColorScheme, Image } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import TurnOvaLogo from "./TurnOvaLogo";
+
+type ThemePreference = "light" | "dark" | "system";
+type ThemeColors = {
+  background: string; header: string; surface: string; text: string; muted: string;
+  border: string; accent: string; accentText: string; subtle: string; label: string;
+  danger: string; success: string; tabInactive: string; tabActive: string;
+};
+const lightColors: ThemeColors = {
+  background: "#F4F6F8", header: "#14283F", surface: "#FFFFFF", text: "#172B42",
+  muted: "#718094", border: "#E2E8EE", accent: "#087BFA", accentText: "#FFFFFF",
+  subtle: "#B8C5D2", label: "#8290A0", danger: "#B42318", success: "#237A54",
+  tabInactive: "#8793A2", tabActive: "#087BFA"
+};
+const darkColors: ThemeColors = {
+  background: "#0F1722", header: "#101D2B", surface: "#182536", text: "#E8EEF5",
+  muted: "#A6B3C2", border: "#344457", accent: "#18DDB9", accentText: "#06243D",
+  subtle: "#A6B3C2", label: "#A6B3C2", danger: "#FF8A80", success: "#70D6A0",
+  tabInactive: "#9AA9B9", tabActive: "#18DDB9"
+};
+const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
+const ZONE = "hyderabad-central";
+const DEFAULT_SERVICE_CLASS = "auto";
+type Tokens = { accessToken: string; refreshToken: string };
+type User = { id: string; email: string; name?: string; role: string };
+type QueueEntry = { driverId: string; position: number; joinedAt: string };
+type QueueMembership = { isQueued: boolean; position: number | null };
+
+async function saveTokens(tokens: Tokens) {
+  await SecureStore.setItemAsync("turnova.access", tokens.accessToken);
+  await SecureStore.setItemAsync("turnova.refresh", tokens.refreshToken);
+}
+async function clearTokens() {
+  await SecureStore.deleteItemAsync("turnova.access");
+  await SecureStore.deleteItemAsync("turnova.refresh");
+}
+async function jsonRequest(path: string, init: RequestInit = {}, token?: string) {
+  const response = await fetch(`${API}${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message ?? body.title ?? "Request failed.");
+  return body;
+}
+
+export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
+  const systemColorScheme = useColorScheme();
+  const [tokens, setTokens] = useState<Tokens | null>(null);
+  const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Payslips" | "Profile">("Home");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const [membership, setMembership] = useState<QueueMembership>({ isQueued: false, position: null });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [availableRides, setAvailableRides] = useState<any[]>([]);
+  const [activeRide, setActiveRide] = useState<any>(null);
+  const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
+  const [driverName, setDriverName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [vehicleMake, setVehicleMake] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [vehicleRegistration, setVehicleRegistration] = useState("");
+  const [licenceReference, setLicenceReference] = useState("");
+  const [registrationReference, setRegistrationReference] = useState("");
+  const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
+  const [serviceClass, setServiceClass] = useState(DEFAULT_SERVICE_CLASS);
+
+  useEffect(() => {
+    let mounted = true;
+    void SecureStore.getItemAsync("turnova.theme").then(value => {
+      if (mounted && (value === "light" || value === "dark" || value === "system")) setThemePreference(value);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
+  const selectTheme = (preference: ThemePreference) => {
+    setThemePreference(preference);
+    void SecureStore.setItemAsync("turnova.theme", preference);
+  };
+
+  const acceptSession = useCallback(async (result: any) => {
+    const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
+    await saveTokens(next);
+    setTokens(next);
+    setUser(result.user);
+    setError("");
+  }, []);
+
+  const refreshSession = useCallback(async (refreshToken: string) => {
+    const result = await jsonRequest("/api/v1/auth/refresh", {
+      method: "POST", body: JSON.stringify({ refreshToken })
+    });
+    await acceptSession(result);
+    return result.accessToken as string;
+  }, [acceptSession]);
+
+  const apiFetch = useCallback(async (path: string, init: RequestInit = {}) => {
+    if (!tokens) throw new Error("Please sign in again.");
+    let response = await fetch(`${API}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens.accessToken}`, ...init.headers }
+    });
+    if (response.status === 401) {
+      const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
+      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); throw new Error("Session expired. Please sign in again."); }
+      let accessToken: string;
+      try {
+        accessToken = await refreshSession(refreshToken);
+      } catch {
+        await clearTokens();
+        setTokens(null);
+        setUser(null);
+        throw new Error("Session expired. Please sign in again.");
+      }
+      response = await fetch(`${API}${path}`, {
+        ...init,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...init.headers }
+      });
+    }
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.message ?? body.title ?? "Request failed.");
+    return body;
+  }, [tokens, refreshSession]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const accessToken = await SecureStore.getItemAsync("turnova.access");
+        const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
+        if (accessToken && refreshToken) {
+          try {
+            const me = await jsonRequest("/api/v1/auth/me", {}, accessToken);
+            if (active) { setTokens({ accessToken, refreshToken }); setUser(me); }
+          } catch {
+            try {
+              const result = await jsonRequest("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) });
+              if (active) await acceptSession(result);
+            } catch { await clearTokens(); }
+          }
+        }
+      } catch (e) { if (active) setError("Unable to restore your session."); }
+      finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [acceptSession]);
+
+  const authenticate = async (replaceOldest = false) => {
+    setLoading(true); setError(""); setNotice("");
+    try {
+      const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
+      const result = await jsonRequest(path, {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), password, name: name.trim() || null, replaceOldest })
+      });
+      await acceptSession(result);
+    } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed."); }
+    finally { setLoading(false); }
+  };
+
+  const loadQueue = useCallback(async () => {
+    try {
+      const [data, current] = await Promise.all([
+        apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}`),
+        apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}/me`)
+      ]);
+      setQueue(data);
+      setMembership(current);
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to load queue."); }
+  }, [apiFetch, serviceClass]);
+  useEffect(() => { if (user && tab === "Queue") void loadQueue(); }, [user, tab, loadQueue]);
+
+  const joinQueue = async () => {
+    if (!user) return;
+    setLoading(true); setError("");
+    try {
+      const result = await apiFetch("/api/v1/queues/join", {
+        method: "POST",
+        body: JSON.stringify({ zoneId: ZONE, serviceClass })
+      });
+      setNotice(result.message ?? "You joined the queue.");
+      await loadQueue();
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to join queue."); }
+    finally { setLoading(false); }
+  };
+
+  const leaveQueue = async () => {
+    setLoading(true); setError(""); setNotice("");
+    try {
+      await apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}/me`, { method: "DELETE" });
+      setNotice("You left the queue. You can join again whenever you're ready.");
+      await loadQueue();
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to leave queue."); }
+    finally { setLoading(false); }
+  };
+
+  const loadAvailableRides = async () => { try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); } catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); } };
+  const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
+  const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Ride declined. It remains available to other drivers."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
+  useEffect(() => {
+    if (!user || tab !== "Trips" || !activeRide) return;
+    const connection = new HubConnectionBuilder()
+      .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
+        accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens?.accessToken ?? "",
+        transport: HttpTransportType.WebSockets
+      })
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
+    connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
+      if (update.rideId === activeRide.rideId) setActiveRide((current: any) => current ? { ...current, status: update.status, locationSharingActive: ["Accepted", "Arrived", "InProgress"].includes(update.status) } : current);
+    });
+    void connection.start().catch(() => {});
+    return () => { void connection.stop(); };
+  }, [user, tab, activeRide?.rideId, tokens?.accessToken]);
+
+  useEffect(() => { if (!user || tab !== "Trips" || !activeRide || !activeRide.locationSharingActive || !["Accepted", "Arrived", "InProgress"].includes(activeRide.status)) return; let subscription: Location.LocationSubscription | undefined; let mounted = true; (async () => { const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) { setError("Location permission is required to share your position with the rider."); return; } subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 }, location => { if (mounted) void apiFetch(`/api/v1/rides/${activeRide.rideId}/location`, { method: "POST", body: JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }) }).catch(e => setError(e instanceof Error ? e.message : "Unable to update location.")); }); })(); return () => { mounted = false; subscription?.remove(); }; }, [user, tab, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
+
+  const advanceRide = async (action: "arrive" | "start" | "complete") => { if (!activeRide) return; try { const updated = await apiFetch(`/api/v1/rides/${activeRide.rideId}/${action}`, { method: "POST" }); setActiveRide(updated); setNotice(action === "arrive" ? "Arrival confirmed." : action === "start" ? "Trip started." : "Trip completed. Location sharing stopped."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to update ride status."); } };
+
+
+  const downloadPayslip = async (year: number, month: number) => {
+    if (!tokens) return;
+    setLoading(true); setError(""); setNotice("");
+    try {
+      let accessToken = tokens.accessToken;
+      let response = await fetch(`${API}/api/v1/driver/payslips/${year}/${month}.pdf`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (response.status === 401) {
+        const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
+        if (!refreshToken) throw new Error("Session expired. Please sign in again.");
+        accessToken = await refreshSession(refreshToken);
+        response = await fetch(`${API}/api/v1/driver/payslips/${year}/${month}.pdf`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+      }
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message ?? body.title ?? "Payslip is not available yet.");
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join("");
+      const base64 = btoa(binary);
+      const filename = `TurnOva-Payslip-${year}-${String(month).padStart(2, "0")}.pdf`;
+      const uri = `${FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: filename });
+        setNotice(`PDF payslip for ${month}/${year} is ready to save or share.`);
+      } else {
+        setNotice(`PDF saved to the app cache: ${filename}`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to download payslip.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOnboarding = useCallback(async () => {
+    try {
+      const profile = await apiFetch("/api/v1/driver/onboarding/me");
+      if (profile?.driverId) {
+        setOnboardingProfile(profile);
+        setProfilePhotoBase64(profile.profilePhotoBase64 ?? "");
+        setServiceClass(profile.serviceClass ?? DEFAULT_SERVICE_CLASS);
+        setDriverName(profile.fullName ?? "");
+        setPhoneNumber(profile.phoneNumber ?? "");
+        setVehicleMake(profile.vehicleMake ?? "");
+        setVehicleModel(profile.vehicleModel ?? "");
+        setVehicleRegistration(profile.vehicleRegistration ?? "");
+        setLicenceReference(profile.documents?.find((document: any) => document.documentType === "DrivingLicence")?.storageReference ?? "");
+        setRegistrationReference(profile.documents?.find((document: any) => document.documentType === "VehicleRegistration")?.storageReference ?? "");
+      }
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to load onboarding profile."); }
+  }, [apiFetch]);
+
+  useEffect(() => { if (user) void loadOnboarding(); }, [user, loadOnboarding]);
+
+  const captureSelfie = async () => {
+    setError(""); setNotice("");
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) throw new Error("Camera permission is required to capture your driver selfie.");
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        cameraType: ImagePicker.CameraType.front,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.55,
+        base64: true
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) throw new Error("Unable to read the captured selfie. Please try again.");
+      const compressed = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 512, height: 512 } }],
+        { compress: 0.55, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      const photo = compressed.base64;
+      if (!photo) throw new Error("Unable to compress the captured selfie. Please try again.");
+      if (photo.length > 410_000) throw new Error("Selfie is too large. Retake it in good lighting.");
+      setProfilePhotoBase64(photo);
+      if (onboardingProfile?.driverId) {
+        const updated = await apiFetch("/api/v1/driver/onboarding/selfie", {
+          method: "PUT",
+          body: JSON.stringify({ profilePhotoBase64: photo })
+        });
+        setOnboardingProfile(updated);
+        setNotice("Driver selfie saved to your profile.");
+      } else {
+        setNotice("Selfie captured. It will be saved when you submit onboarding.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to capture driver selfie.");
+    }
+  };
+
+  const submitOnboarding = async () => {
+    setLoading(true); setError(""); setNotice("");
+    try {
+      const profile = await apiFetch("/api/v1/driver/onboarding", {
+        method: "POST",
+        body: JSON.stringify({
+          zoneId: ZONE,
+          fullName: driverName,
+          phoneNumber,
+          vehicleMake,
+          vehicleModel,
+          vehicleRegistration,
+          serviceClass,
+          passengerCapacity: 3,
+          profilePhotoBase64,
+          documents: [
+            { documentType: "DrivingLicence", storageReference: licenceReference },
+            { documentType: "VehicleRegistration", storageReference: registrationReference }
+          ]
+        })
+      });
+      setOnboardingProfile(profile);
+      setNotice("Onboarding submitted. Queue and ride access will unlock after approval.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to submit onboarding."); }
+    finally { setLoading(false); }
+  };
+
+  const logout = async () => {
+    try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
+    catch { /* Local credentials are cleared even if the network is unavailable. */ }
+    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null });
+  };
+
+  const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
+  const colors = resolvedTheme === "dark" ? darkColors : lightColors;
+  const styles = createStyles(colors);
+  const themePicker = <View style={styles.themePicker}>
+    {(["system", "light", "dark"] as const).map(option => <Pressable key={option} onPress={() => selectTheme(option)} style={[styles.themeOption, themePreference === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, themePreference === option && styles.themeOptionTextSelected]}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</Text></Pressable>)}
+  </View>;
+  if (loading && !user) return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{ marginTop: 80 }} /></SafeAreaView>;
+  if (!user) return (
+    <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
+      <View style={styles.header}><TurnOvaLogo subtitle="Everyone’s Turn Matters." /></View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.eyebrow}>DRIVER PARTNER</Text><Text style={styles.title}>{mode === "login" ? "Welcome back" : "Create your account"}</Text>
+        <Text style={styles.sub}>Sign in securely with your email and password.</Text>{themePicker}
+        <View style={styles.card}>
+          {mode === "register" && <TextInput value={name} onChangeText={setName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full name" autoCapitalize="words" />}
+          <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholderTextColor={colors.muted} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+          <TextInput value={password} onChangeText={setPassword} style={styles.input} placeholderTextColor={colors.muted} placeholder="Password" secureTextEntry />
+          <Pressable style={styles.primary} disabled={loading || !email.trim() || !password} onPress={() => void authenticate()}><Text style={styles.primaryText}>{loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create driver account"}</Text></Pressable>
+          <Pressable onPress={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}><Text style={styles.link}>{mode === "login" ? "New to TurnOva? Create an account" : "Already registered? Sign in"}</Text></Pressable>
+          {!!error && <Text style={styles.error}>{error}</Text>}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+
+  const position = membership.position;
+  const tabs = ["Home", "Queue", "Trips", "Payslips", "Profile"] as const;
+  return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
+    <View style={styles.header}><TurnOvaLogo subtitle={`Driver partner · ${user.name || user.email}`} compact /><Text style={styles.role}>DRIVER</Text></View>
+    <ScrollView contentContainerStyle={styles.content}>
+      {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · {serviceClass.toUpperCase()}</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>View queue</Text></Pressable></View></>}
+      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · {serviceClass.toUpperCase()}</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void (membership.isQueued ? loadQueue() : joinQueue())} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : membership.isQueued ? "Refresh queue" : "Join FIFO queue"}</Text></Pressable>{membership.isQueued && <Pressable style={styles.secondary} onPress={() => void leaveQueue()} disabled={loading}><Text style={styles.secondaryText}>Leave queue</Text></Pressable>}<Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
+      {tab === "Trips" && <><Text style={styles.title}>Ride requests</Text><View style={styles.card}><Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh requests</Text></Pressable>{availableRides.map(item=><View key={item.rideId} style={{marginTop:14}}><Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text><Text style={styles.muted}>{item.passengers} passenger(s) · {item.rideId}</Text><View style={{ flexDirection: "row", gap: 10 }}><Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void acceptRide(item.rideId)}><Text style={styles.secondaryText}>Accept ride</Text></Pressable><Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void rejectRide(item.rideId)}><Text style={styles.secondaryText}>Decline</Text></Pressable></View></View>)}{activeRide&&<><Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>{activeRide.status==="Accepted"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("arrive")}><Text style={styles.secondaryText}>Mark arrived</Text></Pressable>}{activeRide.status==="Arrived"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable>}{activeRide.status==="InProgress"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}</>}</View></>}
+      {tab === "Payslips" && <><Text style={styles.eyebrow}>MONTHLY PDF DOCUMENTS</Text><Text style={styles.title}>Your payslips</Text><Text style={styles.sub}>Download a completed month's payslip as a PDF. Only finalized months are available.</Text><View style={styles.card}><Text style={styles.cardTitle}>Recent months</Text>{Array.from({ length: 12 }, (_, index) => { const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - index - 1); const year = date.getFullYear(); const month = date.getMonth() + 1; const label = date.toLocaleDateString(undefined, { month: "long", year: "numeric" }); return <View key={`${year}-${month}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}><Text style={styles.cardTitle}>{label}</Text><Pressable style={styles.secondary} disabled={loading} onPress={() => void downloadPayslip(year, month)}><Text style={styles.secondaryText}>Download PDF</Text></Pressable></View>; })}</View></>}
+      {tab === "Profile" && <><Text style={styles.title}>Driver onboarding</Text>{themePicker}<Text style={styles.label}>APP THEME</Text><View style={styles.card}>
+        <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
+        {profilePhotoBase64 ? <Image source={{ uri: `data:image/jpeg;base64,${profilePhotoBase64}` }} style={{ width: 112, height: 112, borderRadius: 56, alignSelf: "center", marginVertical: 12 }} /> : <Text style={styles.muted}>No driver selfie saved yet.</Text>}
+        {!!onboardingProfile?.profilePhotoApprovalStatus && <Text style={styles.muted}>Union selfie approval: {onboardingProfile.profilePhotoApprovalStatus}{onboardingProfile.profilePhotoApprovalStatus === "Rejected" && onboardingProfile.profilePhotoReviewReason ? ` · ${onboardingProfile.profilePhotoReviewReason}` : ""}</Text>}
+        <Pressable style={styles.secondary} onPress={() => void captureSelfie()} disabled={loading}><Text style={styles.secondaryText}>{profilePhotoBase64 ? "Retake driver selfie" : "Take driver selfie"}</Text></Pressable>
+        {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
+        {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
+          <Text style={styles.sub}>Complete your driver and vehicle details and capture a clear front-facing selfie. Your application will remain pending until reviewed.</Text>
+          <Text style={styles.label}>VEHICLE CATEGORY</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {(["scooty", "bike", "auto", "cab"] as const).map(option => <Pressable key={option} onPress={() => setServiceClass(option)} style={[styles.themeOption, { minWidth: "45%" }, serviceClass === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, serviceClass === option && styles.themeOptionTextSelected]}>{option === "scooty" ? "Scooty" : option === "bike" ? "Bike" : option === "auto" ? "Auto" : "Cab"}</Text></Pressable>)}
+          </View>
+          <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full legal name" />
+          <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholderTextColor={colors.muted} placeholder="Phone number with country code" keyboardType="phone-pad" />
+          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Bajaj)" />
+          <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle model" />
+          <TextInput value={vehicleRegistration} onChangeText={setVehicleRegistration} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle registration number" autoCapitalize="characters" />
+          <Text style={styles.label}>PRIVATE DOCUMENT STORAGE REFERENCES</Text>
+          <Text style={styles.muted}>Upload files to your approved private storage workflow first. Enter opaque object references, not public URLs.</Text>
+          <TextInput value={licenceReference} onChangeText={setLicenceReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Driving licence object reference" autoCapitalize="none" />
+          <TextInput value={registrationReference} onChangeText={setRegistrationReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle RC object reference" autoCapitalize="none" />
+          <Pressable style={styles.primary} disabled={loading || !driverName.trim() || !phoneNumber.trim() || !vehicleMake.trim() || !vehicleModel.trim() || !vehicleRegistration.trim() || !licenceReference.trim() || !registrationReference.trim() || !profilePhotoBase64} onPress={() => void submitOnboarding()}><Text style={styles.primaryText}>{loading ? "Please wait…" : onboardingProfile ? "Resubmit for review" : "Submit for approval"}</Text></Pressable>
+        </>}
+      </View><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
+      {!!error && <Text style={styles.error}>{error}</Text>}{!!notice && <Text style={styles.success}>{notice}</Text>}
+    </ScrollView>
+    <View style={styles.tabBar}>{tabs.map(item => <Pressable key={item} style={styles.tab} onPress={() => setTab(item)}><Text style={[styles.tabText, tab === item && styles.tabActive]}>{item}</Text></Pressable>)}</View>
+  </SafeAreaView>;
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  safe:{flex:1,backgroundColor:colors.background},header:{backgroundColor:colors.header,padding:22,paddingTop:18},brand:{color:"#FFFFFF",fontSize:25,fontWeight:"800"},tagline:{color:colors.subtle,marginTop:4,fontSize:12},role:{color:colors.tabActive,fontWeight:"800",marginTop:6},content:{padding:22,paddingBottom:34},eyebrow:{color:colors.tabActive,fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:colors.text,fontSize:28,fontWeight:"800",marginTop:8},sub:{color:colors.muted,fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:colors.surface,padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.text,marginBottom:12},primary:{backgroundColor:colors.accent,borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:colors.accentText,fontWeight:"800"},link:{color:colors.tabActive,fontWeight:"800",textAlign:"center",marginTop:18},label:{color:colors.label,fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},cardTitle:{color:colors.text,fontSize:18,fontWeight:"800",marginVertical:8},position:{color:colors.tabActive,fontSize:42,fontWeight:"900",marginTop:6},muted:{color:colors.muted,fontSize:13,marginTop:5},queueItem:{backgroundColor:colors.surface,padding:14,borderRadius:12,marginBottom:8},error:{color:colors.danger,marginTop:12},success:{color:colors.success,marginTop:12},secondary:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:colors.text,fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:colors.surface,paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:colors.tabInactive,fontSize:12,fontWeight:"700"},tabActive:{color:colors.tabActive},themePicker:{flexDirection:"row",gap:8,marginTop:10,marginBottom:10},themeOption:{flex:1,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,alignItems:"center",backgroundColor:colors.surface},themeOptionSelected:{backgroundColor:colors.header,borderColor:colors.header},themeOptionText:{color:colors.muted,fontWeight:"700",fontSize:12},themeOptionTextSelected:{color:"#FFFFFF",fontWeight:"800"}
+});
+}
