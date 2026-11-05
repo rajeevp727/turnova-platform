@@ -4,7 +4,6 @@ using TurnOva.Domain.Dispatch;
 
 namespace TurnOva.Infrastructure.Dispatch;
 
-/// <summary>Single-process adapter for tests and local development only.</summary>
 public sealed class InMemoryRideOfferStore : IRideOfferStore
 {
     private readonly ConcurrentDictionary<string, RideOfferState> _states = new(StringComparer.Ordinal);
@@ -26,11 +25,18 @@ public sealed class InMemoryRideOfferStore : IRideOfferStore
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (maxItems < 1) throw new ArgumentOutOfRangeException(nameof(maxItems));
+        IReadOnlyList<RideOfferState> result = _states.Values.Where(x => x.IsExpiredAt(nowUtc))
+            .OrderBy(x => x.ExpiresAtUtc).Take(maxItems).ToArray();
+        return Task.FromResult(result);
+    }
+
+    public Task<IReadOnlyList<RideOfferState>> GetPendingNotificationsAsync(int maxItems, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (maxItems < 1) throw new ArgumentOutOfRangeException(nameof(maxItems));
         IReadOnlyList<RideOfferState> result = _states.Values
-            .Where(x => x.IsExpiredAt(nowUtc))
-            .OrderBy(x => x.ExpiresAtUtc)
-            .Take(maxItems)
-            .ToArray();
+            .Where(x => x.IsPending && x.NotificationStatus == "Pending")
+            .OrderBy(x => x.OfferedAtUtc).Take(maxItems).ToArray();
         return Task.FromResult(result);
     }
 
