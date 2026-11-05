@@ -105,6 +105,11 @@ The server assigns queue-entry order and timestamps. A client cannot set its own
 
 Offer timeout, retry, queue advancement and cross-zone fallback are configurable policy decisions and must not be hidden in client code.
 
+
+### Durable offer record
+
+Each ride may have only one active offer at a time. An offer has a unique offer ID, target driver, zone/service class, creation time, expiry deadline and status. The ride's offer history must be retained for audit. The server—not the mobile client—owns offer expiry and retry. Acceptance, rejection and expiry must be conditional on the current offer ID so stale clients cannot resolve a later offer. A driver must not hold more than one active offer at a time.
+
 ## 9. Trip lifecycle
 
 Proposed flow: Requested → Matching → Offered → Accepted → DriverArriving → InProgress → Completed.
