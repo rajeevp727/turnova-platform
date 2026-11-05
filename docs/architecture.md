@@ -274,3 +274,8 @@ A hosted worker polls the durable offer store in bounded batches. For each overd
 
 ## FIFO offer delivery (incremental)
 The API persists an initial ride offer for the current FIFO head before sending a SignalR event to that driver's authenticated group. The driver can recover the pending offer after reconnect via an authenticated API read. Acceptance verifies offer ownership, pending status and deadline before the existing ride reservation/ETag guards. Ride and offer documents are separate Cosmos aggregates; their writes are not atomic. Durable outbox delivery, automatic progression after rejection/expiry, and crash recovery are still production blockers.
+
+
+### Idempotent rejection of a persisted offer
+
+For a ride with a durable pending offer, only the assigned driver may reject it, and the offer must still be pending and unexpired. The API rotates the queue using the persisted offer ID as an idempotency key, then conditionally marks the offer and its matching attempt Rejected using the aggregate ETag. If the process stops after queue rotation but before the offer update, retrying the same rejection is safe: the queue store recognizes the offer ID and does not rotate the driver a second time. Legacy rides without a persisted offer retain the previous rotation path. This is retry-safe client recovery, not a durable outbox or autonomous reconciliation; automatic next-driver offer creation and recovery without a client retry remain outstanding.

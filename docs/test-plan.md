@@ -438,3 +438,16 @@ In-memory store concurrency tests are included in CI. Multi-instance Cosmos race
 | OFFER-006 | Wrong driver, resolved offer or expired offer accepts | HTTP 409 and no assignment | API/security | P0 |
 
 Cross-document atomicity, outbox retries, and next-driver progression after rejection/expiry remain production blockers.
+
+
+## Durable offer rejection
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| OFFER-REJECT-001 | Assigned driver rejects a pending, unexpired offer | Queue rotation uses the offer ID; offer and current attempt become Rejected | API/store | P0 |
+| OFFER-REJECT-002 | Another driver rejects the offer | HTTP 409; queue and offer remain unchanged | API/security | P0 |
+| OFFER-REJECT-003 | Driver retries after queue rotation succeeded but offer update failed | Same offer ID is recognized; driver is not rotated twice and offer can be resolved | API/store | P0 |
+| OFFER-REJECT-004 | Driver rejects an expired or already-resolved offer | HTTP 409; no new queue rotation | API | P0 |
+| OFFER-REJECT-005 | Driver repeats a successfully recorded rejection | HTTP 204; no duplicate rotation or work activity | API | P1 |
+
+This retry path depends on the driver retrying after an interrupted response. Automatic reconciliation and next-driver offer issuance remain separate work.
