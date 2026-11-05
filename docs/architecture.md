@@ -186,11 +186,9 @@ Logout revokes the TriSend refresh session, but already-issued access tokens can
 
 Email/password only is in scope. Google/Microsoft OAuth and SSO are explicitly excluded. Driver onboarding/KYC and durable ride persistence are also separate work items; a valid Driver role does not by itself prove production driver eligibility.
 
-
 ## 16. Ride persistence and location tracking
 
 Ride requests are written to the `Rides` Cosmos DB container (partition key `/rideId`) when Cosmos is configured; local demo mode uses process memory. Drivers can list requested rides and accept one. Only the authenticated assigned driver can submit GPS coordinates for an accepted ride. The rider can read its own ride and latest driver coordinates. The Rider app polls the authoritative ride resource every five seconds while the Activity screen is open and displays the driver and pickup markers on a native map. Driver foreground location collection is permission-gated and stops when the Trips screen is left or the app unmounts. This is a foreground/demo implementation: production requires ETag/conditional acceptance to prevent concurrent claims, a proper active-trip lifecycle, background location policy and permissions, throttling, retention, map-provider review, and device E2E tests.
-
 
 ## 17. Ride lifecycle and realtime tracking
 
@@ -200,7 +198,6 @@ The Rider connects to `/hubs/rides?rideId={rideId}` using its JWT. The hub verif
 
 Operational safeguards still required before production: configure a restrictive CORS origin allow-list, rate-limit location updates, define location retention/deletion policy, monitor SignalR scale-out/backplane needs, and run multi-instance Cosmos concurrency and mobile-device acceptance tests.
 
-
 ## 18. Cosmos DB startup and migration reliability
 
 When Cosmos mode is enabled, API startup validates the HTTPS endpoint, account key and database identifier, then runs migrations before the host begins accepting requests. Migration execution is serialized across instances with a single Cosmos-backed lease document in `MigrationLocks`. The lease is acquired using create-if-absent semantics; an expired lease can be replaced with an ETag conditional write. Release also uses the acquired ETag so one instance cannot delete a successor's lease. Applied migration IDs remain in `MigrationHistory`; a conflicting history insert is treated as success only after the record is read back.
@@ -208,7 +205,6 @@ When Cosmos mode is enabled, API startup validates the HTTPS endpoint, account k
 `GET /health` is a process-level health endpoint. `GET /health/ready` performs a Cosmos database read in Cosmos mode and returns 503 when the configured database is unavailable. In-memory demo mode reports ready without a Cosmos dependency. The readiness endpoint does not replace monitoring of request-level Cosmos throttling, latency, RU consumption, or data-plane operations.
 
 The migration lease currently has a 30-minute expiry and is not renewed. Keep migrations short and controlled; migrations expected to exceed this duration require lease renewal before rollout to multiple API instances. Validate the lease and migration behaviour against a real Cosmos development account before production deployment.
-
 
 ## 19. Driver onboarding and dispatch eligibility
 
@@ -244,11 +240,9 @@ The PDF contains identity, employer, pay period and work metrics only. Monetary 
 
 Both Expo applications implement a shared visual contract with equivalent local theme tokens: background, header, surface, text, muted text, borders, accent, status colors and navigation states. Theme preference is `system` by default and resolves using React Native `useColorScheme`; explicit `light` and `dark` choices override the system. The selected preference is persisted in Expo SecureStore under `turnova.theme`, so it survives app restarts and can be used by both TurnOva apps on the same device. Theme selection is available before sign-in and in Profile. The Rider map uses a dark map style when Dark is active. No backend preference endpoint or account-level synchronization is required.
 
-
 ### Union approval for driver profile selfies
 
 A driver's selfie is private by default. The driver onboarding profile stores photo approval status, approving union ID, review timestamp and rejection reason. Uploading or replacing a selfie resets approval to Pending and clears the approving union. The review action is allowed only for the driver's currently active union assignment. Approval is scoped to that union: a transfer to another union automatically hides the old approval. Union member-list responses suppress the Base64 image unless the photo is Approved by the union that currently owns the assignment. The member-detail review endpoint remains operations-protected and can return a pending image for inspection. The current union review endpoint uses the shared operations admin key temporarily; authenticated union-manager RBAC and actor-level audit records are required before production.
-
 
 ## 23. FIFO queue rotation after rejection and offer timeout
 
@@ -256,18 +250,15 @@ A driver who rejects an available ride while at the head of their zone/service-c
 
 The timeout endpoint is an authenticated acknowledgement from the Driver client after its offer timer expires; it is not yet an independent server-side offer scheduler. A later dispatch-offer increment must persist offer IDs, deadlines and delivery state, and have the server expire offers even when a mobile client is offline. Ride-to-zone matching, automated offer delivery and server-owned timeout scheduling remain separate dispatch-engine work.
 
-
 ## 24. Rider vehicle selection and zone-based eligibility
 
 The Rider app requires an explicit vehicle category selection: Scooty, Bike, Auto or Cab. The API validates the category and resolves the pickup coordinates against configured dispatch-zone bounding boxes. Requests outside configured zones are rejected with an availability message rather than silently routed to a default zone. The resolved zone and selected service class are persisted on the ride.
 
 Driver availability and acceptance are restricted to the driver's approved zone and service class, in addition to passenger-capacity checks. The API does not expose rides from other vehicle queues or zones. Dispatch zone boundaries are configuration-driven under `Dispatch:Zones`; production rollout must replace the initial Hyderabad development rectangle with reviewed operational boundaries. This increment establishes correct booking and eligibility metadata; server-owned offer scheduling and offline timeout processing remain a separate dispatch-engine increment.
 
-
 ## 25. Shared rider and driver vehicle categories
 
 The Rider and Driver apps use one canonical service-category set: `scooty`, `bike`, `auto` and `cab`. Drivers select their vehicle category during onboarding. The API validates onboarding and union service-class configuration against this set, and queue membership uses the approved driver's selected category. The zone discovery response advertises all four supported categories. This prevents a rider booking category from being invisible to otherwise eligible drivers because the two apps used different category vocabularies. Existing driver profiles or union records using legacy values (`mini`, `sedan`, `suv`) require an explicit data migration or operations correction before those drivers can serve the new categories; values are not silently remapped.
-
 
 ## 26. Durable ride-offer persistence foundation
 
@@ -277,11 +268,9 @@ The store contract supports lookup by ride, lookup of a driver's pending offer, 
 
 This is the persistence foundation only. API issuance/acceptance/rejection, a server-owned expiry worker, FIFO retry orchestration, durable ride/driver reservation coordination and SignalR/push delivery are not yet wired to this store. Do not claim production dispatch until those stages and Cosmos multi-instance integration tests are complete. Cross-partition atomicity with `Rides` and `QueueEntries` is not assumed.
 
-
 ## Server-owned offer expiry (incremental)
 
 A hosted worker polls the durable offer store in bounded batches. For each overdue pending offer it performs queue rotation through an offer-ID-idempotent operation, then marks the offer and matching attempt Expired using the offer aggregate ETag. If the process stops after queue rotation but before offer resolution, replay sees the same offer ID marker and does not rotate twice. Missing queue membership or ETag conflict leaves the offer unresolved for a later retry. This workflow is not a cross-container transaction and does not yet fence legacy ride acceptance by offer ID; do not treat it as complete assignment/next-driver dispatch.
-
 
 ## FIFO offer delivery (incremental)
 The API persists an initial ride offer for the current FIFO head before sending a SignalR event to that driver's authenticated group. The driver can recover the pending offer after reconnect via an authenticated API read. Acceptance verifies offer ownership, pending status and deadline before the existing ride reservation/ETag guards. Ride and offer documents are separate Cosmos aggregates; their writes are not atomic. Durable outbox delivery, automatic progression after rejection/expiry, and crash recovery are still production blockers.

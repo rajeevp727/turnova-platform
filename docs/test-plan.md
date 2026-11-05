@@ -178,7 +178,6 @@ The GitHub Actions workflow currently runs:
 - Add durable ride persistence, driver eligibility/onboarding and production CORS policy.
 - Add session revocation strategy if immediate access-token invalidation is required.
 
-
 ## 11. Ride persistence, acceptance and live tracking (planned until CI/device validation)
 
 | ID | Scenario | Expected result | Type | Priority |
@@ -194,7 +193,6 @@ The GitHub Actions workflow currently runs:
 | TRACK-004 | Rider Activity screen is open | Map refreshes from authoritative ride state while screen is active | Mobile E2E | P1 |
 | TRACK-005 | Driver leaves Trips screen | Foreground location subscription is removed | Mobile | P0 |
 | TRACK-006 | Location permission denied | Driver sees an actionable error; no false location-sharing state | Mobile | P1 |
-
 
 ## 12. Ride lifecycle, idempotency and SignalR
 
@@ -219,7 +217,6 @@ The GitHub Actions workflow currently runs:
 
 The lifecycle state-machine unit tests and in-memory API integration tests are automated. API integration coverage includes Rider booking/idempotency, role restrictions, ownership, lifecycle transitions, cancellation rules, terminal location-sharing shutdown, and concurrent Driver acceptance. Cosmos-specific concurrency, SignalR WebSocket authorization/reconnect, and physical-device scenarios still require their corresponding integration/device environments.
 
-
 ## 13. Cosmos DB configuration, migration and readiness
 
 | ID | Scenario | Expected result | Type | Priority |
@@ -237,7 +234,6 @@ The lifecycle state-machine unit tests and in-memory API integration tests are a
 | COSMOS-READY-003 | API runs in in-memory demo mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
 
 Automated tests cover Cosmos configuration validation. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
-
 
 ## 14. Driver onboarding and eligibility
 
@@ -321,7 +317,6 @@ Payslip output is PDF only. Monetary calculations are intentionally absent until
 
 Validate on Android and iOS physical devices, including system appearance changes and map rendering.
 
-
 ## Driver selfie and union membership profile
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |
@@ -339,7 +334,6 @@ Validate on Android and iOS physical devices, including system appearance change
 | UNION-SELFIE-011 | Unauthorized profile access | Call operations driver/union detail endpoints without valid admin authorization | HTTP 401; no selfie data is returned | API + security | P0 |
 | UNION-SELFIE-012 | Driver profile displays selfie | Open the driver's Profile tab | Saved selfie is displayed; driver can retake/update it | Mobile | P1 |
 
-
 ## Union selfie approval and visibility
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |
@@ -353,7 +347,6 @@ Validate on Android and iOS physical devices, including system appearance change
 | UNION-SELFIE-019 | Driver sees own approval state | Open driver Profile after union decision | Driver sees current photo, approval state and rejection reason when present | Mobile | P1 |
 | UNION-SELFIE-020 | Pending image not exposed in member list | Query active union members before approval | Photo Base64 is null; no pending photo is exposed in list results | API + security | P0 |
 
-
 ## FIFO rejection and offer-timeout rotation
 
 | ID | Scenario | Expected result | Type | Priority |
@@ -366,7 +359,6 @@ Validate on Android and iOS physical devices, including system appearance change
 | FIFO-ROT-006 | Concurrent Cosmos queue update conflicts with rotation | ETag precondition failure is reported as unsuccessful rotation; caller must refresh queue | Cosmos integration | P0 |
 
 The timeout endpoint is a client acknowledgement, not a server-side timer. Server-owned offer expiry, offer IDs and retry/recovery behavior remain unimplemented and must be completed before production dispatch.
-
 
 ## FIFO queue-head enforcement
 
@@ -382,7 +374,6 @@ The timeout endpoint is a client acknowledgement, not a server-side timer. Serve
 
 This increment enforces queue-head access at the API boundary. Durable offers, server-owned timers, automatic expiry/retry, exclusive offer delivery and multi-instance dispatch coordination remain separate production-critical work.
 
-
 ## Durable ride-offer persistence foundation
 
 | ID | Scenario | Expected result | Type | Priority |
@@ -397,7 +388,6 @@ This increment enforces queue-head access at the API boundary. Durable offers, s
 
 The current increment adds the persistence contract, in-memory/Cosmos adapters and schema migration. API dispatch orchestration and server-owned expiry remain separate increments.
 
-
 ### Dispatch offer expiry coverage
 
 - Expired pending offer is rotated once and marked Expired, including its matching attempt history.
@@ -405,7 +395,6 @@ The current increment adds the persistence contract, in-memory/Cosmos adapters a
 - Missing queue membership leaves the offer pending for retry.
 - ETag conflicts never overwrite a concurrently resolved offer.
 - Worker polls bounded batches and stops promptly on host cancellation.
-
 
 ## Driver availability management
 
@@ -424,7 +413,6 @@ The current increment adds the persistence contract, in-memory/Cosmos adapters a
 
 Online/offline availability is server-authoritative. Mobile controls are presentation only; dispatch and queue APIs enforce the persisted state. Cosmos cross-container writes are not transactional and require operational reconciliation before production.
 
-
 ## Exclusive driver reservation coverage
 
 | ID | Scenario | Expected result | Type | Priority |
@@ -438,7 +426,6 @@ Online/offline availability is server-authoritative. Mobile controls are present
 | RESERVE-007 | API process stops between reservation and ride update | Reservation may remain held; reconciliation is a tracked production blocker | Failure injection | P0 |
 
 In-memory store concurrency tests are included in CI. Multi-instance Cosmos races and crash-window recovery require a real development Cosmos account and are not claimed as executed by CI unless separately configured.
-
 
 ## FIFO offer delivery checks
 | ID | Scenario | Expected result | Type | Priority |
