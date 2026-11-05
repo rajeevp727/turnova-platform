@@ -132,6 +132,10 @@ else
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
 }
 
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<IRideOfferExpiryProcessor, RideOfferExpiryProcessor>();
+builder.Services.Configure<DispatchOfferExpiryOptions>(builder.Configuration.GetSection("Dispatch:OfferExpiry"));
+builder.Services.AddHostedService<RideOfferExpiryWorker>();
 builder.Services.AddScoped<QueueService>();
 
 var app = builder.Build();

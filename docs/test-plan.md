@@ -396,3 +396,12 @@ This increment enforces queue-head access at the API boundary. Durable offers, s
 | OFFER-STORE-007 | Cosmos item replacement races across API instances | One ETag writer succeeds; stale writer retries from authoritative state | Cosmos integration | P0 |
 
 The current increment adds the persistence contract, in-memory/Cosmos adapters and schema migration. API dispatch orchestration and server-owned expiry remain separate increments.
+
+
+### Dispatch offer expiry coverage
+
+- Expired pending offer is rotated once and marked Expired, including its matching attempt history.
+- Reprocessing the same offer after a simulated crash between queue rotation and offer resolution does not rotate twice.
+- Missing queue membership leaves the offer pending for retry.
+- ETag conflicts never overwrite a concurrently resolved offer.
+- Worker polls bounded batches and stops promptly on host cancellation.
