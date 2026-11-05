@@ -264,3 +264,12 @@ Driver availability and acceptance are restricted to the driver's approved zone 
 ## 25. Shared rider and driver vehicle categories
 
 The Rider and Driver apps use one canonical service-category set: `scooty`, `bike`, `auto` and `cab`. Drivers select their vehicle category during onboarding. The API validates onboarding and union service-class configuration against this set, and queue membership uses the approved driver's selected category. The zone discovery response advertises all four supported categories. This prevents a rider booking category from being invisible to otherwise eligible drivers because the two apps used different category vocabularies. Existing driver profiles or union records using legacy values (`mini`, `sedan`, `suv`) require an explicit data migration or operations correction before those drivers can serve the new categories; values are not silently remapped.
+
+
+## 26. Durable ride-offer persistence foundation
+
+The dispatch-offer aggregate is stored in a dedicated `RideOffers` Cosmos container partitioned by `/rideId`. There is one aggregate document per ride, containing the current offer identity, driver, zone/service class, offer/deadline timestamps, status and retained attempt history. This gives a single ETag-guarded write boundary for each ride's offer progression and prevents multiple active-offer documents for the same ride.
+
+The store contract supports lookup by ride, lookup of a driver's pending offer, bounded expiry scans, create-if-absent and ETag-conditional replacement. The local adapter is process-memory only; the Cosmos adapter uses item create/replace and ETags. The migration creates the container automatically.
+
+This is the persistence foundation only. API issuance/acceptance/rejection, a server-owned expiry worker, FIFO retry orchestration, durable ride/driver reservation coordination and SignalR/push delivery are not yet wired to this store. Do not claim production dispatch until those stages and Cosmos multi-instance integration tests are complete. Cross-partition atomicity with `Rides` and `QueueEntries` is not assumed.
