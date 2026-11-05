@@ -10,7 +10,8 @@ public interface IRideOfferExpiryProcessor
 public sealed class RideOfferExpiryProcessor(
     IRideOfferStore offers,
     IQueueStore queues,
-    TimeProvider timeProvider) : IRideOfferExpiryProcessor
+    TimeProvider timeProvider,
+    IRideOfferAdvancer? advancer = null) : IRideOfferExpiryProcessor
 {
     public async Task<int> ProcessBatchAsync(int batchSize, CancellationToken cancellationToken = default)
     {
@@ -33,7 +34,10 @@ public sealed class RideOfferExpiryProcessor(
             if (await offers.TryReplaceAsync(
                 offer with { Status = RideOfferStatuses.Expired, Attempts = attempts },
                 offer.ETag, cancellationToken))
+            {
                 resolved++;
+                if (advancer is not null) await advancer.AdvanceAsync(offer.RideId, cancellationToken);
+            }
         }
         return resolved;
     }

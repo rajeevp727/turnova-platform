@@ -136,6 +136,13 @@ else
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
 }
 
+builder.Services.AddSingleton<IRideOfferAdvancer>(sp => new RideOfferAdvancer(
+    sp.GetRequiredService<IRideOfferStore>(), sp.GetRequiredService<IQueueStore>(),
+    sp.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>(),
+    sp.GetRequiredService<ConcurrentDictionary<string, DemoRide>>(),
+    useCosmos ? sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null,
+    useCosmos ? sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null,
+    sp.GetRequiredService<IHubContext<RideTrackingHub>>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IRideOfferExpiryProcessor, RideOfferExpiryProcessor>();
 builder.Services.Configure<DispatchOfferExpiryOptions>(builder.Configuration.GetSection("Dispatch:OfferExpiry"));
@@ -1191,7 +1198,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 
-app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string rideId, QueueService queueService, IRideOfferStore offerStore, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string rideId, QueueService queueService, IRideOfferStore offerStore, IRideOfferAdvancer offerAdvancer, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
@@ -1242,6 +1249,7 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     }
 
     await RecordWorkActivityAsync(driverId, rideId, "Rejected", DateTimeOffset.UtcNow, ct);
+    if (offer is not null) await offerAdvancer.AdvanceAsync(rideId, ct);
     return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 

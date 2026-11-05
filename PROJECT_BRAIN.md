@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD at start of this increment:** `b7a73f89da59032b84f3f29f3348e3fb9034e2aa` (PR #30)
+**Current main HEAD at start of this increment:** `53f1bd8b78e6472a7c977baa0ccb4ecae6299ed3` (PR #31)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -121,3 +121,12 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Added in-memory queue-store tests for same-offer retry idempotency, a distinct subsequent offer, missing queue membership and empty offer ID validation.
 - Updated the test plan with explicit queue rotation scenarios and the remaining Cosmos/API integration-test gaps.
 - These tests are CI coverage only until the PR workflow completes; no local build or test execution is claimed.
+
+
+## Automatic next-driver offer advancement (in review)
+- Shared advancer handles durable rejection and expiry. It verifies the ride is still Requested and validates candidate approval, Online status, zone, service class and passenger capacity.
+- Appends the next pending attempt to the same ride aggregate with ETag protection and persists before SignalR notification.
+- Rejection endpoint and expiry processor invoke the same service; competing calls cannot both replace the same ETag.
+- Invalid queue entries are removed. No eligible candidate leaves the ride Requested with no pending offer.
+- Known gaps: no transactional notification outbox; reconnect pending-offer fetch is recovery after a lost SignalR event. Cosmos cross-container coordination and multi-instance concurrency require integration tests. Offer lifetime currently uses 30 seconds pending configuration unification.
+- No local build/test claimed; CI is the validation gate.
