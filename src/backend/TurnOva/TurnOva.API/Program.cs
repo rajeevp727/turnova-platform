@@ -108,6 +108,9 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, RideIdempotencyMigration>();
     builder.Services.AddSingleton<ICosmosMigration, UnionManagementMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
+    builder.Services.AddSingleton<IRideOfferStore>(sp =>
+        new CosmosRideOfferStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideOffers")));
     builder.Services.AddSingleton<CosmosMigrationRunner>();
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
@@ -126,6 +129,7 @@ else
         await queueStore.AddAsync(driver, CancellationToken.None);
 
     builder.Services.AddSingleton<IQueueStore>(queueStore);
+    builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
 }
 
 builder.Services.AddScoped<QueueService>();
