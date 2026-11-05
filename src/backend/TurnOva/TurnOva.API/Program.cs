@@ -328,6 +328,14 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
     try { return (await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource; }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
+string? ResolveDispatchZone(double latitude, double longitude)
+{
+    var zones = app.Configuration.GetSection("Dispatch:Zones").Get<DispatchZoneConfig[]>() ?? [];
+    return zones.FirstOrDefault(zone =>
+        latitude >= zone.MinLatitude && latitude <= zone.MaxLatitude &&
+        longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude)?.ZoneId;
+}
+
 var storageMode = useCosmos ? "cosmos-db" : "demo-in-memory";
 
 app.MapGet("/", () => Results.Ok(new
@@ -911,6 +919,12 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         return Results.BadRequest(new { message = "Passenger count must be between 1 and 6." });
     if (request.PickupLatitude is null or < -90 or > 90 || request.PickupLongitude is null or < -180 or > 180)
         return Results.BadRequest(new { message = "Valid pickup coordinates are required." });
+    var serviceClass = request.ServiceClass?.Trim().ToLowerInvariant();
+    if (serviceClass is not ("scooty" or "bike" or "auto" or "cab"))
+        return Results.BadRequest(new { message = "Choose a valid vehicle type: scooty, bike, auto or cab." });
+    var dispatchZoneId = ResolveDispatchZone(request.PickupLatitude.Value, request.PickupLongitude.Value);
+    if (string.IsNullOrWhiteSpace(dispatchZoneId))
+        return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var key = context.Request.Headers["Idempotency-Key"].ToString().Trim();
     if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
@@ -942,7 +956,7 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
 
     var ride = new DemoRide(rideId, request.Pickup.Trim(), request.Dropoff.Trim(), request.Passengers,
         "Requested", DateTimeOffset.UtcNow, 85m, riderId, null, request.PickupLatitude, request.PickupLongitude,
-        null, null, null, null);
+        null, null, null, null, ServiceClass: serviceClass, DispatchZoneId: dispatchZoneId);
     try { await SaveRideAsync(ride, ct); }
     catch
     {
@@ -959,12 +973,18 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, Cancel
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (approvedProfile is null) return Results.Forbid();
-    if (rideContainer is null) return Results.Ok(rides.Values.Where(x => x.Status == "Requested" && x.Passengers <= approvedProfile.PassengerCapacity));
+    if (rideContainer is null) return Results.Ok(rides.Values.Where(x =>
+        x.Status == "Requested" && x.Passengers <= approvedProfile.PassengerCapacity &&
+        x.DispatchZoneId == approvedProfile.ZoneId &&
+        string.Equals(x.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)));
     var query = new QueryDefinition("SELECT * FROM c WHERE c.status = @status").WithParameter("@status", "Requested");
     var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
     var results = new List<DemoRide>();
     while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
-    return Results.Ok(results.Where(ride => ride.Passengers <= approvedProfile.PassengerCapacity));
+    return Results.Ok(results.Where(ride =>
+        ride.Passengers <= approvedProfile.PassengerCapacity &&
+        string.Equals(ride.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(ride.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)));
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
@@ -977,6 +997,9 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     {
         if (!rides.TryGetValue(rideId, out var current) || current.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
+        if (!string.Equals(current.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(current.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "This ride belongs to a different dispatch zone or vehicle queue." });
         if (current.Passengers > approvedProfile.PassengerCapacity)
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
         var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
@@ -991,6 +1014,9 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         var response = await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct);
         if (response.Resource.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
+        if (!string.Equals(response.Resource.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(response.Resource.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "This ride belongs to a different dispatch zone or vehicle queue." });
         if (response.Resource.Passengers > approvedProfile.PassengerCapacity)
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
         var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
@@ -1014,7 +1040,9 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
-    if (ride is null || ride.Status != "Requested" || ride.Passengers > profile.PassengerCapacity)
+    if (ride is null || ride.Status != "Requested" || ride.Passengers > profile.PassengerCapacity ||
+        !string.Equals(ride.DispatchZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(ride.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase))
         return Results.Conflict(new { message = "This ride is not available to reject." });
 
     var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
@@ -1157,7 +1185,7 @@ public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateUnionRequest(string Name, string Code, string? Location, string? ManagerName, string? ManagerPhone, IReadOnlyList<string> ZoneIds, IReadOnlyList<string> ServiceClasses);
 public sealed record UpdateUnionStatusRequest(string Status);
 public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
-public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null);
+public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "auto");
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
@@ -1165,6 +1193,8 @@ public sealed record PasswordLoginRequest(string Email, string Password, bool Re
 public sealed record RefreshTokenRequest(string RefreshToken);
 public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
-    string Status, DateTimeOffset RequestedAt, decimal EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false);
+    string Status, DateTimeOffset RequestedAt, decimal EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "auto", string DispatchZoneId = "hyderabad-central");
+
+public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 
 public partial class Program;

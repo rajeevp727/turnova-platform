@@ -249,3 +249,10 @@ A driver's selfie is private by default. The driver onboarding profile stores ph
 A driver who rejects an available ride while at the head of their zone/service-class queue is moved to the back of that same queue. The next eligible member becomes the head. An offer-timeout acknowledgement follows the same rule: only the currently queued head driver can submit it, and the API returns the next driver ID and the caller's new position. Drivers cannot rotate another driver's membership. In-memory rotation is serialized under the queue lock. Cosmos rotation uses an ETag-conditional item replacement so concurrent queue changes do not silently overwrite each other.
 
 The timeout endpoint is an authenticated acknowledgement from the Driver client after its offer timer expires; it is not yet an independent server-side offer scheduler. A later dispatch-offer increment must persist offer IDs, deadlines and delivery state, and have the server expire offers even when a mobile client is offline. Ride-to-zone matching, automated offer delivery and server-owned timeout scheduling remain separate dispatch-engine work.
+
+
+## 24. Rider vehicle selection and zone-based eligibility
+
+The Rider app requires an explicit vehicle category selection: Scooty, Bike, Auto or Cab. The API validates the category and resolves the pickup coordinates against configured dispatch-zone bounding boxes. Requests outside configured zones are rejected with an availability message rather than silently routed to a default zone. The resolved zone and selected service class are persisted on the ride.
+
+Driver availability and acceptance are restricted to the driver's approved zone and service class, in addition to passenger-capacity checks. The API does not expose rides from other vehicle queues or zones. Dispatch zone boundaries are configuration-driven under `Dispatch:Zones`; production rollout must replace the initial Hyderabad development rectangle with reviewed operational boundaries. This increment establishes correct booking and eligibility metadata; server-owned offer scheduling and offline timeout processing remain a separate dispatch-engine increment.
