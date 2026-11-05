@@ -1215,7 +1215,9 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     }
 
     var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
-    if (queue.FirstOrDefault()?.DriverId != driverId)
+    // A persisted offer proves assignment ownership. Skip the head check on retries because
+    // the first attempt may already have rotated this driver before the offer update failed.
+    if (offer is null && queue.FirstOrDefault()?.DriverId != driverId)
         return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can reject this ride." });
 
     // Offer-ID idempotency makes a client retry safe if the process stops after queue rotation.
