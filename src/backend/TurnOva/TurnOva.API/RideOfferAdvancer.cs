@@ -6,15 +6,10 @@ using TurnOva.Domain.Dispatch;
 
 namespace TurnOva.API;
 
-public interface IRideOfferAdvancer
-{
-    Task<bool> AdvanceAsync(string rideId, CancellationToken cancellationToken = default);
-}
-
 public sealed class RideOfferAdvancer(
     IRideOfferStore offers, IQueueStore queues,
     ConcurrentDictionary<string, DriverOnboardingProfile> inMemoryProfiles,
-    ConcurrentDictionary<string, DemoRide> inMemoryRides,
+    ConcurrentDictionary<string, global::DemoRide> inMemoryRides,
     Container? driverContainer, Container? rideContainer,
     IHubContext<RideTrackingHub> hub, TimeProvider timeProvider) : IRideOfferAdvancer
 {
@@ -64,10 +59,10 @@ public sealed class RideOfferAdvancer(
         return false;
     }
 
-    private async Task<DemoRide?> GetRideAsync(string rideId, CancellationToken ct)
+    private async Task<global::DemoRide?> GetRideAsync(string rideId, CancellationToken ct)
     {
         if (rideContainer is null) return inMemoryRides.TryGetValue(rideId, out var ride) ? ride : null;
-        try { return (await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource; }
+        try { return (await rideContainer.ReadItemAsync<global::DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource; }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
     }
 
