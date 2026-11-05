@@ -451,3 +451,15 @@ Cross-document atomicity, outbox retries, and next-driver progression after reje
 | OFFER-REJECT-005 | Driver repeats a successfully recorded rejection | HTTP 204; no duplicate rotation or work activity | API | P1 |
 
 This retry path depends on the driver retrying after an interrupted response. Automatic reconciliation and next-driver offer issuance remain separate work.
+
+
+## Idempotent FIFO queue rotation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| QUEUE-IDEMP-001 | Repeat queue rotation with the same offer ID | First call moves the driver once; retry succeeds without changing queue order again | Unit | P0 |
+| QUEUE-IDEMP-002 | Rotate the same driver for a different offer ID | New offer is treated as a new rotation and moves the driver to the back | Unit | P0 |
+| QUEUE-IDEMP-003 | Rotate a driver who is not in the queue | Returns false; queue remains unchanged | Unit | P1 |
+| QUEUE-IDEMP-004 | Rotate with an empty offer ID | Argument validation rejects the call | Unit | P1 |
+
+These tests exercise the in-memory adapter. Cosmos ETag conflict and persistence behavior still require integration tests against a development Cosmos account. API-level rejection crash/retry behavior also remains a separate integration-test gap.

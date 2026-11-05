@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD at start of this increment:** `373cdad94006c1b742d15b4a8207a8a9d50f5e20` (PR #26)
+**Current main HEAD at start of this increment:** `b7a73f89da59032b84f3f29f3348e3fb9034e2aa` (PR #30)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -109,9 +109,15 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Offer creation and ride creation are separate Cosmos operations. A durable outbox/reconciliation workflow and automatic next-driver progression after rejection/expiry remain required before production.
 
 
-## Idempotent durable offer rejection (in progress)
+## Idempotent durable offer rejection (merged in PR #30)
 - When a ride has a persisted pending offer, rejection validates that the caller owns that offer and that it is still pending and unexpired.
 - Queue rotation uses the offer ID as an idempotency key. If the API process stops after rotation but before the offer aggregate is marked Rejected, the driver can retry; the queue store recognizes the same offer ID and does not rotate the driver twice.
 - The offer aggregate is conditionally updated with ETag protection and the matching attempt is marked Rejected.
 - Legacy rides without an offer aggregate retain the previous queue-rotation behavior.
 - This improves retry safety but does not yet provide automatic next-driver offer creation, durable notification outbox, or background reconciliation for a driver who never retries. Those remain production blockers.
+
+
+## Queue rotation regression coverage (in review)
+- Added in-memory queue-store tests for same-offer retry idempotency, a distinct subsequent offer, missing queue membership and empty offer ID validation.
+- Updated the test plan with explicit queue rotation scenarios and the remaining Cosmos/API integration-test gaps.
+- These tests are CI coverage only until the PR workflow completes; no local build or test execution is claimed.
