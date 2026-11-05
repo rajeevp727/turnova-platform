@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace TurnOva.Domain.Dispatch;
 
 public static class RideOfferStatuses
@@ -33,6 +35,9 @@ public sealed record RideOfferState(
     IReadOnlyList<RideOfferAttempt> Attempts,
     string? ETag = null)
 {
+    [JsonPropertyName("id")]
+    public string Id => RideId;
+
     public bool IsPending => string.Equals(Status, RideOfferStatuses.Pending, StringComparison.Ordinal);
 
     public bool IsExpiredAt(DateTimeOffset nowUtc) => IsPending && ExpiresAtUtc <= nowUtc;
