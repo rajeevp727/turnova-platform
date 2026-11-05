@@ -982,7 +982,7 @@ app.MapPost("/api/v1/queues/join", async (
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal user, CreateRideRequest request, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal user, CreateRideRequest request, QueueService queueService, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request.Pickup) || string.IsNullOrWhiteSpace(request.Dropoff))
         return Results.BadRequest(new { message = "Pickup and drop-off are required." });
@@ -1035,8 +1035,55 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         else await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
         throw;
     }
+
+    // Persist the initial offer before notifying the FIFO head. Repeated rider requests
+    // return through the idempotency path above and cannot create a second offer.
+    var eligibleQueue = await queueService.GetPositionedQueueAsync(dispatchZoneId, serviceClass, ct);
+    var candidate = eligibleQueue.FirstOrDefault();
+    if (candidate is not null)
+    {
+        var profile = await GetApprovedDriverProfileAsync(candidate.DriverId, ct);
+        if (profile is not null && profile.AvailabilityStatus == "Online" &&
+            profile.PassengerCapacity >= ride.Passengers &&
+            string.Equals(profile.ZoneId, dispatchZoneId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(profile.ServiceClass, serviceClass, StringComparison.OrdinalIgnoreCase))
+        {
+            var now = TimeProvider.System.GetUtcNow();
+            var lifetimeSeconds = Math.Clamp(app.Configuration.GetValue<int?>("Dispatch:OfferLifetimeSeconds") ?? 30, 10, 120);
+            var offerId = Guid.NewGuid().ToString("N");
+            var expiresAt = now.AddSeconds(lifetimeSeconds);
+            var attempt = new RideOfferAttempt(offerId, candidate.DriverId, now, expiresAt, RideOfferStatuses.Pending);
+            var offer = new RideOfferState(ride.RideId, dispatchZoneId, serviceClass, offerId,
+                candidate.DriverId, now, expiresAt, RideOfferStatuses.Pending, [attempt]);
+            var store = app.Services.GetRequiredService<IRideOfferStore>();
+            if (await store.TryCreateAsync(offer, ct))
+                await hub.Clients.Group($"driver:{candidate.DriverId}").SendAsync(
+                    "RideOfferReceived", new { rideId = ride.RideId, offerId, expiresAtUtc = expiresAt }, ct);
+        }
+    }
     return Results.Created($"/api/v1/rides/{ride.RideId}", ride);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
+
+app.MapGet("/api/v1/driver/offers/pending", async (ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var store = app.Services.GetRequiredService<IRideOfferStore>();
+    var offer = await store.GetPendingForDriverAsync(driverId, ct);
+    if (offer is null) return Results.NoContent();
+    if (offer.IsExpiredAt(TimeProvider.System.GetUtcNow()))
+        return Results.Conflict(new { message = "The offer has expired." });
+    return Results.Ok(new
+    {
+        offer.RideId,
+        offer.CurrentOfferId,
+        offer.ZoneId,
+        offer.ServiceClass,
+        offer.OfferedAtUtc,
+        offer.ExpiresAtUtc,
+        offer.Status
+    });
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueService queueService, CancellationToken ct) =>
 {
