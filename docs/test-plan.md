@@ -477,3 +477,19 @@ These tests exercise the in-memory adapter. Cosmos ETag conflict and persistence
 | OFFER-NEXT-006 | Process stops after persistence but before SignalR send | Pending-offer fetch returns authoritative offer after reconnect; outbox remains a gap | Failure injection | P0 |
 
 These scenarios still need API/SignalR and multi-instance Cosmos integration coverage; no such integration execution is claimed by in-memory CI.
+
+
+## Durable offer notification outbox
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| OFFER-OUTBOX-001 | Persist a new initial or advanced offer | Notification state is Pending before any SignalR event | Store/API | P0 |
+| OFFER-OUTBOX-002 | Outbox worker sends a pending offer notification | SignalR event includes stable rideId, offerId and expiry; aggregate is ETag-marked Sent | Worker/store | P0 |
+| OFFER-OUTBOX-003 | SignalR send fails | Sent marker is not written; later poll retries | Worker/failure injection | P0 |
+| OFFER-OUTBOX-004 | Offer is resolved or superseded before delivery | Worker skips stale notification | Worker | P0 |
+| OFFER-OUTBOX-005 | Process stops after send but before Sent marker | Event may be delivered again; client de-duplicates by offerId | Failure injection/mobile | P0 |
+| OFFER-OUTBOX-006 | Two API instances process same pending notification | Duplicate delivery is tolerated; only current offer state is authoritative | Cosmos integration | P0 |
+| OFFER-LIFETIME-001 | Initial offer is created | Expiry uses configured Dispatch:OfferLifetimeSeconds | API | P0 |
+| OFFER-LIFETIME-002 | Next offer is advanced after rejection or expiry | Expiry uses the same configured lifetime as initial offers | API | P0 |
+
+The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-least-once, not exactly-once; client offerId de-duplication is required. Cosmos multi-instance concurrency and restart behaviour need validation before production.
