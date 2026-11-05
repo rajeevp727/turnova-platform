@@ -1,0 +1,22 @@
+using TurnOva.Infrastructure.Dispatch;
+namespace TurnOva.Tests;
+public sealed class DriverRideReservationStoreTests
+{
+    [Fact]
+    public async Task ConcurrentReservationsForOneDriver_OnlyOneSucceeds()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+        var results = await Task.WhenAll(store.TryAcquireAsync("driver-1", "ride-1"), store.TryAcquireAsync("driver-1", "ride-2"));
+        Assert.Single(results.Where(x => x));
+    }
+    [Fact]
+    public async Task ReleaseOnlyRemovesMatchingRide()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+        Assert.True(await store.TryAcquireAsync("driver-1", "ride-1"));
+        Assert.False(await store.TryReleaseAsync("driver-1", "ride-2"));
+        Assert.False(await store.TryAcquireAsync("driver-1", "ride-2"));
+        Assert.True(await store.TryReleaseAsync("driver-1", "ride-1"));
+        Assert.True(await store.TryAcquireAsync("driver-1", "ride-2"));
+    }
+}

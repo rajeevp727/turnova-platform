@@ -169,3 +169,8 @@ Initial zones and boundaries; vehicle categories and capacity; fares, taxes, com
 ### Server-owned expiry increment
 
 The API host runs a bounded background expiry worker in both Cosmos and in-memory modes. Expired offers are resolved by conditional state replacement and the associated driver is moved to the back of the same zone/service-class queue at most once for a given offer ID. A missing queue membership is retried rather than silently resolving the offer. This is an incremental recovery workflow; automatic next-driver delivery and atomic ride/driver reservation are not included.
+
+
+## Exclusive active-driver reservation
+
+A driver may hold at most one active ride reservation at a time. The backend acquires a durable per-driver reservation before attempting the ride's conditional Requested-to-Accepted transition. The ride's ETag remains the single-winner guard when multiple drivers race for the same ride. A failed ride claim releases the matching driver reservation; successful assignment retains it until ride completion or rider cancellation. Reservation release is scoped to the exact driver/ride pair so a stale request cannot clear a different ride's reservation. The reservation and ride are stored in separate Cosmos partitions, so crash recovery and reconciliation remain required before production.

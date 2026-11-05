@@ -82,6 +82,9 @@ Candidates must be approved, explicitly Online, active in the relevant queue, do
 The Driver available-rides endpoint returns actionable requested rides only to the current head of the driver's approved zone/service-class FIFO queue. Ride acceptance rechecks that queue-head condition on the server; clients cannot self-assign by calling the endpoint directly. Explicit rejection is also restricted to the current queue head and moves that driver to the back. These checks are a transitional fairness safeguard, not a complete offer system: there is not yet a durable offer ID/deadline, a server-owned expiry worker, or exclusive per-ride offer state. The timeout acknowledgement endpoint is not automatic expiry.
 
 ### Atomicity and concurrency
+
+The current increment adds a `DriverRideReservations` container partitioned by `/driverId`, with one create-if-absent reservation document per driver. This serializes attempts by the same driver across different rides. The ride document remains partitioned by `/rideId` and uses its ETag for competing-driver/same-ride races. These are separate conditional writes, not a cross-partition transaction: a process stop after reservation creation but before the ride write can leave a reservation held. A reconciliation/lease recovery process is still required before production.
+
 Prevent assigning one driver to multiple active rides and prevent assigning one ride to multiple drivers. Use Cosmos DB transactional batches or conditional writes within an appropriate logical partition where possible. Cosmos DB transactions are scoped to a logical partition; do not assume cross-partition atomic transactions. Use ETags/optimistic concurrency, idempotency keys and bounded conflict retries. If invariants span partitions, revise the partition model or add a dedicated coordination mechanism before production.
 
 ### Queue lifecycle

@@ -423,3 +423,18 @@ The current increment adds the persistence contract, in-memory/Cosmos adapters a
 | AVAIL-010 | Cosmos mode availability change | Availability is persisted in the Drivers profile document and queue changes use the configured queue store | Cosmos integration | P0 |
 
 Online/offline availability is server-authoritative. Mobile controls are presentation only; dispatch and queue APIs enforce the persisted state. Cosmos cross-container writes are not transactional and require operational reconciliation before production.
+
+
+## Exclusive driver reservation coverage
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RESERVE-001 | Same driver concurrently attempts two ride reservations | Exactly one create-if-absent succeeds | Unit + Cosmos integration | P0 |
+| RESERVE-002 | Different drivers concurrently accept the same ride | Ride ETag permits at most one assignment | API + Cosmos integration | P0 |
+| RESERVE-003 | Driver reservation succeeds but ride is already assigned | Matching reservation is released after a conditional-write conflict | API integration | P0 |
+| RESERVE-004 | Driver completes the assigned ride | Matching reservation is released | API integration | P0 |
+| RESERVE-005 | Rider cancels an accepted ride | Matching reservation is released | API integration | P0 |
+| RESERVE-006 | Stale release references a different ride | Existing reservation is unchanged | Unit + Cosmos integration | P0 |
+| RESERVE-007 | API process stops between reservation and ride update | Reservation may remain held; reconciliation is a tracked production blocker | Failure injection | P0 |
+
+In-memory store concurrency tests are included in CI. Multi-instance Cosmos races and crash-window recovery require a real development Cosmos account and are not claimed as executed by CI unless separately configured.
