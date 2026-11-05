@@ -66,28 +66,6 @@ public sealed class InMemoryQueueStore : IQueueStore
         }
     }
 
-    public Task<bool> MoveToBackAsync(
-        string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var key = Key(zoneId, serviceClass);
-        if (!_queues.TryGetValue(key, out var queue))
-            return Task.FromResult(false);
-
-        lock (queue)
-        {
-            var current = queue.Entries.FirstOrDefault(entry => entry.DriverId == driverId);
-            if (current is null) return Task.FromResult(false);
-            queue.Remove(driverId);
-            queue.Enqueue(current with
-            {
-                JoinedAt = DateTimeOffset.UtcNow,
-                Sequence = Interlocked.Increment(ref _sequence)
-            });
-            return Task.FromResult(true);
-        }
-    }
-
     private static string Key(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
 }
