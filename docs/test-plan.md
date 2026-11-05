@@ -366,3 +366,18 @@ Validate on Android and iOS physical devices, including system appearance change
 | FIFO-ROT-006 | Concurrent Cosmos queue update conflicts with rotation | ETag precondition failure is reported as unsuccessful rotation; caller must refresh queue | Cosmos integration | P0 |
 
 The timeout endpoint is a client acknowledgement, not a server-side timer. Server-owned offer expiry, offer IDs and retry/recovery behavior remain unimplemented and must be completed before production dispatch.
+
+
+## FIFO queue-head enforcement
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| FIFO-HEAD-001 | Approved driver is first in the matching zone/service-class queue | Available-rides endpoint returns capacity-compatible requested rides in that zone/class | API | P0 |
+| FIFO-HEAD-002 | Approved driver is not first in the matching queue | Available-rides endpoint returns an empty list | API security | P0 |
+| FIFO-HEAD-003 | Approved driver is not first but calls ride acceptance directly | HTTP 409; ride remains Requested and unassigned | API security | P0 |
+| FIFO-HEAD-004 | Queue head accepts a compatible requested ride | Ride is assigned using the existing conditional state update | API | P0 |
+| FIFO-HEAD-005 | Non-head driver attempts to reject a compatible requested ride | HTTP 409; queue and work-activity ledger remain unchanged | API security | P0 |
+| FIFO-HEAD-006 | Queue head rejects a compatible requested ride | Driver moves to the back; rejection activity is recorded | API | P0 |
+| FIFO-HEAD-007 | Queue membership changes during rejection rotation | HTTP 409; client is instructed to refresh | API/concurrency | P0 |
+
+This increment enforces queue-head access at the API boundary. Durable offers, server-owned timers, automatic expiry/retry, exclusive offer delivery and multi-instance dispatch coordination remain separate production-critical work.

@@ -967,12 +967,18 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
     return Results.Created($"/api/v1/rides/{ride.RideId}", ride);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
-app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, CancellationToken ct) =>
+app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueService queueService, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (approvedProfile is null) return Results.Forbid();
+
+    // Only the current FIFO head may see actionable ride requests.
+    var queue = await queueService.GetPositionedQueueAsync(approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
+    if (queue.FirstOrDefault()?.DriverId != driverId)
+        return Results.Ok(Array.Empty<DemoRide>());
+
     if (rideContainer is null) return Results.Ok(rides.Values.Where(x =>
         x.Status == "Requested" && x.Passengers <= approvedProfile.PassengerCapacity &&
         x.DispatchZoneId == approvedProfile.ZoneId &&
@@ -987,12 +993,15 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, Cancel
         string.Equals(ride.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)));
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, QueueService queueService, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (approvedProfile is null) return Results.Forbid();
+    var queue = await queueService.GetPositionedQueueAsync(approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
+    if (queue.FirstOrDefault()?.DriverId != driverId)
+        return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can accept a ride." });
     if (rideContainer is null)
     {
         if (!rides.TryGetValue(rideId, out var current) || current.Status != "Requested")
@@ -1046,8 +1055,10 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
         return Results.Conflict(new { message = "This ride is not available to reject." });
 
     var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
-    if (queue.FirstOrDefault()?.DriverId == driverId)
-        await queueService.MoveToBackAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
+    if (queue.FirstOrDefault()?.DriverId != driverId)
+        return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can reject this ride." });
+    if (!await queueService.MoveToBackAsync(driverId, profile.ZoneId, profile.ServiceClass, ct))
+        return Results.Conflict(new { message = "Queue membership changed. Refresh and try again." });
 
     await RecordWorkActivityAsync(driverId, rideId, "Rejected", DateTimeOffset.UtcNow, ct);
     return Results.NoContent();
