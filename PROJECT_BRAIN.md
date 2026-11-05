@@ -107,3 +107,11 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Drivers can reconnect and retrieve their pending offer through `GET /api/v1/driver/offers/pending`; SignalR driver groups are joined only when the authenticated driver ID matches the requested group ID.
 - Ride acceptance checks the persisted offer owner, pending state and expiry before applying the existing driver reservation and ride ETag protections.
 - Offer creation and ride creation are separate Cosmos operations. A durable outbox/reconciliation workflow and automatic next-driver progression after rejection/expiry remain required before production.
+
+
+## Idempotent durable offer rejection (in progress)
+- When a ride has a persisted pending offer, rejection validates that the caller owns that offer and that it is still pending and unexpired.
+- Queue rotation uses the offer ID as an idempotency key. If the API process stops after rotation but before the offer aggregate is marked Rejected, the driver can retry; the queue store recognizes the same offer ID and does not rotate the driver twice.
+- The offer aggregate is conditionally updated with ETag protection and the matching attempt is marked Rejected.
+- Legacy rides without an offer aggregate retain the previous queue-rotation behavior.
+- This improves retry safety but does not yet provide automatic next-driver offer creation, durable notification outbox, or background reconciliation for a driver who never retries. Those remain production blockers.

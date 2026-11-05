@@ -1191,7 +1191,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 
-app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string rideId, QueueService queueService, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string rideId, QueueService queueService, IRideOfferStore offerStore, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
@@ -1203,11 +1203,43 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
         !string.Equals(ride.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase))
         return Results.Conflict(new { message = "This ride is not available to reject." });
 
+    var offer = await offerStore.GetByRideAsync(rideId, ct);
+    if (offer is not null)
+    {
+        if (offer.DriverId != driverId)
+            return Results.Conflict(new { message = "This ride offer is not assigned to you." });
+        if (offer.Status == RideOfferStatuses.Rejected)
+            return Results.NoContent();
+        if (!offer.IsPending || offer.IsExpiredAt(TimeProvider.System.GetUtcNow()))
+            return Results.Conflict(new { message = "This ride offer is no longer pending." });
+    }
+
     var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
-    if (queue.FirstOrDefault()?.DriverId != driverId)
+    // A persisted offer proves assignment ownership. Skip the head check on retries because
+    // the first attempt may already have rotated this driver before the offer update failed.
+    if (offer is null && queue.FirstOrDefault()?.DriverId != driverId)
         return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can reject this ride." });
-    if (!await queueService.MoveToBackAsync(driverId, profile.ZoneId, profile.ServiceClass, ct))
+
+    // Offer-ID idempotency makes a client retry safe if the process stops after queue rotation.
+    var rotated = offer is null
+        ? await queueService.MoveToBackAsync(driverId, profile.ZoneId, profile.ServiceClass, ct)
+        : await app.Services.GetRequiredService<IQueueStore>().MoveToBackOnceAsync(
+            driverId, profile.ZoneId, profile.ServiceClass, offer.CurrentOfferId, ct);
+    if (!rotated)
         return Results.Conflict(new { message = "Queue membership changed. Refresh and try again." });
+
+    if (offer is not null && !string.IsNullOrWhiteSpace(offer.ETag))
+    {
+        var resolvedAt = TimeProvider.System.GetUtcNow();
+        var attempts = offer.Attempts.Select(attempt =>
+            attempt.OfferId == offer.CurrentOfferId && attempt.Status == RideOfferStatuses.Pending
+                ? attempt with { Status = RideOfferStatuses.Rejected, ResolvedAtUtc = resolvedAt }
+                : attempt).ToArray();
+        if (!await offerStore.TryReplaceAsync(
+            offer with { Status = RideOfferStatuses.Rejected, Attempts = attempts },
+            offer.ETag, ct))
+            return Results.Conflict(new { message = "The offer changed while rejection was being saved. Retry to confirm the result." });
+    }
 
     await RecordWorkActivityAsync(driverId, rideId, "Rejected", DateTimeOffset.UtcNow, ct);
     return Results.NoContent();
