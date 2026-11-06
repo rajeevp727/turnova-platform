@@ -5,8 +5,8 @@
 
 ## 1. Current step
 
-**13/19 — TRIP-01: Driver trip lifecycle, location sharing, trip history and Rider live progress.**  
-Current task: review and verify Driver-owned trip history in [PR #48](https://github.com/rajeevp727/turnova-platform/pull/48). Rider-owned history was merged in PR #47; PR #48 adds the Driver API/UI and ownership/privacy tests.
+**18/19 — PLATFORM-01: Secure, observable, reliable API with persistent audit trail.**  
+Current task: remove wildcard CORS, enforce an explicit origin allow-list, and keep process liveness distinct from Cosmos-aware readiness; add integration coverage.
 
 ## 2. Overall MVP completion
 
@@ -32,24 +32,22 @@ Current task: review and verify Driver-owned trip history in [PR #48](https://gi
 | 10 | REALTIME-01 | In progress | SignalR ride/offer flows and reconnect recovery exist; Android/iOS interruption, reconnect and device-to-device checks remain. |
 | 11 | DRIVER-01 | In progress | Onboarding and union selfie approval exist; secure document storage/scanning, retention, reviewer RBAC and device tests remain. |
 | 12 | DRIVER-02 | In progress | GPS-gated Online, zone exit and queue removal exist; full offer/timeout/re-entry and physical-device checks remain. |
-| 13 | TRIP-01 | In progress | Rider history merged in PR #47; Driver-owned history API/UI and ownership/privacy tests are being implemented on `feat/driver-trip-history`. Cosmos history, device-to-device and location-privacy checks remain. |
+| 13 | TRIP-01 | In progress | Rider and Driver history code merged in PRs #47 and #48; Cosmos cross-partition history, device-to-device and location-privacy checks remain. |
 | 14 | DRIVER-03 | Blocked | Work-metrics PDF exists; monetary earnings need approved compensation, commission and payout policy. |
 | 15 | DRIVER-04 | Blocked | Driver support workflow needs approved categories, escalation owner and process. |
 | 16 | RIDER-04 | Blocked | Rider history sub-work is in PR #47; payment provider/method, sandbox, webhook/idempotency/refund, receipts and ratings remain. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting process, categories, escalation owner, API/UI, audit and device acceptance remain. |
-| 18 | PLATFORM-01 | In progress | .NET 10 API, health/readiness and native non-container publish are present; real Cosmos, security, observability and load gates remain. |
+| 18 | PLATFORM-01 | In progress | Explicit CORS allow-list and separate liveness/readiness endpoints are being added with integration tests; Cosmos failure injection, security/logging, metrics/traces/audit and load gates remain. |
 | 19 | RELEASE-01 | In progress | CI validates backend, native API publish, Expo config/typechecks and shared auth tests; Android/iOS production builds, signed artifacts and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
 
-- PR #47 merged: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`.
-- Latest PR #47 head `1c08b96e78bef42c175b29593de153a151382f96` passed all four jobs in CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42214516012.
-- Rider history API tests cover owner isolation despite client-supplied riderId, newest-first ordering, response privacy, Rider/Driver role separation and empty history. Rider UI restores the latest active ride, ignores stale responses after Activity unmount/session change, and clears stale active state when history contains no active ride.
-- PR #48 is open: https://github.com/rajeevp727/turnova-platform/pull/48. It adds Driver-only `GET /api/v1/driver/rides/mine`, an owner-scoped safe summary, active-trip restoration in Driver Trips UI with SignalR reconnect refresh, and API ownership/privacy/role/empty-history tests.
-- Initial CI runs 42215153478 and 42215250054 exposed the same Driver TypeScript issue (`styles.status` did not exist); it was corrected to the existing `styles.label` in commit `213ac477c1868f4768d60938436dd86c742e106d`.
-- Driver-history implementation head `5724a3634d8a6c9f7bdbf86cf8ad0c7ecef848db` passed all four jobs in CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42215519184: backend restore/build/tests, native API publish/artifact verification, Rider and Driver Expo config/typechecks, and shared mobile auth tests.
-- A final documentation-only reconciliation commit follows that validated implementation head; require its PR CI run to pass before merge.
-- Real Cosmos cross-partition query/RU behaviour is not verified by the in-memory API tests.
+- PR #47 merged: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed all four jobs.
+- PR #48 merged: https://github.com/rajeevp727/turnova-platform/pull/48; merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42215718229 passed backend restore/build/tests, native API publish/artifact verification, Rider/Driver Expo config/typechecks and shared auth tests.
+- TRIP-01 Rider and Driver history code is merged. The row remains In progress pending Cosmos cross-partition/RU verification, Android/iOS active-trip/device recovery and location-privacy acceptance.
+- Current PLATFORM-01 branch: `fix/platform-cors-health`. It removes wildcard CORS, accepts explicit `Cors:AllowedOrigins` origins only (HTTPS except HTTP in Development), rejects wildcard/path/query/userinfo origins, removes the duplicate `/health/ready` mapping, and adds CORS and liveness/readiness integration tests.
+- The PLATFORM-01 branch has not yet been opened as a PR; review and latest-head CI are still required.
+- Remaining platform gates include Cosmos-unavailable readiness failure injection, production CORS origin configuration, secrets/logging review, metrics/traces/alerts, durable audit failure/recovery tests and load tests.
 
 ## 5. Approved supplemental requirement (not counted in the 19 rows)
 
@@ -57,7 +55,7 @@ Current task: review and verify Driver-owned trip history in [PR #48](https://gi
 
 ## 6. Next step
 
-Finish automated review of PR #48, wait for fresh CI on its latest head, fix any remaining failures, and merge only with all required checks green. After TRIP-01, record blocked decision-dependent areas and proceed in order to the next actionable acceptance area (PLATFORM-01). Do not start a parallel feature PR.
+Finish the PLATFORM-01 CORS/health slice on `fix/platform-cors-health`, add its focused PR, review the full diff, and merge only with latest-head green CI. Then continue the remaining PLATFORM-01 observability/audit/reliability gaps before RELEASE-01. Do not start a parallel feature PR.
 
 ## 7. Blockers
 
