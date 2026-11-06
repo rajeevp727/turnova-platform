@@ -81,9 +81,9 @@
 
 ## Highest-priority next work
 
-1. **Current sequential #19 RELEASE-01:** export and verify production JavaScript bundles for both Rider and Driver on Android and iOS in CI; keep native binaries/signing/device acceptance separate.
+1. **Current sequential AI-01 supplemental requirement:** finish the provider-agnostic Rider trip-intent and approved-help boundary, run final-head CI, complete automated review and merge only when all required checks pass. Keep AI-01 outside the 19-row denominator.
 2. **#17 SUPPORT-01 remains Blocked:** Rider support categories, escalation owner and operating process are not approved. Do not invent them.
-3. After #19, continue the separately approved AI-01 supplemental requirement without changing the 19-row denominator; return to #17 when its product decision is available.
+3. **#19 RELEASE-01 remains In progress:** PR #72 verifies production JavaScript bundles, not native signed APK/AAB/IPA or physical-device acceptance.
 4. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
 
 ## Deployment constraint
