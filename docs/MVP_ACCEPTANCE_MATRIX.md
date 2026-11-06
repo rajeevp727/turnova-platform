@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12 and 14; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #45 merge `9850b778dad9ec040818275bb58095e331f3011d`.
+**Last audited:** 2026-11-06; main baseline is PR #46 merge `98f162c1828bf6c059c3e92eee15d18e030ce299`; Rider trip-history increment is under PR #47.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -18,8 +18,8 @@
 |---|---|---|---|---|
 | AUTH-01 | Rider and Driver registration, login, profile and role separation | PR #35 fake-TriSend API integration tests; PR #39 JWT signature/issuer/audience/expiry and Rider/Driver role-boundary integration tests; PR #40 startup JWT/TriSend HTTPS configuration guards | Duplicate-registration contract and mobile runtime/session tests; end-to-end profile lifecycle | In progress |
 | AUTH-02 | Secure access/refresh-token lifecycle and logout | Both apps use SecureStore; PR #37 serializes concurrent refreshes; PR #41 extracts and tests the shared single-flight refresh coordinator and retry-after-failure behaviour | Automated token rotation/reuse, app restart, expiry, logout and secure-storage failure tests on both apps | In progress |
-| RIDER-01 | Pickup/drop-off selection, location permission, nearby compatible vehicles and capacity | Feature branch adds Rider-only nearby discovery filtered by configured pickup zone, active FIFO membership, approved/online state, service class, passenger capacity, active-trip state and a 120-second location freshness window; Driver app publishes foreground GPS only while online and pauses availability updates during an active ride; API returns vehicle make/model, capacity and rounded distance without driver identity, exact coordinates or location timestamps | CI API tests NEARBY-001–007 cover required GPS, configured-zone rejection, class/capacity/availability/freshness filtering, privacy response shape, Rider-only access, active-trip exclusion, incomplete location payloads and zone-exit offline handling; Android/iOS permission, foreground/resume and live-device checks remain | In progress |
-| RIDER-02 | Fare estimate and clear trip details before confirmation | No verified implementation evidence recorded in this audit | Fare policy decision; estimate API/UI tests for all service classes and passenger counts | In progress |
+| RIDER-01 | Pickup/drop-off selection, location permission, nearby compatible vehicles and capacity | PR #45 adds Rider-only nearby discovery filtered by configured pickup zone, active FIFO membership, approved/online state, service class, passenger capacity, active-trip reservation and 120-second location freshness; Driver app publishes foreground GPS only while Online and pauses availability updates during an active ride; response omits driver identity, exact coordinates and location timestamps | PR #45 CI run 42209346759 passed API tests NEARBY-001–007; Android/iOS permission, foreground/resume, maps/geocoding and live-device checks remain | In progress |
+| RIDER-02 | Fare estimate and clear trip details before confirmation | No fare calculation or pre-confirmation estimate is enabled; API returns a null fare and Rider UI states that pricing is not configured | Fare policy decision (base fare, distance/time components, taxes and service-class rules); estimate API/UI tests for all service classes and passenger counts | Blocked |
 | RIDER-03 | Booking creation, status, cancellation and duplicate-submit safety | Ride lifecycle, ownership and idempotency integration tests; PR #43 adds pickup/drop-off, coordinate, service-class and passenger-count boundary coverage plus invalid-request idempotency retry | Confirm every PRD transition, cancellation policy, persistence/restart and duplicate request against durable storage | In progress |
 | DISPATCH-01 | Pickup resolves to configured zone; matching zone and Scooty/Bike/Auto/Cab service class only | Ride requests and nearby discovery resolve pickup GPS against configured zones; nearby discovery restricts results to the matching zone/service-class FIFO queue | Configured production boundaries, boundary/overlap tests, cross-zone policy decision and end-to-end rider-to-driver matching | In progress |
 | DISPATCH-02 | Only approved, online, eligible, compatible drivers are considered in server-owned FIFO order | Driver onboarding/approval, Online/Offline, FIFO queue and queue-head enforcement merged in prior PRs; PR #46 adds a 16-way concurrent duplicate-join store test | End-to-end eligibility matrix, Cosmos persistence and multi-instance concurrency tests | In progress |
@@ -27,28 +27,61 @@
 | DISPATCH-04 | A ride and driver cannot be assigned twice; one active ride reservation per driver | PR #27 added durable per-driver reservation and ride ETag protection | Crash recovery/reconciliation for reservation-before-ride-write window; real Cosmos simultaneous acceptance tests across instances | In progress |
 | REALTIME-01 | Rider and Driver receive consistent live trip/queue updates and recover after reconnect | SignalR ride hub, driver offer channel and pending-offer recovery documented in README | Android/iOS network interruption, reconnect, stale event, duplicate event and authoritative state refresh tests | In progress |
 | DRIVER-01 | Driver onboarding, required identity/licence/vehicle documents, approval and eligibility feedback | Onboarding and interim review endpoints documented; selfie approval by assigned union implemented | Secure private document upload/storage/scanning, consent/retention, reviewer RBAC, audit actor identity and full onboarding device tests | In progress |
-| DRIVER-02 | Driver availability, queue position, offers, accept/reject/timeout and re-entry | Online requires a valid GPS position inside the driver's assigned configured zone; foreground location updates are accepted only while approved and online; active rides pause availability-location updates; leaving the assigned zone atomically takes the driver offline and removes queue membership | Android/iOS location permission, foreground/resume and zone-exit device tests; full offer/timeout/re-entry acceptance and recovery tests | In progress |
-| TRIP-01 | Driver trip lifecycle, location sharing, trip history and rider live progress | Ride lifecycle and foreground location/SignalR flows documented | Full device-to-device trip tests, durable trip history, background/permission edge cases and location privacy validation | In progress |
-| DRIVER-03 | Driver earnings and support | Monthly PDF work-metrics payslip exists; monetary compensation explicitly not configured | Compensation/commission policy decision, earnings calculation, payout treatment and support workflow | Blocked |
-| RIDER-04 | Payment through enabled methods, trip history, receipts and ratings | No completed payment/receipt/rating acceptance evidence recorded in this audit | Payment provider/method decision, sandbox integration, webhook/idempotency/refund tests, receipts and rating flows | Blocked |
-| SUPPORT-01 | Rider help and issue reporting; driver support | No verified end-to-end support workflow evidence recorded in this audit | Support process, issue categories/escalation owner, API/UI, audit and device acceptance | Blocked |
-| PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations/readiness, health endpoints and selected audit stores documented | Real Cosmos readiness/ETag/partition tests, security review, CORS, secrets/logging, metrics/traces/alerts and load tests | In progress |
-| RELEASE-01 | Android and iOS builds pass agreed functional, security and pilot-readiness tests | Expo app projects and CI typechecks exist; CI workflow runs backend tests and mobile typechecks | Actual successful CI evidence for current main, Android/iOS production builds, signed artifacts, physical-device functional/security/pilot checklist | In progress |
+| DRIVER-02 | Driver availability, queue position, offers, accept/reject/timeout and re-entry | PR #45 requires in-zone GPS before Online; foreground location updates are accepted only while approved and online; active rides pause availability-location updates; leaving the assigned zone atomically takes the driver offline and removes queue membership | Android/iOS location permission, foreground/resume and zone-exit device tests; full offer/timeout/re-entry acceptance and recovery tests | In progress |
+| TRIP-01 | Driver trip lifecycle, location sharing, trip history and rider live progress | Rider trip history API and Activity list return authenticated-owner summaries and restore the latest active ride when Activity opens; driver trip lifecycle and foreground location/SignalR flows documented; Driver history remains outstanding | Driver-owned history API/UI and ownership tests; full device-to-device trip tests, Cosmos history persistence, background/permission edge cases and location privacy validation | In progress |
+| DRIVER-03 | Driver earnings | Monthly PDF work-metrics payslip exists; monetary compensation explicitly not configured | Compensation/commission policy decision, earnings calculation and payout treatment | Blocked |
+| DRIVER-04 | Driver support and issue reporting | No verified end-to-end Driver support workflow evidence recorded in this audit | Driver support process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
+| RIDER-04 | Payment through enabled methods, trip history, receipts and ratings | Rider-owned trip history API and Activity list filter by authenticated rider and expose only safe ride summary fields; PR #47 adds ownership, ordering, privacy and empty-history API tests | Cosmos history query integration; payment provider/method decision, sandbox integration, webhook/idempotency/refund tests, receipts and rating flows | Blocked |
+| SUPPORT-01 | Rider help and issue reporting | No verified end-to-end Rider support workflow evidence recorded in this audit | Rider help process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
+| PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations/readiness, health endpoints and selected audit stores documented; PR #45 verifies a native non-container API publish artifact | Real Cosmos readiness/ETag/partition tests, security review, CORS, secrets/logging, metrics/traces/alerts and load tests | In progress |
+| RELEASE-01 | Android and iOS builds pass agreed functional, security and pilot-readiness tests | Main CI run 42209834591 passed backend build/tests, non-container API publish/artifact verification, Rider/Driver Expo config and TypeScript checks, and shared mobile auth tests | Android/iOS production builds, signed artifacts, physical-device functional/security/pilot checklist | In progress |
 
-## Current verified count
+## Current verified count and weighted progress
 
-- Verified rows: **0 / 19** from this audit.
-- This does **not** mean nothing has been implemented. It means the available evidence did not establish every required test and release gate for any complete acceptance row.
-- Merged implementation increments #24–#37 are valuable progress. PR #36 passed backend tests and both Rider/Driver Expo config/typecheck jobs in [CI run #97](https://github.com/rajeevp727/turnova-platform/actions/runs/42183594825). PR #37 passed all three jobs in [CI run #99](https://github.com/rajeevp727/turnova-platform/actions/runs/42183982378). These are CI evidence, not end-to-end acceptance proof.
-- Update each row with exact PR/commit links and test run URLs/results as evidence becomes available. Split a row if it contains independent acceptance criteria that can be verified separately.
+- Acceptance areas: **19 / 19**, reconciled to the agreed tracker by splitting the combined Driver earnings/support area into the separate PRD capabilities **DRIVER-03 (earnings)** and **DRIVER-04 (support)**. Rider support remains SUPPORT-01. No additional PRD scope was added.
+- Status counts: **0 Verified, 14 In progress, 5 Blocked, 0 Not started**.
+- Weighted progress: **36.8%** = `(Verified × 1 + In progress × 0.5 + Not started × 0 + Blocked × 0) ÷ 19` = `(0 + 7 + 0 + 0) ÷ 19`.
+- Strict fully verified count: **0 / 19**. A weighted score is not a claim that the MVP is accepted or production-ready.
+- PR #47 implements Rider-owned trip history and has a prior-head CI pass (run 42212058315 on commit `c9973abe9d706a9b665dc703d622b81858955faf`). The review found an additional stale-state case and corrected it on the current PR branch; a fresh CI run for the updated head is required before merge.
+- Main CI run 42209834591 passed backend build/tests, native non-container API publish/artifact verification, both mobile Expo config/typechecks and shared mobile auth tests. This remains automated CI evidence, not Android/iOS physical-device or provider acceptance proof.
+- Do not mark an area Verified until all evidence in its row has passed and the links/results are recorded.
+
+## Approved supplemental requirement (not counted in the 19 PRD areas)
+
+| ID | Scope | Status | Evidence / remaining work |
+|---|---|---|---|
+| AI-01 | Provider-agnostic, privacy-safe, bounded Rider/Driver AI assistance: rider trip-intent draft for human review; approved FAQ/ride-state explanations with escalation; optional driver offer explanation. AI must not book, charge, set fares, approve KYC, alter FIFO/eligibility or change ride state. | Not started | Implement the approved service boundary, validated contracts, timeout/cancellation, redaction, rate controls and deterministic fallback with mock-based tests; keep provider/model/credentials as infrastructure placeholders. |
+
+## Ordered 1–19 checklist
+
+1. AUTH-01 — In progress
+2. AUTH-02 — In progress
+3. RIDER-01 — In progress
+4. RIDER-02 — Blocked
+5. RIDER-03 — In progress
+6. DISPATCH-01 — In progress
+7. DISPATCH-02 — In progress
+8. DISPATCH-03 — In progress
+9. DISPATCH-04 — In progress
+10. REALTIME-01 — In progress
+11. DRIVER-01 — In progress
+12. DRIVER-02 — In progress
+13. TRIP-01 — In progress; Rider history increment in PR #47, Driver history remains outstanding
+14. DRIVER-03 — Blocked
+15. DRIVER-04 — Blocked
+16. RIDER-04 — Blocked
+17. SUPPORT-01 — Blocked
+18. PLATFORM-01 — In progress
+19. RELEASE-01 — In progress
 
 ## Highest-priority next work
 
-1. Implement Rider trip history and verify persisted ride ownership; the API currently exposes only single-ride lookup and the Rider app retains one in-memory ride.
-2. Keep fare estimation blocked until the fare policy (base fare, distance/time components, taxes and service-class rules) is explicitly approved; do not invent pricing.
-3. Add real Cosmos integration/failure-injection coverage for driver reservation recovery and outbox/location persistence; these require the development Cosmos account and must remain blocked without credentials.
-4. Implement the remaining payment/receipt/rating and help/issue-reporting flows only after their provider and support-policy decisions are recorded.
-5. Validate both apps on physical Android and iOS devices and collect release evidence.
+1. Finish TRIP-01 by adding authenticated Driver-owned trip history API/UI and ownership/privacy tests after PR #47 is merged.
+2. Keep RIDER-02 blocked until base fare, distance/time components, taxes and service-class pricing rules are approved; never invent a quote.
+3. Keep DRIVER-03 blocked until compensation, commission and payout treatment are approved; the existing monthly PDF is a work-metrics payslip, not monetary earnings.
+4. Keep RIDER-04 blocked until payment method/provider, sandbox, webhook/idempotency/refund, receipt and rating decisions are supplied.
+5. Keep DRIVER-04 and SUPPORT-01 blocked until the role-specific support process, categories and escalation owner are approved.
+6. Continue independent PLATFORM-01 and RELEASE-01 evidence work in sequence; real Cosmos, observability/security, Android/iOS builds and physical-device validation remain explicit gates.
 
 ## Deployment constraint
 
@@ -56,4 +89,4 @@ The MVP API is validated through a native .NET 10 publish artifact. Docker, cont
 
 ## Audit limitations
 
-This is a conservative baseline derived from the PRD, README, test plan, project brain, merged PR #33 and the repository's current source inventory. It is not a substitute for executing CI, Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.
+This audit reflects main after PR #46 merge `98f162c1828bf6c059c3e92eee15d18e030ce299`, the PRD, README, test plan and current source inventory. It is not a substitute for executing Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.

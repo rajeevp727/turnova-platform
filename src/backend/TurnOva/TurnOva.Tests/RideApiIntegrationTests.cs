@@ -827,6 +827,81 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Offline", profile.AvailabilityStatus);
     }
 
+    [Fact]
+    public async Task RiderTripHistoryReturnsOnlyAuthenticatedRidersRidesNewestFirstAndOmitsPrivateFields()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-history-owner");
+        using var otherRider = factory.CreateClient("Rider", "rider-history-other");
+        using var driver = factory.CreateClient("Driver", "driver-history-access");
+
+        var first = await CreateRideAsync(rider, "rider-history-first");
+        var second = await CreateRideAsync(rider, "rider-history-second");
+        var other = await CreateRideAsync(otherRider, "rider-history-other");
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[first.RideId] = rides[first.RideId] with
+        {
+            RequestedAt = DateTimeOffset.UtcNow.AddMinutes(-10),
+            DriverId = "driver-private-id",
+            PickupLatitude = 17.493,
+            PickupLongitude = 78.399
+        };
+        rides[second.RideId] = rides[second.RideId] with
+        {
+            RequestedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            DriverId = "driver-private-id",
+            PickupLatitude = 17.494,
+            PickupLongitude = 78.400
+        };
+
+        using var response = await rider.GetAsync("/api/v1/rides/mine?riderId=rider-history-other");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        var history = JsonSerializer.Deserialize<List<RiderRideHistoryItemTest>>(
+            body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(history);
+        Assert.Equal(2, history.Count);
+        Assert.Equal(second.RideId, history[0].RideId);
+        Assert.Equal(first.RideId, history[1].RideId);
+        Assert.DoesNotContain(history, item => item.RideId == other.RideId);
+
+        Assert.False(body.Contains("riderId", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("driverId", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("pickupLatitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("pickupLongitude", StringComparison.OrdinalIgnoreCase));
+
+        var otherHistory = await otherRider.GetFromJsonAsync<List<RiderRideHistoryItemTest>>("/api/v1/rides/mine");
+        Assert.NotNull(otherHistory);
+        Assert.Single(otherHistory);
+        Assert.Equal(other.RideId, otherHistory[0].RideId);
+        Assert.Equal(HttpStatusCode.Forbidden, (await driver.GetAsync("/api/v1/rides/mine")).StatusCode);
+    }
+
+    [Fact]
+    public async Task NewRideDoesNotExposeAnInventedFareBeforeFarePolicyIsApproved()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-fare-policy-placeholder");
+
+        using var request = CreateRideRequest("rider-fare-policy-placeholder");
+        using var response = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("estimatedFareInr").ValueKind);
+    }
+
+    [Fact]
+    public async Task RiderWithNoTripsReceivesAnEmptyHistoryList()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-history-empty");
+
+        var history = await rider.GetFromJsonAsync<List<RiderRideHistoryItemTest>>("/api/v1/rides/mine");
+        Assert.NotNull(history);
+        Assert.Empty(history);
+    }
+
     private static HttpRequestMessage CreateRideRequest(
         string? idempotencyKey,
         int passengers = 1,
@@ -868,6 +943,7 @@ public sealed class RideApiIntegrationTests
     }
 
     private sealed record NearbyVehicleTest(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
+    private sealed record RiderRideHistoryItemTest(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt);
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 
