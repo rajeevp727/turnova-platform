@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12 and 14; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #45 merge `9850b778dad9ec040818275bb58095e331f3011d`.
+**Last audited:** 2026-11-06 against main after PR #46 merge `98f162c1828bf6c059c3e92eee15d18e030ce299`.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -30,7 +30,7 @@
 | DRIVER-02 | Driver availability, queue position, offers, accept/reject/timeout and re-entry | Online requires a valid GPS position inside the driver's assigned configured zone; foreground location updates are accepted only while approved and online; active rides pause availability-location updates; leaving the assigned zone atomically takes the driver offline and removes queue membership | Android/iOS location permission, foreground/resume and zone-exit device tests; full offer/timeout/re-entry acceptance and recovery tests | In progress |
 | TRIP-01 | Driver trip lifecycle, location sharing, trip history and rider live progress | Ride lifecycle and foreground location/SignalR flows documented | Full device-to-device trip tests, durable trip history, background/permission edge cases and location privacy validation | In progress |
 | DRIVER-03 | Driver earnings and support | Monthly PDF work-metrics payslip exists; monetary compensation explicitly not configured | Compensation/commission policy decision, earnings calculation, payout treatment and support workflow | Blocked |
-| RIDER-04 | Payment through enabled methods, trip history, receipts and ratings | No completed payment/receipt/rating acceptance evidence recorded in this audit | Payment provider/method decision, sandbox integration, webhook/idempotency/refund tests, receipts and rating flows | Blocked |
+| RIDER-04 | Payment through enabled methods, trip history, receipts and ratings | Rider-owned trip history API and Activity list filter by authenticated rider and expose only safe ride summary fields; PR #47 adds ownership, ordering, privacy and empty-history API tests | Cosmos history query integration; payment provider/method decision, sandbox integration, webhook/idempotency/refund tests, receipts and rating flows | Blocked |
 | SUPPORT-01 | Rider help and issue reporting; driver support | No verified end-to-end support workflow evidence recorded in this audit | Support process, issue categories/escalation owner, API/UI, audit and device acceptance | Blocked |
 | PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations/readiness, health endpoints and selected audit stores documented | Real Cosmos readiness/ETag/partition tests, security review, CORS, secrets/logging, metrics/traces/alerts and load tests | In progress |
 | RELEASE-01 | Android and iOS builds pass agreed functional, security and pilot-readiness tests | Expo app projects and CI typechecks exist; CI workflow runs backend tests and mobile typechecks | Actual successful CI evidence for current main, Android/iOS production builds, signed artifacts, physical-device functional/security/pilot checklist | In progress |
