@@ -546,3 +546,11 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 | NEARBY-007 | Driver submits a location update with missing coordinates or has an active ride | HTTP 400 for missing coordinates; HTTP 409 during an active ride without changing Online state or trip location | API integration | P0 |
 
 The API integration tests use the in-memory store and configured test zone. They do not establish Cosmos cross-partition query behaviour or physical-device permission/resume behaviour. Driver GPS is foreground-only and is not intended as background tracking.
+
+## 13. Concurrent queue membership
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| QUEUE-CONC-001 | Sixteen concurrent AddAsync operations submit the same driver to one zone/service-class queue | Exactly one operation succeeds, duplicate attempts are rejected, and one active membership remains | Unit concurrency | P0 |
+
+This deterministic test exercises the in-memory store. Cosmos multi-instance and partition-level concurrency remain an infrastructure-backed verification gate.
