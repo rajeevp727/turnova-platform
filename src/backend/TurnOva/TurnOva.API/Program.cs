@@ -1202,7 +1202,7 @@ app.MapPost("/api/v1/queues/join", async (
     if (!IsCabServiceClass(approvedProfile.ServiceClass))
         return Results.Conflict(new { message = "Only approved Cab drivers can join the new MVP queue." });
     if (approvedProfile.AvailabilityStatus != "Online")
-        return Results.Conflict(new { message = "Go online before joining the FIFO queue." });
+        return Results.Conflict(new { message = "Go online before joining the Cab availability queue." });
 
     try
     {
@@ -1215,7 +1215,7 @@ app.MapPost("/api/v1/queues/join", async (
             DateTimeOffset.UtcNow, 0, true), ct);
         var entries = await service.GetPositionedQueueAsync(request.ZoneId.Trim(), serviceClass, ct);
         var position = entries.ToList().FindIndex(x => x.DriverId == driverId) + 1;
-        return Results.Ok(new { message = "You joined the queue.", driverId, position });
+        return Results.Ok(new { message = "You joined the Cab availability queue.", driverId, position });
     }
     catch (InvalidOperationException ex)
     {
