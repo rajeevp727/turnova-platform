@@ -82,6 +82,7 @@ export default function App() {
   const [agreementHistory, setAgreementHistory] = useState<AgreementVersion[]>([]);
   const [agreementAmount, setAgreementAmount] = useState("");
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
+  const [unionAssignment, setUnionAssignment] = useState<any>(null);
   const [driverName, setDriverName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [vehicleMake, setVehicleMake] = useState("");
@@ -130,7 +131,7 @@ export default function App() {
     });
     if (response.status === 401) {
       const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); throw new Error("Session expired. Please sign in again."); }
+      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); setUnionAssignment(null); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
         accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
@@ -140,6 +141,7 @@ export default function App() {
         setUser(null);
         setActiveRide(null);
         setDriverRideHistory([]);
+        setUnionAssignment(null);
         setAvailableRides([]);
         throw new Error("Session expired. Please sign in again.");
       }
@@ -526,7 +528,12 @@ export default function App() {
 
   const loadOnboarding = useCallback(async () => {
     try {
-      const profile = await apiFetch("/api/v1/driver/onboarding/me");
+      setUnionAssignment(null);
+      const [profile, assignment] = await Promise.all([
+        apiFetch("/api/v1/driver/onboarding/me"),
+        apiFetch("/api/v1/driver/union")
+      ]);
+      setUnionAssignment(assignment?.status === "Active" ? assignment : null);
       if (!profile?.driverId) setLegacyServiceClass(null);
       if (profile?.driverId) {
         setOnboardingProfile(profile);
@@ -545,6 +552,16 @@ export default function App() {
   }, [apiFetch]);
 
   useEffect(() => { if (user) void loadOnboarding(); }, [user, loadOnboarding]);
+  useEffect(() => {
+    if (!user || tab !== "Profile") return;
+    let cancelled = false;
+    void apiFetch("/api/v1/driver/union")
+      .then(assignment => {
+        if (!cancelled) setUnionAssignment(assignment?.status === "Active" ? assignment : null);
+      })
+      .catch(error => setError(error instanceof Error ? error.message : "Unable to refresh Union membership."));
+    return () => { cancelled = true; };
+  }, [user, tab, apiFetch]);
 
   const captureSelfie = async () => {
     setError(""); setNotice("");
@@ -620,7 +637,7 @@ export default function App() {
   const logout = async () => {
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
-    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]);
+    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null);
   };
 
   const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
@@ -711,9 +728,16 @@ export default function App() {
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
         {profilePhotoBase64 ? <Image source={{ uri: `data:image/jpeg;base64,${profilePhotoBase64}` }} style={{ width: 112, height: 112, borderRadius: 56, alignSelf: "center", marginVertical: 12 }} /> : <Text style={styles.muted}>No driver selfie saved yet.</Text>}
         {!!onboardingProfile?.profilePhotoApprovalStatus && <Text style={styles.muted}>Union selfie approval: {onboardingProfile.profilePhotoApprovalStatus}{onboardingProfile.profilePhotoApprovalStatus === "Rejected" && onboardingProfile.profilePhotoReviewReason ? ` · ${onboardingProfile.profilePhotoReviewReason}` : ""}</Text>}
+        <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
+          <Text style={styles.label}>CURRENT UNION MEMBERSHIP</Text>
+          {unionAssignment ? <>
+            <Text style={styles.cardTitle}>{unionAssignment.unionName}</Text>
+            <Text style={styles.muted}>Membership status: {unionAssignment.status}</Text>
+          </> : <Text style={styles.muted}>No active Cab union membership is assigned yet.</Text>}
+        </View>
         <Pressable style={styles.secondary} onPress={() => void captureSelfie()} disabled={loading || !!legacyServiceClass}><Text style={styles.secondaryText}>{profilePhotoBase64 ? "Retake driver selfie" : "Take driver selfie"}</Text></Pressable>
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
-        {onboardingProfile?.status === "Approved" && legacyServiceClass ? <Text style={styles.error}>Your legacy {legacyServiceClass.toUpperCase()} profile is retained for history and is not eligible for new Cab rides.</Text> : onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your Cab driver profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
+        {onboardingProfile?.status === "Approved" && legacyServiceClass ? <Text style={styles.error}>Your legacy {legacyServiceClass.toUpperCase()} profile is retained for history and is not eligible for new Cab rides.</Text> : onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your Cab driver profile is approved. Active union membership and verified vehicle documents are also required for Rider discovery.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
           <Text style={styles.sub}>Complete your driver and vehicle details and capture a clear front-facing selfie. Your application will remain pending until reviewed.</Text>
           <Text style={styles.label}>VEHICLE CATEGORY</Text>
           <View style={[styles.themeOption, styles.themeOptionSelected]}><Text style={styles.themeOptionTextSelected}>CAB · ONLY MVP CATEGORY</Text></View>

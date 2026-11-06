@@ -388,6 +388,236 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionManagerCanReviewOnlyCurrentAssignedCabDriverSelfiesAndReceivesMinimalData()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var driver = factory.CreateClient("Driver", "union-review-driver");
+        using var rider = factory.CreateClient("Rider", "union-review-rider");
+        using var ops = factory.CreateClient("Rider", "union-review-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        const string unionId = "union-review-union";
+        const string driverId = "union-review-driver";
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null
+        };
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-review");
+        using var otherManager = factory.CreateUnionManagerClient("another-union", "other-union-manager");
+        using var managerWithoutUnion = factory.CreateClient("UnionManager", "manager-without-union");
+
+        var members = await manager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers");
+        var member = Assert.Single(members!);
+        Assert.Equal(driverId, member.GetProperty("driverId").GetString());
+        Assert.Equal(unionId, member.GetProperty("unionId").GetString());
+
+        var driverDetails = member.GetProperty("driver");
+        Assert.Equal("Pending", driverDetails.GetProperty("profilePhotoApprovalStatus").GetString());
+        Assert.Equal("/9j/2Q==", driverDetails.GetProperty("profilePhotoBase64").GetString());
+        Assert.Equal("cab", driverDetails.GetProperty("serviceClass").GetString());
+        Assert.False(driverDetails.TryGetProperty("phoneNumber", out _));
+        Assert.False(driverDetails.TryGetProperty("email", out _));
+        Assert.False(driverDetails.TryGetProperty("zoneId", out _));
+        Assert.False(driverDetails.TryGetProperty("currentLatitude", out _));
+        Assert.False(driverDetails.TryGetProperty("currentLongitude", out _));
+        Assert.False(driverDetails.TryGetProperty("storageReference", out _));
+        Assert.False(driverDetails.TryGetProperty("riderId", out _));
+        Assert.False(driverDetails.TryGetProperty("chatMessages", out _));
+        Assert.All(driverDetails.GetProperty("documentStatuses").EnumerateArray(),
+            document => Assert.False(document.TryGetProperty("storageReference", out _)));
+
+        var approvedDocuments = profiles[driverId].Documents;
+        profiles[driverId] = profiles[driverId] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/licence", "Pending"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
+        using var pendingDocumentsReview = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.Conflict, pendingDocumentsReview.StatusCode);
+        profiles[driverId] = profiles[driverId] with { Documents = approvedDocuments };
+
+        Assert.Empty(await otherManager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers") ?? []);
+        Assert.Equal(HttpStatusCode.Forbidden, (await managerWithoutUnion.GetAsync("/api/v1/union/drivers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await rider.GetAsync("/api/v1/union/drivers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await driver.GetAsync("/api/v1/union/drivers")).StatusCode);
+        using var wrongUnionReview = await otherManager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.NotFound, wrongUnionReview.StatusCode);
+
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.False(await reservations.HasActiveAsync(driverId));
+        using var noClaimReview = await managerWithoutUnion.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.NotFound, noClaimReview.StatusCode);
+        Assert.False(await reservations.HasActiveAsync(driverId));
+
+        using var operationsApproval = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.Forbidden, operationsApproval.StatusCode);
+
+        Assert.True(await reservations.TryAcquireTemporaryAsync(
+            driverId, "union-review-existing-reservation", DateTimeOffset.UtcNow.AddMinutes(5), CancellationToken.None));
+        using var blockedReview = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.Conflict, blockedReview.StatusCode);
+        Assert.True(await reservations.TryReleaseAsync(driverId, "union-review-existing-reservation", CancellationToken.None));
+
+        using var discoveryBeforeApproval = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discoveryBeforeApproval.StatusCode);
+        using var beforeJson = JsonDocument.Parse(await discoveryBeforeApproval.Content.ReadAsStringAsync());
+        var beforeDriver = beforeJson.RootElement.GetProperty("unions").EnumerateArray()
+            .Single(group => group.GetProperty("unionId").GetString() == unionId)
+            .GetProperty("drivers").EnumerateArray().Single();
+        Assert.Equal(JsonValueKind.Null, beforeDriver.GetProperty("profilePhotoBase64").ValueKind);
+
+        using var approval = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
+        using var repeatedApproval = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, repeatedApproval.StatusCode);
+        Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
+        Assert.Equal(unionId, profiles[driverId].ProfilePhotoApprovedByUnionId);
+
+        using var discoveryAfterApproval = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        using var afterJson = JsonDocument.Parse(await discoveryAfterApproval.Content.ReadAsStringAsync());
+        var afterDriver = afterJson.RootElement.GetProperty("unions").EnumerateArray()
+            .Single(group => group.GetProperty("unionId").GetString() == unionId)
+            .GetProperty("drivers").EnumerateArray().Single();
+        Assert.Equal("/9j/2Q==", afterDriver.GetProperty("profilePhotoBase64").GetString());
+
+        var ownMembership = await driver.GetFromJsonAsync<JsonElement>("/api/v1/driver/union");
+        Assert.Equal(unionId, ownMembership.GetProperty("unionId").GetString());
+
+        using var auditResponse = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.Equal(HttpStatusCode.OK, auditResponse.StatusCode);
+        using var auditJson = JsonDocument.Parse(await auditResponse.Content.ReadAsStringAsync());
+        Assert.Single(auditJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("eventType").GetString() == "SelfieApprovedByUnion");
+
+        using var operationsRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Vehicle image requires a clearer review photo." });
+        Assert.Equal(HttpStatusCode.OK, operationsRejection.StatusCode);
+        Assert.Equal("Rejected", profiles[driverId].ProfilePhotoApprovalStatus);
+        using var discoveryAfterRejection = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        using var rejectedJson = JsonDocument.Parse(await discoveryAfterRejection.Content.ReadAsStringAsync());
+        var rejectedDriver = rejectedJson.RootElement.GetProperty("unions").EnumerateArray()
+            .Single(group => group.GetProperty("unionId").GetString() == unionId)
+            .GetProperty("drivers").EnumerateArray().Single();
+        Assert.Equal(JsonValueKind.Null, rejectedDriver.GetProperty("profilePhotoBase64").ValueKind);
+
+        using var rejectedAuditResponse = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+        using var rejectedAuditJson = JsonDocument.Parse(await rejectedAuditResponse.Content.ReadAsStringAsync());
+        Assert.Contains(rejectedAuditJson.RootElement.EnumerateArray(), item =>
+            item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
+    }
+
+    [Fact]
+    public async Task UnionTransferResetsSelfieApprovalUntilTheNewUnionApprovesIt()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var driver = factory.CreateClient("Driver", "transfer-selfie-driver");
+        using var rider = factory.CreateClient("Rider", "transfer-selfie-rider");
+        using var ops = factory.CreateClient("Rider", "transfer-selfie-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        const string driverId = "transfer-selfie-driver";
+        const string oldUnionId = "transfer-selfie-old-union";
+        const string newUnionId = "transfer-selfie-new-union";
+        SeedBookableDriver(factory, driverId, oldUnionId);
+
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[newUnionId] =
+            new DriverUnion(newUnionId, "Transfer Selfie New Union", "TRANSFER-SELFIE-NEW",
+                "Hyderabad", null, null, ["hyderabad-central"], ["cab"], "Active", now, now);
+
+        using var oldManager = factory.CreateUnionManagerClient(oldUnionId, "old-union-manager");
+        using var newManager = factory.CreateUnionManagerClient(newUnionId, "new-union-manager");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var approvedDocuments = profiles[driverId].Documents;
+        profiles[driverId] = profiles[driverId] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/licence", "Pending"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
+        using var unverifiedTransfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason = "Driver moved to the new Cab union." });
+        Assert.Equal(HttpStatusCode.Conflict, unverifiedTransfer.StatusCode);
+        profiles[driverId] = profiles[driverId] with { Documents = approvedDocuments };
+
+        using var transfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason = "Driver moved to the new Cab union." });
+        Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
+
+        var transferredProfile = profiles[driverId];
+        Assert.Equal("Pending", transferredProfile.ProfilePhotoApprovalStatus);
+        Assert.Null(transferredProfile.ProfilePhotoApprovedByUnionId);
+        Assert.Null(transferredProfile.ProfilePhotoReviewedAtUtc);
+        Assert.Null(transferredProfile.ProfilePhotoReviewReason);
+
+        Assert.Empty(await oldManager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers") ?? []);
+        using var oldUnionApproval = await oldManager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.NotFound, oldUnionApproval.StatusCode);
+
+        var newMembers = await newManager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers");
+        Assert.Single(newMembers!);
+        Assert.Equal("Pending", newMembers![0].GetProperty("driver").GetProperty("profilePhotoApprovalStatus").GetString());
+
+        using var discoveryBeforeApproval = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        using var beforeJson = JsonDocument.Parse(await discoveryBeforeApproval.Content.ReadAsStringAsync());
+        var beforeDriver = beforeJson.RootElement.GetProperty("unions").EnumerateArray()
+            .Single(group => group.GetProperty("unionId").GetString() == newUnionId)
+            .GetProperty("drivers").EnumerateArray().Single();
+        Assert.Equal(JsonValueKind.Null, beforeDriver.GetProperty("profilePhotoBase64").ValueKind);
+
+        using var newUnionApproval = await newManager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, newUnionApproval.StatusCode);
+
+        using var discoveryAfterApproval = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        using var afterJson = JsonDocument.Parse(await discoveryAfterApproval.Content.ReadAsStringAsync());
+        var afterDriver = afterJson.RootElement.GetProperty("unions").EnumerateArray()
+            .Single(group => group.GetProperty("unionId").GetString() == newUnionId)
+            .GetProperty("drivers").EnumerateArray().Single();
+        Assert.Equal("/9j/2Q==", afterDriver.GetProperty("profilePhotoBase64").GetString());
+
+        var ownMembership = await driver.GetFromJsonAsync<JsonElement>("/api/v1/driver/union");
+        Assert.Equal(newUnionId, ownMembership.GetProperty("unionId").GetString());
+
+        using var auditResponse = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+        using var auditJson = JsonDocument.Parse(await auditResponse.Content.ReadAsStringAsync());
+        Assert.Contains(auditJson.RootElement.EnumerateArray(), item =>
+            item.GetProperty("eventType").GetString() == "Transferred");
+        Assert.Contains(auditJson.RootElement.EnumerateArray(), item =>
+            item.GetProperty("eventType").GetString() == "SelfieApprovedByUnion");
+    }
+
+    [Fact]
     public async Task LegacyNonCabDriverCannotEnterNewSelfieQueueLocationOrOfferWorkflows()
     {
         using var factory = new TurnOvaApiFactory();
@@ -2158,7 +2388,7 @@ public sealed class RideApiIntegrationTests
                 }));
         }
 
-        public HttpClient CreateClient(string role, string subject)
+        public HttpClient CreateClient(string role, string subject, string? unionId = null)
         {
             var client = CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -2166,7 +2396,7 @@ public sealed class RideApiIntegrationTests
                 BaseAddress = new Uri("https://localhost")
             });
             client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject));
+                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject, unionId));
             if (role == "Driver")
             {
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -2186,20 +2416,26 @@ public sealed class RideApiIntegrationTests
             return client;
         }
 
-        private static string CreateToken(string role, string subject)
+        public HttpClient CreateUnionManagerClient(string unionId, string subject) =>
+            CreateClient("UnionManager", subject, unionId);
+
+        private static string CreateToken(string role, string subject, string? unionId)
         {
             var credentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)),
                 SecurityAlgorithms.HmacSha256);
+            var claims = new List<Claim>
+            {
+                new("sub", subject),
+                new("role", role),
+                new("name", subject)
+            };
+            if (!string.IsNullOrWhiteSpace(unionId))
+                claims.Add(new Claim("unionId", unionId));
             var token = new JwtSecurityToken(
                 issuer: Issuer,
                 audience: Audience,
-                claims:
-                [
-                    new Claim("sub", subject),
-                    new Claim("role", role),
-                    new Claim("name", subject)
-                ],
+                claims: claims,
                 notBefore: DateTime.UtcNow.AddMinutes(-1),
                 expires: DateTime.UtcNow.AddMinutes(10),
                 signingCredentials: credentials);
