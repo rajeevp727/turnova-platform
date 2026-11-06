@@ -82,7 +82,6 @@ export default function App() {
   const [agreementHistory, setAgreementHistory] = useState<AgreementVersion[]>([]);
   const [agreementAmount, setAgreementAmount] = useState("");
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
-  const [unionAssignment, setUnionAssignment] = useState<any>(null);
   const [driverName, setDriverName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [vehicleMake, setVehicleMake] = useState("");
@@ -527,11 +526,7 @@ export default function App() {
 
   const loadOnboarding = useCallback(async () => {
     try {
-      const [profile, assignment] = await Promise.all([
-        apiFetch("/api/v1/driver/onboarding/me"),
-        apiFetch("/api/v1/driver/union")
-      ]);
-      setUnionAssignment(assignment?.status === "Active" ? assignment : null);
+      const profile = await apiFetch("/api/v1/driver/onboarding/me");
       if (!profile?.driverId) setLegacyServiceClass(null);
       if (profile?.driverId) {
         setOnboardingProfile(profile);
@@ -625,7 +620,7 @@ export default function App() {
   const logout = async () => {
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
-    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null);
+    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]);
   };
 
   const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
@@ -716,8 +711,6 @@ export default function App() {
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
         {profilePhotoBase64 ? <Image source={{ uri: `data:image/jpeg;base64,${profilePhotoBase64}` }} style={{ width: 112, height: 112, borderRadius: 56, alignSelf: "center", marginVertical: 12 }} /> : <Text style={styles.muted}>No driver selfie saved yet.</Text>}
         {!!onboardingProfile?.profilePhotoApprovalStatus && <Text style={styles.muted}>Union selfie approval: {onboardingProfile.profilePhotoApprovalStatus}{onboardingProfile.profilePhotoApprovalStatus === "Rejected" && onboardingProfile.profilePhotoReviewReason ? ` · ${onboardingProfile.profilePhotoReviewReason}` : ""}</Text>}
-        <Text style={styles.label}>UNION MEMBERSHIP</Text>
-        {unionAssignment ? <><Text style={styles.cardTitle}>{unionAssignment.unionName}</Text><Text style={styles.muted}>Membership status: {unionAssignment.status}</Text></> : <Text style={styles.muted}>No active union membership is assigned yet.</Text>}
         <Pressable style={styles.secondary} onPress={() => void captureSelfie()} disabled={loading || !!legacyServiceClass}><Text style={styles.secondaryText}>{profilePhotoBase64 ? "Retake driver selfie" : "Take driver selfie"}</Text></Pressable>
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
         {onboardingProfile?.status === "Approved" && legacyServiceClass ? <Text style={styles.error}>Your legacy {legacyServiceClass.toUpperCase()} profile is retained for history and is not eligible for new Cab rides.</Text> : onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your Cab driver profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
