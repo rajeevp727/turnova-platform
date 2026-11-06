@@ -82,10 +82,10 @@
 ## Highest-priority next work
 
 1. Implement CAB-DISCOVERY-01: discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by pickup proximity; Rider explicitly selects. No customer-facing FIFO ranking or automatic assignment.
-3. Implement CAB-AGREEMENT-01: direct Rider/Driver negotiation, immutable versioned agreement, both parties confirm current version, and no ride start before mutual confirmation.
-4. Implement CAB-RECON-01: Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
-5. Complete CAB-UNION-01 and the remaining Driver/Rider support, platform observability and release evidence.
-6. Keep AI-01 as the separately approved supplemental requirement, outside the 19-area denominator.
+2. Implement CAB-AGREEMENT-01: direct Rider/Driver negotiation, immutable versioned agreement, both parties confirm current version, and no ride start before mutual confirmation.
+3. Implement CAB-RECON-01: Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
+4. Complete CAB-UNION-01 and the remaining Driver/Rider support, platform observability and release evidence.
+5. Keep AI-01 as the separately approved supplemental requirement, outside the 19-area denominator.
 
 ## Deployment constraint
 
