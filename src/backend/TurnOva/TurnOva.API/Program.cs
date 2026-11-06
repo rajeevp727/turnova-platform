@@ -1732,13 +1732,14 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
         return Results.Conflict(new { message = "The selected Driver or Union is not eligible for Cab negotiation." });
 
     var versions = ride.AgreementVersions ?? [];
-    var retry = versions.FirstOrDefault(item => item.IdempotencyKey == idempotencyKey);
+    var scopedIdempotencyKey = $"{actorId}:{idempotencyKey}";
+    var retry = versions.FirstOrDefault(item => item.IdempotencyKey == scopedIdempotencyKey);
     if (retry is not null)
     {
         var confirmations = ride.AgreementConfirmations ?? [];
         return Results.Ok(new
         {
-            agreement = retry,
+            agreement = new { retry.RideId, retry.Version, retry.RiderId, retry.DriverId, retry.UnionId, retry.Amount, retry.Currency, retry.Pickup, retry.Dropoff, retry.Stops, retry.ProposedBy, retry.CreatedAtUtc },
             riderConfirmed = confirmations.Any(item => item.Version == retry.Version && item.Party == "Rider"),
             driverConfirmed = confirmations.Any(item => item.Version == retry.Version && item.Party == "Driver")
         });
@@ -1747,19 +1748,35 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
     var version = new RideAgreementVersion(
         rideId, (versions.LastOrDefault()?.Version ?? 0) + 1,
         ride.RiderId, ride.DriverId!, assignment.UnionId, request.Amount, request.Currency,
-        ride.Pickup, ride.Dropoff, [], isRider ? "Rider" : "Driver", idempotencyKey, DateTimeOffset.UtcNow);
+        ride.Pickup, ride.Dropoff, [], isRider ? "Rider" : "Driver", scopedIdempotencyKey, DateTimeOffset.UtcNow);
     var updated = ride with
     {
         AgreementVersions = [.. versions, version],
         AgreementStateRevision = ride.AgreementStateRevision + 1
     };
     if (!await TryReplaceRideAsync(ride, updated, ct))
+    {
+        var latest = await FindRideAsync(rideId, ct);
+        var concurrentRetry = latest?.AgreementVersions?.FirstOrDefault(item => item.IdempotencyKey == scopedIdempotencyKey);
+        if (concurrentRetry is not null)
+        {
+            var latestConfirmations = latest!.AgreementConfirmations ?? [];
+            return Results.Ok(new
+            {
+                agreement = new { concurrentRetry.RideId, concurrentRetry.Version, concurrentRetry.RiderId, concurrentRetry.DriverId,
+                    concurrentRetry.UnionId, concurrentRetry.Amount, concurrentRetry.Currency, concurrentRetry.Pickup,
+                    concurrentRetry.Dropoff, concurrentRetry.Stops, concurrentRetry.ProposedBy, concurrentRetry.CreatedAtUtc },
+                riderConfirmed = latestConfirmations.Any(item => item.Version == concurrentRetry.Version && item.Party == "Rider"),
+                driverConfirmed = latestConfirmations.Any(item => item.Version == concurrentRetry.Version && item.Party == "Driver")
+            });
+        }
         return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh the agreement history and retry with a new idempotency key." });
+    }
 
     await hub.Clients.Group(rideId).SendAsync("RideAgreementChanged", new { rideId, version = version.Version }, ct);
     return Results.Created($"/api/v1/rides/{rideId}/agreements", new
     {
-        agreement = version, riderConfirmed = false, driverConfirmed = false
+        agreement = new { version.RideId, version.Version, version.RiderId, version.DriverId, version.UnionId, version.Amount, version.Currency, version.Pickup, version.Dropoff, version.Stops, version.ProposedBy, version.CreatedAtUtc }, riderConfirmed = false, driverConfirmed = false
     });
 }).RequireAuthorization();
 
