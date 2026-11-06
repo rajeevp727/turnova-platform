@@ -45,7 +45,7 @@ Current task: review and verify Driver-owned trip history in [PR #48](https://gi
 - PR #47 merged: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`.
 - Latest PR #47 head `1c08b96e78bef42c175b29593de153a151382f96` passed all four jobs in CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42214516012.
 - Rider history API tests cover owner isolation despite client-supplied riderId, newest-first ordering, response privacy, Rider/Driver role separation and empty history. Rider UI restores the latest active ride, ignores stale responses after Activity unmount/session change, and clears stale active state when history contains no active ride.
-- PR #48 is open: https://github.com/rajeevp727/turnova-platform/pull/48. It adds Driver-only `GET /api/v1/driver/rides/mine`, an owner-scoped safe summary, active-trip restoration in Driver Trips UI, and API ownership/privacy/role/empty-history tests.
+- PR #48 is open: https://github.com/rajeevp727/turnova-platform/pull/48. It adds Driver-only `GET /api/v1/driver/rides/mine`, an owner-scoped safe summary, active-trip restoration in Driver Trips UI with SignalR reconnect refresh, and API ownership/privacy/role/empty-history tests.
 - Initial CI run 42215153478 failed only the Driver app TypeScript check (`styles.status` did not exist); backend build/tests, native publish, Rider typecheck and shared auth tests passed. The style reference was corrected to the existing `styles.label`; a fresh latest-head CI run is required before merge.
 - Real Cosmos cross-partition query/RU behaviour is not verified by the in-memory API tests.
 
