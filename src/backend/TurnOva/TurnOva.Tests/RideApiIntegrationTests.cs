@@ -1506,6 +1506,70 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionTransferIsBlockedWhileDriverHasAcceptedActiveRide()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "transfer-active-ride-rider");
+        using var driver = factory.CreateClient("Driver", "transfer-active-ride-driver");
+        using var ops = factory.CreateClient("Rider", "transfer-active-ride-ops");
+        SeedBookableDriver(factory, "transfer-active-ride-driver", "transfer-active-ride-union");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles["transfer-active-ride-driver"] = profiles["transfer-active-ride-driver"] with
+        {
+            ProfilePhotoBase64 = Convert.ToBase64String([1, 2, 3]),
+            ProfilePhotoContentType = "image/jpeg"
+        };
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()["transfer-active-ride-target-union"] =
+            new DriverUnion("transfer-active-ride-target-union", "Transfer Target Union", "TRANSFER-TARGET", "Hyderabad",
+                null, null, ["hyderabad-central"], ["cab"], "Active", now, now);
+
+        using var bookingRequest = CreateSelectedBookingRequest("transfer-active-ride-booking",
+            "transfer-active-ride-driver", "transfer-active-ride-union", "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(bookingRequest);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+
+        using var proposal = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 420m, currency = "INR" })
+        };
+        proposal.Headers.Add("Idempotency-Key", "transfer-active-ride-fare");
+        Assert.Equal(HttpStatusCode.Created, (await rider.SendAsync(proposal)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+        using var accepted = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        using var acceptedJson = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync());
+        Assert.Equal("Accepted", acceptedJson.RootElement.GetProperty("status").GetString());
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("transfer-active-ride-driver"));
+
+        using var transfer = new HttpRequestMessage(HttpMethod.Post,
+            "/api/v1/ops/drivers/transfer-active-ride-driver/union-assignment")
+        {
+            Content = JsonContent.Create(new
+            {
+                unionId = "transfer-active-ride-target-union",
+                reason = "Approved operational transfer"
+            })
+        };
+        transfer.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var transferResponse = await ops.SendAsync(transfer);
+        Assert.Equal(HttpStatusCode.Conflict, transferResponse.StatusCode);
+
+        var assignment = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()
+            ["transfer-active-ride-driver"];
+        Assert.Equal("transfer-active-ride-union", assignment.UnionId);
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("transfer-active-ride-driver"));
+    }
+
+    [Fact]
     public async Task SelectedBookingRejectsDriverPairedWithDifferentUnion()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
