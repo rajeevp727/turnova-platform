@@ -62,7 +62,7 @@
 1. AUTH-01 — In progress
 2. AUTH-02 — In progress
 3. RIDER-01 — In progress
-4. RIDER-02 — Blocked
+4. RIDER-02 — Not started
 5. RIDER-03 — In progress
 6. DISPATCH-01 — In progress
 7. DISPATCH-02 — In progress
@@ -76,12 +76,11 @@
 15. DRIVER-04 — Blocked
 16. RIDER-04 — In progress
 17. SUPPORT-01 — Blocked
-18. PLATFORM-01 — In progress; PR #49 CORS/health merged; queue audit and safe exception logging under implementation; metrics/traces/Cosmos gates remain
+18. PLATFORM-01 — In progress; PRs #49/#51 merged CORS/health, queue audit and safe exception handling; metrics/traces/Cosmos gates remain
 19. RELEASE-01 — In progress
 
 ## Highest-priority next work
 
-1. Finish and merge PR #53's legacy non-Cab action guards after automated review and fresh CI; then begin CAB-DISCOVERY-01.
 1. Implement CAB-DISCOVERY-01: discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by pickup proximity; Rider explicitly selects. No customer-facing FIFO ranking or automatic assignment.
 3. Implement CAB-AGREEMENT-01: direct Rider/Driver negotiation, immutable versioned agreement, both parties confirm current version, and no ride start before mutual confirmation.
 4. Implement CAB-RECON-01: Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
