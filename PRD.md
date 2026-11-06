@@ -174,3 +174,39 @@ The API host runs a bounded background expiry worker in both Cosmos and in-memor
 ## Exclusive active-driver reservation
 
 A driver may hold at most one active ride reservation at a time. The backend acquires a durable per-driver reservation before attempting the ride's conditional Requested-to-Accepted transition. The ride's ETag remains the single-winner guard when multiple drivers race for the same ride. A failed ride claim releases the matching driver reservation; successful assignment retains it until ride completion or rider cancellation. Reservation release is scoped to the exact driver/ride pair so a stale request cannot clear a different ride's reservation. The reservation and ride are stored in separate Cosmos partitions, so crash recovery and reconciliation remain required before production.
+
+
+## 15. Approved MVP business model — Cab only (2026-11-06)
+
+This section supersedes conflicting earlier statements. TurnOva MVP supports CAB rides only. Scooty, Bike and Auto are out of scope for new onboarding, discovery and ride workflows. Preserve historical records without destructive migration.
+
+TurnOva is a union-connected cab discovery and ride-coordination platform, not automatic FIFO dispatch or fixed-fare pricing.
+
+### Rider journey
+1. Rider enters pickup, destination and optional stops.
+2. Discover active, approved unions serving Cab within the configured pickup radius.
+3. Group eligible, approved and available Cab drivers by union; show no more than 2–3 per union, ordered by driver-to-pickup proximity.
+4. Show only union-approved driver photos and verified Cab details. Distinguish driver-to-pickup proximity from journey distance.
+5. Rider selects a driver and can call/chat when providers are configured.
+6. Rider and selected driver negotiate directly. No platform fare estimate or recommendation.
+
+### Agreement and ride
+- Record proposals/counterproposals or equivalent negotiation history.
+- Persist a durable, immutable, versioned agreement with ride, Rider, Driver, Union, amount, currency, route/stops, timestamps and both confirmations.
+- A changed fare creates a new version; both parties must confirm the current version.
+- Driver cannot start until the current agreement is mutually confirmed.
+- Enforce server-owned legal transitions, idempotency, safe expiry/cancellation and concurrency-safe driver reservations. No overlapping active negotiation or ride.
+
+### Direct payment reporting
+- Rider pays Driver directly. No in-app payment collection, gateway or escrow.
+- After completion, Driver reports amount received; label it driver-reported/unverified.
+- Signed delta = agreed amount minus driver-reported amount: positive=reported shortfall, zero=exact, negative=reported excess.
+- Persist amount, delta, currency, timestamps, reporting actor and reconciliation status. Apply least-privilege Driver/Union access and audit.
+- Customer dispute/confirmation and next-ride policy for non-zero delta remain unresolved; do not invent them.
+
+### Union and FIFO
+- Support approved union participation, Cab driver membership, authorised transfer, Cab/vehicle verification and union selfie approval before public photo display.
+- Union oversight exposes minimum necessary ride/reconciliation data, never private chat or unrelated customer data. Partnership terms require legal review.
+- FIFO must not rank Rider discovery or automatically assign a driver. Whether it remains internal union fairness/availability is unresolved.
+
+Out of scope: Scooty, Bike, Auto, platform fare estimates/pricing, payment gateway/escrow, fleet/corporate workflows and customer-facing FIFO dispatch.
