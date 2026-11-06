@@ -2567,6 +2567,29 @@ public sealed class RideApiIntegrationTests
             .PaymentReconciliation);
     }
 
+
+    [Fact]
+    public async Task DriverPaymentReportRequiresAnExplicitAmount()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-missing-amount-driver";
+        using var rider = factory.CreateClient("Rider", "payment-missing-amount-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, "payment-missing-amount-union", "payment-missing-amount", 500m);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/v1/driver/rides/{rideId}/payment-report")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        request.Headers.Add("Idempotency-Key", "payment-missing-amount-key");
+        using var response = await driver.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId]
+            .PaymentReconciliation);
+    }
+
     [Fact]
     public async Task DriverPaymentReportRequiresAnIdempotencyKey()
     {
