@@ -1043,6 +1043,84 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task SelectedRideLocationIsPrivateUntilSharingAndClearedAfterCompletion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "trip-location-rider");
+        using var otherRider = factory.CreateClient("Rider", "trip-location-other-rider");
+        using var driver = factory.CreateClient("Driver", "trip-location-driver");
+        SeedBookableDriver(factory, "trip-location-driver", "trip-location-union");
+
+        using var bookingRequest = CreateSelectedBookingRequest(
+            "trip-location-booking-key", "trip-location-driver", "trip-location-union",
+            "KPHB", "HITEC City", []);
+        using var bookingResponse = await rider.SendAsync(bookingRequest);
+        Assert.Equal(HttpStatusCode.Created, bookingResponse.StatusCode);
+        var booking = await ReadRideAsync(bookingResponse);
+
+        var beforeSharing = await rider.GetFromJsonAsync<RiderRideDetailsTest>($"/api/v1/rides/{booking.RideId}");
+        Assert.NotNull(beforeSharing);
+        Assert.False(beforeSharing.LocationSharingActive);
+        Assert.Null(beforeSharing.DriverLatitude);
+        Assert.Null(beforeSharing.DriverLongitude);
+
+        using var prematureLocation = await driver.PostAsJsonAsync(
+            $"/api/v1/rides/{booking.RideId}/location",
+            new { latitude = 17.492, longitude = 78.401 });
+        Assert.Equal(HttpStatusCode.NotFound, prematureLocation.StatusCode);
+
+        using var proposal = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{booking.RideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 480m, currency = "INR" })
+        };
+        proposal.Headers.Add("Idempotency-Key", "trip-location-agreement-key");
+        Assert.Equal(HttpStatusCode.Created, (await rider.SendAsync(proposal)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await rider.PostAsync($"/api/v1/rides/{booking.RideId}/agreements/1/confirm", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{booking.RideId}/agreements/1/confirm", null)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{booking.RideId}/accept", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{booking.RideId}/arrive", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{booking.RideId}/start", null)).StatusCode);
+
+        var activeWithoutFix = await rider.GetFromJsonAsync<RiderRideDetailsTest>($"/api/v1/rides/{booking.RideId}");
+        Assert.NotNull(activeWithoutFix);
+        Assert.True(activeWithoutFix.LocationSharingActive);
+        Assert.Null(activeWithoutFix.DriverLatitude);
+        Assert.Null(activeWithoutFix.DriverLongitude);
+
+        using var location = await driver.PostAsJsonAsync(
+            $"/api/v1/rides/{booking.RideId}/location",
+            new { latitude = 17.492, longitude = 78.401 });
+        Assert.Equal(HttpStatusCode.NoContent, location.StatusCode);
+
+        var activeDetails = await rider.GetFromJsonAsync<RiderRideDetailsTest>($"/api/v1/rides/{booking.RideId}");
+        Assert.NotNull(activeDetails);
+        Assert.Equal(17.492, activeDetails.DriverLatitude);
+        Assert.Equal(78.401, activeDetails.DriverLongitude);
+        Assert.NotNull(activeDetails.LocationUpdatedAt);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await otherRider.GetAsync($"/api/v1/rides/{booking.RideId}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{booking.RideId}/complete", null)).StatusCode);
+        var completedDetails = await rider.GetFromJsonAsync<RiderRideDetailsTest>($"/api/v1/rides/{booking.RideId}");
+        Assert.NotNull(completedDetails);
+        Assert.Equal("Completed", completedDetails.Status);
+        Assert.False(completedDetails.LocationSharingActive);
+        Assert.Null(completedDetails.DriverLatitude);
+        Assert.Null(completedDetails.DriverLongitude);
+        Assert.Null(completedDetails.LocationUpdatedAt);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await driver.PostAsJsonAsync($"/api/v1/rides/{booking.RideId}/location",
+                new { latitude = 17.493, longitude = 78.402 })).StatusCode);
+    }
+
+    [Fact]
     public async Task OnlyAssignedDriverCanAdvanceRideAndOnlyOwningRiderCanReadIt()
     {
         using var factory = new TurnOvaApiFactory();
@@ -2454,6 +2532,8 @@ public sealed class RideApiIntegrationTests
     private sealed record RiderRideHistoryItemTest(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt);
     private sealed record DriverRideHistoryItemTest(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive);
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
+    private sealed record RiderRideDetailsTest(string RideId, string Status, bool LocationSharingActive,
+        double? DriverLatitude, double? DriverLongitude, DateTimeOffset? LocationUpdatedAt);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
