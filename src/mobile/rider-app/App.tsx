@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useColorScheme } from "react-native";
 import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
-import { singleFlight } from "../shared/refreshCoordinator";
+import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { findActiveRide } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
@@ -91,7 +91,24 @@ export default function App() {
   const apiFetch=useCallback(async(path:string,init:RequestInit={})=>{
     if(!tokens)throw new Error("Please sign in again.");
     let response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${tokens.accessToken}`,...init.headers}});
-    if(response.status===401){const rt=await SecureStore.getItemAsync("turnova.refresh");if(!rt){await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}let accessToken:string;try{accessToken=await singleFlight(refreshInFlight,()=>refresh(rt));}catch{await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});}
+    if(response.status===401){
+      let accessToken:string;
+      try{
+        accessToken=await getFreshAccessToken(
+          refreshInFlight,
+          tokens.accessToken,
+          async()=>({
+            accessToken:await SecureStore.getItemAsync("turnova.access"),
+            refreshToken:await SecureStore.getItemAsync("turnova.refresh")
+          }),
+          refresh
+        );
+      }catch{
+        await clearTokens();setTokens(null);setUser(null);
+        throw new Error("Session expired. Please sign in again.");
+      }
+      response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});
+    }
     const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current?.rideId===details.rideId?{...current,...details}:details);}else if(isActive()){setRide(null);}},[apiFetch]);
