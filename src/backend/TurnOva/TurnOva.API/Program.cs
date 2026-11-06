@@ -1353,9 +1353,11 @@ app.MapGet("/api/v1/driver/offers/pending", async (ClaimsPrincipal user, Cancell
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (profile is null || !IsCabServiceClass(profile.ServiceClass)) return Results.NoContent();
     var store = app.Services.GetRequiredService<IRideOfferStore>();
     var offer = await store.GetPendingForDriverAsync(driverId, ct);
-    if (offer is null) return Results.NoContent();
+    if (offer is null || !IsCabServiceClass(offer.ServiceClass)) return Results.NoContent();
     if (offer.IsExpiredAt(TimeProvider.System.GetUtcNow()))
         return Results.Conflict(new { message = "The offer has expired." });
     return Results.Ok(new
