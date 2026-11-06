@@ -240,6 +240,7 @@ export default function App() {
     };
 
     const publishLocation = async (latitude: number, longitude: number): Promise<boolean> => {
+      if (!mounted || AppState.currentState !== "active") return false;
       try {
         await apiFetch("/api/v1/driver/location", {
           method: "POST",
@@ -285,8 +286,10 @@ export default function App() {
           return;
         }
 
+        if (!mounted || AppState.currentState !== "active") return;
         const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        if (!await publishLocation(current.coords.latitude, current.coords.longitude) || !mounted) return;
+        if (!mounted || AppState.currentState !== "active" ||
+            !await publishLocation(current.coords.latitude, current.coords.longitude)) return;
         await startWatching();
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
