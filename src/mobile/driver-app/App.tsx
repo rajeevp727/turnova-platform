@@ -86,8 +86,8 @@ export default function App() {
   const [licenceReference, setLicenceReference] = useState("");
   const [registrationReference, setRegistrationReference] = useState("");
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
-  const serviceClass = DEFAULT_SERVICE_CLASS;
   const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
+  const serviceClass = legacyServiceClass ?? DEFAULT_SERVICE_CLASS;
 
   useEffect(() => {
     let mounted = true;
@@ -596,7 +596,7 @@ export default function App() {
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
         {profilePhotoBase64 ? <Image source={{ uri: `data:image/jpeg;base64,${profilePhotoBase64}` }} style={{ width: 112, height: 112, borderRadius: 56, alignSelf: "center", marginVertical: 12 }} /> : <Text style={styles.muted}>No driver selfie saved yet.</Text>}
         {!!onboardingProfile?.profilePhotoApprovalStatus && <Text style={styles.muted}>Union selfie approval: {onboardingProfile.profilePhotoApprovalStatus}{onboardingProfile.profilePhotoApprovalStatus === "Rejected" && onboardingProfile.profilePhotoReviewReason ? ` · ${onboardingProfile.profilePhotoReviewReason}` : ""}</Text>}
-        <Pressable style={styles.secondary} onPress={() => void captureSelfie()} disabled={loading}><Text style={styles.secondaryText}>{profilePhotoBase64 ? "Retake driver selfie" : "Take driver selfie"}</Text></Pressable>
+        <Pressable style={styles.secondary} onPress={() => void captureSelfie()} disabled={loading || !!legacyServiceClass}><Text style={styles.secondaryText}>{profilePhotoBase64 ? "Retake driver selfie" : "Take driver selfie"}</Text></Pressable>
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
         {onboardingProfile?.status === "Approved" && legacyServiceClass ? <Text style={styles.error}>Your legacy {legacyServiceClass.toUpperCase()} profile is retained for history and is not eligible for new Cab rides.</Text> : onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your Cab driver profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
           <Text style={styles.sub}>Complete your driver and vehicle details and capture a clear front-facing selfie. Your application will remain pending until reviewed.</Text>
