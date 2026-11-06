@@ -255,10 +255,12 @@ export default function App() {
       }
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       if (!await publishLocation(current.coords.latitude, current.coords.longitude) || !mounted) return;
-      subscription = await Location.watchPositionAsync(
+      const nextSubscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 50 },
         location => { void publishLocation(location.coords.latitude, location.coords.longitude); }
       );
+      if (!mounted) nextSubscription.remove();
+      else subscription = nextSubscription;
     })().catch(e => {
       if (mounted) setError(e instanceof Error ? e.message : "Unable to share availability location.");
     });
