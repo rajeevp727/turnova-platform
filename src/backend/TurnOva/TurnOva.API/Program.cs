@@ -19,6 +19,7 @@ using TurnOva.Infrastructure.Dispatch;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHealthChecks();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
@@ -82,6 +83,9 @@ var cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"];
 var cosmosKey = builder.Configuration["CosmosDb:Key"];
 var databaseName = builder.Configuration["CosmosDb:DatabaseName"] ?? "TurnOvaDb";
 var useCosmos = !string.IsNullOrWhiteSpace(cosmosEndpoint) || !string.IsNullOrWhiteSpace(cosmosKey);
+
+if (builder.Environment.IsProduction() && !useCosmos)
+    throw new InvalidOperationException("Production requires CosmosDb:Endpoint and CosmosDb:Key. In-memory persistence is development/test only.");
 
 if (useCosmos && (string.IsNullOrWhiteSpace(cosmosEndpoint) || string.IsNullOrWhiteSpace(cosmosKey)))
     throw new InvalidOperationException("Both CosmosDb:Endpoint and CosmosDb:Key must be configured.");
@@ -164,6 +168,8 @@ app.UseCors();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHealthChecks("/health/live");
+app.MapHealthChecks("/health/ready");
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
