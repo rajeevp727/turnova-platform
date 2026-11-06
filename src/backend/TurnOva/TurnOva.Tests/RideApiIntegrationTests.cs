@@ -2920,6 +2920,11 @@ public sealed class RideApiIntegrationTests
         Assert.True(draft.RequiresUserConfirmation);
         Assert.Equal("deterministic-fallback", draft.Source);
 
+        using var historyResponse = await rider.GetAsync("/api/v1/rides/mine");
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        using var history = JsonDocument.Parse(await historyResponse.Content.ReadAsStringAsync());
+        Assert.Equal(0, history.RootElement.GetArrayLength());
+
         using var forbidden = await driver.PostAsJsonAsync("/api/v1/assistance/trip-intent", new
         {
             text = "Cab from Nizampet to HITEC City"
