@@ -1327,15 +1327,17 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    if (year < 2020 || year > DateTime.UtcNow.Year || month is < 1 or > 12)
-        return Results.BadRequest(new { message = "A valid payslip year and month are required." });
     var indiaTimeZoneOffset = TimeSpan.FromMinutes(330);
+    var nowLocal = DateTimeOffset.UtcNow.ToOffset(indiaTimeZoneOffset);
+    if (year < 2020 || year > nowLocal.Year || month is < 1 or > 12)
+        return Results.BadRequest(new { message = "A valid payslip year and month are required." });
     var periodStartLocal = new DateTimeOffset(year, month, 1, 0, 0, 0, indiaTimeZoneOffset);
     var periodEndLocal = periodStartLocal.AddMonths(1);
+    var currentMonthStartLocal = new DateTimeOffset(nowLocal.Year, nowLocal.Month, 1, 0, 0, 0, indiaTimeZoneOffset);
+    if (periodStartLocal >= currentMonthStartLocal)
+        return Results.BadRequest(new { message = "Payslips are available only for completed months." });
     var periodStart = periodStartLocal.ToUniversalTime();
     var periodEnd = periodEndLocal.ToUniversalTime();
-    if (periodStart >= DateTimeOffset.UtcNow)
-        return Results.BadRequest(new { message = "Payslips are available only for completed months." });
 
     var payslipId = $"{driverId}-{year:D4}-{month:D2}";
     var payslip = await FindPayslipAsync(driverId, payslipId, ct);
