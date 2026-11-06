@@ -28,6 +28,11 @@ export function saveSessionTokens(
 
 export function clearSessionTokens(storage: SessionTokenStorage): Promise<void>;
 
+export function logoutSession(
+  storage: SessionTokenStorage,
+  revoke: () => Promise<unknown>
+): Promise<void>;
+
 export function restoreStoredSession(
   storage: SessionTokenStorage,
   request: (path: string, init?: any, token?: string) => Promise<any>
