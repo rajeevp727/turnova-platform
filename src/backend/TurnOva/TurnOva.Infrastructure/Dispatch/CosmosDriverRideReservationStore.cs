@@ -51,6 +51,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var current = await container.ReadItemAsync<DriverRideReservation>(
                 driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
             if (current.Resource.RideId != rideId) return false;
+            if (current.Resource.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow) return false;
             if (current.Resource.ExpiresAtUtc is null) return true;
             await container.ReplaceItemAsync(current.Resource with { ExpiresAtUtc = null }, driverId,
                 new PartitionKey(driverId), new ItemRequestOptions { IfMatchEtag = current.ETag }, cancellationToken);
