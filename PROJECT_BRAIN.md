@@ -9,7 +9,7 @@
 **Current main HEAD:** `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0` (PR #51)
 
 ## Product in one line
-Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
+Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
 
 ## Stack and app scope
 - Backend: .NET 10 LTS / ASP.NET Core Web API / C# 14.
@@ -198,7 +198,7 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 
 
 ## PLATFORM-01 queue audit increment (merged in PR #51)
-- PR #51 is open: https://github.com/rajeevp727/turnova-platform/pull/51 (branch `feat/platform-observability-audit`). Implementation head `369f5dacea92885ce78c1504bcb4f9dce9cbde04` passed all four CI jobs in run 42219053050; merge remains gated on green CI for the latest PR head.
+- PR #51 merged as `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run 42219327319 passed all four jobs.
 - Existing `RideOfferState.Attempts` persists offer decisions and `DriverUnionAudit` persists union transfers, but queue membership changes were mutable state without append-only history.
 - New `QueueAuditEvent` records successful join, leave, move-to-back and offer rotation events with driver, zone/service-class partition, UTC time and optional offerId; no phone/email, exact location or fare.
 - `IQueueStore` exposes queue-scoped audit retrieval. In-memory adapter records only successful mutations; duplicate offer retries and failed/no-op operations do not create duplicate events.
