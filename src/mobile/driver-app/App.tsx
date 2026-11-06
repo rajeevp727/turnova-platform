@@ -11,6 +11,7 @@ import { useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { singleFlight } from "../shared/refreshCoordinator";
+import { findActiveRide } from "../shared/rideRecovery";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -321,7 +322,7 @@ export default function App() {
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
     if (!isActive()) return;
     setDriverRideHistory(history);
-    const active = history.find(item => ["Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"].includes(item.status));
+    const active = findActiveRide(history, "driver");
     setActiveRide(active ?? null);
   }, [apiFetch]);
 
