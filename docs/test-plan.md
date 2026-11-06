@@ -61,7 +61,7 @@ The API contract tests use a fake named TriSend HTTP handler; CI must never call
 | AUTH-API-003 | Unsupported registration role | HTTP 404; TriSend is not called | API integration | P0 |
 | AUTH-API-004 | Login returns a different app role | HTTP 403; returned access token is sent to TriSend logout | API integration | P0 |
 | AUTH-API-005 | Refresh request | Refresh token is forwarded unchanged to TriSend | API integration | P0 |
-| AUTH-API-006 | TriSend connection failure | Stable HTTP 503; upstream exception details are not exposed | API integration | P0 |
+| AUTH-API-006 | TriSend connection failure | Stable HTTP 503; upstream exception details are not exposed | API integration | P0 |\n| AUTH-API-007 | Duplicate registration | TriSend HTTP 409 is preserved as a conflict and no access/refresh token is returned | API integration | P0 |\n| AUTH-API-008 | Rider profile read | `/api/v1/auth/me` forwards the bearer token and returns the authenticated profile from TriSend | API integration | P0 |
 
 ## 3. JWT validation and authorization
 
