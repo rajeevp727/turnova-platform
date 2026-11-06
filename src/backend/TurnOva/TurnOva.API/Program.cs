@@ -964,13 +964,21 @@ app.MapPost("/api/v1/driver/availability", async (
         if (await HasActiveDriverRideAsync(driverId, ct))
             return Results.Conflict(new { message = "Complete your active ride before going online." });
 
-        await SaveDriverProfileAsync(profile with
-        {
-            AvailabilityStatus = "Online",
-            CurrentLatitude = request.Latitude,
-            CurrentLongitude = request.Longitude,
-            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
-        }, ct);
+        var savedOnline = await TryUpdateDriverProfileAsync(driverId, current =>
+            current.Status == "Approved" &&
+            string.Equals(current.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase)
+                ? current with
+                {
+                    AvailabilityStatus = "Online",
+                    CurrentLatitude = request.Latitude,
+                    CurrentLongitude = request.Longitude,
+                    LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+                }
+                : null, ct);
+        if (!savedOnline)
+            return Results.Conflict(new { message = "Driver profile or availability changed. Refresh before going online." });
+
         try
         {
             var current = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
@@ -979,13 +987,18 @@ app.MapPost("/api/v1/driver/availability", async (
         }
         catch
         {
-            await SaveDriverProfileAsync(profile with
-            {
-                AvailabilityStatus = "Offline",
-                CurrentLatitude = null,
-                CurrentLongitude = null,
-                LocationUpdatedAtUtc = null
-            }, ct);
+            try { await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct); }
+            catch { /* Profile state below still prevents this driver from being dispatched. */ }
+            await TryUpdateDriverProfileAsync(driverId, current =>
+                current.Status == "Approved" && current.AvailabilityStatus == "Online"
+                    ? current with
+                    {
+                        AvailabilityStatus = "Offline",
+                        CurrentLatitude = null,
+                        CurrentLongitude = null,
+                        LocationUpdatedAtUtc = null
+                    }
+                    : null, ct);
             throw;
         }
         var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
@@ -996,14 +1009,22 @@ app.MapPost("/api/v1/driver/availability", async (
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "Complete your active ride before going offline." });
 
+    var savedOffline = await TryUpdateDriverProfileAsync(driverId, current =>
+        current.Status == "Approved" &&
+        string.Equals(current.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase)
+            ? current with
+            {
+                AvailabilityStatus = "Offline",
+                CurrentLatitude = null,
+                CurrentLongitude = null,
+                LocationUpdatedAtUtc = null
+            }
+            : null, ct);
+    if (!savedOffline)
+        return Results.Conflict(new { message = "Driver profile or availability changed. Refresh before going offline." });
+
     await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
-    await SaveDriverProfileAsync(profile with
-    {
-        AvailabilityStatus = "Offline",
-        CurrentLatitude = null,
-        CurrentLongitude = null,
-        LocationUpdatedAtUtc = null
-    }, ct);
     return Results.Ok(new { availabilityStatus = "Offline", isOnline = false, isQueued = false, position = (int?)null });
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
@@ -1029,7 +1050,9 @@ app.MapPost("/api/v1/driver/location", async (
     if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
     {
         var takenOffline = await TryUpdateDriverProfileAsync(driverId, current =>
-            current.Status == "Approved" && current.AvailabilityStatus == "Online"
+            current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
+            string.Equals(current.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase)
                 ? current with
                 {
                     AvailabilityStatus = "Offline",
@@ -1045,7 +1068,8 @@ app.MapPost("/api/v1/driver/location", async (
 
     var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
-        string.Equals(current.ZoneId, currentZoneId, StringComparison.OrdinalIgnoreCase)
+        string.Equals(current.ZoneId, currentZoneId, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase)
             ? current with
             {
                 CurrentLatitude = latitude,
