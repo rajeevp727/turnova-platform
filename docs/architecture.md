@@ -206,6 +206,8 @@ The Driver and Rider clients use email/password through the TurnOva API, which p
 
 TriSend issues 15-minute JWT access tokens and rotating refresh tokens. Mobile clients store tokens using Expo SecureStore. TurnOva validates JWT signature, issuer, audience and expiry locally and applies Driver/Rider authorization policies. The API requires the exact same issuer, audience and symmetric signing key as TriSend; keep these values only in the backend secret store.
 
+Both mobile apps coordinate unauthorized-request recovery through one in-flight refresh operation. The current stored access/refresh pair is read only after entering that shared operation. If a delayed 401 arrives after another request has already rotated the pair, the client reuses the newer stored access token instead of attempting to reuse the old refresh token. A per-app session epoch invalidates pending requests across logout or a new/restored session so old responses are not retried or returned under a replacement session. A missing or rejected refresh token clears the local session and returns the user to sign-in.
+
 Logout revokes the TriSend refresh session, but already-issued access tokens can remain valid until their 15-minute expiry because TurnOva validates them locally. This is an explicit MVP trade-off; immediate revocation requires an online session check or a distributed revocation mechanism.
 
 Email/password only is in scope. Google/Microsoft OAuth and SSO are explicitly excluded. Driver onboarding/KYC and durable ride persistence are also separate work items; a valid Driver role does not by itself prove production driver eligibility.

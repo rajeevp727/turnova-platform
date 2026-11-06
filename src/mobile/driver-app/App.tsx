@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
-import { singleFlight } from "../shared/refreshCoordinator";
+import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 
@@ -68,6 +68,7 @@ export default function App() {
   const systemColorScheme = useColorScheme();
   const [tokens, setTokens] = useState<Tokens | null>(null);
   const refreshInFlight = useRef<Promise<string> | null>(null);
+  const sessionEpoch = useRef(0);
   const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Payslips" | "Profile">("Home");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -114,35 +115,48 @@ export default function App() {
     void SecureStore.setItemAsync("turnova.theme", preference);
   };
 
-  const acceptSession = useCallback(async (result: any) => {
+  const acceptSession = useCallback(async (result: any, newSession = false) => {
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
     await saveTokens(next);
+    if (newSession) sessionEpoch.current += 1;
     setTokens(next);
     setUser(result.user);
     setError("");
   }, []);
 
-  const refreshSession = useCallback(async (refreshToken: string) => {
+  const refreshSession = useCallback(async (refreshToken: string, expectedEpoch: number) => {
+    if (sessionEpoch.current !== expectedEpoch) return "";
     const result = await jsonRequest("/api/v1/auth/refresh", {
       method: "POST", body: JSON.stringify({ refreshToken })
     });
+    if (sessionEpoch.current !== expectedEpoch) return "";
     await acceptSession(result);
     return result.accessToken as string;
   }, [acceptSession]);
 
   const apiFetch = useCallback(async (path: string, init: RequestInit = {}) => {
     if (!tokens) throw new Error("Please sign in again.");
+    const requestEpoch = sessionEpoch.current;
     let response = await fetch(`${API}${path}`, {
       ...init,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens.accessToken}`, ...init.headers }
     });
+    if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
     if (response.status === 401) {
-      const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); setPaymentReportAmounts({}); setUnionAssignment(null); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
-        accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
+        accessToken = await getFreshAccessToken(
+          refreshInFlight,
+          tokens.accessToken,
+          async () => ({
+            accessToken: await SecureStore.getItemAsync("turnova.access"),
+            refreshToken: await SecureStore.getItemAsync("turnova.refresh")
+          }),
+          (refreshToken: string) => refreshSession(refreshToken, requestEpoch)
+        );
       } catch {
+        if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
+        sessionEpoch.current += 1;
         await clearTokens();
         setTokens(null);
         setUser(null);
@@ -153,10 +167,12 @@ export default function App() {
         setAvailableRides([]);
         throw new Error("Session expired. Please sign in again.");
       }
+      if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
       response = await fetch(`${API}${path}`, {
         ...init,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...init.headers }
       });
+      if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
     }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.message ?? body.title ?? "Request failed.");
@@ -172,11 +188,11 @@ export default function App() {
         if (accessToken && refreshToken) {
           try {
             const me = await jsonRequest("/api/v1/auth/me", {}, accessToken);
-            if (active) { setTokens({ accessToken, refreshToken }); setUser(me); }
+            if (active) { sessionEpoch.current += 1; setTokens({ accessToken, refreshToken }); setUser(me); }
           } catch {
             try {
               const result = await jsonRequest("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) });
-              if (active) await acceptSession(result);
+              if (active) await acceptSession(result, true);
             } catch { await clearTokens(); }
           }
         }
@@ -194,7 +210,7 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ email: email.trim(), password, name: name.trim() || null, replaceOldest })
       });
-      await acceptSession(result);
+      await acceptSession(result, true);
     } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed."); }
     finally { setLoading(false); }
   };
@@ -634,19 +650,38 @@ export default function App() {
 
   const downloadPayslip = async (year: number, month: number) => {
     if (!tokens) return;
+    const requestEpoch = sessionEpoch.current;
     setLoading(true); setError(""); setNotice("");
     try {
-      let accessToken = tokens.accessToken;
       let response = await fetch(`${API}/api/v1/driver/payslips/${year}/${month}.pdf`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${tokens.accessToken}` }
       });
+      if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
       if (response.status === 401) {
-        const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-        if (!refreshToken) throw new Error("Session expired. Please sign in again.");
-        accessToken = await refreshSession(refreshToken);
+        let accessToken: string;
+        try {
+          accessToken = await getFreshAccessToken(
+            refreshInFlight,
+            tokens.accessToken,
+            async () => ({
+              accessToken: await SecureStore.getItemAsync("turnova.access"),
+              refreshToken: await SecureStore.getItemAsync("turnova.refresh")
+            }),
+            (refreshToken: string) => refreshSession(refreshToken, requestEpoch)
+          );
+        } catch {
+          if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
+          sessionEpoch.current += 1;
+          await clearTokens();
+          setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
+          setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
+          throw new Error("Session expired. Please sign in again.");
+        }
+        if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
         response = await fetch(`${API}/api/v1/driver/payslips/${year}/${month}.pdf`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
+        if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
       }
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -780,6 +815,7 @@ export default function App() {
   };
 
   const logout = async () => {
+    sessionEpoch.current += 1;
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
     await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});

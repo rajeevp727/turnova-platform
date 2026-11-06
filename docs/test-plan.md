@@ -49,6 +49,7 @@
 | AUTH-LOGIN-019 | Secure storage failure | Simulate SecureStore read/write failure | User sees recoverable error; app does not silently claim authenticated state | Mobile | P1 |
 | AUTH-LOGIN-020 | Session limit reached | Sign in when TriSend's session limit is reached; test both replaceOldest false/true | TriSend policy is respected; no unexpected session is evicted | API + mobile | P1 |
 | AUTH-LOGIN-021 | Concurrent unauthorized API responses | Trigger multiple protected API requests that all receive 401 while refresh-token rotation is enabled | Both apps share one in-flight refresh operation, persist the rotated token pair once, and retry each original request with the new access token | Mobile | P0 |
+| AUTH-LOGIN-022 | Late 401 after another request rotates the session | First request refreshes and persists a new token pair; a delayed request using the old access token then receives 401 | Client reads the current stored pair inside the shared refresh operation and retries with the latest access token without reusing the rotated refresh token | Mobile unit | P0 |
 
 ## 2A. Authentication API integration contracts
 
