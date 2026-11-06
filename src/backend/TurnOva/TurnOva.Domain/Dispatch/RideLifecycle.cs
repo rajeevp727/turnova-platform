@@ -12,6 +12,10 @@ public static class RideLifecycle
     public const string Cancelled = "Cancelled";
     public const string Expired = "Expired";
 
+    public static bool AreCoordinatesValid(double latitude, double longitude) =>
+        double.IsFinite(latitude) && latitude >= -90 && latitude <= 90 &&
+        double.IsFinite(longitude) && longitude >= -180 && longitude <= 180;
+
     public static bool CanTransition(string current, string next) =>
         (current, next) switch
         {

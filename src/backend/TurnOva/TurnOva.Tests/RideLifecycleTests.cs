@@ -30,6 +30,19 @@ public sealed class RideLifecycleTests
         Assert.Equal(expected, RideLifecycle.CanTransition(current, next));
     }
 
+    [Fact]
+    public void AreCoordinatesValid_RejectsNonFiniteAndOutOfRangeValues()
+    {
+        Assert.True(RideLifecycle.AreCoordinatesValid(0, 0));
+        Assert.True(RideLifecycle.AreCoordinatesValid(90, 180));
+        Assert.True(RideLifecycle.AreCoordinatesValid(-90, -180));
+        Assert.False(RideLifecycle.AreCoordinatesValid(double.NaN, 0));
+        Assert.False(RideLifecycle.AreCoordinatesValid(0, double.PositiveInfinity));
+        Assert.False(RideLifecycle.AreCoordinatesValid(double.NegativeInfinity, 0));
+        Assert.False(RideLifecycle.AreCoordinatesValid(90.0001, 0));
+        Assert.False(RideLifecycle.AreCoordinatesValid(0, -180.0001));
+    }
+
     [Theory]
     [InlineData("Requested", false)]
     [InlineData("Negotiating", false)]

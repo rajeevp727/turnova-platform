@@ -1406,8 +1406,8 @@ app.MapPost("/api/v1/driver/availability", async (
         {
             if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
                 return Results.Conflict(new { message = "Only approved Cab drivers can go online for new MVP ride requests. Legacy non-Cab profiles are retained for history." });
-            if (request.Latitude is null or < -90 or > 90 ||
-                request.Longitude is null or < -180 or > 180)
+            if (request.Latitude is null || request.Longitude is null ||
+                !RideLifecycle.AreCoordinatesValid(request.Latitude.Value, request.Longitude.Value))
                 return Results.BadRequest(new { message = "Valid GPS coordinates are required before going online." });
 
             var assignment = await FindUnionAssignmentAsync(driverId, ct);
@@ -1505,8 +1505,8 @@ app.MapPost("/api/v1/driver/location", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId))
         return Results.Forbid();
-    if (request.Latitude is null or < -90 or > 90 ||
-        request.Longitude is null or < -180 or > 180)
+    if (request.Latitude is null || request.Longitude is null ||
+        !RideLifecycle.AreCoordinatesValid(request.Latitude.Value, request.Longitude.Value))
         return Results.BadRequest(new { message = "Valid latitude and longitude are required." });
 
     var latitude = request.Latitude.Value;
@@ -1689,8 +1689,7 @@ app.MapPost("/api/v1/queues/join", async (
 app.MapGet("/api/v1/rider/discovery", async (
     double latitude, double longitude, int passengers, CancellationToken ct) =>
 {
-    if (!double.IsFinite(latitude) || latitude is < -90 or > 90 ||
-        !double.IsFinite(longitude) || longitude is < -180 or > 180 ||
+    if (!RideLifecycle.AreCoordinatesValid(latitude, longitude) ||
         passengers is < 1 or > 6)
         return Results.BadRequest(new { message = "Provide valid pickup coordinates and a passenger count between 1 and 6." });
 
@@ -1788,8 +1787,7 @@ app.MapPost("/api/v1/rider/bookings", async (
         string.IsNullOrWhiteSpace(pickup) || pickup.Length > 250 ||
         string.IsNullOrWhiteSpace(dropoff) || dropoff.Length > 250 ||
         request.Passengers is < 1 or > 6 ||
-        !double.IsFinite(request.PickupLatitude) || request.PickupLatitude is < -90 or > 90 ||
-        !double.IsFinite(request.PickupLongitude) || request.PickupLongitude is < -180 or > 180 ||
+        !RideLifecycle.AreCoordinatesValid(request.PickupLatitude, request.PickupLongitude) ||
         request.Stops?.Count > 10 ||
         request.Stops?.Any(stop => string.IsNullOrWhiteSpace(stop) || stop.Trim().Length > 250) == true)
         return Results.BadRequest(new { message = "Provide a selected Cab driver and union, pickup, drop-off, valid stops, coordinates and passenger count." });
@@ -2085,7 +2083,8 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         return Results.BadRequest(new { message = "Pickup and drop-off are required." });
     if (request.Passengers is < 1 or > 6)
         return Results.BadRequest(new { message = "Passenger count must be between 1 and 6." });
-    if (request.PickupLatitude is null or < -90 or > 90 || request.PickupLongitude is null or < -180 or > 180)
+    if (request.PickupLatitude is null || request.PickupLongitude is null ||
+        !RideLifecycle.AreCoordinatesValid(request.PickupLatitude.Value, request.PickupLongitude.Value))
         return Results.BadRequest(new { message = "Valid pickup coordinates are required." });
     var serviceClass = request.ServiceClass?.Trim().ToLowerInvariant() ?? string.Empty;
     if (!string.Equals(serviceClass, "cab", StringComparison.OrdinalIgnoreCase))
@@ -2430,7 +2429,7 @@ app.MapPost("/api/v1/queues/{zoneId}/{serviceClass}/offer-timeout", async (
 
 app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
-    if (location.Latitude is < -90 or > 90 || location.Longitude is < -180 or > 180)
+    if (!RideLifecycle.AreCoordinatesValid(location.Latitude, location.Longitude))
         return Results.BadRequest(new { message = "Invalid coordinates." });
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
