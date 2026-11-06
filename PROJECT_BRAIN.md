@@ -63,7 +63,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 
 ## Highest-priority unfinished work
 
-1. **CAB-DISCOVERY-01:** discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by driver-to-pickup proximity; Rider selects, no customer-facing FIFO ranking or automatic assignment.
+1. **Complete RIDER-01 / CAB-DISCOVERY-01:** finish durable selected-driver reservation/booking and exact expiry/cancel handling without customer-facing FIFO; then run Android/iOS discovery, photo and location acceptance.
 2. **CAB-AGREEMENT-01:** direct Rider/Driver fare negotiation, immutable versioned agreement, both confirm current version, and no ride start until mutual confirmation.
 3. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
 4. **CAB-UNION-01:** Cab membership, vehicle verification, union approval/selfie visibility and minimum necessary oversight.
