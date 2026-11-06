@@ -1879,6 +1879,37 @@ async Task<DemoRide?> TryTransitionAsync(DemoRide current, string next, Cancella
     return await TryReplaceRideAsync(current, updated, ct) ? updated : null;
 }
 
+bool IsSameRideSnapshot(DemoRide left, DemoRide right)
+{
+    if (left.RideId != right.RideId || left.Pickup != right.Pickup || left.Dropoff != right.Dropoff ||
+        left.Passengers != right.Passengers || left.Status != right.Status || left.RequestedAt != right.RequestedAt ||
+        left.EstimatedFareInr != right.EstimatedFareInr || left.RiderId != right.RiderId || left.DriverId != right.DriverId ||
+        left.PickupLatitude != right.PickupLatitude || left.PickupLongitude != right.PickupLongitude ||
+        left.DriverLatitude != right.DriverLatitude || left.DriverLongitude != right.DriverLongitude ||
+        left.AcceptedAt != right.AcceptedAt || left.LocationUpdatedAt != right.LocationUpdatedAt ||
+        left.LocationSharingActive != right.LocationSharingActive || left.ServiceClass != right.ServiceClass ||
+        left.DispatchZoneId != right.DispatchZoneId || left.AgreementStateRevision != right.AgreementStateRevision)
+        return false;
+
+    var leftVersions = left.AgreementVersions ?? [];
+    var rightVersions = right.AgreementVersions ?? [];
+    if (leftVersions.Count != rightVersions.Count) return false;
+    for (var index = 0; index < leftVersions.Count; index++)
+    {
+        var first = leftVersions[index];
+        var second = rightVersions[index];
+        if (first.RideId != second.RideId || first.Version != second.Version ||
+            first.RiderId != second.RiderId || first.DriverId != second.DriverId || first.UnionId != second.UnionId ||
+            first.Amount != second.Amount || first.Currency != second.Currency || first.Pickup != second.Pickup ||
+            first.Dropoff != second.Dropoff || first.ProposedBy != second.ProposedBy ||
+            first.IdempotencyKey != second.IdempotencyKey || first.CreatedAtUtc != second.CreatedAtUtc ||
+            !first.Stops.SequenceEqual(second.Stops, StringComparer.Ordinal))
+            return false;
+    }
+
+    return (left.AgreementConfirmations ?? []).SequenceEqual(right.AgreementConfirmations ?? []);
+}
+
 async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, CancellationToken ct)
 {
     if (rideContainer is null)
@@ -1886,8 +1917,7 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
     try
     {
         var response = await rideContainer.ReadItemAsync<DemoRide>(current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
-        if (response.Resource.Status != current.Status || response.Resource.DriverId != current.DriverId ||
-            response.Resource.AgreementStateRevision != current.AgreementStateRevision)
+        if (!IsSameRideSnapshot(response.Resource, current))
             return false;
         await rideContainer.ReplaceItemAsync(updated, current.RideId, new PartitionKey(current.RideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
