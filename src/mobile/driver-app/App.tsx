@@ -32,7 +32,7 @@ const darkColors: ThemeColors = {
 };
 const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
 const ZONE = "hyderabad-central";
-const DEFAULT_SERVICE_CLASS = "auto";
+const DEFAULT_SERVICE_CLASS = "cab";
 type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
@@ -87,6 +87,7 @@ export default function App() {
   const [registrationReference, setRegistrationReference] = useState("");
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
   const [serviceClass, setServiceClass] = useState(DEFAULT_SERVICE_CLASS);
+  const isCabProfile = serviceClass.toLowerCase() === "cab";
 
   useEffect(() => {
     let mounted = true;
@@ -191,6 +192,7 @@ export default function App() {
   useEffect(() => { if (user) void loadAvailability(); }, [user, loadAvailability]);
 
   const toggleAvailability = async () => {
+    if (!isCabProfile) { setError("Legacy non-Cab profiles are preserved for history but cannot join new Cab-only MVP workflows."); return; }
     setLoading(true); setError(""); setNotice("");
     try {
       const nextOnline = availabilityStatus !== "Online";
@@ -277,6 +279,7 @@ export default function App() {
   }, [user?.id, availabilityStatus, activeRide?.status, apiFetch]);
 
   const loadQueue = useCallback(async () => {
+    if (!isCabProfile) { setQueue([]); setMembership({ isQueued: false, position: null }); return; }
     try {
       const [data, current] = await Promise.all([
         apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}`),
@@ -285,10 +288,11 @@ export default function App() {
       setQueue(data);
       setMembership(current);
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to load queue."); }
-  }, [apiFetch, serviceClass]);
+  }, [apiFetch, serviceClass, isCabProfile]);
   useEffect(() => { if (user && tab === "Queue") void loadQueue(); }, [user, tab, loadQueue]);
 
   const leaveQueue = async () => {
+    if (!isCabProfile) { setError("Legacy non-Cab profiles cannot join or leave the Cab-only queue."); return; }
     setLoading(true); setError(""); setNotice("");
     try {
       await apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}/me`, { method: "DELETE" });
@@ -299,9 +303,10 @@ export default function App() {
   };
 
   const loadAvailableRides = useCallback(async () => {
+    if (!isCabProfile) { setAvailableRides([]); return; }
     try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); }
     catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); }
-  }, [apiFetch]);
+  }, [apiFetch, isCabProfile]);
 
   const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
@@ -497,7 +502,7 @@ export default function App() {
           vehicleMake,
           vehicleModel,
           vehicleRegistration,
-          serviceClass,
+          serviceClass: "cab",
           passengerCapacity: 3,
           profilePhotoBase64,
           documents: [
@@ -548,8 +553,8 @@ export default function App() {
   return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
     <View style={styles.header}><TurnOvaLogo subtitle={`Driver partner · ${user.name || user.email}`} compact /><Text style={styles.role}>DRIVER</Text></View>
     <ScrollView contentContainerStyle={styles.content}>
-      {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · {serviceClass.toUpperCase()}</Text><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.cardTitle}>{availabilityStatus}</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>Manage availability</Text></Pressable></View></>}
-      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · {serviceClass.toUpperCase()}</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.position}>{availabilityStatus}</Text><Pressable style={styles.primary} onPress={() => void toggleAvailability()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : availabilityStatus === "Online" ? "Go offline" : "Go online"}</Text></Pressable><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void loadQueue()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : "Refresh queue"}</Text></Pressable><Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
+      {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your approved Cab profile can be discovered by nearby Riders.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · {serviceClass.toUpperCase()}</Text><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.cardTitle}>{availabilityStatus}</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")} disabled={!isCabProfile}><Text style={styles.primaryText}>Manage Cab availability</Text></Pressable>{!isCabProfile && <Text style={styles.error}>Legacy non-Cab profile is read-only for new MVP workflows. Historical trips remain available.</Text>}</View></>}
+      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · {serviceClass.toUpperCase()}</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.position}>{availabilityStatus}</Text><Pressable style={styles.primary} onPress={() => void toggleAvailability()} disabled={loading || !isCabProfile}><Text style={styles.primaryText}>{loading ? "Please wait…" : availabilityStatus === "Online" ? "Go offline" : "Go online"}</Text></Pressable><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void loadQueue()} disabled={loading || !isCabProfile}><Text style={styles.primaryText}>{loading ? "Please wait…" : "Refresh queue"}</Text></Pressable><Pressable onPress={() => void loadQueue()} disabled={!isCabProfile}><Text style={styles.link}>Refresh list</Text></Pressable>{!isCabProfile && <Text style={styles.error}>Only Cab drivers can use new MVP availability and queue workflows.</Text>}</View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
       {tab === "Trips" && <>
         <Text style={styles.title}>Trips</Text>
         <View style={styles.card}>
@@ -590,12 +595,10 @@ export default function App() {
         {!!onboardingProfile?.profilePhotoApprovalStatus && <Text style={styles.muted}>Union selfie approval: {onboardingProfile.profilePhotoApprovalStatus}{onboardingProfile.profilePhotoApprovalStatus === "Rejected" && onboardingProfile.profilePhotoReviewReason ? ` · ${onboardingProfile.profilePhotoReviewReason}` : ""}</Text>}
         <Pressable style={styles.secondary} onPress={() => void captureSelfie()} disabled={loading}><Text style={styles.secondaryText}>{profilePhotoBase64 ? "Retake driver selfie" : "Take driver selfie"}</Text></Pressable>
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
-        {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
+        {onboardingProfile?.status === "Approved" && isCabProfile ? <Text style={styles.success}>Your Cab profile is approved. Availability and ride access are enabled.</Text> : onboardingProfile?.status === "Approved" && !isCabProfile ? <Text style={styles.error}>This legacy non-Cab profile is preserved for historical records and is not eligible for new Cab-only workflows. Contact your union to review a Cab-only onboarding path.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
           <Text style={styles.sub}>Complete your driver and vehicle details and capture a clear front-facing selfie. Your application will remain pending until reviewed.</Text>
           <Text style={styles.label}>VEHICLE CATEGORY</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-            {(["scooty", "bike", "auto", "cab"] as const).map(option => <Pressable key={option} onPress={() => setServiceClass(option)} style={[styles.themeOption, { minWidth: "45%" }, serviceClass === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, serviceClass === option && styles.themeOptionTextSelected]}>{option === "scooty" ? "Scooty" : option === "bike" ? "Bike" : option === "auto" ? "Auto" : "Cab"}</Text></Pressable>)}
-          </View>
+          <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.header, marginBottom: 12 }}><Text style={{ color: "#FFFFFF", fontWeight: "800" }}>Cab only</Text><Text style={{ color: colors.subtle, fontSize: 12, marginTop: 4 }}>New MVP onboarding accepts Cab vehicles only.</Text></View>
           <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full legal name" />
           <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholderTextColor={colors.muted} placeholder="Phone number with country code" keyboardType="phone-pad" />
           <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Bajaj)" />
