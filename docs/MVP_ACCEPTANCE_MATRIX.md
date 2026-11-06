@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #53 merge `7642168f42e277e04b76d7fba4c28ba90d3faa22`. PR #53's final-head CI run `42232390997` passed all four jobs. CAB-SCOPE-01 is implemented and CI-validated for covered API/mobile paths; physical-device and production acceptance remain.
+**Last audited:** 2026-11-06 against main after PR #54 merge `7dd1aedf56fdc9ef36b6b04add952d78687a4266`. PR #54's final-head CI run `42234802360` passed all four jobs. CAB-SCOPE-01 is implemented and CI-validated for covered API/mobile paths; physical-device and production acceptance remain.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -81,7 +81,7 @@
 
 ## Highest-priority next work
 
-1. Implement CAB-DISCOVERY-01: discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by pickup proximity; Rider explicitly selects. No customer-facing FIFO ranking or automatic assignment.
+1. Complete RIDER-01 / CAB-DISCOVERY-01: add durable selected-driver reservation/booking and exact expiry/cancel handling without customer-facing FIFO; then verify Android/iOS discovery and photo/location behaviour.
 2. Implement CAB-AGREEMENT-01: direct Rider/Driver negotiation, immutable versioned agreement, both parties confirm current version, and no ride start before mutual confirmation.
 3. Implement CAB-RECON-01: Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
 4. Complete CAB-UNION-01 and the remaining Driver/Rider support, platform observability and release evidence.
