@@ -30,9 +30,9 @@
 | 2 | AUTH-02 | In progress | PRs #37 and #41 plus shared mobile refresh tests cover single-flight refresh and retry-after-failure; rotation/reuse, restart, expiry, logout and secure-storage device tests remain. |
 | 3 | RIDER-01 | In progress | PR #55 candidate adds approved-union grouping, max three eligible drivers per union, pickup-proximity order, approved-photo privacy and Rider local selection cards. Durable selection reservation/booking, stops persistence, route distance, provider actions and device validation remain. |
 | 4 | RIDER-02 | Not started | Platform fare estimates are out of scope; direct fare negotiation, immutable agreement versions and mutual confirmation before ride start are not implemented. |
-| 5 | RIDER-03 | In progress | Ride lifecycle, ownership and idempotency exist; selected-driver booking/negotiation reservation and agreement start gate remain. |
-| 6 | DISPATCH-01 | In progress | Zone resolution exists; approved-union discovery for Cab is not implemented. |
-| 7 | DISPATCH-02 | In progress | Existing FIFO/offer flow is not to be used for customer-facing ranking/assignment; Rider selection of 2–3 approved Cab drivers per union is not implemented. Internal FIFO role remains unresolved. |
+| 5 | RIDER-03 | In progress | PR #55 disables legacy FIFO Rider request creation by default; selected-driver booking/reservation, agreement start gate and end-to-end status remain. |
+| 6 | DISPATCH-01 | In progress | PR #55 adds Active Cab union/zone filtering and requires Dispatch:NearbyRadiusKm; checked-in radius is 0 until product approval. |
+| 7 | DISPATCH-02 | In progress | PR #55 adds up to three per union, pickup-distance order and Rider local selection; durable server reservation is still missing. Internal FIFO role remains unresolved. |
 | 8 | DISPATCH-03 | In progress | Durable offer/expiry/outbox exists; selected-driver negotiation reservation/expiry remains, and automatic next-driver advancement must not drive customer-facing assignment. |
 | 9 | DISPATCH-04 | In progress | Per-driver reservation and ride ETag guards exist; adapt them to selected-driver negotiation and exact expiry/cancel release; Cosmos concurrency remains. |
 | 10 | REALTIME-01 | In progress | SignalR ride/offer flows and reconnect recovery exist; negotiation/agreement version events and device-to-device checks remain. |
