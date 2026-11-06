@@ -557,10 +557,31 @@ async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct,
 
 string? ResolveDispatchZone(double latitude, double longitude)
 {
+    if (!double.IsFinite(latitude) || !double.IsFinite(longitude) ||
+        latitude is < -90 or > 90 || longitude is < -180 or > 180)
+        return null;
+
     var zones = app.Configuration.GetSection("Dispatch:Zones").Get<DispatchZoneConfig[]>() ?? [];
-    return zones.FirstOrDefault(zone =>
+    if (zones.Length == 0 || zones.Any(zone =>
+        zone is null ||
+        string.IsNullOrWhiteSpace(zone.ZoneId) ||
+        !double.IsFinite(zone.MinLatitude) || !double.IsFinite(zone.MaxLatitude) ||
+        !double.IsFinite(zone.MinLongitude) || !double.IsFinite(zone.MaxLongitude) ||
+        zone.MinLatitude < -90 || zone.MaxLatitude > 90 || zone.MinLatitude >= zone.MaxLatitude ||
+        zone.MinLongitude < -180 || zone.MaxLongitude > 180 || zone.MinLongitude >= zone.MaxLongitude))
+        return null;
+
+    var normalizedZoneIds = zones.Select(zone => zone.ZoneId.Trim()).ToArray();
+    if (normalizedZoneIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() != zones.Length)
+        return null;
+
+    var matches = zones.Where(zone =>
         latitude >= zone.MinLatitude && latitude <= zone.MaxLatitude &&
-        longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude)?.ZoneId;
+        longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude).ToArray();
+
+    // Inclusive rectangles can share edges. If a pickup matches more than one zone,
+    // do not select whichever configuration entry happens to appear first.
+    return matches.Length == 1 ? matches[0].ZoneId.Trim() : null;
 }
 
 double CalculateDistanceKm(double firstLatitude, double firstLongitude, double secondLatitude, double secondLongitude)
