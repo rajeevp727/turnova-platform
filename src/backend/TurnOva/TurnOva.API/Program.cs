@@ -1383,87 +1383,118 @@ app.MapPost("/api/v1/driver/availability", async (
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (profile is null) return Results.Conflict(new { message = "Only an approved driver can change availability." });
+    if (await GetApprovedDriverProfileAsync(driverId, ct) is null)
+        return Results.Conflict(new { message = "Only an approved driver can change availability." });
+    if (await HasActiveDriverRideAsync(driverId, ct))
+        return Results.Conflict(new { message = "Resolve or complete the active selected booking/ride before changing availability." });
 
-    if (!request.IsOnline && await HasActiveDriverRideAsync(driverId, ct))
-        return Results.Conflict(new { message = "Resolve or complete the active selected booking/ride before going offline." });
+    // Serialize availability changes with selected bookings and Union transfers.
+    // This is a short technical lease, not a Rider/Driver negotiation-lifetime policy.
+    var availabilityLeaseId = $"DRIVER-AVAILABILITY-{Guid.NewGuid():N}";
+    if (!await driverRideReservations.TryAcquireTemporaryAsync(
+        driverId, availabilityLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct))
+        return Results.Conflict(new { message = "The Driver is reserved by a selected negotiation or ride. Resolve it before changing availability." });
 
-    if (request.IsOnline)
+    try
     {
-        if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
-            return Results.Conflict(new { message = "Only approved Cab drivers can go online for new MVP ride requests. Legacy non-Cab profiles are retained for history." });
-        if (request.Latitude is null or < -90 or > 90 ||
-            request.Longitude is null or < -180 or > 180)
-            return Results.BadRequest(new { message = "Valid GPS coordinates are required before going online." });
-        var currentZoneId = ResolveDispatchZone(request.Latitude.Value, request.Longitude.Value);
-        if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
-            return Results.Conflict(new { message = "Your current location is outside your assigned service zone." });
-        if (await HasActiveDriverRideAsync(driverId, ct))
-            return Results.Conflict(new { message = "Complete your active ride before going online." });
+        // Re-read the authoritative profile after acquiring the same per-Driver lease used by booking.
+        var profile = await GetApprovedDriverProfileAsync(driverId, ct);
+        if (profile is null)
+            return Results.Conflict(new { message = "Only an approved driver can change availability." });
 
-        var savedOnline = await TryUpdateDriverProfileAsync(driverId, current =>
+        if (request.IsOnline)
+        {
+            if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+                return Results.Conflict(new { message = "Only approved Cab drivers can go online for new MVP ride requests. Legacy non-Cab profiles are retained for history." });
+            if (request.Latitude is null or < -90 or > 90 ||
+                request.Longitude is null or < -180 or > 180)
+                return Results.BadRequest(new { message = "Valid GPS coordinates are required before going online." });
+
+            var assignment = await FindUnionAssignmentAsync(driverId, ct);
+            if (assignment is null || assignment.Status != "Active")
+                return Results.Conflict(new { message = "An active approved Cab Union membership is required before going online." });
+            var union = await FindUnionAsync(assignment.UnionId, ct);
+            if (union is null || union.Status != "Active" ||
+                !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase) ||
+                !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
+                return Results.Conflict(new { message = "The assigned Union must be active, serve Cab and cover the Driver's approved service zone." });
+            if (profile.Documents is null ||
+                !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
+                !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
+                return Results.Conflict(new { message = "Approved driving licence and Cab vehicle documents are required before going online." });
+
+            var currentZoneId = ResolveDispatchZone(request.Latitude.Value, request.Longitude.Value);
+            if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
+                return Results.Conflict(new { message = "Your current location is outside your assigned service zone." });
+
+            var savedOnline = await TryUpdateDriverProfileAsync(driverId, current =>
+                current.Status == "Approved" &&
+                string.Equals(current.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase) &&
+                current.Documents is not null &&
+                current.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") &&
+                current.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved")
+                    ? current with
+                    {
+                        AvailabilityStatus = "Online",
+                        CurrentLatitude = request.Latitude,
+                        CurrentLongitude = request.Longitude,
+                        LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+                    }
+                    : null, ct);
+            if (!savedOnline)
+                return Results.Conflict(new { message = "Driver profile, verification or availability changed. Refresh before going online." });
+
+            try
+            {
+                var current = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
+                if (!current.Any(entry => entry.DriverId == driverId))
+                    await queueService.JoinAsync(new DriverQueueEntry(driverId, profile.ZoneId, profile.ServiceClass, DateTimeOffset.UtcNow, 0, true), ct);
+            }
+            catch
+            {
+                try { await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct); }
+                catch { /* Profile state below still prevents this Driver from being discovered. */ }
+                await TryUpdateDriverProfileAsync(driverId, current =>
+                    current.Status == "Approved" && current.AvailabilityStatus == "Online"
+                        ? current with
+                        {
+                            AvailabilityStatus = "Offline",
+                            CurrentLatitude = null,
+                            CurrentLongitude = null,
+                            LocationUpdatedAtUtc = null
+                        }
+                        : null, ct);
+                throw;
+            }
+
+            var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
+            var position = queue.ToList().FindIndex(entry => entry.DriverId == driverId) + 1;
+            return Results.Ok(new { availabilityStatus = "Online", isOnline = true, isQueued = position > 0, position });
+        }
+
+        var savedOffline = await TryUpdateDriverProfileAsync(driverId, current =>
             current.Status == "Approved" &&
             string.Equals(current.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase)
                 ? current with
                 {
-                    AvailabilityStatus = "Online",
-                    CurrentLatitude = request.Latitude,
-                    CurrentLongitude = request.Longitude,
-                    LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+                    AvailabilityStatus = "Offline",
+                    CurrentLatitude = null,
+                    CurrentLongitude = null,
+                    LocationUpdatedAtUtc = null
                 }
                 : null, ct);
-        if (!savedOnline)
-            return Results.Conflict(new { message = "Driver profile or availability changed. Refresh before going online." });
+        if (!savedOffline)
+            return Results.Conflict(new { message = "Driver profile or availability changed. Refresh before going offline." });
 
-        try
-        {
-            var current = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
-            if (!current.Any(entry => entry.DriverId == driverId))
-                await queueService.JoinAsync(new DriverQueueEntry(driverId, profile.ZoneId, profile.ServiceClass, DateTimeOffset.UtcNow, 0, true), ct);
-        }
-        catch
-        {
-            try { await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct); }
-            catch { /* Profile state below still prevents this driver from being dispatched. */ }
-            await TryUpdateDriverProfileAsync(driverId, current =>
-                current.Status == "Approved" && current.AvailabilityStatus == "Online"
-                    ? current with
-                    {
-                        AvailabilityStatus = "Offline",
-                        CurrentLatitude = null,
-                        CurrentLongitude = null,
-                        LocationUpdatedAtUtc = null
-                    }
-                    : null, ct);
-            throw;
-        }
-        var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
-        var position = queue.ToList().FindIndex(entry => entry.DriverId == driverId) + 1;
-        return Results.Ok(new { availabilityStatus = "Online", isOnline = true, isQueued = position > 0, position });
+        await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
+        return Results.Ok(new { availabilityStatus = "Offline", isOnline = false, isQueued = false, position = (int?)null });
     }
-
-    if (await HasActiveDriverRideAsync(driverId, ct))
-        return Results.Conflict(new { message = "Complete your active ride before going offline." });
-
-    var savedOffline = await TryUpdateDriverProfileAsync(driverId, current =>
-        current.Status == "Approved" &&
-        string.Equals(current.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase)
-            ? current with
-            {
-                AvailabilityStatus = "Offline",
-                CurrentLatitude = null,
-                CurrentLongitude = null,
-                LocationUpdatedAtUtc = null
-            }
-            : null, ct);
-    if (!savedOffline)
-        return Results.Conflict(new { message = "Driver profile or availability changed. Refresh before going offline." });
-
-    await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
-    return Results.Ok(new { availabilityStatus = "Offline", isOnline = false, isQueued = false, position = (int?)null });
+    finally
+    {
+        await driverRideReservations.TryReleaseAsync(driverId, availabilityLeaseId, CancellationToken.None);
+    }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/driver/location", async (
@@ -1489,21 +1520,61 @@ app.MapPost("/api/v1/driver/location", async (
     var currentZoneId = ResolveDispatchZone(latitude, longitude);
     if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
     {
-        var takenOffline = await TryUpdateDriverProfileAsync(driverId, current =>
-            current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
-            string.Equals(current.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase)
-                ? current with
-                {
-                    AvailabilityStatus = "Offline",
-                    CurrentLatitude = null,
-                    CurrentLongitude = null,
-                    LocationUpdatedAtUtc = null
-                }
-                : null, ct);
-        if (takenOffline)
-            await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
-        return Results.Conflict(new { message = "You left your assigned service zone and were taken offline." });
+        // A zone-exit transition must not race a Rider selecting this Driver.
+        // The same per-Driver lease serializes it with bookings and Union transfers.
+        var zoneExitLeaseId = $"DRIVER-ZONE-EXIT-{Guid.NewGuid():N}";
+        if (!await driverRideReservations.TryAcquireTemporaryAsync(
+            driverId, zoneExitLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct))
+            return Results.Conflict(new { message = "Location cannot take the Driver offline while a selected negotiation or ride reservation is active." });
+
+        try
+        {
+            var latestProfile = await GetApprovedDriverProfileAsync(driverId, ct);
+            if (latestProfile is null || latestProfile.AvailabilityStatus != "Online" ||
+                !string.Equals(latestProfile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+                return Results.Conflict(new { message = "Driver availability changed. Refresh before sharing location." });
+
+            var latestZoneId = ResolveDispatchZone(latitude, longitude);
+            if (string.Equals(latestZoneId, latestProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
+            {
+                var savedInside = await TryUpdateDriverProfileAsync(driverId, current =>
+                    current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
+                    string.Equals(current.ZoneId, latestProfile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(current.ServiceClass, latestProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)
+                        ? current with
+                        {
+                            CurrentLatitude = latitude,
+                            CurrentLongitude = longitude,
+                            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+                        }
+                        : null, ct);
+                return savedInside
+                    ? Results.NoContent()
+                    : Results.Conflict(new { message = "Driver availability changed. Refresh before sharing location." });
+            }
+
+            var takenOffline = await TryUpdateDriverProfileAsync(driverId, current =>
+                current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
+                string.Equals(current.ZoneId, latestProfile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(current.ServiceClass, latestProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)
+                    ? current with
+                    {
+                        AvailabilityStatus = "Offline",
+                        CurrentLatitude = null,
+                        CurrentLongitude = null,
+                        LocationUpdatedAtUtc = null
+                    }
+                    : null, ct);
+            if (!takenOffline)
+                return Results.Conflict(new { message = "Driver availability changed. Refresh before sharing location." });
+
+            await queueService.LeaveAsync(driverId, latestProfile.ZoneId, latestProfile.ServiceClass, ct);
+            return Results.Conflict(new { message = "You left your assigned service zone and were taken offline." });
+        }
+        finally
+        {
+            await driverRideReservations.TryReleaseAsync(driverId, zoneExitLeaseId, CancellationToken.None);
+        }
     }
 
     var saved = await TryUpdateDriverProfileAsync(driverId, current =>
