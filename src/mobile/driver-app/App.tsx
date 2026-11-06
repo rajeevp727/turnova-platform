@@ -171,7 +171,7 @@ export default function App() {
       if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
     }
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message ?? body.title ?? "Request failed.");
+    if (!response.ok) { const error = new Error(body.message ?? body.title ?? "Request failed."); (error as Error & { status: number }).status = response.status; throw error; }
     return body;
   }, [tokens, refreshSession]);
 
