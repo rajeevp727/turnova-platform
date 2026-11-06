@@ -77,9 +77,12 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 5. **#11 DRIVER-01 — In progress:** PR #66 merged union-scoped selfie approval and Driver membership display. Identity-provider claim mapping, private document storage/scanning/consent/retention and Android/iOS onboarding evidence remain.
 6. **#12 DRIVER-02 — In progress:** PR #67 merged the active Cab Union/document gate, reservation-safe Online/Offline and zone-exit transitions, and foreground availability-GPS refresh; live Cosmos and Android/iOS device gates remain.
 7. **#13 TRIP-01 — In progress:** PR #68 merged the selected-Cab lifecycle/location safety slice; live Cosmos and Android/iOS SignalR/map/permission/background-resume acceptance remain.
-8. **#14 DRIVER-03 — Current:** fix current/incomplete month rejection and prove authenticated Driver/Union assignment isolation and work-metrics-only PDF privacy with automated tests.
-9. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
-10. **CAB-UNION-01, remaining support/platform/release areas, and AI-01 supplemental:** complete only after the agreed 19-area sequence; keep AI-01 outside the denominator.
+8. **#14 DRIVER-03 — In progress:** PR #69 merged at `70738af97d17cb8be715410898138d3e2f10f1cf`; final-head CI [42291337082](https://github.com/rajeevp727/turnova-platform/actions/runs/42291337082) passed 196/196 backend tests, native non-container API publish, both mobile typechecks and nine shared mobile tests. Android/iOS PDF document acceptance and live Cosmos snapshot/recovery remain.
+9. **#15 DRIVER-04 — Blocked:** Driver support categories, escalation owner and operational process are not approved. Do not invent them.
+10. **#16 RIDER-04 — Current:** immutable Driver-reported direct-payment reconciliation after completed Cab rides, signed delta, Driver history and claim-scoped UnionManager oversight; final-head CI pending.
+11. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved.
+12. **#18 PLATFORM-01 / #19 RELEASE-01:** continue sequentially after #17 is audited; retain live hosting, Cosmos, provider, legal and Android/iOS release gates.
+13. **AI-01 supplemental:** provider-agnostic Rider intent/help boundary remains separately tracked outside the 19-row denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -324,3 +327,11 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - The authenticated Driver claim is the sole source of driverId. A query parameter must not select another Driver's payslip. Missing Union assignment or a Union transfer inside the month must reject generation rather than invent split-employer allocation.
 - PDF content should include only Driver/Union identity and work metrics; exclude ride/customer identifiers, route details and payment/fare values.
 - Android/iOS month list and PDF save/share/accessibility checks plus live Cosmos snapshot/migration/crash-window validation remain external gates.
+
+
+## RIDER-04 direct-payment reconciliation increment (2026-11-07)
+
+- #16 adds one immutable Driver-reported payment record inside the existing ride aggregate after a Completed Cab ride and mutually confirmed current agreement. It stores Rider/Driver/Union linkage, agreement version, agreed amount, amount received, signed delta, currency, timestamp, reporting actor, unverified status and hashed idempotency key.
+- Driver trip history exposes only the assigned Driver's report. `GET /api/v1/union/reconciliation` is UnionManager-only, filtered by signed unionId claims and returns minimum reconciliation fields without Rider identity, route/stops, contact details, exact location or private chat. No separate payment container or migration is introduced.
+- Reports are immutable and idempotent for the same key/payload. No customer confirmation/dispute or non-zero-delta next-ride policy is inferred; completion's existing reservation release is unchanged. No payment gateway or escrow is added.
+- Current weighted progress remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19). Next sequential area after #16 is #17 SUPPORT-01, whose support process/owner remains unapproved.
