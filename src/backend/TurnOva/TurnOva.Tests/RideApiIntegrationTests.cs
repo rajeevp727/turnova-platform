@@ -403,6 +403,33 @@ public sealed class RideApiIntegrationTests
         Assert.False(profiles.ContainsKey("driver-noncab-onboarding"));
     }
 
+    [Fact]
+    public async Task LegacyNonCabRideHistoryRemainsReadableForRiderAndDriver()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-legacy-history");
+        using var driver = factory.CreateClient("Driver", "driver-legacy-history");
+
+        var ride = await CreateRideAsync(rider, "legacy-noncab-history");
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[ride.RideId] = rides[ride.RideId] with
+        {
+            DriverId = "driver-legacy-history",
+            Status = "Completed",
+            ServiceClass = "auto"
+        };
+
+        var riderHistory = await rider.GetFromJsonAsync<List<JsonElement>>("/api/v1/rides/mine");
+        Assert.NotNull(riderHistory);
+        Assert.Single(riderHistory);
+        Assert.Equal("auto", riderHistory[0].GetProperty("serviceClass").GetString());
+
+        var driverHistory = await driver.GetFromJsonAsync<List<JsonElement>>("/api/v1/driver/rides/mine");
+        Assert.NotNull(driverHistory);
+        Assert.Single(driverHistory);
+        Assert.Equal("auto", driverHistory[0].GetProperty("serviceClass").GetString());
+    }
+
     private static object ValidOnboardingRequest(string serviceClass = "cab") => new
     {
         zoneId = "hyderabad-central",
