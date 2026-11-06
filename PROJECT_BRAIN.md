@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `78ddb9558b453b9171bc020ea83e51087f6e5f2f` (PR #55; PR #54 and earlier changes are ancestors)
+**Current main HEAD:** `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8` (PR #56 merged; PR #55 and earlier changes are ancestors)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -59,8 +59,9 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Current active increment
-- PR #55 merged sequential #3 RIDER-01 / CAB-DISCOVERY-01 at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run `42237572056` passed all four jobs. It adds union-grouped Cab discovery and Rider local selection cards; durable selected-driver booking/reservation remains unimplemented.
-- PR #56 is the sequential #4 RIDER-02 / CAB-AGREEMENT-01 slice. It adds immutable agreement term versions and append-only confirmations in the ride aggregate, idempotent proposals, ETag/revision concurrency protection, Rider/Driver proposal and confirmation controls, SignalR change events, and start/completion gates. Code/test head `74d4a2164576572186a31b081c73ad5ba6d7e049` passed all four CI jobs in run `42245873224` (backend tests/native publish, both Expo typechecks and shared mobile-auth tests). Automated review comment `6688847543` found no critical/high-risk issue. The PR remains open pending final-head CI after the evidence update. The current slice supports assigned rides; RIDER-03 must connect it to Rider-selected booking and add optional-stop route snapshots.
+- PR #55 merged sequential #3 RIDER-01 / CAB-DISCOVERY-01 at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run `42237572056` passed all four jobs. It adds union-grouped Cab discovery, eligibility filtering, pickup-proximity ordering, approved-photo privacy and Rider local selection.
+- PR #56 merged sequential #4 RIDER-02 / CAB-AGREEMENT-01 at `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8`; final-head CI run `42245873224` passed all four jobs. It adds immutable agreement term versions, append-only confirmations, ETag/revision concurrency protection, Rider/Driver proposal and confirmation controls, SignalR agreement events, and start/completion gates.
+- The current sequential #5 branch `feature/rider-selected-booking-v1` connects discovery selection to durable Negotiating rides, optional-stop agreement snapshots, per-driver expiring reservation leases, deterministic idempotency recovery, cancellation/decline/expiry/terminal cleanup, Driver notification and privacy-safe Rider/Driver booking UI. Final-head CI and automated review are pending.
 
 ## Highest-priority unfinished work
 
@@ -230,7 +231,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #53 merged legacy non-Cab selfie replacement/approval, location, queue-read, pending-offer, rejection and timeout guards; the Driver app suppresses legacy-profile queue/offer polling and SignalR subscriptions while retaining read-only history and Offline cleanup.
 - PR #54 merged documentation reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; latest-head CI run 42234802360 passed backend, Rider app, Driver app and shared mobile-auth jobs.
 - PR #53 merge commit: `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run `42232390997` passed all four jobs. This is CI validation, not physical-device or production acceptance.
-- Legacy customer-facing FIFO/automatic-offer flow still exists for Cab and is not the approved final flow; CAB-DISCOVERY-01 must replace it. Internal FIFO role remains unresolved.
+- The legacy FIFO/automatic-offer machinery remains for compatibility, but the Rider booking path no longer uses customer-facing FIFO ranking or automatic assignment. Whether FIFO remains an internal Union fairness mechanism is unresolved.
 
 
 ## RIDER-02 agreement implementation details
