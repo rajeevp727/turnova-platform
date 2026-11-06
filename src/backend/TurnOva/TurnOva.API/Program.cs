@@ -751,7 +751,7 @@ opsUnions.MapPost("/", async (HttpContext context, CreateUnionRequest request, C
         request.ZoneIds.Any(zone => string.IsNullOrWhiteSpace(zone) || zone.Trim().Length > 80) ||
         request.ServiceClasses is null || request.ServiceClasses.Count == 0 ||
         request.ServiceClasses.Any(serviceClass => !IsCabServiceClass(serviceClass)))
-        return Results.BadRequest(new { message = "Provide a name, unique code, at least one service zone and supported service class." });
+        return Results.BadRequest(new { message = "Provide a name, unique code and at least one service zone; new MVP unions support Cab only." });
 
     var code = request.Code.Trim().ToUpperInvariant();
     var existing = await ListUnionsAsync(ct);
@@ -915,7 +915,7 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
     if (union.Status != "Active") return Results.Conflict(new { message = "Drivers can only be assigned to an active union." });
     if (!union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase) ||
         !union.ServiceClasses.Contains(profile.ServiceClass, StringComparer.OrdinalIgnoreCase))
-        return Results.Conflict(new { message = "The union does not support this driver's approved zone and service class." });
+        return Results.Conflict(new { message = "The union must be active and support Cab in this driver's approved zone." });
 
     var previous = await FindUnionAssignmentAsync(driverId, ct);
     if (previous?.UnionId == union.UnionId && previous.Status == "Active")
@@ -1231,7 +1231,7 @@ app.MapGet("/api/v1/rides/nearby", async (
     if (latitude is < -90 or > 90 || longitude is < -180 or > 180 ||
         passengers is < 1 or > 6 ||
         !IsCabServiceClass(normalizedServiceClass))
-        return Results.BadRequest(new { message = "Provide valid pickup coordinates, passenger count and vehicle type." });
+        return Results.BadRequest(new { message = "Provide valid pickup coordinates and passenger count; the MVP supports Cab only." });
 
     var zoneId = ResolveDispatchZone(latitude, longitude);
     if (string.IsNullOrWhiteSpace(zoneId))
