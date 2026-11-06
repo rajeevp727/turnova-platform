@@ -79,7 +79,7 @@ test("shares the stored-token read and refresh for concurrent unauthorized reque
   const second = getFreshAccessToken(ref, "old-access", readTokens, refresh);
 
   assert.equal(first, second);
-  await Promise.resolve();
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(reads, 1);
   assert.equal(refreshCalls, 1);
   resolveRefresh();
