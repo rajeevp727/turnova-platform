@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `c70cc39c5c246ca643574032f6fbd417fb0ec7e5` (PR #33)
+**Current main HEAD:** `32cacbf430e1443835e3bd8e4294c15d3c137fe3` (PR #47)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -48,16 +48,22 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #31: merged — queue rotation idempotency regression tests.
 - PR #32: merged — automatic next-driver offer advancement after rejection/expiry.
 - PR #33: merged — durable SignalR notification outbox and unified offer lifetime.
+- PR #34–#43 merged: acceptance matrix baseline, auth contract/JWT/startup guards, SignalR offer delivery, refresh-token single-flight coordination, native non-container API publish, outbox retry/concurrency tests and ride-request validation coverage.
+- PR #45 merged: zone-scoped nearby compatible vehicles and online Driver location handling; CI run 42209346759 passed.
+- PR #46 merged: 16-way concurrent duplicate queue-join test; CI run 42209694545 passed.
+- PR #47 merged: authenticated Rider-owned trip history, Activity restore/history, safe no-fare placeholder, stale-response/stale-active-state guards, 19-area acceptance tracker reconciliation and progress handoff. Merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed all four jobs.
+- The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
-1. **Exclusive driver/ride reservation (P0):** PR #27 adds a durable per-driver reservation slot; ride ETags still arbitrate competing drivers for the same ride.
-2. **Offer orchestration and delivery (P0):** create the next FIFO offer only after prior resolution; persist before SignalR/push delivery and fetch authoritative state after reconnect.
-3. **Availability lifecycle:** Online/Offline is merged; temporary-unavailable and on-trip integration remain follow-up work.
-4. **Offer notifications:** SignalR/push delivery only after durable state is written; reconnect must fetch authoritative state.
-5. **Production hardening:** replace demo/in-memory boundaries, secure Ops/union-manager RBAC, audit, privacy/retention, observability and device/Cosmos integration tests.
 
-Do not mistake PR #22 queue-head checks for a complete dispatch offer system. The timeout route is still a client acknowledgement, not a server-owned timer. Available ride/ride storage and multi-instance dispatch require further hardening.
+1. **TRIP-01 Driver history (in progress):** Rider history merged in PR #47. Implement authenticated Driver-owned history API/UI, owner/privacy/role/empty-history tests, and active-trip restoration in one focused PR.
+2. **RIDER-02 fare estimate (blocked):** requires approved base fare, distance/time components, taxes and service-class rules. Keep fare null; never invent pricing.
+3. **DRIVER-03 monetary earnings (blocked):** monthly PDF work-metrics payslip exists, but compensation, commission and payout treatment are not approved.
+4. **RIDER-04 payments/receipts/ratings (blocked):** requires enabled payment method/provider, sandbox and webhook/idempotency/refund policy.
+5. **DRIVER-04 and SUPPORT-01 support (blocked):** require role-specific support process, issue categories and escalation owner.
+6. **PLATFORM-01 and RELEASE-01 (in progress):** real Cosmos partition/ETag/multi-instance verification, security/observability/load evidence, Android/iOS builds and physical-device pilot gates remain.
+7. **AI-01 supplemental (not started):** implement the separately approved bounded provider-agnostic AI service only after the current sequential PRD-area work; keep it outside the 19-area denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -72,13 +78,15 @@ Do not mistake PR #22 queue-head checks for a complete dispatch offer system. Th
 Priority/Normal driver tiers and commission model are intentionally parked until the user's partner is available. Do not invent, implement, or reopen this policy unless the user asks.
 
 ## Working agreements
-- Work in small, reviewable PRs; do not merge without explicit user approval.
+- Work in small, reviewable PRs; inspect the full diff and relevant tests before merge.
+- Merge only when automated review finds no unresolved critical/high-risk issue, the latest head has all required checks green, and repository rules permit the merge.
+- Do not submit a formal self-approval. Do not bypass an independent required human approval or weaken branch protection.
 - Before a new feature: read this brain, inspect current `main`, open PRs, relevant implementation and tests.
-- After every feature: update this brain in the same PR with status, decisions, constraints, next step and validation evidence.
+- After every feature: update this brain, acceptance matrix and progress handoff in the same focused PR whenever status/next step changes.
 - Keep PRD/architecture/test-plan synchronized when product behaviour or architecture changes.
 - Distinguish implemented, CI-validated, manually tested and production-ready; never claim one means another.
 - Do not commit secrets or real personal data.
-- If a decision depends on partner input, park it rather than guessing.
+- If a decision depends on partner or product input, park it rather than guessing.
 
 ## Current implementation increment (merged)
 Durable offer persistence foundation was introduced on `feature/durable-ride-offer-foundation`:
@@ -161,3 +169,18 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Branch `fix/mobile-refresh-token-single-flight`: serialize concurrent 401-triggered refreshes in both Rider and Driver apps. Without a shared in-flight refresh promise, parallel requests could submit the same rotating refresh token and cause one request to invalidate the session after another had already rotated it.
 - Adds AUTH-LOGIN-021 to the test plan. CI and runtime validation are still required; do not mark the acceptance row verified yet.
 - Next priority after this increment: improve mobile auth testability and cover refresh rotation/recovery, then continue durable dispatch recovery and Rider payment/receipt/support acceptance gaps.
+
+
+## Rider trip history increment (merged in PR #47)
+- Rider-only `GET /api/v1/rides/mine` derives ownership from the authenticated subject, returns a newest-first allow-listed summary, and omits rider/driver IDs, exact coordinates and fare.
+- Rider Activity restores the latest active ride from persisted history; late responses after unmount/session change are ignored, and stale in-memory active state is cleared when no active ride remains.
+- API tests cover owner isolation despite client-supplied riderId, ordering, response privacy, role separation and empty history.
+- PR #47 merge commit: `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed.
+- Cosmos cross-partition query RU/retention/performance and physical-device restoration remain unverified.
+
+## Driver trip history increment (in progress)
+- Branch: `feat/driver-trip-history`.
+- Add Driver-only `GET /api/v1/driver/rides/mine`, deriving ownership from the authenticated subject; return newest-first allow-listed trip summaries and active-location-sharing state only.
+- Driver app restores the latest active assigned trip on opening Trips and displays previous assigned trips; terminal-only history clears stale in-memory active state.
+- API tests cover owner isolation despite client-supplied driverId, ordering, private-field omission, Rider denial and empty history.
+- Do not expose rider/driver IDs, exact coordinates or fare values in history. Real Cosmos cross-partition behaviour remains an infrastructure-backed gate.
