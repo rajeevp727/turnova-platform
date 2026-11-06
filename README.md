@@ -186,4 +186,4 @@ TurnOva Driver and TurnOva Rider support Light, Dark and System appearance modes
 
 ## Infrastructure placeholders
 
-Deployment templates are checked in without credentials: see [infrastructure/README.md](./infrastructure/README.md), [Render Blueprint](./render.yaml) and [Render Dockerfile](./infrastructure/render/Dockerfile). Cosmos, Render, TriSend and optional SWA values remain placeholders until infrastructure is supplied. The MVP interfaces are native Android/iOS apps; SWA is not their deployment target.
+Deployment inputs are documented in [infrastructure/README.md](./infrastructure/README.md). The API is published as a native .NET application artifact; no Docker or container deployment is used. Hosting provider, Cosmos, TriSend and other required external-provider values remain placeholders until infrastructure is supplied. The MVP interfaces are native Android/iOS apps; Azure Static Web Apps is not their deployment target.
