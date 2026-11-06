@@ -1438,6 +1438,7 @@ app.MapPost("/api/v1/rider/bookings", async (
         profile.PassengerCapacity < request.Passengers ||
         profile.LocationUpdatedAtUtc is null || profile.LocationUpdatedAtUtc.Value < now.AddSeconds(-maxAgeSeconds) ||
         profile.CurrentLatitude is null or < -90 or > 90 || profile.CurrentLongitude is null or < -180 or > 180 ||
+        !double.IsFinite(profile.CurrentLatitude.Value) || !double.IsFinite(profile.CurrentLongitude.Value) ||
         !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
         !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
         return Results.Conflict(new { message = "The selected Cab driver is no longer eligible or available. Refresh discovery and choose another driver." });
@@ -1577,11 +1578,9 @@ app.MapPost("/api/v1/driver/bookings/{rideId}/decline", async (
     var now = TimeProvider.System.GetUtcNow();
     if (ride.NegotiationExpiresAtUtc is null || ride.NegotiationExpiresAtUtc <= now)
     {
-        var expired = await TryTransitionAsync(ride, RideLifecycle.Expired, ct, "System");
+        await TryTransitionAsync(ride, RideLifecycle.Expired, ct, "System");
         await driverRideReservations.TryReleaseAsync(driverId, rideId, ct);
-        return expired is null
-            ? Results.Conflict(new { message = "This selected-driver request has expired." })
-            : Results.Conflict(new { message = "This selected-driver request has expired." });
+        return Results.Conflict(new { message = "This selected-driver request has expired." });
     }
 
     var cancelled = await TryTransitionAsync(ride, RideLifecycle.Cancelled, ct, "Driver");
