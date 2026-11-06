@@ -328,3 +328,15 @@ Candidates are grouped by Union. Each group returns no more than three drivers, 
 JourneyDistanceKm is currently null because no routing/maps provider is configured. The Rider app labels journey distance unavailable and separately labels driver-to-pickup proximity; it must not substitute one for the other. Call/chat controls remain unavailable until a provider is configured. Driver selection in this increment is a client-side discovery selection only; durable selected-driver negotiation reservation and booking are the next sequential slice.
 
 The legacy Rider GET /api/v1/rides/nearby endpoint returns 410 Gone so the app cannot consume FIFO-ranked results. Legacy POST /api/v1/rides/request is disabled by default through Dispatch:LegacyFifoRiderRequestsEnabled=false; the true override exists only in integration-test fixtures to preserve regression coverage for legacy ride/offer code. Never enable that override in a deployed Rider API. Internal FIFO policy remains unresolved and is not used by discovery.
+
+
+## Direct fare agreement persistence (RIDER-02)
+
+- Agreement terms are immutable `RideAgreementVersion` records embedded in the ride aggregate; a new proposal/counterproposal appends a new version rather than editing an earlier amount or route.
+- Rider and Driver confirmations are separate append-only `RideAgreementConfirmation` records keyed by ride/version/party. A confirmation for an older version never confirms the current version.
+- `AgreementStateRevision` increments for every agreement mutation. The ride update uses the existing Rides-container partition (`/rideId`) and ETag conditional replacement; concurrent proposals or confirmations return a conflict and must refresh. Start and completion use the same conditional ride replacement, preventing a stale confirmation check from racing through a state transition.
+- Proposal requests require an `Idempotency-Key`; a retry with the same key returns the already-created version. The server validates party ownership, active Cab union membership, approved Cab driver profile, positive two-decimal amount and uppercase three-letter currency.
+- Both parties must confirm the latest version before start. If a new version is proposed during an active trip, completion remains blocked until both parties confirm that version.
+- No platform fare calculation, estimate, recommendation, payment gateway, escrow or collection is introduced.
+- Current limitation: the ride model has not yet been extended by RIDER-03 to persist selected-driver optional stops, so agreement snapshots presently contain pickup/drop-off and an empty stops list. Do not mark the complete RIDER-02 acceptance row verified until the selected-driver booking supplies the full route snapshot and the Rider/Driver flows are validated end-to-end.
+- Cosmos ETag behaviour and multi-instance contention still require live Cosmos integration tests; CI currently validates the in-memory API concurrency path only.

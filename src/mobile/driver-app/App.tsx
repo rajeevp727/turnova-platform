@@ -38,6 +38,7 @@ type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
 type QueueMembership = { isQueued: boolean; position: number | null };
 type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean };
+type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; driverConfirmed: boolean };
 
 async function saveTokens(tokens: Tokens) {
   await SecureStore.setItemAsync("turnova.access", tokens.accessToken);
@@ -77,6 +78,8 @@ export default function App() {
   const [availableRides, setAvailableRides] = useState<any[]>([]);
   const [activeRide, setActiveRide] = useState<any>(null);
   const [driverRideHistory, setDriverRideHistory] = useState<DriverRideHistoryItem[]>([]);
+  const [agreementHistory, setAgreementHistory] = useState<AgreementVersion[]>([]);
+  const [agreementAmount, setAgreementAmount] = useState("");
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
   const [driverName, setDriverName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -126,7 +129,7 @@ export default function App() {
     });
     if (response.status === 401) {
       const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); throw new Error("Session expired. Please sign in again."); }
+      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
         accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
@@ -322,6 +325,48 @@ export default function App() {
     setActiveRide(active ?? null);
   }, [apiFetch]);
 
+  const loadAgreementHistory = useCallback(async (rideId: string) => {
+    const result = await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];
+    setAgreementHistory(result);
+  }, [apiFetch]);
+
+  useEffect(() => {
+    if (!activeRide?.rideId) { setAgreementHistory([]); setAgreementAmount(""); return; }
+    if (tab !== "Trips") return;
+    let active = true;
+    void apiFetch(`/api/v1/rides/${activeRide.rideId}/agreements`).then(result => {
+      if (active) setAgreementHistory(result as AgreementVersion[]);
+    }).catch(() => { if (active) setAgreementHistory([]); });
+    return () => { active = false; };
+  }, [activeRide?.rideId, tab, apiFetch]);
+
+  const proposeAgreement = async () => {
+    if (!activeRide?.rideId) return;
+    const amount = Number(agreementAmount);
+    if (!Number.isFinite(amount) || amount <= 0) { setError("Enter a positive proposed amount in INR."); return; }
+    setError("");
+    try {
+      await apiFetch(`/api/v1/rides/${activeRide.rideId}/agreements`, {
+        method: "POST",
+        headers: { "Idempotency-Key": `driver-${Date.now()}-${Math.random().toString(36).slice(2)}` },
+        body: JSON.stringify({ amount, currency: "INR" })
+      });
+      setAgreementAmount("");
+      await loadAgreementHistory(activeRide.rideId);
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to submit fare proposal."); }
+  };
+
+  const confirmAgreement = async () => {
+    if (!activeRide?.rideId) return;
+    const current = agreementHistory[agreementHistory.length - 1];
+    if (!current) return;
+    setError("");
+    try {
+      await apiFetch(`/api/v1/rides/${activeRide.rideId}/agreements/${current.version}/confirm`, { method: "POST" });
+      await loadAgreementHistory(activeRide.rideId);
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to confirm fare agreement."); }
+  };
+
   useEffect(() => {
     if (!user?.id || tab !== "Trips") return;
     let active = true;
@@ -366,6 +411,31 @@ export default function App() {
       void connection.stop();
     };
   }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides]);
+
+  useEffect(() => {
+    if (!user?.id || tab !== "Trips" || !activeRide?.rideId || !tokens) return;
+    let mounted = true;
+    const connection = new HubConnectionBuilder()
+      .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
+        accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens.accessToken,
+        transport: HttpTransportType.WebSockets
+      })
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
+    const refreshAgreement = (update?: { rideId?: string }) => {
+      if (mounted && (!update?.rideId || update.rideId === activeRide.rideId))
+        void loadAgreementHistory(activeRide.rideId).catch(e => {
+          if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh fare agreement.");
+        });
+    };
+    connection.on("RideAgreementChanged", refreshAgreement);
+    connection.onreconnected(() => refreshAgreement());
+    void connection.start().then(() => refreshAgreement()).catch(() => {
+      if (mounted) setError("Live fare agreement updates are unavailable. Refresh the agreement manually.");
+    });
+    return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
+  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Ride declined. It remains available to other drivers."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
@@ -584,9 +654,22 @@ export default function App() {
           {activeRide&&<>
             <Text style={styles.label}>ACTIVE TRIP</Text>
             <Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>
+            <View style={{marginTop:12,paddingTop:10,borderTopWidth:1,borderTopColor:colors.border}}>
+              <Text style={styles.cardTitle}>Direct fare negotiation · INR</Text>
+              {agreementHistory.map(item=><View key={item.version} style={{paddingVertical:7}}>
+                <Text style={styles.muted}>Version {item.version} · ₹{item.amount.toFixed(2)} · proposed by {item.proposedBy}</Text>
+                <Text style={styles.muted}>Rider: {item.riderConfirmed?"Confirmed":"Pending"} · Driver: {item.driverConfirmed?"Confirmed":"Pending"}</Text>
+              </View>)}
+              <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>
+              {["Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
+                <TextInput value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/>
+                <Pressable style={styles.secondary} disabled={!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>Propose / counter fare</Text></Pressable>
+                {agreementHistory.length>0&&<Pressable style={styles.secondary} disabled={agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void confirmAgreement()}><Text style={styles.secondaryText}>{agreementHistory[agreementHistory.length-1].driverConfirmed?"You confirmed this version":"Confirm current agreement"}</Text></Pressable>}
+              </>}
+            </View>
             {activeRide.status==="Accepted"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("arrive")}><Text style={styles.secondaryText}>Mark arrived</Text></Pressable>}
-            {activeRide.status==="Arrived"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable>}
-            {activeRide.status==="InProgress"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}
+            {activeRide.status==="Arrived"&&<><Text style={styles.muted}>{agreementHistory.length>0&&agreementHistory[agreementHistory.length-1].riderConfirmed&&agreementHistory[agreementHistory.length-1].driverConfirmed?"Both parties confirmed the current fare.":"Both Rider and Driver must confirm the current fare before starting."}</Text><Pressable style={styles.secondary} disabled={!agreementHistory.length||!agreementHistory[agreementHistory.length-1].riderConfirmed||!agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable></>}
+            {activeRide.status==="InProgress"&&<Pressable style={styles.secondary} disabled={!agreementHistory.length||!agreementHistory[agreementHistory.length-1].riderConfirmed||!agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}
           </>}
         </View>
         {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).length>0&&<View style={styles.card}>
