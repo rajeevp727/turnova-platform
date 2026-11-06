@@ -1987,6 +1987,8 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
         return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh the agreement history and retry with a new idempotency key." });
     }
 
+    if (updated.Status != ride.Status)
+        await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = updated.Status }, ct);
     await hub.Clients.Group(rideId).SendAsync("RideAgreementChanged", new { rideId, version = version.Version }, ct);
     return Results.Created($"/api/v1/rides/{rideId}/agreements", new
     {
@@ -2022,6 +2024,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
         : confirmations.ToArray();
     var riderConfirmed = nextConfirmations.Any(item => item.Version == version && item.Party == "Rider" && item.ActorId == current.RiderId);
     var driverConfirmed = nextConfirmations.Any(item => item.Version == version && item.Party == "Driver" && item.ActorId == current.DriverId);
+    var statusAfterConfirmation = ride.Status;
     if (existing is null)
     {
         var updated = ride with
@@ -2033,7 +2036,10 @@ app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
         };
         if (!await TryReplaceRideAsync(ride, updated, ct))
             return Results.Conflict(new { message = "Agreement changed concurrently. Refresh and confirm the current version." });
+        statusAfterConfirmation = updated.Status;
     }
+    if (statusAfterConfirmation != ride.Status)
+        await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = statusAfterConfirmation }, ct);
     await hub.Clients.Group(rideId).SendAsync("RideAgreementChanged",
         new { rideId, version, riderConfirmed, driverConfirmed }, ct);
     return Results.Ok(new { rideId, version, riderConfirmed, driverConfirmed, mutuallyConfirmed = riderConfirmed && driverConfirmed });
