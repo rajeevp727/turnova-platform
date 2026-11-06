@@ -1351,6 +1351,132 @@ public sealed class RideApiIntegrationTests
             (await factory.CreateClient("Rider", "driver-history-empty-rider").GetAsync("/api/v1/driver/rides/mine")).StatusCode);
     }
 
+    [Fact]
+    public async Task RideAgreementRequiresBothPartiesToConfirmCurrentImmutableVersionBeforeStart()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-driver");
+        const string rideId = "RIDE-AGREEMENT-001";
+        SeedAgreementRide(factory, rideId, "agreement-rider", "agreement-driver");
+
+        using var riderProposal = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 450.00m, currency = "INR" })
+        };
+        riderProposal.Headers.Add("Idempotency-Key", "agreement-rider-proposal-001");
+        using var proposalResponse = await rider.SendAsync(riderProposal);
+        Assert.Equal(HttpStatusCode.Created, proposalResponse.StatusCode);
+        using var proposalJson = JsonDocument.Parse(await proposalResponse.Content.ReadAsStringAsync());
+        Assert.Equal(1, proposalJson.RootElement.GetProperty("agreement").GetProperty("version").GetInt32());
+
+        using var retry = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 450.00m, currency = "INR" })
+        };
+        retry.Headers.Add("Idempotency-Key", "agreement-rider-proposal-001");
+        using var retryResponse = await rider.SendAsync(retry);
+        Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
+        using var retryJson = JsonDocument.Parse(await retryResponse.Content.ReadAsStringAsync());
+        Assert.Equal(1, retryJson.RootElement.GetProperty("agreement").GetProperty("version").GetInt32());
+
+        using var counter = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 500.00m, currency = "INR" })
+        };
+        counter.Headers.Add("Idempotency-Key", "agreement-driver-counter-001");
+        using var counterResponse = await driver.SendAsync(counter);
+        Assert.Equal(HttpStatusCode.Created, counterResponse.StatusCode);
+        using var counterJson = JsonDocument.Parse(await counterResponse.Content.ReadAsStringAsync());
+        Assert.Equal(2, counterJson.RootElement.GetProperty("agreement").GetProperty("version").GetInt32());
+
+        using var staleConfirmation = await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null);
+        Assert.Equal(HttpStatusCode.Conflict, staleConfirmation.StatusCode);
+
+        using var arrive = await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null);
+        Assert.Equal(HttpStatusCode.OK, arrive.StatusCode);
+        using var blockedStart = await driver.PostAsync($"/api/v1/rides/{rideId}/start", null);
+        Assert.Equal(HttpStatusCode.Conflict, blockedStart.StatusCode);
+
+        using var riderConfirm = await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/2/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, riderConfirm.StatusCode);
+        using var stillBlocked = await driver.PostAsync($"/api/v1/rides/{rideId}/start", null);
+        Assert.Equal(HttpStatusCode.Conflict, stillBlocked.StatusCode);
+
+        using var driverConfirm = await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/2/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, driverConfirm.StatusCode);
+        using var allowedStart = await driver.PostAsync($"/api/v1/rides/{rideId}/start", null);
+        Assert.Equal(HttpStatusCode.OK, allowedStart.StatusCode);
+
+        using var historyResponse = await rider.GetAsync($"/api/v1/rides/{rideId}/agreements");
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        using var history = JsonDocument.Parse(await historyResponse.Content.ReadAsStringAsync());
+        var versions = history.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, versions.Length);
+        Assert.Equal(450.00m, versions[0].GetProperty("amount").GetDecimal());
+        Assert.Equal(500.00m, versions[1].GetProperty("amount").GetDecimal());
+        Assert.True(versions[1].GetProperty("riderConfirmed").GetBoolean());
+        Assert.True(versions[1].GetProperty("driverConfirmed").GetBoolean());
+        Assert.False(versions[0].GetProperty("riderConfirmed").GetBoolean());
+        Assert.False(versions[0].GetProperty("driverConfirmed").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(0, "INR")]
+    [InlineData(-1, "INR")]
+    [InlineData(10.123, "INR")]
+    [InlineData(10, "inr")]
+    [InlineData(10, "US")]
+    public async Task RideAgreementRejectsInvalidAmountOrCurrency(decimal amount, string currency)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-validation-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-validation-driver");
+        const string rideId = "RIDE-AGREEMENT-VALIDATION";
+        SeedAgreementRide(factory, rideId, "agreement-validation-rider", "agreement-validation-driver");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount, currency })
+        };
+        request.Headers.Add("Idempotency-Key", "agreement-validation-001");
+        using var response = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RideAgreementIsVisibleOnlyToTheAssignedRiderAndDriver()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-private-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-private-driver");
+        using var other = factory.CreateClient("Rider", "agreement-private-other");
+        const string rideId = "RIDE-AGREEMENT-PRIVATE";
+        SeedAgreementRide(factory, rideId, "agreement-private-rider", "agreement-private-driver");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 250m, currency = "INR" })
+        };
+        request.Headers.Add("Idempotency-Key", "agreement-private-001");
+        Assert.Equal(HttpStatusCode.Created, (await rider.SendAsync(request)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/v1/rides/{rideId}/agreements")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await driver.GetAsync($"/api/v1/rides/{rideId}/agreements")).StatusCode);
+    }
+
+    private static void SeedAgreementRide(TurnOvaApiFactory factory, string rideId, string riderId, string driverId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()["agreement-union"] =
+            new DriverUnion("agreement-union", "Agreement Test Union", "AGR", "Hyderabad", null, null,
+                ["hyderabad-central"], ["cab"], "Active", now, now);
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()[driverId] =
+            new DriverUnionAssignment(driverId, "agreement-union", "Agreement Test Union", "Active", now, now, "test");
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId] =
+            new DemoRide(rideId, "KPHB", "HITEC City", 1, "Accepted", now, null, riderId, driverId,
+                17.493, 78.399, null, null, now, null, false, "cab", "hyderabad-central");
+    }
+
     private static HttpRequestMessage CreateRideRequest(
         string? idempotencyKey,
         int passengers = 1,
