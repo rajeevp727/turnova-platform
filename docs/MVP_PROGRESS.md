@@ -11,7 +11,7 @@
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
 - CAB-SCOPE-01 is implemented and CI-validated for the covered API/mobile paths. Physical-device and production acceptance remain outstanding.
 - PR #54 merged tracker reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; its final-head CI run 42234802360 passed all four jobs.
-- PR #55 candidate branch `feature/rider-union-discovery` adds union-grouped API discovery, eligibility/radius/photo/privacy rules, disables legacy customer-facing FIFO discovery/request paths by default, and adds Rider grouped-card/local selection UI. Its CI and merge review are pending.
+- PR #55 is open with union-grouped API discovery, eligibility/radius/photo/privacy rules, legacy customer-facing FIFO paths disabled by default and Rider grouped-card/local selection UI. Latest-head CI run 42236711865 passed all four jobs; automated review found no critical/high-risk issue. Durable selected-driver reservation/booking and device/provider gates remain.
 
 ## 2. Overall MVP completion
 
@@ -28,7 +28,7 @@
 |---:|---|---|---|
 | 1 | AUTH-01 | In progress | PRs #35, #39 and #40 cover fake-TriSend API contracts, JWT/role boundaries and startup configuration guards; mobile runtime/session and full profile lifecycle remain. |
 | 2 | AUTH-02 | In progress | PRs #37 and #41 plus shared mobile refresh tests cover single-flight refresh and retry-after-failure; rotation/reuse, restart, expiry, logout and secure-storage device tests remain. |
-| 3 | RIDER-01 | In progress | PR #55 candidate adds approved-union grouping, max three eligible drivers per union, pickup-proximity order, approved-photo privacy and Rider local selection cards. Durable selection reservation/booking, stops persistence, route distance, provider actions and device validation remain. |
+| 3 | RIDER-01 | In progress | PR #55 adds approved-union grouping, max three eligible drivers per union, pickup-proximity order, approved-photo privacy and Rider local selection cards; CI run 42236711865 passed all four jobs. Durable selection reservation/booking, stops persistence, route distance, provider actions and device validation remain. |
 | 4 | RIDER-02 | Not started | Platform fare estimates are out of scope; direct fare negotiation, immutable agreement versions and mutual confirmation before ride start are not implemented. |
 | 5 | RIDER-03 | In progress | PR #55 disables legacy FIFO Rider request creation by default; selected-driver booking/reservation, agreement start gate and end-to-end status remain. |
 | 6 | DISPATCH-01 | In progress | PR #55 adds Active Cab union/zone filtering and requires Dispatch:NearbyRadiusKm; checked-in radius is 0 until product approval. |
