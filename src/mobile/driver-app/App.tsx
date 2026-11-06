@@ -605,7 +605,7 @@ export default function App() {
           <Text style={styles.muted}>New TurnOva onboarding accepts Cab vehicles only.</Text>
           <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full legal name" />
           <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholderTextColor={colors.muted} placeholder="Phone number with country code" keyboardType="phone-pad" />
-          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Bajaj)" />
+          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Maruti)" />
           <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle model" />
           <TextInput value={vehicleRegistration} onChangeText={setVehicleRegistration} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle registration number" autoCapitalize="characters" />
           <Text style={styles.label}>PRIVATE DOCUMENT STORAGE REFERENCES</Text>
