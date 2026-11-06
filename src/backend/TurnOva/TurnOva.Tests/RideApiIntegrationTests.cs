@@ -408,8 +408,8 @@ public sealed class RideApiIntegrationTests
         zoneId = "hyderabad-central",
         fullName = "Test Driver",
         phoneNumber = "+919876543210",
-        vehicleMake = "Bajaj",
-        vehicleModel = "RE",
+        vehicleMake = "Maruti",
+        vehicleModel = "Dzire",
         vehicleRegistration = "TS09AB1234",
         serviceClass,
         passengerCapacity = 3,
@@ -832,8 +832,8 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(JsonValueKind.Array, vehicles.ValueKind);
         Assert.Equal(1, vehicles.GetArrayLength());
         var vehicle = vehicles[0];
-        Assert.Equal("Bajaj", vehicle.GetProperty("vehicleMake").GetString());
-        Assert.Equal("RE", vehicle.GetProperty("vehicleModel").GetString());
+        Assert.Equal("Maruti", vehicle.GetProperty("vehicleMake").GetString());
+        Assert.Equal("Dzire", vehicle.GetProperty("vehicleModel").GetString());
         Assert.Equal("cab", vehicle.GetProperty("serviceClass").GetString());
         Assert.Equal(3, vehicle.GetProperty("passengerCapacity").GetInt32());
         Assert.True(vehicle.GetProperty("distanceKm").GetDouble() >= 0);
@@ -1205,7 +1205,7 @@ public sealed class RideApiIntegrationTests
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
                 profiles[subject] = new DriverOnboardingProfile(
                     subject, subject, "hyderabad-central", "Approved Test Driver", "+919876543210",
-                    "Bajaj", "RE", "TS09AB1234", "cab", 3,
+                    "Maruti", "Dzire", "TS09AB1234", "cab", 3,
                     [new DriverDocumentReference("DrivingLicence", "test/licence")],
                     "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
             }
