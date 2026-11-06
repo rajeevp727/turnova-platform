@@ -23,37 +23,42 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks();
 
-var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-foreach (var origin in corsAllowedOrigins)
-{
-    if (!Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin) ||
-        (parsedOrigin.Scheme != Uri.UriSchemeHttps &&
-         !(builder.Environment.IsDevelopment() && parsedOrigin.Scheme == Uri.UriSchemeHttp)) ||
-        parsedOrigin.AbsolutePath != "/" ||
-        !string.IsNullOrEmpty(parsedOrigin.UserInfo) ||
-        !string.IsNullOrEmpty(parsedOrigin.Query) ||
-        !string.IsNullOrEmpty(parsedOrigin.Fragment))
-        throw new InvalidOperationException(
-            "Cors:AllowedOrigins must contain explicit HTTPS origins (HTTP is allowed only in Development); wildcards and URL paths are not allowed.");
-}
-
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
+    // Read configuration when the options are built. This keeps host/test configuration
+    // overrides visible and validates the exact origins used by the running application.
+    var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    foreach (var origin in corsAllowedOrigins)
+    {
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin) ||
+            (parsedOrigin.Scheme != Uri.UriSchemeHttps &&
+             !(builder.Environment.IsDevelopment() && parsedOrigin.Scheme == Uri.UriSchemeHttp)) ||
+            parsedOrigin.AbsolutePath != "/" ||
+            !string.IsNullOrEmpty(parsedOrigin.UserInfo) ||
+            !string.IsNullOrEmpty(parsedOrigin.Query) ||
+            !string.IsNullOrEmpty(parsedOrigin.Fragment))
+            throw new InvalidOperationException(
+                "Cors:AllowedOrigins must contain explicit HTTPS origins (HTTP is allowed only in Development); wildcards and URL paths are not allowed.");
+    }
+
     policy.AllowAnyHeader().AllowAnyMethod();
     if (corsAllowedOrigins.Length > 0)
         policy.WithOrigins(corsAllowedOrigins);
 }));
 
-var jwtIssuer = builder.Configuration["Auth:Jwt:Issuer"];
-var jwtAudience = builder.Configuration["Auth:Jwt:Audience"];
-var jwtSigningKey = builder.Configuration["Auth:Jwt:SigningKey"];
-if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience) ||
-    string.IsNullOrWhiteSpace(jwtSigningKey) || jwtSigningKey.Length < 32)
-    throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.");
-
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // WebApplicationFactory and hosting providers may contribute configuration
+        // after Program has created the builder. Resolve the validated JWT settings
+        // when authentication options are materialized, not during top-level startup.
+        var jwtIssuer = builder.Configuration["Auth:Jwt:Issuer"];
+        var jwtAudience = builder.Configuration["Auth:Jwt:Audience"];
+        var jwtSigningKey = builder.Configuration["Auth:Jwt:SigningKey"];
+        if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience) ||
+            string.IsNullOrWhiteSpace(jwtSigningKey) || jwtSigningKey.Length < 32)
+            throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.");
+
         options.MapInboundClaims = false;
         options.Events = new JwtBearerEvents
         {
@@ -79,6 +84,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             NameClaimType = "name"
         };
     });
+
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Validate(options =>
+    {
+        var parameters = options.TokenValidationParameters;
+        return !string.IsNullOrWhiteSpace(parameters.ValidIssuer) &&
+            !string.IsNullOrWhiteSpace(parameters.ValidAudience) &&
+            parameters.IssuerSigningKey is SymmetricSecurityKey signingKey &&
+            signingKey.KeySize >= 256;
+    }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.")
+    .ValidateOnStart();
 builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DemoRide>>();
