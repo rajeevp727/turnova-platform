@@ -482,6 +482,22 @@ async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
     await rideContainer.UpsertItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
 }
 
+async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
+{
+    if (rideContainer is null)
+        return rides.TryAdd(ride.RideId, ride);
+
+    try
+    {
+        await rideContainer.CreateItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
+        return true;
+    }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+    {
+        return false;
+    }
+}
+
 async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
 {
     if (rideContainer is null) return rides.TryGetValue(rideId, out var item) ? item : null;
@@ -507,27 +523,28 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
 
 async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct, string? exceptRideId = null)
 {
+    // Read expired leases without deleting them. The ride aggregate is the authority for
+    // expiry; only after its terminal transition (or an expired orphan lease) may the
+    // matching reservation be released and another booking acquire the driver.
     var reservation = await driverRideReservations.GetActiveAsync(driverId, ct);
     if (reservation is null || reservation.RideId == exceptRideId) return false;
 
-    var reservedRide = await ReadRideRawAsync(reservation.RideId, ct);
+    var reservedRide = await FindRideAsync(reservation.RideId, ct);
     if (reservedRide is not null && reservedRide.Status is "Completed" or "Cancelled" or "Expired")
     {
         await driverRideReservations.TryReleaseAsync(driverId, reservation.RideId, ct);
         return false;
     }
 
-    if (reservation.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+    if (reservedRide is null && reservation.ExpiresAtUtc is { } orphanExpiry &&
+        orphanExpiry <= DateTimeOffset.UtcNow)
     {
-        var resolvedRide = await FindRideAsync(reservation.RideId, ct);
-        if (resolvedRide is null || resolvedRide.Status is "Completed" or "Cancelled" or "Expired")
-        {
-            await driverRideReservations.TryReleaseAsync(driverId, reservation.RideId, ct);
-            return false;
-        }
+        await driverRideReservations.TryReleaseAsync(driverId, reservation.RideId, ct);
+        return false;
     }
 
-    // Missing or still-active ride records fail closed; a reservation is never silently stolen.
+    // An expired lease with a still-active ride is inconsistent and must fail closed.
+    // FindRideAsync has already attempted the authoritative Negotiating/AgreementConfirmed expiry transition.
     return true;
 }
 
@@ -1344,7 +1361,7 @@ app.MapGet("/api/v1/rider/discovery", async (
             !assignmentsByDriver.TryGetValue(profile.DriverId, out var assignment) ||
             !eligibleUnions.TryGetValue(assignment.UnionId, out var union) ||
             !string.Equals(assignment.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
-            await driverRideReservations.HasActiveAsync(profile.DriverId, ct))
+            await HasActiveDriverRideAsync(profile.DriverId, ct))
             continue;
 
         var distanceKm = CalculateDistanceKm(
@@ -1441,7 +1458,25 @@ app.MapPost("/api/v1/rider/bookings", async (
             return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
 
         var priorRide = await FindRideAsync(prior.rideId, ct);
-        if (priorRide is not null) return Results.Ok(priorRide);
+        if (priorRide is not null)
+        {
+            // Re-send the selected-driver notification on an idempotent replay so a
+            // transient SignalR failure after persistence does not strand the Driver.
+            if (priorRide.DriverId is not null &&
+                priorRide.Status is "Negotiating" or "AgreementConfirmed")
+            {
+                await hub.Clients.Group($"driver:{priorRide.DriverId}").SendAsync("RideSelected", new
+                {
+                    rideId = priorRide.RideId,
+                    pickup = priorRide.Pickup,
+                    dropoff = priorRide.Dropoff,
+                    stops = priorRide.Stops ?? [],
+                    passengers = priorRide.Passengers,
+                    expiresAtUtc = priorRide.NegotiationExpiresAtUtc
+                }, ct);
+            }
+            return Results.Ok(priorRide);
+        }
 
         // A deterministic ride ID lets a retry recover a process interrupted after the
         // idempotency record or reservation was written but before the ride document was saved.
@@ -1596,13 +1631,56 @@ app.MapPost("/api/v1/rider/bookings", async (
         UnionId: unionId, Stops: stops, NegotiationExpiresAtUtc: expiresAtUtc,
         DriverDisplayName: latestProfile.FullName, DriverVehicleMake: latestProfile.VehicleMake,
         DriverVehicleModel: latestProfile.VehicleModel, DriverDistanceToPickupKm: latestDistanceKm,
-        UnionName: latestUnion.UnionName);
-    try { await SaveRideAsync(ride, ct); }
+        UnionName: latestUnion.Name);
+    bool MatchesSelectedBooking(DemoRide existing) =>
+        existing.RiderId == riderId &&
+        existing.DriverId == selectedDriverId &&
+        existing.UnionId == unionId &&
+        existing.Pickup == pickup &&
+        existing.Dropoff == dropoff &&
+        existing.Passengers == request.Passengers &&
+        (existing.Stops ?? []).SequenceEqual(stops, StringComparer.Ordinal) &&
+        existing.PickupLatitude == request.PickupLatitude &&
+        existing.PickupLongitude == request.PickupLongitude;
+
+    var rideWasAlreadyPersisted = false;
+    try
+    {
+        if (!await TryCreateRideAsync(ride, ct))
+        {
+            var existing = await ReadRideRawAsync(rideId, ct);
+            if (existing is null)
+                return Results.Problem("The booking write could not be confirmed. Retry with the same Idempotency-Key.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            if (!MatchesSelectedBooking(existing))
+                return Results.Conflict(new { message = "The deterministic booking reference already belongs to a different ride payload." });
+            ride = existing;
+            rideWasAlreadyPersisted = true;
+        }
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+    {
+        // Do not release the lease or idempotency record after an ambiguous write cancellation.
+        // A retry with the same key will resolve the deterministic ride ID.
+        throw;
+    }
     catch
     {
-        await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct);
-        await RemoveIdempotencyRecordAsync();
-        throw;
+        // Cosmos may commit a create before the client observes a transport failure. Read
+        // back without the request token; never release a possibly committed ride's lease.
+        DemoRide? persisted;
+        try { persisted = await ReadRideRawAsync(rideId, CancellationToken.None); }
+        catch
+        {
+            return Results.Problem("The booking persistence outcome could not be confirmed. Retry with the same Idempotency-Key.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        if (persisted is null || !MatchesSelectedBooking(persisted))
+            return Results.Problem("The booking persistence outcome could not be confirmed. Retry with the same Idempotency-Key.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        ride = persisted;
+        rideWasAlreadyPersisted = true;
     }
 
     await hub.Clients.Group($"driver:{selectedDriverId}").SendAsync("RideSelected", new
@@ -1610,7 +1688,9 @@ app.MapPost("/api/v1/rider/bookings", async (
         rideId, pickup, dropoff, stops, passengers = request.Passengers, expiresAtUtc
     }, ct);
     await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = ride.Status }, ct);
-    return Results.Created($"/api/v1/rides/{rideId}", ride);
+    return rideWasAlreadyPersisted
+        ? Results.Ok(ride)
+        : Results.Created($"/api/v1/rides/{rideId}", ride);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.MapGet("/api/v1/rides/nearby", () =>
