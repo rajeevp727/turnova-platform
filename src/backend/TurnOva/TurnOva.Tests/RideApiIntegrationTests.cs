@@ -73,9 +73,9 @@ public sealed class RideApiIntegrationTests
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Contains("An unexpected error occurred.", body, StringComparison.Ordinal);
-        Assert.Contains("traceId", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("sensitive-test-exception", body, StringComparison.Ordinal);
+        Assert.Contains("An unexpected error occurred.", body);
+        Assert.Contains("traceId", body);
+        Assert.DoesNotContain("sensitive-test-exception", body);
     }
 
     [Fact]
