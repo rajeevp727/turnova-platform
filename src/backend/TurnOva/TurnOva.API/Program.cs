@@ -186,6 +186,8 @@ if (useCosmos)
     await app.Services.GetRequiredService<CosmosMigrationRunner>().RunAsync();
 }
 
+app.UseCors();
+
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
@@ -199,7 +201,6 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         .ExecuteAsync(context);
 }));
 
-app.UseCors();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
