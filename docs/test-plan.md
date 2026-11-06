@@ -574,3 +574,17 @@ Fare calculation remains blocked until the product owner approves base fare, dis
 | RIDER-HISTORY-005 | Rider reopens Activity while a ride is Requested, Offered, Accepted, Arrived or InProgress | Latest active ride details are restored from the owner-scoped history result so status/live tracking can reconnect | Android/iOS functional + SignalR | P0 |
 
 The current automated tests exercise the in-memory store. Cosmos cross-partition history query behaviour, retention and larger-history performance require the configured development Cosmos environment. On Android and iOS, also verify that reopening Activity clears a previously active in-memory ride when the server history contains only terminal states, and that a late response after leaving Activity or signing out cannot overwrite current UI state.
+
+
+## 16. Driver trip history
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DRIVER-HISTORY-001 | Driver requests trip history after being assigned multiple rides | Only rides whose DriverId matches the authenticated Driver subject are returned, newest first, regardless of a client-supplied driverId query value | API integration/security | P0 |
+| DRIVER-HISTORY-002 | Driver history response is inspected for private fields | Response includes only ride reference, pickup/drop-off notes, passengers, service class, status, request/accept timestamps and active-location-sharing flag; driver/rider IDs, exact coordinates and fare amounts are omitted | API integration/security | P0 |
+| DRIVER-HISTORY-003 | Driver with no assigned trips requests history | HTTP 200 with an empty array | API integration | P1 |
+| DRIVER-HISTORY-004 | Rider requests Driver history endpoint | HTTP 403 | API authorization | P0 |
+| DRIVER-HISTORY-005 | Driver reopens Trips while a ride is Accepted, Arrived or InProgress | Latest active ride summary is restored from the authenticated Driver history result; terminal-only history clears stale in-memory active ride | Android/iOS functional + SignalR | P0 |
+| DRIVER-HISTORY-006 | Driver reconnects to SignalR after a network interruption during an active trip | Driver app reloads authoritative history and restores the current active or terminal state instead of trusting missed events | Android/iOS functional + SignalR | P0 |
+
+The automated API tests use the in-memory ride store. Cosmos cross-partition query behaviour, RU consumption, retention and larger-history performance require the configured development Cosmos environment. On Android and iOS, verify active-trip restoration, completion-to-history transition, SignalR reconnect refresh, and that leaving Trips, signing out, or session expiry prevents late history responses from changing UI state and clears the prior account's in-memory trip history before another account is shown.
