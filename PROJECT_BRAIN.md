@@ -183,4 +183,5 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Add Driver-only `GET /api/v1/driver/rides/mine`, deriving ownership from the authenticated subject; return newest-first allow-listed trip summaries and active-location-sharing state only.
 - Driver app restores the latest active assigned trip on opening Trips, displays previous assigned trips, refreshes authoritative history after SignalR reconnect, and clears stale in-memory active state on terminal-only history or session expiry.
 - API tests cover owner isolation despite client-supplied driverId, ordering, private-field omission, Rider denial and empty history.
+- Implementation head `5724a3634d8a6c9f7bdbf86cf8ad0c7ecef848db` passed all four CI jobs in run 42215519184; final documentation-only updates require the current PR head to pass CI before merge.
 - Do not expose rider/driver IDs, exact coordinates or fare values in history. Real Cosmos cross-partition behaviour remains an infrastructure-backed gate.
