@@ -1498,6 +1498,37 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task DiscoveryExpiresAnExpiredNegotiationBeforeReleasingItsDriverReservation()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "discovery-expiry-rider");
+        SeedBookableDriver(factory, "discovery-expiry-driver", "discovery-expiry-union");
+
+        using var request = CreateSelectedBookingRequest("discovery-expiry-key", "discovery-expiry-driver",
+            "discovery-expiry-union", "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[rideId] = rides[rideId] with { NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1) };
+
+        using var discovery = await rider.GetAsync("/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
+        using var discoveryJson = JsonDocument.Parse(await discovery.Content.ReadAsStringAsync());
+        var discoveredDriverIds = discoveryJson.RootElement.GetProperty("unions").EnumerateArray()
+            .SelectMany(group => group.GetProperty("drivers").EnumerateArray())
+            .Select(item => item.GetProperty("driverId").GetString());
+        Assert.Contains("discovery-expiry-driver", discoveredDriverIds);
+
+        using var expiredRide = await rider.GetAsync($"/api/v1/rides/{rideId}");
+        using var expiredJson = JsonDocument.Parse(await expiredRide.Content.ReadAsStringAsync());
+        Assert.Equal("Expired", expiredJson.RootElement.GetProperty("status").GetString());
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("discovery-expiry-driver"));
+    }
+
+    [Fact]
     public async Task SelectedDriverCanAcceptOnlyAfterMutualAgreementAndReservationBecomesPermanent()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
