@@ -64,6 +64,8 @@ public sealed class AuthApiIntegrationTests
         {
             Assert.Equal("/auth/register", request.Path);
             Assert.Equal("rider@example.com", request.Body.GetProperty("email").GetString());
+            Assert.Equal("Rider", request.Body.GetProperty("role").GetString());
+            Assert.Equal("turnova", request.Body.GetProperty("appId").GetString());
             return Task.FromResult(JsonResponse(HttpStatusCode.Conflict,
                 """{"message":"Email already registered."}"""));
         });
@@ -102,6 +104,9 @@ public sealed class AuthApiIntegrationTests
         using var profile = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("rider-1", profile.RootElement.GetProperty("id").GetString());
         Assert.Equal("Rider", profile.RootElement.GetProperty("role").GetString());
+        var profileBody = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("accessToken", profileBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("refreshToken", profileBody, StringComparison.OrdinalIgnoreCase);
         var request = Assert.Single(handler.Requests);
         Assert.Equal("GET", request.Method);
         Assert.Equal("Bearer", request.AuthorizationScheme);
