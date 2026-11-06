@@ -2197,6 +2197,12 @@ app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, Cancellatio
             history.AddRange(await iterator.ReadNextAsync(ct));
     }
 
+    for (var index = 0; index < history.Count; index++)
+    {
+        var current = await FindRideAsync(history[index].RideId, ct);
+        if (current is not null) history[index] = current;
+    }
+
     var items = history
         .OrderByDescending(ride => ride.RequestedAt)
         .Select(ride => new DriverRideHistoryItem(
@@ -2208,7 +2214,8 @@ app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, Cancellatio
             ride.Status,
             ride.RequestedAt,
             ride.AcceptedAt,
-            ride.LocationSharingActive))
+            ride.LocationSharingActive,
+            ride.Stops ?? []))
         .ToArray();
     return Results.Ok(items);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
@@ -2233,6 +2240,12 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
             history.AddRange(await iterator.ReadNextAsync(ct));
     }
 
+    for (var index = 0; index < history.Count; index++)
+    {
+        var current = await FindRideAsync(history[index].RideId, ct);
+        if (current is not null) history[index] = current;
+    }
+
     var items = history
         .OrderByDescending(ride => ride.RequestedAt)
         .Select(ride => new RiderRideHistoryItem(
@@ -2243,7 +2256,8 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
             ride.ServiceClass,
             ride.Status,
             ride.RequestedAt,
-            ride.AcceptedAt))
+            ride.AcceptedAt,
+            ride.Stops ?? []))
         .ToArray();
     return Results.Ok(items);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
@@ -2278,8 +2292,8 @@ public sealed record DriverAvailabilityLocationRequest(double? Latitude, double?
 public sealed record RiderDiscoveryResponse(string PickupZoneId, double? JourneyDistanceKm, IReadOnlyList<NearbyUnionDiscoveryGroup> Unions);
 public sealed record NearbyUnionDiscoveryGroup(string UnionId, string UnionName, IReadOnlyList<NearbyDriverDiscoveryResponse> Drivers);
 public sealed record NearbyDriverDiscoveryResponse(string DriverId, string FullName, string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceToPickupKm, string? ProfilePhotoBase64, string? ProfilePhotoContentType);
-public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt);
-public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive);
+public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, IReadOnlyList<string> Stops);
+public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive, IReadOnlyList<string> Stops);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
