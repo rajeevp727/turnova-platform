@@ -33,3 +33,23 @@ public static class RideLifecycle
     public static bool IsLocationSharingActive(string status) =>
         status is Accepted or Arrived or InProgress;
 }
+
+
+/// <summary>
+/// Immutable Driver report of money received directly from the Rider. This is not customer- or bank-verified.
+/// Stored inside the ride aggregate so the report and ride share one Cosmos partition and ETag boundary.
+/// </summary>
+public sealed record RidePaymentReconciliation(
+    string RideId,
+    int AgreementVersion,
+    string RiderId,
+    string DriverId,
+    string UnionId,
+    decimal AgreedAmount,
+    decimal AmountReceived,
+    decimal Delta,
+    string Currency,
+    DateTimeOffset ReportedAtUtc,
+    string ReportedByDriverId,
+    string Status,
+    string IdempotencyKeyHash);

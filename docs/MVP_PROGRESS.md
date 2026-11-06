@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#14 DRIVER-03: Harden the existing PDF work-metrics payslip: reject current/incomplete periods, prove authenticated Driver/Union assignment isolation, and ensure PDF content contains no customer, route or monetary payment data.**
+**#16 RIDER-04: Implement immutable Driver-reported direct-payment reconciliation after completed Cab rides, expose the report only to the assigned Driver and claim-scoped UnionManager, and verify signed delta, idempotency and privacy.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -21,7 +21,7 @@
 - PR #66 merged at `26dafc87451ba49ea4734df81c94f9e75790800d`; final-head CI [42278673796](https://github.com/rajeevp727/turnova-platform/actions/runs/42278673796) passed all four jobs: **191/191 backend tests**, TRX non-zero guard, non-container API publish/artifact verification, both Expo config/typechecks and shared mobile tests.
 - PR #67 merged at `213832f7f1e6f4eaa5ea3fdabf099c7b63e18979`; verified PR head `125f3f5ae58d1debdf4c453a9f67b0625643ef4e` passed CI [42286793305](https://github.com/rajeevp727/turnova-platform/actions/runs/42286793305), all four jobs: **193/193 backend tests**, TRX non-zero guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and six shared mobile tests passed.
 - PR #68 merged at `1a545048fee86111a7c55724275d93a1458e90f3`; final PR head `0d7331aa2a93d1fa61862bf56710bd31290d9c3f` passed CI [42290510329](https://github.com/rajeevp727/turnova-platform/actions/runs/42290510329), all four jobs: **195/195 backend tests**, TRX non-zero guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and **9 shared mobile tests**. Automated review comment [6695007160](https://github.com/rajeevp727/turnova-platform/pull/68#issuecomment-6695007160) found no unresolved critical/high-risk issue; live Cosmos and physical-device gates remain.
-- DRIVER-03 current increment on branch `feat/driver-03-payslip-privacy`: fix current/incomplete India-local month rejection; add invalid period, no-union, mid-month transfer, cross-Driver isolation and work-metrics-only PDF privacy tests. CI/review pending.
+- PR #69 merged at `70738af97d17cb8be715410898138d3e2f10f1cf`; final head `047564de5e4d07ee2ca34fe92e87ce1aed29d9b6` passed CI [42291337082](https://github.com/rajeevp727/turnova-platform/actions/runs/42291337082), all four jobs: 196/196 backend tests, TRX guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and nine shared tests. Android/iOS payslip document tests and live Cosmos snapshot/recovery remain.
 
 ## 2. Overall MVP completion
 
@@ -49,9 +49,9 @@
 | 11 | DRIVER-01 | In progress | PRs #52/#53 enforce Cab-only onboarding and preserve legacy records; PR #66 merged signed UnionManager scope, minimum-data member listing, union-only selfie approval, retry-safe audit, transfer reapproval and Driver membership display. Provider claim mapping, private document storage/retention and physical-device onboarding tests remain. |
 | 12 | DRIVER-02 | In progress | PR #67 merged; final-head CI [42286793305](https://github.com/rajeevp727/turnova-platform/actions/runs/42286793305) passed all four jobs and 193/193 backend tests; live Cosmos lease races and Android/iOS permission/background/resume remain. |
 | 13 | TRIP-01 | In progress | PR #68 merged at `1a545048fee86111a7c55724275d93a1458e90f3`; final PR head `0d7331aa2a93d1fa61862bf56710bd31290d9c3f` passed CI [42290510329](https://github.com/rajeevp727/turnova-platform/actions/runs/42290510329): 195/195 backend tests, non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos and Android/iOS physical-device acceptance remain. |
-| 14 | DRIVER-03 | In progress | Current branch fixes the current-month payslip guard and adds Union assignment/transfer, authenticated Driver isolation and PDF privacy tests; final-head CI, Android/iOS PDF save/share and live Cosmos snapshot/recovery remain. |
+| 14 | DRIVER-03 | In progress | PR #69 merged at `70738af97d17cb8be715410898138d3e2f10f1cf`; final-head CI [42291337082](https://github.com/rajeevp727/turnova-platform/actions/runs/42291337082) passed 196/196 backend tests, non-container API publish, both mobile typechecks and nine shared tests. Android/iOS PDF save/share/accessibility and live Cosmos snapshot/recovery remain. |
 | 15 | DRIVER-04 | Blocked | Driver support categories, escalation owner and operational process are not approved. |
-| 16 | RIDER-04 | In progress | Rider history merged in PR #47; direct-payment reporting/reconciliation and ratings remain. Customer dispute/confirmation and non-zero-delta next-ride policy are unresolved. |
+| 16 | RIDER-04 | In progress | PR #70 code head `d73dc0c76528ca95fff39a5d38a5512b1720b941` passed CI [42295719183](https://github.com/rajeevp727/turnova-platform/actions/runs/42295719183): 210/210 backend tests, non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history device acceptance remain. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved. Ratings are not an explicit PRD acceptance criterion. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting categories, escalation owner, process, API/UI, audit and device acceptance remain. |
 | 18 | PLATFORM-01 | In progress | PR #49 CORS/health and PR #51 queue audit/safe exception response merged; durable exception audit, metrics/traces/alerts, Cosmos failure/recovery and load gates remain. |
 | 19 | RELEASE-01 | In progress | CI validates backend, native API publish, Expo config/typechecks and shared auth tests; Android/iOS production builds, signed artifacts and physical-device pilot checks remain. |
@@ -83,7 +83,7 @@
 | CAB-SCOPE-01 | New Rider rides, Driver onboarding and new Union configuration are Cab-only; preserve historical records and exclude legacy non-Cab profiles from new eligibility. | Implemented and CI-validated for covered API/mobile paths — PRs #52/#53 merged; physical-device/production acceptance remains. |
 | CAB-DISCOVERY-01 | Show approved unions serving pickup; up to 2–3 eligible/available Cab drivers per union ordered by pickup proximity; Rider selects. No customer-facing FIFO ranking or automatic assignment. | In progress — PR #55 merged; RIDER-03 adds durable selected booking/reservation; production radius and device validation remain. |
 | CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | In progress — PR #56 merged; RIDER-03 connects selected booking and persists optional stops in agreement snapshots; device/Cosmos/expiry-policy validation remain. |
-| CAB-RECON-01 | Driver reports amount received as unverified; persist agreed-minus-reported signed delta; expose only to authorised union roles. No platform payment gateway/escrow/collection. | Not started |
+| CAB-RECON-01 | Driver reports amount received as unverified; persist agreed-minus-reported signed delta; expose only to authorised union roles. No platform payment gateway/escrow/collection. | In progress — PR #70 code head `d73dc0c76528ca95fff39a5d38a5512b1720b941` passed CI [42295719183](https://github.com/rajeevp727/turnova-platform/actions/runs/42295719183) with 210/210 backend tests, both mobile typechecks, nine shared tests and non-container API publish; live Cosmos/device gates remain. Not counted in 19-area percentage. |
 | CAB-UNION-01 | Cab membership, Cab vehicle verification, union approval and approved selfie visibility. | Partially evidenced; Cab-only validation and full union workflow remain |
 | AI-01 | Separately approved provider-agnostic, bounded Rider/Driver AI assistance. Keep outside the 19-area denominator and do not let AI book, set fares, approve KYC or alter dispatch/ride state. | Not started |
 
@@ -99,12 +99,10 @@
 
 ## 7. Next steps
 
-1. Current sequential #14 DRIVER-03: fix current-month payslip acceptance, add Union assignment and Driver privacy tests, and verify work-metrics-only PDF output; review/merge only after final-head checks pass.
-2. After #14, inspect #15 DRIVER-04 support requirements; if categories/owner/process remain unapproved, record the blocker and proceed to #16 RIDER-04 without inventing policy.
-3. Implement CAB-RECON-01 in the later Rider/Driver rows: persist driver-reported/unverified amount, signed agreed-minus-reported delta and authorised Union visibility without gateway/escrow.
-4. Keep #11 DRIVER-01 In Progress until identity-provider claim mapping, private document storage/scanning/consent/retention and Android/iOS onboarding evidence pass.
-5. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
-6. Keep internal FIFO role, customer dispute/confirmation, non-zero-delta next-ride policy, legal partnership terms, provider configuration and physical-device gates explicit; do not invent decisions.
+1. Current sequential #16 RIDER-04: complete the immutable Driver-reported payment reconciliation vertical slice, run final-head backend/mobile CI, review the full diff and merge only when all required checks are green.
+2. #15 DRIVER-04 remains Blocked because Driver support categories, escalation owner and operational process are unapproved; no support workflow is invented. After #16, inspect #17 SUPPORT-01 and preserve its blocker if Rider support categories/owner/process remain unapproved.
+3. Continue #18 PLATFORM-01 and #19 RELEASE-01 only after #17 is audited; keep the 19-row denominator and approved AI-01 supplemental tracking unchanged.
+4. Keep customer dispute/confirmation, non-zero-delta next-ride policy, internal FIFO role, legal partnership terms, provider configuration and physical-device gates explicit; do not invent decisions.
 
 ## 8. DISPATCH-03 audit handoff (2026-11-06)
 
@@ -158,3 +156,15 @@
 - Added API regression tests for missing Union/documents and unchanged availability/location during a selected negotiation. PR #67 final-head CI [42286508190](https://github.com/rajeevp727/turnova-platform/actions/runs/42286508190) passed all four jobs and executed 193/193 backend tests; Expo typechecks and shared mobile tests also passed.
 - Remaining gates: live Cosmos multi-instance/ETag/restart concurrency, Android/iOS physical permission/background/resume tests, and unresolved internal FIFO role.
 - Weighted progress remains **42.1%** (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict **0/19**).
+
+
+## RIDER-04 direct-payment reconciliation increment (2026-11-07)
+
+- Current sequential item: #16 RIDER-04. #15 DRIVER-04 was inspected and remains Blocked: the PRD leaves Driver support categories, escalation owner and operational process unapproved. No speculative support workflow is added.
+- The API accepts one non-negative, at-most-two-decimal amount report only from the assigned Driver after a Completed Cab ride with the current mutually confirmed agreement. Agreed amount/currency are snapshotted from that agreement; delta is agreed minus reported.
+- The report is embedded in the existing Rides aggregate and protected by the existing ETag/snapshot comparison. Same-key/same-payload retry is idempotent; conflicting reports cannot overwrite the first report.
+- Driver history shows the unverified report. The UnionManager endpoint is filtered by signed unionId claims and returns only ride/Driver references and reconciliation values; it omits Rider identity, route/stops, contacts, exact coordinates and private chat.
+- No payment gateway, escrow, customer verification/dispute workflow or delta-based next-ride gate is introduced. The latter two product decisions remain open. Physical Android/iOS entry/history acceptance and live Cosmos ETag/restart validation remain external gates.
+- Weighted progress remains **42.1%**: 0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. The 19-area denominator is unchanged.
+
+- Approved supplemental **CAB-RECON-01 is In progress in PR #70** and remains outside the 19-area denominator; AI-01 remains separately Not started.

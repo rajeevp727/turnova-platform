@@ -649,12 +649,15 @@ These supplement and supersede legacy fare-estimate, payment-gateway and automat
 | CAB-AGR-003 | Both confirm current version | Start allowed subject to lifecycle rules | API | P0 |
 | CAB-AGR-004 | Fare changes after confirmation | New immutable version; both reconfirm | API/persistence | P0 |
 | CAB-AGR-005 | Mutate historical confirmed version | Rejected; history unchanged | API/persistence | P0 |
-| CAB-REC-001 | Agreed 500, reported 400 | Delta +100, driver-reported/unverified shortfall | Unit/API | P0 |
-| CAB-REC-002 | Agreed 500, reported 500 | Delta 0 | Unit/API | P0 |
-| CAB-REC-003 | Agreed 400, reported 500 | Delta -100 | Unit/API | P0 |
-| CAB-REC-004 | Decimal/currency precision and invalid amount | Currency-safe validation/rounding | Unit/API | P0 |
-| CAB-REC-005 | Unrelated union/driver requests reconciliation | Forbidden; authorised minimum data only | Security | P0 |
-| CAB-REC-006 | Driver submits amount | Actor/time/status audited; not customer/bank verified | API | P0 |
+| CAB-REC-001 | Agreed 500, reported 400 | Delta +100; Driver-reported/unverified shortfall | API integration | P0 |
+| CAB-REC-002 | Agreed 500, reported 500 | Delta 0; Driver-reported/unverified exact report | API integration | P0 |
+| CAB-REC-003 | Agreed 400, reported 500 | Delta -100; Driver-reported/unverified excess | API integration | P0 |
+| CAB-REC-004 | Missing, zero, negative, over-precision or decimal amount | An amount is mandatory; zero or more with at most two decimals is accepted; invalid values are rejected; currency is inherited from the agreement | API integration | P0 |
+| CAB-REC-005 | Unrelated Driver or Union requests reconciliation | Not found/forbidden; only the assigned Driver and claim-scoped UnionManager can read the minimum report fields | API/security | P0 |
+| CAB-REC-006 | Driver submits amount | Ride-linked report records agreement version, actor/time, currency, signed delta and DriverReportedUnverified status | API integration | P0 |
+| CAB-REC-007 | Driver reports before completion or without the current mutual agreement | Conflict; no report is stored | API integration | P0 |
+| CAB-REC-008 | Same idempotency key is retried or a competing report is submitted | Same key/payload returns the immutable report; another key/payload cannot overwrite it | API/concurrency | P0 |
+| CAB-REC-009 | UnionManager lists reconciliation records | Only records matching signed unionId claims are returned; no Rider identity, route/stops, contact data, exact location or chat is exposed | API/privacy | P0 |
 | CAB-UNION-001 | Driver transferred unions | Prior selfie approval invalidated until new union approval | API/privacy | P0 |
 
 Do not test or implement platform fare estimates, in-app payment collection, gateway/escrow or customer-facing FIFO ranking/automatic assignment as MVP behaviour. Dispute and non-zero-delta next-ride outcomes remain pending product decisions.
