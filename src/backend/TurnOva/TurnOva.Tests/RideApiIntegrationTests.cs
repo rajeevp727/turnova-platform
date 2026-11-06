@@ -527,6 +527,116 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Conflict, lateCancellation.StatusCode);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(7)]
+    public async Task RideRequestRejectsPassengerCountsOutsideSupportedRange(int passengers)
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", $"rider-passengers-{passengers}");
+        using var request = CreateRideRequest($"invalid-passengers-{passengers}", passengers: passengers);
+
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("", "HITEC City, Hyderabad")]
+    [InlineData(null, "HITEC City, Hyderabad")]
+    [InlineData("KPHB, Hyderabad", " ")]
+    [InlineData("KPHB, Hyderabad", null)]
+    public async Task RideRequestRejectsMissingPickupOrDropoff(string? pickup, string? dropoff)
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-missing-location");
+        using var request = CreateRideRequest("missing-location", pickup: pickup, dropoff: dropoff);
+
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RideRequestRejectsMissingPickupCoordinates()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-missing-coordinates");
+        using var request = CreateRideRequest("missing-coordinates", pickupLatitude: null);
+
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(91d, 78.399d)]
+    [InlineData(-91d, 78.399d)]
+    [InlineData(17.493d, 181d)]
+    public async Task RideRequestRejectsCoordinatesOutsideLatitudeLongitudeRanges(double latitude, double longitude)
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-invalid-coordinates");
+        using var request = CreateRideRequest("invalid-coordinates", pickupLatitude: latitude, pickupLongitude: longitude);
+
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RideRequestRejectsUnsupportedServiceClass()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-invalid-service-class");
+        using var request = CreateRideRequest("invalid-service-class", serviceClass: "taxi");
+
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RideRequestRejectsPickupOutsideConfiguredZones()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-outside-zone");
+        using var request = CreateRideRequest("outside-zone", pickupLatitude: 0, pickupLongitude: 0);
+
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MaximumSupportedPassengerCountIsAccepted()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-max-passengers");
+        using var request = CreateRideRequest("max-passengers", passengers: 6);
+
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(6, (await ReadRideAsync(response)).Passengers);
+    }
+
+    [Fact]
+    public async Task InvalidRideRequestDoesNotConsumeIdempotencyKey()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-validation-idempotency");
+        using var invalid = CreateRideRequest("validation-retry-key", passengers: 7);
+        using var valid = CreateRideRequest("validation-retry-key");
+
+        using var rejected = await rider.SendAsync(invalid);
+        using var accepted = await rider.SendAsync(valid);
+
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+    }
+
     [Fact]
     public async Task RideRequestRequiresIdempotencyKeyAndRiderRole()
     {
@@ -543,17 +653,25 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync("/api/v1/rides/request", driverRequest)).StatusCode);
     }
 
-    private static HttpRequestMessage CreateRideRequest(string? idempotencyKey)
+    private static HttpRequestMessage CreateRideRequest(
+        string? idempotencyKey,
+        int passengers = 1,
+        string? pickup = "KPHB, Hyderabad",
+        string? dropoff = "HITEC City, Hyderabad",
+        double? pickupLatitude = 17.493,
+        double? pickupLongitude = 78.399,
+        string serviceClass = "auto")
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/rides/request")
         {
             Content = JsonContent.Create(new
             {
-                pickup = "KPHB, Hyderabad",
-                dropoff = "HITEC City, Hyderabad",
-                passengers = 1,
-                pickupLatitude = 17.493,
-                pickupLongitude = 78.399
+                pickup,
+                dropoff,
+                passengers,
+                pickupLatitude,
+                pickupLongitude,
+                serviceClass
             })
         };
         if (idempotencyKey is not null)
