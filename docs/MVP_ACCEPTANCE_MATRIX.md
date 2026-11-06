@@ -19,7 +19,7 @@
 | AUTH-01 | Rider and Driver registration, login, profile and role separation | PR #35 fake-TriSend API integration tests; PR #39 JWT signature/issuer/audience/expiry and Rider/Driver role-boundary integration tests; PR #40 startup JWT/TriSend HTTPS configuration guards | Duplicate-registration contract and mobile runtime/session tests; end-to-end profile lifecycle | In progress |
 | AUTH-02 | Secure access/refresh-token lifecycle and logout | Both apps use SecureStore; PR #37 serializes concurrent refreshes; PR #41 extracts and tests the shared single-flight refresh coordinator and retry-after-failure behaviour | Automated token rotation/reuse, app restart, expiry, logout and secure-storage failure tests on both apps | In progress |
 | RIDER-01 | Cab-only pickup/drop-off selection, location permission and union-grouped nearby Cab discovery | PR #45 zone/capacity/freshness groundwork; PRs #52/#53 Cab-only and legacy guards; PR #55 adds union-grouped discovery, active membership/verified-document/Online/fresh-location/capacity/reservation filtering, 3-driver cap, pickup-distance ordering, current-union selfie gating, privacy-safe response and Rider grouped-card/local selection UI; CI run 42237256233 passed backend build/tests, native non-container API publish, both mobile typechecks and shared mobile-auth tests | Durable selected-driver reservation/booking, optional-stop persistence, maps journey distance, call/chat provider actions, approved production radius, Cosmos multi-instance validation and Android/iOS device tests | In progress |
-| RIDER-02 | Direct Rider/Driver fare negotiation and mutually confirmed agreement before ride start; no platform fare estimate | Fare estimate is intentionally null; no negotiation history, immutable agreement versions or mutual-confirmation start gate exist | Proposal/counterproposal history, immutable versions, both-party confirmation, start gate, expiry/cancellation and idempotency tests | Not started |
+| RIDER-02 | Direct Rider/Driver fare negotiation and mutually confirmed agreement before ride start; no platform fare estimate | PR #56 adds authenticated Rider/Driver proposal/counterproposal APIs, immutable ride-embedded versions, append-only confirmations, idempotency, SignalR change events and mutual-confirmation gates for start/completion; both mobile apps expose proposal/confirmation controls. | CI API tests cover version history, stale confirmation, idempotent retry, start gate, in-trip renegotiation/completion gate, amount/currency validation, party authorization and concurrent proposal CAS. Optional-stop snapshot depends on RIDER-03; device and live Cosmos concurrency gates remain. | In progress |
 | RIDER-03 | Customer-selected Cab booking, status, cancellation and duplicate-submit safety | PR #55 disables legacy FIFO Rider request creation by default; discovery now supplies selected-driver IDs, but no durable selected-driver booking/reservation is created yet | Selected-driver booking, no automatic FIFO assignment, reservation/expiry/cancel, durable persistence/restart and duplicate-submit tests | In progress |
 | DISPATCH-01 | Pickup resolves to configured zone/radius and approved unions serving Cab | PR #55 uses configured zone coverage and a required Dispatch:NearbyRadiusKm; Active Cab unions must serve the resolved zone; CI run 42237256233 passed | Product-approved production radius/zone boundaries, Cosmos query validation and cross-zone/device tests | In progress |
 | DISPATCH-02 | Rider selects up to 2–3 approved, available Cab drivers per union ordered by pickup proximity; no customer-facing FIFO or automatic assignment | PR #55 discovery bypasses queue ordering, caps at three per union, sorts by pickup distance and renders selectable grouped cards; legacy nearby endpoint returns 410 and legacy request path is disabled by default; CI run 42237256233 passed | Durable server-side selection/reservation, expiry/cancellation and physical-device validation; internal FIFO role remains unresolved | In progress |
@@ -62,7 +62,7 @@
 1. AUTH-01 — In progress
 2. AUTH-02 — In progress
 3. RIDER-01 — In progress
-4. RIDER-02 — Not started
+4. RIDER-02 — In progress
 5. RIDER-03 — In progress
 6. DISPATCH-01 — In progress
 7. DISPATCH-02 — In progress
@@ -82,7 +82,7 @@
 ## Highest-priority next work
 
 1. Complete RIDER-01 / CAB-DISCOVERY-01: add durable selected-driver reservation/booking and exact expiry/cancel handling without customer-facing FIFO; then verify Android/iOS discovery and photo/location behaviour.
-2. Implement CAB-AGREEMENT-01: direct Rider/Driver negotiation, immutable versioned agreement, both parties confirm current version, and no ride start before mutual confirmation.
+2. Complete CAB-AGREEMENT-01: connect the agreement UI/API to selected-driver booking (RIDER-03), persist optional stops in the route snapshot, then validate Android/iOS and live Cosmos ETag contention.
 3. Implement CAB-RECON-01: Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
 4. Complete CAB-UNION-01 and the remaining Driver/Rider support, platform observability and release evidence.
 5. Keep AI-01 as the separately approved supplemental requirement, outside the 19-area denominator.
@@ -111,7 +111,7 @@ This clarification supersedes conflicting legacy row descriptions without changi
 |---|---|---|
 | CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | Implemented and CI-validated for covered API/mobile paths — PR #52/#53 merged; PR #53 final-head CI run 42232390997 passed all four jobs. Physical-device/production acceptance remains. |
 | CAB-DISCOVERY-01 | Approved nearby unions; max 2–3 eligible drivers per union; pickup proximity ordering; customer selection | In progress — PR #55 implements server grouping/eligibility/cap/order/photo privacy and Rider local card selection; CI run 42237256233 passed all four jobs. Durable reservation/booking and production radius/device gates remain |
-| CAB-AGREEMENT-01 | Direct negotiation; durable immutable versioned agreement; both confirm; no start without current mutual confirmation | Not verified |
+| CAB-AGREEMENT-01 | Direct negotiation; durable immutable versioned agreement; both confirm; no start without current mutual confirmation | In progress — PR #56 implements API/mobile proposal and confirmation controls, append-only terms/confirmation history and start/completion gates; booking integration, optional stops and device/Cosmos validation remain. |
 | CAB-RECON-01 | Driver-reported/unverified amount, signed delta, authorised union visibility and audit | Not verified |
 | CAB-UNION-01 | Approved membership, Cab/vehicle verification, union selfie approval and least-privilege oversight | Partially evidenced; end-to-end pending |
 
