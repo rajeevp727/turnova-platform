@@ -60,6 +60,7 @@ export default function App() {
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme();
   const [tokens, setTokens] = useState<Tokens | null>(null);
+  const refreshInFlight = useRef<Promise<string> | null>(null);
   const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Payslips" | "Profile">("Home");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -124,7 +125,10 @@ export default function App() {
       if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
-        accessToken = await refreshSession(refreshToken);
+        if (!refreshInFlight.current) {
+          refreshInFlight.current = refreshSession(refreshToken).finally(() => { refreshInFlight.current = null; });
+        }
+        accessToken = await refreshInFlight.current;
       } catch {
         await clearTokens();
         setTokens(null);
