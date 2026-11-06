@@ -1410,15 +1410,34 @@ public sealed class RideApiIntegrationTests
         using var allowedStart = await driver.PostAsync($"/api/v1/rides/{rideId}/start", null);
         Assert.Equal(HttpStatusCode.OK, allowedStart.StatusCode);
 
+        using var inTripCounter = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 550.00m, currency = "INR" })
+        };
+        inTripCounter.Headers.Add("Idempotency-Key", "agreement-driver-counter-during-trip");
+        using var inTripCounterResponse = await driver.SendAsync(inTripCounter);
+        Assert.Equal(HttpStatusCode.Created, inTripCounterResponse.StatusCode);
+        using var blockedCompletion = await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null);
+        Assert.Equal(HttpStatusCode.Conflict, blockedCompletion.StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/3/confirm", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/3/confirm", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null)).StatusCode);
+
         using var historyResponse = await rider.GetAsync($"/api/v1/rides/{rideId}/agreements");
         Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
         using var history = JsonDocument.Parse(await historyResponse.Content.ReadAsStringAsync());
         var versions = history.RootElement.EnumerateArray().ToArray();
-        Assert.Equal(2, versions.Length);
+        Assert.Equal(3, versions.Length);
         Assert.Equal(450.00m, versions[0].GetProperty("amount").GetDecimal());
         Assert.Equal(500.00m, versions[1].GetProperty("amount").GetDecimal());
+        Assert.Equal(550.00m, versions[2].GetProperty("amount").GetDecimal());
         Assert.True(versions[1].GetProperty("riderConfirmed").GetBoolean());
         Assert.True(versions[1].GetProperty("driverConfirmed").GetBoolean());
+        Assert.True(versions[2].GetProperty("riderConfirmed").GetBoolean());
+        Assert.True(versions[2].GetProperty("driverConfirmed").GetBoolean());
         Assert.False(versions[0].GetProperty("riderConfirmed").GetBoolean());
         Assert.False(versions[0].GetProperty("driverConfirmed").GetBoolean());
     }
@@ -1444,6 +1463,39 @@ public sealed class RideApiIntegrationTests
         request.Headers.Add("Idempotency-Key", "agreement-validation-001");
         using var response = await rider.SendAsync(request);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ConcurrentAgreementProposalsCannotCreateTheSameCurrentVersion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-race-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-race-driver");
+        const string rideId = "RIDE-AGREEMENT-RACE";
+        SeedAgreementRide(factory, rideId, "agreement-race-rider", "agreement-race-driver");
+
+        static HttpRequestMessage Proposal(string key, decimal amount)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var first = Proposal("agreement-race-a", 300m);
+        using var second = Proposal("agreement-race-b", 325m);
+        var responses = await Task.WhenAll(rider.SendAsync(first), driver.SendAsync(second));
+        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Created));
+        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        foreach (var response in responses) response.Dispose();
+
+        var stored = await factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+            .GetValueOrDefault(rideId)!.AgreementVersions;
+        Assert.NotNull(stored);
+        Assert.Single(stored);
+        Assert.Equal(1, stored[0].Version);
     }
 
     [Fact]
