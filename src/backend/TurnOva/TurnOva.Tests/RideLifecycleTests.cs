@@ -5,6 +5,10 @@ namespace TurnOva.Tests;
 public sealed class RideLifecycleTests
 {
     [Theory]
+    [InlineData("Negotiating", "Cancelled", true)]
+    [InlineData("Negotiating", "Declined", true)]
+    [InlineData("Negotiating", "Expired", true)]
+    [InlineData("Negotiating", "Accepted", false)]
     [InlineData("Requested", "Accepted", true)]
     [InlineData("Accepted", "Arrived", true)]
     [InlineData("Arrived", "InProgress", true)]
