@@ -132,7 +132,10 @@ Store identity documents in protected object storage rather than large Cosmos DB
 - Online/Offline transitions acquire the same per-driver exclusive reservation lease used by selected bookings and Union transfers. A selected negotiation/ride therefore cannot overlap an availability mutation; ETag-aware profile updates remain the persistence guard.
 - A zone-exit location update acquires that lease before clearing location and taking the Driver Offline. If a selected booking owns the lease, the location transition fails closed and retries on a later foreground update.
 - Driver location is foreground-only. The mobile app stops its watcher when backgrounded, refreshes the current GPS fix and restarts the watcher on resume, and attempts to go Offline if foreground permission is revoked.
-- Location sharing pauses during Negotiating, AgreementConfirmed and active ride states. Rider discovery still uses only server-authoritative Online state, current location freshness and the existing union/vehicle eligibility filters; exact Driver coordinates are not returned to the Rider.
+- The availability/discovery location watcher pauses during Negotiating, AgreementConfirmed and active ride states; it is not the active-trip tracker. Rider discovery uses server-authoritative Online state, current location freshness and union/vehicle eligibility filters.
+- A separate ride-scoped location watcher runs only while `LocationSharingActive` is true and the ride is Accepted, Arrived or InProgress. It is foreground-only, independent of the selected app tab, stops on background/terminal state, and posts a fresh GPS fix before restarting on resume.
+- Rider and Driver ride-group SignalR connections remain subscribed while their ride is active regardless of the selected UI tab; reconnect refreshes owner-scoped ride/agreement state.
+- The ride-location API accepts only the assigned Driver during an active sharing state and broadcasts to the authorized ride group. Rider ride details hide exact Driver coordinates before sharing and after terminal transitions; terminal state transitions clear the stored latest coordinate.
 
 ## 8. Initial API resource groups
 
