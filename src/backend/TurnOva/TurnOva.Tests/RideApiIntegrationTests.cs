@@ -1474,7 +1474,7 @@ public sealed class RideApiIntegrationTests
         const string rideId = "RIDE-AGREEMENT-RACE";
         SeedAgreementRide(factory, rideId, "agreement-race-rider", "agreement-race-driver");
 
-        static HttpRequestMessage Proposal(string key, decimal amount)
+        HttpRequestMessage Proposal(string key, decimal amount)
         {
             var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
             {
