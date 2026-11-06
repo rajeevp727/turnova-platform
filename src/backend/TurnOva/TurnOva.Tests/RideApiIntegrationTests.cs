@@ -662,7 +662,6 @@ public sealed class RideApiIntegrationTests
         using var tooSmall = factory.CreateClient("Driver", "nearby-too-small");
         using var wrongClass = factory.CreateClient("Driver", "nearby-wrong-class");
         using var stale = factory.CreateClient("Driver", "nearby-stale");
-        using var offline = factory.CreateClient("Driver", "nearby-offline");
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         profiles["nearby-too-small"] = profiles["nearby-too-small"] with { PassengerCapacity = 2 };
@@ -708,6 +707,36 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Forbidden,
             (await matching.GetAsync(
                 "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1")).StatusCode);
+    }
+
+    [Fact]
+    public async Task NearbyVehicleDiscoveryExcludesDriversWithActiveRidesAndPausesAvailabilityLocation()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-nearby-active-trip");
+        using var driver = factory.CreateClient("Driver", "driver-nearby-active-trip");
+
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
+
+        var ride = await CreateRideAsync(rider, "nearby-active-trip-001");
+        using var accepted = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+
+        using var location = await driver.PostAsJsonAsync("/api/v1/driver/location",
+            new { latitude = 17.494, longitude = 78.400 });
+        Assert.Equal(HttpStatusCode.Conflict, location.StatusCode);
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["driver-nearby-active-trip"];
+        Assert.Equal("Online", profile.AvailabilityStatus);
+
+        using var nearby = await rider.GetAsync(
+            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, nearby.StatusCode);
+        var vehicles = await nearby.Content.ReadFromJsonAsync<List<NearbyVehicleTest>>();
+        Assert.NotNull(vehicles);
+        Assert.Empty(vehicles);
     }
 
     [Fact]
@@ -791,6 +820,7 @@ public sealed class RideApiIntegrationTests
             ?? throw new InvalidOperationException("The API returned an empty ride response.");
     }
 
+    private sealed record NearbyVehicleTest(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm, DateTimeOffset LocationUpdatedAtUtc);
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 
