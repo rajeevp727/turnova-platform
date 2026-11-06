@@ -1075,6 +1075,17 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderDiscoveryFailsClosedWhenNearbyRadiusIsNotConfigured()
+    {
+        using var factory = new TurnOvaApiFactory(nearbyRadiusKm: 0);
+        using var rider = factory.CreateClient("Rider", "rider-discovery-radius-missing");
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CustomerFacingFifoRideCreationIsDisabledOutsideTestCompatibilityMode()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
@@ -1379,10 +1390,12 @@ public sealed class RideApiIntegrationTests
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
+        private readonly double _nearbyRadiusKm;
 
-        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true)
+        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double nearbyRadiusKm = 10)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
+            _nearbyRadiusKm = nearbyRadiusKm;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -1397,7 +1410,7 @@ public sealed class RideApiIntegrationTests
                     ["TriSend:BaseUrl"] = "https://localhost:7443",
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
                     ["Cors:AllowedOrigins:0"] = "https://app.turnova.test",
-                    ["Dispatch:NearbyRadiusKm"] = "10",
+                    ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
                 }));
         }
