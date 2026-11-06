@@ -701,3 +701,6 @@ Mobile acceptance still requires Android/iOS device checks for union grouping, s
 | CAB-AGR-014 | Two different proposals race for the same current version | One wins; the other receives conflict; only one version is current | ConcurrentAgreementProposalsCannotCreateTheSameCurrentVersion | P0 |
 
 The first increment includes the API and Rider/Driver negotiation controls for rides that already have an assigned Driver. It does not yet connect those controls to the selected-driver booking flow; that dependency is sequenced under RIDER-03. Negotiation expiry/cancellation needs a product-approved lifetime and abandoned-session policy; do not invent one. Optional stop persistence, Android/iOS device acceptance, live Cosmos ETag/multi-instance contention, and production data recovery remain open. The tests above are CI evidence only when the PR's final head has passed its required workflow.
+
+
+RIDER-02 first implementation CI evidence: run [42245656414](https://github.com/rajeevp727/turnova-platform/actions/runs/42245656414) passed backend restore/build/tests, native non-container API publish/artifact verification, Rider/Driver Expo config/typechecks and shared mobile-auth tests on code/test head `750543cee2a9d46fe9e951f7b992a4cc8c24d500`. This is CI evidence, not Android/iOS physical-device or live Cosmos validation.
