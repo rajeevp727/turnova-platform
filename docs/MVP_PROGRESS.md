@@ -5,11 +5,13 @@
 
 ## 1. Current step
 
-**CAB-DISCOVERY-01: implement Rider-selected, union-grouped Cab discovery.**
+**#3 RIDER-01 / CAB-DISCOVERY-01: implement Rider-selected, union-grouped Cab discovery.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
 - CAB-SCOPE-01 is implemented and CI-validated for the covered API/mobile paths. Physical-device and production acceptance remain outstanding.
+- PR #54 merged tracker reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; its final-head CI run 42234802360 passed all four jobs.
+- PR #55 candidate branch `feature/rider-union-discovery` adds union-grouped API discovery, eligibility/radius/photo/privacy rules, disables legacy customer-facing FIFO discovery/request paths by default, and adds Rider grouped-card/local selection UI. Its CI and merge review are pending.
 
 ## 2. Overall MVP completion
 
@@ -26,7 +28,7 @@
 |---:|---|---|---|
 | 1 | AUTH-01 | In progress | PRs #35, #39 and #40 cover fake-TriSend API contracts, JWT/role boundaries and startup configuration guards; mobile runtime/session and full profile lifecycle remain. |
 | 2 | AUTH-02 | In progress | PRs #37 and #41 plus shared mobile refresh tests cover single-flight refresh and retry-after-failure; rotation/reuse, restart, expiry, logout and secure-storage device tests remain. |
-| 3 | RIDER-01 | In progress | PR #45 covers pickup-zone/capacity/freshness filtering; PR #52 adds Cab-only Rider category and non-Cab nearby/request rejection. Approved-union grouping, max 2–3 drivers per union, pickup-proximity ordering and Rider selection remain. |
+| 3 | RIDER-01 | In progress | PR #55 candidate adds approved-union grouping, max three eligible drivers per union, pickup-proximity order, approved-photo privacy and Rider local selection cards. Durable selection reservation/booking, stops persistence, route distance, provider actions and device validation remain. |
 | 4 | RIDER-02 | Not started | Platform fare estimates are out of scope; direct fare negotiation, immutable agreement versions and mutual confirmation before ride start are not implemented. |
 | 5 | RIDER-03 | In progress | Ride lifecycle, ownership and idempotency exist; selected-driver booking/negotiation reservation and agreement start gate remain. |
 | 6 | DISPATCH-01 | In progress | Zone resolution exists; approved-union discovery for Cab is not implemented. |
@@ -80,7 +82,7 @@
 
 ## 7. Next steps
 
-1. Implement CAB-DISCOVERY-01: approved-union grouping, at most 2–3 available Cab drivers per union, pickup-proximity ordering and explicit Rider selection; no customer-facing FIFO ranking or automatic assignment.
+1. Complete RIDER-01 / CAB-DISCOVERY-01: add durable selected-driver reservation/booking and exact expiry/cancel handling without customer-facing FIFO; then verify Android/iOS discovery and photo/location behaviour.
 2. Implement CAB-AGREEMENT-01: versioned direct negotiation and mutual confirmation gate.
 3. Implement CAB-RECON-01: Driver-reported amount and signed delta; leave dispute/next-ride policy blocked until approved.
 4. Complete CAB-UNION-01 and remaining 19-area verification plus AI-01 sequentially. Do not open parallel feature PRs.
