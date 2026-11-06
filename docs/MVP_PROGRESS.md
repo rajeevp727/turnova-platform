@@ -66,3 +66,14 @@ Finish review of PR #49 and require the latest documentation-only head to pass C
 - Infrastructure-backed verification: development Cosmos access for cross-partition, ETag, partition and multi-instance tests.
 - Release evidence: Android/iOS production build/signing and physical devices; maps/geocoding and other provider sandboxes as applicable.
 - API hosting remains a post-coding decision; Docker/container builds and deployments are prohibited. No credentials or secrets are stored in this file.
+
+
+## Approved scope reset — Cab-only business model (2026-11-06)
+
+The user's latest instruction makes the entire MVP Cab-only and requires the union-connected, customer-selected-driver and direct-negotiation model. This supersedes older notes treating fare estimates, payment gateways and customer-facing FIFO dispatch as MVP requirements.
+
+Current task: reconcile PRD, acceptance matrix, test plan and project brain to Cab-only scope. Documentation branch: docs/cab-only-business-model-alignment.
+
+This documentation change does not implement the Rider/Driver/Union vertical slice and does not increase verified feature completion. The previously recorded 36.8% is historical from the pre-reset matrix and must be recalculated after a fresh code/evidence audit. Strict fully verified remains 0/19 on the last recorded audit.
+
+Next: review and merge this focused documentation PR only after latest-head CI and automated review; then implement Cab-only union discovery/customer selection, followed by negotiation/agreement and reconciliation in sequential focused PRs. Keep internal FIFO role, dispute policy, non-zero-delta next-ride policy, cancellation policy and legal review explicit.
