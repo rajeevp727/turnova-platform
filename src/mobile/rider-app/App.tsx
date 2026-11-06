@@ -5,6 +5,7 @@ import { useColorScheme } from "react-native";
 import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { singleFlight } from "../shared/refreshCoordinator";
+import { findActiveRide } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
@@ -89,9 +90,11 @@ export default function App() {
     if(response.status===401){const rt=await SecureStore.getItemAsync("turnova.refresh");if(!rt){await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}let accessToken:string;try{accessToken=await singleFlight(refreshInFlight,()=>refresh(rt));}catch{await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});}
     const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh]);
+  const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current?.rideId===details.rideId?{...current,...details}:details);}else if(isActive()){setRide(null);}},[apiFetch]);
   useEffect(()=>{let active=true;(async()=>{try{const at=await SecureStore.getItemAsync("turnova.access");const rt=await SecureStore.getItemAsync("turnova.refresh");if(at&&rt){try{const me=await request("/api/v1/auth/me",{},at);if(active){setTokens({accessToken:at,refreshToken:rt});setUser(me);}}catch{try{const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(active)await accept(result);}catch{await clearTokens();}}}}catch{if(active)setError("Unable to restore session.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[accept]);
   useEffect(()=>{
     if(!ride||tab!=="Activity"||!tokens)return;
+    let active=true;
     const connection=new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(ride.rideId)}`,{
         accessTokenFactory:async()=>await SecureStore.getItemAsync("turnova.access")??tokens.accessToken,
@@ -100,20 +103,37 @@ export default function App() {
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)
       .build();
+    const refreshAgreements=async()=>{
+      const history=await apiFetch(`/api/v1/rides/${ride.rideId}/agreements`) as AgreementVersion[];
+      if(active)setAgreementHistory(history);
+    };
+    const refreshRiderState=async()=>{
+      try{
+        await loadRideHistory(()=>active);
+        if(active)await refreshAgreements();
+      }catch(e){if(active)setError(e instanceof Error?e.message:"Unable to recover the latest ride state.");}
+    };
     connection.on("DriverLocationUpdated",(update:{rideId:string;latitude:number;longitude:number;locationUpdatedAt:string})=>{
-      setRide(current=>current?.rideId===update.rideId?{...current,driverLatitude:update.latitude,driverLongitude:update.longitude,locationUpdatedAt:update.locationUpdatedAt}:current);
+      if(active)setRide(current=>current?.rideId===update.rideId?{...current,driverLatitude:update.latitude,driverLongitude:update.longitude,locationUpdatedAt:update.locationUpdatedAt}:current);
     });
     connection.on("RideStatusChanged",(update:{rideId:string;status:string})=>{
-      setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
+      if(active)setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
     });
-    const refreshAgreements=()=>{void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(setAgreementHistory).catch(()=>{});};
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
-      if(update.rideId===ride.rideId)refreshAgreements();
+      if(active&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>setError(e instanceof Error?e.message:"Unable to refresh fare agreement."));
     });
-    connection.onreconnected(refreshAgreements);
-    void connection.start().then(refreshAgreements).catch(()=>{});
-    return()=>{void connection.stop();};
-  },[ride?.rideId,tab,tokens?.accessToken,apiFetch]);
+    connection.onreconnected(()=>{void refreshRiderState();});
+    void connection.start().then(refreshRiderState).catch(()=>{
+      if(active)setError("Live ride updates are temporarily unavailable. Reopen Activity to refresh the current trip state.");
+    });
+    return()=>{
+      active=false;
+      connection.off("DriverLocationUpdated");
+      connection.off("RideStatusChanged");
+      connection.off("RideAgreementChanged");
+      void connection.stop();
+    };
+  },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
   const authenticate=async()=>{setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});await accept(result);}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
   const logout=async()=>{try{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);}catch{}await clearTokens();setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);setAgreementHistory([]);setAgreementAmount("");};
   const findNearbyVehicles=async()=>{setLoading(true);setError("");setSelectedDriverId(null);try{const permission=await Location.requestForegroundPermissionsAsync();if(!permission.granted)throw new Error("Location permission is required to find nearby Cab drivers.");const position=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});const coordinates={latitude:position.coords.latitude,longitude:position.coords.longitude};setPickupCoordinates(coordinates);const query="latitude="+encodeURIComponent(String(coordinates.latitude))+"&longitude="+encodeURIComponent(String(coordinates.longitude))+"&passengers="+encodeURIComponent(String(Number(passengers)||1));const result=await apiFetch("/api/v1/rider/discovery?"+query);setDiscovery(result as DiscoveryResult);}catch(e){setDiscovery(null);setError(e instanceof Error?e.message:"Unable to discover nearby Cab drivers.");}finally{setLoading(false);}};
@@ -123,7 +143,7 @@ export default function App() {
   useEffect(()=>{if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}if(tab!=="Activity")return;let active=true;void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(result=>{if(active)setAgreementHistory(result as AgreementVersion[]);}).catch(()=>{if(active)setAgreementHistory([]);});return()=>{active=false;};},[ride?.rideId,tab,apiFetch]);
   const proposeAgreement=async()=>{if(!ride)return;const amount=Number(agreementAmount);if(!Number.isFinite(amount)||amount<=0){setError("Enter a positive agreed amount in INR.");return;}setError("");try{await apiFetch(`/api/v1/rides/${ride.rideId}/agreements`,{method:"POST",headers:{"Idempotency-Key":`rider-${Date.now()}-${Math.random().toString(36).slice(2)}`},body:JSON.stringify({amount,currency:"INR"})});setAgreementAmount("");await loadAgreementHistory(ride.rideId);}catch(e){setError(e instanceof Error?e.message:"Unable to submit fare proposal.");}};
   const confirmAgreement=async()=>{if(!ride)return;const current=agreementHistory[agreementHistory.length-1];if(!current)return;setError("");try{await apiFetch(`/api/v1/rides/${ride.rideId}/agreements/${current.version}/confirm`,{method:"POST"});await loadAgreementHistory(ride.rideId);}catch(e){setError(e instanceof Error?e.message:"Unable to confirm fare agreement.");}};
-  const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=history.find(item=>["Requested","Matching","Offered","Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(item.status));if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current?.rideId===details.rideId?{...current,...details}:details);}else if(isActive()){setRide(null);}},[apiFetch]);
+
   useEffect(()=>{if(!user||tab!=="Activity")return;let active=true;void loadRideHistory(()=>active).catch(e=>{if(active)setError(e instanceof Error?e.message:"Unable to load trip history.");});return()=>{active=false;};},[user?.id,tab,loadRideHistory,ride?.status]);
   const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
   const colors = resolvedTheme === "dark" ? darkColors : lightColors;
