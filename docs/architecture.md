@@ -286,3 +286,12 @@ For a ride with a durable pending offer, only the assigned driver may reject it,
 After a durable offer is rejected or expires, the same ride-partitioned aggregate advances to the next eligible FIFO driver. The service verifies that the ride remains Requested, revalidates candidate approval, Online status, zone, service class and passenger capacity, and removes stale/ineligible queue entries. It appends the next attempt and conditionally persists it with the aggregate ETag before sending SignalR. Rejection and expiry use the same advancer; concurrent calls race on the ETag, so at most one next offer is persisted. If no eligible candidate remains, the ride remains Requested without an active offer.
 
 This is not a transactional outbox. A process stop after offer persistence but before SignalR delivery can lose the realtime event; reconnect can recover through the pending-offer endpoint. Queue/profile coordination spans Cosmos containers and is not transactional. Multi-instance integration tests, autonomous reconciliation and durable notification outbox remain production blockers. Offer lifetime currently uses a 30-second default pending central configuration.
+
+
+## Deployment and environment boundaries
+
+The API exposes unauthenticated `/health/live` and `/health/ready` probes for hosting-platform health checks. These currently confirm process health; they do not independently prove every downstream provider is healthy. Cosmos schema migrations run before the app accepts traffic. Production startup rejects missing Cosmos endpoint/key configuration, preventing accidental in-memory persistence in production.
+
+Render configuration is maintained as a placeholder blueprint in `render.yaml`; secrets are supplied through Render environment variables and are never committed. The container listens on port 8080 and uses `/health/ready` as its platform probe.
+
+TurnOva MVP clients are native Android/iOS Expo applications, not browser SPAs. Azure Static Web Apps cannot host or distribute native binaries. SWA is documented only as an optional future static companion/API-documentation host; native app builds and distribution require EAS Build and/or the app stores.
