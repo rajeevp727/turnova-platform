@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12 and 14; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #47 merge `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; Driver trip-history increment is under PR #48.
+**Last audited:** 2026-11-06 against main after PR #48 merge `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; PLATFORM-01 hardening increment is underway.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -33,7 +33,7 @@
 | DRIVER-04 | Driver support and issue reporting | No verified end-to-end Driver support workflow evidence recorded in this audit | Driver support process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
 | RIDER-04 | Payment through enabled methods, trip history, receipts and ratings | Rider-owned trip history API and Activity list filter by authenticated rider and expose only safe ride summary fields; PR #47 adds ownership, ordering, privacy and empty-history API tests | Cosmos history query integration; payment provider/method decision, sandbox integration, webhook/idempotency/refund tests, receipts and rating flows | Blocked |
 | SUPPORT-01 | Rider help and issue reporting | No verified end-to-end Rider support workflow evidence recorded in this audit | Rider help process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
-| PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations/readiness, health endpoints and selected audit stores documented; PR #45 verifies a native non-container API publish artifact | Real Cosmos readiness/ETag/partition tests, security review, CORS, secrets/logging, metrics/traces/alerts and load tests | In progress |
+| PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations and selected audit stores; explicit `Cors:AllowedOrigins` allow-list replaces wildcard CORS, `/health/live` and Cosmos-aware `/health/ready` are distinct, and integration tests cover allowed/disallowed origins and demo readiness | Cosmos-unavailable readiness failure injection, production origin configuration, secrets/logging review, metrics/traces/alerts, audit durability and load tests | In progress |
 | RELEASE-01 | Android and iOS builds pass agreed functional, security and pilot-readiness tests | Main CI run 42209834591 passed backend build/tests, non-container API publish/artifact verification, Rider/Driver Expo config and TypeScript checks, and shared mobile auth tests | Android/iOS production builds, signed artifacts, physical-device functional/security/pilot checklist | In progress |
 
 ## Current verified count and weighted progress
@@ -66,17 +66,17 @@
 10. REALTIME-01 — In progress
 11. DRIVER-01 — In progress
 12. DRIVER-02 — In progress
-13. TRIP-01 — In progress; Rider history merged in PR #47; Driver history implementation is in PR #48
+13. TRIP-01 — In progress; Rider and Driver history code merged in PRs #47 and #48; Cosmos/device acceptance remains
 14. DRIVER-03 — Blocked
 15. DRIVER-04 — Blocked
 16. RIDER-04 — Blocked
 17. SUPPORT-01 — Blocked
-18. PLATFORM-01 — In progress
+18. PLATFORM-01 — In progress; CORS allow-list and health-probe hardening in progress
 19. RELEASE-01 — In progress
 
 ## Highest-priority next work
 
-1. Complete authenticated Driver-owned trip history API/UI and ownership/privacy tests in PR #48; after TRIP-01 is complete, continue with the next actionable acceptance area in order.
+1. Complete PLATFORM-01 security/health hardening: verify explicit CORS allow-list and unambiguous liveness/readiness endpoints, then continue metrics/traces/audit and Cosmos reliability evidence.
 2. Keep RIDER-02 blocked until base fare, distance/time components, taxes and service-class pricing rules are approved; never invent a quote.
 3. Keep DRIVER-03 blocked until compensation, commission and payout treatment are approved; the existing monthly PDF is a work-metrics payslip, not monetary earnings.
 4. Keep RIDER-04 blocked until payment method/provider, sandbox, webhook/idempotency/refund, receipt and rating decisions are supplied.
@@ -89,4 +89,4 @@ The MVP API is validated through a native .NET 10 publish artifact. Docker, cont
 
 ## Audit limitations
 
-This audit reflects main after PR #47 merge `32cacbf430e1443835e3bd8e4294c15d3c137fe3`, the PRD, README, test plan and current source inventory. It is not a substitute for executing Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.
+This audit reflects main after PR #48 merge `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`, the PRD, README, test plan and current source inventory. It is not a substitute for executing Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.
