@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `7dd1aedf56fdc9ef36b6b04add952d78687a4266` (PR #54; PR #53 and earlier changes are ancestors)
+**Current main HEAD:** `78ddb9558b453b9171bc020ea83e51087f6e5f2f` (PR #55; PR #54 and earlier changes are ancestors)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -59,7 +59,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Current active increment
-- PR #55 is the sequential #3 RIDER-01 / CAB-DISCOVERY-01 slice. It adds union-grouped Cab discovery and Rider selection cards; the client selection is not yet a durable booking/reservation. CI run `42237256233` passed all four jobs on code/test head `5b5d57d79b10b64b0fe9b475deb46d2ca9c21f69`: backend restore/build/tests, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile-auth tests. Subsequent changes are documentation-only; final PR-head checks remain a merge gate. Automated diff review found no critical/high-risk issue.
+- PR #55 merged the sequential #3 RIDER-01 / CAB-DISCOVERY-01 slice at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run `42237572056` passed all four jobs. It adds union-grouped Cab discovery and Rider local selection cards; durable selected-driver booking/reservation remains unimplemented.
 
 ## Highest-priority unfinished work
 
@@ -230,3 +230,11 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #54 merged documentation reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; latest-head CI run 42234802360 passed backend, Rider app, Driver app and shared mobile-auth jobs.
 - PR #53 merge commit: `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run `42232390997` passed all four jobs. This is CI validation, not physical-device or production acceptance.
 - Legacy customer-facing FIFO/automatic-offer flow still exists for Cab and is not the approved final flow; CAB-DISCOVERY-01 must replace it. Internal FIFO role remains unresolved.
+
+
+## RIDER-02 agreement implementation details
+- Agreement terms are append-only `RideAgreementVersion` records embedded in the Rides aggregate; Rider/Driver confirmation records are append-only and version-specific.
+- `AgreementStateRevision` increments on proposal/confirmation changes. Cosmos writes use the existing Rides partition and ETag replacement; concurrent proposal/confirmation or stale start/completion attempts return conflict.
+- Proposal API requires party ownership, active Cab union membership, approved Cab profile, `Idempotency-Key`, positive two-decimal amount and uppercase three-letter currency. No platform fare or payment collection is introduced.
+- Start and completion require both parties to confirm the current version. A fare renegotiated during the trip invalidates prior confirmations and blocks completion until both reconfirm.
+- Optional stops are not yet present in the existing ride aggregate; the full route snapshot is dependent on RIDER-03 selected booking. Do not mark RIDER-02 verified yet.
