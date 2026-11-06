@@ -188,7 +188,7 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 
 
 ## PLATFORM-01 CORS and health increment (in progress)
-- Branch: `fix/platform-cors-health`.
+- PR #49 is open: https://github.com/rajeevp727/turnova-platform/pull/49 (branch `fix/platform-cors-health`).
 - Replace wildcard CORS with explicit `Cors:AllowedOrigins`; reject wildcards, URL paths, query/userinfo and non-HTTPS origins outside Development. Empty allow-list denies browser CORS while native Android/iOS clients remain unaffected.
 - Keep `/health/live` as process liveness and `/health/ready` as the single Cosmos-aware readiness endpoint; remove the duplicate health-check route mapping.
 - Add integration tests for configured/disallowed browser origins and demo-mode liveness/readiness.
