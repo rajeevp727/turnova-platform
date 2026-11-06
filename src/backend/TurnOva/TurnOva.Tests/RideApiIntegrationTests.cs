@@ -570,7 +570,6 @@ public sealed class RideApiIntegrationTests
         using var firstDriver = factory.CreateClient("Driver", "driver-fifo-first");
         using var secondDriver = factory.CreateClient("Driver", "driver-fifo-second");
         var queue = factory.Services.GetRequiredService<IQueueStore>();
-        var joinedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
         await EnqueueLegacyDriverAsync(factory, "driver-fifo-first");
         await EnqueueLegacyDriverAsync(factory, "driver-fifo-second");
 
@@ -735,6 +734,7 @@ public sealed class RideApiIntegrationTests
         using var driver = factory.CreateClient("Driver", "driver-assigned");
         using var otherDriver = factory.CreateClient("Driver", "driver-other");
         await EnqueueLegacyDriverAsync(factory, "driver-assigned");
+        SetLegacyDriverOnline(factory, "driver-other");
         var ride = await CreateRideAsync(rider, "request-ownership-001");
 
         Assert.Equal(HttpStatusCode.NotFound,
@@ -2058,7 +2058,7 @@ public sealed class RideApiIntegrationTests
                 17.493, 78.399, null, null, now, null, false, "cab", "hyderabad-central");
     }
 
-    private static async Task EnqueueLegacyDriverAsync(TurnOvaApiFactory factory, string driverId)
+    private static void SetLegacyDriverOnline(TurnOvaApiFactory factory, string driverId)
     {
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         if (!profiles.TryGetValue(driverId, out var profile))
@@ -2070,6 +2070,11 @@ public sealed class RideApiIntegrationTests
             CurrentLongitude = 78.399,
             LocationUpdatedAtUtc = DateTimeOffset.UtcNow
         };
+    }
+
+    private static async Task EnqueueLegacyDriverAsync(TurnOvaApiFactory factory, string driverId)
+    {
+        SetLegacyDriverOnline(factory, driverId);
         await factory.Services.GetRequiredService<IQueueStore>().AddAsync(
             new DriverQueueEntry(driverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true),
             CancellationToken.None);
