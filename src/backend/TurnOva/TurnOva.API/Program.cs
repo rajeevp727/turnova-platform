@@ -1443,8 +1443,8 @@ app.MapPost("/api/v1/rider/bookings", async (
         !string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
         profile.PassengerCapacity < request.Passengers ||
         profile.LocationUpdatedAtUtc is null || profile.LocationUpdatedAtUtc < freshAfter ||
-        profile.CurrentLatitude is null or < -90 or > 90 ||
-        profile.CurrentLongitude is null or < -180 or > 180 ||
+        profile.CurrentLatitude is null or < -90 or > 90 || !double.IsFinite(profile.CurrentLatitude.Value) ||
+        profile.CurrentLongitude is null or < -180 or > 180 || !double.IsFinite(profile.CurrentLongitude.Value) ||
         profile.Documents is null ||
         !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
         !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
@@ -2215,7 +2215,8 @@ app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, Cancellatio
             ride.RequestedAt,
             ride.AcceptedAt,
             ride.LocationSharingActive,
-            ride.Stops ?? []))
+            ride.Stops ?? [],
+            ride.NegotiationExpiresAtUtc))
         .ToArray();
     return Results.Ok(items);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
@@ -2293,7 +2294,7 @@ public sealed record RiderDiscoveryResponse(string PickupZoneId, double? Journey
 public sealed record NearbyUnionDiscoveryGroup(string UnionId, string UnionName, IReadOnlyList<NearbyDriverDiscoveryResponse> Drivers);
 public sealed record NearbyDriverDiscoveryResponse(string DriverId, string FullName, string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceToPickupKm, string? ProfilePhotoBase64, string? ProfilePhotoContentType);
 public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, IReadOnlyList<string> Stops);
-public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive, IReadOnlyList<string> Stops);
+public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive, IReadOnlyList<string> Stops, DateTimeOffset? NegotiationExpiresAtUtc = null);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
