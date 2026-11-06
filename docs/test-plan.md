@@ -710,7 +710,7 @@ Mobile acceptance still requires Android/iOS device checks for union grouping, s
 RIDER-03 now connects Rider-selected discovery to durable booking, optional-stop persistence, Driver notification, agreement negotiation, reservation expiry/cancellation and the existing mutual-confirmation start gate. The negotiation lifetime remains a product decision: production appsettings is null and the API returns 503 until the approved value is configured; the 15-minute integration-test value is not a product default. The tests below are CI evidence only when the final PR head has passed its required workflow. Live Cosmos ETag/multi-instance contention, Android/iOS device acceptance and production data recovery remain open.
 
 
-RIDER-02 first implementation CI workflow evidence: run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) was green on code/test head `74d4a2164576572186a31b0816a31b081c73ad5ba6d7e049`, but later job-log inspection found the Release solution configuration omitted project mappings and the `dotnet test` command did not execute `TurnOva.Tests`. The run proves workflow-level publish/mobile checks only; backend test evidence is pending PR #64.
+RIDER-02 first implementation CI workflow evidence: run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) was green on code/test head `74d4a2164576572186a31b081c73ad5ba6d7e049`, but later job-log inspection found the Release solution configuration omitted project mappings and the `dotnet test` command did not execute `TurnOva.Tests`. The run proves workflow-level publish/mobile checks only; backend test evidence is pending PR #64.
 
 
 ## RIDER-03 — selected-driver booking and reservation
