@@ -96,13 +96,7 @@ public sealed class AiAssistanceServiceTests
     [Fact]
     public async Task CallerCancellationIsPropagatedInsteadOfConvertedToFallback()
     {
-        var provider = new FakeProvider
-        {
-            TripHandler = (_, cancellationToken) =>
-                Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken)
-                    .ContinueWith<TripIntentProviderResult?>(_ => null, cancellationToken)
-        };
-        var service = CreateService(provider, enabled: true);
+        var service = CreateService(new UnavailableAiAssistantProvider());
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
 
@@ -240,7 +234,7 @@ public sealed class AiAssistanceServiceTests
     {
         public bool IsAvailable => true;
 
-        public Func<SafeTripIntentPrompt, CancellationToken, Task<TripIntentProviderResult?>>? TripHandler { get; init; }
+        public Func<SafeTripIntentPrompt, CancellationToken, Task<TripIntentProviderResult?>>? TripHandler { get; set; }
         public Func<SafeHelpPrompt, CancellationToken, Task<HelpProviderResult?>>? HelpHandler { get; init; }
 
         public Task<TripIntentProviderResult?> DraftTripIntentAsync(
