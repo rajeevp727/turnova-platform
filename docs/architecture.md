@@ -123,6 +123,8 @@ Store identity documents in protected object storage rather than large Cosmos DB
 - Operations admin-key access may reject/hide a selfie, but cannot approve public visibility. Approval must come from the currently assigned union manager.
 - A new/changed union assignment resets selfie approval to Pending unless the selfie was already approved by that exact current union. Rider discovery returns the photo only after current-union approval. The Driver app reads its own `/api/v1/driver/union` membership and displays the current union/status.
 - TriSend/identity-provider issuance of the `UnionManager` role and `unionId` claims is a configuration gate. Private document storage, malware scanning, consent and retention remain blocked on provider/policy selection; no storage provider or credentials are hardcoded.
+- Selfie review and Union transfer share the per-driver exclusive reservation lease, so a review cannot race a membership change or selected booking. The profile update uses the existing ETag-aware conditional update path and rejects a stale selfie/document snapshot.
+- Union selfie audit IDs are deterministic for the driver, union, action and review timestamp. Repeated requests and retries after an ambiguous response do not create duplicate review events. Profile and audit records remain separate Cosmos writes; cross-container atomicity is not assumed and live Cosmos retry/failure validation remains a launch gate.
 
 ## 8. Initial API resource groups
 
