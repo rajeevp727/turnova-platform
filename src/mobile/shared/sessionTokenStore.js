@@ -53,12 +53,11 @@ async function readSessionTokens(storage) {
 }
 
 async function logoutSession(storage, revoke) {
-  try {
-    await revoke();
-  } catch {
+  const revocation = Promise.resolve().then(revoke).catch(() => {
     // Local credential deletion must not depend on network availability.
-  }
+  });
   await clearSessionTokens(storage);
+  void revocation;
 }
 
 async function restoreStoredSession(storage, request) {
