@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import * as SecureStore from "expo-secure-store";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useColorScheme } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
@@ -51,7 +51,7 @@ async function request(path: string, init: RequestInit = {}, token?: string) {
 export default function App() {
   const [user,setUser]=useState<User|null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
-  const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null);
+  const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
   const [pickup,setPickup]=useState("KPHB, Hyderabad"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [passengers,setPassengers]=useState("1");
@@ -76,7 +76,7 @@ export default function App() {
   const apiFetch=useCallback(async(path:string,init:RequestInit={})=>{
     if(!tokens)throw new Error("Please sign in again.");
     let response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${tokens.accessToken}`,...init.headers}});
-    if(response.status===401){const rt=await SecureStore.getItemAsync("turnova.refresh");if(!rt){await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}let accessToken:string;try{accessToken=await refresh(rt);}catch{await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});}
+    if(response.status===401){const rt=await SecureStore.getItemAsync("turnova.refresh");if(!rt){await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}let accessToken:string;try{if(!refreshInFlight.current){refreshInFlight.current=refresh(rt).finally(()=>{refreshInFlight.current=null;});}accessToken=await refreshInFlight.current;}catch{await clearTokens();setTokens(null);setUser(null);throw new Error("Session expired. Please sign in again.");}response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});}
     const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh]);
   useEffect(()=>{let active=true;(async()=>{try{const at=await SecureStore.getItemAsync("turnova.access");const rt=await SecureStore.getItemAsync("turnova.refresh");if(at&&rt){try{const me=await request("/api/v1/auth/me",{},at);if(active){setTokens({accessToken:at,refreshToken:rt});setUser(me);}}catch{try{const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(active)await accept(result);}catch{await clearTokens();}}}}catch{if(active)setError("Unable to restore session.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[accept]);
