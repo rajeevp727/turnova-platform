@@ -979,8 +979,7 @@ opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionI
 opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
     HttpContext context, string unionId, string driverId, DriverSelfieReviewRequest request, CancellationToken ct) =>
 {
-    // Interim authorization: the union-scoped review endpoint is protected by the existing operations admin key.
-    // Replace this with authenticated union-manager RBAC before enabling self-service union administration.
+    // Operations may reject/hide a selfie, but public approval is reserved for the current authenticated UnionManager.
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
     if (request.Status is not ("Approved" or "Rejected"))
         return Results.BadRequest(new { message = "Selfie review status must be Approved or Rejected." });
@@ -1001,14 +1000,28 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         return Results.Forbid(); // Only an authenticated manager of the current union may approve public selfie visibility.
 
     var now = DateTimeOffset.UtcNow;
-    var updated = profile with
+    var saved = await TryUpdateDriverProfileAsync(driverId, current =>
     {
-        ProfilePhotoApprovalStatus = "Rejected",
-        ProfilePhotoApprovedByUnionId = null,
-        ProfilePhotoReviewedAtUtc = now,
-        ProfilePhotoReviewReason = request.Reason!.Trim()
-    };
-    await SaveDriverProfileAsync(updated, ct);
+        if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+            current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
+            current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
+            current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
+            current.ProfilePhotoReviewReason != profile.ProfilePhotoReviewReason)
+            return null;
+
+        return current with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = now,
+            ProfilePhotoReviewReason = request.Reason!.Trim()
+        };
+    }, ct);
+    if (!saved)
+        return Results.Conflict(new { message = "Driver selfie changed during operations review. Refresh the member record and retry." });
+
+    var updated = await FindDriverProfileAsync(driverId, ct)
+        ?? throw new InvalidOperationException("The rejected driver profile could not be reloaded.");
     await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
         unionId, union.Name, unionId, union.Name, "SelfieRejectedByOperations",
         request.Reason.Trim(), context.User.Identity?.Name ?? "Operations", now), ct);
@@ -1239,6 +1252,10 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
         if (profile.Status != "Approved") return Results.Conflict(new { message = "Only approved drivers can be assigned to a union." });
         if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "Only Cab drivers can receive new MVP Union assignments. Legacy non-Cab membership records are retained for history." });
+        if (profile.Documents is null ||
+            !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
+            !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
+            return Results.Conflict(new { message = "Approved driving licence and Cab vehicle registration documents are required before Union assignment." });
         if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
             return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
 
@@ -1257,14 +1274,29 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
         if (!string.Equals(profile.ProfilePhotoApprovedByUnionId, union.UnionId, StringComparison.Ordinal))
         {
             // A selfie approval is scoped to the current union. New/changed membership must be re-reviewed.
-            profile = profile with
+            var profileReset = await TryUpdateDriverProfileAsync(driverId, current =>
             {
-                ProfilePhotoApprovalStatus = "Pending",
-                ProfilePhotoApprovedByUnionId = null,
-                ProfilePhotoReviewedAtUtc = null,
-                ProfilePhotoReviewReason = null
-            };
-            await SaveDriverProfileAsync(profile, ct);
+                if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+                    current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
+                    current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
+                    current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
+                    current.ProfilePhotoReviewReason != profile.ProfilePhotoReviewReason ||
+                    current.Documents is null || profile.Documents is null ||
+                    !current.Documents.SequenceEqual(profile.Documents) ||
+                    current.Status != "Approved" ||
+                    !string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                return current with
+                {
+                    ProfilePhotoApprovalStatus = "Pending",
+                    ProfilePhotoApprovedByUnionId = null,
+                    ProfilePhotoReviewedAtUtc = null,
+                    ProfilePhotoReviewReason = null
+                };
+            }, ct);
+            if (!profileReset)
+                return Results.Conflict(new { message = "Driver onboarding or selfie data changed during Union transfer. Refresh and retry." });
         }
 
         var assignment = new DriverUnionAssignment(driverId, union.UnionId, union.Name, "Active",
