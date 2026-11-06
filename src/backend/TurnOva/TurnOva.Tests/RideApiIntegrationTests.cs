@@ -520,6 +520,7 @@ public sealed class RideApiIntegrationTests
 
     private static object ValidOnboardingRequest(string serviceClass = "cab") => new
     {
+        profilePhotoBase64 = "/9j/2Q==",
         zoneId = "hyderabad-central",
         fullName = "Test Driver",
         phoneNumber = "+919876543210",
@@ -544,6 +545,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-decline-test");
         using var driver = factory.CreateClient("Driver", "driver-decline-test");
+        await EnqueueLegacyDriverAsync(factory, "driver-decline-test");
         var ride = await CreateRideAsync(rider, "request-driver-decline-001");
 
         Assert.Equal(HttpStatusCode.NoContent,
@@ -697,6 +699,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-lifecycle");
         using var driver = factory.CreateClient("Driver", "driver-lifecycle");
+        await EnqueueLegacyDriverAsync(factory, "driver-lifecycle");
         var ride = await CreateRideAsync(rider, "request-lifecycle-001");
 
         var invalidStart = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/start", null);
@@ -731,6 +734,7 @@ public sealed class RideApiIntegrationTests
         using var otherRider = factory.CreateClient("Rider", "rider-other");
         using var driver = factory.CreateClient("Driver", "driver-assigned");
         using var otherDriver = factory.CreateClient("Driver", "driver-other");
+        await EnqueueLegacyDriverAsync(factory, "driver-assigned");
         var ride = await CreateRideAsync(rider, "request-ownership-001");
 
         Assert.Equal(HttpStatusCode.NotFound,
@@ -751,6 +755,8 @@ public sealed class RideApiIntegrationTests
         using var rider = factory.CreateClient("Rider", "rider-concurrency");
         using var firstDriver = factory.CreateClient("Driver", "driver-race-a");
         using var secondDriver = factory.CreateClient("Driver", "driver-race-b");
+        await EnqueueLegacyDriverAsync(factory, "driver-race-a");
+        await EnqueueLegacyDriverAsync(factory, "driver-race-b");
         var ride = await CreateRideAsync(rider, "request-concurrency-001");
 
         var results = await Task.WhenAll(
@@ -767,6 +773,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-cancel-before");
         using var driver = factory.CreateClient("Driver", "driver-cancel-before");
+        await EnqueueLegacyDriverAsync(factory, "driver-cancel-before");
         var cancelBefore = await CreateRideAsync(rider, "request-cancel-before-001");
         await driver.PostAsync($"/api/v1/rides/{cancelBefore.RideId}/accept", null);
 
@@ -1095,8 +1102,8 @@ public sealed class RideApiIntegrationTests
 
     [Theory]
     [InlineData(null)]
-    [InlineData(0)]
-    [InlineData(-1)]
+    [InlineData(0d)]
+    [InlineData(-1d)]
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]
     public async Task RiderDiscoveryFailsClosedWhenNearbyRadiusIsMissingOrInvalid(double? radiusKm)
@@ -1471,6 +1478,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "transfer-active-rider");
         using var ops = factory.CreateClient("Rider", "transfer-active-ops");
+        using var driver = factory.CreateClient("Driver", "transfer-active-driver");
         SeedBookableDriver(factory, "transfer-active-driver", "transfer-active-union");
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -1619,6 +1627,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "discovery-expiry-rider");
+        using var driver = factory.CreateClient("Driver", "discovery-expiry-driver");
         SeedBookableDriver(factory, "discovery-expiry-driver", "discovery-expiry-union");
 
         using var request = CreateSelectedBookingRequest("discovery-expiry-key", "discovery-expiry-driver",
@@ -2049,6 +2058,13 @@ public sealed class RideApiIntegrationTests
                 17.493, 78.399, null, null, now, null, false, "cab", "hyderabad-central");
     }
 
+    private static async Task EnqueueLegacyDriverAsync(TurnOvaApiFactory factory, string driverId)
+    {
+        await factory.Services.GetRequiredService<IQueueStore>().AddAsync(
+            new DriverQueueEntry(driverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true),
+            CancellationToken.None);
+    }
+
     private static HttpRequestMessage CreateRideRequest(
         string? idempotencyKey,
         int passengers = 1,
@@ -2142,8 +2158,15 @@ public sealed class RideApiIntegrationTests
                 profiles[subject] = new DriverOnboardingProfile(
                     subject, subject, "hyderabad-central", "Approved Test Driver", "+919876543210",
                     "Maruti", "Dzire", "TS09AB1234", "cab", 3,
-                    [new DriverDocumentReference("DrivingLicence", "test/licence")],
-                    "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+                    [
+                        new DriverDocumentReference("DrivingLicence", "test/licence", "Approved"),
+                        new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+                    ],
+                    "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+                    ProfilePhotoBase64: "/9j/2Q==",
+                    ProfilePhotoContentType: "image/jpeg",
+                    ProfilePhotoCapturedAtUtc: DateTimeOffset.UtcNow,
+                    ProfilePhotoApprovalStatus: "Approved");
             }
             return client;
         }
