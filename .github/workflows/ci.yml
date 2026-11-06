@@ -70,6 +70,8 @@ jobs:
       - run: npm install
       - run: npx expo config --type public
       - run: npm run typecheck
+      - name: Verify Metro can see shared mobile modules
+        run: node -e 'const path = require("node:path"); const config = require("./metro.config.js"); const shared = path.resolve(process.cwd(), "../shared"); if (!config.watchFolders.includes(shared)) throw new Error("Metro shared workspace is not configured");'
       - name: Export Android production JavaScript bundle
         run: npx expo export --platform android --output-dir "$RUNNER_TEMP/turnova-${{ matrix.app }}-android"
       - name: Verify Android production bundle
