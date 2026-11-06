@@ -130,7 +130,7 @@ Apply resource ownership checks and authorization policies to every endpoint. Ne
 
 ## 9. Realtime
 
-SignalR delivers queue-position changes, ride offers, driver location updates and trip lifecycle events. Ride offers are persisted with a notification-pending marker before publication. A hosted outbox worker retries pending notifications and marks them sent with an ETag update. Delivery is at-least-once: a crash after SignalR send but before the sent marker can produce duplicates, so clients must de-duplicate by offerId. Realtime is not the source of truth: after reconnect, clients fetch authoritative current state. Initial and subsequent offers share clamped Dispatch:OfferLifetimeSeconds configuration (10–120 seconds, default 30).
+SignalR delivers ride offers, selected-driver notifications, agreement changes, driver location updates and trip lifecycle events. Ride offers are persisted with a notification-pending marker before publication. A hosted outbox worker retries pending notifications and marks them sent with an ETag update. Delivery is at-least-once: a crash after SignalR send but before the sent marker can produce duplicates, so clients must de-duplicate by offerId. Realtime is not the source of truth: on initial connection and every reconnect, Rider reloads owner-scoped ride history/current ride details and agreement versions; Driver reloads its available requests and owner-scoped selected/active ride history. Missed events never determine the recovered state. Initial and subsequent legacy offers share clamped Dispatch:OfferLifetimeSeconds configuration (10–120 seconds, default 30).
 
 Authenticate hub connections, scope groups, rate-limit events and protect location privacy. Do not expose precise driver location to unrelated riders.
 
