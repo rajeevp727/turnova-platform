@@ -794,3 +794,28 @@ These CI steps validate production JavaScript bundling for both apps and platfor
 
 
 The two Expo apps share modules from `src/mobile/shared`; each app's Metro configuration adds only that shared directory to `watchFolders` and leaves Metro's default hierarchical dependency resolution intact. This is required for production bundling and does not introduce a new runtime integration.
+
+
+
+## 15. AI-01 — bounded Rider trip intent and approved-content help
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-001 | Rider describes “from … to …” Cab trip | API returns pickup/drop-off draft, Cab category, passenger count and explicit review requirement; no booking or ride is created | API integration + mobile | P0 |
+| AI-002 | Trip text omits pickup or destination | Missing fields are returned for manual completion; no location is invented | Unit + API | P0 |
+| AI-003 | Passenger count is outside 1–6 | Passenger count is null and clarification is required; value is not clamped | Unit | P0 |
+| AI-004 | Provider receives trip-intent prompt | Provider sees only fixed route placeholders and allow-listed generic intent tokens; exact pickup/drop-off, email, phone and arbitrary free text are absent | Unit/security | P0 |
+| AI-005 | Provider is disabled or unavailable | Deterministic local draft is returned with source marked as fallback | Unit + API | P0 |
+| AI-006 | Provider returns wrong service class, route token or passenger count | Provider output is rejected; local Cab draft is returned | Unit | P0 |
+| AI-007 | Provider times out or transient HTTP call fails | Deterministic fallback is returned within the configured timeout | Unit | P0 |
+| AI-008 | Caller cancels an assistance request | Cancellation propagates; it is not converted into a successful fallback response | Unit | P1 |
+| AI-009 | Rider requests a known ride-state explanation | Exact approved in-repository state explanation is returned; no ride state is changed | Unit + API | P0 |
+| AI-010 | Rider/Driver asks approved product help | Provider may select only an approved source ID; API returns the exact in-repository answer | Unit + API | P0 |
+| AI-011 | Question is unsupported or provider source ID is unknown | Safe escalation response is returned; no policy, fare, ETA or support SLA is fabricated | Unit + API | P0 |
+| AI-012 | Driver calls Rider trip-intent endpoint | HTTP 403; only Rider role may request a trip draft | API security | P0 |
+| AI-013 | Rider or Driver calls help endpoint | Authenticated Rider and Driver succeed; unauthenticated callers receive 401 | API security | P0 |
+| AI-014 | Caller exceeds assistance request limit | Further requests receive HTTP 429 within that caller's rate-limit partition | API abuse control | P1 |
+| AI-015 | Prompt/log privacy review | Precise route, identity/KYC, phone/email, payment details, tokens and private chat are not sent to provider or written to logs | Security review | P0 |
+| AI-016 | AI output attempts to set fare, approve KYC, rank drivers or change ride state | Contract exposes none of these operations; only a human-reviewed draft or approved help source can be returned | Architecture + tests | P0 |
+
+The CI provider is a deterministic fake. Live provider sandbox behavior, managed-secret wiring and data-processing terms are not claimed until infrastructure is configured. AI assistance must never invoke booking, fare agreement, payment, eligibility, discovery ordering or ride-state mutation endpoints.
