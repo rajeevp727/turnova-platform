@@ -1267,7 +1267,7 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         return Results.BadRequest(new { message = "Passenger count must be between 1 and 6." });
     if (request.PickupLatitude is null or < -90 or > 90 || request.PickupLongitude is null or < -180 or > 180)
         return Results.BadRequest(new { message = "Valid pickup coordinates are required." });
-    var serviceClass = request.ServiceClass?.Trim().ToLowerInvariant();
+    var serviceClass = request.ServiceClass?.Trim().ToLowerInvariant() ?? string.Empty;
     if (!string.Equals(serviceClass, "cab", StringComparison.OrdinalIgnoreCase))
         return Results.BadRequest(new { message = "Only Cab rides are supported in the TurnOva MVP." });
     var dispatchZoneId = ResolveDispatchZone(request.PickupLatitude.Value, request.PickupLongitude.Value);
