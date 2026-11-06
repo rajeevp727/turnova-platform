@@ -4,6 +4,7 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TurnOva.Application.Dispatch;
+using TurnOva.Domain.Dispatch;
 
 namespace TurnOva.API;
 
