@@ -2488,6 +2488,289 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, (await driver.GetAsync($"/api/v1/rides/{rideId}/agreements")).StatusCode);
     }
 
+
+    [Theory]
+    [InlineData(500.00, 400.00, 100.00)]
+    [InlineData(500.00, 500.00, 0.00)]
+    [InlineData(400.00, 500.00, -100.00)]
+    [InlineData(400.75, 400.50, 0.25)]
+    [InlineData(500.00, 0.00, 500.00)]
+    public async Task DriverCanReportDirectPaymentWithSignedDeltaAndUnverifiedStatus(
+        decimal agreedAmount, decimal amountReceived, decimal expectedDelta)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-report-driver";
+        const string unionId = "payment-report-union";
+        using var rider = factory.CreateClient("Rider", "payment-report-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "payment-report-" + agreedAmount, agreedAmount);
+
+        using var request = CreatePaymentReportRequest(rideId, "payment-report-key", amountReceived);
+        using var response = await driver.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var report = json.RootElement;
+        Assert.Equal(rideId, report.GetProperty("rideId").GetString());
+        Assert.Equal(1, report.GetProperty("agreementVersion").GetInt32());
+        Assert.Equal(unionId, report.GetProperty("unionId").GetString());
+        Assert.Equal(agreedAmount, report.GetProperty("agreedAmount").GetDecimal());
+        Assert.Equal(amountReceived, report.GetProperty("amountReceived").GetDecimal());
+        Assert.Equal(expectedDelta, report.GetProperty("delta").GetDecimal());
+        Assert.Equal("INR", report.GetProperty("currency").GetString());
+        Assert.Equal(driverId, report.GetProperty("reportedByDriverId").GetString());
+        Assert.Equal("DriverReportedUnverified", report.GetProperty("status").GetString());
+
+        var stored = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId];
+        Assert.Equal(expectedDelta, stored.PaymentReconciliation!.Delta);
+        Assert.Equal("DriverReportedUnverified", stored.PaymentReconciliation.Status);
+        var history = await driver.GetFromJsonAsync<List<JsonElement>>("/api/v1/driver/rides/mine");
+        var historyItem = history!.Single(item => item.GetProperty("rideId").GetString() == rideId);
+        Assert.Equal(expectedDelta,
+            historyItem.GetProperty("paymentReconciliation").GetProperty("delta").GetDecimal());
+    }
+
+    [Fact]
+    public async Task DriverPaymentReportUsesTheConfirmedAgreementCurrency()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-currency-driver";
+        using var rider = factory.CreateClient("Rider", "payment-currency-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, "payment-currency-union", "payment-currency", 500m, "USD");
+
+        using var request = CreatePaymentReportRequest(rideId, "payment-currency-key", 450m);
+        using var response = await driver.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("USD", json.RootElement.GetProperty("currency").GetString());
+        Assert.Equal(50m, json.RootElement.GetProperty("delta").GetDecimal());
+    }
+
+    [Theory]
+    [InlineData(-1.00)]
+    [InlineData(10.123)]
+    public async Task DriverPaymentReportRejectsNegativeOrExcessPrecision(decimal amountReceived)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-invalid-driver";
+        using var rider = factory.CreateClient("Rider", "payment-invalid-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, "payment-invalid-union", "payment-invalid-" + amountReceived, 500m);
+
+        using var request = CreatePaymentReportRequest(rideId, "payment-invalid-key", amountReceived);
+        using var response = await driver.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId]
+            .PaymentReconciliation);
+    }
+
+    [Fact]
+    public async Task DriverPaymentReportRequiresAnIdempotencyKey()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-no-key-driver";
+        using var rider = factory.CreateClient("Rider", "payment-no-key-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, "payment-no-key-union", "payment-no-key", 500m);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/v1/driver/rides/{rideId}/payment-report")
+        {
+            Content = JsonContent.Create(new { amountReceived = 400m })
+        };
+        using var response = await driver.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DriverPaymentReportRequiresCompletedRideAndAssignedDriver()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-state-driver";
+        using var rider = factory.CreateClient("Rider", "payment-state-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var negotiatingRideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, driverId, "payment-state-union", "payment-state-negotiating", 500m);
+
+        using var beforeCompletion = CreatePaymentReportRequest(
+            negotiatingRideId, "payment-state-before-completion", 400m);
+        using var blocked = await driver.SendAsync(beforeCompletion);
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+
+        const string completedDriverId = "payment-owner-driver";
+        using var completedRider = factory.CreateClient("Rider", "payment-owner-rider");
+        using var completedDriver = factory.CreateClient("Driver", completedDriverId);
+        var completedRideId = await CreateCompletedSelectedRideAsync(
+            factory, completedRider, completedDriver, completedDriverId, "payment-owner-union", "payment-owner", 500m);
+        using var otherDriver = factory.CreateClient("Driver", "payment-other-driver");
+        using var wrongOwnerRequest = CreatePaymentReportRequest(
+            completedRideId, "payment-wrong-owner", 400m);
+        using var wrongOwner = await otherDriver.SendAsync(wrongOwnerRequest);
+        Assert.Equal(HttpStatusCode.NotFound, wrongOwner.StatusCode);
+
+        using var riderRequest = CreatePaymentReportRequest(
+            completedRideId, "payment-rider-forbidden", 400m);
+        using var riderForbidden = await completedRider.SendAsync(riderRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, riderForbidden.StatusCode);
+    }
+
+    [Fact]
+    public async Task PaymentReportIsIdempotentAndCannotBeOverwritten()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-idempotent-driver";
+        using var rider = factory.CreateClient("Rider", "payment-idempotent-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, "payment-idempotent-union", "payment-idempotent", 500m);
+
+        using var firstRequest = CreatePaymentReportRequest(rideId, "payment-idempotent-key", 400m);
+        using var first = await driver.SendAsync(firstRequest);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        using var retryRequest = CreatePaymentReportRequest(rideId, "payment-idempotent-key", 400m);
+        using var retry = await driver.SendAsync(retryRequest);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+
+        using var changedPayloadRequest = CreatePaymentReportRequest(rideId, "payment-idempotent-key", 450m);
+        using var changedPayload = await driver.SendAsync(changedPayloadRequest);
+        Assert.Equal(HttpStatusCode.Conflict, changedPayload.StatusCode);
+
+        using var newKeyRequest = CreatePaymentReportRequest(rideId, "payment-idempotent-new-key", 400m);
+        using var newKey = await driver.SendAsync(newKeyRequest);
+        Assert.Equal(HttpStatusCode.Conflict, newKey.StatusCode);
+
+        Assert.Equal(400m, factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId]
+            .PaymentReconciliation!.AmountReceived);
+    }
+
+    [Fact]
+    public async Task ConcurrentPaymentReportsCannotOverwriteTheFirstReport()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-race-driver";
+        using var rider = factory.CreateClient("Rider", "payment-race-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, "payment-race-union", "payment-race", 500m);
+
+        using var firstRequest = CreatePaymentReportRequest(rideId, "payment-race-a", 400m);
+        using var secondRequest = CreatePaymentReportRequest(rideId, "payment-race-b", 450m);
+        var responses = await Task.WhenAll(driver.SendAsync(firstRequest), driver.SendAsync(secondRequest));
+        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.OK));
+        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        foreach (var response in responses) response.Dispose();
+        Assert.Contains(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId]
+            .PaymentReconciliation!.AmountReceived, new[] { 400m, 450m });
+    }
+
+    [Fact]
+    public async Task UnionManagerSeesOnlyItsMinimalPaymentReconciliationRecords()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var riderA = factory.CreateClient("Rider", "payment-union-rider-a");
+        using var driverA = factory.CreateClient("Driver", "payment-union-driver-a");
+        const string unionA = "payment-union-a";
+        var rideA = await CreateCompletedSelectedRideAsync(
+            factory, riderA, driverA, "payment-union-driver-a", unionA, "payment-union-a", 500m);
+        using var reportARequest = CreatePaymentReportRequest(rideA, "payment-union-report-a", 450m);
+        using var reportA = await driverA.SendAsync(reportARequest);
+        Assert.Equal(HttpStatusCode.OK, reportA.StatusCode);
+
+        using var riderB = factory.CreateClient("Rider", "payment-union-rider-b");
+        using var driverB = factory.CreateClient("Driver", "payment-union-driver-b");
+        const string unionB = "payment-union-b";
+        var rideB = await CreateCompletedSelectedRideAsync(
+            factory, riderB, driverB, "payment-union-driver-b", unionB, "payment-union-b", 700m);
+        using var reportBRequest = CreatePaymentReportRequest(rideB, "payment-union-report-b", 650m);
+        using var reportB = await driverB.SendAsync(reportBRequest);
+        Assert.Equal(HttpStatusCode.OK, reportB.StatusCode);
+
+        using var managerA = factory.CreateUnionManagerClient(unionA, "payment-union-manager-a");
+        using var managerB = factory.CreateUnionManagerClient(unionB, "payment-union-manager-b");
+        using var managerWithoutUnion = factory.CreateClient("UnionManager", "payment-union-manager-unscoped");
+
+        using var responseA = await managerA.GetAsync("/api/v1/union/reconciliation");
+        Assert.Equal(HttpStatusCode.OK, responseA.StatusCode);
+        using var jsonA = JsonDocument.Parse(await responseA.Content.ReadAsStringAsync());
+        var recordsA = jsonA.RootElement.EnumerateArray().ToArray();
+        var recordA = Assert.Single(recordsA);
+        Assert.Equal(rideA, recordA.GetProperty("rideId").GetString());
+        Assert.Equal(unionA, recordA.GetProperty("unionId").GetString());
+        Assert.False(recordA.TryGetProperty("riderId", out _));
+        Assert.False(recordA.TryGetProperty("pickup", out _));
+        Assert.False(recordA.TryGetProperty("dropoff", out _));
+        Assert.False(recordA.TryGetProperty("stops", out _));
+        Assert.False(recordA.TryGetProperty("phoneNumber", out _));
+        Assert.False(recordA.TryGetProperty("driverLatitude", out _));
+        Assert.False(recordA.TryGetProperty("privateChat", out _));
+
+        using var responseB = await managerB.GetAsync("/api/v1/union/reconciliation");
+        Assert.Equal(HttpStatusCode.OK, responseB.StatusCode);
+        using var jsonB = JsonDocument.Parse(await responseB.Content.ReadAsStringAsync());
+        Assert.Equal(rideB, Assert.Single(jsonB.RootElement.EnumerateArray())
+            .GetProperty("rideId").GetString());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await managerWithoutUnion.GetAsync("/api/v1/union/reconciliation")).StatusCode);
+    }
+
+    private static async Task<string> CreateSelectedRideWithConfirmedAgreementAsync(
+        TurnOvaApiFactory factory, HttpClient rider, HttpClient driver,
+        string driverId, string unionId, string bookingKey, decimal agreedAmount, string currency = "INR")
+    {
+        SeedBookableDriver(factory, driverId, unionId);
+        using var bookingRequest = CreateSelectedBookingRequest(
+            bookingKey, driverId, unionId, "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(bookingRequest);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+
+        using var proposal = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = agreedAmount, currency })
+        };
+        proposal.Headers.Add("Idempotency-Key", "payment-agreement-" + bookingKey);
+        using var proposalResponse = await rider.SendAsync(proposal);
+        Assert.Equal(HttpStatusCode.Created, proposalResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+        return rideId;
+    }
+
+    private static async Task<string> CreateCompletedSelectedRideAsync(
+        TurnOvaApiFactory factory, HttpClient rider, HttpClient driver,
+        string driverId, string unionId, string bookingKey, decimal agreedAmount, string currency = "INR")
+    {
+        var rideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, driverId, unionId, bookingKey, agreedAmount, currency);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/start", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null)).StatusCode);
+        return rideId;
+    }
+
+    private static HttpRequestMessage CreatePaymentReportRequest(string rideId, string idempotencyKey, decimal amountReceived)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/driver/rides/{rideId}/payment-report")
+        {
+            Content = JsonContent.Create(new { amountReceived })
+        };
+        request.Headers.Add("Idempotency-Key", idempotencyKey);
+        return request;
+    }
+
     private static async Task ConfirmRideAgreementAsync(
         TurnOvaApiFactory factory, HttpClient rider, HttpClient driver, string rideId, string driverId)
     {
