@@ -508,6 +508,24 @@ public sealed class RideApiIntegrationTests
         using var auditJson = JsonDocument.Parse(await auditResponse.Content.ReadAsStringAsync());
         Assert.Single(auditJson.RootElement.EnumerateArray(),
             item => item.GetProperty("eventType").GetString() == "SelfieApprovedByUnion");
+
+        using var operationsRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Vehicle image requires a clearer review photo." });
+        Assert.Equal(HttpStatusCode.OK, operationsRejection.StatusCode);
+        Assert.Equal("Rejected", profiles[driverId].ProfilePhotoApprovalStatus);
+        using var discoveryAfterRejection = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        using var rejectedJson = JsonDocument.Parse(await discoveryAfterRejection.Content.ReadAsStringAsync());
+        var rejectedDriver = rejectedJson.RootElement.GetProperty("unions").EnumerateArray()
+            .Single(group => group.GetProperty("unionId").GetString() == unionId)
+            .GetProperty("drivers").EnumerateArray().Single();
+        Assert.Equal(JsonValueKind.Null, rejectedDriver.GetProperty("profilePhotoBase64").ValueKind);
+
+        using var rejectedAuditResponse = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+        using var rejectedAuditJson = JsonDocument.Parse(await rejectedAuditResponse.Content.ReadAsStringAsync());
+        Assert.Contains(rejectedAuditJson.RootElement.EnumerateArray(), item =>
+            item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
     }
 
     [Fact]
@@ -532,12 +550,27 @@ public sealed class RideApiIntegrationTests
         using var oldManager = factory.CreateUnionManagerClient(oldUnionId, "old-union-manager");
         using var newManager = factory.CreateUnionManagerClient(newUnionId, "new-union-manager");
 
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var approvedDocuments = profiles[driverId].Documents;
+        profiles[driverId] = profiles[driverId] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/licence", "Pending"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
+        using var unverifiedTransfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason = "Driver moved to the new Cab union." });
+        Assert.Equal(HttpStatusCode.Conflict, unverifiedTransfer.StatusCode);
+        profiles[driverId] = profiles[driverId] with { Documents = approvedDocuments };
+
         using var transfer = await ops.PostAsJsonAsync(
             $"/api/v1/ops/drivers/{driverId}/union-assignment",
             new { unionId = newUnionId, reason = "Driver moved to the new Cab union." });
         Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
 
-        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         var transferredProfile = profiles[driverId];
         Assert.Equal("Pending", transferredProfile.ProfilePhotoApprovalStatus);
         Assert.Null(transferredProfile.ProfilePhotoApprovedByUnionId);
