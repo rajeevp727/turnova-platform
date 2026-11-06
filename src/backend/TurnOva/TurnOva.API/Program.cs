@@ -671,13 +671,10 @@ app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, Cance
     try
     {
         await storageReadiness.CheckAsync(ct);
-        return Results.Ok(new
-        {
-            service = "TurnOva.API",
-            status = "ready",
-            storage = storageMode,
-            database = useCosmos ? databaseName : null
-        });
+        if (!useCosmos)
+            return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode });
+
+        return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode, database = databaseName });
     }
     catch (StorageReadinessException ex)
     {
