@@ -388,6 +388,94 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task LegacyNonCabDriverCannotEnterNewSelfieQueueLocationOrOfferWorkflows()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-legacy-guard-test");
+        using var driver = factory.CreateClient("Driver", "driver-legacy-auto");
+        using var ops = factory.CreateClient("Rider", "ops-legacy-guard-test");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var existing = profiles["driver-legacy-auto"];
+        profiles["driver-legacy-auto"] = existing with
+        {
+            ServiceClass = "auto",
+            Status = "Approved",
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoBase64 = "/9j/",
+            ProfilePhotoApprovalStatus = "Pending"
+        };
+
+        var now = DateTimeOffset.UtcNow;
+        var union = new DriverUnion(
+            "legacy-guard-union", "Legacy Guard Union", "LEGACY-GUARD", "Hyderabad",
+            "Union Manager", null, ["hyderabad-central"], ["cab"], "Active", now, now);
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[union.UnionId] = union;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()
+            ["driver-legacy-auto"] = new DriverUnionAssignment(
+                "driver-legacy-auto", union.UnionId, union.Name, "Active", now, now, "Legacy guard test");
+
+        var pendingOffer = new RideOfferState(
+            "legacy-cab-offer", "hyderabad-central", "cab", "legacy-cab-offer-1",
+            "driver-legacy-auto", now, now.AddMinutes(1), RideOfferStatuses.Pending,
+            [new RideOfferAttempt("legacy-cab-offer-1", "driver-legacy-auto", now, now.AddMinutes(1), RideOfferStatuses.Pending)]);
+        Assert.True(await factory.Services.GetRequiredService<IRideOfferStore>().TryCreateAsync(pendingOffer));
+
+        using var selfie = await driver.PutAsJsonAsync(
+            "/api/v1/driver/onboarding/selfie", new { profilePhotoBase64 = "/9j/" });
+        Assert.Equal(HttpStatusCode.Conflict, selfie.StatusCode);
+
+        using var approval = new HttpRequestMessage(
+            HttpMethod.Post, "/api/v1/ops/drivers/driver-legacy-auto/review")
+        {
+            Content = JsonContent.Create(new { status = "Approved", reason = (string?)null })
+        };
+        approval.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.Conflict, (await ops.SendAsync(approval)).StatusCode);
+
+        using var selfieApproval = new HttpRequestMessage(
+            HttpMethod.Put, $"/api/v1/ops/unions/{union.UnionId}/drivers/driver-legacy-auto/selfie-review")
+        {
+            Content = JsonContent.Create(new { status = "Approved", reason = (string?)null })
+        };
+        selfieApproval.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.Conflict, (await ops.SendAsync(selfieApproval)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await driver.GetAsync("/api/v1/zones/hyderabad-central/queues/auto")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await driver.GetAsync("/api/v1/zones/hyderabad-central/queues/auto/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await driver.PostAsJsonAsync("/api/v1/driver/location",
+                new { latitude = 17.494, longitude = 78.400 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await driver.GetAsync("/api/v1/driver/rides/available")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await driver.GetAsync("/api/v1/driver/offers/pending")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await driver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null)).StatusCode);
+
+        var ride = await CreateRideAsync(rider, "legacy-auto-reject-guard");
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[ride.RideId] = rides[ride.RideId] with { ServiceClass = "auto" };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null)).StatusCode);
+
+        var queue = factory.Services.GetRequiredService<IQueueStore>();
+        await queue.AddAsync(new DriverQueueEntry(
+            "driver-legacy-auto", "hyderabad-central", "auto", now, 0, true), CancellationToken.None);
+        using var offline = await driver.PostAsJsonAsync(
+            "/api/v1/driver/availability", new { isOnline = false });
+        Assert.Equal(HttpStatusCode.OK, offline.StatusCode);
+        Assert.Equal("auto", profiles["driver-legacy-auto"].ServiceClass);
+        Assert.Equal("Offline", profiles["driver-legacy-auto"].AvailabilityStatus);
+        Assert.Empty(await queue.GetEligibleAsync("hyderabad-central", "auto", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task DriverOnboardingRejectsNonCabWithoutCreatingOrOverwritingProfile()
     {
         using var factory = new TurnOvaApiFactory();

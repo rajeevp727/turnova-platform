@@ -656,3 +656,13 @@ Do not test or implement platform fare estimates, in-app payment collection, gat
 | CAB-SCOPE-005 | Rider requests nearby discovery using Scooty, Bike or Auto | API rejects the request; only Cab discovery is accepted | API integration | P0 |
 | CAB-SCOPE-006 | Existing ride-history records contain legacy non-Cab service classes | History remains readable without changing the stored category | API integration/data-retention | P1 |
 
+
+
+### CAB-SCOPE-01 follow-up — legacy non-Cab action guards
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| CAB-SCOPE-007 | Existing non-Cab Driver replaces a selfie or Operations attempts to approve the profile/selfie for new Cab eligibility | API rejects the action; legacy service class and existing history remain unchanged | API integration/security | P0 |
+| CAB-SCOPE-008 | Existing non-Cab Driver reads a queue, pending offer or available-ride endpoint | No non-Cab queue or actionable offer is exposed; new queue reads are Cab-only | API integration/security | P0 |
+| CAB-SCOPE-009 | Existing non-Cab Driver attempts location sharing, rejection or offer timeout | New activity is rejected; the Driver can still go Offline to remove stale legacy queue membership | API integration/concurrency | P0 |
+| CAB-SCOPE-010 | Existing non-Cab Driver opens the mobile app | Profile/history remain readable; queue polling, actionable requests and SignalR offer subscription stay disabled; Offline cleanup remains available | Mobile typecheck + device | P1 |

@@ -634,6 +634,8 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         return Results.BadRequest(new { message = "Provide a valid JPEG selfie no larger than 300 KB." });
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.NotFound(new { message = "Complete driver onboarding before adding a profile selfie." });
+    if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "Legacy non-Cab profiles cannot update a selfie for new MVP eligibility." });
     var updated = profile with
     {
         ProfilePhotoBase64 = request.ProfilePhotoBase64,
@@ -718,6 +720,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
     if (profile is null) return Results.NotFound();
     if (profile.Status == "Suspended" && request.Status == "Approved")
         return Results.Conflict(new { message = "A suspended driver cannot be re-approved through this endpoint." });
+    if (request.Status == "Approved" && !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "Legacy non-Cab profiles cannot be approved for new MVP workflows." });
     if (request.Status == "Approved" &&
         (!profile.Documents.Any(document => document.DocumentType == "DrivingLicence") ||
          !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration")))
@@ -846,6 +850,8 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null || string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
         return Results.NotFound(new { message = "Driver selfie not found." });
+    if (request.Status == "Approved" && !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "Legacy non-Cab driver photos cannot be approved for new public discovery." });
 
     var updated = profile with
     {
@@ -1089,6 +1095,8 @@ app.MapPost("/api/v1/driver/location", async (
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null || profile.AvailabilityStatus != "Online")
         return Results.Conflict(new { message = "Only an approved online driver can share availability location." });
+    if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "Legacy non-Cab profiles cannot share location for new MVP workflows." });
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "Availability location is paused while you have an active ride." });
 
@@ -1144,6 +1152,8 @@ app.MapGet("/api/v1/zones", () => Results.Ok(new[]
 app.MapGet("/api/v1/zones/{zoneId}/queues/{serviceClass}", async (
     string zoneId, string serviceClass, QueueService service, CancellationToken ct) =>
 {
+    if (!string.Equals(serviceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest(new { message = "Only the Cab queue is available in the MVP." });
     var entries = await service.GetPositionedQueueAsync(zoneId, serviceClass, ct);
     return Results.Ok(entries.Select((entry, index) => new
     {
@@ -1161,6 +1171,8 @@ app.MapGet("/api/v1/zones/{zoneId}/queues/{serviceClass}/me", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId))
         return Results.Forbid();
+    if (!string.Equals(serviceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest(new { message = "Only the Cab queue is available in the MVP." });
 
     var entries = await service.GetPositionedQueueAsync(zoneId, serviceClass, ct);
     var position = entries.ToList().FindIndex(entry => entry.DriverId == driverId);
@@ -1343,9 +1355,13 @@ app.MapGet("/api/v1/driver/offers/pending", async (ClaimsPrincipal user, Cancell
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (profile is null || !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.NoContent();
     var store = app.Services.GetRequiredService<IRideOfferStore>();
     var offer = await store.GetPendingForDriverAsync(driverId, ct);
-    if (offer is null) return Results.NoContent();
+    if (offer is null || !string.Equals(offer.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.NoContent();
     if (offer.IsExpiredAt(TimeProvider.System.GetUtcNow()))
         return Results.Conflict(new { message = "The offer has expired." });
     return Results.Ok(new
@@ -1473,7 +1489,8 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (profile is null || profile.AvailabilityStatus != "Online") return Results.Forbid();
+    if (profile is null || profile.AvailabilityStatus != "Online" ||
+        !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.Status != "Requested" || ride.Passengers > profile.PassengerCapacity ||
         !string.Equals(ride.DispatchZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
@@ -1533,7 +1550,8 @@ app.MapPost("/api/v1/queues/{zoneId}/{serviceClass}/offer-timeout", async (
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
 
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (profile is null || profile.AvailabilityStatus != "Online") return Results.Forbid();
+    if (profile is null || profile.AvailabilityStatus != "Online" ||
+        !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)) return Results.Forbid();
     if (!string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(profile.ServiceClass, serviceClass, StringComparison.OrdinalIgnoreCase))
         return Results.Forbid();
