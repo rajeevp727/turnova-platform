@@ -1879,7 +1879,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
     var isDriver = user.IsInRole("Driver") && ride?.DriverId == actorId;
     if (ride is null || string.IsNullOrWhiteSpace(actorId) || (!isRider && !isDriver))
         return Results.NotFound(new { message = "Ride not found." });
-    if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived" or "InProgress"))
+    if (ride.Status is not ("Selected" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
         return Results.Conflict(new { message = "Fare negotiation is not available in the current ride state." });
     if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount ||
         request.Currency is null || request.Currency.Length != 3 ||
@@ -1897,7 +1897,8 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
     var driver = await FindDriverProfileAsync(ride.DriverId!, ct);
     if (union?.Status != "Active" || driver?.Status != "Approved" ||
         !string.Equals(driver.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
-        !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
+        !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase) ||
+        (ride.UnionId is not null && ride.UnionId != assignment.UnionId))
         return Results.Conflict(new { message = "The selected Driver or Union is not eligible for Cab negotiation." });
 
     var versions = ride.AgreementVersions ?? [];
@@ -1916,12 +1917,13 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
 
     var version = new RideAgreementVersion(
         rideId, (versions.LastOrDefault()?.Version ?? 0) + 1,
-        ride.RiderId, ride.DriverId!, assignment.UnionId, request.Amount, request.Currency,
-        ride.Pickup, ride.Dropoff, [], isRider ? "Rider" : "Driver", scopedIdempotencyKey, DateTimeOffset.UtcNow);
+        ride.RiderId, ride.DriverId!, ride.UnionId ?? assignment.UnionId, request.Amount, request.Currency,
+        ride.Pickup, ride.Dropoff, ride.Stops ?? [], isRider ? "Rider" : "Driver", scopedIdempotencyKey, DateTimeOffset.UtcNow);
     var updated = ride with
     {
         AgreementVersions = [.. versions, version],
-        AgreementStateRevision = ride.AgreementStateRevision + 1
+        AgreementStateRevision = ride.AgreementStateRevision + 1,
+        Status = ride.Status == "AgreementConfirmed" ? "Negotiating" : ride.Status
     };
     if (!await TryReplaceRideAsync(ride, updated, ct))
     {
@@ -1958,7 +1960,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
     var isDriver = user.IsInRole("Driver") && ride?.DriverId == actorId;
     if (ride is null || string.IsNullOrWhiteSpace(actorId) || (!isRider && !isDriver))
         return Results.NotFound(new { message = "Ride agreement not found." });
-    if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived" or "InProgress"))
+    if (ride.Status is not ("Selected" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
         return Results.Conflict(new { message = "Agreement confirmation is closed for this ride state." });
 
     var versions = ride.AgreementVersions ?? [];
@@ -1971,21 +1973,24 @@ app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
     var existing = confirmations.FirstOrDefault(item => item.Version == version && item.Party == party);
     if (existing is not null && existing.ActorId != actorId)
         return Results.Conflict(new { message = "This agreement party has already been confirmed by a different account." });
+
+    var nextConfirmations = existing is null
+        ? new[] { .. confirmations, new RideAgreementConfirmation(rideId, version, party, actorId, DateTimeOffset.UtcNow) }
+        : confirmations.ToArray();
+    var riderConfirmed = nextConfirmations.Any(item => item.Version == version && item.Party == "Rider" && item.ActorId == current.RiderId);
+    var driverConfirmed = nextConfirmations.Any(item => item.Version == version && item.Party == "Driver" && item.ActorId == current.DriverId);
     if (existing is null)
     {
-        var confirmation = new RideAgreementConfirmation(rideId, version, party, actorId, DateTimeOffset.UtcNow);
         var updated = ride with
         {
-            AgreementConfirmations = [.. confirmations, confirmation],
-            AgreementStateRevision = ride.AgreementStateRevision + 1
+            AgreementConfirmations = nextConfirmations,
+            AgreementStateRevision = ride.AgreementStateRevision + 1,
+            Status = ride.Status == "Negotiating" && riderConfirmed && driverConfirmed
+                ? "AgreementConfirmed" : ride.Status
         };
         if (!await TryReplaceRideAsync(ride, updated, ct))
             return Results.Conflict(new { message = "Agreement changed concurrently. Refresh and confirm the current version." });
-        confirmations = updated.AgreementConfirmations!;
     }
-
-    var riderConfirmed = confirmations.Any(item => item.Version == version && item.Party == "Rider" && item.ActorId == ride.RiderId);
-    var driverConfirmed = confirmations.Any(item => item.Version == version && item.Party == "Driver" && item.ActorId == ride.DriverId);
     await hub.Clients.Group(rideId).SendAsync("RideAgreementChanged",
         new { rideId, version, riderConfirmed, driverConfirmed }, ct);
     return Results.Ok(new { rideId, version, riderConfirmed, driverConfirmed, mutuallyConfirmed = riderConfirmed && driverConfirmed });
