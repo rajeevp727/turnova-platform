@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12 and 14; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #37 merge `65f6733375a6a12b3bd518fb6f97469c6ab67ac3`.
+**Last audited:** 2026-11-06 against main after PR #40 merge `c51652cf1e4502c5b9927f14bf7094472713d29d`.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -16,7 +16,7 @@
 
 | ID | In-scope acceptance criterion | Implementation evidence currently known | Evidence still required | Status |
 |---|---|---|---|---|
-| AUTH-01 | Rider and Driver registration, login, profile and role separation | TriSend email/password integration documented in README; JWT role boundaries described in test plan | Fake-TriSend API contract/integration tests for success, errors, duplicate registration, role mismatch; mobile runtime/session tests | In progress |
+| AUTH-01 | Rider and Driver registration, login, profile and role separation | PR #35 fake-TriSend API integration tests; PR #39 JWT signature/issuer/audience/expiry and Rider/Driver role-boundary integration tests; PR #40 startup JWT/TriSend HTTPS configuration guards | Duplicate-registration contract and mobile runtime/session tests; end-to-end profile lifecycle | In progress |
 | AUTH-02 | Secure access/refresh-token lifecycle and logout | SecureStore and refresh flow documented for both apps | Automated refresh rotation/reuse/concurrency, restart, expiry, logout and secure-storage failure tests on both apps | In progress |
 | RIDER-01 | Pickup/drop-off selection, location permission, nearby compatible vehicles and capacity | Rider booking and service-class selection exist in the MVP codebase; zone matching is part of dispatch design | Physical-device location permission tests, configured-zone boundary tests, nearby vehicle/capacity acceptance | In progress |
 | RIDER-02 | Fare estimate and clear trip details before confirmation | No verified implementation evidence recorded in this audit | Fare policy decision; estimate API/UI tests for all service classes and passenger counts | In progress |
