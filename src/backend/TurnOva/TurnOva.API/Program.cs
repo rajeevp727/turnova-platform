@@ -504,7 +504,7 @@ async Task<DemoRide> AddSelectedDriverSummaryAsync(DemoRide ride, CancellationTo
         profile.PassengerCapacity,
         photoApprovedForRideUnion ? profile.ProfilePhotoBase64 : null,
         photoApprovedForRideUnion ? profile.ProfilePhotoContentType : null,
-        union.UnionId, union.Name);
+        union.UnionId, union.Name, ride.DriverToPickupDistanceKm);
     return ride with { SelectedDriver = summary };
 }
 
@@ -1489,7 +1489,7 @@ app.MapPost("/api/v1/rides/select-driver", async (
         }
     }
 
-    var ttlSeconds = Math.Clamp(app.Configuration.GetValue<int?>("DriverSelection:ReservationTtlSeconds") ?? 600, 60, 1800);
+    var ttlSeconds = Math.Clamp(app.Configuration.GetValue<int?>("DriverSelection:ReservationTtlSeconds") ?? 600, 1, 1800);
     var now = DateTimeOffset.UtcNow;
     var expiresAt = now.AddSeconds(ttlSeconds);
     if (!await driverRideReservations.TryAcquireUntilAsync(request.DriverId, rideId, expiresAt, ct))
@@ -1505,7 +1505,10 @@ app.MapPost("/api/v1/rides/select-driver", async (
         "Negotiating", now, null, riderId, profile.DriverId,
         request.PickupLatitude, request.PickupLongitude, null, null, null, null,
         LocationSharingActive: false, ServiceClass: "cab", DispatchZoneId: zoneId,
-        UnionId: union.UnionId, Stops: stops, NegotiationExpiresAtUtc: expiresAt);
+        UnionId: union.UnionId, Stops: stops, NegotiationExpiresAtUtc: expiresAt,
+        DriverToPickupDistanceKm: Math.Round(CalculateDistanceKm(
+            request.PickupLatitude, request.PickupLongitude,
+            profile.CurrentLatitude!.Value, profile.CurrentLongitude!.Value), 1));
     try { await SaveRideAsync(ride, ct); }
     catch
     {
@@ -1967,7 +1970,7 @@ public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude);
 public sealed record NearbyUnionDriverResponse(string DriverId, string FullName, string VehicleMake, string VehicleModel, string VehicleRegistration, int PassengerCapacity, string ProfilePhotoBase64, string? ProfilePhotoContentType, double DriverToPickupDistanceKm);
 public sealed record NearbyUnionResponse(string UnionId, string UnionName, double? JourneyDistanceKm, IReadOnlyList<NearbyUnionDriverResponse> Drivers);
-public sealed record SelectedDriverSummary(string DriverId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, int PassengerCapacity, string? ProfilePhotoBase64, string? ProfilePhotoContentType, string UnionId, string UnionName);
+public sealed record SelectedDriverSummary(string DriverId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, int PassengerCapacity, string? ProfilePhotoBase64, string? ProfilePhotoContentType, string UnionId, string UnionName, double? DriverToPickupDistanceKm);
 public sealed record NearbyVehicleResponse(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
 public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt);
 public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive);
@@ -1977,7 +1980,7 @@ public sealed record PasswordLoginRequest(string Email, string Password, bool Re
 public sealed record RefreshTokenRequest(string RefreshToken);
 public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
-    string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "cab", string DispatchZoneId = "hyderabad-central", string? UnionId = null, IReadOnlyList<string>? Stops = null, DateTimeOffset? NegotiationExpiresAtUtc = null, bool HasMutuallyConfirmedAgreement = false, SelectedDriverSummary? SelectedDriver = null);
+    string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "cab", string DispatchZoneId = "hyderabad-central", string? UnionId = null, IReadOnlyList<string>? Stops = null, DateTimeOffset? NegotiationExpiresAtUtc = null, bool HasMutuallyConfirmedAgreement = false, SelectedDriverSummary? SelectedDriver = null, double? DriverToPickupDistanceKm = null);
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 
