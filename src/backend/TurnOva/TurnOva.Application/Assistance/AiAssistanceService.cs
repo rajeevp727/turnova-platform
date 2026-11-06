@@ -309,7 +309,7 @@ public sealed class AiAssistanceService
     {
         var match = PassengerPattern.Match(text);
         if (!match.Success)
-            return (1, false);
+            return (null, false);
 
         var raw = match.Groups["passengers"].Success
             ? match.Groups["passengers"].Value
