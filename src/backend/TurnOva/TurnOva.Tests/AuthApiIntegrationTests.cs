@@ -261,6 +261,51 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Theory]
+    [InlineData("Auth:Jwt:Issuer", " ")]
+    [InlineData("Auth:Jwt:Audience", " ")]
+    [InlineData("Auth:Jwt:SigningKey", " ")]
+    public void StartupRejectsMissingJwtConfiguration(string setting, string value)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Startup validation must run before TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { [setting] = value });
+
+        var exception = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(exception);
+        Assert.Contains("Auth:Jwt", exception.ToString(), StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public void StartupRejectsWeakJwtSigningKey()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Startup validation must run before TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["Auth:Jwt:SigningKey"] = "too-short" });
+
+        var exception = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(exception);
+        Assert.Contains("Auth:Jwt", exception.ToString(), StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("http://auth.test.invalid")]
+    [InlineData("not-a-valid-url")]
+    [InlineData(" ")]
+    public void StartupRejectsNonHttpsOrInvalidTriSendBaseUrl(string baseUrl)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Startup validation must run before TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["TriSend:BaseUrl"] = baseUrl });
+
+        var exception = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(exception);
+        Assert.Contains("TriSend:BaseUrl", exception.ToString(), StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
     private static string CreateToken(
         string role = "Driver",
         string issuer = Issuer,
@@ -287,20 +332,28 @@ public sealed class AuthApiIntegrationTests
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, string json) =>
         new(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
-    private sealed class AuthApiFactory(RecordingHandler handler) : WebApplicationFactory<Program>
+    private sealed class AuthApiFactory(
+        RecordingHandler handler,
+        IReadOnlyDictionary<string, string?>? overrides = null) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
             builder.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                var settings = new Dictionary<string, string?>
                 {
                     ["Auth:Jwt:Issuer"] = Issuer,
                     ["Auth:Jwt:Audience"] = Audience,
                     ["Auth:Jwt:SigningKey"] = SigningKey,
                     ["TriSend:BaseUrl"] = "https://auth.test.invalid",
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars"
-                }));
+                };
+                if (overrides is not null)
+                    foreach (var setting in overrides)
+                        settings[setting.Key] = setting.Value;
+                configuration.AddInMemoryCollection(settings);
+            });
             builder.ConfigureTestServices(services =>
                 services.AddHttpClient("TriSend")
                     .ConfigurePrimaryHttpMessageHandler(() => handler));
