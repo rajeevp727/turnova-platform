@@ -219,7 +219,7 @@ This approved Rider/Driver MVP requirement is tracked separately from the existi
 - Exact pickup/drop-off text and other sensitive personal information must not be sent to an AI provider. Route values are extracted locally and replaced by fixed placeholders before a provider call; only an allow-listed, minimized intent summary may leave the API.
 
 ### Approved-content help
-- Rider and Driver may ask for explanations of approved ride states and product help.
+- Rider and Driver may ask for explanations of approved ride/queue/availability states and product help.
 - Answers must come from version-controlled in-repository FAQ/state content. A configured provider may select an approved content identifier, but the API returns the approved repository answer rather than arbitrary generated policy or trip facts.
 - Unsupported questions must clearly require escalation; do not invent support categories, response times or contact details.
 - No ride identifier, route, precise location, identity/KYC document, phone/email, payment detail, access token or private chat content is sent to an AI provider.
