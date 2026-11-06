@@ -652,7 +652,7 @@ These supplement and supersede legacy fare-estimate, payment-gateway and automat
 | CAB-REC-001 | Agreed 500, reported 400 | Delta +100; Driver-reported/unverified shortfall | API integration | P0 |
 | CAB-REC-002 | Agreed 500, reported 500 | Delta 0; Driver-reported/unverified exact report | API integration | P0 |
 | CAB-REC-003 | Agreed 400, reported 500 | Delta -100; Driver-reported/unverified excess | API integration | P0 |
-| CAB-REC-004 | Decimal amount, zero received, negative or over-precision amount | Non-negative amounts with at most two decimals are accepted; invalid values rejected; currency is inherited from the agreement | API integration | P0 |
+| CAB-REC-004 | Missing, zero, negative, over-precision or decimal amount | An amount is mandatory; zero or more with at most two decimals is accepted; invalid values are rejected; currency is inherited from the agreement | API integration | P0 |
 | CAB-REC-005 | Unrelated Driver or Union requests reconciliation | Not found/forbidden; only the assigned Driver and claim-scoped UnionManager can read the minimum report fields | API/security | P0 |
 | CAB-REC-006 | Driver submits amount | Ride-linked report records agreement version, actor/time, currency, signed delta and DriverReportedUnverified status | API integration | P0 |
 | CAB-REC-007 | Driver reports before completion or without the current mutual agreement | Conflict; no report is stored | API integration | P0 |
