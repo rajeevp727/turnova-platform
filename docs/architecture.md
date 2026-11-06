@@ -66,12 +66,12 @@ Keep domain and application logic independent of Cosmos DB and transport concern
 - RideRequest: rider, pickup/drop-off, service type and passenger count.
 - DispatchOffer: request, candidate, expiry and response.
 - Trip: accepted assignment and trip lifecycle.
-- DispatchAuditEvent: reasoned record of queue and allocation decisions.
+- QueueAuditEvent: append-only queue join/leave/rotation record in the queue partition; RideOfferState.Attempts retain ride-offer decisions; DriverUnionAuditEvent retains union transfers.
 
 ## 6. FIFO dispatch architecture
 
 ### Queue partitioning
-Create logical queues by service zone and compatible service/vehicle class. Avoid a single citywide queue that routinely creates distant pickups. Zone boundaries and cross-zone fallback are explicit policy.
+Create logical queues by service zone and compatible service/vehicle class. Avoid a single citywide queue that routinely creates distant pickups. Zone boundaries and cross-zone fallback are explicit policy. The `QueueEntries` container is partitioned by `/zoneServiceKey`; successful queue joins, leaves and rotations append `QueueAuditEvent` documents in the same partition and are committed with the queue-state mutation in one Cosmos transactional batch. In-memory queue storage records equivalent events for tests.
 
 ### Ordering and eligibility
 The server assigns queue-entry order. A deterministic sequence and stable tie-breaker establish ordering. Clients cannot submit or modify queue rank.
@@ -88,7 +88,7 @@ The current increment adds a `DriverRideReservations` container partitioned by `
 Prevent assigning one driver to multiple active rides and prevent assigning one ride to multiple drivers. Use Cosmos DB transactional batches or conditional writes within an appropriate logical partition where possible. Cosmos DB transactions are scoped to a logical partition; do not assume cross-partition atomic transactions. Use ETags/optimistic concurrency, idempotency keys and bounded conflict retries. If invariants span partitions, revise the partition model or add a dedicated coordination mechanism before production.
 
 ### Queue lifecycle
-Model Online/Offline availability, join, unavailable, on-trip, leave, rejoin, offer-pending, accepted, rejected and timed-out states explicitly. Define whether decline/timeout retains, advances or resets position. Record every exception with reason, actor and timestamp. Never silently alter priority.
+Model Online/Offline availability, join, unavailable, on-trip, leave, rejoin, offer-pending, accepted, rejected and timed-out states explicitly. Define whether decline/timeout retains, advances or resets position. Queue mutations append an event with driver, queue scope, event type and UTC time; offer attempts remain in the ride-partitioned aggregate. Unhandled API exceptions return generic Problem Details and safe logs with traceId and exception type only. Durable exception audit with actor/reason remains an acceptance gate. Never silently alter priority.
 
 ### Dispatch flow
 1. Validate and persist the ride request.
@@ -108,7 +108,7 @@ Candidate entities/containers:
 - Service zones and configuration.
 - Queue memberships and queue events.
 - Ride requests, offers and trips.
-- Dispatch audit events.
+- Queue audit events in `QueueEntries` (`/zoneServiceKey`), offer-attempt history in `RideOffers` (`/rideId`) and union assignment history in `DriverUnionAudit` (`/driverId`).
 
 Partition keys must follow access patterns and transaction boundaries. Candidate keys include a zone/service-class queue identifier for queue operations and ride/request identifiers for trip lookups. Validate hot-partition risk, queue size, query patterns, indexing, TTL and consistency with representative load tests. Avoid cross-partition transaction assumptions.
 
@@ -142,6 +142,7 @@ Authenticate hub connections, scope groups, rate-limit events and protect locati
 - Rate limiting, input validation, abuse detection and audit logging.
 - Managed secret storage; no secrets in Git.
 - Browser CORS is deny-by-default and uses explicit origins from `Cors:AllowedOrigins`; wildcard origins are rejected. Native Android/iOS clients do not require CORS.
+- Unhandled API exceptions return generic Problem Details with a traceId; structured error logs contain traceId and exception type only, not request bodies, tokens or exception messages.
 - Minimize location/identity data and obtain appropriate consent.
 - Define retention, deletion, export and incident-response procedures.
 - Do not store raw payment-card data; use payment-provider tokenization.
@@ -153,7 +154,7 @@ Provider decisions remain open for maps/geocoding/routing, OTP/SMS, payment/refu
 
 ## 12. Deployment and operations
 
-Start with a low-cost development environment and separate development, staging and production configuration. CI should build, test and scan backend/mobile code. Use managed secrets, health checks, structured logs, metrics, distributed tracing, database backup and restore testing. Do not assume production hosting is always free; validate availability, data residency, capacity, recovery and cost. The API exposes `/health/live` for process liveness and `/health/ready` for readiness; readiness reads the configured Cosmos database in Cosmos mode and reports ready in explicit in-memory demo/test mode.
+Start with a low-cost development environment and separate development, staging and production configuration. CI should build, test and scan backend/mobile code. Use managed secrets, health checks, structured logs, metrics, distributed tracing, database backup and restore testing. Do not assume production hosting is always free; validate availability, data residency, capacity, recovery and cost. The API exposes `/health/live` for process liveness and one `/health/ready` endpoint for readiness; readiness reads the configured Cosmos database in Cosmos mode and reports ready in explicit in-memory demo/test mode. Unhandled exceptions are logged with traceId and exception type only; metrics, trace exporters, alerting and durable exception audit remain to be completed.
 
 ## 13. Test strategy
 
@@ -197,13 +198,13 @@ Ride state transitions are server-authoritative: `Requested → Accepted → Arr
 
 The Rider connects to `/hubs/rides?rideId={rideId}` using its JWT. The hub verifies Rider role and ride ownership before joining the ride-specific SignalR group. Assigned Driver location updates and ride-state changes are broadcast to that group. The Driver app sends foreground GPS updates only while the Trips screen is active and the ride is in a location-sharing state. SignalR is used for rider updates; no periodic polling is required by the normal connected path.
 
-Operational safeguards still required before production: configure a restrictive CORS origin allow-list, rate-limit location updates, define location retention/deletion policy, monitor SignalR scale-out/backplane needs, and run multi-instance Cosmos concurrency and mobile-device acceptance tests.
+Operational safeguards still required before production: configure the production `Cors:AllowedOrigins` values, rate-limit location updates, define location retention/deletion policy, add metrics/traces/alerts and durable exception audit, monitor SignalR scale-out/backplane needs, and run multi-instance Cosmos concurrency and mobile-device acceptance tests.
 
 ## 18. Cosmos DB startup and migration reliability
 
 When Cosmos mode is enabled, API startup validates the HTTPS endpoint, account key and database identifier, then runs migrations before the host begins accepting requests. Migration execution is serialized across instances with a single Cosmos-backed lease document in `MigrationLocks`. The lease is acquired using create-if-absent semantics; an expired lease can be replaced with an ETag conditional write. Release also uses the acquired ETag so one instance cannot delete a successor's lease. Applied migration IDs remain in `MigrationHistory`; a conflicting history insert is treated as success only after the record is read back.
 
-`GET /health` is a process-level health endpoint. `GET /health/ready` performs a Cosmos database read in Cosmos mode and returns 503 when the configured database is unavailable. In-memory demo mode reports ready without a Cosmos dependency. The readiness endpoint does not replace monitoring of request-level Cosmos throttling, latency, RU consumption, or data-plane operations.
+`GET /health/live` is the process liveness endpoint. `GET /health/ready` performs a Cosmos database read in Cosmos mode and returns 503 when the configured database is unavailable. In-memory demo mode reports ready without a Cosmos dependency. The readiness endpoint does not replace monitoring of request-level Cosmos throttling, latency, RU consumption, or data-plane operations.
 
 The migration lease currently has a 30-minute expiry and is not renewed. Keep migrations short and controlled; migrations expected to exceed this duration require lease renewal before rollout to multiple API instances. Validate the lease and migration behaviour against a real Cosmos development account before production deployment.
 
@@ -296,3 +297,17 @@ The API exposes unauthenticated `/health/live` and `/health/ready` probes for ho
 The API is published as a standard .NET 10 application directory and hosted on a native .NET-capable platform selected during infrastructure setup. Docker and container-based deployment are explicitly excluded. Hosting secrets are supplied through the selected provider's secret store and are never committed. The API exposes `/health/live` and `/health/ready` probes.
 
 TurnOva MVP clients are native Android/iOS Expo applications, not browser SPAs. Azure Static Web Apps cannot host or distribute native binaries. SWA is documented only as an optional future static companion/API-documentation host; native app builds and distribution require EAS Build and/or the app stores.
+
+## 26. Approved Cab-only MVP business model (2026-11-06)
+
+This section supersedes the earlier four-category and customer-facing FIFO descriptions in sections 6, 17 and 23–25 for the Rider/Driver MVP.
+
+- New Rider bookings and new Driver onboarding are Cab-only. Do not destructively migrate or delete historical Scooty/Bike/Auto records; legacy records remain readable where needed for history.
+- Resolve pickup to configured service coverage, discover approved unions serving Cab, and show at most 2–3 eligible/available Cab drivers per union ordered by pickup proximity. The Rider explicitly selects a driver. Do not rank customer-facing choices by FIFO or automatically assign/advance a driver.
+- The internal role of FIFO/queue fairness remains unresolved. Preserve legacy implementation until the selected-driver flow is introduced, but do not extend it as customer-facing dispatch behaviour.
+- Rider and Driver negotiate the fare directly. Persist immutable, versioned agreement proposals/counterproposals; both parties must confirm the current version. A ride cannot start until mutual confirmation of that exact version.
+- Platform fare estimates, in-app payment gateway, escrow and payment collection are out of scope. Do not fabricate or calculate a platform quote.
+- After the trip, the Driver reports the amount received. Treat it as driver-reported/unverified, persist the agreed-minus-reported signed delta, and expose only the minimum required fields to authorised union roles. Do not imply bank/customer verification.
+- Customer dispute/confirmation handling and the next-ride policy for non-zero deltas remain product decisions; do not implement an assumed outcome.
+- Union approval controls Cab membership, vehicle verification and public selfie visibility. Existing union approval and assignment audit remain relevant; legal partnership terms and production reviewer authorization require separate review.
+
