@@ -24,9 +24,9 @@ public sealed class DriverRideReservationStoreTests
     public async Task TemporaryReservationExpiresAndCanBeReacquired()
     {
         var store = new InMemoryDriverRideReservationStore();
-        Assert.True(await store.TryAcquireTemporaryAsync("driver-1", "ride-1", DateTimeOffset.UtcNow.AddMilliseconds(40)));
+        Assert.True(await store.TryAcquireTemporaryAsync("driver-1", "ride-1", DateTimeOffset.UtcNow.AddMilliseconds(500)));
         Assert.True(await store.HasActiveAsync("driver-1"));
-        await Task.Delay(80);
+        await Task.Delay(700);
         Assert.False(await store.HasActiveAsync("driver-1"));
         Assert.True(await store.TryAcquireAsync("driver-1", "ride-2"));
     }
@@ -35,10 +35,10 @@ public sealed class DriverRideReservationStoreTests
     public async Task TemporaryReservationCanBeMadePermanentOnlyForItsRide()
     {
         var store = new InMemoryDriverRideReservationStore();
-        Assert.True(await store.TryAcquireTemporaryAsync("driver-1", "ride-1", DateTimeOffset.UtcNow.AddMilliseconds(40)));
+        Assert.True(await store.TryAcquireTemporaryAsync("driver-1", "ride-1", DateTimeOffset.UtcNow.AddMilliseconds(500)));
         Assert.False(await store.TryMakePermanentAsync("driver-1", "ride-2"));
         Assert.True(await store.TryMakePermanentAsync("driver-1", "ride-1"));
-        await Task.Delay(80);
+        await Task.Delay(700);
         Assert.True(await store.HasActiveAsync("driver-1"));
     }
 
