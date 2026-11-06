@@ -1516,8 +1516,8 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
         using var acceptedJson = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync());
         Assert.Equal("Accepted", acceptedJson.RootElement.GetProperty("status").GetString());
-        Assert.Null(acceptedJson.RootElement.GetProperty("negotiationExpiresAtUtc").ValueKind == JsonValueKind.Null
-            ? null : acceptedJson.RootElement.GetProperty("negotiationExpiresAtUtc").GetString());
+        if (acceptedJson.RootElement.TryGetProperty("negotiationExpiresAtUtc", out var expiry))
+            Assert.Equal(JsonValueKind.Null, expiry.ValueKind);
         Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("selected-accept-driver"));
     }
