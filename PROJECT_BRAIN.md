@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `6bd8f734e56ce35716595307cbeb9d7ab9decc59` (PR #50; PR #51 is an ancestor)
+**Current main HEAD:** `6ba7b1968c1b5b2de61843cab04e85f7631e50fc` (PR #52; PR #50 and #51 are ancestors)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -24,7 +24,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - Cab is the only supported category for new Rider, Driver and Union MVP workflows. Legacy Scooty/Bike/Auto records remain readable for history and are not destructively migrated or silently converted.
 - Rider discovery must group approved unions and show up to 2–3 eligible Cab drivers per union by driver-to-pickup proximity; the Rider selects the Driver.
 - Customer-facing FIFO ranking, automatic FIFO assignment and next-driver advancement are not part of the approved Rider flow. Whether FIFO remains an internal Union fairness mechanism is unresolved; preserve legacy queue data/code until that decision is made.
-- New non-Cab Rider requests, nearby lookups, Driver onboarding/availability/queue eligibility, Union configuration/assignment and legacy non-Cab ride acceptance are rejected by CAB-SCOPE-01 implementation in PR #52; CI run 42222681286 passed on code head `d4ff9dd32fce93a2f406eee4989e8da7a8fa39bf`, merge pending.
+- PR #52 merged Cab-only Rider/Driver/Union foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`; post-merge CI run 42223126817 passed all four jobs. PR #53 is the legacy non-Cab endpoint/UI guard follow-up; it must pass fresh CI before merge.
 - Only approved drivers with verified Cab details and current Union eligibility may enter new discovery/ride workflows.
 - Union is an employer/operating association, not a dispatch queue. Driver transfers require reasons and are audited.
 - Driver selfie is private until approved by the driver's current union; replacement or union transfer resets/hides approval.
@@ -54,13 +54,13 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - PR #49 merged: explicit CORS origin allow-list, wildcard rejection, separate liveness and Cosmos-aware readiness endpoints, and CORS/health integration tests. Merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; final-head CI run 42216606101 passed all four jobs.
 - PR #51 merged: append-only queue audit events in the existing `QueueEntries` partition with transactional Cosmos batches, in-memory audit tests, and generic traceId Problem Details with exception-type-only logs. Merge commit `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run 42219327319 passed all four jobs.
 - PR #50 merged: authoritative Cab-only union-selected-driver business-model documentation and 19-area acceptance reclassification. Merge commit `6bd8f734e56ce35716595307cbeb9d7ab9decc59`; final-head CI run 42220682290 passed all four jobs.
-- PR #52 is the active CAB-SCOPE-01 implementation: Cab-only Rider/Driver UI and API gates, new Union Cab-only configuration/assignment, legacy profile and ride-history retention tests. CI run 42222681286 passed on code head `d4ff9dd32fce93a2f406eee4989e8da7a8fa39bf`; a test/documentation follow-up is receiving final CI before merge.
+- PR #52 merged CAB-SCOPE-01 foundations: Cab-only Rider/Driver UI and API gates, new Union Cab-only configuration/assignment, legacy profile and ride-history retention tests. Post-merge CI run 42223126817 passed all four jobs.
 - The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
 
-1. **CAB-SCOPE-01 (PR #52):** complete review, latest-head CI and merge for Cab-only API/UI validation and legacy-record preservation.
+1. **CAB-SCOPE-01 follow-up (PR #53):** reconcile the branch with PR #52 main, close remaining legacy non-Cab selfie/location/queue/offer action gaps, add regression tests, and merge only after fresh CI passes.
 2. **CAB-DISCOVERY-01:** discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by driver-to-pickup proximity; Rider selects, no customer-facing FIFO ranking or automatic assignment.
 3. **CAB-AGREEMENT-01:** direct Rider/Driver fare negotiation, immutable versioned agreement, both confirm current version, and no ride start until mutual confirmation.
 4. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
@@ -220,3 +220,10 @@ No platform fare estimates, fixed/dynamic pricing, payment gateway, escrow or in
 Customer-facing discovery must not rank or auto-assign by FIFO. Internal FIFO role remains unresolved. Union membership/approval, Cab/vehicle verification, union-approved selfie before public display, least-privilege oversight and audit are in-scope. Partnership terms require legal review.
 
 Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, CAB-RECON-01 and CAB-UNION-01. Keep the 19-row denominator; reclassify obsolete fare estimate/payment gateway/FIFO dispatch requirements. See PRD.md §15 and docs/MVP_ACCEPTANCE_MATRIX.md.
+
+
+## CAB-SCOPE-01 implementation and legacy action hardening
+- PR #52 merged Cab-only new-workflow validation and historical data retention. Post-merge CI run 42223126817 passed backend build/tests, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile auth tests.
+- PR #53 is a focused follow-up to prevent legacy non-Cab profiles from using selfie replacement/approval, location updates, queue reads, pending offers, ride rejection or offer-timeout actions. It also suppresses legacy-profile queue/offer polling and SignalR subscriptions in the Driver app while retaining read-only history and Offline cleanup.
+- PR #53 must be reviewed against the reconciled main tree and pass fresh CI before merge.
+- Legacy customer-facing FIFO/automatic-offer flow still exists for Cab and is not the approved final flow; CAB-DISCOVERY-01 must replace it. Internal FIFO role remains unresolved.

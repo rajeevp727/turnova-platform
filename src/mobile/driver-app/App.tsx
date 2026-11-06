@@ -195,6 +195,10 @@ export default function App() {
     setLoading(true); setError(""); setNotice("");
     try {
       const nextOnline = availabilityStatus !== "Online";
+      if (legacyServiceClass && nextOnline) {
+        setError("Legacy non-Cab profiles are preserved for history and cannot go Online in the Cab-only MVP. You can still go Offline.");
+        return;
+      }
       let position: Location.LocationObject | undefined;
       if (nextOnline) {
         const permission = await Location.requestForegroundPermissionsAsync();
@@ -218,7 +222,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!user || availabilityStatus !== "Online" ||
+    if (!user || availabilityStatus !== "Online" || legacyServiceClass ||
         (activeRide && ["Accepted", "Arrived", "InProgress"].includes(activeRide.status))) return;
     let mounted = true;
     let subscription: Location.LocationSubscription | undefined;
@@ -275,9 +279,14 @@ export default function App() {
       mounted = false;
       subscription?.remove();
     };
-  }, [user?.id, availabilityStatus, activeRide?.status, apiFetch]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, activeRide?.status, apiFetch]);
 
   const loadQueue = useCallback(async () => {
+    if (legacyServiceClass) {
+      setQueue([]);
+      setMembership({ isQueued: false, position: null });
+      return;
+    }
     try {
       const [data, current] = await Promise.all([
         apiFetch(`/api/v1/zones/${ZONE}/queues/${serviceClass}`),
@@ -286,7 +295,7 @@ export default function App() {
       setQueue(data);
       setMembership(current);
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to load queue."); }
-  }, [apiFetch, serviceClass]);
+  }, [apiFetch, serviceClass, legacyServiceClass]);
   useEffect(() => { if (user && tab === "Queue") void loadQueue(); }, [user, tab, loadQueue]);
 
   const leaveQueue = async () => {
@@ -300,9 +309,10 @@ export default function App() {
   };
 
   const loadAvailableRides = useCallback(async () => {
+    if (legacyServiceClass) { setAvailableRides([]); return; }
     try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); }
     catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); }
-  }, [apiFetch]);
+  }, [apiFetch, legacyServiceClass]);
 
   const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
@@ -324,7 +334,7 @@ export default function App() {
   // SignalR is at-least-once: deduplicate by the server-issued offerId before surfacing it.
   const receivedOfferIds = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!user?.id || availabilityStatus !== "Online") return;
+    if (!user?.id || availabilityStatus !== "Online" || legacyServiceClass) return;
     let mounted = true;
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?driverId=${encodeURIComponent(user.id)}`, {
@@ -355,7 +365,7 @@ export default function App() {
       connection.off("RideOfferReceived");
       void connection.stop();
     };
-  }, [user?.id, availabilityStatus, tokens?.accessToken, loadAvailableRides]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Ride declined. It remains available to other drivers."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
