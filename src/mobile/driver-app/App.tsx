@@ -11,6 +11,7 @@ import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { getFreshAccessToken } from "../shared/refreshCoordinator";
+import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession } from "../shared/sessionTokenStore";
 import { findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 
@@ -45,12 +46,10 @@ type AgreementVersion = { rideId: string; version: number; amount: number; curre
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
 
 async function saveTokens(tokens: Tokens) {
-  await SecureStore.setItemAsync("turnova.access", tokens.accessToken);
-  await SecureStore.setItemAsync("turnova.refresh", tokens.refreshToken);
+  await saveSessionTokens(SecureStore, tokens);
 }
 async function clearTokens() {
-  await SecureStore.deleteItemAsync("turnova.access");
-  await SecureStore.deleteItemAsync("turnova.refresh");
+  await clearSessionTokens(SecureStore);
 }
 async function jsonRequest(path: string, init: RequestInit = {}, token?: string) {
   const response = await fetch(`${API}${path}`, {
@@ -58,7 +57,7 @@ async function jsonRequest(path: string, init: RequestInit = {}, token?: string)
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers }
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.message ?? body.title ?? "Request failed.");
+  if (!response.ok) { const error = new Error(body.message ?? body.title ?? "Request failed."); (error as Error & { status: number }).status = response.status; throw error; }
   return body;
 }
 
@@ -148,10 +147,7 @@ export default function App() {
         accessToken = await getFreshAccessToken(
           refreshInFlight,
           tokens.accessToken,
-          async () => ({
-            accessToken: await SecureStore.getItemAsync("turnova.access"),
-            refreshToken: await SecureStore.getItemAsync("turnova.refresh")
-          }),
+          () => readSessionTokens(SecureStore),
           (refreshToken: string) => refreshSession(refreshToken, requestEpoch)
         );
       } catch {
@@ -183,24 +179,18 @@ export default function App() {
     let active = true;
     (async () => {
       try {
-        const accessToken = await SecureStore.getItemAsync("turnova.access");
-        const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-        if (accessToken && refreshToken) {
-          try {
-            const me = await jsonRequest("/api/v1/auth/me", {}, accessToken);
-            if (active) { sessionEpoch.current += 1; setTokens({ accessToken, refreshToken }); setUser(me); }
-          } catch {
-            try {
-              const result = await jsonRequest("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) });
-              if (active) await acceptSession(result, true);
-            } catch { await clearTokens(); }
-          }
+        const restored = await restoreStoredSession(SecureStore, jsonRequest);
+        if (active && restored) {
+          sessionEpoch.current += 1;
+          setTokens(restored.tokens);
+          setUser(restored.user as User);
         }
-      } catch (e) { if (active) setError("Unable to restore your session."); }
-      finally { if (active) setLoading(false); }
+      } catch {
+        if (active) setError("Unable to restore your session. Check your connection or secure storage and retry.");
+      } finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
-  }, [acceptSession]);
+  }, []);
 
   const authenticate = async (replaceOldest = false) => {
     setLoading(true); setError(""); setNotice("");
@@ -663,10 +653,7 @@ export default function App() {
           accessToken = await getFreshAccessToken(
             refreshInFlight,
             tokens.accessToken,
-            async () => ({
-              accessToken: await SecureStore.getItemAsync("turnova.access"),
-              refreshToken: await SecureStore.getItemAsync("turnova.refresh")
-            }),
+            () => readSessionTokens(SecureStore),
             (refreshToken: string) => refreshSession(refreshToken, requestEpoch)
           );
         } catch {
@@ -818,7 +805,9 @@ export default function App() {
     sessionEpoch.current += 1;
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
-    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
+    try { await clearTokens(); }
+    catch { setError("Unable to clear secure session storage. Please retry sign-out."); return; }
+    setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
   };
 
   const askHelp = async () => {
