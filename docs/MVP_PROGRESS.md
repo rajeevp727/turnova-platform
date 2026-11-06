@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#11 DRIVER-01: Audit Cab-only Driver onboarding, required identity/licence/Cab vehicle verification, Union approval and union-approved selfie visibility; implement only the next missing in-scope vertical slice.**
+**#11 DRIVER-01: Audit Cab-only Driver onboarding, required identity/licence/Cab vehicle verification, Union approval and union-approved selfie visibility; first repair the CI Release configuration because prior backend test jobs did not execute the test project.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -16,8 +16,8 @@
 - PR #58 merged sequential #6 DISPATCH-01 at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs. Automated review comment [6690682769](https://github.com/rajeevp727/turnova-platform/pull/58#issuecomment-6690682769) found no unresolved critical/high-risk issue.
 - DISPATCH-01 remains Blocked: PR #55 implements pickup-zone and positive-finite radius filtering; PR #58 adds out-of-zone-union and missing/invalid-radius regressions. The checked-in radius is 0 and the Hyderabad zone box is a development placeholder. Production radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance remain external gates.
 - DISPATCH-02 implementation groups eligible Cab drivers by union, caps each union at three, orders by pickup distance then DriverId ordinal, and does not require FIFO queue membership. PR #59 merged at `508a789246cec1a9452651c62fa08aa3908140a4`; final-head CI [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
-- PR #61 merged DISPATCH-04 active-ride/Union-transfer regression coverage at `118929955d3959f078ddb59f7f5bdf3c3965d52a`; final-head CI [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) passed all four jobs. The test confirms an accepted ride keeps the Driver reservation and prevents Union transfer.
-- PR #63 implements the REALTIME-01 Rider reconnect fix at head `d51acc55093f71efec190b10ba85b8cc738f985c`; CI run [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480) passed all four jobs. It adds authenticated hub-group tests, shared mobile active-state tests, and Rider authoritative history/ride/agreement refresh on initial SignalR connection and reconnect.
+- PR #61 merged DISPATCH-04 active-ride/Union-transfer regression coverage at `118929955d3959f078ddb59f7f5bdf3c3965d52a`. Its CI run [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) passed workflow-level checks, but backend test logs show no tests executed because Release project mappings were missing. The new accepted-active-ride/Union-transfer regression still needs a real test run.
+- PR #63 implements the REALTIME-01 Rider reconnect fix at head `d51acc55093f71efec190b10ba85b8cc738f985c`; CI runs [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480) and [42268079249](https://github.com/rajeevp727/turnova-platform/actions/runs/42268079249) passed workflow-level checks, mobile typechecks and shared Node tests. Backend build/publish ran, but backend test execution was a no-op because Release project mappings were missing; `RideTrackingHubTests` must be rerun after PR #64.
 
 ## 2. Overall MVP completion
 
@@ -97,7 +97,7 @@
 
 1. DISPATCH-03 audit found temporary reservation acquisition, expiry, cancellation/decline cleanup, permanent promotion after acceptance and idempotent interrupted-write recovery covered by existing API/store tests; live Cosmos ETag/restart/outbox validation remains blocked.
 2. DISPATCH-04 received PR #61: accepted active rides retain the per-driver reservation and a Union transfer attempt conflicts without changing membership. Keep the row In progress until live Cosmos multi-instance ETag/restart/crash recovery and the approved negotiation-lifetime gate are satisfied.
-3. REALTIME-01 implementation is covered by PR #63 and CI [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480); keep the row In progress until Android/iOS device-to-device WebSocket/reconnect/background acceptance passes.
+3. REALTIME-01 implementation is covered by PR #63; mobile typechecks and shared Node tests passed, but backend hub tests were not executed because Release project mappings were missing. PR #64 must rerun the backend suite before relying on the API test evidence. Keep the row In progress until physical-device SignalR acceptance passes.
 4. Continue sequentially with #11 DRIVER-01: audit Cab-only onboarding, identity/licence/Cab vehicle verification, Union approval and union-approved selfie visibility; add only missing end-to-end API/mobile tests.
 5. Revisit blocked DISPATCH-01 when the product owner approves production pickup radius and reviewed zone boundaries; then run live Cosmos query/index and Android/iOS pickup-zone acceptance.
 6. Keep internal FIFO fairness/availability, customer dispute/confirmation, non-zero-delta next-ride policy and legal union terms unresolved until explicitly approved.
@@ -125,6 +125,13 @@
 - PR #63 fixes the identified Rider gap: reconnect previously refreshed agreement history only and could leave ride status/location stale after missed events. Rider now reloads owner-scoped history and the authoritative current ride snapshot on initial SignalR connection and reconnect, then refreshes agreement versions. Event callbacks are guarded after effect cleanup.
 - Driver selected-booking and active-trip reconnect paths already reload authoritative Driver history/available requests; both apps now use the shared role-specific active-ride selector so terminal-only history clears stale active state consistently.
 - `RideTrackingHubTests` covers Rider ownership, assigned Driver ownership, Driver self-only notification group membership and rejection before group join. `rideRecovery.test.cjs` covers Rider/Driver active-state selection, terminal-state clearing and invalid roles.
-- PR #63 final-head CI run [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480) passed all four jobs: backend restore/build/test, native non-container API publish/artifact verification, Rider and Driver Expo config/typechecks, and shared mobile state/refresh tests.
+- PR #63 final-head CI run [42268079249](https://github.com/rajeevp727/turnova-platform/actions/runs/42268079249) passed workflow-level backend build/publish, Rider and Driver Expo config/typechecks, and shared mobile state/refresh tests. Backend tests did not execute because the Release solution mappings were missing; PR #64 adds an explicit test-project run and zero-test guard.
 - REALTIME-01 remains In progress until physical Android/iOS SignalR delivery, reconnect, background/resume and device-to-device agreement/status/location checks pass. No live device validation is claimed.
 - Next sequential item: #11 DRIVER-01. Do not add customer-facing FIFO or automatic dispatch.
+
+
+## CI evidence correction (2026-11-06)
+
+- Job-log inspection of PR #61 run `42262634978` and PR #63 runs `42267819480`/`42268079249` found `MSB4121` warnings: `TurnOva.sln` had Debug project mappings but no Release mappings. The Release solution build skipped project configurations and `dotnet test ...TurnOva.sln --configuration Release` exited 0 without executing the test project. Do not count prior backend test claims as evidence.
+- PR #64 adds Release mappings, explicitly runs `TurnOva.Tests.csproj`, writes TRX results and fails if fewer than one backend test executed. Backend acceptance evidence must be refreshed after that CI run.
+- Current sequential item remains #11 DRIVER-01; complete this CI correction before relying on backend test results or opening the Driver onboarding feature PR.
