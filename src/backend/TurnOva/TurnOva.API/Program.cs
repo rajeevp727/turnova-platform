@@ -1690,11 +1690,21 @@ app.MapPost("/api/v1/rider/bookings", async (
         rideWasAlreadyPersisted = true;
     }
 
-    await hub.Clients.Group($"driver:{selectedDriverId}").SendAsync("RideSelected", new
+    if (ride.Status is "Completed" or "Cancelled" or "Expired")
     {
-        rideId, pickup, dropoff, stops, passengers = request.Passengers, expiresAtUtc
-    }, ct);
-    await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = ride.Status }, ct);
+        await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct);
+        return Results.Ok(ride);
+    }
+
+    if (ride.Status is "Negotiating" or "AgreementConfirmed")
+    {
+        await hub.Clients.Group($"driver:{selectedDriverId}").SendAsync("RideSelected", new
+        {
+            rideId, pickup, dropoff, stops, passengers = request.Passengers, expiresAtUtc = ride.NegotiationExpiresAtUtc
+        }, ct);
+        await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = ride.Status }, ct);
+    }
+
     return rideWasAlreadyPersisted
         ? Results.Ok(ride)
         : Results.Created($"/api/v1/rides/{rideId}", ride);
