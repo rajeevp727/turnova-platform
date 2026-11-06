@@ -7,7 +7,7 @@
 
 **CAB-SCOPE-01 (approved supplemental requirement; not part of the 19-area denominator): enforce Cab-only new Rider and Driver workflows while preserving historical records.**
 
-Current code gap: new ride requests and Driver onboarding still accept non-Cab service/vehicle classes. Implement Cab-only validation first; do not destructively migrate existing historical records.
+Current implementation: PR #52 branch `feat/cab-only-scope-20261106` adds Cab-only Rider request/nearby validation, Cab-only Driver onboarding/availability/queue eligibility, Cab-only new Union configuration, and Cab-only Rider/Driver UI. Legacy non-Cab profiles remain readable and are not converted or deleted. Latest-head CI is pending.
 
 ## 2. Overall MVP completion
 
@@ -24,7 +24,7 @@ Current code gap: new ride requests and Driver onboarding still accept non-Cab s
 |---:|---|---|---|
 | 1 | AUTH-01 | In progress | PRs #35, #39 and #40 cover fake-TriSend API contracts, JWT/role boundaries and startup configuration guards; mobile runtime/session and full profile lifecycle remain. |
 | 2 | AUTH-02 | In progress | PRs #37 and #41 plus shared mobile refresh tests cover single-flight refresh and retry-after-failure; rotation/reuse, restart, expiry, logout and secure-storage device tests remain. |
-| 3 | RIDER-01 | In progress | PR #45 covers pickup-zone/capacity/freshness filtering; Cab-only approved-union grouping, max 2–3 drivers per union, pickup-proximity ordering and Rider selection are not implemented. |
+| 3 | RIDER-01 | In progress | PR #45 covers pickup-zone/capacity/freshness filtering; PR #52 adds Cab-only Rider category and non-Cab nearby/request rejection. Approved-union grouping, max 2–3 drivers per union, pickup-proximity ordering and Rider selection remain. |
 | 4 | RIDER-02 | Not started | Platform fare estimates are out of scope; direct fare negotiation, immutable agreement versions and mutual confirmation before ride start are not implemented. |
 | 5 | RIDER-03 | In progress | Ride lifecycle, ownership and idempotency exist; selected-driver booking/negotiation reservation and agreement start gate remain. |
 | 6 | DISPATCH-01 | In progress | Zone resolution exists; approved-union discovery for Cab is not implemented. |
@@ -32,8 +32,8 @@ Current code gap: new ride requests and Driver onboarding still accept non-Cab s
 | 8 | DISPATCH-03 | In progress | Durable offer/expiry/outbox exists; selected-driver negotiation reservation/expiry remains, and automatic next-driver advancement must not drive customer-facing assignment. |
 | 9 | DISPATCH-04 | In progress | Per-driver reservation and ride ETag guards exist; adapt them to selected-driver negotiation and exact expiry/cancel release; Cosmos concurrency remains. |
 | 10 | REALTIME-01 | In progress | SignalR ride/offer flows and reconnect recovery exist; negotiation/agreement version events and device-to-device checks remain. |
-| 11 | DRIVER-01 | In progress | Onboarding and union selfie approval exist; Cab-only validation, Cab vehicle checks and secure document controls remain. |
-| 12 | DRIVER-02 | In progress | GPS-gated Online, zone exit and queue removal exist; Cab-only availability and selected-driver negotiation remain. Internal FIFO role is unresolved. |
+| 11 | DRIVER-01 | In progress | PR #52 enforces Cab-only new onboarding and prevents in-place legacy non-Cab conversion; union selfie approval exists; Cab vehicle checks and secure document controls remain. |
+| 12 | DRIVER-02 | In progress | PR #52 blocks legacy non-Cab profiles from new Online/queue eligibility; GPS/zone protections remain. Selected-driver negotiation remains; internal FIFO role is unresolved. |
 | 13 | TRIP-01 | In progress | Rider and Driver history merged in PRs #47/#48; mutual-agreement start gate, Cosmos history and Android/iOS device/location-privacy checks remain. |
 | 14 | DRIVER-03 | In progress | Monthly PDF work-metrics payslip exists; no monetary earnings/commission/payout policy is assumed. Direct-payment report is tracked under CAB-RECON-01. |
 | 15 | DRIVER-04 | Blocked | Driver support categories, escalation owner and operational process are not approved. |
@@ -48,8 +48,8 @@ Current code gap: new ride requests and Driver onboarding still accept non-Cab s
 - PR #48 merged Driver history: https://github.com/rajeevp727/turnova-platform/pull/48; merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; CI run 42215718229 passed all four jobs.
 - PR #49 merged CORS/health hardening: https://github.com/rajeevp727/turnova-platform/pull/49; merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; CI run 42216606101 passed all four jobs.
 - PR #51 merged queue audit/safe exception handling: https://github.com/rajeevp727/turnova-platform/pull/51; merge commit `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42219327319 passed all four jobs.
-- PR #50 contains the approved Cab-only documentation reset. Original CI run 42217994808 passed on its initial head; the branch was reconciled with current main in merge commit `5eda5a9a4800e67c028018a8395c85efaa1fa7b3`, and final-head CI run 42220458874 passed all four jobs. PR #50 remains open pending merge.
-- Current main code still accepts non-Cab service/vehicle classes in new Rider/Driver workflows. CAB-SCOPE-01 is not implemented yet.
+- PR #50 merged the approved Cab-only documentation reset at `6bd8f734e56ce35716595307cbeb9d7ab9decc59`; final-head CI run 42220682290 passed all four jobs.
+- CAB-SCOPE-01 implementation is on PR #52 branch `feat/cab-only-scope-20261106`; CI and merge are pending. The API rejects non-Cab Rider requests/nearby lookups, Driver onboarding/availability/queue eligibility and new Union configuration; Rider/Driver apps expose Cab only. Legacy non-Cab records are preserved and ineligible for new workflows.
 - Current discovery is service-class/FIFO-oriented; approved-union grouping, 2–3 driver limit per union, pickup-proximity ordering and Rider selection are not implemented.
 - Fare estimate remains null; platform payment gateway/escrow/collection is not part of the approved Cab-only scope. Direct negotiation/agreement and Driver-reported payment reconciliation remain code gaps.
 - The old FIFO/offer machinery exists; do not extend customer-facing FIFO or automatic assignment. Internal FIFO role remains unresolved.
@@ -59,7 +59,7 @@ Current code gap: new ride requests and Driver onboarding still accept non-Cab s
 
 | ID | Requirement | Status |
 |---|---|---|
-| CAB-SCOPE-01 | New Rider rides and Driver onboarding are Cab-only; preserve historical records and do not destructively migrate legacy vehicle classes. | Not started |
+| CAB-SCOPE-01 | New Rider rides, Driver onboarding and new Union configuration are Cab-only; preserve historical records and exclude legacy non-Cab profiles from new eligibility. | In progress — PR #52 implementation branch; CI pending. |
 | CAB-DISCOVERY-01 | Show approved unions serving pickup; up to 2–3 eligible/available Cab drivers per union ordered by pickup proximity; Rider selects. No customer-facing FIFO ranking or automatic assignment. | Not started |
 | CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | Not started |
 | CAB-RECON-01 | Driver reports amount received as unverified; persist agreed-minus-reported signed delta; expose only to authorised union roles. No platform payment gateway/escrow/collection. | Not started |
@@ -78,9 +78,8 @@ Current code gap: new ride requests and Driver onboarding still accept non-Cab s
 
 ## 7. Next steps
 
-1. Reconcile and merge PR #50 only after current-main conflict resolution, full documentation review and latest-head green CI.
-2. Implement CAB-SCOPE-01 in one focused PR: reject non-Cab for new ride requests and Driver onboarding; preserve historical records.
-3. Implement CAB-DISCOVERY-01: approved-union grouping, 2–3 available Cab drivers per union, pickup-proximity ordering and Rider selection.
-4. Implement CAB-AGREEMENT-01: versioned direct negotiation and mutual confirmation gate.
-5. Implement CAB-RECON-01: Driver-reported amount and signed delta; leave dispute/next-ride policy blocked until approved.
-6. Continue the remaining 19-area verification and AI-01 supplemental work sequentially. Do not open parallel feature PRs.
+1. Complete automated review, fresh CI and merge for PR #52 CAB-SCOPE-01.
+2. Implement CAB-DISCOVERY-01: approved-union grouping, at most 2–3 available Cab drivers per union, pickup-proximity ordering and explicit Rider selection; no customer-facing FIFO ranking or automatic assignment.
+3. Implement CAB-AGREEMENT-01: versioned direct negotiation and mutual confirmation gate.
+4. Implement CAB-RECON-01: Driver-reported amount and signed delta; leave dispute/next-ride policy blocked until approved.
+5. Complete CAB-UNION-01 and remaining 19-area verification plus AI-01 sequentially. Do not open parallel feature PRs.
