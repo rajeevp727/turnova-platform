@@ -125,7 +125,7 @@ export default function App() {
     });
     if (response.status === 401) {
       const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); throw new Error("Session expired. Please sign in again."); }
+      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
         accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
@@ -133,6 +133,9 @@ export default function App() {
         await clearTokens();
         setTokens(null);
         setUser(null);
+        setActiveRide(null);
+        setDriverRideHistory([]);
+        setAvailableRides([]);
         throw new Error("Session expired. Please sign in again.");
       }
       response = await fetch(`${API}${path}`, {
