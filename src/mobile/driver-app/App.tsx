@@ -212,7 +212,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!user || availabilityStatus !== "Online") return;
+    if (!user || availabilityStatus !== "Online" ||
+        (activeRide && ["Accepted", "Arrived", "InProgress"].includes(activeRide.status))) return;
     let mounted = true;
     let subscription: Location.LocationSubscription | undefined;
 
@@ -238,7 +239,18 @@ export default function App() {
     void (async () => {
       const permission = await Location.getForegroundPermissionsAsync();
       if (!permission.granted) {
-        if (mounted) setError("Location permission is required while online.");
+        try {
+          await apiFetch("/api/v1/driver/availability", {
+            method: "POST",
+            body: JSON.stringify({ isOnline: false })
+          });
+          if (mounted) {
+            setAvailabilityStatus("Offline");
+            setNotice("You were taken offline because location permission is required while online.");
+          }
+        } catch (e) {
+          if (mounted) setError(e instanceof Error ? e.message : "Unable to turn off availability.");
+        }
         return;
       }
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -255,7 +267,7 @@ export default function App() {
       mounted = false;
       subscription?.remove();
     };
-  }, [user?.id, availabilityStatus, apiFetch]);
+  }, [user?.id, availabilityStatus, activeRide?.status, apiFetch]);
 
   const loadQueue = useCallback(async () => {
     try {
