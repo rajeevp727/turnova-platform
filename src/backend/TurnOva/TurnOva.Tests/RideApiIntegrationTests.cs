@@ -94,7 +94,7 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Pending", profile.Status);
 
         var join = await driver.PostAsJsonAsync("/api/v1/queues/join",
-            new { zoneId = "hyderabad-central", serviceClass = "auto" });
+            new { zoneId = "hyderabad-central", serviceClass = "cab" });
         Assert.Equal(HttpStatusCode.Conflict, join.StatusCode);
 
         using var approval = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-onboarding-pending/review")
@@ -108,11 +108,11 @@ public sealed class RideApiIntegrationTests
         var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.OK, online.StatusCode);
         var joined = await driver.PostAsJsonAsync("/api/v1/queues/join",
-            new { zoneId = "hyderabad-central", serviceClass = "auto" });
+            new { zoneId = "hyderabad-central", serviceClass = "cab" });
         Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
 
         var wrongZone = await driver.PostAsJsonAsync("/api/v1/queues/join",
-            new { zoneId = "hyderabad-north", serviceClass = "auto" });
+            new { zoneId = "hyderabad-north", serviceClass = "cab" });
         Assert.Equal(HttpStatusCode.Forbidden, wrongZone.StatusCode);
 
         using var suspension = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-onboarding-pending/review")
@@ -135,7 +135,7 @@ public sealed class RideApiIntegrationTests
         using var second = factory.CreateClient("Driver", "availability-second");
 
         Assert.Equal(HttpStatusCode.Conflict,
-            (await first.PostAsJsonAsync("/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "auto" })).StatusCode);
+            (await first.PostAsJsonAsync("/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "cab" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
@@ -167,7 +167,7 @@ public sealed class RideApiIntegrationTests
 
         var invalid = await driver.PostAsJsonAsync("/api/v1/driver/onboarding",
             new { fullName = "Driver", phoneNumber = "123", vehicleMake = "T", vehicleModel = "M",
-                vehicleRegistration = "TS01AA1234", serviceClass = "auto", passengerCapacity = 2,
+                vehicleRegistration = "TS01AA1234", serviceClass = "cab", passengerCapacity = 2,
                 documents = new[] { new { documentType = "DrivingLicence", storageReference = "https://example.com/doc.pdf" } } });
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
 
@@ -203,7 +203,7 @@ public sealed class RideApiIntegrationTests
                     managerName = "Union Manager",
                     managerPhone = "+919876543210",
                     zoneIds = new[] { "hyderabad-central" },
-                    serviceClasses = new[] { "auto" }
+                    serviceClasses = new[] { "cab" }
                 })
             };
             request.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
@@ -267,7 +267,7 @@ public sealed class RideApiIntegrationTests
                 name = "North Drivers Union",
                 code = "HYD-NORTH",
                 zoneIds = new[] { "hyderabad-north" },
-                serviceClasses = new[] { "auto" }
+                serviceClasses = new[] { "cab" }
             })
         };
         create.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
@@ -314,7 +314,7 @@ public sealed class RideApiIntegrationTests
         vehicleMake = "Bajaj",
         vehicleModel = "RE",
         vehicleRegistration = "TS09AB1234",
-        serviceClass = "auto",
+        serviceClass = "cab",
         passengerCapacity = 3,
         documents = new[]
         {
@@ -357,13 +357,13 @@ public sealed class RideApiIntegrationTests
         using var secondDriver = factory.CreateClient("Driver", "driver-fifo-second");
         var queue = factory.Services.GetRequiredService<IQueueStore>();
         var joinedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
-        await queue.AddAsync(new DriverQueueEntry("driver-fifo-first", "hyderabad-central", "auto", joinedAt, 0, true), CancellationToken.None);
-        await queue.AddAsync(new DriverQueueEntry("driver-fifo-second", "hyderabad-central", "auto", joinedAt.AddMinutes(1), 0, true), CancellationToken.None);
+        await queue.AddAsync(new DriverQueueEntry("driver-fifo-first", "hyderabad-central", "cab", joinedAt, 0, true), CancellationToken.None);
+        await queue.AddAsync(new DriverQueueEntry("driver-fifo-second", "hyderabad-central", "cab", joinedAt.AddMinutes(1), 0, true), CancellationToken.None);
 
         var ride = await CreateRideAsync(rider, "request-fifo-reject-001");
         Assert.Equal(HttpStatusCode.NoContent,
             (await firstDriver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null)).StatusCode);
-        var afterReject = await queue.GetEligibleAsync("hyderabad-central", "auto", CancellationToken.None);
+        var afterReject = await queue.GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
         Assert.Equal(new[] { "driver-fifo-second", "driver-fifo-first" }, afterReject.Select(entry => entry.DriverId));
 
         using var timeout = await firstDriver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null);
@@ -371,7 +371,7 @@ public sealed class RideApiIntegrationTests
 
         using var secondTimeout = await secondDriver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null);
         Assert.Equal(HttpStatusCode.OK, secondTimeout.StatusCode);
-        var afterTimeout = await queue.GetEligibleAsync("hyderabad-central", "auto", CancellationToken.None);
+        var afterTimeout = await queue.GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
         Assert.Equal(new[] { "driver-fifo-first", "driver-fifo-second" }, afterTimeout.Select(entry => entry.DriverId));
     }
 
@@ -382,7 +382,7 @@ public sealed class RideApiIntegrationTests
         using var driver = factory.CreateClient("Driver", "driver-payslip-pdf");
         var union = new DriverUnion(
             "union-payslip", "Central Drivers Union", "HYD-CENTRAL", "Hyderabad",
-            "Union Manager", null, ["hyderabad-central"], ["auto"], "Active",
+            "Union Manager", null, ["hyderabad-central"], ["cab"], "Active",
             DateTimeOffset.UtcNow.AddYears(-1), DateTimeOffset.UtcNow);
         factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[union.UnionId] = union;
 
@@ -737,7 +737,7 @@ public sealed class RideApiIntegrationTests
         var vehicle = vehicles[0];
         Assert.Equal("Bajaj", vehicle.GetProperty("vehicleMake").GetString());
         Assert.Equal("RE", vehicle.GetProperty("vehicleModel").GetString());
-        Assert.Equal("auto", vehicle.GetProperty("serviceClass").GetString());
+        Assert.Equal("cab", vehicle.GetProperty("serviceClass").GetString());
         Assert.Equal(3, vehicle.GetProperty("passengerCapacity").GetInt32());
         Assert.True(vehicle.GetProperty("distanceKm").GetDouble() >= 0);
 
@@ -1038,7 +1038,7 @@ public sealed class RideApiIntegrationTests
         string? dropoff = "HITEC City, Hyderabad",
         double? pickupLatitude = 17.493,
         double? pickupLongitude = 78.399,
-        string serviceClass = "auto")
+        string serviceClass = "cab")
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/rides/request")
         {
@@ -1108,7 +1108,7 @@ public sealed class RideApiIntegrationTests
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
                 profiles[subject] = new DriverOnboardingProfile(
                     subject, subject, "hyderabad-central", "Approved Test Driver", "+919876543210",
-                    "Bajaj", "RE", "TS09AB1234", "auto", 3,
+                    "Bajaj", "RE", "TS09AB1234", "cab", 3,
                     [new DriverDocumentReference("DrivingLicence", "test/licence")],
                     "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
             }
