@@ -2,11 +2,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using TurnOva.API;
 
 namespace TurnOva.Tests;
@@ -135,6 +138,150 @@ public sealed class AuthApiIntegrationTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("temporarily unavailable", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private upstream detail", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DriverEndpointRejectsMissingBearerToken()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Authorization must reject before calling TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("not-a-jwt")]
+    [InlineData("Bearer malformed")]
+    public async Task DriverEndpointRejectsMalformedBearerToken(string token)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Authorization must reject before calling TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", token.StartsWith("Bearer ", StringComparison.Ordinal) ? token : $"Bearer {token}");
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DriverEndpointRejectsTokenWithInvalidSignature()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Authorization must reject before calling TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(signingKey: "different-signing-key-for-tests-32-bytes"));
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("wrong-issuer", "turnova-api")]
+    [InlineData("turnova-auth-tests", "wrong-audience")]
+    public async Task DriverEndpointRejectsTokenWithWrongIssuerOrAudience(string issuer, string audience)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Authorization must reject before calling TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(issuer: issuer, audience: audience));
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DriverEndpointRejectsExpiredToken()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Authorization must reject before calling TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(expires: DateTime.UtcNow.AddMinutes(-5)));
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task RiderTokenCannotAccessDriverEndpoint()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Authorization must reject before calling TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(role: "Rider"));
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DriverTokenCannotAccessRiderEndpoint()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Authorization must reject before calling TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(role: "Driver"));
+
+        using var response = await client.GetAsync("/api/v1/rides/RIDE-NOT-OWNED");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task ValidDriverTokenCanAccessDriverEndpoint()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Driver availability must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(role: "Driver"));
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    private static string CreateToken(
+        string role = "Driver",
+        string issuer = Issuer,
+        string audience = Audience,
+        string signingKey = SigningKey,
+        DateTime? notBefore = null,
+        DateTime? expires = null)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, "driver-1"),
+            new Claim("role", role)
+        };
+        var token = new JwtSecurityToken(
+            issuer, audience, claims,
+            notBefore ?? DateTime.UtcNow.AddMinutes(-1),
+            expires ?? DateTime.UtcNow.AddMinutes(5),
+            credentials);
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, string json) =>
