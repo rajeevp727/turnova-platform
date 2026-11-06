@@ -231,7 +231,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 
 
 ## CAB-SCOPE-01 implementation and legacy action hardening
-- PR #52 merged Cab-only new-workflow validation and historical data retention. Post-merge CI run 42223126817 passed backend build/tests, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile auth tests.
+- PR #52 merged Cab-only new-workflow validation and historical data retention. Post-merge CI run 42223126817 was green at workflow level and validated native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile auth tests; backend test execution is not valid until PR #64 corrects the Release solution mappings.
 - PR #53 merged legacy non-Cab selfie replacement/approval, location, queue-read, pending-offer, rejection and timeout guards; the Driver app suppresses legacy-profile queue/offer polling and SignalR subscriptions while retaining read-only history and Offline cleanup.
 - PR #54 merged documentation reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; latest-head CI run 42234802360 passed backend, Rider app, Driver app and shared mobile-auth jobs.
 - PR #53 merge commit: `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run `42232390997` passed all four jobs. This is CI validation, not physical-device or production acceptance.
