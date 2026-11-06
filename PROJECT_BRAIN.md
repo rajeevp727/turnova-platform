@@ -241,3 +241,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Proposal API requires party ownership, active Cab union membership, approved Cab profile, `Idempotency-Key`, positive two-decimal amount and uppercase three-letter currency. No platform fare or payment collection is introduced.
 - Start and completion require both parties to confirm the current version. A fare renegotiated during the trip invalidates prior confirmations and blocks completion until both reconfirm.
 - RIDER-03 adds optional stops to selected rides and agreement route snapshots; live Cosmos/device evidence remains required before the related acceptance rows can be marked Verified.
+
+
+## DISPATCH-03 reservation lifecycle audit (2026-11-06)
+
+- Main after PR #59 merge `508a789246cec1a9452651c62fa08aa3908140a4` includes selected-driver reservation lifecycle handling and regression coverage.
+- Temporary leases are acquired before selected booking creation; availability and union membership are re-read while holding the lease. Mutual agreement and Driver acceptance promote the lease to permanent.
+- Rider cancellation, Driver decline, completed/cancelled/expired ride reconciliation and lazy negotiation expiry release only the matching driver/ride reservation. Expired leases are not silently stolen by the store; the API first reconciles authoritative ride state. Idempotent retry can recover the same ride after an interrupted write.
+- Tests in `RideApiIntegrationTests.cs` cover concurrent bookings, cancel/decline release, expiry through ride read/discovery, fail-closed missing expiry configuration, interrupted-write recovery and terminal-state cleanup. `DriverRideReservationStoreTests.cs` covers matching release, expiry retention and permanent promotion.
+- Cosmos reservation store uses conditional ETag replacement/deletion. Live Cosmos multi-instance contention, restart/crash recovery and outbox validation remain external gates; no live validation is claimed.
+- Next sequential work: DISPATCH-04 audit of active-ride reservation protection and union-transfer contention. Do not introduce customer-facing FIFO ranking or automatic next-driver advancement.
