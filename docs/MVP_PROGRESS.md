@@ -117,7 +117,7 @@
 - Automated engineering review was recorded on PR #61 and found no unresolved critical/high-risk issue. The test exercises Rider selection, mutual agreement confirmation, Driver acceptance, permanent reservation retention and a blocked Union transfer with unchanged membership.
 - Backend restore/build/test, native non-container publish and artifact verification passed; Rider/Driver Expo config/typechecks and shared mobile-auth tests passed.
 - DISPATCH-04 remains In Progress: live Cosmos cross-instance ETag contention and restart/crash recovery plus the product-approved negotiation lifetime are external gates. No live Cosmos/device validation is claimed.
-- Current sequential focus: #10 REALTIME-01. Do not introduce customer-facing FIFO ranking or automatic next-driver advancement.
+- PR #63 completed the #10 REALTIME-01 implementation audit; physical-device SignalR gates remain. Current sequential focus advances to #11 DRIVER-01. Do not introduce customer-facing FIFO ranking or automatic next-driver advancement.
 
 
 ## 10. REALTIME-01 reconnect audit handoff (2026-11-06)
