@@ -35,10 +35,10 @@ public sealed class DriverRideReservationStoreTests
     public async Task TemporaryReservationCanBeMadePermanentOnlyForItsRide()
     {
         var store = new InMemoryDriverRideReservationStore();
-        Assert.True(await store.TryAcquireTemporaryAsync("driver-1", "ride-1", DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.True(await store.TryAcquireTemporaryAsync("driver-1", "ride-1", DateTimeOffset.UtcNow.AddMilliseconds(40)));
         Assert.False(await store.TryMakePermanentAsync("driver-1", "ride-2"));
         Assert.True(await store.TryMakePermanentAsync("driver-1", "ride-1"));
-        await Task.Delay(30);
+        await Task.Delay(80);
         Assert.True(await store.HasActiveAsync("driver-1"));
     }
 
