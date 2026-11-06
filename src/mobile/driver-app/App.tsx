@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
-import { singleFlight } from "../shared/refreshCoordinator";
+import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 
@@ -137,11 +137,17 @@ export default function App() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens.accessToken}`, ...init.headers }
     });
     if (response.status === 401) {
-      const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); setPaymentReportAmounts({}); setUnionAssignment(null); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
-        accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
+        accessToken = await getFreshAccessToken(
+          refreshInFlight,
+          tokens.accessToken,
+          async () => ({
+            accessToken: await SecureStore.getItemAsync("turnova.access"),
+            refreshToken: await SecureStore.getItemAsync("turnova.refresh")
+          }),
+          refreshSession
+        );
       } catch {
         await clearTokens();
         setTokens(null);
