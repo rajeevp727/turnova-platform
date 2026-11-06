@@ -552,6 +552,16 @@ export default function App() {
   }, [apiFetch]);
 
   useEffect(() => { if (user) void loadOnboarding(); }, [user, loadOnboarding]);
+  useEffect(() => {
+    if (!user || tab !== "Profile") return;
+    let cancelled = false;
+    void apiFetch("/api/v1/driver/union")
+      .then(assignment => {
+        if (!cancelled) setUnionAssignment(assignment?.status === "Active" ? assignment : null);
+      })
+      .catch(error => setError(error instanceof Error ? error.message : "Unable to refresh Union membership."));
+    return () => { cancelled = true; };
+  }, [user, tab, apiFetch]);
 
   const captureSelfie = async () => {
     setError(""); setNotice("");
