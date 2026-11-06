@@ -18,7 +18,7 @@ public sealed class RideTrackingHubTests
         await hub.OnConnectedAsync();
 
         Assert.False(caller.Aborted);
-        Assert.Equal(["ride-1"], groups.AddedGroups);
+        Assert.Equal("ride-1", Assert.Single(groups.AddedGroups));
     }
 
     [Theory]
@@ -42,7 +42,7 @@ public sealed class RideTrackingHubTests
         await hub.OnConnectedAsync();
 
         Assert.False(caller.Aborted);
-        Assert.Equal(["driver:driver-1"], groups.AddedGroups);
+        Assert.Equal("driver:driver-1", Assert.Single(groups.AddedGroups));
     }
 
     [Fact]
