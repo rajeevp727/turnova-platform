@@ -506,8 +506,8 @@ public sealed class RideApiIntegrationTests
         using var auditResponse = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
         Assert.Equal(HttpStatusCode.OK, auditResponse.StatusCode);
         using var auditJson = JsonDocument.Parse(await auditResponse.Content.ReadAsStringAsync());
-        Assert.Single(auditJson.RootElement.EnumerateArray().Where(item =>
-            item.GetProperty("eventType").GetString() == "SelfieApprovedByUnion"));
+        Assert.Single(auditJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("eventType").GetString() == "SelfieApprovedByUnion");
     }
 
     [Fact]
