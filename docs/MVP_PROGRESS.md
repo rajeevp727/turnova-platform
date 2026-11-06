@@ -52,6 +52,9 @@
 
 ## 4. Current item evidence and review
 
+- PR #58 merged sequential #6 DISPATCH-01 at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs. Automated review comment [6690682769](https://github.com/rajeevp727/turnova-platform/pull/58#issuecomment-6690682769) found no unresolved critical/high-risk issue.
+- PR #59 is the current sequential #7 DISPATCH-02 test increment: the discovery fixture now gives central-1 and central-2 identical pickup coordinates and asserts equal distances while the API's DriverId ordinal tie-break keeps the result deterministic. CI is pending on the final PR head; no local test run is claimed.
+
 - PR #56 merged at `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8`; final-head CI run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) passed all four jobs. Its automated review found no critical/high-risk issue.
 
 - PR #47 merged Rider history: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; CI run 42214516012 passed all four jobs.
@@ -92,4 +95,4 @@
 2. Continue sequentially with #8 DISPATCH-03: re-audit reservation expiry, cancellation/decline cleanup, auditability and the no-automatic-next-driver rule; add only missing tests and keep Cosmos multi-instance recovery gates explicit.
 3. Revisit blocked DISPATCH-01 when the product owner approves the production pickup radius and reviewed zone boundaries; then run live Cosmos query/index and Android/iOS pickup-zone acceptance.
 4. Keep the internal FIFO fairness/availability decision unresolved until explicitly approved; it must not change Rider selection or ranking.
-4. Continue the remaining 19-area sequence before the separately approved supplemental CAB-RECON-01, CAB-UNION-01 and AI-01 work. Keep customer dispute/confirmation, non-zero-delta next-ride policy and internal FIFO role unresolved until approved.
+5. Continue the remaining 19-area sequence before the separately approved supplemental CAB-RECON-01, CAB-UNION-01 and AI-01 work. Keep customer dispute/confirmation, non-zero-delta next-ride policy and internal FIFO role unresolved until approved.
