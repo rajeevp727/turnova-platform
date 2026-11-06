@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; `docs/test-plan.md`.
-**Last audited:** 2026-11-07 against main after PR #70 merge `17c489eac64dc0f99e881a1474147b2f79fe2aac`. PR #70 final head `55cbe53a044f5f1abed9096973cbc0aad06b83a6` passed CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210), all four jobs: 210/210 backend tests, native non-container API publish, Rider/Driver config/typechecks and nine shared mobile tests. Automated review [6695955311](https://github.com/rajeevp727/turnova-platform/pull/70#issuecomment-6695955311) found no unresolved critical/high-risk issue. Live Cosmos and Android/iOS device acceptance remain.
+**Last audited:** 2026-11-07 against main after PR #71 merge `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`. PR #71 final head `cebb545c9aa5268e8cf6d71d999fcad7b381375f` passed CI [42301719963](https://github.com/rajeevp727/turnova-platform/actions/runs/42301719963), all four jobs: 214/214 backend tests, TRX execution guard, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile tests. Automated review [6697024986](https://github.com/rajeevp727/turnova-platform/pull/71#issuecomment-6697024986) found no unresolved critical/high-risk issue.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -76,7 +76,7 @@
 15. DRIVER-04 — Blocked
 16. RIDER-04 — In progress; PR #70 merged immutable Driver-reported direct-payment reconciliation; live Cosmos and Android/iOS report-entry/history gates remain
 17. SUPPORT-01 — Blocked
-18. PLATFORM-01 — In progress; current sequential task is bounded Cosmos storage readiness timeout/failure handling with deterministic API/unit tests
+18. PLATFORM-01 — In progress; PR #71 merged bounded storage readiness failure/timeout handling; live Cosmos, broader audit, telemetry and load gates remain
 19. RELEASE-01 — In progress; current sequential task adds CI production JavaScript bundle exports for Rider/Driver on Android and iOS; native signing/device gates remain
 
 ## Highest-priority next work
