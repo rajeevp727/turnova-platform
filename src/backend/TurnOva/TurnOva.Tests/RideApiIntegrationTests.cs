@@ -1093,11 +1093,12 @@ public sealed class RideApiIntegrationTests
     }
 
     [Theory]
+    [InlineData(null)]
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]
-    public async Task RiderDiscoveryFailsClosedWhenNearbyRadiusIsNotPositiveFinite(double radiusKm)
+    public async Task RiderDiscoveryFailsClosedWhenNearbyRadiusIsMissingOrInvalid(double? radiusKm)
     {
         using var factory = new TurnOvaApiFactory(nearbyRadiusKm: radiusKm);
         using var rider = factory.CreateClient("Rider", "rider-discovery-radius-invalid");
@@ -2031,10 +2032,10 @@ public sealed class RideApiIntegrationTests
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
-        private readonly double _nearbyRadiusKm;
+        private readonly double? _nearbyRadiusKm;
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
 
-        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double nearbyRadiusKm = 10,
+        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double? nearbyRadiusKm = 10,
             int? selectedDriverNegotiationLifetimeMinutes = 15)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
@@ -2054,7 +2055,7 @@ public sealed class RideApiIntegrationTests
                     ["TriSend:BaseUrl"] = "https://localhost:7443",
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
                     ["Cors:AllowedOrigins:0"] = "https://app.turnova.test",
-                    ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] =
                         _selectedDriverNegotiationLifetimeMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
