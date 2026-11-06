@@ -310,6 +310,6 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 ## TRIP-01 selected-Cab lifecycle and foreground location increment (2026-11-07)
 
 - The selected Rider booking path must be tested end-to-end from Negotiating through mutual agreement, Driver acceptance, arrival, start and completion; the legacy FIFO lifecycle test is not sufficient evidence for this path.
-- Active-trip location is foreground-only on the Driver app. Backgrounding, leaving Trips, terminal state or unmounting removes the GPS watcher; late callbacks are ignored. Resume rechecks foreground permission and starts a watcher only if the same ride remains Accepted/Arrived/InProgress and the server still marks location sharing active.
+- Active-trip location is foreground-only on the Driver app. Backgrounding, leaving Trips, terminal state or unmounting removes the GPS watcher; late callbacks are ignored. Resume reloads authenticated Driver history, rechecks foreground permission and starts a watcher only if the same ride remains Accepted/Arrived/InProgress and the server still marks location sharing active.
 - API coordinate validation rejects NaN, infinity and geographic out-of-range values for availability, pickup and active-trip updates. Only the assigned Driver may update an active ride; only its owning Rider reads the current coordinates.
 - Physical Android/iOS SignalR, map, permission and background/resume tests and live Cosmos ETag/history tests remain external acceptance gates.

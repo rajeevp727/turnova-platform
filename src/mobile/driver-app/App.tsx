@@ -12,7 +12,7 @@ import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Tex
 import TurnOvaLogo from "./TurnOvaLogo";
 import { singleFlight } from "../shared/refreshCoordinator";
 import { findActiveRide } from "../shared/rideRecovery";
-import { canShareTripLocation } from "../shared/tripLocationSharing";
+import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -533,7 +533,21 @@ export default function App() {
       starting = true;
       restartRequested = false;
       try {
-        const permission = await Location.getForegroundPermissionsAsync();
+        const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
+        if (!canShare()) return;
+        const authoritativeRide = findAuthoritativeActiveTrip(history, activeRide.rideId);
+        if (!authoritativeRide) {
+          setActiveRide(findActiveRide(history, "driver") ?? null);
+          return;
+        }
+        setActiveRide(current => current?.rideId === activeRide.rideId
+          ? { ...current, ...authoritativeRide }
+          : current);
+
+        const currentPermission = await Location.getForegroundPermissionsAsync();
+        const permission = currentPermission.granted
+          ? currentPermission
+          : await Location.requestForegroundPermissionsAsync();
         if (!permission.granted) {
           if (mounted) setError("Foreground location permission is required to share your trip location.");
           return;
