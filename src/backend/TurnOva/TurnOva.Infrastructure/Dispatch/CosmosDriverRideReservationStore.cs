@@ -75,27 +75,38 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return false; }
     }
 
-    public async Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default)
+    public async Task<DriverRideReservation?> GetActiveAsync(string driverId, CancellationToken cancellationToken = default)
     {
-        try
+        DriverRideReservation? lastRead = null;
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            var current = await container.ReadItemAsync<DriverRideReservation>(
-                driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
-            if (current.Resource.ExpiresAtUtc is null || current.Resource.ExpiresAtUtc > DateTimeOffset.UtcNow)
-                return true;
             try
             {
-                await container.DeleteItemAsync<DriverRideReservation>(driverId, new PartitionKey(driverId),
-                    new ItemRequestOptions { IfMatchEtag = current.ETag }, cancellationToken);
-                return false;
+                var current = await container.ReadItemAsync<DriverRideReservation>(
+                    driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
+                lastRead = current.Resource;
+                if (lastRead.ExpiresAtUtc is null || lastRead.ExpiresAtUtc > DateTimeOffset.UtcNow)
+                    return lastRead;
+
+                try
+                {
+                    await container.DeleteItemAsync<DriverRideReservation>(driverId, new PartitionKey(driverId),
+                        new ItemRequestOptions { IfMatchEtag = current.ETag }, cancellationToken);
+                    return null;
+                }
+                catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+                {
+                    // Re-read after a concurrent renewal/release; after bounded retries, fail closed.
+                }
             }
-            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
-            {
-                return true; // A concurrent renewal wins; fail closed for discovery.
-            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
         }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return false; }
+
+        return lastRead;
     }
+
+    public async Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
+        await GetActiveAsync(driverId, cancellationToken) is not null;
 
     public async Task<bool> TryReleaseAsync(string driverId, string rideId, CancellationToken cancellationToken = default)
     {

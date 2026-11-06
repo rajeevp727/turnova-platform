@@ -505,8 +505,31 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
     return expired;
 }
 
-async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct) =>
-    await driverRideReservations.HasActiveAsync(driverId, ct);
+async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct, string? exceptRideId = null)
+{
+    var reservation = await driverRideReservations.GetActiveAsync(driverId, ct);
+    if (reservation is null || reservation.RideId == exceptRideId) return false;
+
+    var reservedRide = await ReadRideRawAsync(reservation.RideId, ct);
+    if (reservedRide is not null && reservedRide.Status is "Completed" or "Cancelled" or "Expired")
+    {
+        await driverRideReservations.TryReleaseAsync(driverId, reservation.RideId, ct);
+        return false;
+    }
+
+    if (reservation.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+    {
+        var resolvedRide = await FindRideAsync(reservation.RideId, ct);
+        if (resolvedRide is null || resolvedRide.Status is "Completed" or "Cancelled" or "Expired")
+        {
+            await driverRideReservations.TryReleaseAsync(driverId, reservation.RideId, ct);
+            return false;
+        }
+    }
+
+    // Missing or still-active ride records fail closed; a reservation is never silently stolen.
+    return true;
+}
 
 string? ResolveDispatchZone(double latitude, double longitude)
 {
@@ -1050,7 +1073,7 @@ app.MapPost("/api/v1/driver/availability", async (
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.Conflict(new { message = "Only an approved driver can change availability." });
 
-    if (!request.IsOnline && await driverRideReservations.HasActiveAsync(driverId, ct))
+    if (!request.IsOnline && await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "Resolve or complete the active selected booking/ride before going offline." });
 
     if (request.IsOnline)
@@ -1381,6 +1404,7 @@ app.MapPost("/api/v1/rider/bookings", async (
         request.Passengers is < 1 or > 6 ||
         !double.IsFinite(request.PickupLatitude) || request.PickupLatitude is < -90 or > 90 ||
         !double.IsFinite(request.PickupLongitude) || request.PickupLongitude is < -180 or > 180 ||
+        request.Stops?.Count > 10 ||
         request.Stops?.Any(stop => string.IsNullOrWhiteSpace(stop) || stop.Trim().Length > 250) == true)
         return Results.BadRequest(new { message = "Provide a selected Cab driver and union, pickup, drop-off, valid stops, coordinates and passenger count." });
 
@@ -1407,27 +1431,71 @@ app.MapPost("/api/v1/rider/bookings", async (
     var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)));
     var idempotencyIndex = $"{riderId}:{keyId}";
     var bookingIdempotency = app.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
+    var now = DateTimeOffset.UtcNow;
+    var rideId = $"RIDE-SEL-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{riderId}:{keyId}")))}";
+    var isIdempotencyRecovery = false;
+
+    async Task<IResult?> ResolveExistingBookingIdempotencyAsync(RideIdempotencyRecord prior)
+    {
+        if (prior.RequestHash != requestFingerprint)
+            return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
+
+        var priorRide = await FindRideAsync(prior.rideId, ct);
+        if (priorRide is not null) return Results.Ok(priorRide);
+
+        // A deterministic ride ID lets a retry recover a process interrupted after the
+        // idempotency record or reservation was written but before the ride document was saved.
+        if (prior.CreatedAtUtc is null || prior.CreatedAtUtc.Value > now.AddSeconds(-60))
+            return Results.Conflict(new { message = "The original booking is still being processed. Retry shortly." });
+
+        rideId = prior.rideId;
+        isIdempotencyRecovery = true;
+        return null;
+    }
+
     if (idempotencyContainer is null)
     {
         if (bookingIdempotency.TryGetValue(idempotencyIndex, out var prior))
         {
-            if (prior.RequestHash != requestFingerprint)
-                return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
-            var priorRide = await FindRideAsync(prior.rideId, ct);
-            return priorRide is null ? Results.Conflict(new { message = "The original booking is still being processed. Retry shortly." }) : Results.Ok(priorRide);
+            var existingResult = await ResolveExistingBookingIdempotencyAsync(prior);
+            if (existingResult is not null) return existingResult;
+        }
+        else
+        {
+            var record = new RideIdempotencyRecord(keyId, riderId, rideId, requestFingerprint, now);
+            if (!bookingIdempotency.TryAdd(idempotencyIndex, record))
+            {
+                if (!bookingIdempotency.TryGetValue(idempotencyIndex, out prior))
+                    return Results.Conflict(new { message = "A booking with this Idempotency-Key is already being processed. Retry shortly." });
+                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior);
+                if (existingResult is not null) return existingResult;
+            }
         }
     }
     else
     {
         try
         {
-            var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
-            if (prior.Resource.RequestHash != requestFingerprint)
-                return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
-            var priorRide = await FindRideAsync(prior.Resource.rideId, ct);
-            return priorRide is null ? Results.Conflict(new { message = "The original booking is still being processed. Retry shortly." }) : Results.Ok(priorRide);
+            var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
+                keyId, new PartitionKey(riderId), cancellationToken: ct);
+            var existingResult = await ResolveExistingBookingIdempotencyAsync(prior.Resource);
+            if (existingResult is not null) return existingResult;
         }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            var record = new RideIdempotencyRecord(keyId, riderId, rideId, requestFingerprint, now);
+            try
+            {
+                await idempotencyContainer.CreateItemAsync(record, new PartitionKey(riderId), cancellationToken: ct);
+            }
+            catch (CosmosException conflict) when (conflict.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
+                    keyId, new PartitionKey(riderId), cancellationToken: ct);
+                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior.Resource);
+                if (existingResult is not null) return existingResult;
+            }
+        }
     }
 
     var union = await FindUnionAsync(unionId, ct);
@@ -1457,10 +1525,7 @@ app.MapPost("/api/v1/rider/bookings", async (
     if (distanceKm > radiusKm.Value)
         return Results.Conflict(new { message = "The selected Driver is no longer within the approved pickup radius." });
 
-    var now = DateTimeOffset.UtcNow;
     var expiresAtUtc = now.AddMinutes(lifetimeMinutes.Value);
-    var rideId = $"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
-    var idempotencyRecord = new RideIdempotencyRecord(keyId, riderId, rideId, requestFingerprint);
     if (idempotencyContainer is null)
     {
         if (!bookingIdempotency.TryAdd(idempotencyIndex, idempotencyRecord))
@@ -1481,6 +1546,7 @@ app.MapPost("/api/v1/rider/bookings", async (
 
     async Task RemoveIdempotencyRecordAsync()
     {
+        if (isIdempotencyRecovery) return;
         if (idempotencyContainer is null) bookingIdempotency.TryRemove(idempotencyIndex, out _);
         else
         {
@@ -1489,17 +1555,59 @@ app.MapPost("/api/v1/rider/bookings", async (
         }
     }
 
+    if (await HasActiveDriverRideAsync(selectedDriverId, ct, rideId))
+    {
+        await RemoveIdempotencyRecordAsync();
+        return Results.Conflict(new { message = "The selected Driver has another active negotiation or ride. Refresh discovery and select an available Driver." });
+    }
     if (!await driverRideReservations.TryAcquireTemporaryAsync(selectedDriverId, rideId, expiresAtUtc, ct))
     {
         await RemoveIdempotencyRecordAsync();
         return Results.Conflict(new { message = "The selected Driver has another active negotiation or ride. Refresh discovery and select an available Driver." });
     }
 
+    // Re-read eligibility after acquiring the per-driver lease. Availability changes are
+    // blocked while a lease is held; this second read closes the selection/assignment race.
+    var latestAssignment = await FindUnionAssignmentAsync(selectedDriverId, ct);
+    var latestUnion = await FindUnionAsync(unionId, ct);
+    var latestProfile = await GetApprovedDriverProfileAsync(selectedDriverId, ct);
+    var latestFreshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds);
+    if (latestAssignment is null || latestAssignment.Status != "Active" || latestAssignment.UnionId != unionId ||
+        latestUnion is null || latestUnion.Status != "Active" ||
+        !latestUnion.ZoneIds.Contains(zoneId, StringComparer.OrdinalIgnoreCase) ||
+        !latestUnion.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase) ||
+        latestProfile is null || latestProfile.AvailabilityStatus != "Online" ||
+        !string.Equals(latestProfile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(latestProfile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
+        latestProfile.PassengerCapacity < request.Passengers ||
+        latestProfile.LocationUpdatedAtUtc is null || latestProfile.LocationUpdatedAtUtc < latestFreshAfter ||
+        latestProfile.CurrentLatitude is null or < -90 or > 90 || !double.IsFinite(latestProfile.CurrentLatitude.Value) ||
+        latestProfile.CurrentLongitude is null or < -180 or > 180 || !double.IsFinite(latestProfile.CurrentLongitude.Value) ||
+        latestProfile.Documents is null ||
+        !latestProfile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
+        !latestProfile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
+    {
+        await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct);
+        await RemoveIdempotencyRecordAsync();
+        return Results.Conflict(new { message = "The selected Driver or Union changed eligibility while the booking was being created. Refresh discovery." });
+    }
+
+    var latestDistanceKm = CalculateDistanceKm(request.PickupLatitude, request.PickupLongitude,
+        latestProfile.CurrentLatitude.Value, latestProfile.CurrentLongitude.Value);
+    if (latestDistanceKm > radiusKm.Value)
+    {
+        await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct);
+        await RemoveIdempotencyRecordAsync();
+        return Results.Conflict(new { message = "The selected Driver is no longer within the approved pickup radius." });
+    }
+
     var ride = new DemoRide(
         rideId, pickup, dropoff, request.Passengers, "Negotiating", now, null, riderId, selectedDriverId,
-        request.PickupLatitude, request.PickupLongitude, profile.CurrentLatitude, profile.CurrentLongitude,
-        null, profile.LocationUpdatedAtUtc, false, "cab", zoneId,
-        UnionId: unionId, Stops: stops, NegotiationExpiresAtUtc: expiresAtUtc);
+        request.PickupLatitude, request.PickupLongitude, null, null, null, null, false, "cab", zoneId,
+        UnionId: unionId, Stops: stops, NegotiationExpiresAtUtc: expiresAtUtc,
+        DriverDisplayName: latestProfile.FullName, DriverVehicleMake: latestProfile.VehicleMake,
+        DriverVehicleModel: latestProfile.VehicleModel, DriverDistanceToPickupKm: latestDistanceKm,
+        UnionName: latestUnion.UnionName);
     try { await SaveRideAsync(ride, ct); }
     catch
     {
@@ -2156,6 +2264,9 @@ bool IsSameRideSnapshot(DemoRide left, DemoRide right)
         left.LocationSharingActive != right.LocationSharingActive || left.ServiceClass != right.ServiceClass ||
         left.DispatchZoneId != right.DispatchZoneId || left.AgreementStateRevision != right.AgreementStateRevision ||
         left.UnionId != right.UnionId || left.NegotiationExpiresAtUtc != right.NegotiationExpiresAtUtc ||
+        left.DriverDisplayName != right.DriverDisplayName || left.DriverVehicleMake != right.DriverVehicleMake ||
+        left.DriverVehicleModel != right.DriverVehicleModel || left.DriverDistanceToPickupKm != right.DriverDistanceToPickupKm ||
+        left.UnionName != right.UnionName ||
         !(left.Stops ?? []).SequenceEqual(right.Stops ?? [], StringComparer.Ordinal))
         return false;
 
@@ -2313,7 +2424,7 @@ public sealed record NearbyUnionDiscoveryGroup(string UnionId, string UnionName,
 public sealed record NearbyDriverDiscoveryResponse(string DriverId, string FullName, string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceToPickupKm, string? ProfilePhotoBase64, string? ProfilePhotoContentType);
 public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, IReadOnlyList<string> Stops);
 public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive, IReadOnlyList<string> Stops, DateTimeOffset? NegotiationExpiresAtUtc = null);
-public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null);
+public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null, DateTimeOffset? CreatedAtUtc = null);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
 public sealed record RefreshTokenRequest(string RefreshToken);
@@ -2321,7 +2432,9 @@ public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
     string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "cab", string DispatchZoneId = "hyderabad-central",
     IReadOnlyList<RideAgreementVersion>? AgreementVersions = null, IReadOnlyList<RideAgreementConfirmation>? AgreementConfirmations = null,
-    int AgreementStateRevision = 0, string? UnionId = null, IReadOnlyList<string>? Stops = null, DateTimeOffset? NegotiationExpiresAtUtc = null);
+    int AgreementStateRevision = 0, string? UnionId = null, IReadOnlyList<string>? Stops = null, DateTimeOffset? NegotiationExpiresAtUtc = null,
+    string? DriverDisplayName = null, string? DriverVehicleMake = null, string? DriverVehicleModel = null,
+    double? DriverDistanceToPickupKm = null, string? UnionName = null);
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 

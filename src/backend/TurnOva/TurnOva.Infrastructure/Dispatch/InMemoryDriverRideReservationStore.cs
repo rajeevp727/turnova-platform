@@ -47,17 +47,21 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         return Task.FromResult(_items.TryUpdate(driverId, current with { ExpiresAtUtc = expiresAtUtc }, current));
     }
 
-    public Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default)
+    public Task<DriverRideReservation?> GetActiveAsync(string driverId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         while (_items.TryGetValue(driverId, out var current))
         {
-            if (current.ExpiresAtUtc is null || current.ExpiresAtUtc > DateTimeOffset.UtcNow) return Task.FromResult(true);
+            if (current.ExpiresAtUtc is null || current.ExpiresAtUtc > DateTimeOffset.UtcNow)
+                return Task.FromResult<DriverRideReservation?>(current);
             if (((ICollection<KeyValuePair<string, DriverRideReservation>>)_items).Remove(new(driverId, current)))
-                return Task.FromResult(false);
+                return Task.FromResult<DriverRideReservation?>(null);
         }
-        return Task.FromResult(false);
+        return Task.FromResult<DriverRideReservation?>(null);
     }
+
+    public async Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
+        await GetActiveAsync(driverId, cancellationToken) is not null;
 
     public Task<bool> TryReleaseAsync(string driverId, string rideId, CancellationToken cancellationToken = default)
     {

@@ -660,8 +660,10 @@ export default function App() {
             </View>
           </View>)}
           {activeRide&&<>
-            <Text style={styles.label}>ACTIVE TRIP</Text>
+            <Text style={styles.label}>{["Negotiating","AgreementConfirmed"].includes(activeRide.status)?"SELECTED RIDE":"ACTIVE TRIP"}</Text>
             <Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>
+            <Text style={styles.cardTitle}>{activeRide.pickup} → {activeRide.dropoff}</Text>
+            {activeRide.stops?.length ? <Text style={styles.muted}>Stops · {activeRide.stops.join(" → ")}</Text> : null}
             <View style={{marginTop:12,paddingTop:10,borderTopWidth:1,borderTopColor:colors.border}}>
               <Text style={styles.cardTitle}>Direct fare negotiation · INR</Text>
               {agreementHistory.map(item=><View key={item.version} style={{paddingVertical:7}}>

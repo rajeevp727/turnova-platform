@@ -1370,6 +1370,14 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Negotiating", json.RootElement.GetProperty("status").GetString());
         Assert.Equal("selected-booking-union", json.RootElement.GetProperty("unionId").GetString());
         Assert.Equal(2, json.RootElement.GetProperty("stops").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("driverLatitude").ValueKind);
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("driverLongitude").ValueKind);
+        Assert.False(json.RootElement.GetProperty("locationSharingActive").GetBoolean());
+        Assert.Equal("Approved Test Driver", json.RootElement.GetProperty("driverDisplayName").GetString());
+        Assert.Equal("Maruti", json.RootElement.GetProperty("driverVehicleMake").GetString());
+        Assert.Equal("Dzire", json.RootElement.GetProperty("driverVehicleModel").GetString());
+        Assert.Equal("Selected Booking Union", json.RootElement.GetProperty("unionName").GetString());
+        Assert.True(json.RootElement.GetProperty("driverDistanceToPickupKm").GetDouble() >= 0);
 
         using var retry = CreateSelectedBookingRequest("selected-booking-key", "selected-booking-driver",
             "selected-booking-union", "KPHB", "HITEC City", ["JNTU", "Madhapur"]);
@@ -1528,6 +1536,105 @@ public sealed class RideApiIntegrationTests
             Assert.Equal(JsonValueKind.Null, expiry.ValueKind);
         Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("selected-accept-driver"));
+    }
+
+    [Fact]
+    public async Task SelectedBookingRejectsMoreThanTenIntermediateStops()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "too-many-stops-rider");
+        using var driver = factory.CreateClient("Driver", "too-many-stops-driver");
+        SeedBookableDriver(factory, "too-many-stops-driver", "too-many-stops-union");
+
+        var stops = Enumerable.Range(1, 11).Select(index => $"Stop {index}").ToArray();
+        using var request = CreateSelectedBookingRequest("too-many-stops-key", "too-many-stops-driver",
+            "too-many-stops-union", "KPHB", "HITEC City", stops);
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("too-many-stops-driver"));
+    }
+
+    [Fact]
+    public async Task SelectedBookingFailsClosedWhenNegotiationLifetimeIsNotConfigured()
+    {
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false, selectedDriverNegotiationLifetimeMinutes: null);
+        using var rider = factory.CreateClient("Rider", "missing-expiry-rider");
+        using var driver = factory.CreateClient("Driver", "missing-expiry-driver");
+        SeedBookableDriver(factory, "missing-expiry-driver", "missing-expiry-union");
+
+        using var request = CreateSelectedBookingRequest("missing-expiry-key", "missing-expiry-driver",
+            "missing-expiry-union", "KPHB", "HITEC City", []);
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("missing-expiry-driver"));
+    }
+
+    [Fact]
+    public async Task SelectedBookingRecoversAfterInterruptedRideWriteUsingSameIdempotencyKey()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "recovery-booking-rider");
+        using var driver = factory.CreateClient("Driver", "recovery-booking-driver");
+        SeedBookableDriver(factory, "recovery-booking-driver", "recovery-booking-union");
+
+        using var request = CreateSelectedBookingRequest("recovery-booking-key", "recovery-booking-driver",
+            "recovery-booking-union", "KPHB", "HITEC City", ["JNTU"]);
+        using var firstResponse = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+        using var firstJson = JsonDocument.Parse(await firstResponse.Content.ReadAsStringAsync());
+        var rideId = firstJson.RootElement.GetProperty("rideId").GetString()!;
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        Assert.True(rides.TryRemove(rideId, out _));
+        var idempotency = factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
+        var idempotencyIndex = idempotency.Keys.Single();
+        idempotency[idempotencyIndex] = idempotency[idempotencyIndex] with
+        {
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2)
+        };
+
+        using var retry = CreateSelectedBookingRequest("recovery-booking-key", "recovery-booking-driver",
+            "recovery-booking-union", "KPHB", "HITEC City", ["JNTU"]);
+        using var recovered = await rider.SendAsync(retry);
+        Assert.Equal(HttpStatusCode.Created, recovered.StatusCode);
+        using var recoveredJson = JsonDocument.Parse(await recovered.Content.ReadAsStringAsync());
+        Assert.Equal(rideId, recoveredJson.RootElement.GetProperty("rideId").GetString());
+        Assert.Equal(1, recoveredJson.RootElement.GetProperty("stops").GetArrayLength());
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("recovery-booking-driver"));
+    }
+
+    [Fact]
+    public async Task DiscoveryReleasesPermanentReservationWhenRideIsAlreadyTerminal()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "terminal-reservation-rider");
+        using var driver = factory.CreateClient("Driver", "terminal-reservation-driver");
+        SeedBookableDriver(factory, "terminal-reservation-driver", "terminal-reservation-union");
+
+        using var request = CreateSelectedBookingRequest("terminal-reservation-key", "terminal-reservation-driver",
+            "terminal-reservation-union", "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[rideId] = rides[rideId] with { Status = "Completed", NegotiationExpiresAtUtc = null };
+
+        using var discovery = await rider.GetAsync("/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
+        using var discoveryJson = JsonDocument.Parse(await discovery.Content.ReadAsStringAsync());
+        var discoveredDriverIds = discoveryJson.RootElement.GetProperty("unions").EnumerateArray()
+            .SelectMany(group => group.GetProperty("drivers").EnumerateArray())
+            .Select(item => item.GetProperty("driverId").GetString());
+        Assert.Contains("terminal-reservation-driver", discoveredDriverIds);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("terminal-reservation-driver"));
     }
 
     private static void SeedBookableDriver(TurnOvaApiFactory factory, string driverId, string unionId)
@@ -1822,11 +1929,14 @@ public sealed class RideApiIntegrationTests
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
         private readonly double _nearbyRadiusKm;
+        private readonly int? _selectedDriverNegotiationLifetimeMinutes;
 
-        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double nearbyRadiusKm = 10)
+        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double nearbyRadiusKm = 10,
+            int? selectedDriverNegotiationLifetimeMinutes = 15)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
+            _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -1842,7 +1952,8 @@ public sealed class RideApiIntegrationTests
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
                     ["Cors:AllowedOrigins:0"] = "https://app.turnova.test",
                     ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] = "15",
+                    ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] =
+                        _selectedDriverNegotiationLifetimeMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
                 }));
         }
