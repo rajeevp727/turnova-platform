@@ -6,5 +6,5 @@ public interface ICosmosMigration
 {
     string Id { get; }
     string Description { get; }
-    Task UpAsync(Database database, CancellationToken cancellationToken);
+    Task UpAsync(Microsoft.Azure.Cosmos.Database database, CancellationToken cancellationToken);
 }
