@@ -19,7 +19,29 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet restore src/backend/TurnOva/TurnOva.sln
       - run: dotnet build src/backend/TurnOva/TurnOva.sln --configuration Release --no-restore
-      - run: dotnet test src/backend/TurnOva/TurnOva.sln --configuration Release --no-build
+      - name: Run backend test project
+        run: dotnet test src/backend/TurnOva/TurnOva.Tests/TurnOva.Tests.csproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=turnova-tests.trx" --results-directory "$RUNNER_TEMP/turnova-test-results"
+      - name: Verify backend tests actually executed
+        run: |
+          python3 - "$RUNNER_TEMP/turnova-test-results/turnova-tests.trx" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          path = sys.argv[1]
+          root = ET.parse(path).getroot()
+          namespace = {"trx": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          counters = root.find(".//trx:Counters", namespace)
+          if counters is None:
+              raise SystemExit("TRX results did not contain test counters.")
+          total = int(counters.get("total", "0"))
+          executed = int(counters.get("executed", "0"))
+          failed = int(counters.get("failed", "0"))
+          if total < 1 or executed < 1:
+              raise SystemExit(f"Backend test project executed no tests (total={total}, executed={executed}).")
+          if failed:
+              raise SystemExit(f"Backend test suite reported {failed} failure(s).")
+          print(f"Backend tests executed: {executed}/{total}; failures: {failed}.")
+          PY
       - name: Publish API without containers
         run: dotnet publish src/backend/TurnOva/TurnOva.API/TurnOva.API.csproj --configuration Release --no-restore --output "$RUNNER_TEMP/turnova-api"
       - name: Verify publish artifact
