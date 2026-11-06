@@ -151,9 +151,9 @@ else
     var queueStore = new InMemoryQueueStore();
     var demoDrivers = new[]
     {
-        new DriverQueueEntry("DRV-1001", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
-        new DriverQueueEntry("DRV-1002", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
-        new DriverQueueEntry("DRV-1003", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
+        new DriverQueueEntry("DRV-1001", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
+        new DriverQueueEntry("DRV-1002", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
+        new DriverQueueEntry("DRV-1003", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
     };
     foreach (var driver in demoDrivers)
         await queueStore.AddAsync(driver, CancellationToken.None);
@@ -899,6 +899,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.NotFound(new { message = "Driver onboarding profile not found." });
     if (profile.Status != "Approved") return Results.Conflict(new { message = "Only approved drivers can be assigned to a union." });
+    if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "Only Cab drivers can receive new MVP Union assignments. Legacy non-Cab membership records are retained for history." });
     if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
         return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
     var union = await FindUnionAsync(request.UnionId, ct);
@@ -1136,7 +1138,7 @@ app.MapGet("/api/v1/driver/union", async (ClaimsPrincipal user, CancellationToke
 
 app.MapGet("/api/v1/zones", () => Results.Ok(new[]
 {
-    new { id = "hyderabad-central", name = "Hyderabad Central", serviceClasses = new[] { "scooty", "bike", "auto", "cab" } }
+    new { id = "hyderabad-central", name = "Hyderabad Central", serviceClasses = new[] { "cab" } }
 })).RequireAuthorization();
 
 app.MapGet("/api/v1/zones/{zoneId}/queues/{serviceClass}", async (
