@@ -911,6 +911,90 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderDiscoveryFailsClosedWhenConfiguredZonesOverlapAtPickup()
+    {
+        var zones = new[]
+        {
+            new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6),
+            new DispatchZoneConfig("hyderabad-overlap", 17.4, 17.8, 78.3, 78.7)
+        };
+        using var factory = new TurnOvaApiFactory(dispatchZones: zones);
+        using var rider = factory.CreateClient("Rider", "rider-overlapping-zones");
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RiderDiscoveryFailsClosedWhenAnyConfiguredZoneHasInvalidBounds()
+    {
+        var zones = new[]
+        {
+            new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6),
+            new DispatchZoneConfig("invalid-zone", 17.8, 17.4, 78.2, 78.6)
+        };
+        using var factory = new TurnOvaApiFactory(dispatchZones: zones);
+        using var rider = factory.CreateClient("Rider", "rider-invalid-zone-config");
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RiderDiscoveryExcludesNearbyCabDriverWhoseUnionServesAnotherPickupZone()
+    {
+        var zones = new[]
+        {
+            new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6),
+            new DispatchZoneConfig("hyderabad-north", 17.6, 18.0, 78.2, 78.6)
+        };
+        using var factory = new TurnOvaApiFactory(dispatchZones: zones);
+        using var rider = factory.CreateClient("Rider", "rider-cross-zone");
+        using var driver = factory.CreateClient("Driver", "driver-cross-zone");
+
+        var now = DateTimeOffset.UtcNow;
+        var union = new DriverUnion("north-zone-union", "North Zone Cab Union", "NORTH-ZONE",
+            "Hyderabad", null, null, ["hyderabad-north"], ["cab"], "Active", now, now);
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[union.UnionId] = union;
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var profile = profiles["driver-cross-zone"];
+        profiles[profile.DriverId] = profile with
+        {
+            ZoneId = "hyderabad-north",
+            ServiceClass = "cab",
+            Status = "Approved",
+            PassengerCapacity = 4,
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/cross-zone/licence", "Approved"),
+                new DriverDocumentReference("VehicleRegistration", "test/cross-zone/registration", "Approved")
+            ],
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.6001,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = now,
+            ProfilePhotoBase64 = "/9j/",
+            ProfilePhotoContentType = "image/jpeg",
+            ProfilePhotoApprovalStatus = "Approved",
+            ProfilePhotoApprovedByUnionId = union.UnionId
+        };
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()[profile.DriverId] =
+            new DriverUnionAssignment(profile.DriverId, union.UnionId, union.Name, "Active", now, now, "Cross-zone fixture");
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.5999&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("hyderabad-central", json.RootElement.GetProperty("pickupZoneId").GetString());
+        Assert.Empty(json.RootElement.GetProperty("unions").EnumerateArray());
+    }
+
+    [Fact]
     public async Task RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency()
     {
         using var factory = new TurnOvaApiFactory();
@@ -2022,20 +2106,23 @@ public sealed class RideApiIntegrationTests
         private readonly bool _legacyFifoRiderRequestsEnabled;
         private readonly double _nearbyRadiusKm;
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
+        private readonly DispatchZoneConfig[]? _dispatchZones;
 
         public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double nearbyRadiusKm = 10,
-            int? selectedDriverNegotiationLifetimeMinutes = 15)
+            int? selectedDriverNegotiationLifetimeMinutes = 15, DispatchZoneConfig[]? dispatchZones = null)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
             _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
+            _dispatchZones = dispatchZones;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
             builder.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                var settings = new Dictionary<string, string?>
                 {
                     ["Auth:Jwt:Issuer"] = Issuer,
                     ["Auth:Jwt:Audience"] = Audience,
@@ -2047,7 +2134,23 @@ public sealed class RideApiIntegrationTests
                     ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] =
                         _selectedDriverNegotiationLifetimeMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
-                }));
+                };
+
+                if (_dispatchZones is not null)
+                {
+                    for (var index = 0; index < _dispatchZones.Length; index++)
+                    {
+                        var zone = _dispatchZones[index];
+                        settings[$"Dispatch:Zones:{index}:ZoneId"] = zone.ZoneId;
+                        settings[$"Dispatch:Zones:{index}:MinLatitude"] = zone.MinLatitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        settings[$"Dispatch:Zones:{index}:MaxLatitude"] = zone.MaxLatitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        settings[$"Dispatch:Zones:{index}:MinLongitude"] = zone.MinLongitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        settings[$"Dispatch:Zones:{index}:MaxLongitude"] = zone.MaxLongitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    }
+                }
+
+                configuration.AddInMemoryCollection(settings);
+            });
         }
 
         public HttpClient CreateClient(string role, string subject)
