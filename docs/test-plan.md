@@ -232,7 +232,7 @@ The GitHub Actions workflow currently runs:
 | TRACK-013 | Driver selected-booking or active-trip connection reconnects | Driver reloads its own available requests and authoritative selected/active/terminal ride history | Mobile + API | P0 |
 | TRACK-014 | Non-owner Rider/Driver attempts to join a ride group, or Driver requests another Driver notification group | Hub aborts the connection before adding any group membership | SignalR security | P0 |
 
-The lifecycle state-machine unit tests and in-memory API integration tests are automated. API integration coverage includes Rider booking/idempotency, role restrictions, ownership, lifecycle transitions, cancellation rules, terminal location-sharing shutdown, and concurrent Driver acceptance. Cosmos-specific concurrency, SignalR WebSocket authorization/reconnect, and physical-device scenarios still require their corresponding integration/device environments.
+The lifecycle state-machine unit tests and in-memory API integration tests are automated. API integration coverage includes Rider booking/idempotency, role restrictions, ownership, lifecycle transitions, cancellation rules, terminal location-sharing shutdown, and concurrent Driver acceptance. `RideTrackingHubTests` verifies authenticated ride/Driver group membership, and the shared `rideRecovery` tests verify Rider/Driver active-state selection. Live SignalR WebSocket delivery/reconnect and physical-device foreground/background scenarios remain device gates; Cosmos-specific concurrency still requires the configured integration environment.
 
 ## 13. Cosmos DB configuration, migration and readiness
 
