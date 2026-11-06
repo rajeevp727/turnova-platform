@@ -533,9 +533,24 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 - Reject unsupported service classes and pickup coordinates outside configured service zones.
 - Verify a rejected request does not consume its idempotency key, allowing a corrected retry to create the ride.
 
+## 12. Nearby available vehicles and online driver location
 
-## 12. Concurrent queue membership
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| NEARBY-001 | Driver goes online without GPS coordinates or with coordinates outside the assigned zone | HTTP 400/409; driver remains Offline and is not added to the queue | API integration | P0 |
+| NEARBY-002 | Rider searches for nearby vehicles | Only approved, online drivers with active queue membership in the pickup zone, matching service class and sufficient passenger capacity are returned, ordered by distance | API integration | P0 |
+| NEARBY-003 | Nearby search privacy and stale location | Response omits driver ID, name, phone, registration and exact coordinates; locations older than the configured freshness window are excluded | API integration + security | P0 |
+| NEARBY-004 | Driver leaves assigned zone while online | Driver is taken Offline, queue membership is removed and current location is cleared | API integration | P0 |
+| NEARBY-005 | Driver app is online in foreground or an active ride begins | Foreground availability updates run only while Online, pause during Accepted/Arrived/InProgress rides and stop when Offline or signed out; active-trip location uses the trip tracking endpoint | Android/iOS functional | P0 |
+| NEARBY-006 | Rider searches without location permission or outside configured zones | Clear recoverable permission/zone error; no nearby driver data is returned | Android/iOS + API | P0 |
+| NEARBY-007 | Driver submits a location update with missing coordinates or has an active ride | HTTP 400 for missing coordinates; HTTP 409 during an active ride without changing Online state or trip location | API integration | P0 |
 
-- Submit sixteen concurrent AddAsync operations for the same Driver and zone/service-class queue.
-- Exactly one operation succeeds; all duplicate attempts are rejected and one queue membership remains.
-- This is deterministic in-memory concurrency coverage; Cosmos multi-instance partition/ETag validation remains outstanding.
+The API integration tests use the in-memory store and configured test zone. They do not establish Cosmos cross-partition query behaviour or physical-device permission/resume behaviour. Driver GPS is foreground-only and is not intended as background tracking.
+
+## 13. Concurrent queue membership
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| QUEUE-CONC-001 | Sixteen concurrent AddAsync operations submit the same driver to one zone/service-class queue | Exactly one operation succeeds, duplicate attempts are rejected, and one active membership remains | Unit concurrency | P0 |
+
+This deterministic test exercises the in-memory store. Cosmos multi-instance and partition-level concurrency remain an infrastructure-backed verification gate.
