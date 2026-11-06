@@ -103,9 +103,9 @@
 
 ## 7. Next steps
 
-1. **Current sequential #19 RELEASE-01:** export and verify production JavaScript bundles for both Rider and Driver apps on Android and iOS in CI; do not describe these as signed native binaries.
+1. **Current sequential AI-01 supplemental requirement:** finish the provider-agnostic Rider trip-intent and approved-help slice, run final-head CI, perform automated review and merge only when checks pass. Keep AI-01 outside the 19-row denominator.
 2. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved. Do not invent a support workflow.
-3. After #19, begin approved supplemental AI-01 work while preserving the 19-row denominator; revisit #17 when the support decision is available.
+3. **#19 RELEASE-01 remains In progress:** PR #72 verifies production JavaScript bundles, not native signed APK/AAB/IPA or physical-device acceptance.
 4. Keep #15 DRIVER-04 Blocked until Driver support categories, escalation owner and operational process are approved.
 5. Revisit #6 DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
 
@@ -172,7 +172,7 @@
 - No payment gateway, escrow, customer verification/dispute workflow or delta-based next-ride gate is introduced. The latter two product decisions remain open. Physical Android/iOS entry/history acceptance and live Cosmos ETag/restart validation remain external gates.
 - Weighted progress remains **42.1%**: 0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. The 19-area denominator is unchanged.
 
-- Approved supplemental **CAB-RECON-01 is In progress in PR #70** and remains outside the 19-area denominator; AI-01 remains separately Not started.
+- Approved supplemental **CAB-RECON-01 is In progress in PR #70** and remains outside the 19-area denominator; AI-01 is now In progress in the focused sequential branch and remains outside the 19-area denominator.
 
 
 ## PLATFORM-01 bounded storage readiness increment (2026-11-07)
@@ -187,7 +187,7 @@
 
 ## RELEASE-01 production bundle increment (2026-11-07)
 
-- Focused PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) is the current sequential item #19. It adds production JavaScript bundle exports for Android and iOS in both mobile apps, plus non-empty metadata checks and CI artifacts. Final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) passed; Rider bundle artifact [13544064077](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838/artifacts/13544064077), Driver bundle artifact [13543824695](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838/artifacts/13543824695), API publish artifact [13544163935](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838/artifacts/13544163935).
+- Focused PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) completed sequential item #19 and merged at `43cb52f4652990d1ddc88efb765f8fef72ec0753`. Final-head CI [42303396400](https://github.com/rajeevp727/turnova-platform/actions/runs/42303396400) passed all four jobs, including 214/214 backend tests, native non-container API publish, all four Rider/Driver Android/iOS production JavaScript bundle exports and three artifacts.
 - This is stronger than Expo config/typecheck alone but is not a native APK/AAB/IPA build and does not prove signing or app-store readiness.
 - Current app configs contain Android package IDs but no iOS bundle identifiers. Final iOS store identifiers, signing credentials/profiles, Android release keystore and physical-device functional/security/pilot evidence remain external gates; no values are invented.
 - The 19-area weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19) until the release row's full evidence passes.
