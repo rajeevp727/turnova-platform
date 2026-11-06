@@ -176,6 +176,34 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task ExplicitStateNameInQuestionReturnsItsApprovedExplanation()
+    {
+        var service = CreateService(new UnavailableAiAssistantProvider());
+
+        var result = await service.ExplainHelpAsync(
+            "What does InProgress mean?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("state-in-progress", result.SourceId);
+        Assert.Contains("InProgress", result.Answer, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AmbiguousGenericRideStatusQuestionEscalatesInsteadOfGuessingAState()
+    {
+        var service = CreateService(new UnavailableAiAssistantProvider());
+
+        var result = await service.ExplainHelpAsync(
+            "What is my ride status?",
+            null,
+            CancellationToken.None);
+
+        Assert.True(result.EscalationRequired);
+        Assert.Equal("unsupported", result.SourceId);
+    }
+
+    [Fact]
     public async Task QueueHelpExplainsRiderSelectionWithoutInventingInternalFifoPolicy()
     {
         var service = CreateService(new UnavailableAiAssistantProvider());
