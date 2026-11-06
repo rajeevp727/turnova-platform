@@ -56,5 +56,5 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Test shared mobile refresh coordination
-        run: node --test src/mobile/shared/refreshCoordinator.test.cjs
+      - name: Test shared mobile state and refresh helpers
+        run: node --test src/mobile/shared/*.test.cjs
