@@ -229,4 +229,4 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Driver app defaults to Cab, displays Cab-only onboarding, and keeps approved legacy non-Cab profiles read-only for new workflows while retaining history. Rider app exposes Cab only; Rider history keeps serviceClass as string so old non-Cab records remain readable.
 - Integration test covers non-Cab ride/nearby/onboarding/union creation rejection, non-Cab Driver availability/offer denial, Cab-only zone catalog and historical non-Cab ride visibility.
 - Legacy customer-facing FIFO/automatic-offer flow still exists for Cab and is not the approved final flow; CAB-DISCOVERY-01 must replace it. Internal FIFO role remains unresolved.
-- Current branch needs final diff review, PR creation and latest-head CI before merge.
+- PR #53 is open: https://github.com/rajeevp727/turnova-platform/pull/53. Latest-head CI is pending; merge only after the final head passes all checks.
