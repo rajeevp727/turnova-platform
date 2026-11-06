@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Approved supplemental AI-01: implement the provider-agnostic Rider trip-intent draft and approved-content Rider/Driver ride/queue-state help boundary, with privacy-safe inputs, deterministic fallback, rate limiting, mobile wiring and automated tests. AI-01 remains outside the 19-area denominator.**
+**Approved supplemental AI-01: final automated review and merge of the provider-agnostic Rider trip-intent draft and approved-content Rider/Driver ride/queue-state help boundary. Implementation and CI are complete; live provider validation remains external. AI-01 remains outside the 19-area denominator.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -103,10 +103,10 @@
 
 ## 7. Next steps
 
-1. **Current sequential AI-01 supplemental requirement:** finish the provider-agnostic Rider trip-intent and approved-help slice, run final-head CI, perform automated review and merge only when checks pass. Keep AI-01 outside the 19-row denominator.
-2. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved. Do not invent a support workflow.
-3. **#19 RELEASE-01 remains In progress:** PR #72 verifies production JavaScript bundles, not native signed APK/AAB/IPA or physical-device acceptance.
-4. Keep #15 DRIVER-04 Blocked until Driver support categories, escalation owner and operational process are approved.
+1. **Current sequential AI-01 supplemental requirement:** complete the automated review and merge PR #73 only at the verified head SHA with all required checks green. Keep AI-01 outside the 19-row denominator.
+2. **Next after AI-01:** re-audit #1 AUTH-01 for the remaining mobile session/profile lifecycle code gaps and implement the smallest test-backed vertical slice; then continue the ordered 1–19 audit.
+3. **#17 SUPPORT-01 and #15 DRIVER-04 remain Blocked:** support categories, escalation owner and operating process are not approved. Do not invent a support workflow.
+4. **#19 RELEASE-01 remains In progress:** PR #72 verifies production JavaScript bundles, not native signed APK/AAB/IPA or physical-device acceptance.
 5. Revisit #6 DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
 
 ## 8. DISPATCH-03 audit handoff (2026-11-06)
@@ -209,6 +209,6 @@
 - Rider/Driver help uses approved in-repository FAQ/state entries. A provider may select only an approved source ID; the API returns the exact repository answer. Unsupported questions require escalation.
 - Rider UI exposes draft-only trip intent in Book and approved help in Profile; Driver Profile exposes approved ride/queue help. Draft output only pre-fills editable fields and does not invoke booking, fare, agreement or payment operations.
 - API integration tests cover Rider-only draft authorization, Rider/Driver help, unsupported escalation and per-caller rate limiting. Service unit tests cover route redaction, provider output validation, timeout/cancellation, fallback and approved source selection.
-- Final automated review, CI and merge are pending. Live provider sandbox, managed-secret wiring and provider data-processing validation remain external gates.
+- PR #73 final-head CI [42306272200](https://github.com/rajeevp727/turnova-platform/actions/runs/42306272200) passed: 231/231 backend tests, TRX execution guard, non-container API publish/artifact, Rider/Driver Expo config/typechecks, four Android/iOS production JS bundle exports and shared mobile tests. Automated review and merge are pending. Live provider sandbox, managed-secret wiring and provider data-processing validation remain external gates.
 - The 19-area weighted score remains **42.1%** = `(0 Verified + 16 × 0.5 + 0 Not started + 3 × 0) / 19 × 100`; counts **0 Verified, 16 In progress, 0 Not started, 3 Blocked**; strict fully verified count **0/19**. AI-01 is supplemental and is not counted.
 - **Next step:** finish the current AI-01 branch review/build checks and open one focused PR. After merge, re-audit main; #17 SUPPORT-01 remains blocked pending approved support categories, escalation owner and operating process.
