@@ -122,7 +122,7 @@ public sealed class RideApiIntegrationTests
         suspension.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         Assert.Equal(HttpStatusCode.OK, (await driver.SendAsync(suspension)).StatusCode);
         var membership = await driver.GetFromJsonAsync<QueueMembershipTest>(
-            "/api/v1/zones/hyderabad-central/queues/auto/me");
+            "/api/v1/zones/hyderabad-central/queues/cab/me");
         Assert.NotNull(membership);
         Assert.False(membership.IsQueued);
     }
@@ -141,19 +141,19 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK,
             (await second.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
 
-        var before = await first.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        var before = await first.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(before);
         Assert.Equal(new[] { "availability-first", "availability-second" }, before.Select(x => x.DriverId));
 
         Assert.Equal(HttpStatusCode.OK,
             (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = false })).StatusCode);
-        var afterOffline = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        var afterOffline = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(afterOffline);
         Assert.Equal(new[] { "availability-second" }, afterOffline.Select(x => x.DriverId));
 
         Assert.Equal(HttpStatusCode.OK,
             (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
-        var rejoined = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        var rejoined = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(rejoined);
         Assert.Equal(new[] { "availability-second", "availability-first" }, rejoined.Select(x => x.DriverId));
     }
@@ -366,10 +366,10 @@ public sealed class RideApiIntegrationTests
         var afterReject = await queue.GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
         Assert.Equal(new[] { "driver-fifo-second", "driver-fifo-first" }, afterReject.Select(entry => entry.DriverId));
 
-        using var timeout = await firstDriver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null);
+        using var timeout = await firstDriver.PostAsync("/api/v1/queues/hyderabad-central/cab/offer-timeout", null);
         Assert.Equal(HttpStatusCode.Conflict, timeout.StatusCode);
 
-        using var secondTimeout = await secondDriver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null);
+        using var secondTimeout = await secondDriver.PostAsync("/api/v1/queues/hyderabad-central/cab/offer-timeout", null);
         Assert.Equal(HttpStatusCode.OK, secondTimeout.StatusCode);
         var afterTimeout = await queue.GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
         Assert.Equal(new[] { "driver-fifo-first", "driver-fifo-second" }, afterTimeout.Select(entry => entry.DriverId));
@@ -727,7 +727,7 @@ public sealed class RideApiIntegrationTests
         };
 
         using var response = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=3");
+            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=3");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         using var json = JsonDocument.Parse(body);
@@ -749,7 +749,7 @@ public sealed class RideApiIntegrationTests
 
         Assert.Equal(HttpStatusCode.Forbidden,
             (await matching.GetAsync(
-                "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1")).StatusCode);
+                "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=1")).StatusCode);
     }
 
     [Fact]
@@ -778,7 +778,7 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Online", profile.AvailabilityStatus);
 
         using var nearby = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1");
+            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=1");
         Assert.Equal(HttpStatusCode.OK, nearby.StatusCode);
         var vehicles = await nearby.Content.ReadFromJsonAsync<List<NearbyVehicleTest>>();
         Assert.NotNull(vehicles);
@@ -800,12 +800,12 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Offline", profile.AvailabilityStatus);
 
         var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
-            "/api/v1/zones/hyderabad-central/queues/auto");
+            "/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(queue);
         Assert.DoesNotContain(queue, entry => entry.DriverId == "driver-online-outside-zone");
 
         using var nearby = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=0&longitude=0&serviceClass=auto&passengers=1");
+            "/api/v1/rides/nearby?latitude=0&longitude=0&serviceClass=cab&passengers=1");
         Assert.Equal(HttpStatusCode.BadRequest, nearby.StatusCode);
     }
 
@@ -831,7 +831,7 @@ public sealed class RideApiIntegrationTests
         Assert.Null(profile.LocationUpdatedAtUtc);
 
         var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
-            "/api/v1/zones/hyderabad-central/queues/auto");
+            "/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(queue);
         Assert.DoesNotContain(queue, entry => entry.DriverId == "driver-location-zone-exit");
     }
