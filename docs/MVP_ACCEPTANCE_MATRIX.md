@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; `docs/test-plan.md`.
-**Last audited:** 2026-11-07 against main after PR #73 merge `3a2e37e610e8660fa8ecca1a3e1f42e8899251ff`. PR #73 final-head CI [42306913746](https://github.com/rajeevp727/turnova-platform/actions/runs/42306913746) passed all four jobs: 233/233 backend tests, TRX guard, native non-container API publish, Rider/Driver Android+iOS production bundle exports, Metro assertions, both app typechecks, shared mobile tests and artifacts. Automated review [6697690613](https://github.com/rajeevp727/turnova-platform/pull/73#issuecomment-6697690613) found no unresolved critical/high-risk issue.
+**Last audited:** 2026-11-07 against main after PR #74 merge `7fa2fc3490e7d914fa8bdfea7006025e84f6739d`. PR #74 final-head CI [42307569528](https://github.com/rajeevp727/turnova-platform/actions/runs/42307569528) passed all four jobs: 235/235 backend tests, TRX guard, native non-container API publish/artifact verification, Rider/Driver Expo config/typechecks, shared mobile tests and Android/iOS production JavaScript bundle exports. Automated review [6697841721](https://github.com/rajeevp727/turnova-platform/pull/74#issuecomment-6697841721) found no unresolved critical/high-risk issue.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -16,8 +16,8 @@
 
 | ID | In-scope acceptance criterion | Implementation evidence currently known | Evidence still required | Status |
 |---|---|---|---|---|
-| AUTH-01 | Rider and Driver registration, login, profile and role separation | PRs #35, #39 and #40 cover fake-TriSend registration, JWT validation/role boundaries and startup guards; PR #74 adds duplicate-registration 409 and authenticated `/auth/me` profile-read integration tests. | Mobile runtime/session tests and editable profile lifecycle remain. No upstream profile-update endpoint/field contract is specified, so do not invent one. | In progress |
-| AUTH-02 | Secure access/refresh-token lifecycle and logout | Both apps use SecureStore; PR #37 serializes concurrent refreshes; PR #41 extracts and tests the shared single-flight refresh coordinator and retry-after-failure behaviour | Automated token rotation/reuse, app restart, expiry, logout and secure-storage failure tests on both apps | In progress |
+| AUTH-01 | Rider and Driver registration, login, profile and role separation | PRs #35, #39 and #40 cover fake-TriSend registration, JWT validation/role boundaries and startup guards; PR #74 adds duplicate-registration 409 and authenticated `/auth/me` profile-read integration tests. Final-head CI [42307569528](https://github.com/rajeevp727/turnova-platform/actions/runs/42307569528) passed 235/235 backend tests and all four jobs. | Mobile runtime/session tests and editable profile lifecycle remain. No upstream profile-update endpoint/field contract is specified, so do not invent one. | In progress |
+| AUTH-02 | Secure access/refresh-token lifecycle and logout | PRs #37/#41 provide SecureStore use and single-flight/retry handling. Current sequential branch `fix/auth-02-late-401-refresh-race` reads the latest stored access/refresh pair inside the shared operation in both apps; tests cover one read/refresh for concurrent 401s, delayed 401 after rotation and missing refresh token. CI pending. | Provider rotation/reuse sandbox contract, app restart/expiry/logout and SecureStore failure runtime tests on Android/iOS remain. | In progress |
 | RIDER-01 | Cab-only pickup/drop-off selection, location permission and union-grouped nearby Cab discovery | PR #45 zone/capacity/freshness groundwork; PRs #52/#53 Cab-only and legacy guards; PR #55 adds union-grouped discovery and Rider local selection cards | Approved production radius, call/chat provider actions, live Cosmos multi-instance validation and Android/iOS device tests | In progress |
 | RIDER-02 | Direct Rider/Driver fare negotiation and mutually confirmed agreement before ride start; no platform fare estimate | PR #56 adds authenticated proposal/counterproposal APIs, immutable agreement versions, append-only confirmations, idempotency, SignalR events and mutual-confirmation gates; PR #57 connects selected booking and optional-stop agreement snapshots. | PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including agreement version/confirmation tests; native API publish and mobile checks passed. Live Cosmos ETag/multi-instance and Android/iOS device acceptance remain. | In progress |
 | RIDER-03 | Customer-selected Cab booking, status, cancellation and duplicate-submit safety | PR #57 creates selected-driver Negotiating rides with route/Union snapshots, request-fingerprint idempotency, create-if-absent persistence and deterministic retry recovery; per-driver leases are reconciled against ride lifecycle before release and shared with Union transfer so membership cannot change during an active negotiation/ride; Driver notification/reconnect recovery, mutual-agreement acceptance, cancellation/decline/expiry/completion handling and privacy-safe location snapshots are covered. | PR #57 final synchronized head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs; automated review comments [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440) found no unresolved critical/high-risk issue. Live Cosmos restart/ETag contention, Android/iOS booking/cancel/expiry tests, production radius and approved negotiation lifetime remain. | In progress |
@@ -59,8 +59,8 @@
 
 ## Ordered 1–19 checklist
 
-1. AUTH-01 — In progress
-2. AUTH-02 — In progress
+1. AUTH-01 — In progress; PR #74 merged and final-head CI passed 235/235 backend tests plus all four jobs; mobile runtime/profile lifecycle remain
+2. AUTH-02 — In progress; late-401 refresh-token race fix and shared tests are on the current sequential branch; CI pending
 3. RIDER-01 — In progress
 4. RIDER-02 — In progress
 5. RIDER-03 — In progress
@@ -81,8 +81,8 @@
 
 ## Highest-priority next work
 
-1. **Current sequential #1 AUTH-01:** complete duplicate-registration conflict and authenticated `/auth/me` profile-read contract tests, then re-audit the remaining profile lifecycle gap without inventing an upstream update contract.
-2. **Next:** #2 AUTH-02 — inspect refresh rotation/reuse, app restart, expiry, logout and SecureStore failure tests; implement the next missing token-lifecycle vertical slice.
+1. **Current sequential #2 AUTH-02:** verify the late-401 refresh race fix in both apps; CI must pass the shared refresh tests, app typechecks and Android/iOS bundle exports.
+2. **Next within AUTH-02:** audit remaining app restart, expired-token, logout/offline and SecureStore-failure paths; only move to #3 RIDER-01 after independent AUTH-02 code/test gaps are addressed or explicitly blocked by provider/device gates.
 3. **#17 SUPPORT-01 remains Blocked:** Rider support categories, escalation owner and operating process are not approved. Do not invent them.
 4. **#19 RELEASE-01 remains In progress:** PR #72 verifies production JavaScript bundles, not native signed APK/AAB/IPA or physical-device acceptance.
 5. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
