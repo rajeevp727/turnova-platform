@@ -683,7 +683,7 @@ Do not test or implement platform fare estimates, in-app payment collection, gat
 | CAB-DISC-014 | Legacy customer-facing FIFO discovery/request | Nearby endpoint returns 410; legacy ride creation is disabled by default | RiderDiscoveryExcludesReservedDriversAndLegacyFifoRiderRoutesAreRetired; CustomerFacingFifoRideCreationIsDisabledOutsideTestCompatibilityMode | CI run 42237256233 passed all four jobs |
 | CAB-DISC-015 | A Driver or unauthenticated caller requests Rider discovery | Driver role is forbidden and unauthenticated requests are unauthorized; only Rider role may call discovery | RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency (Driver and anonymous assertions) | CI run 42237256233 passed all four jobs |
 
-Mobile acceptance still requires Android/iOS device checks for union grouping, selected-card state, approved-photo rendering, location permission denial, no-provider call/chat messaging and the distinct unavailable journey-distance label. The discovery selection is local to the screen in this increment; durable selected-driver reservation/negotiation is a subsequent acceptance slice. Live maps/routing, production radius approval and Cosmos multi-instance query/concurrency validation remain external gates.
+Mobile acceptance still requires Android/iOS device checks for union grouping, selected booking request/retry, approved-photo rendering, location permission denial, no-provider call/chat messaging, fare proposal/confirmation and the distinct unavailable journey-distance label. The app now submits the selected Driver and optional stops to the durable booking API; live maps/routing, production radius and negotiation-lifetime approval, and Cosmos multi-instance query/concurrency validation remain external gates.
 
 
 
@@ -704,3 +704,15 @@ The first increment includes the API and Rider/Driver negotiation controls for r
 
 
 RIDER-02 first implementation CI evidence: run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) passed backend restore/build/tests, native non-container API publish/artifact verification, Rider/Driver Expo config/typechecks and shared mobile-auth tests on code/test head `74d4a2164576572186a31b081c73ad5ba6d7e049`. This is CI evidence, not Android/iOS physical-device or live Cosmos validation.
+
+
+## RIDER-03 — selected-driver booking and reservation
+
+- Verify only an active Cab Union, active membership, approved Cab Driver, approved driving licence/vehicle registration, Online state, fresh location, passenger capacity and configured pickup radius can be booked.
+- Verify the selected Driver and Union are persisted with pickup, destination and optional stops; the agreement snapshot contains the same route.
+- Verify Idempotency-Key retries return the same ride, while reusing a key with a different request fingerprint conflicts.
+- Verify two Riders cannot acquire overlapping reservations for one Driver; Rider cancellation, Driver decline, negotiation expiry and trip completion release only the matching reservation.
+- Verify a temporary reservation expires, can be reacquired, and becomes permanent only after mutual agreement and Driver acceptance; active reservations prevent going offline.
+- Verify Driver acceptance is rejected before both parties confirm the current agreement and the selected booking transitions Negotiating → AgreementConfirmed → Accepted.
+- Verify expiry is configuration-gated: missing Dispatch:SelectedDriverNegotiationLifetimeMinutes returns 503; no default lifetime is invented. Lazy expiry is triggered on ride reads/history and reservation checks.
+- Automated tests added in RIDER-03 cover selected booking, route stops, idempotent retry/payload mismatch, union mismatch, concurrent reservation, cancellation/decline, expiry/release, agreement-gated Driver acceptance, and reservation promotion. CI evidence must be attached to the final PR head.
