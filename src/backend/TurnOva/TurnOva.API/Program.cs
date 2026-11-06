@@ -2698,7 +2698,7 @@ app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
-    if (ride is null || ride.DriverId != driverId) return Results.NotFound();
+    if (string.IsNullOrWhiteSpace(driverId) || ride is null || ride.DriverId != driverId) return Results.NotFound();
     if (!string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
         return Results.Conflict(new { message = "Direct-payment reporting is available only for Cab rides." });
     if (ride.Status != "Completed")
@@ -2715,9 +2715,9 @@ app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
             item.Party == "Driver" && item.ActorId == driverId))
         return Results.Conflict(new { message = "A current, mutually confirmed Cab agreement and Union assignment are required." });
 
-    if (request.AmountReceived < 0 ||
-        decimal.Round(request.AmountReceived, 2, MidpointRounding.AwayFromZero) != request.AmountReceived)
-        return Results.BadRequest(new { message = "Amount received must be zero or more with at most two decimal places." });
+    if (request.AmountReceived is not decimal amountReceived || amountReceived < 0 ||
+        decimal.Round(amountReceived, 2, MidpointRounding.AwayFromZero) != amountReceived)
+        return Results.BadRequest(new { message = "An explicit amount received of zero or more with at most two decimal places is required." });
 
     var idempotencyKey = context.Request.Headers["Idempotency-Key"].ToString().Trim();
     if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 128)
@@ -2728,14 +2728,14 @@ app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
     if (ride.PaymentReconciliation is { } existing)
     {
         if (existing.IdempotencyKeyHash == idempotencyKeyHash &&
-            existing.AmountReceived == request.AmountReceived)
+            existing.AmountReceived == amountReceived)
             return Results.Ok(ToPaymentReconciliationResponse(existing));
         return Results.Conflict(new { message = "A payment report is already recorded for this ride and is immutable." });
     }
 
     var report = new RidePaymentReconciliation(
         rideId, current.Version, ride.RiderId, driverId!, ride.UnionId!,
-        current.Amount, request.AmountReceived,
+        current.Amount, amountReceived,
         decimal.Round(current.Amount - request.AmountReceived, 2, MidpointRounding.AwayFromZero),
         current.Currency, DateTimeOffset.UtcNow, driverId!, "DriverReportedUnverified", idempotencyKeyHash);
     var updated = ride with { PaymentReconciliation = report };
@@ -2744,7 +2744,7 @@ app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
         var latest = await ReadRideRawAsync(rideId, ct);
         if (latest?.PaymentReconciliation is { } concurrent &&
             concurrent.IdempotencyKeyHash == idempotencyKeyHash &&
-            concurrent.AmountReceived == request.AmountReceived)
+            concurrent.AmountReceived == amountReceived)
             return Results.Ok(ToPaymentReconciliationResponse(concurrent));
         return Results.Conflict(new { message = "The ride or payment report changed concurrently. Refresh the trip history before retrying." });
     }
@@ -2969,7 +2969,7 @@ public sealed record UpdateUnionStatusRequest(string Status);
 public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "cab");
 public sealed record ProposeRideAgreementRequest(decimal Amount, string Currency);
-public sealed record ReportRidePaymentRequest(decimal AmountReceived);
+public sealed record ReportRidePaymentRequest(decimal? AmountReceived);
 public sealed record RiderSelectedBookingRequest(string SelectedDriverId, string UnionId, string Pickup, string Dropoff,
     IReadOnlyList<string>? Stops, int Passengers, double PickupLatitude, double PickupLongitude);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
