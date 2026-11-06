@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#4 RIDER-02 / CAB-AGREEMENT-01: direct fare negotiation, immutable versions and mutual confirmation gates.**
+**#5 RIDER-03: durable Rider-selected Cab booking, driver reservation, lifecycle and idempotency.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -30,11 +30,11 @@
 | 2 | AUTH-02 | In progress | PRs #37 and #41 plus shared mobile refresh tests cover single-flight refresh and retry-after-failure; rotation/reuse, restart, expiry, logout and secure-storage device tests remain. |
 | 3 | RIDER-01 | In progress | PR #55 merged at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run 42237572056 passed all four jobs. Durable selection reservation/booking, stops persistence, route distance, provider actions and device validation remain. |
 | 4 | RIDER-02 | In progress | [PR #56](https://github.com/rajeevp727/turnova-platform/pull/56), code/test head `74d4a2164576572186a31b081c73ad5ba6d7e049`: versioned direct negotiation, append-only confirmations, start/completion gates and Rider/Driver controls. CI run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) passed all four jobs. Booking integration, stop snapshot, negotiation expiry/cancellation policy, live Cosmos concurrency and physical-device acceptance remain. |
-| 5 | RIDER-03 | In progress | PR #55 disables legacy FIFO Rider request creation by default; selected-driver booking/reservation, agreement start gate and end-to-end status remain. |
+| 5 | RIDER-03 | In progress | Branch feature/rider-selected-booking-v1 adds POST /api/v1/rider/bookings, request fingerprint idempotency, selected Union/Driver validation, optional-stop persistence, expiring per-driver reservation leases, Driver acceptance after mutual agreement, cancellation/decline/expiry/completion release and Rider/Driver UI wiring. CI and review pending. |
 | 6 | DISPATCH-01 | In progress | PR #55 adds Active Cab union/zone filtering and requires Dispatch:NearbyRadiusKm; checked-in radius is 0 until product approval. |
 | 7 | DISPATCH-02 | In progress | PR #55 adds up to three per union, pickup-distance order and Rider local selection; durable server reservation is still missing. Internal FIFO role remains unresolved. |
-| 8 | DISPATCH-03 | In progress | Durable offer/expiry/outbox exists; selected-driver negotiation reservation/expiry remains, and automatic next-driver advancement must not drive customer-facing assignment. |
-| 9 | DISPATCH-04 | In progress | Per-driver reservation and ride ETag guards exist; adapt them to selected-driver negotiation and exact expiry/cancel release; Cosmos concurrency remains. |
+| 8 | DISPATCH-03 | In progress | RIDER-03 adds selected-driver reservation leases and lazy expiry; legacy offer worker remains compatibility-only and cannot advance customer-facing selection. Restart/outbox recovery and live Cosmos validation remain. |
+| 9 | DISPATCH-04 | In progress | RIDER-03 uses temporary per-driver reservation leases, permanent promotion on acceptance, ETag-protected release/expiry and active-reservation offline protection; live Cosmos multi-instance contention remains. |
 | 10 | REALTIME-01 | In progress | SignalR ride/offer flows and reconnect recovery exist; negotiation/agreement version events and device-to-device checks remain. |
 | 11 | DRIVER-01 | In progress | PR #52 enforces Cab-only new onboarding and prevents in-place legacy non-Cab conversion; union selfie approval exists; Cab vehicle checks and secure document controls remain. |
 | 12 | DRIVER-02 | In progress | PR #52 blocks legacy non-Cab profiles from new Online/queue eligibility; GPS/zone protections remain. Selected-driver negotiation remains; internal FIFO role is unresolved. |
@@ -56,8 +56,8 @@
 - PR #51 merged queue audit/safe exception handling: https://github.com/rajeevp727/turnova-platform/pull/51; merge commit `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42219327319 passed all four jobs.
 - PR #50 merged the approved Cab-only documentation reset at `6bd8f734e56ce35716595307cbeb9d7ab9decc59`; final-head CI run 42220682290 passed all four jobs.
 - PR #52 merged Cab-only Rider/Driver/Union foundations; post-merge CI run 42223126817 passed all four jobs. PR #53 merged the remaining legacy non-Cab endpoint/UI guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run 42232390997 passed all four jobs. Legacy profiles and ride-history service-class values remain preserved.
-- PR #55 now implements approved-union grouping, a three-driver cap, pickup-proximity ordering, selfie privacy and Rider local selection; durable selected-driver booking/reservation remains for RIDER-03.
-- Fare estimate remains null; platform payment gateway/escrow/collection is out of scope. PR #56 adds a partial direct-negotiation/agreement API and mobile controls; selected booking and optional-stop integration remain. Driver-reported reconciliation remains a later code gap.
+- PR #55 implements approved-union grouping, a three-driver cap, pickup-proximity ordering, selfie privacy and Rider selection. RIDER-03 now adds durable booking/reservation and optional-stop route persistence; final CI/review pending.
+- Fare estimate remains null; platform payment gateway/escrow/collection is out of scope. PR #56 adds versioned negotiation/agreement APIs and mobile controls; RIDER-03 connects selected booking and route stops. Driver-reported reconciliation remains a later code gap.
 - The old FIFO/offer machinery exists; do not extend customer-facing FIFO or automatic assignment. Internal FIFO role remains unresolved.
 - Real Cosmos transactional batch/ETag/restart/retention, Android/iOS physical-device tests and release signing remain infrastructure/device gates.
 
@@ -67,7 +67,7 @@
 |---|---|---|
 | CAB-SCOPE-01 | New Rider rides, Driver onboarding and new Union configuration are Cab-only; preserve historical records and exclude legacy non-Cab profiles from new eligibility. | Implemented and CI-validated for covered API/mobile paths — PRs #52/#53 merged; physical-device/production acceptance remains. |
 | CAB-DISCOVERY-01 | Show approved unions serving pickup; up to 2–3 eligible/available Cab drivers per union ordered by pickup proximity; Rider selects. No customer-facing FIFO ranking or automatic assignment. | In progress — PR #55 merged; durable selection reservation/booking and device/radius validation remain. |
-| CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | In progress — PR #56 API/mobile increment; selected-driver booking integration, optional stops and device/Cosmos validation remain. |
+| CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | In progress — PR #56 merged; RIDER-03 connects selected booking and persists optional stops in agreement snapshots; device/Cosmos/expiry-policy validation remain. |
 | CAB-RECON-01 | Driver reports amount received as unverified; persist agreed-minus-reported signed delta; expose only to authorised union roles. No platform payment gateway/escrow/collection. | Not started |
 | CAB-UNION-01 | Cab membership, Cab vehicle verification, union approval and approved selfie visibility. | Partially evidenced; Cab-only validation and full union workflow remain |
 | AI-01 | Separately approved provider-agnostic, bounded Rider/Driver AI assistance. Keep outside the 19-area denominator and do not let AI book, set fares, approve KYC or alter dispatch/ride state. | Not started |
@@ -84,7 +84,6 @@
 
 ## 7. Next steps
 
-1. **#5 RIDER-03:** implement durable Rider-selected booking/reservation, idempotency, concurrency-safe driver hold, cancellation/expiry and exact reservation release; wire the selected driver from discovery into the agreement APIs.
-2. Revisit RIDER-02 to persist optional stops in the agreement route snapshot and complete selected-driver mobile/device validation.
-3. After RIDER-03, continue with #6 DISPATCH-01 and later rows; retain external radius, provider, legal, Cosmos and device dependencies as explicit gates.
+1. Complete RIDER-03 code review and final-head CI, then merge only if all checks pass and repository rules permit.
+2. Continue sequentially with #6 DISPATCH-01; revisit RIDER-02/RIDER-03 device, live Cosmos, approved radius and negotiation-lifetime evidence when those external gates become available.
 4. Complete approved supplemental slices (CAB-RECON-01, CAB-UNION-01 and AI-01) in the documented sequential order without expanding Phase 2. Leave dispute/next-ride policy blocked until approved.
