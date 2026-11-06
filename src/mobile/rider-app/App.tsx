@@ -5,7 +5,7 @@ import { useColorScheme } from "react-native";
 import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { singleFlight } from "../shared/refreshCoordinator";
-import { findActiveRide } from "../shared/rideRecovery";
+import { canShareActiveRideLocation, findActiveRide, isActiveRide } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
@@ -93,7 +93,7 @@ export default function App() {
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current?.rideId===details.rideId?{...current,...details}:details);}else if(isActive()){setRide(null);}},[apiFetch]);
   useEffect(()=>{let active=true;(async()=>{try{const at=await SecureStore.getItemAsync("turnova.access");const rt=await SecureStore.getItemAsync("turnova.refresh");if(at&&rt){try{const me=await request("/api/v1/auth/me",{},at);if(active){setTokens({accessToken:at,refreshToken:rt});setUser(me);}}catch{try{const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(active)await accept(result);}catch{await clearTokens();}}}}catch{if(active)setError("Unable to restore session.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[accept]);
   useEffect(()=>{
-    if(!ride||tab!=="Activity"||!tokens)return;
+    if(!ride||!isActiveRide(ride,"rider")||!tokens)return;
     let active=true;
     const connection=new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(ride.rideId)}`,{
@@ -114,17 +114,25 @@ export default function App() {
       }catch(e){if(active)setError(e instanceof Error?e.message:"Unable to recover the latest ride state.");}
     };
     connection.on("DriverLocationUpdated",(update:{rideId:string;latitude:number;longitude:number;locationUpdatedAt:string})=>{
-      if(active)setRide(current=>current?.rideId===update.rideId?{...current,driverLatitude:update.latitude,driverLongitude:update.longitude,locationUpdatedAt:update.locationUpdatedAt}:current);
+      if(active)setRide(current=>current?.rideId===update.rideId&&canShareActiveRideLocation(current)?{...current,driverLatitude:update.latitude,driverLongitude:update.longitude,locationUpdatedAt:update.locationUpdatedAt}:current);
     });
     connection.on("RideStatusChanged",(update:{rideId:string;status:string})=>{
-      if(active)setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
+      if(active){
+        const locationSharingActive=canShareActiveRideLocation({status:update.status,locationSharingActive:true});
+        setRide(current=>current?.rideId===update.rideId?{
+          ...current,
+          status:update.status,
+          locationSharingActive,
+          ...(locationSharingActive?{}:{driverLatitude:undefined,driverLongitude:undefined,locationUpdatedAt:undefined})
+        }:current);
+      }
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
       if(active&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>setError(e instanceof Error?e.message:"Unable to refresh fare agreement."));
     });
     connection.onreconnected(()=>{void refreshRiderState();});
     void connection.start().then(refreshRiderState).catch(()=>{
-      if(active)setError("Live ride updates are temporarily unavailable. Reopen Activity to refresh the current trip state.");
+      if(active)setError("Live ride updates are temporarily unavailable. The current trip state will refresh after reconnection.");
     });
     return()=>{
       active=false;
@@ -133,7 +141,7 @@ export default function App() {
       connection.off("RideAgreementChanged");
       void connection.stop();
     };
-  },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
+  },[ride?.rideId,ride?.status,tokens?.accessToken,apiFetch,loadRideHistory]);
   const authenticate=async()=>{setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});await accept(result);}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
   const logout=async()=>{try{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);}catch{}await clearTokens();setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);setAgreementHistory([]);setAgreementAmount("");};
   const findNearbyVehicles=async()=>{setLoading(true);setError("");setSelectedDriverId(null);try{const permission=await Location.requestForegroundPermissionsAsync();if(!permission.granted)throw new Error("Location permission is required to find nearby Cab drivers.");const position=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});const coordinates={latitude:position.coords.latitude,longitude:position.coords.longitude};setPickupCoordinates(coordinates);const query="latitude="+encodeURIComponent(String(coordinates.latitude))+"&longitude="+encodeURIComponent(String(coordinates.longitude))+"&passengers="+encodeURIComponent(String(Number(passengers)||1));const result=await apiFetch("/api/v1/rider/discovery?"+query);setDiscovery(result as DiscoveryResult);}catch(e){setDiscovery(null);setError(e instanceof Error?e.message:"Unable to discover nearby Cab drivers.");}finally{setLoading(false);}};
