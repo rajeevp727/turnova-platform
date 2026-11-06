@@ -7,6 +7,7 @@
 
 **CAB-SCOPE-01 (approved supplemental requirement; not part of the 19-area denominator): enforce Cab-only new Rider and Driver workflows while preserving historical records.**
 
+- Reconciliation commit `3d8099a301bce596697333b852e6ab01d73dcedb` now has current main as its first parent; the main-to-branch comparison contains only the seven intended follow-up files.
 PR #52 merged CAB-SCOPE-01 foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`; post-merge CI run [42223126817](https://github.com/rajeevp727/turnova-platform/actions/runs/42223126817) passed all four jobs. PR #53 is the focused follow-up for legacy non-Cab selfie/approval, location, queue-read, offer/reject/timeout and mobile polling/SignalR guards. Its branch is being reconciled with the merged main head; fresh CI is required before merge.
 
 ## 2. Overall MVP completion
