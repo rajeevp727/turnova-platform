@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD at start of this increment:** `72ee4c7fc146469eff12da6c74e3f1c587dcb618` (PR #32)
+**Current main HEAD:** `c70cc39c5c246ca643574032f6fbd417fb0ec7e5` (PR #33)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -47,6 +47,7 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #30: merged — retry-safe durable offer rejection and idempotent queue rotation.
 - PR #31: merged — queue rotation idempotency regression tests.
 - PR #32: merged — automatic next-driver offer advancement after rejection/expiry.
+- PR #33: merged — durable SignalR notification outbox and unified offer lifetime.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
@@ -136,9 +137,16 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - No local build/test claimed; CI is the validation gate.
 
 
-## Durable offer notification outbox + unified lifetime (in PR)
+## Durable offer notification outbox + unified lifetime (merged in PR #33)
 - Initial and advanced offers share clamped `Dispatch:OfferLifetimeSeconds` configuration (10–120 seconds; default 30).
 - Offer aggregate stores notification state; newly created offers start Pending and are persisted before delivery.
 - Hosted outbox worker reads bounded pending batches, rechecks current offer identity/status, sends `RideOfferReceived`, then ETag-marks notification Sent.
 - Delivery is at-least-once: a crash after SignalR send but before the Sent marker can duplicate an event. Clients must de-duplicate by offerId and refresh authoritative pending state after reconnect.
 - Multi-instance duplicate delivery and Cosmos failure-injection tests remain required. No local build/test claimed; CI is the validation gate.
+
+
+## Verification note (2026-11-06)
+- PR #33 is confirmed merged to main at c70cc39c5c246ca643574032f6fbd417fb0ec7e5.
+- The GitHub connector returned no workflow runs and no commit status entries for this SHA; CI success is therefore **not verified from this audit**.
+- The acceptance matrix in `docs/MVP_ACCEPTANCE_MATRIX.md` is the working source for requirement-by-requirement progress. Rows remain In progress until implementation and relevant test evidence are both recorded.
+- Do not report 100% based on merged PR count. Use verified matrix rows divided by total in-scope rows, and separately report unresolved product decisions and pilot/production gates.
