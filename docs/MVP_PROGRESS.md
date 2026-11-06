@@ -6,7 +6,7 @@
 ## 1. Current step
 
 **13/19 — TRIP-01: Driver trip lifecycle, location sharing, trip history and Rider live progress.**  
-Current task: complete the Rider trip-history increment in PR #47, verify it, merge it under the merge policy, then implement authenticated Driver-owned trip history. PR #47 currently contains the Rider API/UI, ownership/privacy tests and a stale-response/stale-active-state UI fix.
+Current task: implement authenticated Driver-owned trip history API/UI and ownership/privacy tests on branch `feat/driver-trip-history`. Rider-owned history was merged in PR #47; Driver history is the remaining TRIP-01 implementation slice.
 
 ## 2. Overall MVP completion
 
@@ -32,7 +32,7 @@ Current task: complete the Rider trip-history increment in PR #47, verify it, me
 | 10 | REALTIME-01 | In progress | SignalR ride/offer flows and reconnect recovery exist; Android/iOS interruption, reconnect and device-to-device checks remain. |
 | 11 | DRIVER-01 | In progress | Onboarding and union selfie approval exist; secure document storage/scanning, retention, reviewer RBAC and device tests remain. |
 | 12 | DRIVER-02 | In progress | GPS-gated Online, zone exit and queue removal exist; full offer/timeout/re-entry and physical-device checks remain. |
-| 13 | TRIP-01 | In progress | Rider history is in PR #47; Driver history API/UI and ownership tests remain. Cosmos history, device-to-device and location-privacy checks remain. |
+| 13 | TRIP-01 | In progress | Rider history merged in PR #47; Driver-owned history API/UI and ownership/privacy tests are being implemented on `feat/driver-trip-history`. Cosmos history, device-to-device and location-privacy checks remain. |
 | 14 | DRIVER-03 | Blocked | Work-metrics PDF exists; monetary earnings need approved compensation, commission and payout policy. |
 | 15 | DRIVER-04 | Blocked | Driver support workflow needs approved categories, escalation owner and process. |
 | 16 | RIDER-04 | Blocked | Rider history sub-work is in PR #47; payment provider/method, sandbox, webhook/idempotency/refund, receipts and ratings remain. |
@@ -42,12 +42,11 @@ Current task: complete the Rider trip-history increment in PR #47, verify it, me
 
 ## 4. Current item evidence and review
 
-- PR: https://github.com/rajeevp727/turnova-platform/pull/47
-- Rider history implementation: authenticated Rider-only `GET /api/v1/rides/mine`; owner comes from the authenticated subject, response is newest-first and excludes rider/driver IDs, exact coordinates and fare.
-- API tests cover owner isolation despite a client-supplied riderId, ordering, response privacy, Rider/Driver role separation and empty history.
-- Prior head `c9973abe9d706a9b665dc703d622b81858955faf` passed CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42212058315 (backend build/tests, native .NET publish, Rider/Driver Expo config/typechecks and shared auth tests).
-- Review found and fixed two UI state cases on the PR branch: ignore history/detail responses after Activity unmount or session change; clear a stale in-memory active ride when the server history contains no active ride.
-- The prior CI run predates those review fixes and documentation reconciliation commits. A fresh CI run on the latest PR head is required before merge.
+- PR #47 merged: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`.
+- Latest PR #47 head `1c08b96e78bef42c175b29593de153a151382f96` passed all four jobs in CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42214516012.
+- Rider history API tests cover owner isolation despite client-supplied riderId, newest-first ordering, response privacy, Rider/Driver role separation and empty history. Rider UI restores the latest active ride, ignores stale responses after Activity unmount/session change, and clears stale active state when history contains no active ride.
+- Driver history work is underway on branch `feat/driver-trip-history`: Driver-only `GET /api/v1/driver/rides/mine`, owner-scoped safe summary, active-trip restoration in Driver Trips UI, and API ownership/privacy/role/empty-history tests.
+- PR #48 has not yet been opened; the current Driver-history branch still requires review and fresh CI.
 - Real Cosmos cross-partition query/RU behaviour is not verified by the in-memory API tests.
 
 ## 5. Approved supplemental requirement (not counted in the 19 rows)
@@ -56,7 +55,7 @@ Current task: complete the Rider trip-history increment in PR #47, verify it, me
 
 ## 6. Next step
 
-After PR #47 passes fresh CI and merges, continue TRIP-01 with one focused PR for Driver-owned trip history: authenticated Driver subject scoping, safe newest-first summary, Driver app history UI, ownership/privacy/role/empty-history tests, and matrix/test-plan/project-brain updates. Do not start a parallel feature PR.
+Finish the Driver-owned history slice on `feat/driver-trip-history`, run CI, open and review one focused PR, and merge only with latest-head green checks. After TRIP-01, record blocked decision-dependent areas and proceed in order to the next actionable acceptance area (PLATFORM-01). Do not start a parallel feature PR.
 
 ## 7. Blockers
 
