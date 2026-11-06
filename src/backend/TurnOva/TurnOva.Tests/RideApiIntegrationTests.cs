@@ -910,6 +910,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-payslip-pdf");
+        using var otherDriver = factory.CreateClient("Driver", "driver-payslip-other");
         var union = new DriverUnion(
             "union-payslip", "Central Drivers Union", "HYD-CENTRAL", "Hyderabad",
             "Union Manager", null, ["hyderabad-central"], ["cab"], "Active",
@@ -946,10 +947,62 @@ public sealed class RideApiIntegrationTests
         Assert.Contains("Rides accepted: 2", pdf);
         Assert.Contains("Rides completed: 2", pdf);
         Assert.Contains("Rides rejected: 1", pdf);
+        Assert.DoesNotContain("ride-1", pdf);
+        Assert.DoesNotContain("ride-2", pdf);
+        Assert.DoesNotContain("Customer:", pdf);
+        Assert.DoesNotContain("Fare:", pdf);
+        Assert.DoesNotContain("₹", pdf);
+        Assert.DoesNotContain("INR", pdf);
+        Assert.DoesNotContain("Net payable:", pdf);
 
+        ledger["driver-payslip-pdf|ride-4:Completed"] = new DriverWorkActivity(
+            "ride-4:Completed", "driver-payslip-pdf", "ride-4", "Completed",
+            new DateTimeOffset(2026, 10, 6, 5, 0, 0, TimeSpan.Zero));
         using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
         Assert.Equal(pdf, Encoding.ASCII.GetString(await repeated.Content.ReadAsByteArrayAsync()));
+
+        using var otherDriverResponse = await otherDriver.GetAsync(
+            "/api/v1/driver/payslips/2026/10.pdf?driverId=driver-payslip-pdf");
+        Assert.Equal(HttpStatusCode.Conflict, otherDriverResponse.StatusCode);
+        Assert.NotEqual("application/pdf", otherDriverResponse.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task PayslipRejectsMissingUnionAssignmentAndUnionTransferWithinMonth()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var noUnionDriver = factory.CreateClient("Driver", "driver-payslip-no-union");
+        using var transferDriver = factory.CreateClient("Driver", "driver-payslip-transfer");
+
+        using var noAssignment = await noUnionDriver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.Conflict, noAssignment.StatusCode);
+
+        var oldUnion = new DriverUnion(
+            "union-payslip-old", "Old Drivers Union", "HYD-OLD", "Hyderabad",
+            "Old Manager", null, ["hyderabad-central"], ["cab"], "Active",
+            DateTimeOffset.UtcNow.AddYears(-1), DateTimeOffset.UtcNow);
+        var newUnion = new DriverUnion(
+            "union-payslip-new", "New Drivers Union", "HYD-NEW", "Hyderabad",
+            "New Manager", null, ["hyderabad-central"], ["cab"], "Active",
+            DateTimeOffset.UtcNow.AddYears(-1), DateTimeOffset.UtcNow);
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        unions[oldUnion.UnionId] = oldUnion;
+        unions[newUnion.UnionId] = newUnion;
+
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        audit["driver-payslip-transfer|assignment-before-period"] = new DriverUnionAuditEvent(
+            "assignment-before-period", "driver-payslip-transfer", null, null,
+            oldUnion.UnionId, oldUnion.Name, "Assigned", "Initial assignment", "Operations",
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+        audit["driver-payslip-transfer|transfer-during-period"] = new DriverUnionAuditEvent(
+            "transfer-during-period", "driver-payslip-transfer", oldUnion.UnionId, oldUnion.Name,
+            newUnion.UnionId, newUnion.Name, "Transferred", "Union transfer", "Operations",
+            new DateTimeOffset(2026, 10, 15, 0, 0, 0, TimeSpan.Zero));
+
+        using var transfer = await transferDriver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.Conflict, transfer.StatusCode);
+        Assert.NotEqual("application/pdf", transfer.Content.Headers.ContentType?.MediaType);
     }
 
     [Fact]
@@ -981,9 +1034,18 @@ public sealed class RideApiIntegrationTests
         using var driver = factory.CreateClient("Driver", "driver-payslip-endpoint");
         using var rider = factory.CreateClient("Rider", "rider-payslip-endpoint");
 
-        var futureMonth = DateTime.UtcNow.AddMonths(2);
+        var currentMonth = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromMinutes(330));
+        var currentResponse = await driver.GetAsync($"/api/v1/driver/payslips/{currentMonth.Year}/{currentMonth.Month}.pdf");
+        Assert.Equal(HttpStatusCode.BadRequest, currentResponse.StatusCode);
+
+        var futureMonth = currentMonth.AddMonths(2);
         var driverResponse = await driver.GetAsync($"/api/v1/driver/payslips/{futureMonth.Year}/{futureMonth.Month}.pdf");
         Assert.Equal(HttpStatusCode.BadRequest, driverResponse.StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await driver.GetAsync("/api/v1/driver/payslips/2026/13.pdf")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await driver.GetAsync("/api/v1/driver/payslips/2019/10.pdf")).StatusCode);
 
         var riderResponse = await rider.GetAsync($"/api/v1/driver/payslips/{futureMonth.Year}/{futureMonth.Month}.pdf");
         Assert.Equal(HttpStatusCode.Forbidden, riderResponse.StatusCode);

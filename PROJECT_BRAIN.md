@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `213832f7f1e6f4eaa5ea3fdabf099c7b63e18979` (PR #67 Cab availability/location reservation safety merged)
+**Last audited main HEAD:** `1a545048fee86111a7c55724275d93a1458e90f3` (PR #68 selected-Cab trip/location safety merged)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -76,9 +76,10 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 4. **#10 REALTIME-01 — Code audit recorded:** PR #63 fixes Rider reconnect state restoration. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including hub ownership tests; physical Android/iOS WebSocket/reconnect acceptance remains outstanding.
 5. **#11 DRIVER-01 — In progress:** PR #66 merged union-scoped selfie approval and Driver membership display. Identity-provider claim mapping, private document storage/scanning/consent/retention and Android/iOS onboarding evidence remain.
 6. **#12 DRIVER-02 — In progress:** PR #67 merged the active Cab Union/document gate, reservation-safe Online/Offline and zone-exit transitions, and foreground availability-GPS refresh; live Cosmos and Android/iOS device gates remain.
-7. **#13 TRIP-01 — Current:** complete the selected-Cab negotiation-to-completion integration path, finite coordinate validation, assigned-Driver-only Rider live location and foreground-only active-trip GPS pause/resume.
-8. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
-9. **CAB-UNION-01, remaining support/platform/release areas, and AI-01 supplemental:** complete only after the agreed 19-area sequence; keep AI-01 outside the denominator.
+7. **#13 TRIP-01 — In progress:** PR #68 merged the selected-Cab lifecycle/location safety slice; live Cosmos and Android/iOS SignalR/map/permission/background-resume acceptance remain.
+8. **#14 DRIVER-03 — Current:** fix current/incomplete month rejection and prove authenticated Driver/Union assignment isolation and work-metrics-only PDF privacy with automated tests.
+9. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
+10. **CAB-UNION-01, remaining support/platform/release areas, and AI-01 supplemental:** complete only after the agreed 19-area sequence; keep AI-01 outside the denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -314,3 +315,12 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - API coordinate validation rejects NaN, infinity and geographic out-of-range values for availability, pickup and active-trip updates. Only the assigned Driver may update an active ride; only its owning Rider reads the current coordinates.
 - PR #68 final head `98ee431ffb686411589aec0a5305e1062a787864` passed CI [42290264457](https://github.com/rajeevp727/turnova-platform/actions/runs/42290264457): 195/195 backend tests, native non-container API publish/artifact, Rider/Driver Expo typechecks and nine shared mobile tests; all four jobs green.
 - Physical Android/iOS SignalR, map, permission and background/resume tests and live Cosmos ETag/history tests remain external acceptance gates.
+
+
+## DRIVER-03 work-metrics payslip increment (2026-11-07)
+
+- The Driver payslip is a PDF-only monthly work summary. It must not calculate earnings, commission, deductions, fare, payment received or net payable; direct Rider-to-Driver payment reconciliation remains a separate unverified record.
+- Only completed India-local months may be requested. The existing UTC-start comparison rejected future months but incorrectly allowed the current incomplete month; compare against the current India-local month start.
+- The authenticated Driver claim is the sole source of driverId. A query parameter must not select another Driver's payslip. Missing Union assignment or a Union transfer inside the month must reject generation rather than invent split-employer allocation.
+- PDF content should include only Driver/Union identity and work metrics; exclude ride/customer identifiers, route details and payment/fare values.
+- Android/iOS month list and PDF save/share/accessibility checks plus live Cosmos snapshot/migration/crash-window validation remain external gates.

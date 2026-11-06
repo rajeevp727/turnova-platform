@@ -315,8 +315,12 @@ These APIs currently use the temporary server-side admin API key and are not a s
 | PAY-011 | Repeated event delivery | Deterministic activity ID prevents duplicate ledger entries |
 | PAY-012 | Payslip requested more than once after snapshot | Same immutable snapshot and PDF metrics are returned |
 | PAY-013 | PDF generation | Output begins with a valid PDF header and includes all work metrics |
+| PAY-015 | Driver requests the current or a future month | Bad request; only completed India-local months can be snapshotted |
+| PAY-016 | Driver supplies another driver's ID in a query string | API derives the driver ID from the authenticated Driver claim and never returns another driver's PDF |
+| PAY-017 | Driver has no union assignment or transfers unions within the month | Conflict; no PDF is generated until the period has one unambiguous employer union |
+| PAY-018 | Inspect generated PDF content | Work metrics only; no ride/customer identifiers, route details, fare, currency, received-payment or net-payable values |
 
-Payslip output is PDF only. Monetary calculations are intentionally absent until the compensation model is approved. Cosmos persistence, migration and crash-window reconciliation require validation with a development Cosmos account.
+Payslip output is PDF only. Monetary calculations are intentionally absent until the compensation model is approved. Automated tests cover completed-month validation, missing/changed Union assignment, authenticated Driver isolation and exclusion of customer/ride/payment details. Physical Android/iOS month-list, download/save/share and accessibility checks remain device gates. Cosmos persistence, migration and crash-window reconciliation require validation with a development Cosmos account.
 
 ## Light and dark application themes
 
