@@ -63,6 +63,7 @@ All apps are Android/iOS mobile apps. They share one backend and dispatch engine
 - Registration and Cab-only onboarding with identity, licence, verified vehicle and required documents.
 - Approved union membership and eligibility feedback; only an authenticated manager scoped to the current union may approve public selfie visibility. A union transfer resets selfie approval and requires approval by the new current union.
 - Explicit Online/Offline availability and current pickup location, subject to approval and active-ride reservation.
+- Share trip location only for the assigned active Cab ride while the Driver app is foregrounded; pause in background and terminal states, and refresh authoritative Driver ride history and recheck foreground permission before resuming.
 - Receive Rider-selected Cab negotiation requests; propose/counter-propose and confirm the current agreement.
 - Start a ride only after both Rider and Driver confirm the same current agreement version.
 - Complete the trip, view history and report the amount received directly from the Rider as unverified.

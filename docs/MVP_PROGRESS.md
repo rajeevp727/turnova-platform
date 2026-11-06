@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#12 DRIVER-02: Complete the Cab Driver availability/location eligibility slice: active Cab Union and verified-document gate, reservation-safe Online/Offline and zone-exit transitions, and foreground GPS refresh on app resume.**
+**#13 TRIP-01: Complete the selected-Cab trip lifecycle and live-location safety slice: prove negotiation-to-completion through the selected-driver path, enforce assigned-Driver-only finite coordinates, and pause/restart active-trip GPS safely across background/resume.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -19,7 +19,8 @@
 - PR #61 merged DISPATCH-04 active-ride/Union-transfer regression coverage at `118929955d3959f078ddb59f7f5bdf3c3965d52a`. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including the accepted-active-ride/Union-transfer regression.
 - PR #64 merged the Release test-execution correction at `c90699d8fd5e9140d2daccbced106075d86118bb`; final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) passed all four jobs and executed **189/189 backend tests**. The TRX non-zero guard, native non-container API publish/artifact verification, Rider/Driver Expo config/typechecks and shared mobile tests also passed.
 - PR #66 merged at `26dafc87451ba49ea4734df81c94f9e75790800d`; final-head CI [42278673796](https://github.com/rajeevp727/turnova-platform/actions/runs/42278673796) passed all four jobs: **191/191 backend tests**, TRX non-zero guard, non-container API publish/artifact verification, both Expo config/typechecks and shared mobile tests.
-- PR #67 final head `a371ae9932e998ee9daaea6fd2a8fdff6e3615c1` passed CI [42286508190](https://github.com/rajeevp727/turnova-platform/actions/runs/42286508190), all four jobs: **193/193 backend tests**, TRX non-zero guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and six shared mobile tests.
+- PR #67 merged at `213832f7f1e6f4eaa5ea3fdabf099c7b63e18979`; verified PR head `125f3f5ae58d1debdf4c453a9f67b0625643ef4e` passed CI [42286793305](https://github.com/rajeevp727/turnova-platform/actions/runs/42286793305), all four jobs: **193/193 backend tests**, TRX non-zero guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and six shared mobile tests passed.
+- PR #68 final head `98ee431ffb686411589aec0a5305e1062a787864` passed CI [42290264457](https://github.com/rajeevp727/turnova-platform/actions/runs/42290264457), all four jobs: **195/195 backend tests**, TRX non-zero guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and **9 shared mobile tests**. Earlier run [42289992974](https://github.com/rajeevp727/turnova-platform/actions/runs/42289992974) exposed TS7006; the state updater was explicitly typed before the passing final-head run. Automated review comment [6695007160](https://github.com/rajeevp727/turnova-platform/pull/68#issuecomment-6695007160) found no unresolved critical/high-risk issue; live Cosmos and physical-device gates remain.
 
 ## 2. Overall MVP completion
 
@@ -45,8 +46,8 @@
 | 9 | DISPATCH-04 | In progress | PR #57 implements per-driver reservation leases and lifecycle cleanup; PR #61 adds accepted-active-ride Union-transfer conflict coverage. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including this regression. Live Cosmos multi-instance ETag/restart/crash recovery and approved negotiation lifetime remain. |
 | 10 | REALTIME-01 | In progress | PR #63 reloads Rider owner-scoped history/current ride and agreement versions on connect/reconnect; Driver reconnect rehydrates selected/active state. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including `RideTrackingHubTests`; Android/iOS physical-device SignalR delivery/reconnect remains. |
 | 11 | DRIVER-01 | In progress | PRs #52/#53 enforce Cab-only onboarding and preserve legacy records; PR #66 merged signed UnionManager scope, minimum-data member listing, union-only selfie approval, retry-safe audit, transfer reapproval and Driver membership display. Provider claim mapping, private document storage/retention and physical-device onboarding tests remain. |
-| 12 | DRIVER-02 | In progress | PR #67 final-head CI [42286508190](https://github.com/rajeevp727/turnova-platform/actions/runs/42286508190) passed all four jobs, executing 193/193 backend tests plus native API publish, Rider/Driver Expo config/typechecks and six shared mobile tests. Live Cosmos and Android/iOS background/permission/device validation remain; internal FIFO role is unresolved. |
-| 13 | TRIP-01 | In progress | PRs #47/#48 provide owner-scoped history; PR #56 mutual-confirmation gates; RIDER-03 adds Negotiating/AgreementConfirmed/Expired states and stop snapshots. Cosmos/device/location-privacy validation remains. |
+| 12 | DRIVER-02 | In progress | PR #67 merged; final-head CI [42286793305](https://github.com/rajeevp727/turnova-platform/actions/runs/42286793305) passed all four jobs and 193/193 backend tests; live Cosmos lease races and Android/iOS permission/background/resume remain. |
+| 13 | TRIP-01 | In progress | PR #68 final head `98ee431ffb686411589aec0a5305e1062a787864` passed CI [42290264457](https://github.com/rajeevp727/turnova-platform/actions/runs/42290264457): 195/195 backend tests, non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos and Android/iOS physical-device acceptance remain. |
 | 14 | DRIVER-03 | In progress | Monthly PDF work-metrics payslip exists; no monetary earnings/commission/payout policy is assumed. Direct-payment report is tracked under CAB-RECON-01. |
 | 15 | DRIVER-04 | Blocked | Driver support categories, escalation owner and operational process are not approved. |
 | 16 | RIDER-04 | In progress | Rider history merged in PR #47; direct-payment reporting/reconciliation and ratings remain. Customer dispute/confirmation and non-zero-delta next-ride policy are unresolved. |
@@ -97,8 +98,8 @@
 
 ## 7. Next steps
 
-1. Continue sequential #12 DRIVER-02 in PR #67: finish API availability/zone-exit lease protection, approved Union/document eligibility, and foreground GPS refresh on app resume; review and merge only on a green latest head.
-2. After #12, move to #13 TRIP-01: audit selected Cab trip lifecycle, location-sharing privacy, history and Rider live progress; implement only the next missing vertical slice.
+1. Current sequential #13 TRIP-01: complete the selected-Cab lifecycle/location regression, foreground-only watcher and coordinate validation; review the full diff and merge only after final-head checks pass.
+2. After #13, continue sequentially with #14 DRIVER-03: audit work-metrics payslip implementation, authorised access/privacy and Android/iOS document viewing evidence; do not add monetary earnings or commission policy.
 3. Implement CAB-RECON-01 in the later Rider/Driver rows: persist driver-reported/unverified amount, signed agreed-minus-reported delta and authorised Union visibility without gateway/escrow.
 4. Keep #11 DRIVER-01 In Progress until identity-provider claim mapping, private document storage/scanning/consent/retention and Android/iOS onboarding evidence pass.
 5. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
