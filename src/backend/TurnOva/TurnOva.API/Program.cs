@@ -1361,6 +1361,158 @@ app.MapGet("/api/v1/rider/discovery", async (
     return Results.Ok(new RiderDiscoveryResponse(zoneId, null, groups));
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
+app.MapPost("/api/v1/rider/bookings", async (
+    HttpContext context, ClaimsPrincipal user, RiderSelectedBookingRequest request,
+    IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
+{
+    var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
+    var selectedDriverId = request.SelectedDriverId?.Trim();
+    var unionId = request.UnionId?.Trim();
+    var pickup = request.Pickup?.Trim();
+    var dropoff = request.Dropoff?.Trim();
+    if (string.IsNullOrWhiteSpace(selectedDriverId) || selectedDriverId.Length > 128 ||
+        string.IsNullOrWhiteSpace(unionId) || unionId.Length > 128 ||
+        string.IsNullOrWhiteSpace(pickup) || pickup.Length > 250 ||
+        string.IsNullOrWhiteSpace(dropoff) || dropoff.Length > 250 ||
+        request.Passengers is < 1 or > 6 ||
+        !double.IsFinite(request.PickupLatitude) || request.PickupLatitude is < -90 or > 90 ||
+        !double.IsFinite(request.PickupLongitude) || request.PickupLongitude is < -180 or > 180 ||
+        request.Stops?.Any(stop => string.IsNullOrWhiteSpace(stop) || stop.Trim().Length > 250) == true)
+        return Results.BadRequest(new { message = "Provide a selected Cab driver and union, pickup, drop-off, valid stops, coordinates and passenger count." });
+
+    var lifetimeMinutes = app.Configuration.GetValue<int?>("Dispatch:SelectedDriverNegotiationLifetimeMinutes");
+    if (lifetimeMinutes is null || lifetimeMinutes <= 0)
+        return Results.Problem("Selected-driver negotiation lifetime is not configured. Booking is disabled until the approved expiry policy is supplied.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    var radiusKm = app.Configuration.GetValue<double?>("Dispatch:NearbyRadiusKm");
+    if (radiusKm is null || !double.IsFinite(radiusKm.Value) || radiusKm.Value <= 0)
+        return Results.Problem("The approved Rider discovery radius is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    var zoneId = ResolveDispatchZone(request.PickupLatitude, request.PickupLongitude);
+    if (string.IsNullOrWhiteSpace(zoneId))
+        return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
+
+    var idempotencyKey = context.Request.Headers["Idempotency-Key"].ToString().Trim();
+    if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 128)
+        return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
+    var stops = request.Stops?.Select(stop => stop.Trim()).ToArray() ?? [];
+    var requestFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+    {
+        selectedDriverId, unionId, pickup, dropoff, stops, request.Passengers,
+        request.PickupLatitude, request.PickupLongitude
+    })));
+    var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)));
+    var idempotencyIndex = $"{riderId}:{keyId}";
+    var bookingIdempotency = app.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
+    if (idempotencyContainer is null)
+    {
+        if (bookingIdempotency.TryGetValue(idempotencyIndex, out var prior))
+        {
+            if (prior.RequestHash != requestFingerprint)
+                return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
+            var priorRide = await FindRideAsync(prior.rideId, ct);
+            return priorRide is null ? Results.Conflict(new { message = "The original booking is still being processed. Retry shortly." }) : Results.Ok(priorRide);
+        }
+    }
+    else
+    {
+        try
+        {
+            var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
+            if (prior.Resource.RequestHash != requestFingerprint)
+                return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
+            var priorRide = await FindRideAsync(prior.Resource.rideId, ct);
+            return priorRide is null ? Results.Conflict(new { message = "The original booking is still being processed. Retry shortly." }) : Results.Ok(priorRide);
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+    }
+
+    var union = await FindUnionAsync(unionId, ct);
+    if (union is null || union.Status != "Active" ||
+        !union.ZoneIds.Contains(zoneId, StringComparer.OrdinalIgnoreCase) ||
+        !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "The selected Union is not active for Cab service in this pickup zone." });
+    var assignment = await FindUnionAssignmentAsync(selectedDriverId, ct);
+    if (assignment is null || assignment.Status != "Active" || assignment.UnionId != unionId)
+        return Results.Conflict(new { message = "The selected Driver is not an active member of this Union." });
+    var profile = await GetApprovedDriverProfileAsync(selectedDriverId, ct);
+    var maxAgeSeconds = Math.Clamp(app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds") ?? 120, 30, 600);
+    var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds);
+    if (profile is null || profile.AvailabilityStatus != "Online" ||
+        !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
+        profile.PassengerCapacity < request.Passengers ||
+        profile.LocationUpdatedAtUtc is null || profile.LocationUpdatedAtUtc < freshAfter ||
+        profile.CurrentLatitude is null or < -90 or > 90 ||
+        profile.CurrentLongitude is null or < -180 or > 180 ||
+        profile.Documents is null ||
+        !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
+        !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
+        return Results.Conflict(new { message = "The selected Driver is no longer eligible or available for this Cab booking." });
+    var distanceKm = CalculateDistanceKm(request.PickupLatitude, request.PickupLongitude,
+        profile.CurrentLatitude.Value, profile.CurrentLongitude.Value);
+    if (distanceKm > radiusKm.Value)
+        return Results.Conflict(new { message = "The selected Driver is no longer within the approved pickup radius." });
+
+    var now = DateTimeOffset.UtcNow;
+    var expiresAtUtc = now.AddMinutes(lifetimeMinutes.Value);
+    var rideId = $"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+    var idempotencyRecord = new RideIdempotencyRecord(keyId, riderId, rideId, requestFingerprint);
+    if (idempotencyContainer is null)
+    {
+        if (!bookingIdempotency.TryAdd(idempotencyIndex, idempotencyRecord))
+            return Results.Conflict(new { message = "A booking with this Idempotency-Key is already being processed. Retry shortly." });
+    }
+    else
+    {
+        try { await idempotencyContainer.CreateItemAsync(idempotencyRecord, new PartitionKey(riderId), cancellationToken: ct); }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
+            if (prior.Resource.RequestHash != requestFingerprint)
+                return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
+            var priorRide = await FindRideAsync(prior.Resource.rideId, ct);
+            return priorRide is null ? Results.Conflict(new { message = "The original booking is still being processed. Retry shortly." }) : Results.Ok(priorRide);
+        }
+    }
+
+    async Task RemoveIdempotencyRecordAsync()
+    {
+        if (idempotencyContainer is null) bookingIdempotency.TryRemove(idempotencyIndex, out _);
+        else
+        {
+            try { await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct); }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+        }
+    }
+
+    if (!await driverRideReservations.TryAcquireTemporaryAsync(selectedDriverId, rideId, expiresAtUtc, ct))
+    {
+        await RemoveIdempotencyRecordAsync();
+        return Results.Conflict(new { message = "The selected Driver has another active negotiation or ride. Refresh discovery and select an available Driver." });
+    }
+
+    var ride = new DemoRide(
+        rideId, pickup, dropoff, request.Passengers, "Negotiating", now, null, riderId, selectedDriverId,
+        request.PickupLatitude, request.PickupLongitude, profile.CurrentLatitude, profile.CurrentLongitude,
+        null, profile.LocationUpdatedAtUtc, false, "cab", zoneId,
+        UnionId: unionId, Stops: stops, NegotiationExpiresAtUtc: expiresAtUtc);
+    try { await SaveRideAsync(ride, ct); }
+    catch
+    {
+        await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct);
+        await RemoveIdempotencyRecordAsync();
+        throw;
+    }
+
+    await hub.Clients.Group($"driver:{selectedDriverId}").SendAsync("RideSelected", new
+    {
+        rideId, pickup, dropoff, stops, passengers = request.Passengers, expiresAtUtc
+    }, ct);
+    await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = ride.Status }, ct);
+    return Results.Created($"/api/v1/rides/{rideId}", ride);
+}).RequireAuthorization(policy => policy.RequireRole("Rider"));
+
 app.MapGet("/api/v1/rides/nearby", () =>
     Results.Problem("Customer-facing FIFO discovery is retired. Use Rider union discovery.", statusCode: StatusCodes.Status410Gone))
     .RequireAuthorization(policy => policy.RequireRole("Rider"));
