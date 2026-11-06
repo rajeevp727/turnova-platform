@@ -205,3 +205,28 @@ RIDER-02 stores immutable agreement term versions and append-only party confirma
 - The report is stored in the existing ride aggregate with agreement version, Rider/Driver/Union linkage, agreed amount, amount received, signed agreed-minus-reported delta, UTC timestamp, reporting Driver, unverified status and a hashed idempotency key. No separate payment container or gateway is introduced.
 - The Driver sees the report in owned trip history. The authenticated UnionManager reconciliation list is filtered by signed unionId claims and exposes only ride/driver identifiers, amounts, delta, currency, report timestamp, actor and unverified status; it omits Rider identity, route, contact data, exact location and chat.
 - Reports are immutable; a same-key/same-payload retry returns the existing record, while a different payload conflicts. No customer confirmation/dispute or non-zero-delta next-ride policy is inferred. Completion continues to release the ride reservation under the existing lifecycle; the unresolved next-ride policy is not implemented.
+
+
+
+## 16. Approved supplemental AI assistance — AI-01 (2026-11-07)
+
+This approved Rider/Driver MVP requirement is tracked separately from the existing 19 acceptance areas and does not change their denominator.
+
+### Rider trip-intent draft
+- A Rider may describe a Cab trip in natural language and request a structured draft containing pickup, destination, Cab service class and passenger count.
+- The draft is only a convenience. The Rider must review and edit the fields and then explicitly use the existing discovery/selection flow. AI must never create a booking, select a Driver, confirm an agreement, set a fare or charge anyone.
+- The deterministic fallback may extract a simple “from … to …” route and a passenger count from the request. Missing or invalid fields are returned for manual completion; the fallback must not invent a location or passenger count.
+- Exact pickup/drop-off text and other sensitive personal information must not be sent to an AI provider. Route values are extracted locally and replaced by fixed placeholders before a provider call; only an allow-listed, minimized intent summary may leave the API.
+
+### Approved-content help
+- Rider and Driver may ask for explanations of approved ride states and product help.
+- Answers must come from version-controlled in-repository FAQ/state content. A configured provider may select an approved content identifier, but the API returns the approved repository answer rather than arbitrary generated policy or trip facts.
+- Unsupported questions must clearly require escalation; do not invent support categories, response times or contact details.
+- No ride identifier, route, precise location, identity/KYC document, phone/email, payment detail, access token or private chat content is sent to an AI provider.
+
+### AI safety boundary
+- Provider/model/endpoint/managed-credential reference are configuration placeholders. AI is disabled by default until a provider is selected and validated; deterministic fallback remains available.
+- Provider calls are bounded by timeout and caller cancellation. Inputs and provider outputs are validated. Requests are rate-limited per authenticated caller. Logs contain only use-case, source and outcome metadata, never prompt text or sensitive values.
+- AI must not set or recommend fares, make payment/reconciliation decisions, approve KYC/selfies, determine Driver eligibility, rank or override Rider discovery, influence any FIFO policy, accept/reject a ride, make safety/legal decisions or change server-owned ride state.
+- Initial delivery covers Rider trip-intent drafting and approved-content help for Rider/Driver. A Driver trip/offer explanation is optional and is not required by this increment.
+- Live provider sandbox validation remains an infrastructure gate; mock-provider and deterministic-fallback tests are the coding/CI evidence until that gate is supplied.
