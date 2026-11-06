@@ -48,3 +48,13 @@ jobs:
       - run: npm install
       - run: npx expo config --type public
       - run: npm run typecheck
+
+  mobile-auth-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Test shared mobile refresh coordination
+        run: node --test src/mobile/shared/refreshCoordinator.test.cjs
