@@ -523,3 +523,12 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 - Verify a transient SignalR send failure leaves the outbox item pending and a later poll retries it.
 - Run two workers against a barrier-controlled shared store to prove at-least-once duplicate delivery can occur while the same offerId remains stable for client de-duplication.
 - These tests use the in-memory store; Cosmos multi-instance persistence, process-restart and ETag failure-injection remain separate required gates.
+
+
+## 11. Rider ride-request validation coverage
+
+- Reject passenger counts below one or above six; accept the maximum supported count of six.
+- Reject missing/blank pickup and drop-off descriptions.
+- Reject missing pickup coordinates and latitude/longitude values outside their valid ranges.
+- Reject unsupported service classes and pickup coordinates outside configured service zones.
+- Verify a rejected request does not consume its idempotency key, allowing a corrected retry to create the ride.
