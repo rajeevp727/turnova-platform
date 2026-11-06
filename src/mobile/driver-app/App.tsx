@@ -37,7 +37,7 @@ type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
 type QueueMembership = { isQueued: boolean; position: number | null };
-type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean };
+type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean; stops?: string[]; negotiationExpiresAtUtc?: string | null };
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; driverConfirmed: boolean };
 
 async function saveTokens(tokens: Tokens) {
@@ -321,7 +321,7 @@ export default function App() {
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
     if (!isActive()) return;
     setDriverRideHistory(history);
-    const active = history.find(item => ["Accepted", "Arrived", "InProgress"].includes(item.status));
+    const active = history.find(item => ["Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"].includes(item.status));
     setActiveRide(active ?? null);
   }, [apiFetch]);
 
@@ -391,6 +391,20 @@ export default function App() {
       .build();
 
     const refreshOffers = () => { if (mounted) void loadAvailableRides(); };
+    const refreshDriverState = () => {
+      if (!mounted) return;
+      refreshOffers();
+      void loadDriverRideHistory(() => mounted).catch(e => {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to recover selected Rider bookings.");
+      });
+    };
+    connection.on("RideSelected", (selection: { rideId?: string; expiresAtUtc?: string }) => {
+      if (!mounted || !selection?.rideId) return;
+      setNotice("A Rider selected you for a Cab trip. Review the request and negotiate directly.");
+      void loadDriverRideHistory(() => mounted).catch(e => {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to load selected Rider booking.");
+      });
+    });
     connection.on("RideOfferReceived", (offer: { rideId?: string; offerId?: string; expiresAtUtc?: string }) => {
       if (!mounted || !offer?.offerId || receivedOfferIds.current.has(offer.offerId)) return;
       receivedOfferIds.current.add(offer.offerId);
@@ -401,16 +415,19 @@ export default function App() {
       setNotice("A new ride offer has arrived. Review the available ride requests.");
       refreshOffers();
     });
-    connection.onreconnected(refreshOffers);
-    void connection.start().then(refreshOffers).catch(() => {
+    // Recover selected bookings as well as legacy offers after initial connect/reconnect;
+    // SignalR delivery is at-least-once and may be missed while the app is suspended.
+    connection.onreconnected(refreshDriverState);
+    void connection.start().then(refreshDriverState).catch(() => {
       if (mounted) setError("Live ride offers are temporarily unavailable. Available rides can still be refreshed manually.");
     });
     return () => {
       mounted = false;
       connection.off("RideOfferReceived");
+      connection.off("RideSelected");
       void connection.stop();
     };
-  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory]);
 
   useEffect(() => {
     if (!user?.id || tab !== "Trips" || !activeRide?.rideId || !tokens) return;
@@ -438,7 +455,7 @@ export default function App() {
   }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
-  const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Ride declined. It remains available to other drivers."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
+  const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Selected Rider request declined. No automatic reassignment was made."); if (activeRide?.rideId === rideId) { setActiveRide(null); setAgreementHistory([]); } } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
   useEffect(() => {
     if (!user || tab !== "Trips" || !activeRide) return;
     let mounted = true;
@@ -652,8 +669,10 @@ export default function App() {
             </View>
           </View>)}
           {activeRide&&<>
-            <Text style={styles.label}>ACTIVE TRIP</Text>
+            <Text style={styles.label}>{["Negotiating","AgreementConfirmed"].includes(activeRide.status)?"SELECTED RIDE":"ACTIVE TRIP"}</Text>
             <Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>
+            <Text style={styles.cardTitle}>{activeRide.pickup} → {activeRide.dropoff}</Text>
+            {activeRide.stops?.length ? <Text style={styles.muted}>Stops · {activeRide.stops.join(" → ")}</Text> : null}
             <View style={{marginTop:12,paddingTop:10,borderTopWidth:1,borderTopColor:colors.border}}>
               <Text style={styles.cardTitle}>Direct fare negotiation · INR</Text>
               {agreementHistory.map(item=><View key={item.version} style={{paddingVertical:7}}>
@@ -661,12 +680,14 @@ export default function App() {
                 <Text style={styles.muted}>Rider: {item.riderConfirmed?"Confirmed":"Pending"} · Driver: {item.driverConfirmed?"Confirmed":"Pending"}</Text>
               </View>)}
               <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>
-              {["Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
+              {["Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
                 <TextInput value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/>
                 <Pressable style={styles.secondary} disabled={!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>Propose / counter fare</Text></Pressable>
                 {agreementHistory.length>0&&<Pressable style={styles.secondary} disabled={agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void confirmAgreement()}><Text style={styles.secondaryText}>{agreementHistory[agreementHistory.length-1].driverConfirmed?"You confirmed this version":"Confirm current agreement"}</Text></Pressable>}
               </>}
             </View>
+            {activeRide.status==="Negotiating"&&<><Text style={styles.muted}>A Rider selected you. Propose or counter the fare directly, then both parties confirm the current version. {activeRide.negotiationExpiresAtUtc ? "Negotiation expires at "+new Date(activeRide.negotiationExpiresAtUtc).toLocaleTimeString() : "A configured negotiation deadline applies."}</Text><Pressable style={styles.secondary} onPress={()=>void rejectRide(activeRide.rideId)}><Text style={styles.secondaryText}>Decline selected request</Text></Pressable></>}
+            {activeRide.status==="AgreementConfirmed"&&<><Text style={styles.muted}>Both parties confirmed the current fare. Accept this selected trip to begin the arrival/start flow.</Text><Pressable style={styles.primary} onPress={()=>void acceptRide(activeRide.rideId)}><Text style={styles.primaryText}>Accept agreed trip</Text></Pressable><Pressable style={styles.secondary} onPress={()=>void rejectRide(activeRide.rideId)}><Text style={styles.secondaryText}>Decline selected request</Text></Pressable></>}
             {activeRide.status==="Accepted"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("arrive")}><Text style={styles.secondaryText}>Mark arrived</Text></Pressable>}
             {activeRide.status==="Arrived"&&<><Text style={styles.muted}>{agreementHistory.length>0&&agreementHistory[agreementHistory.length-1].riderConfirmed&&agreementHistory[agreementHistory.length-1].driverConfirmed?"Both parties confirmed the current fare.":"Both Rider and Driver must confirm the current fare before starting."}</Text><Pressable style={styles.secondary} disabled={!agreementHistory.length||!agreementHistory[agreementHistory.length-1].riderConfirmed||!agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable></>}
             {activeRide.status==="InProgress"&&<Pressable style={styles.secondary} disabled={!agreementHistory.length||!agreementHistory[agreementHistory.length-1].riderConfirmed||!agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}
