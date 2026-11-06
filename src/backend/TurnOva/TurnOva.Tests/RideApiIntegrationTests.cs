@@ -678,11 +678,11 @@ public sealed class RideApiIntegrationTests
         using var rider = factory.CreateClient("Rider", "rider-idempotency");
         using var firstRequest = CreateRideRequest("request-idempotency-001");
 
-        var firstResponse = await rider.PostAsync("/api/v1/rides/request", firstRequest);
+        var firstResponse = await rider.SendAsync(firstRequest);
         var firstRide = await ReadRideAsync(firstResponse);
 
         using var retryRequest = CreateRideRequest("request-idempotency-001");
-        var retryResponse = await rider.PostAsync("/api/v1/rides/request", retryRequest);
+        var retryResponse = await rider.SendAsync(retryRequest);
         var retryRide = await ReadRideAsync(retryResponse);
 
         Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
@@ -903,11 +903,11 @@ public sealed class RideApiIntegrationTests
 
         using var requestWithoutKey = CreateRideRequest(null);
         Assert.Equal(HttpStatusCode.BadRequest,
-            (await rider.PostAsync("/api/v1/rides/request", requestWithoutKey)).StatusCode);
+            (await rider.SendAsync(requestWithoutKey)).StatusCode);
 
         using var driverRequest = CreateRideRequest("driver-must-not-book-001");
         Assert.Equal(HttpStatusCode.Forbidden,
-            (await driver.PostAsync("/api/v1/rides/request", driverRequest)).StatusCode);
+            (await driver.SendAsync(driverRequest)).StatusCode);
     }
 
     [Fact]
@@ -1116,7 +1116,7 @@ public sealed class RideApiIntegrationTests
         using var rider = factory.CreateClient("Rider", "rider-fifo-disabled");
 
         using var request = CreateRideRequest("legacy-fifo-disabled-001");
-        using var response = await rider.PostAsync("/api/v1/rides/request", request);
+        using var response = await rider.SendAsync(request);
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
@@ -2077,7 +2077,7 @@ public sealed class RideApiIntegrationTests
 
     private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key)
     {
-        using var response = await rider.PostAsync("/api/v1/rides/request", CreateRideRequest(key));
+        using var response = await rider.SendAsync(CreateRideRequest(key));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return await ReadRideAsync(response);
     }
