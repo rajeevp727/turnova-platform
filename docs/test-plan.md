@@ -438,6 +438,7 @@ Online/offline availability is server-authoritative. Mobile controls are present
 | RESERVE-005 | Rider cancels an accepted ride | Matching reservation is released | API integration | P0 |
 | RESERVE-006 | Stale release references a different ride | Existing reservation is unchanged | Unit + Cosmos integration | P0 |
 | RESERVE-007 | API process stops between reservation and ride update | Reservation may remain held; reconciliation is a tracked production blocker | Failure injection | P0 |
+| RESERVE-008 | Union transfer is attempted while a selected Driver is negotiating or has an accepted active Cab ride | Transfer returns conflict; original Union assignment and the matching active reservation remain unchanged | API integration | P0 |
 
 In-memory store concurrency tests are included in CI. Multi-instance Cosmos races and crash-window recovery require a real development Cosmos account and are not claimed as executed by CI unless separately configured.
 
