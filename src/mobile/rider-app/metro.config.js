@@ -1,16 +1,9 @@
 const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
 
-const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, "..");
-const config = getDefaultConfig(projectRoot);
+const config = getDefaultConfig(__dirname);
 
-// The app imports the shared refresh/recovery modules from src/mobile/shared.
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, "node_modules"),
-  path.resolve(workspaceRoot, "node_modules"),
-];
-config.resolver.disableHierarchicalLookup = true;
+// App source imports shared refresh/recovery modules from src/mobile/shared.
+config.watchFolders = [path.resolve(__dirname, "../shared")];
 
 module.exports = config;
