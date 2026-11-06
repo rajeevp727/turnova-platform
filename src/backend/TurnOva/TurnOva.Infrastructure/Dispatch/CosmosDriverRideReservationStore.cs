@@ -59,6 +59,21 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return false; }
     }
 
+    public async Task<bool> TrySetExpiryAsync(string driverId, string rideId, DateTimeOffset? expiresAtUtc, CancellationToken cancellationToken = default)
+    {
+        if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow) return false;
+        try
+        {
+            var current = await container.ReadItemAsync<DriverRideReservation>(
+                driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
+            if (current.Resource.RideId != rideId) return false;
+            await container.ReplaceItemAsync(current.Resource with { ExpiresAtUtc = expiresAtUtc }, driverId,
+                new PartitionKey(driverId), new ItemRequestOptions { IfMatchEtag = current.ETag }, cancellationToken);
+            return true;
+        }
+        catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { return false; }
+    }
+
     public async Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default)
     {
         try
