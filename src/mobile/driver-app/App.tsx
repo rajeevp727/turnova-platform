@@ -11,7 +11,7 @@ import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { singleFlight } from "../shared/refreshCoordinator";
-import { findActiveRide } from "../shared/rideRecovery";
+import { canShareActiveRideLocation, findActiveRide, isActiveRide } from "../shared/rideRecovery";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -457,7 +457,7 @@ export default function App() {
   }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory]);
 
   useEffect(() => {
-    if (!user?.id || tab !== "Trips" || !activeRide?.rideId || !tokens) return;
+    if (!user?.id || !activeRide?.rideId || !tokens || !isActiveRide(activeRide, "driver")) return;
     let mounted = true;
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
@@ -479,12 +479,12 @@ export default function App() {
       if (mounted) setError("Live fare agreement updates are unavailable. Refresh the agreement manually.");
     });
     return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
-  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
+  }, [user?.id, activeRide?.rideId, activeRide?.status, tokens?.accessToken, loadAgreementHistory]);
 
-  const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
+  const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Foreground location sharing stays active while the trip is active, even if you switch tabs."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Selected Rider request declined. No automatic reassignment was made."); if (activeRide?.rideId === rideId) { setActiveRide(null); setAgreementHistory([]); } } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
   useEffect(() => {
-    if (!user || tab !== "Trips" || !activeRide) return;
+    if (!user || !activeRide?.rideId || !isActiveRide(activeRide, "driver")) return;
     let mounted = true;
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
@@ -495,7 +495,15 @@ export default function App() {
       .configureLogging(LogLevel.Warning)
       .build();
     connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
-      if (update.rideId === activeRide.rideId) setActiveRide((current: any) => current ? { ...current, status: update.status, locationSharingActive: ["Accepted", "Arrived", "InProgress"].includes(update.status) } : current);
+      if (update.rideId === activeRide.rideId) {
+        const locationSharingActive = canShareActiveRideLocation({ status: update.status, locationSharingActive: true });
+        setActiveRide((current: any) => current ? {
+          ...current,
+          status: update.status,
+          locationSharingActive,
+          ...(locationSharingActive ? {} : { driverLatitude: undefined, driverLongitude: undefined, locationUpdatedAt: undefined })
+        } : current);
+      }
     });
     connection.onreconnected(() => {
       if (mounted) void loadDriverRideHistory(() => mounted).catch(e => {
@@ -504,9 +512,78 @@ export default function App() {
     });
     void connection.start().catch(() => {});
     return () => { mounted = false; void connection.stop(); };
-  }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory]);
+  }, [user?.id, activeRide?.rideId, activeRide?.status, tokens?.accessToken, loadDriverRideHistory]);
 
-  useEffect(() => { if (!user || tab !== "Trips" || !activeRide || !activeRide.locationSharingActive || !["Accepted", "Arrived", "InProgress"].includes(activeRide.status)) return; let subscription: Location.LocationSubscription | undefined; let mounted = true; (async () => { const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) { setError("Location permission is required to share your position with the rider."); return; } subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 }, location => { if (mounted) void apiFetch(`/api/v1/rides/${activeRide.rideId}/location`, { method: "POST", body: JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }) }).catch(e => setError(e instanceof Error ? e.message : "Unable to update location.")); }); })(); return () => { mounted = false; subscription?.remove(); }; }, [user, tab, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
+  useEffect(() => {
+    if (!user || !activeRide?.rideId || !canShareActiveRideLocation(activeRide)) return;
+    let mounted = true;
+    let refreshing = false;
+    let subscription: Location.LocationSubscription | undefined;
+
+    const stopWatching = () => {
+      subscription?.remove();
+      subscription = undefined;
+    };
+
+    const postTripLocation = async (latitude: number, longitude: number): Promise<boolean> => {
+      if (!mounted || AppState.currentState !== "active") return false;
+      try {
+        await apiFetch(`/api/v1/rides/${activeRide.rideId}/location`, {
+          method: "POST",
+          body: JSON.stringify({ latitude, longitude })
+        });
+        return true;
+      } catch (e) {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to update active-trip location.");
+        return false;
+      }
+    };
+
+    const startWatching = async () => {
+      if (!mounted || subscription || AppState.currentState !== "active") return;
+      const nextSubscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+        location => { void postTripLocation(location.coords.latitude, location.coords.longitude); }
+      );
+      if (!mounted || AppState.currentState !== "active") nextSubscription.remove();
+      else subscription = nextSubscription;
+    };
+
+    const refreshTripLocation = async (requestPermissionIfNeeded: boolean) => {
+      if (!mounted || refreshing || AppState.currentState !== "active") return;
+      refreshing = true;
+      try {
+        let permission = await Location.getForegroundPermissionsAsync();
+        if (!permission.granted && requestPermissionIfNeeded)
+          permission = await Location.requestForegroundPermissionsAsync();
+        if (!permission.granted) {
+          if (mounted) setError("Foreground location permission is required to share your position during the active ride.");
+          return;
+        }
+        if (!mounted || AppState.currentState !== "active") return;
+        const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (!mounted || AppState.currentState !== "active") return;
+        if (await postTripLocation(current.coords.latitude, current.coords.longitude))
+          await startWatching();
+      } catch (e) {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh active-trip location.");
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    const appStateSubscription = AppState.addEventListener("change", state => {
+      if (state === "active") void refreshTripLocation(false);
+      else stopWatching();
+    });
+    if (AppState.currentState === "active") void refreshTripLocation(true);
+
+    return () => {
+      mounted = false;
+      stopWatching();
+      appStateSubscription.remove();
+    };
+  }, [user?.id, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
 
   const advanceRide = async (action: "arrive" | "start" | "complete") => { if (!activeRide) return; try { const updated = await apiFetch(`/api/v1/rides/${activeRide.rideId}/${action}`, { method: "POST" }); setActiveRide(updated); setNotice(action === "arrive" ? "Arrival confirmed." : action === "start" ? "Trip started." : "Trip completed. Location sharing stopped."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to update ride status."); } };
 
