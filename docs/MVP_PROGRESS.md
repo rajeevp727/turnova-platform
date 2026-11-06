@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#11 DRIVER-01: Complete the Cab-only Driver onboarding/Union approval slice: signed UnionManager + unionId-scoped member review, privacy-minimal member listing, union-only selfie approval, retry-safe audit, transfer reapproval and Driver membership display.**
+**#12 DRIVER-02: Complete the Cab Driver availability/location eligibility slice: active Cab Union and verified-document gate, reservation-safe Online/Offline and zone-exit transitions, and foreground GPS refresh on app resume.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -18,7 +18,7 @@
 - DISPATCH-02 implementation groups eligible Cab drivers by union, caps each union at three, orders by pickup distance then DriverId ordinal, and does not require FIFO queue membership. PR #59 merged at `508a789246cec1a9452651c62fa08aa3908140a4`; final-head CI [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
 - PR #61 merged DISPATCH-04 active-ride/Union-transfer regression coverage at `118929955d3959f078ddb59f7f5bdf3c3965d52a`. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including the accepted-active-ride/Union-transfer regression.
 - PR #64 merged the Release test-execution correction at `c90699d8fd5e9140d2daccbced106075d86118bb`; final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) passed all four jobs and executed **189/189 backend tests**. The TRX non-zero guard, native non-container API publish/artifact verification, Rider/Driver Expo config/typechecks and shared mobile tests also passed.
-- PR #66 final pre-evidence head `0175ae3764be6eb7771256c6a3d64dde6ea4431e` passed CI [42278464932](https://github.com/rajeevp727/turnova-platform/actions/runs/42278464932): **191/191 backend tests**, TRX non-zero guard, non-container API publish/artifact verification, both Expo config/typechecks and shared mobile tests; all four jobs succeeded.
+- PR #66 merged at `26dafc87451ba49ea4734df81c94f9e75790800d`; final-head CI [42278673796](https://github.com/rajeevp727/turnova-platform/actions/runs/42278673796) passed all four jobs: **191/191 backend tests**, TRX non-zero guard, non-container API publish/artifact verification, both Expo config/typechecks and shared mobile tests.
 
 ## 2. Overall MVP completion
 
@@ -43,8 +43,8 @@
 | 8 | DISPATCH-03 | In progress | RIDER-03 adds expiring selected-driver leases, lazy expiry, deterministic interrupted-write recovery and terminal cleanup; live Cosmos restart/ETag/outbox validation remains. No customer-facing automatic advancement. |
 | 9 | DISPATCH-04 | In progress | PR #57 implements per-driver reservation leases and lifecycle cleanup; PR #61 adds accepted-active-ride Union-transfer conflict coverage. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including this regression. Live Cosmos multi-instance ETag/restart/crash recovery and approved negotiation lifetime remain. |
 | 10 | REALTIME-01 | In progress | PR #63 reloads Rider owner-scoped history/current ride and agreement versions on connect/reconnect; Driver reconnect rehydrates selected/active state. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including `RideTrackingHubTests`; Android/iOS physical-device SignalR delivery/reconnect remains. |
-| 11 | DRIVER-01 | In progress | PRs #52/#53 enforce Cab-only onboarding and preserve legacy records; PR #66 adds signed UnionManager scope, minimum-data member listing, union-only selfie approval, retry-safe audit, transfer reapproval and Driver membership display. Provider claim mapping, private document storage/retention and physical-device onboarding tests remain. |
-| 12 | DRIVER-02 | In progress | PR #52 blocks legacy non-Cab profiles; RIDER-03 adds selected booking, Driver notification, accept/decline and active-reservation offline protection. GPS/zone/device validation and internal FIFO decision remain. |
+| 11 | DRIVER-01 | In progress | PRs #52/#53 enforce Cab-only onboarding and preserve legacy records; PR #66 merged signed UnionManager scope, minimum-data member listing, union-only selfie approval, retry-safe audit, transfer reapproval and Driver membership display. Provider claim mapping, private document storage/retention and physical-device onboarding tests remain. |
+| 12 | DRIVER-02 | In progress | PR #52/#53 provide Cab-only availability; PR #67 adds active Cab Union/document eligibility, reservation-safe availability/zone-exit mutations and foreground GPS refresh on resume. Live Cosmos and Android/iOS background/permission/device validation remain; internal FIFO role is unresolved. |
 | 13 | TRIP-01 | In progress | PRs #47/#48 provide owner-scoped history; PR #56 mutual-confirmation gates; RIDER-03 adds Negotiating/AgreementConfirmed/Expired states and stop snapshots. Cosmos/device/location-privacy validation remains. |
 | 14 | DRIVER-03 | In progress | Monthly PDF work-metrics payslip exists; no monetary earnings/commission/payout policy is assumed. Direct-payment report is tracked under CAB-RECON-01. |
 | 15 | DRIVER-04 | Blocked | Driver support categories, escalation owner and operational process are not approved. |
@@ -96,11 +96,12 @@
 
 ## 7. Next steps
 
-1. Finish sequential #11 DRIVER-01 PR #66: review the complete diff, confirm backend/mobile checks on the latest head, record automated review findings, and merge only when the final head is green and repository rules permit.
-2. After #11, continue with #12 DRIVER-02: audit Cab availability/location eligibility, selected-driver offer handling and reservation-aware online/offline transitions; implement only the next missing in-scope API/mobile slice.
-3. Implement CAB-RECON-01 in the later Rider/Driver sequence: persist driver-reported/unverified amount, signed agreed-minus-reported delta and authorised Union visibility without gateway/escrow.
-4. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
-5. Keep internal FIFO role, customer dispute/confirmation, non-zero-delta next-ride policy, legal partnership terms, provider configuration and physical-device gates explicit; do not invent decisions.
+1. Continue sequential #12 DRIVER-02 in PR #67: finish API availability/zone-exit lease protection, approved Union/document eligibility, and foreground GPS refresh on app resume; review and merge only on a green latest head.
+2. After #12, move to #13 TRIP-01: audit selected Cab trip lifecycle, location-sharing privacy, history and Rider live progress; implement only the next missing vertical slice.
+3. Implement CAB-RECON-01 in the later Rider/Driver rows: persist driver-reported/unverified amount, signed agreed-minus-reported delta and authorised Union visibility without gateway/escrow.
+4. Keep #11 DRIVER-01 In Progress until identity-provider claim mapping, private document storage/scanning/consent/retention and Android/iOS onboarding evidence pass.
+5. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
+6. Keep internal FIFO role, customer dispute/confirmation, non-zero-delta next-ride policy, legal partnership terms, provider configuration and physical-device gates explicit; do not invent decisions.
 
 ## 8. DISPATCH-03 audit handoff (2026-11-06)
 
@@ -144,3 +145,13 @@
 - Remaining DRIVER-01 gates: identity-provider issuance of signed UnionManager/unionId claims; private document storage/scanning/consent/retention provider and policy; Android/iOS camera/document-permission/onboarding physical-device tests; live Cosmos retry/ETag/restart validation.
 - Operations-controlled union creation/activation remains the MVP approval gate for discovery. No separate Union mobile app is introduced. Partnership terms and legal/T&C approval remain external launch gates.
 - Overall score remains **42.1%**: 0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. The denominator is unchanged.
+
+
+## DRIVER-02 availability/location increment (2026-11-07)
+
+- PR #67 is the current sequential #12 change. The API now serializes Online/Offline and zone-exit transitions with the selected-booking/Union-transfer per-Driver lease.
+- Going Online requires an Active Cab-serving Union covering the assigned zone and approved driving-licence/vehicle-registration documents; GPS must be valid and inside the assigned zone.
+- Driver mobile location tracking is foreground-only, pauses during Negotiating/AgreementConfirmed/active ride, stops in background and refreshes/restarts on resume.
+- Added API regression tests for missing Union/documents and unchanged availability/location during a selected negotiation. The PR is open and CI is pending; do not count this item as verified yet.
+- Remaining gates: live Cosmos multi-instance/ETag/restart concurrency, Android/iOS physical permission/background/resume tests, and unresolved internal FIFO role.
+- Weighted progress remains **42.1%** (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict **0/19**).
