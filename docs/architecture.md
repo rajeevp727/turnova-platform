@@ -372,3 +372,18 @@ The legacy Rider GET /api/v1/rides/nearby endpoint returns 410 Gone so the app c
 - `/health/ready` uses a storage readiness probe. In in-memory Development/Testing mode the probe completes locally; in Cosmos mode it performs a database metadata read.
 - The probe has a fixed three-second upper bound and propagates caller cancellation. A dependency exception or the probe's own timeout is translated to a generic HTTP 503 readiness response; internal SDK diagnostics and endpoint details are not returned or logged.
 - This is a bounded health probe, not proof of live Cosmos transactional-batch, ETag, multi-instance or restart recovery. Those remain separate infrastructure validation gates.
+
+
+
+## 16. AI-01 — bounded assistance boundary
+
+The MVP AI boundary lives in `TurnOva.Application.Assistance` and is exposed through authenticated Rider/Driver API endpoints. It is deliberately separate from dispatch, agreement, payment and eligibility services.
+
+- `IAiAssistantProvider` is the provider-agnostic adapter contract. The checked-in `UnavailableAiAssistantProvider` is the safe default; `AiAssistant:Enabled` is false and provider, model, HTTPS endpoint and managed-credential reference are empty placeholders. No provider, model, price or credential is selected.
+- `AiAssistanceService` owns request validation, provider timeout/cancellation and deterministic fallback. A provider timeout or transient HTTP failure returns the deterministic result; caller cancellation is propagated.
+- Rider trip intent is parsed locally for pickup, destination and passenger count. Before a future provider call, the full route span is removed and only fixed `[PICKUP]` / `[DROPOFF]` placeholders plus an allow-listed generic intent vocabulary are retained. The provider cannot supply route values; the API merges only locally parsed values and validates Cab plus passenger count 1–6.
+- Every trip-intent response requires Rider review. The endpoint only returns a draft; it has no booking, fare, agreement, payment or ride-state dependency and cannot trigger those operations.
+- Help requests are reduced to allow-listed keywords and a canonical ride-state value. A provider may return only an approved FAQ/state source ID. The API returns the exact version-controlled answer from `AiAssistanceService`; unknown source IDs and unsupported questions fall back to safe escalation text.
+- The Rider-only trip-intent endpoint and Rider/Driver help endpoint use JWT role authorization and a per-authenticated-caller fixed-window rate limit. Input lengths, provider tokens/source IDs, service class and passenger count are validated. Logs include only use-case/source/outcome metadata; prompts, routes, identity, contact, payment and token values are never logged.
+- AI is prohibited from setting fares, changing payment decisions, approving identity/KYC/selfies, determining Driver eligibility, ranking discovery/FIFO, accepting/rejecting rides or changing authoritative ride state. The deterministic backend remains the source of truth.
+- No provider credentials are required for local fallback or CI. Live provider sandbox validation, data-processing terms and managed-secret wiring remain post-coding infrastructure gates.
