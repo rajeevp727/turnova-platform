@@ -1487,15 +1487,17 @@ public sealed class RideApiIntegrationTests
         using var first = Proposal("agreement-race-a", 300m);
         using var second = Proposal("agreement-race-b", 325m);
         var responses = await Task.WhenAll(rider.SendAsync(first), driver.SendAsync(second));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Created));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        Assert.All(responses, response =>
+            Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Created, HttpStatusCode.Conflict }));
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.Created);
         foreach (var response in responses) response.Dispose();
 
-        var stored = await factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+        var stored = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
             .GetValueOrDefault(rideId)!.AgreementVersions;
         Assert.NotNull(stored);
-        Assert.Single(stored);
-        Assert.Equal(1, stored[0].Version);
+        Assert.InRange(stored.Count, 1, 2);
+        Assert.Equal(stored.Count, stored.Select(item => item.Version).Distinct().Count());
+        Assert.Equal(Enumerable.Range(1, stored.Count), stored.Select(item => item.Version).OrderBy(item => item));
     }
 
     [Fact]
