@@ -6,7 +6,7 @@ import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
@@ -217,7 +217,47 @@ export default function App() {
     finally { setLoading(false); }
   };
 
-  const loadAvailableRides = async () => { try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); } catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); } };
+  const loadAvailableRides = useCallback(async () => {
+    try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); }
+    catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); }
+  }, [apiFetch]);
+
+  // SignalR is at-least-once: deduplicate by the server-issued offerId before surfacing it.
+  const receivedOfferIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user?.id || availabilityStatus !== "Online") return;
+    let mounted = true;
+    const connection = new HubConnectionBuilder()
+      .withUrl(`${API}/hubs/rides?driverId=${encodeURIComponent(user.id)}`, {
+        accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens?.accessToken ?? "",
+        transport: HttpTransportType.WebSockets
+      })
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
+
+    const refreshOffers = () => { if (mounted) void loadAvailableRides(); };
+    connection.on("RideOfferReceived", (offer: { rideId?: string; offerId?: string; expiresAtUtc?: string }) => {
+      if (!mounted || !offer?.offerId || receivedOfferIds.current.has(offer.offerId)) return;
+      receivedOfferIds.current.add(offer.offerId);
+      if (receivedOfferIds.current.size > 500) {
+        const oldest = receivedOfferIds.current.values().next().value;
+        if (oldest) receivedOfferIds.current.delete(oldest);
+      }
+      setNotice("A new ride offer has arrived. Review the available ride requests.");
+      refreshOffers();
+    });
+    connection.onreconnected(refreshOffers);
+    void connection.start().then(refreshOffers).catch(() => {
+      if (mounted) setError("Live ride offers are temporarily unavailable. Available rides can still be refreshed manually.");
+    });
+    return () => {
+      mounted = false;
+      connection.off("RideOfferReceived");
+      void connection.stop();
+    };
+  }, [user?.id, availabilityStatus, tokens?.accessToken, loadAvailableRides]);
+
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Ride declined. It remains available to other drivers."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
   useEffect(() => {
