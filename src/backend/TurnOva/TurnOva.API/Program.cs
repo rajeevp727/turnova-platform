@@ -189,7 +189,7 @@ if (useCosmos)
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-    app.Logger.LogError(exception, "Unhandled API exception. TraceId {TraceId}", context.TraceIdentifier);
+    app.Logger.LogError("Unhandled API exception. TraceId {TraceId} ExceptionType {ExceptionType}", context.TraceIdentifier, exception?.GetType().Name ?? "Unknown");
     context.Response.Clear();
     context.Response.StatusCode = StatusCodes.Status500InternalServerError;
     await Results.Problem(
