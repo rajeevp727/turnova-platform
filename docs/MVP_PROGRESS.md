@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#7 DISPATCH-02: Rider-selected Cab discovery cap, pickup-proximity ordering and deterministic tie-break — implementation is already present; PR #59 adds an equal-distance regression test.**
+**#8 DISPATCH-03: Audit selected-driver reservation expiry, cancellation/decline cleanup, idempotent recovery and no-automatic-next-driver behaviour.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -15,7 +15,7 @@
 - PR #57 merged at `c5ff07843365e949b70fe1d4b9753bcd88022e10`; final synchronized PR head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs. Automated reviews [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440) found no unresolved critical/high-risk issue.
 - PR #58 merged sequential #6 DISPATCH-01 at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs. Automated review comment [6690682769](https://github.com/rajeevp727/turnova-platform/pull/58#issuecomment-6690682769) found no unresolved critical/high-risk issue.
 - DISPATCH-01 remains Blocked: PR #55 implements pickup-zone and positive-finite radius filtering; PR #58 adds out-of-zone-union and missing/invalid-radius regressions. The checked-in radius is 0 and the Hyderabad zone box is a development placeholder. Production radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance remain external gates.
-- DISPATCH-02 implementation already groups eligible Cab drivers by union, caps each union at three, orders by pickup distance then DriverId ordinal, and does not require FIFO queue membership. PR #59 adds an equal-distance regression so the deterministic tie-break is explicit in automated evidence. `e2ebe8d13a6e0379f8cddd945d6140a380c2b96a`, `f5381975e171b9fc2fc77fd86b32045419e7664a` and `9d5d7a5a0c3f996a61205a0a7b292d09885200ab` passed runs [42257212012](https://github.com/rajeevp727/turnova-platform/actions/runs/42257212012), [42257488325](https://github.com/rajeevp727/turnova-platform/actions/runs/42257488325) and [42257773007](https://github.com/rajeevp727/turnova-platform/actions/runs/42257773007). The latest code/test head `0384c8dc9f72cc40e55a85120cf1c862bfaeec2d` passed [42258271193](https://github.com/rajeevp727/turnova-platform/actions/runs/42258271193), all four jobs; final documentation-only PR-head CI remains the merge gate.
+- DISPATCH-02 implementation already groups eligible Cab drivers by union, caps each union at three, orders by pickup distance then DriverId ordinal, and does not require FIFO queue membership. PR #59 adds an equal-distance regression so the deterministic tie-break is explicit in automated evidence. `e2ebe8d13a6e0379f8cddd945d6140a380c2b96a`, `f5381975e171b9fc2fc77fd86b32045419e7664a` and `9d5d7a5a0c3f996a61205a0a7b292d09885200ab` passed runs [42257212012](https://github.com/rajeevp727/turnova-platform/actions/runs/42257212012), [42257488325](https://github.com/rajeevp727/turnova-platform/actions/runs/42257488325) and [42257773007](https://github.com/rajeevp727/turnova-platform/actions/runs/42257773007). The final PR #59 head `851e2f56cc9507f63495d0e412b7f5fbf8caa69d` passed CI run [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145), all four jobs; PR #59 merged at `508a789246cec1a9452651c62fa08aa3908140a4`.
 
 ## 2. Overall MVP completion
 
@@ -91,8 +91,16 @@
 
 ## 7. Next steps
 
-1. Complete PR #59 final-head CI and automated review, then merge only if all required checks remain green.
-2. Continue sequentially with #8 DISPATCH-03: re-audit reservation expiry, cancellation/decline cleanup, auditability and the no-automatic-next-driver rule; add only missing tests and keep Cosmos multi-instance recovery gates explicit.
-3. Revisit blocked DISPATCH-01 when the product owner approves the production pickup radius and reviewed zone boundaries; then run live Cosmos query/index and Android/iOS pickup-zone acceptance.
-4. Keep the internal FIFO fairness/availability decision unresolved until explicitly approved; it must not change Rider selection or ranking.
-5. Continue the remaining 19-area sequence before the separately approved supplemental CAB-RECON-01, CAB-UNION-01 and AI-01 work. Keep customer dispute/confirmation, non-zero-delta next-ride policy and internal FIFO role unresolved until approved.
+1. DISPATCH-03 audit found the selected-booking lifecycle already covers temporary lease acquisition, terminal expiry/cancellation/decline release, permanent promotion after acceptance, matching-ride-only release and idempotent interrupted-write recovery. Integration tests cover concurrent Rider bookings, cancellation, Driver decline, expiry via ride read/discovery, fail-closed missing lifetime, and terminal reservation cleanup. No missing in-memory/API code slice was identified; do not duplicate it.
+2. DISPATCH-03 remains In progress because Cosmos multi-instance ETag/restart/recovery and outbox validation are external infrastructure gates. No automatic next-driver advancement is introduced.
+3. Continue sequentially with #9 DISPATCH-04: audit cross-request and cross-instance driver reservation exclusivity, active-ride protection, and union-transfer contention; add only missing deterministic tests/code.
+4. Revisit blocked DISPATCH-01 when the product owner approves production pickup radius and reviewed zone boundaries; then run live Cosmos query/index and Android/iOS pickup-zone acceptance.
+5. Keep internal FIFO fairness/availability, customer dispute/confirmation, non-zero-delta next-ride policy and legal union terms unresolved until explicitly approved.
+
+
+## 8. DISPATCH-03 audit handoff (2026-11-06)
+
+- PR #59 is merged; final PR-head CI run [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
+- API and integration-test audit found coverage for temporary reservation acquisition, concurrent booking exclusion, Rider cancellation release, Driver decline release, expiry via ride read and discovery, terminal-state reconciliation, permanent promotion after mutual agreement/acceptance, and interrupted-write idempotent recovery.
+- Reservation stores deliberately retain expired leases until the API reconciles the linked ride; Cosmos mutation paths use ETag conditions for promotion, expiry changes and release. Live Cosmos multi-instance/restart/ETag testing remains unavailable and is not claimed.
+- No customer-facing FIFO ranking or automatic advancement is permitted. Current sequential focus advances to DISPATCH-04.
