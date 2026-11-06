@@ -1623,6 +1623,27 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
         using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
         var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+
+        using var proposal = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 350m, currency = "INR" })
+        };
+        proposal.Headers.Add("Idempotency-Key", "terminal-reservation-agreement");
+        using var proposalResponse = await rider.SendAsync(proposal);
+        Assert.Equal(HttpStatusCode.Created, proposalResponse.StatusCode);
+        using var proposalJson = JsonDocument.Parse(await proposalResponse.Content.ReadAsStringAsync());
+        var version = proposalJson.RootElement.GetProperty("agreement").GetProperty("version").GetInt32();
+
+        using var riderConfirm = await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/{version}/confirm", null);
+        using var driverConfirm = await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/{version}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, riderConfirm.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, driverConfirm.StatusCode);
+        using var accept = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("terminal-reservation-driver"));
+
+        // Simulate a process interruption after the terminal ride write but before reservation release.
         var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
         rides[rideId] = rides[rideId] with { Status = "Completed", NegotiationExpiresAtUtc = null };
 

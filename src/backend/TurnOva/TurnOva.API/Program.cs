@@ -1455,46 +1455,24 @@ app.MapPost("/api/v1/rider/bookings", async (
 
     if (idempotencyContainer is null)
     {
-        if (bookingIdempotency.TryGetValue(idempotencyIndex, out var prior))
+        if (bookingIdempotency.TryGetValue(idempotencyIndex, out var existingRecord))
         {
-            var existingResult = await ResolveExistingBookingIdempotencyAsync(prior);
+            var existingResult = await ResolveExistingBookingIdempotencyAsync(existingRecord);
             if (existingResult is not null) return existingResult;
-        }
-        else
-        {
-            var record = new RideIdempotencyRecord(keyId, riderId, rideId, requestFingerprint, now);
-            if (!bookingIdempotency.TryAdd(idempotencyIndex, record))
-            {
-                if (!bookingIdempotency.TryGetValue(idempotencyIndex, out prior))
-                    return Results.Conflict(new { message = "A booking with this Idempotency-Key is already being processed. Retry shortly." });
-                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior);
-                if (existingResult is not null) return existingResult;
-            }
         }
     }
     else
     {
         try
         {
-            var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
+            var existingRecord = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
                 keyId, new PartitionKey(riderId), cancellationToken: ct);
-            var existingResult = await ResolveExistingBookingIdempotencyAsync(prior.Resource);
+            var existingResult = await ResolveExistingBookingIdempotencyAsync(existingRecord.Resource);
             if (existingResult is not null) return existingResult;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
-            var record = new RideIdempotencyRecord(keyId, riderId, rideId, requestFingerprint, now);
-            try
-            {
-                await idempotencyContainer.CreateItemAsync(record, new PartitionKey(riderId), cancellationToken: ct);
-            }
-            catch (CosmosException conflict) when (conflict.StatusCode == System.Net.HttpStatusCode.Conflict)
-            {
-                var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
-                    keyId, new PartitionKey(riderId), cancellationToken: ct);
-                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior.Resource);
-                if (existingResult is not null) return existingResult;
-            }
+            // Create the idempotency record only after current Union/Driver eligibility is validated.
         }
     }
 
@@ -1526,21 +1504,32 @@ app.MapPost("/api/v1/rider/bookings", async (
         return Results.Conflict(new { message = "The selected Driver is no longer within the approved pickup radius." });
 
     var expiresAtUtc = now.AddMinutes(lifetimeMinutes.Value);
-    if (idempotencyContainer is null)
+    var idempotencyRecord = new RideIdempotencyRecord(keyId, riderId, rideId, requestFingerprint, now);
+    if (!isIdempotencyRecovery)
     {
-        if (!bookingIdempotency.TryAdd(idempotencyIndex, idempotencyRecord))
-            return Results.Conflict(new { message = "A booking with this Idempotency-Key is already being processed. Retry shortly." });
-    }
-    else
-    {
-        try { await idempotencyContainer.CreateItemAsync(idempotencyRecord, new PartitionKey(riderId), cancellationToken: ct); }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+        if (idempotencyContainer is null)
         {
-            var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
-            if (prior.Resource.RequestHash != requestFingerprint)
-                return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
-            var priorRide = await FindRideAsync(prior.Resource.rideId, ct);
-            return priorRide is null ? Results.Conflict(new { message = "The original booking is still being processed. Retry shortly." }) : Results.Ok(priorRide);
+            if (!bookingIdempotency.TryAdd(idempotencyIndex, idempotencyRecord))
+            {
+                if (!bookingIdempotency.TryGetValue(idempotencyIndex, out var prior))
+                    return Results.Conflict(new { message = "A booking with this Idempotency-Key is already being processed. Retry shortly." });
+                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior);
+                if (existingResult is not null) return existingResult;
+            }
+        }
+        else
+        {
+            try
+            {
+                await idempotencyContainer.CreateItemAsync(idempotencyRecord, new PartitionKey(riderId), cancellationToken: ct);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
+                    keyId, new PartitionKey(riderId), cancellationToken: ct);
+                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior.Resource);
+                if (existingResult is not null) return existingResult;
+            }
         }
     }
 
