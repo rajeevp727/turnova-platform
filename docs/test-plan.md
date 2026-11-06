@@ -532,3 +532,10 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 - Reject missing pickup coordinates and latitude/longitude values outside their valid ranges.
 - Reject unsupported service classes and pickup coordinates outside configured service zones.
 - Verify a rejected request does not consume its idempotency key, allowing a corrected retry to create the ride.
+
+
+## 12. Concurrent queue membership
+
+- Submit sixteen concurrent AddAsync operations for the same Driver and zone/service-class queue.
+- Exactly one operation succeeds; all duplicate attempts are rejected and one queue membership remains.
+- This is deterministic in-memory concurrency coverage; Cosmos multi-instance partition/ETag validation remains outstanding.
