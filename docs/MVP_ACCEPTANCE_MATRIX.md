@@ -79,7 +79,7 @@
 
 ## Highest-priority next work
 
-1. Complete PR #52 CAB-SCOPE-01 review/CI/merge; API and Rider/Driver UI Cab-only gates are implemented, with legacy records retained.
+1. Merge PR #52 CAB-SCOPE-01 after the final documentation/test update receives green CI; then begin CAB-DISCOVERY-01.
 2. Implement CAB-DISCOVERY-01: discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by pickup proximity; Rider explicitly selects. No customer-facing FIFO ranking or automatic assignment.
 3. Implement CAB-AGREEMENT-01: direct Rider/Driver negotiation, immutable versioned agreement, both parties confirm current version, and no ride start before mutual confirmation.
 4. Implement CAB-RECON-01: Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
@@ -108,7 +108,7 @@ This clarification supersedes conflicting legacy row descriptions without changi
 ### Approved supplemental acceptance requirements (not counted in 19)
 | ID | Acceptance requirement | Status |
 |---|---|---|
-| CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | In progress — PR #52 adds API validation for Rider requests, nearby lookup, Driver onboarding/availability/queue eligibility and new Union configuration; Rider/Driver UI exposes Cab only; automated legacy-record retention tests added; CI pending. |
+| CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | In progress — PR #52 adds API validation for Rider requests, nearby lookup, Driver onboarding/availability/queue eligibility, Union configuration/assignment and Cab-only Rider/Driver UI. Legacy profile and ride-history retention tests pass in CI run 42222681286 on head `d4ff9dd32fce93a2f406eee4989e8da7a8fa39bf`; merge pending. |
 | CAB-DISCOVERY-01 | Approved nearby unions; max 2–3 eligible drivers per union; pickup proximity ordering; customer selection | Not verified |
 | CAB-AGREEMENT-01 | Direct negotiation; durable immutable versioned agreement; both confirm; no start without current mutual confirmation | Not verified |
 | CAB-RECON-01 | Driver-reported/unverified amount, signed delta, authorised union visibility and audit | Not verified |
