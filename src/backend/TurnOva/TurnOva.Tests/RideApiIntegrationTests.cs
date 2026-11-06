@@ -25,14 +25,42 @@ public sealed class RideApiIntegrationTests
     private const string SigningKey = "turnova-integration-test-signing-key-32-bytes-minimum";
 
     [Fact]
-    public async Task ReadinessEndpointReturnsReadyInInMemoryMode()
+    public async Task HealthEndpointsExposeLivenessAndCosmosAwareReadiness()
     {
         using var factory = new TurnOvaApiFactory();
         using var client = factory.CreateClient("Rider", "rider-health");
 
-        var response = await client.GetAsync("/health/ready");
+        using var live = await client.GetAsync("/health/live");
+        Assert.Equal(HttpStatusCode.OK, live.StatusCode);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var ready = await client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
+        using var json = JsonDocument.Parse(await ready.Content.ReadAsStringAsync());
+        Assert.Equal("ready", json.RootElement.GetProperty("status").GetString());
+        Assert.Equal("demo-in-memory", json.RootElement.GetProperty("storage").GetString());
+    }
+
+    [Fact]
+    public async Task CorsAllowsOnlyConfiguredOrigins()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var client = factory.CreateClient("Rider", "rider-cors");
+
+        using var allowedRequest = new HttpRequestMessage(HttpMethod.Options, "/health/ready");
+        allowedRequest.Headers.Add("Origin", "https://app.turnova.test");
+        allowedRequest.Headers.Add("Access-Control-Request-Method", "GET");
+        using var allowedResponse = await client.SendAsync(allowedRequest);
+
+        Assert.Equal(HttpStatusCode.NoContent, allowedResponse.StatusCode);
+        Assert.Equal("https://app.turnova.test",
+            Assert.Single(allowedResponse.Headers.GetValues("Access-Control-Allow-Origin")));
+
+        using var deniedRequest = new HttpRequestMessage(HttpMethod.Options, "/health/ready");
+        deniedRequest.Headers.Add("Origin", "https://untrusted.example");
+        deniedRequest.Headers.Add("Access-Control-Request-Method", "GET");
+        using var deniedResponse = await client.SendAsync(deniedRequest);
+
+        Assert.False(deniedResponse.Headers.Contains("Access-Control-Allow-Origin"));
     }
 
     [Fact]
@@ -1046,7 +1074,8 @@ public sealed class RideApiIntegrationTests
                     ["Auth:Jwt:Audience"] = Audience,
                     ["Auth:Jwt:SigningKey"] = SigningKey,
                     ["TriSend:BaseUrl"] = "https://localhost:7443",
-                    ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars"
+                    ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
+                    ["Cors:AllowedOrigins:0"] = "https://app.turnova.test"
                 }));
         }
 
