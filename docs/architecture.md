@@ -311,3 +311,7 @@ This section supersedes the earlier four-category and customer-facing FIFO descr
 - Customer dispute/confirmation handling and the next-ride policy for non-zero deltas remain product decisions; do not implement an assumed outcome.
 - Union approval controls Cab membership, vehicle verification and public selfie visibility. Existing union approval and assignment audit remain relevant; legal partnership terms and production reviewer authorization require separate review.
 
+
+### CAB-SCOPE-01 API enforcement
+
+New Rider ride requests and nearby discovery accept only the canonical `cab` category. New Driver onboarding, Online/queue eligibility and new Union service configuration are Cab-only. Existing Scooty/Bike/Auto profile, union, ride and queue records are not destructively migrated or silently rewritten; legacy Driver profiles remain readable for history but cannot enter new Cab availability/ride workflows. The selected-driver discovery and negotiation increments will replace the remaining legacy FIFO Rider assignment path; the internal FIFO role remains unresolved.

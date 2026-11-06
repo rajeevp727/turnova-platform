@@ -94,7 +94,7 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Pending", profile.Status);
 
         var join = await driver.PostAsJsonAsync("/api/v1/queues/join",
-            new { zoneId = "hyderabad-central", serviceClass = "auto" });
+            new { zoneId = "hyderabad-central", serviceClass = "cab" });
         Assert.Equal(HttpStatusCode.Conflict, join.StatusCode);
 
         using var approval = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-onboarding-pending/review")
@@ -108,11 +108,11 @@ public sealed class RideApiIntegrationTests
         var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.OK, online.StatusCode);
         var joined = await driver.PostAsJsonAsync("/api/v1/queues/join",
-            new { zoneId = "hyderabad-central", serviceClass = "auto" });
+            new { zoneId = "hyderabad-central", serviceClass = "cab" });
         Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
 
         var wrongZone = await driver.PostAsJsonAsync("/api/v1/queues/join",
-            new { zoneId = "hyderabad-north", serviceClass = "auto" });
+            new { zoneId = "hyderabad-north", serviceClass = "cab" });
         Assert.Equal(HttpStatusCode.Forbidden, wrongZone.StatusCode);
 
         using var suspension = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-onboarding-pending/review")
@@ -122,7 +122,7 @@ public sealed class RideApiIntegrationTests
         suspension.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         Assert.Equal(HttpStatusCode.OK, (await driver.SendAsync(suspension)).StatusCode);
         var membership = await driver.GetFromJsonAsync<QueueMembershipTest>(
-            "/api/v1/zones/hyderabad-central/queues/auto/me");
+            "/api/v1/zones/hyderabad-central/queues/cab/me");
         Assert.NotNull(membership);
         Assert.False(membership.IsQueued);
     }
@@ -135,25 +135,25 @@ public sealed class RideApiIntegrationTests
         using var second = factory.CreateClient("Driver", "availability-second");
 
         Assert.Equal(HttpStatusCode.Conflict,
-            (await first.PostAsJsonAsync("/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "auto" })).StatusCode);
+            (await first.PostAsJsonAsync("/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "cab" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await second.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
 
-        var before = await first.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        var before = await first.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(before);
         Assert.Equal(new[] { "availability-first", "availability-second" }, before.Select(x => x.DriverId));
 
         Assert.Equal(HttpStatusCode.OK,
             (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = false })).StatusCode);
-        var afterOffline = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        var afterOffline = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(afterOffline);
         Assert.Equal(new[] { "availability-second" }, afterOffline.Select(x => x.DriverId));
 
         Assert.Equal(HttpStatusCode.OK,
             (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
-        var rejoined = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
+        var rejoined = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(rejoined);
         Assert.Equal(new[] { "availability-second", "availability-first" }, rejoined.Select(x => x.DriverId));
     }
@@ -167,7 +167,7 @@ public sealed class RideApiIntegrationTests
 
         var invalid = await driver.PostAsJsonAsync("/api/v1/driver/onboarding",
             new { fullName = "Driver", phoneNumber = "123", vehicleMake = "T", vehicleModel = "M",
-                vehicleRegistration = "TS01AA1234", serviceClass = "auto", passengerCapacity = 2,
+                vehicleRegistration = "TS01AA1234", serviceClass = "cab", passengerCapacity = 2,
                 documents = new[] { new { documentType = "DrivingLicence", storageReference = "https://example.com/doc.pdf" } } });
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
 
@@ -203,7 +203,7 @@ public sealed class RideApiIntegrationTests
                     managerName = "Union Manager",
                     managerPhone = "+919876543210",
                     zoneIds = new[] { "hyderabad-central" },
-                    serviceClasses = new[] { "auto" }
+                    serviceClasses = new[] { "cab" }
                 })
             };
             request.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
@@ -267,7 +267,7 @@ public sealed class RideApiIntegrationTests
                 name = "North Drivers Union",
                 code = "HYD-NORTH",
                 zoneIds = new[] { "hyderabad-north" },
-                serviceClasses = new[] { "auto" }
+                serviceClasses = new[] { "cab" }
             })
         };
         create.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
@@ -306,15 +306,139 @@ public sealed class RideApiIntegrationTests
 
     private sealed record QueueMembershipTest(bool IsQueued, int? Position);
 
-    private static object ValidOnboardingRequest() => new
+    [Fact]
+    public async Task CabOnlyScopeRejectsNonCabNewWorkflowsAndPreservesLegacyProfiles()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-cab-scope");
+        using var legacyDriver = factory.CreateClient("Driver", "driver-legacy-auto");
+        using var ops = factory.CreateClient("Rider", "ops-cab-scope");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var seeded = profiles["driver-legacy-auto"];
+        profiles["driver-legacy-auto"] = seeded with { ServiceClass = "auto", AvailabilityStatus = "Offline" };
+
+        var legacyProfile = await legacyDriver.GetFromJsonAsync<DriverOnboardingProfile>("/api/v1/driver/onboarding/me");
+        Assert.NotNull(legacyProfile);
+        Assert.Equal("auto", legacyProfile.ServiceClass);
+
+        var online = await legacyDriver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.Conflict, online.StatusCode);
+
+        var join = await legacyDriver.PostAsJsonAsync("/api/v1/queues/join",
+            new { zoneId = "hyderabad-central", serviceClass = "auto" });
+        Assert.Equal(HttpStatusCode.Conflict, join.StatusCode);
+
+        var legacyReplacement = await legacyDriver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest("cab"));
+        Assert.Equal(HttpStatusCode.Conflict, legacyReplacement.StatusCode);
+        Assert.Equal("auto", profiles["driver-legacy-auto"].ServiceClass);
+
+        using var nonCabRide = new HttpRequestMessage(HttpMethod.Post, "/api/v1/rides/request")
+        {
+            Content = JsonContent.Create(new
+            {
+                pickup = "Pickup landmark",
+                dropoff = "Drop-off landmark",
+                passengers = 1,
+                serviceClass = "auto",
+                pickupLatitude = 17.493,
+                pickupLongitude = 78.399
+            })
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await rider.SendAsync(nonCabRide)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await rider.GetAsync("/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1")).StatusCode);
+
+        using var nonCabUnion = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "Legacy Auto Union",
+                code = "LEGACY-AUTO",
+                zoneIds = new[] { "hyderabad-central" },
+                serviceClasses = new[] { "auto" }
+            })
+        };
+        nonCabUnion.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.BadRequest, (await ops.SendAsync(nonCabUnion)).StatusCode);
+
+        using var cabUnion = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "Cab Union",
+                code = "CAB-UNION",
+                zoneIds = new[] { "hyderabad-central" },
+                serviceClasses = new[] { "cab" }
+            })
+        };
+        cabUnion.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var cabUnionResponse = await ops.SendAsync(cabUnion);
+        Assert.Equal(HttpStatusCode.Created, cabUnionResponse.StatusCode);
+        using var cabUnionJson = JsonDocument.Parse(await cabUnionResponse.Content.ReadAsStringAsync());
+        var cabUnionId = cabUnionJson.RootElement.GetProperty("unionId").GetString()!;
+        using var legacyAssignment = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/drivers/driver-legacy-auto/union-assignment")
+        {
+            Content = JsonContent.Create(new { unionId = cabUnionId, reason = "Cab-only scope check" })
+        };
+        legacyAssignment.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.Conflict, (await ops.SendAsync(legacyAssignment)).StatusCode);
+    }
+
+    [Fact]
+    public async Task DriverOnboardingRejectsNonCabWithoutCreatingOrOverwritingProfile()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-noncab-onboarding");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove("driver-noncab-onboarding", out _);
+
+        var response = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest("auto"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var profile = await driver.GetAsync("/api/v1/driver/onboarding/me");
+        Assert.Equal(HttpStatusCode.NoContent, profile.StatusCode);
+        Assert.False(profiles.ContainsKey("driver-noncab-onboarding"));
+    }
+
+    [Fact]
+    public async Task LegacyNonCabRideHistoryRemainsReadableForRiderAndDriver()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-legacy-history");
+        using var driver = factory.CreateClient("Driver", "driver-legacy-history");
+
+        var ride = await CreateRideAsync(rider, "legacy-noncab-history");
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[ride.RideId] = rides[ride.RideId] with
+        {
+            DriverId = "driver-legacy-history",
+            Status = "Completed",
+            ServiceClass = "auto"
+        };
+
+        var riderHistory = await rider.GetFromJsonAsync<List<JsonElement>>("/api/v1/rides/mine");
+        Assert.NotNull(riderHistory);
+        Assert.Single(riderHistory);
+        Assert.Equal("auto", riderHistory[0].GetProperty("serviceClass").GetString());
+
+        var driverHistory = await driver.GetFromJsonAsync<List<JsonElement>>("/api/v1/driver/rides/mine");
+        Assert.NotNull(driverHistory);
+        Assert.Single(driverHistory);
+        Assert.Equal("auto", driverHistory[0].GetProperty("serviceClass").GetString());
+    }
+
+    private static object ValidOnboardingRequest(string serviceClass = "cab") => new
     {
         zoneId = "hyderabad-central",
         fullName = "Test Driver",
         phoneNumber = "+919876543210",
-        vehicleMake = "Bajaj",
-        vehicleModel = "RE",
+        vehicleMake = "Maruti",
+        vehicleModel = "Dzire",
         vehicleRegistration = "TS09AB1234",
-        serviceClass = "auto",
+        serviceClass,
         passengerCapacity = 3,
         documents = new[]
         {
@@ -357,21 +481,21 @@ public sealed class RideApiIntegrationTests
         using var secondDriver = factory.CreateClient("Driver", "driver-fifo-second");
         var queue = factory.Services.GetRequiredService<IQueueStore>();
         var joinedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
-        await queue.AddAsync(new DriverQueueEntry("driver-fifo-first", "hyderabad-central", "auto", joinedAt, 0, true), CancellationToken.None);
-        await queue.AddAsync(new DriverQueueEntry("driver-fifo-second", "hyderabad-central", "auto", joinedAt.AddMinutes(1), 0, true), CancellationToken.None);
+        await queue.AddAsync(new DriverQueueEntry("driver-fifo-first", "hyderabad-central", "cab", joinedAt, 0, true), CancellationToken.None);
+        await queue.AddAsync(new DriverQueueEntry("driver-fifo-second", "hyderabad-central", "cab", joinedAt.AddMinutes(1), 0, true), CancellationToken.None);
 
         var ride = await CreateRideAsync(rider, "request-fifo-reject-001");
         Assert.Equal(HttpStatusCode.NoContent,
             (await firstDriver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null)).StatusCode);
-        var afterReject = await queue.GetEligibleAsync("hyderabad-central", "auto", CancellationToken.None);
+        var afterReject = await queue.GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
         Assert.Equal(new[] { "driver-fifo-second", "driver-fifo-first" }, afterReject.Select(entry => entry.DriverId));
 
-        using var timeout = await firstDriver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null);
+        using var timeout = await firstDriver.PostAsync("/api/v1/queues/hyderabad-central/cab/offer-timeout", null);
         Assert.Equal(HttpStatusCode.Conflict, timeout.StatusCode);
 
-        using var secondTimeout = await secondDriver.PostAsync("/api/v1/queues/hyderabad-central/auto/offer-timeout", null);
+        using var secondTimeout = await secondDriver.PostAsync("/api/v1/queues/hyderabad-central/cab/offer-timeout", null);
         Assert.Equal(HttpStatusCode.OK, secondTimeout.StatusCode);
-        var afterTimeout = await queue.GetEligibleAsync("hyderabad-central", "auto", CancellationToken.None);
+        var afterTimeout = await queue.GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
         Assert.Equal(new[] { "driver-fifo-first", "driver-fifo-second" }, afterTimeout.Select(entry => entry.DriverId));
     }
 
@@ -382,7 +506,7 @@ public sealed class RideApiIntegrationTests
         using var driver = factory.CreateClient("Driver", "driver-payslip-pdf");
         var union = new DriverUnion(
             "union-payslip", "Central Drivers Union", "HYD-CENTRAL", "Hyderabad",
-            "Union Manager", null, ["hyderabad-central"], ["auto"], "Active",
+            "Union Manager", null, ["hyderabad-central"], ["cab"], "Active",
             DateTimeOffset.UtcNow.AddYears(-1), DateTimeOffset.UtcNow);
         factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[union.UnionId] = union;
 
@@ -727,7 +851,7 @@ public sealed class RideApiIntegrationTests
         };
 
         using var response = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=3");
+            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=3");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         using var json = JsonDocument.Parse(body);
@@ -735,9 +859,9 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(JsonValueKind.Array, vehicles.ValueKind);
         Assert.Equal(1, vehicles.GetArrayLength());
         var vehicle = vehicles[0];
-        Assert.Equal("Bajaj", vehicle.GetProperty("vehicleMake").GetString());
-        Assert.Equal("RE", vehicle.GetProperty("vehicleModel").GetString());
-        Assert.Equal("auto", vehicle.GetProperty("serviceClass").GetString());
+        Assert.Equal("Maruti", vehicle.GetProperty("vehicleMake").GetString());
+        Assert.Equal("Dzire", vehicle.GetProperty("vehicleModel").GetString());
+        Assert.Equal("cab", vehicle.GetProperty("serviceClass").GetString());
         Assert.Equal(3, vehicle.GetProperty("passengerCapacity").GetInt32());
         Assert.True(vehicle.GetProperty("distanceKm").GetDouble() >= 0);
 
@@ -749,7 +873,7 @@ public sealed class RideApiIntegrationTests
 
         Assert.Equal(HttpStatusCode.Forbidden,
             (await matching.GetAsync(
-                "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1")).StatusCode);
+                "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=1")).StatusCode);
     }
 
     [Fact]
@@ -778,7 +902,7 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Online", profile.AvailabilityStatus);
 
         using var nearby = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1");
+            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=1");
         Assert.Equal(HttpStatusCode.OK, nearby.StatusCode);
         var vehicles = await nearby.Content.ReadFromJsonAsync<List<NearbyVehicleTest>>();
         Assert.NotNull(vehicles);
@@ -800,12 +924,12 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Offline", profile.AvailabilityStatus);
 
         var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
-            "/api/v1/zones/hyderabad-central/queues/auto");
+            "/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(queue);
         Assert.DoesNotContain(queue, entry => entry.DriverId == "driver-online-outside-zone");
 
         using var nearby = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=0&longitude=0&serviceClass=auto&passengers=1");
+            "/api/v1/rides/nearby?latitude=0&longitude=0&serviceClass=cab&passengers=1");
         Assert.Equal(HttpStatusCode.BadRequest, nearby.StatusCode);
     }
 
@@ -831,7 +955,7 @@ public sealed class RideApiIntegrationTests
         Assert.Null(profile.LocationUpdatedAtUtc);
 
         var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
-            "/api/v1/zones/hyderabad-central/queues/auto");
+            "/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(queue);
         Assert.DoesNotContain(queue, entry => entry.DriverId == "driver-location-zone-exit");
     }
@@ -1038,7 +1162,7 @@ public sealed class RideApiIntegrationTests
         string? dropoff = "HITEC City, Hyderabad",
         double? pickupLatitude = 17.493,
         double? pickupLongitude = 78.399,
-        string serviceClass = "auto")
+        string serviceClass = "cab")
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/rides/request")
         {
@@ -1108,7 +1232,7 @@ public sealed class RideApiIntegrationTests
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
                 profiles[subject] = new DriverOnboardingProfile(
                     subject, subject, "hyderabad-central", "Approved Test Driver", "+919876543210",
-                    "Bajaj", "RE", "TS09AB1234", "auto", 3,
+                    "Maruti", "Dzire", "TS09AB1234", "cab", 3,
                     [new DriverDocumentReference("DrivingLicence", "test/licence")],
                     "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
             }

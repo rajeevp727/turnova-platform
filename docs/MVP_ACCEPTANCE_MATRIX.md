@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 using main after PR #51 merge `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; Cab-only scope is reconciled on PR #50 and awaits merge.
+**Last audited:** 2026-11-06 using main after PR #50 Cab-only documentation merge `6bd8f734e56ce35716595307cbeb9d7ab9decc59` (PR #51 queue audit is also merged). CAB-SCOPE-01 implementation is in PR #52.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -18,16 +18,16 @@
 |---|---|---|---|---|
 | AUTH-01 | Rider and Driver registration, login, profile and role separation | PR #35 fake-TriSend API integration tests; PR #39 JWT signature/issuer/audience/expiry and Rider/Driver role-boundary integration tests; PR #40 startup JWT/TriSend HTTPS configuration guards | Duplicate-registration contract and mobile runtime/session tests; end-to-end profile lifecycle | In progress |
 | AUTH-02 | Secure access/refresh-token lifecycle and logout | Both apps use SecureStore; PR #37 serializes concurrent refreshes; PR #41 extracts and tests the shared single-flight refresh coordinator and retry-after-failure behaviour | Automated token rotation/reuse, app restart, expiry, logout and secure-storage failure tests on both apps | In progress |
-| RIDER-01 | Cab-only pickup/drop-off selection, location permission and union-grouped nearby Cab discovery | PR #45 provides pickup-zone, capacity and location-freshness filtering, but current discovery is vehicle/FIFO-oriented; approved-union grouping, max 2–3 drivers per union, pickup-proximity ordering and Rider selection are not implemented | Cab-only API rejection; union eligibility/grouping, 2–3 limit, pickup-proximity ordering, privacy, location-permission and Android/iOS selection tests | In progress |
+| RIDER-01 | Cab-only pickup/drop-off selection, location permission and union-grouped nearby Cab discovery | PR #45 provides pickup-zone/capacity/freshness filtering; PR #52 fixes Rider category to Cab and rejects non-Cab nearby requests; approved-union grouping, max 2–3 drivers per union, pickup-proximity ordering and Rider selection remain | Union eligibility/grouping, 2–3 limit, pickup-proximity ordering, privacy, location-permission and Android/iOS selection tests | In progress |
 | RIDER-02 | Direct Rider/Driver fare negotiation and mutually confirmed agreement before ride start; no platform fare estimate | Fare estimate is intentionally null; no negotiation history, immutable agreement versions or mutual-confirmation start gate exist | Proposal/counterproposal history, immutable versions, both-party confirmation, start gate, expiry/cancellation and idempotency tests | Not started |
-| RIDER-03 | Customer-selected Cab booking, status, cancellation and duplicate-submit safety | Ride lifecycle, ownership and idempotency tests exist, but current booking still enters FIFO dispatch; selected-driver negotiation/reservation and agreement gate are not implemented | Selected-driver booking, no overlapping negotiation/ride, cancellation/expiry, durable persistence/restart and duplicate-submit tests | In progress |
+| RIDER-03 | Customer-selected Cab booking, status, cancellation and duplicate-submit safety | PR #52 restricts new ride requests to Cab and defaults the request contract to Cab; legacy ride creation still enters the old offer path until CAB-DISCOVERY replaces it | Customer-selected booking, no automatic FIFO assignment, negotiation reservation, cancellation/expiry, durable persistence/restart and duplicate-submit tests | In progress |
 | DISPATCH-01 | Pickup resolves to configured zone/radius and approved unions serving Cab | Zone resolution exists; current matching returns service-class queue candidates rather than union-grouped Cab discovery | Configured radius/zone boundaries, approved-union eligibility, Cab-only grouping and overlap/cross-zone tests | In progress |
 | DISPATCH-02 | Rider selects up to 2–3 approved, available Cab drivers per union ordered by pickup proximity; no customer-facing FIFO or automatic assignment | Current server-owned FIFO queue/offer flow exists and must not be used for customer-facing ranking/assignment; union grouping and Rider selection are not implemented; internal FIFO role remains unresolved | Union/driver eligibility, 2–3 limit, pickup-proximity order, Rider selection and privacy tests; decide internal FIFO role before implementing internal fairness | In progress |
 | DISPATCH-03 | Durable selected-driver negotiation/reservation expiry and audit; no automatic next-driver advancement | Durable offer aggregates, server expiry and outbox exist, but customer-selected negotiation state/expiry is absent; automatic FIFO advancement is legacy behaviour to remove from the Rider-facing flow | Negotiation reservation/outbox/expiry, stale request suppression, restart/ETag/recovery tests | In progress |
 | DISPATCH-04 | A selected Cab driver cannot be reserved for overlapping negotiations or active rides | Durable per-driver reservation and ride ETag guards exist; reservation scope must be integrated with selected-driver negotiation and exact expiry/cancel release | Concurrent selection, negotiation expiry/cancel, crash recovery and real Cosmos cross-partition concurrency | In progress |
 | REALTIME-01 | Rider/Driver receive live negotiation, agreement and Cab trip updates and recover after reconnect | SignalR ride and offer channels exist; negotiation/agreement state events are not implemented; customer-facing FIFO queue updates are not required | Negotiation/agreement notifications, agreement-version updates, trip reconnect and device-to-device tests | In progress |
-| DRIVER-01 | Cab-only Driver onboarding, identity/licence/Cab vehicle verification, union approval and selfie visibility | Onboarding and union selfie approval exist, but new onboarding does not yet enforce Cab-only or complete secure private-document controls | Cab-only validation, Cab vehicle checks, document storage/scanning/consent/retention, reviewer RBAC and union selfie approval tests | In progress |
-| DRIVER-02 | Cab Driver availability/location eligibility and selected-driver negotiation; internal FIFO only if approved | In-zone GPS, Online/Offline, queue and offer lifecycle exist; Cab-only validation and selected-driver negotiation are not implemented; internal FIFO role is unresolved | Cab-only availability, location permission/resume/zone-exit, selected-driver negotiation/re-entry and internal FIFO decision | In progress |
+| DRIVER-01 | Cab-only Driver onboarding, identity/licence/Cab vehicle verification, union approval and selfie visibility | PR #52 enforces Cab-only new onboarding, rejects in-place conversion of legacy non-Cab profiles and removes non-Cab category choices from Driver UI; existing union selfie approval remains | Cab vehicle checks, secure document storage/scanning/consent/retention, reviewer RBAC, union selfie approval and full onboarding device tests | In progress |
+| DRIVER-02 | Cab Driver availability/location eligibility and selected-driver negotiation; internal FIFO only if approved | PR #52 blocks non-Cab profiles from new Online/queue eligibility; selected-driver negotiation is not implemented; internal FIFO role is unresolved | Location permission/resume/zone-exit, selected-driver negotiation/reservation/re-entry and internal FIFO decision | In progress |
 | TRIP-01 | Cab trip lifecycle, location sharing, history and Rider live progress gated by mutual agreement | PR #47/#48 merged Rider and Driver owner-scoped history and reconnect restoration; agreement start gate and negotiation state remain unimplemented | Mutual-agreement start gate, device-to-device trip tests, Cosmos history persistence, background/permission and location-privacy tests | In progress |
 | DRIVER-03 | Driver work metrics; no monetary earnings/commission/payout policy is assumed | Monthly PDF work-metrics payslip exists; direct-payment reporting is tracked under CAB-RECON-01, not as platform earnings | Work-metrics PDF device tests and authorised access/privacy verification | In progress |
 | DRIVER-04 | Driver support and issue reporting | No verified end-to-end Driver support workflow evidence | Driver support process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
@@ -46,7 +46,7 @@
 - PR #48 merged Driver history at `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; CI run 42215718229 passed all four jobs.
 - PR #49 merged CORS/health hardening at `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; CI run 42216606101 passed all four jobs.
 - PR #51 merged queue audit and safe exception handling at `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; CI run 42219327319 passed all four jobs.
-- PR #50 contains the approved Cab-only documentation reset. Original CI run 42217994808 passed on its initial head; the branch was reconciled with current main in merge commit `5eda5a9a4800e67c028018a8395c85efaa1fa7b3`, and final-head CI run 42220458874 passed all four jobs; merge remains pending.
+- PR #50 merged the approved Cab-only documentation reset at `6bd8f734e56ce35716595307cbeb9d7ab9decc59`; final-head CI run 42220682290 passed all four jobs.
 - Do not mark an area Verified until all evidence in its row has passed and links/results are recorded.
 
 ## Approved supplemental requirement (not counted in the 19 PRD areas)
@@ -79,7 +79,7 @@
 
 ## Highest-priority next work
 
-1. Implement CAB-SCOPE-01: reject Scooty/Bike/Auto in new Rider ride requests and Driver onboarding; allow Cab only and preserve historical records without destructive migration.
+1. Merge PR #52 CAB-SCOPE-01 after the final documentation/test update receives green CI; then begin CAB-DISCOVERY-01.
 2. Implement CAB-DISCOVERY-01: discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by pickup proximity; Rider explicitly selects. No customer-facing FIFO ranking or automatic assignment.
 3. Implement CAB-AGREEMENT-01: direct Rider/Driver negotiation, immutable versioned agreement, both parties confirm current version, and no ride start before mutual confirmation.
 4. Implement CAB-RECON-01: Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
@@ -92,7 +92,7 @@ The MVP API is validated through a native .NET 10 publish artifact. Docker, cont
 
 ## Audit limitations
 
-This audit reflects main after PR #51 merge `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`, the PRD, README, test plan and current source inventory. It is not a substitute for executing Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.
+This audit reflects main after PR #50 merge `6bd8f734e56ce35716595307cbeb9d7ab9decc59` and the PR #52 Cab-only implementation branch. It is not a substitute for executing Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.
 
 ## Approved Cab-only business-model reconciliation (2026-11-06)
 
@@ -108,7 +108,7 @@ This clarification supersedes conflicting legacy row descriptions without changi
 ### Approved supplemental acceptance requirements (not counted in 19)
 | ID | Acceptance requirement | Status |
 |---|---|---|
-| CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | Not verified |
+| CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | In progress — PR #52 adds API validation for Rider requests, nearby lookup, Driver onboarding/availability/queue eligibility, Union configuration/assignment and Cab-only Rider/Driver UI. Legacy profile and ride-history retention tests pass in CI run 42222681286 on head `d4ff9dd32fce93a2f406eee4989e8da7a8fa39bf`; merge pending. |
 | CAB-DISCOVERY-01 | Approved nearby unions; max 2–3 eligible drivers per union; pickup proximity ordering; customer selection | Not verified |
 | CAB-AGREEMENT-01 | Direct negotiation; durable immutable versioned agreement; both confirm; no start without current mutual confirmation | Not verified |
 | CAB-RECON-01 | Driver-reported/unverified amount, signed delta, authorised union visibility and audit | Not verified |

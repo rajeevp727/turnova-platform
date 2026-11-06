@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0` (PR #51)
+**Current main HEAD:** `6bd8f734e56ce35716595307cbeb9d7ab9decc59` (PR #50; PR #51 is an ancestor)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -21,13 +21,11 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - Phase 2: TurnOva Fleet and TurnOva Ops. No driver/rider web apps.
 
 ## Current product rules
-- Canonical service classes: `scooty`, `bike`, `auto`, `cab`.
-- Rider selects service class; pickup coordinates resolve to a configured dispatch zone.
-- Driver selects service class during onboarding; queue and union eligibility use that same value.
-- Only approved drivers are eligible for queue/ride actions.
-- FIFO order is server-owned within a zone + service class.
-- Current API exposes actionable requested rides only to the FIFO head; accept/reject recheck head ownership.
-- Rejecting at queue head moves that driver to the back.
+- Cab is the only supported category for new Rider, Driver and Union MVP workflows. Legacy Scooty/Bike/Auto records remain readable for history and are not destructively migrated or silently converted.
+- Rider discovery must group approved unions and show up to 2–3 eligible Cab drivers per union by driver-to-pickup proximity; the Rider selects the Driver.
+- Customer-facing FIFO ranking, automatic FIFO assignment and next-driver advancement are not part of the approved Rider flow. Whether FIFO remains an internal Union fairness mechanism is unresolved; preserve legacy queue data/code until that decision is made.
+- New non-Cab Rider requests, nearby lookups, Driver onboarding/availability/queue eligibility, Union configuration/assignment and legacy non-Cab ride acceptance are rejected by CAB-SCOPE-01 implementation in PR #52; CI run 42222681286 passed on code head `d4ff9dd32fce93a2f406eee4989e8da7a8fa39bf`, merge pending.
+- Only approved drivers with verified Cab details and current Union eligibility may enter new discovery/ride workflows.
 - Union is an employer/operating association, not a dispatch queue. Driver transfers require reasons and are audited.
 - Driver selfie is private until approved by the driver's current union; replacement or union transfer resets/hides approval.
 - Monthly payslips are PDF only, for completed IST months; metrics are days worked, accepted, completed and explicitly rejected rides. No compensation amounts until policy is agreed.
@@ -55,12 +53,14 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - PR #48 merged: authenticated Driver-owned trip history API/UI, active-trip restore, SignalR reconnect refresh, session-expiry state cleanup and owner/privacy/role/empty-history tests. Merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run 42215718229 passed all four jobs.
 - PR #49 merged: explicit CORS origin allow-list, wildcard rejection, separate liveness and Cosmos-aware readiness endpoints, and CORS/health integration tests. Merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; final-head CI run 42216606101 passed all four jobs.
 - PR #51 merged: append-only queue audit events in the existing `QueueEntries` partition with transactional Cosmos batches, in-memory audit tests, and generic traceId Problem Details with exception-type-only logs. Merge commit `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run 42219327319 passed all four jobs.
+- PR #50 merged: authoritative Cab-only union-selected-driver business-model documentation and 19-area acceptance reclassification. Merge commit `6bd8f734e56ce35716595307cbeb9d7ab9decc59`; final-head CI run 42220682290 passed all four jobs.
+- PR #52 is the active CAB-SCOPE-01 implementation: Cab-only Rider/Driver UI and API gates, new Union Cab-only configuration/assignment, legacy profile and ride-history retention tests. CI run 42222681286 passed on code head `d4ff9dd32fce93a2f406eee4989e8da7a8fa39bf`; a test/documentation follow-up is receiving final CI before merge.
 - The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
 
-1. **CAB-SCOPE-01 (current):** reject Scooty/Bike/Auto for new Rider rides and Driver onboarding; allow Cab only and preserve historical records without destructive migration.
+1. **CAB-SCOPE-01 (PR #52):** complete review, latest-head CI and merge for Cab-only API/UI validation and legacy-record preservation.
 2. **CAB-DISCOVERY-01:** discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by driver-to-pickup proximity; Rider selects, no customer-facing FIFO ranking or automatic assignment.
 3. **CAB-AGREEMENT-01:** direct Rider/Driver fare negotiation, immutable versioned agreement, both confirm current version, and no ride start until mutual confirmation.
 4. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
@@ -72,7 +72,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
 - Ride model currently includes in-memory/demo paths; Cosmos-backed persistence exists for selected resources, not proof that all ride/dispatch state is production durable.
 - Development zone `hyderabad-central` uses a placeholder bounding rectangle; replace with reviewed operational boundaries before pilot.
-- Existing driver/union records with legacy `mini`, `sedan`, `suv` values need explicit migration/operations correction; never silently map them.
+- Existing driver/union records with legacy Scooty/Bike/Auto service classes are retained for history and are not eligible for new Cab discovery; never silently map them to Cab.
 - Interim Ops endpoints use a backend-only admin API key. This is not production RBAC.
 - Payslip work-activity append is not transactionally coupled to ride transitions; add outbox/reconciliation before production.
 - No production compensation, priority tier or commission policy has been agreed.

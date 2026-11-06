@@ -32,7 +32,7 @@ const darkColors: ThemeColors = {
 };
 const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
 const ZONE = "hyderabad-central";
-const DEFAULT_SERVICE_CLASS = "auto";
+const DEFAULT_SERVICE_CLASS = "cab";
 type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
@@ -86,7 +86,8 @@ export default function App() {
   const [licenceReference, setLicenceReference] = useState("");
   const [registrationReference, setRegistrationReference] = useState("");
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
-  const [serviceClass, setServiceClass] = useState(DEFAULT_SERVICE_CLASS);
+  const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
+  const serviceClass = legacyServiceClass ?? DEFAULT_SERVICE_CLASS;
 
   useEffect(() => {
     let mounted = true;
@@ -428,10 +429,12 @@ export default function App() {
   const loadOnboarding = useCallback(async () => {
     try {
       const profile = await apiFetch("/api/v1/driver/onboarding/me");
+      if (!profile?.driverId) setLegacyServiceClass(null);
       if (profile?.driverId) {
         setOnboardingProfile(profile);
         setProfilePhotoBase64(profile.profilePhotoBase64 ?? "");
-        setServiceClass(profile.serviceClass ?? DEFAULT_SERVICE_CLASS);
+        const storedServiceClass = String(profile.serviceClass ?? "").trim().toLowerCase();
+        setLegacyServiceClass(storedServiceClass && storedServiceClass !== "cab" ? storedServiceClass : null);
         setDriverName(profile.fullName ?? "");
         setPhoneNumber(profile.phoneNumber ?? "");
         setVehicleMake(profile.vehicleMake ?? "");
@@ -486,6 +489,10 @@ export default function App() {
   };
 
   const submitOnboarding = async () => {
+    if (legacyServiceClass) {
+      setError("This legacy non-Cab profile is retained for history and cannot be converted in place. Complete Cab vehicle verification through your union.");
+      return;
+    }
     setLoading(true); setError(""); setNotice("");
     try {
       const profile = await apiFetch("/api/v1/driver/onboarding", {
@@ -548,8 +555,9 @@ export default function App() {
   return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
     <View style={styles.header}><TurnOvaLogo subtitle={`Driver partner · ${user.name || user.email}`} compact /><Text style={styles.role}>DRIVER</Text></View>
     <ScrollView contentContainerStyle={styles.content}>
-      {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · {serviceClass.toUpperCase()}</Text><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.cardTitle}>{availabilityStatus}</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>Manage availability</Text></Pressable></View></>}
-      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · {serviceClass.toUpperCase()}</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.position}>{availabilityStatus}</Text><Pressable style={styles.primary} onPress={() => void toggleAvailability()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : availabilityStatus === "Online" ? "Go offline" : "Go online"}</Text></Pressable><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void loadQueue()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : "Refresh queue"}</Text></Pressable><Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
+      {legacyServiceClass && <View style={styles.card}><Text style={styles.error}>Legacy {legacyServiceClass.toUpperCase()} profile retained for history. It is not eligible for new Cab rides. Complete Cab vehicle verification through your union before joining Cab discovery.</Text></View>}
+      {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · {legacyServiceClass ? `LEGACY ${legacyServiceClass.toUpperCase()} · INELIGIBLE` : serviceClass.toUpperCase()}</Text><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.cardTitle}>{availabilityStatus}</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>Manage availability</Text></Pressable></View></>}
+      {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · {legacyServiceClass ? `LEGACY ${legacyServiceClass.toUpperCase()} · INELIGIBLE` : serviceClass.toUpperCase()}</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.position}>{availabilityStatus}</Text><Pressable style={styles.primary} onPress={() => void toggleAvailability()} disabled={loading || (!!legacyServiceClass && availabilityStatus !== "Online")}><Text style={styles.primaryText}>{loading ? "Please wait…" : availabilityStatus === "Online" ? "Go offline" : "Go online"}</Text></Pressable><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void loadQueue()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : "Refresh queue"}</Text></Pressable><Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
       {tab === "Trips" && <>
         <Text style={styles.title}>Trips</Text>
         <View style={styles.card}>
@@ -588,17 +596,16 @@ export default function App() {
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
         {profilePhotoBase64 ? <Image source={{ uri: `data:image/jpeg;base64,${profilePhotoBase64}` }} style={{ width: 112, height: 112, borderRadius: 56, alignSelf: "center", marginVertical: 12 }} /> : <Text style={styles.muted}>No driver selfie saved yet.</Text>}
         {!!onboardingProfile?.profilePhotoApprovalStatus && <Text style={styles.muted}>Union selfie approval: {onboardingProfile.profilePhotoApprovalStatus}{onboardingProfile.profilePhotoApprovalStatus === "Rejected" && onboardingProfile.profilePhotoReviewReason ? ` · ${onboardingProfile.profilePhotoReviewReason}` : ""}</Text>}
-        <Pressable style={styles.secondary} onPress={() => void captureSelfie()} disabled={loading}><Text style={styles.secondaryText}>{profilePhotoBase64 ? "Retake driver selfie" : "Take driver selfie"}</Text></Pressable>
+        <Pressable style={styles.secondary} onPress={() => void captureSelfie()} disabled={loading || !!legacyServiceClass}><Text style={styles.secondaryText}>{profilePhotoBase64 ? "Retake driver selfie" : "Take driver selfie"}</Text></Pressable>
         {!!onboardingProfile?.reviewReason && <Text style={styles.error}>Review note: {onboardingProfile.reviewReason}</Text>}
-        {onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
+        {onboardingProfile?.status === "Approved" && legacyServiceClass ? <Text style={styles.error}>Your legacy {legacyServiceClass.toUpperCase()} profile is retained for history and is not eligible for new Cab rides.</Text> : onboardingProfile?.status === "Approved" ? <Text style={styles.success}>Your Cab driver profile is approved. Queue and ride access are enabled.</Text> : onboardingProfile?.status === "Suspended" ? <Text style={styles.error}>Your driver account is suspended. Contact TurnOva operations for assistance.</Text> : <>
           <Text style={styles.sub}>Complete your driver and vehicle details and capture a clear front-facing selfie. Your application will remain pending until reviewed.</Text>
           <Text style={styles.label}>VEHICLE CATEGORY</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-            {(["scooty", "bike", "auto", "cab"] as const).map(option => <Pressable key={option} onPress={() => setServiceClass(option)} style={[styles.themeOption, { minWidth: "45%" }, serviceClass === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, serviceClass === option && styles.themeOptionTextSelected]}>{option === "scooty" ? "Scooty" : option === "bike" ? "Bike" : option === "auto" ? "Auto" : "Cab"}</Text></Pressable>)}
-          </View>
+          <View style={[styles.themeOption, styles.themeOptionSelected]}><Text style={styles.themeOptionTextSelected}>CAB · ONLY MVP CATEGORY</Text></View>
+          <Text style={styles.muted}>New TurnOva onboarding accepts Cab vehicles only.</Text>
           <TextInput value={driverName} onChangeText={setDriverName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full legal name" />
           <TextInput value={phoneNumber} onChangeText={setPhoneNumber} style={styles.input} placeholderTextColor={colors.muted} placeholder="Phone number with country code" keyboardType="phone-pad" />
-          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Bajaj)" />
+          <TextInput value={vehicleMake} onChangeText={setVehicleMake} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle make (e.g. Maruti)" />
           <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle model" />
           <TextInput value={vehicleRegistration} onChangeText={setVehicleRegistration} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle registration number" autoCapitalize="characters" />
           <Text style={styles.label}>PRIVATE DOCUMENT STORAGE REFERENCES</Text>
