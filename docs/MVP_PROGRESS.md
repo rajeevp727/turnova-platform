@@ -56,8 +56,8 @@
 
 - PR #58 merged sequential #6 DISPATCH-01 at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs. Automated review comment [6690682769](https://github.com/rajeevp727/turnova-platform/pull/58#issuecomment-6690682769) found no unresolved critical/high-risk issue.
 - PR #59 merged sequential #7 DISPATCH-02; final-head CI [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
-- PR #61 merged sequential #9 DISPATCH-04 regression coverage; automated review found no unresolved critical/high-risk issue. CI [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) was green at workflow level, but backend tests did not execute; no test result is claimed.
-- PR #63 is the sequential #10 REALTIME-01 increment. Automated review found no unresolved critical/high-risk issue; mobile typechecks and shared Node tests passed. Backend hub tests did not execute because of the Release solution mapping defect; no backend test result is claimed.
+- PR #61 merged sequential #9 DISPATCH-04 regression coverage; automated review found no unresolved critical/high-risk issue. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including the accepted-active-ride/Union-transfer regression.
+- PR #63 is the sequential #10 REALTIME-01 increment. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including RideTrackingHubTests; mobile typechecks and shared mobile tests passed. Physical-device reconnect validation remains.
 
 - PR #56 merged at `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8`; final-head CI run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) passed all four jobs. Its automated review found no critical/high-risk issue.
 
@@ -113,7 +113,7 @@
 
 - PR #61 merged at `118929955d3959f078ddb59f7f5bdf3c3965d52a`; final PR head `84763cce86f3413b86577cfc4a2cb724e49dc752` passed CI run [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978), all four jobs.
 - Automated engineering review was recorded on PR #61 and found no unresolved critical/high-risk issue. The test exercises Rider selection, mutual agreement confirmation, Driver acceptance, permanent reservation retention and a blocked Union transfer with unchanged membership.
-- Native non-container publish/artifact verification and Rider/Driver Expo config/typechecks/shared mobile tests passed. Backend test execution was not verified because the Release solution mapping defect prevented the test project from running.
+- PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests. Native non-container publish/artifact verification and Rider/Driver Expo config/typechecks/shared mobile tests passed.
 - DISPATCH-04 remains In Progress: live Cosmos cross-instance ETag contention and restart/crash recovery plus the product-approved negotiation lifetime are external gates. No live Cosmos/device validation is claimed.
 - PR #63 completed the #10 REALTIME-01 implementation audit; physical-device SignalR gates remain. Current sequential focus advances to #11 DRIVER-01. Do not introduce customer-facing FIFO ranking or automatic next-driver advancement.
 
