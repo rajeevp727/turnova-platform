@@ -1710,7 +1710,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
     var isDriver = user.IsInRole("Driver") && ride?.DriverId == actorId;
     if (ride is null || string.IsNullOrWhiteSpace(actorId) || (!isRider && !isDriver))
         return Results.NotFound(new { message = "Ride not found." });
-    if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived"))
+    if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived" or "InProgress"))
         return Results.Conflict(new { message = "Fare negotiation is not available in the current ride state." });
     if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount ||
         request.Currency is null || request.Currency.Length != 3 ||
@@ -1825,9 +1825,19 @@ app.MapPost("/api/v1/rides/{rideId}/start", async (
     return Results.Ok(started);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/complete", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
-    TransitionRideAsync(user, rideId, "InProgress", "Completed", ct))
-    .RequireAuthorization(policy => policy.RequireRole("Driver"));
+app.MapPost("/api/v1/rides/{rideId}/complete", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var ride = await FindRideAsync(rideId, ct);
+    if (ride is null || ride.DriverId != driverId) return Results.NotFound();
+    var current = (ride.AgreementVersions ?? []).LastOrDefault();
+    var confirmations = ride.AgreementConfirmations ?? [];
+    if (current is null ||
+        !confirmations.Any(item => item.Version == current.Version && item.Party == "Rider" && item.ActorId == ride.RiderId) ||
+        !confirmations.Any(item => item.Version == current.Version && item.Party == "Driver" && item.ActorId == ride.DriverId))
+        return Results.Conflict(new { message = "Both parties must confirm the current agreement version before completing the ride." });
+    return await TransitionRideAsync(user, rideId, "InProgress", "Completed", ct);
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
