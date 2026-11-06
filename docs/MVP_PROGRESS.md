@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#10 REALTIME-01: Audit Rider/Driver live negotiation, agreement and Cab trip events plus authenticated reconnect/state recovery; add only missing deterministic coverage.**
+**#11 DRIVER-01: Audit Cab-only Driver onboarding, required identity/licence/Cab vehicle verification, Union approval and union-approved selfie visibility; implement only the next missing in-scope vertical slice.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -17,6 +17,7 @@
 - DISPATCH-01 remains Blocked: PR #55 implements pickup-zone and positive-finite radius filtering; PR #58 adds out-of-zone-union and missing/invalid-radius regressions. The checked-in radius is 0 and the Hyderabad zone box is a development placeholder. Production radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance remain external gates.
 - DISPATCH-02 implementation groups eligible Cab drivers by union, caps each union at three, orders by pickup distance then DriverId ordinal, and does not require FIFO queue membership. PR #59 merged at `508a789246cec1a9452651c62fa08aa3908140a4`; final-head CI [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
 - PR #61 merged DISPATCH-04 active-ride/Union-transfer regression coverage at `118929955d3959f078ddb59f7f5bdf3c3965d52a`; final-head CI [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) passed all four jobs. The test confirms an accepted ride keeps the Driver reservation and prevents Union transfer.
+- PR #63 implements the REALTIME-01 Rider reconnect fix at head `d51acc55093f71efec190b10ba85b8cc738f985c`; CI run [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480) passed all four jobs. It adds authenticated hub-group tests, shared mobile active-state tests, and Rider authoritative history/ride/agreement refresh on initial SignalR connection and reconnect.
 
 ## 2. Overall MVP completion
 
@@ -40,7 +41,7 @@
 | 7 | DISPATCH-02 | In progress | PR #55 plus RIDER-03 provide the three-driver cap, pickup-distance order, queue-independent discovery and explicit Rider selection/reservation. PR #59 adds an equal-distance deterministic DriverId tie-break regression; live Cosmos/device validation and the internal FIFO role decision remain. |
 | 8 | DISPATCH-03 | In progress | RIDER-03 adds expiring selected-driver leases, lazy expiry, deterministic interrupted-write recovery and terminal cleanup; live Cosmos restart/ETag/outbox validation remains. No customer-facing automatic advancement. |
 | 9 | DISPATCH-04 | In progress | PR #57 implements per-driver reservation leases and lifecycle cleanup; PR #61 adds accepted-active-ride Union-transfer conflict coverage. CI [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) passed all four jobs. Live Cosmos multi-instance ETag/restart/crash recovery and approved negotiation lifetime remain. |
-| 10 | REALTIME-01 | In progress | PR #56 agreement events plus RIDER-03 driver-group RideSelected notification and mobile refresh; device-to-device reconnect acceptance remains. |
+| 10 | REALTIME-01 | In progress | PR #63 reloads Rider owner-scoped history/current ride and agreement versions on connect/reconnect; Driver reconnect already rehydrates selected/active state and now shares the tested role-specific selector. Hub group authorization and mobile recovery tests passed CI [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480), all four jobs. Android/iOS physical-device SignalR delivery/reconnect remains. |
 | 11 | DRIVER-01 | In progress | PR #52 enforces Cab-only new onboarding and prevents in-place legacy non-Cab conversion; union selfie approval exists; Cab vehicle checks and secure document controls remain. |
 | 12 | DRIVER-02 | In progress | PR #52 blocks legacy non-Cab profiles; RIDER-03 adds selected booking, Driver notification, accept/decline and active-reservation offline protection. GPS/zone/device validation and internal FIFO decision remain. |
 | 13 | TRIP-01 | In progress | PRs #47/#48 provide owner-scoped history; PR #56 mutual-confirmation gates; RIDER-03 adds Negotiating/AgreementConfirmed/Expired states and stop snapshots. Cosmos/device/location-privacy validation remains. |
@@ -56,6 +57,7 @@
 - PR #58 merged sequential #6 DISPATCH-01 at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs. Automated review comment [6690682769](https://github.com/rajeevp727/turnova-platform/pull/58#issuecomment-6690682769) found no unresolved critical/high-risk issue.
 - PR #59 merged sequential #7 DISPATCH-02; final-head CI [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
 - PR #61 merged sequential #9 DISPATCH-04 regression coverage; automated review found no unresolved critical/high-risk issue and final-head CI [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) passed all four jobs. No local test run is claimed.
+- PR #63 is the sequential #10 REALTIME-01 increment. Automated review found no unresolved critical/high-risk issue; final-head CI [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480) passed all four jobs. No physical-device test is claimed.
 
 - PR #56 merged at `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8`; final-head CI run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) passed all four jobs. Its automated review found no critical/high-risk issue.
 
@@ -95,9 +97,10 @@
 
 1. DISPATCH-03 audit found temporary reservation acquisition, expiry, cancellation/decline cleanup, permanent promotion after acceptance and idempotent interrupted-write recovery covered by existing API/store tests; live Cosmos ETag/restart/outbox validation remains blocked.
 2. DISPATCH-04 received PR #61: accepted active rides retain the per-driver reservation and a Union transfer attempt conflicts without changing membership. Keep the row In progress until live Cosmos multi-instance ETag/restart/crash recovery and the approved negotiation-lifetime gate are satisfied.
-3. Continue sequentially with #10 REALTIME-01: audit authenticated SignalR group membership, selected negotiation/agreement/trip event delivery, Rider/Driver reconnect refresh and state recovery; add only missing deterministic API/mobile tests.
-4. Revisit blocked DISPATCH-01 when the product owner approves production pickup radius and reviewed zone boundaries; then run live Cosmos query/index and Android/iOS pickup-zone acceptance.
-5. Keep internal FIFO fairness/availability, customer dispute/confirmation, non-zero-delta next-ride policy and legal union terms unresolved until explicitly approved.
+3. REALTIME-01 implementation is covered by PR #63 and CI [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480); keep the row In progress until Android/iOS device-to-device WebSocket/reconnect/background acceptance passes.
+4. Continue sequentially with #11 DRIVER-01: audit Cab-only onboarding, identity/licence/Cab vehicle verification, Union approval and union-approved selfie visibility; add only missing end-to-end API/mobile tests.
+5. Revisit blocked DISPATCH-01 when the product owner approves production pickup radius and reviewed zone boundaries; then run live Cosmos query/index and Android/iOS pickup-zone acceptance.
+6. Keep internal FIFO fairness/availability, customer dispute/confirmation, non-zero-delta next-ride policy and legal union terms unresolved until explicitly approved.
 
 
 ## 8. DISPATCH-03 audit handoff (2026-11-06)
@@ -114,4 +117,14 @@
 - Automated engineering review was recorded on PR #61 and found no unresolved critical/high-risk issue. The test exercises Rider selection, mutual agreement confirmation, Driver acceptance, permanent reservation retention and a blocked Union transfer with unchanged membership.
 - Backend restore/build/test, native non-container publish and artifact verification passed; Rider/Driver Expo config/typechecks and shared mobile-auth tests passed.
 - DISPATCH-04 remains In Progress: live Cosmos cross-instance ETag contention and restart/crash recovery plus the product-approved negotiation lifetime are external gates. No live Cosmos/device validation is claimed.
-- Current sequential focus: #10 REALTIME-01. Do not introduce customer-facing FIFO ranking or automatic next-driver advancement.
+- PR #63 completed the #10 REALTIME-01 implementation audit; physical-device SignalR gates remain. Current sequential focus advances to #11 DRIVER-01. Do not introduce customer-facing FIFO ranking or automatic next-driver advancement.
+
+
+## 10. REALTIME-01 reconnect audit handoff (2026-11-06)
+
+- PR #63 fixes the identified Rider gap: reconnect previously refreshed agreement history only and could leave ride status/location stale after missed events. Rider now reloads owner-scoped history and the authoritative current ride snapshot on initial SignalR connection and reconnect, then refreshes agreement versions. Event callbacks are guarded after effect cleanup.
+- Driver selected-booking and active-trip reconnect paths already reload authoritative Driver history/available requests; both apps now use the shared role-specific active-ride selector so terminal-only history clears stale active state consistently.
+- `RideTrackingHubTests` covers Rider ownership, assigned Driver ownership, Driver self-only notification group membership and rejection before group join. `rideRecovery.test.cjs` covers Rider/Driver active-state selection, terminal-state clearing and invalid roles.
+- PR #63 final-head CI run [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480) passed all four jobs: backend restore/build/test, native non-container API publish/artifact verification, Rider and Driver Expo config/typechecks, and shared mobile state/refresh tests.
+- REALTIME-01 remains In progress until physical Android/iOS SignalR delivery, reconnect, background/resume and device-to-device agreement/status/location checks pass. No live device validation is claimed.
+- Next sequential item: #11 DRIVER-01. Do not add customer-facing FIFO or automatic dispatch.
