@@ -70,12 +70,13 @@ builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAuditEvent
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverWorkActivity>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverRideReservation>>();
+var triSendBaseUrl = builder.Configuration["TriSend:BaseUrl"];
+if (!Uri.TryCreate(triSendBaseUrl, UriKind.Absolute, out var triSendUri) || triSendUri.Scheme != Uri.UriSchemeHttps)
+    throw new InvalidOperationException("TriSend:BaseUrl must be a valid HTTPS URL.");
+
 builder.Services.AddHttpClient("TriSend", client =>
 {
-    var baseUrl = builder.Configuration["TriSend:BaseUrl"];
-    if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        throw new InvalidOperationException("TriSend:BaseUrl must be a valid HTTPS URL.");
-    client.BaseAddress = uri;
+    client.BaseAddress = triSendUri;
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
