@@ -645,3 +645,14 @@ These supplement and supersede legacy fare-estimate, payment-gateway and automat
 | CAB-UNION-001 | Driver transferred unions | Prior selfie approval invalidated until new union approval | API/privacy | P0 |
 
 Do not test or implement platform fare estimates, in-app payment collection, gateway/escrow or customer-facing FIFO ranking/automatic assignment as MVP behaviour. Dispute and non-zero-delta next-ride outcomes remain pending product decisions.
+
+
+### CAB-SCOPE-01 — Cab-only new workflows and legacy retention
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| CAB-SCOPE-003 | An existing approved non-Cab Driver profile is loaded after the Cab-only release | The historical profile remains readable and unchanged; new Online, queue-join and onboarding-conversion attempts are rejected | API integration/data-retention | P0 |
+| CAB-SCOPE-004 | Operations creates a new Union with any non-Cab service class or multiple classes | API rejects the configuration; a new Union must declare Cab only | API integration | P0 |
+| CAB-SCOPE-005 | Rider requests nearby discovery using Scooty, Bike or Auto | API rejects the request; only Cab discovery is accepted | API integration | P0 |
+| CAB-SCOPE-006 | Existing ride-history records contain legacy non-Cab service classes | History remains readable without changing the stored category | API integration/data-retention | P1 |
+
