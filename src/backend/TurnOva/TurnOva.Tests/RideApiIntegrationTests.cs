@@ -348,7 +348,7 @@ public sealed class RideApiIntegrationTests
         };
         Assert.Equal(HttpStatusCode.BadRequest, (await rider.SendAsync(nonCabRide)).StatusCode);
 
-        Assert.Equal(HttpStatusCode.BadRequest,
+        Assert.Equal(HttpStatusCode.Gone,
             (await rider.GetAsync("/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1")).StatusCode);
 
         using var nonCabUnion = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
@@ -909,92 +909,200 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
-    public async Task NearbyVehicleDiscoveryReturnsOnlyFreshQueuedDriversMatchingZoneClassAndCapacity()
+    public async Task RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency()
     {
         using var factory = new TurnOvaApiFactory();
-        using var rider = factory.CreateClient("Rider", "rider-nearby-discovery");
-        using var matching = factory.CreateClient("Driver", "nearby-matching");
-        using var tooSmall = factory.CreateClient("Driver", "nearby-too-small");
-        using var wrongClass = factory.CreateClient("Driver", "nearby-wrong-class");
-        using var stale = factory.CreateClient("Driver", "nearby-stale");
-
+        using var rider = factory.CreateClient("Rider", "rider-union-discovery");
+        using var driverRole = factory.CreateClient("Driver", "driver-discovery-role");
+        using var anonymous = factory.CreateClient();
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
-        profiles["nearby-too-small"] = profiles["nearby-too-small"] with { PassengerCapacity = 2 };
-        profiles["nearby-wrong-class"] = profiles["nearby-wrong-class"] with { ServiceClass = "bike" };
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var now = DateTimeOffset.UtcNow;
 
-        async Task GoOnlineAsync(HttpClient driver)
+        DriverUnion AddUnion(string unionId, string name, string status = "Active")
         {
-            using var response = await driver.PostAsJsonAsync("/api/v1/driver/availability",
-                new { isOnline = true, latitude = 17.493, longitude = 78.399 });
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var union = new DriverUnion(unionId, name, unionId.ToUpperInvariant(), "Hyderabad",
+                null, null, ["hyderabad-central"], ["cab"], status, now, now);
+            unions[unionId] = union;
+            return union;
         }
 
-        await GoOnlineAsync(matching);
-        await GoOnlineAsync(tooSmall);
-        await GoOnlineAsync(wrongClass);
-        await GoOnlineAsync(stale);
-        profiles["nearby-stale"] = profiles["nearby-stale"] with
+        void AddDriver(
+            string driverId,
+            string? unionId,
+            double latitude,
+            double longitude,
+            int capacity = 4,
+            string serviceClass = "cab",
+            string status = "Approved",
+            bool documentsApproved = true,
+            DateTimeOffset? locationUpdatedAtUtc = null,
+            string photoStatus = "Approved",
+            string? photoApprovedByUnionId = null)
         {
-            LocationUpdatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5)
-        };
+            using var seededClient = factory.CreateClient("Driver", driverId);
+            var current = profiles[driverId];
+            profiles[driverId] = current with
+            {
+                FullName = driverId,
+                ServiceClass = serviceClass,
+                PassengerCapacity = capacity,
+                Status = status,
+                Documents =
+                [
+                    new DriverDocumentReference("DrivingLicence", $"test/{driverId}/licence", documentsApproved ? "Approved" : "Pending"),
+                    new DriverDocumentReference("VehicleRegistration", $"test/{driverId}/registration", documentsApproved ? "Approved" : "Pending")
+                ],
+                AvailabilityStatus = "Online",
+                CurrentLatitude = latitude,
+                CurrentLongitude = longitude,
+                LocationUpdatedAtUtc = locationUpdatedAtUtc ?? now,
+                ProfilePhotoBase64 = photoStatus == "None" ? null : "/9j/",
+                ProfilePhotoContentType = photoStatus == "None" ? null : "image/jpeg",
+                ProfilePhotoApprovalStatus = photoStatus == "None" ? "Pending" : photoStatus,
+                ProfilePhotoApprovedByUnionId = photoStatus == "Approved" ? photoApprovedByUnionId ?? unionId : null
+            };
+
+            if (unionId is not null)
+            {
+                var union = unions[unionId];
+                assignments[driverId] = new DriverUnionAssignment(
+                    driverId, unionId, union.Name, "Active", now, now, "Discovery integration fixture");
+            }
+        }
+
+        var central = AddUnion("union-central", "Central Cab Union");
+        var metro = AddUnion("union-metro", "Metro Cab Union");
+        var inactive = AddUnion("union-inactive", "Inactive Cab Union", "Inactive");
+        var outer = AddUnion("union-outer", "Outer Cab Union");
+
+        AddDriver("central-1", central.UnionId, 17.493, 78.400);
+        AddDriver("central-2", central.UnionId, 17.494, 78.402);
+        AddDriver("central-3", central.UnionId, 17.495, 78.404);
+        AddDriver("central-4", central.UnionId, 17.496, 78.406);
+        AddDriver("metro-photo-approved", metro.UnionId, 17.493, 78.401);
+        AddDriver("metro-photo-pending", metro.UnionId, 17.493, 78.402, photoStatus: "Pending");
+        AddDriver("metro-photo-approved-by-old-union", metro.UnionId, 17.493, 78.403,
+            photoStatus: "Approved", photoApprovedByUnionId: "previous-union");
+        AddDriver("inactive-union-driver", inactive.UnionId, 17.493, 78.399);
+        AddDriver("unassigned-driver", null, 17.493, 78.399);
+        AddDriver("stale-driver", central.UnionId, 17.493, 78.399,
+            locationUpdatedAtUtc: now.AddMinutes(-5));
+        AddDriver("outside-radius-driver", outer.UnionId, 17.590, 78.399);
+        AddDriver("too-small-driver", central.UnionId, 17.493, 78.399, capacity: 2);
+        AddDriver("unverified-documents-driver", central.UnionId, 17.493, 78.399, documentsApproved: false);
+        AddDriver("not-approved-driver", central.UnionId, 17.493, 78.399, status: "Pending");
+        AddDriver("wrong-class-driver", central.UnionId, 17.493, 78.399, serviceClass: "bike");
 
         using var response = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=3");
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=3");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await driverRole.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1")).StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         using var json = JsonDocument.Parse(body);
-        var vehicles = json.RootElement;
-        Assert.Equal(JsonValueKind.Array, vehicles.ValueKind);
-        Assert.Equal(1, vehicles.GetArrayLength());
-        var vehicle = vehicles[0];
-        Assert.Equal("Maruti", vehicle.GetProperty("vehicleMake").GetString());
-        Assert.Equal("Dzire", vehicle.GetProperty("vehicleModel").GetString());
-        Assert.Equal("cab", vehicle.GetProperty("serviceClass").GetString());
-        Assert.Equal(3, vehicle.GetProperty("passengerCapacity").GetInt32());
-        Assert.True(vehicle.GetProperty("distanceKm").GetDouble() >= 0);
+        var root = json.RootElement;
+        Assert.Equal("hyderabad-central", root.GetProperty("pickupZoneId").GetString());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("journeyDistanceKm").ValueKind);
 
-        Assert.False(body.Contains("driverId", StringComparison.OrdinalIgnoreCase));
-        Assert.False(body.Contains("latitude", StringComparison.OrdinalIgnoreCase));
-        Assert.False(body.Contains("longitude", StringComparison.OrdinalIgnoreCase));
+        var groups = root.GetProperty("unions");
+        Assert.Equal(2, groups.GetArrayLength());
+        var centralGroup = groups.EnumerateArray()
+            .Single(group => group.GetProperty("unionId").GetString() == central.UnionId);
+        var centralDrivers = centralGroup.GetProperty("drivers");
+        Assert.Equal(3, centralDrivers.GetArrayLength());
+        var centralIds = centralDrivers.EnumerateArray()
+            .Select(driver => driver.GetProperty("driverId").GetString()).ToArray();
+        Assert.Equal(new[] { "central-1", "central-2", "central-3" }, centralIds);
+        var distances = centralDrivers.EnumerateArray()
+            .Select(driver => driver.GetProperty("distanceToPickupKm").GetDouble()).ToArray();
+        Assert.Equal(distances.OrderBy(distance => distance), distances);
+
+        var metroGroup = groups.EnumerateArray()
+            .Single(group => group.GetProperty("unionId").GetString() == metro.UnionId);
+        var metroDrivers = metroGroup.GetProperty("drivers").EnumerateArray().ToArray();
+        Assert.Equal(3, metroDrivers.Length);
+        var approvedPhoto = metroDrivers.Single(driver =>
+            driver.GetProperty("driverId").GetString() == "metro-photo-approved");
+        Assert.Equal("/9j/", approvedPhoto.GetProperty("profilePhotoBase64").GetString());
+        var pendingPhoto = metroDrivers.Single(driver =>
+            driver.GetProperty("driverId").GetString() == "metro-photo-pending");
+        Assert.Equal(JsonValueKind.Null, pendingPhoto.GetProperty("profilePhotoBase64").ValueKind);
+        var wrongUnionPhoto = metroDrivers.Single(driver =>
+            driver.GetProperty("driverId").GetString() == "metro-photo-approved-by-old-union");
+        Assert.Equal(JsonValueKind.Null, wrongUnionPhoto.GetProperty("profilePhotoBase64").ValueKind);
+
         Assert.False(body.Contains("phoneNumber", StringComparison.OrdinalIgnoreCase));
         Assert.False(body.Contains("vehicleRegistration", StringComparison.OrdinalIgnoreCase));
-
-        Assert.Equal(HttpStatusCode.Forbidden,
-            (await matching.GetAsync(
-                "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=1")).StatusCode);
+        Assert.False(body.Contains("currentLatitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("currentLongitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("queuePosition", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task NearbyVehicleDiscoveryExcludesDriversWithActiveRidesAndPausesAvailabilityLocation()
+    public async Task RiderDiscoveryExcludesReservedDriversAndLegacyFifoRiderRoutesAreRetired()
     {
         using var factory = new TurnOvaApiFactory();
-        using var rider = factory.CreateClient("Rider", "rider-nearby-active-trip");
-        using var driver = factory.CreateClient("Driver", "driver-nearby-active-trip");
+        using var rider = factory.CreateClient("Rider", "rider-discovery-reservation");
+        using var seededDriver = factory.CreateClient("Driver", "driver-discovery-reserved");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var now = DateTimeOffset.UtcNow;
+        var union = new DriverUnion("union-reservation", "Reservation Union", "RESERVATION",
+            "Hyderabad", null, null, ["hyderabad-central"], ["cab"], "Active", now, now);
+        unions[union.UnionId] = union;
+        var profile = profiles["driver-discovery-reserved"];
+        profiles[profile.DriverId] = profile with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/licence", "Approved"),
+                new DriverDocumentReference("VehicleRegistration", "test/registration", "Approved")
+            ],
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = now
+        };
+        assignments[profile.DriverId] = new DriverUnionAssignment(
+            profile.DriverId, union.UnionId, union.Name, "Active", now, now, "Reservation fixture");
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.True(await reservations.TryAcquireAsync(profile.DriverId, "active-ride"));
 
-        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
-            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
-        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
+        using var discovery = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
+        using var json = JsonDocument.Parse(await discovery.Content.ReadAsStringAsync());
+        Assert.Empty(json.RootElement.GetProperty("unions").EnumerateArray());
 
-        var ride = await CreateRideAsync(rider, "nearby-active-trip-001");
-        using var accepted = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
-        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.Equal(HttpStatusCode.Gone,
+            (await rider.GetAsync("/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=1")).StatusCode);
+    }
 
-        using var location = await driver.PostAsJsonAsync("/api/v1/driver/location",
-            new { latitude = 17.494, longitude = 78.400 });
-        Assert.Equal(HttpStatusCode.Conflict, location.StatusCode);
-        using var offline = await driver.PostAsJsonAsync("/api/v1/driver/availability",
-            new { isOnline = false });
-        Assert.Equal(HttpStatusCode.Conflict, offline.StatusCode);
-        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
-            ["driver-nearby-active-trip"];
-        Assert.Equal("Online", profile.AvailabilityStatus);
+    [Fact]
+    public async Task RiderDiscoveryFailsClosedWhenNearbyRadiusIsNotConfigured()
+    {
+        using var factory = new TurnOvaApiFactory(nearbyRadiusKm: 0);
+        using var rider = factory.CreateClient("Rider", "rider-discovery-radius-missing");
 
-        using var nearby = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=1");
-        Assert.Equal(HttpStatusCode.OK, nearby.StatusCode);
-        var vehicles = await nearby.Content.ReadFromJsonAsync<List<NearbyVehicleTest>>();
-        Assert.NotNull(vehicles);
-        Assert.Empty(vehicles);
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CustomerFacingFifoRideCreationIsDisabledOutsideTestCompatibilityMode()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "rider-fifo-disabled");
+
+        using var request = CreateRideRequest("legacy-fifo-disabled-001");
+        using var response = await rider.PostAsync("/api/v1/rides/request", request);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
     [Fact]
@@ -1016,9 +1124,9 @@ public sealed class RideApiIntegrationTests
         Assert.NotNull(queue);
         Assert.DoesNotContain(queue, entry => entry.DriverId == "driver-online-outside-zone");
 
-        using var nearby = await rider.GetAsync(
-            "/api/v1/rides/nearby?latitude=0&longitude=0&serviceClass=cab&passengers=1");
-        Assert.Equal(HttpStatusCode.BadRequest, nearby.StatusCode);
+        using var discovery = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=0&longitude=0&passengers=1");
+        Assert.Equal(HttpStatusCode.BadRequest, discovery.StatusCode);
     }
 
     [Fact]
@@ -1283,7 +1391,6 @@ public sealed class RideApiIntegrationTests
             ?? throw new InvalidOperationException("The API returned an empty ride response.");
     }
 
-    private sealed record NearbyVehicleTest(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
     private sealed record RiderRideHistoryItemTest(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt);
     private sealed record DriverRideHistoryItemTest(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive);
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
@@ -1291,6 +1398,15 @@ public sealed class RideApiIntegrationTests
 
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
+        private readonly bool _legacyFifoRiderRequestsEnabled;
+        private readonly double _nearbyRadiusKm;
+
+        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double nearbyRadiusKm = 10)
+        {
+            _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
+            _nearbyRadiusKm = nearbyRadiusKm;
+        }
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
@@ -1302,7 +1418,9 @@ public sealed class RideApiIntegrationTests
                     ["Auth:Jwt:SigningKey"] = SigningKey,
                     ["TriSend:BaseUrl"] = "https://localhost:7443",
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
-                    ["Cors:AllowedOrigins:0"] = "https://app.turnova.test"
+                    ["Cors:AllowedOrigins:0"] = "https://app.turnova.test",
+                    ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
                 }));
         }
 

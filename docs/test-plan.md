@@ -1,9 +1,9 @@
 # TurnOva Feature Test Plan
 
-**Scope:** TurnOva MVP foundation and Feature 2 (TriSend email/password authentication).
+**Scope:** TurnOva Rider and Driver Cab-only Android/iOS MVP, including authentication, union-grouped discovery, selected-driver negotiation, trip lifecycle, direct-payment reporting and release gates. Legacy FIFO cases are compatibility regression tests only; they are not the approved customer-facing Rider flow.
 **Test types:** automated unit/CI, API integration, mobile functional, security, and manual acceptance.
 **Priority:** P0 = release blocker, P1 = high, P2 = normal.
-**Status convention:** Planned means the case is specified but has not yet been executed. A green build/type-check is not evidence that a functional scenario passed.
+**Status convention:** Planned means the case is specified but has not yet been executed. A green build/type-check is not evidence that a functional scenario passed. PRD.md §15 is authoritative where earlier test sections describe multi-category or customer-facing FIFO behaviour.
 
 ## 1. Authentication — registration
 
@@ -666,3 +666,22 @@ Do not test or implement platform fare estimates, in-app payment collection, gat
 | CAB-SCOPE-008 | Existing non-Cab Driver reads a queue, pending offer or available-ride endpoint | No non-Cab queue or actionable offer is exposed; new queue reads are Cab-only | API integration/security | P0 |
 | CAB-SCOPE-009 | Existing non-Cab Driver attempts location sharing, rejection or offer timeout | New activity is rejected; the Driver can still go Offline to remove stale legacy queue membership | API integration/concurrency | P0 |
 | CAB-SCOPE-010 | Existing non-Cab Driver opens the mobile app | Profile/history remain readable; queue polling, actionable requests and SignalR offer subscription stay disabled; Offline cleanup remains available | Mobile typecheck + device | P1 |
+
+
+### CAB-DISCOVERY-01 implementation coverage (PR #55 candidate)
+
+| ID | Scenario | Expected result | Automated evidence | Status |
+|---|---|---|---|---|
+| CAB-DISC-006 | Rider discovers with multiple eligible unions | Only Active unions serving Cab in the pickup zone are returned; drivers are grouped by their current Active union assignment | RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency | CI run 42237256233 passed all four jobs |
+| CAB-DISC-007 | A union has more than three eligible drivers | At most three drivers are returned for that union | Same API integration test; deterministic pickup-distance order | CI run 42237256233 passed all four jobs |
+| CAB-DISC-008 | Driver has pending/rejected/old-union selfie approval | Driver may remain eligible, but public photo is null unless approved by the current union | Same API integration test | CI run 42237256233 passed all four jobs |
+| CAB-DISC-009 | Driver is stale, outside radius, under-capacity, unapproved, non-Cab, unassigned, or union inactive | Driver is excluded | Same API integration test | CI run 42237256233 passed all four jobs |
+| CAB-DISC-010 | Driver has an active reservation | Driver is excluded from Rider discovery | RiderDiscoveryExcludesReservedDriversAndLegacyFifoRiderRoutesAreRetired | CI run 42237256233 passed all four jobs |
+| CAB-DISC-011 | Driver is Online but has no FIFO queue membership | Driver can still appear when all union/profile eligibility rules pass | Discovery fixture seeds Online profiles directly without queue entries | CI run 42237256233 passed all four jobs |
+| CAB-DISC-012 | Discovery response privacy | No phone, full registration or exact driver coordinates; only approved current-union selfie is returned | API integration assertions on serialized response | CI run 42237256233 passed all four jobs |
+| CAB-DISC-013 | Nearby radius is absent/zero | API returns 503; no implicit radius fallback | RiderDiscoveryFailsClosedWhenNearbyRadiusIsNotConfigured | CI run 42237256233 passed all four jobs |
+| CAB-DISC-014 | Legacy customer-facing FIFO discovery/request | Nearby endpoint returns 410; legacy ride creation is disabled by default | RiderDiscoveryExcludesReservedDriversAndLegacyFifoRiderRoutesAreRetired; CustomerFacingFifoRideCreationIsDisabledOutsideTestCompatibilityMode | CI run 42237256233 passed all four jobs |
+| CAB-DISC-015 | A Driver or unauthenticated caller requests Rider discovery | Driver role is forbidden and unauthenticated requests are unauthorized; only Rider role may call discovery | RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency (Driver and anonymous assertions) | CI run 42237256233 passed all four jobs |
+
+Mobile acceptance still requires Android/iOS device checks for union grouping, selected-card state, approved-photo rendering, location permission denial, no-provider call/chat messaging and the distinct unavailable journey-distance label. The discovery selection is local to the screen in this increment; durable selected-driver reservation/negotiation is a subsequent acceptance slice. Live maps/routing, production radius approval and Cosmos multi-instance query/concurrency validation remain external gates.
+
