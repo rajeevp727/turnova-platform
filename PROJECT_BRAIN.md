@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `17c489eac64dc0f99e881a1474147b2f79fe2aac` (PR #70 direct-payment reconciliation merged)
+**Last audited main HEAD:** `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6` (PR #71 bounded storage readiness merged)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -344,3 +344,11 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR [#71](https://github.com/rajeevp727/turnova-platform/pull/71) adds a three-second bounded storage readiness probe. Liveness stays independent; dependency failure/probe timeout returns generic 503; caller cancellation is propagated; diagnostics are not exposed in response/logs. Final-head CI is pending.
 - Tests use a deterministic failing probe and a cancellable delayed probe. They do not claim live Cosmos validation.
 - Next sequential area after #18 is #19 RELEASE-01. Keep the 19-area weighted status at 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19) until row evidence is fully accepted.
+
+
+## RELEASE-01 production bundle validation (2026-11-07)
+
+- PR #71 merged at `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`; its final-head CI passed 214/214 backend tests, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile tests.
+- Current sequential item #19 adds CI exports of production JavaScript bundles for Android and iOS in both Rider and Driver apps, with metadata verification and uploaded artifacts.
+- Bundle exports are not native binaries. Android APK/AAB, iOS archive/signing, iOS bundle identifiers, store credentials and physical-device functional/security/pilot gates remain external. Do not invent identifiers or signing secrets.
+- #17 SUPPORT-01 remains blocked by unapproved Rider support categories, escalation owner and operating process. After #19, proceed to approved supplemental AI-01 while preserving the 19-row denominator.
