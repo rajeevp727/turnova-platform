@@ -60,7 +60,7 @@ async function request(path: string, init: RequestInit = {}, token?: string) {
 export default function App() {
   const [user,setUser]=useState<User|null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
-  const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null);
+  const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
   const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
@@ -86,10 +86,11 @@ export default function App() {
     void SecureStore.setItemAsync("turnova.theme", preference);
   };
 
-  const accept=useCallback(async(result:any)=>{const t={accessToken:result.accessToken,refreshToken:result.refreshToken};await saveTokens(t);setTokens(t);setUser(result.user);setError("");},[]);
-  const refresh=useCallback(async(rt:string)=>{const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});await accept(result);return result.accessToken as string;},[accept]);
+  const accept=useCallback(async(result:any,newSession=false)=>{const t={accessToken:result.accessToken,refreshToken:result.refreshToken};await saveTokens(t);if(newSession)sessionEpoch.current+=1;setTokens(t);setUser(result.user);setError("");},[]);
+  const refresh=useCallback(async(rt:string,expectedEpoch:number)=>{if(sessionEpoch.current!==expectedEpoch)return "";const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(sessionEpoch.current!==expectedEpoch)return "";await accept(result);return result.accessToken as string;},[accept]);
   const apiFetch=useCallback(async(path:string,init:RequestInit={})=>{
     if(!tokens)throw new Error("Please sign in again.");
+    const requestEpoch=sessionEpoch.current;
     let response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${tokens.accessToken}`,...init.headers}});
     if(response.status===401){
       let accessToken:string;
@@ -101,18 +102,21 @@ export default function App() {
             accessToken:await SecureStore.getItemAsync("turnova.access"),
             refreshToken:await SecureStore.getItemAsync("turnova.refresh")
           }),
-          refresh
+          (refreshToken:string)=>refresh(refreshToken,requestEpoch)
         );
       }catch{
+        if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
+        sessionEpoch.current+=1;
         await clearTokens();setTokens(null);setUser(null);
         throw new Error("Session expired. Please sign in again.");
       }
+      if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
       response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});
     }
     const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current?.rideId===details.rideId?{...current,...details}:details);}else if(isActive()){setRide(null);}},[apiFetch]);
-  useEffect(()=>{let active=true;(async()=>{try{const at=await SecureStore.getItemAsync("turnova.access");const rt=await SecureStore.getItemAsync("turnova.refresh");if(at&&rt){try{const me=await request("/api/v1/auth/me",{},at);if(active){setTokens({accessToken:at,refreshToken:rt});setUser(me);}}catch{try{const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(active)await accept(result);}catch{await clearTokens();}}}}catch{if(active)setError("Unable to restore session.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[accept]);
+  useEffect(()=>{let active=true;(async()=>{try{const at=await SecureStore.getItemAsync("turnova.access");const rt=await SecureStore.getItemAsync("turnova.refresh");if(at&&rt){try{const me=await request("/api/v1/auth/me",{},at);if(active){sessionEpoch.current+=1;setTokens({accessToken:at,refreshToken:rt});setUser(me);}}catch{try{const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(active)await accept(result,true);}catch{await clearTokens();}}}}catch{if(active)setError("Unable to restore session.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[accept]);
   useEffect(()=>{
     if(!ride||tab!=="Activity"||!tokens)return;
     let active=true;
@@ -155,10 +159,10 @@ export default function App() {
       void connection.stop();
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const authenticate=async()=>{setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});await accept(result);}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
+  const authenticate=async()=>{setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});await accept(result,true);}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
   const draftTripIntent=async()=>{setTripIntentBusy(true);setTripIntentNotice("");setError("");try{const result=await apiFetch("/api/v1/assistance/trip-intent",{method:"POST",body:JSON.stringify({text:tripIntentText})}) as TripIntentDraft;if(result.pickup)setPickup(result.pickup);if(result.dropoff)setDropoff(result.dropoff);if(result.passengerCount!==null&&result.passengerCount>=1&&result.passengerCount<=6)setPassengers(String(result.passengerCount));setDiscovery(null);setSelectedDriverId(null);setBookingRequestKey(`${Date.now()}-${Math.random().toString(36).slice(2)}`);const missing=result.missingFields.length?`Please enter: ${result.missingFields.join(", ")}. `:"";const source=result.source==="provider"?"AI provider draft":"Deterministic local fallback draft";setTripIntentNotice(`${missing}${source}. Review and edit every field before searching. This draft does not book a ride or charge anyone.`);}catch(e){setError(e instanceof Error?e.message:"Unable to prepare a trip draft.");}finally{setTripIntentBusy(false);}};
   const askHelp=async()=>{setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{setHelpBusy(false);}};
-  const logout=async()=>{try{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);}catch{}await clearTokens();setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);setAgreementHistory([]);setAgreementAmount("");};
+  const logout=async()=>{sessionEpoch.current+=1;try{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);}catch{}await clearTokens();setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);setAgreementHistory([]);setAgreementAmount("");};
   const findNearbyVehicles=async()=>{setLoading(true);setError("");setSelectedDriverId(null);try{const permission=await Location.requestForegroundPermissionsAsync();if(!permission.granted)throw new Error("Location permission is required to find nearby Cab drivers.");const position=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});const coordinates={latitude:position.coords.latitude,longitude:position.coords.longitude};setPickupCoordinates(coordinates);const query="latitude="+encodeURIComponent(String(coordinates.latitude))+"&longitude="+encodeURIComponent(String(coordinates.longitude))+"&passengers="+encodeURIComponent(String(Number(passengers)||1));const result=await apiFetch("/api/v1/rider/discovery?"+query);setDiscovery(result as DiscoveryResult);}catch(e){setDiscovery(null);setError(e instanceof Error?e.message:"Unable to discover nearby Cab drivers.");}finally{setLoading(false);}};
   const cancelRide=async()=>{if(!ride)return;setLoading(true);setError("");try{const updated=await apiFetch(`/api/v1/rides/${ride.rideId}/cancel`,{method:"POST"});setRide(updated);}catch(e){setError(e instanceof Error?e.message:"Unable to cancel ride.");}finally{setLoading(false);}};
    const requestSelectedDriver=async()=>{if(!selectedDriver||!selectedUnion)return;setLoading(true);setError("");try{let coordinates=pickupCoordinates;if(!coordinates){const permission=await Location.requestForegroundPermissionsAsync();if(!permission.granted)throw new Error("Location permission is required to request the selected driver.");const position=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});coordinates={latitude:position.coords.latitude,longitude:position.coords.longitude};setPickupCoordinates(coordinates);}const stops=stopsText.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean);const created=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":bookingRequestKey},body:JSON.stringify({selectedDriverId:selectedDriver.driverId,unionId:selectedUnion.unionId,pickup,dropoff,stops,passengers:Number(passengers)||1,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});setRide(created as Ride);setRideHistory(current=>[created as RideHistoryItem,...current.filter(item=>item.rideId!==created.rideId)]);setAgreementHistory([]);setAgreementAmount("");setTab("Activity");setDiscovery(null);setSelectedDriverId(null);setBookingRequestKey(`${Date.now()}-${Math.random().toString(36).slice(2)}`);}catch(e){setError(e instanceof Error?e.message:"Unable to request the selected driver.");}finally{setLoading(false);}};
