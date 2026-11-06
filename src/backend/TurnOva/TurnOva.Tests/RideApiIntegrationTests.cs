@@ -911,6 +911,18 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderDiscoveryFailsClosedUntilZoneConfigurationIsProductApproved()
+    {
+        using var factory = new TurnOvaApiFactory(zoneConfigurationApproved: false);
+        using var rider = factory.CreateClient("Rider", "rider-zone-approval-pending");
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task RiderDiscoveryFailsClosedWhenConfiguredZonesOverlapAtPickup()
     {
         var zones = new[]
@@ -2107,14 +2119,17 @@ public sealed class RideApiIntegrationTests
         private readonly double _nearbyRadiusKm;
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
         private readonly DispatchZoneConfig[]? _dispatchZones;
+        private readonly bool _zoneConfigurationApproved;
 
         public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double nearbyRadiusKm = 10,
-            int? selectedDriverNegotiationLifetimeMinutes = 15, DispatchZoneConfig[]? dispatchZones = null)
+            int? selectedDriverNegotiationLifetimeMinutes = 15, DispatchZoneConfig[]? dispatchZones = null,
+            bool zoneConfigurationApproved = true)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
             _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
             _dispatchZones = dispatchZones;
+            _zoneConfigurationApproved = zoneConfigurationApproved;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -2131,6 +2146,7 @@ public sealed class RideApiIntegrationTests
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
                     ["Cors:AllowedOrigins:0"] = "https://app.turnova.test",
                     ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["Dispatch:ZoneConfigurationApproved"] = _zoneConfigurationApproved ? "true" : "false",
                     ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] =
                         _selectedDriverNegotiationLifetimeMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
