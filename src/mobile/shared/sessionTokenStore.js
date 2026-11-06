@@ -52,6 +52,15 @@ async function readSessionTokens(storage) {
   return null;
 }
 
+async function logoutSession(storage, revoke) {
+  try {
+    await revoke();
+  } catch {
+    // Local credential deletion must not depend on network availability.
+  }
+  await clearSessionTokens(storage);
+}
+
 async function restoreStoredSession(storage, request) {
   const tokens = await readSessionTokens(storage);
   if (!tokens) return null;
@@ -89,5 +98,6 @@ module.exports = {
   readSessionTokens,
   saveSessionTokens,
   clearSessionTokens,
+  logoutSession,
   restoreStoredSession
 };
