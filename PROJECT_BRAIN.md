@@ -252,7 +252,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Rider cancellation, Driver decline, completed/cancelled/expired ride reconciliation and lazy negotiation expiry release only the matching driver/ride reservation. Expired leases are not silently stolen by the store; the API first reconciles authoritative ride state. Idempotent retry can recover the same ride after an interrupted write.
 - Tests in `RideApiIntegrationTests.cs` cover concurrent bookings, cancel/decline release, expiry through ride read/discovery, fail-closed missing expiry configuration, interrupted-write recovery and terminal-state cleanup. `DriverRideReservationStoreTests.cs` covers matching release, expiry retention and permanent promotion.
 - Cosmos reservation store uses conditional ETag replacement/deletion. Live Cosmos multi-instance contention, restart/crash recovery and outbox validation remain external gates; no live validation is claimed.
-- Next sequential work: DISPATCH-04 audit of active-ride reservation protection and union-transfer contention. Do not introduce customer-facing FIFO ranking or automatic next-driver advancement.
+- DISPATCH-04 audit is recorded in PR #61: accepted active rides retain the per-driver reservation and Union transfer is rejected. Live Cosmos multi-instance/restart validation remains external. Next sequential work is #10 REALTIME-01; do not introduce customer-facing FIFO ranking or automatic next-driver advancement.
 
 
 ## DISPATCH-04 accepted-ride transfer audit (2026-11-06)
