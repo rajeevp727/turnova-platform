@@ -92,6 +92,7 @@ export default function App() {
     if(!tokens)throw new Error("Please sign in again.");
     const requestEpoch=sessionEpoch.current;
     let response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${tokens.accessToken}`,...init.headers}});
+    if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
     if(response.status===401){
       let accessToken:string;
       try{
@@ -112,6 +113,7 @@ export default function App() {
       }
       if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
       response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});
+      if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
     }
     const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh]);
