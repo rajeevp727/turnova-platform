@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12 and 14; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #41 merge `2bf2ec9a1a6789545c19e724b3ef2e832d5ac7cf`.
+**Last audited:** 2026-11-06 against main after PR #43 merge `50e6fa18851fbca88836365f28726625c274981b`.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -22,7 +22,7 @@
 | RIDER-02 | Fare estimate and clear trip details before confirmation | No verified implementation evidence recorded in this audit | Fare policy decision; estimate API/UI tests for all service classes and passenger counts | In progress |
 | RIDER-03 | Booking creation, status, cancellation and duplicate-submit safety | Ride lifecycle, ownership and idempotency integration tests; PR #43 adds pickup/drop-off, coordinate, service-class and passenger-count boundary coverage plus invalid-request idempotency retry | Confirm every PRD transition, cancellation policy, persistence/restart and duplicate request against durable storage | In progress |
 | DISPATCH-01 | Pickup resolves to configured zone; matching zone and Scooty/Bike/Auto/Cab service class only | Canonical vehicle classes, queue scoping and FIFO enforcement documented; zone matching feature branch exists in history | Configured production boundaries, boundary/overlap tests, cross-zone policy decision and end-to-end rider-to-driver matching | In progress |
-| DISPATCH-02 | Only approved, online, eligible, compatible drivers are considered in server-owned FIFO order | Driver onboarding/approval, Online/Offline, FIFO queue and queue-head enforcement merged in prior PRs | End-to-end eligibility matrix, concurrent joins/dispatch, Cosmos persistence and multi-instance concurrency tests | In progress |
+| DISPATCH-02 | Only approved, online, eligible, compatible drivers are considered in server-owned FIFO order | Driver onboarding/approval, Online/Offline, FIFO queue and queue-head enforcement merged in prior PRs; PR #44 adds a 16-way concurrent duplicate-join store test | End-to-end eligibility matrix, Cosmos persistence and multi-instance concurrency tests | In progress |
 | DISPATCH-03 | Offers are durable, expire server-side, advance to next driver and retain audit history | PRs #24–#33 merged: durable offer aggregate, expiry, retry-safe rejection, advancement and notification outbox; PR #42 tests stale-notification suppression, transient SignalR retry and concurrent worker duplicate delivery with stable offerId | Cosmos failure injection, process-restart recovery, real Cosmos ETag races and mobile offerId de-duplication/reconnect tests | In progress |
 | DISPATCH-04 | A ride and driver cannot be assigned twice; one active ride reservation per driver | PR #27 added durable per-driver reservation and ride ETag protection | Crash recovery/reconciliation for reservation-before-ride-write window; real Cosmos simultaneous acceptance tests across instances | In progress |
 | REALTIME-01 | Rider and Driver receive consistent live trip/queue updates and recover after reconnect | SignalR ride hub, driver offer channel and pending-offer recovery documented in README | Android/iOS network interruption, reconnect, stale event, duplicate event and authoritative state refresh tests | In progress |
