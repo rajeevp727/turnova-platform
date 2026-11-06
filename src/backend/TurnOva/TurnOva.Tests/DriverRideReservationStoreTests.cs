@@ -31,3 +31,22 @@ public sealed class DriverRideReservationStoreTests
         Assert.True(await store.TryAcquireAsync("driver-1", "ride-2"));
     }
 }
+    [Fact]
+    public async Task ExpiredNegotiationReservationCanBeReacquired()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+        Assert.True(await store.TryAcquireUntilAsync("driver-1", "negotiation-1", DateTimeOffset.UtcNow.AddMilliseconds(40)));
+        Assert.True(await store.HasActiveAsync("driver-1"));
+        await Task.Delay(80);
+        Assert.False(await store.HasActiveAsync("driver-1"));
+        Assert.True(await store.TryAcquireAsync("driver-1", "ride-2"));
+    }
+
+    [Fact]
+    public async Task UnexpiredNegotiationReservationBlocksAnotherSelection()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+        Assert.True(await store.TryAcquireUntilAsync("driver-1", "negotiation-1", DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.False(await store.TryAcquireUntilAsync("driver-1", "negotiation-2", DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.True(await store.HasActiveAsync("driver-1"));
+    }
