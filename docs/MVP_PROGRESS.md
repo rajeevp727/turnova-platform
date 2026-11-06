@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Approved supplemental AI-01: implement the provider-agnostic Rider trip-intent draft and approved-content Rider/Driver help boundary, with privacy-safe inputs, deterministic fallback, rate limiting, mobile wiring and automated tests. AI-01 remains outside the 19-area denominator.**
+**Approved supplemental AI-01: implement the provider-agnostic Rider trip-intent draft and approved-content Rider/Driver ride/queue-state help boundary, with privacy-safe inputs, deterministic fallback, rate limiting, mobile wiring and automated tests. AI-01 remains outside the 19-area denominator.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
