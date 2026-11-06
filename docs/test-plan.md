@@ -541,7 +541,8 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 | NEARBY-002 | Rider searches for nearby vehicles | Only approved, online drivers with active queue membership in the pickup zone, matching service class and sufficient passenger capacity are returned, ordered by distance | API integration | P0 |
 | NEARBY-003 | Nearby search privacy and stale location | Response omits driver ID, name, phone, registration and exact coordinates; locations older than the configured freshness window are excluded | API integration + security | P0 |
 | NEARBY-004 | Driver leaves assigned zone while online | Driver is taken Offline, queue membership is removed and current location is cleared | API integration | P0 |
-| NEARBY-005 | Driver app is online in foreground | Foreground location updates are sent only while Online; leaving the screen/session or going Offline stops the watcher | Android/iOS functional | P0 |
+| NEARBY-005 | Driver app is online in foreground or an active ride begins | Foreground availability updates run only while Online, pause during Accepted/Arrived/InProgress rides and stop when Offline or signed out; active-trip location uses the trip tracking endpoint | Android/iOS functional | P0 |
 | NEARBY-006 | Rider searches without location permission or outside configured zones | Clear recoverable permission/zone error; no nearby driver data is returned | Android/iOS + API | P0 |
+| NEARBY-007 | Driver submits a location update with missing coordinates or has an active ride | HTTP 400 for missing coordinates; HTTP 409 during an active ride without changing Online state or trip location | API integration | P0 |
 
 The API integration tests use the in-memory store and configured test zone. They do not establish Cosmos cross-partition query behaviour or physical-device permission/resume behaviour. Driver GPS is foreground-only and is not intended as background tracking.
