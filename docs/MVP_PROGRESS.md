@@ -49,7 +49,7 @@ Current task: add append-only queue membership audit events committed atomically
 - TRIP-01 Rider and Driver history code is merged; the row remains In Progress pending Cosmos cross-partition/RU verification and Android/iOS device recovery/location-privacy acceptance.
 - Current PLATFORM-01 branch: `feat/platform-observability-audit`. It adds `QueueAuditEvent` records for successful queue join/leave/move/offer rotation; Cosmos queue state and audit events are written in one transactional batch in the existing `QueueEntries` partition. In-memory tests cover event types, queue scoping, no-op/failed mutations and duplicate offer retry; API integration test covers generic exception Problem Details with traceId and no exception message.
 - Adds an exception handler that returns generic Problem Details with traceId and logs only traceId plus exception type; no request body, token or exception message is logged.
-- This PLATFORM-01 increment still needs full diff review, a focused PR and latest-head CI. Real Cosmos transactional batch/ETag/restart/retention verification is not available without the development Cosmos environment.
+- PR #51 is open: https://github.com/rajeevp727/turnova-platform/pull/51. The 12-file diff requires final review and latest-head CI before merge. Real Cosmos transactional batch/ETag/restart/retention verification is not available without the development Cosmos environment.
 - Remaining platform gates: metrics/traces/alerts, Cosmos-unavailable readiness failure injection, production CORS origin configuration, secrets/logging review and load tests.
 
 ## 5. Approved supplemental requirement (not counted in the 19 rows)
