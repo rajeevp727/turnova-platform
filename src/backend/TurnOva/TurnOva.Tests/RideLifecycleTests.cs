@@ -6,6 +6,13 @@ public sealed class RideLifecycleTests
 {
     [Theory]
     [InlineData("Requested", "Accepted", true)]
+    [InlineData("DriverSelected", "Negotiating", true)]
+    [InlineData("DriverSelected", "Cancelled", true)]
+    [InlineData("Negotiating", "Cancelled", true)]
+    [InlineData("DriverSelected", "Declined", true)]
+    [InlineData("Negotiating", "Declined", true)]
+    [InlineData("DriverSelected", "Expired", true)]
+    [InlineData("Negotiating", "Expired", true)]
     [InlineData("Accepted", "Arrived", true)]
     [InlineData("Arrived", "InProgress", true)]
     [InlineData("InProgress", "Completed", true)]
@@ -15,6 +22,9 @@ public sealed class RideLifecycleTests
     [InlineData("InProgress", "Cancelled", false)]
     [InlineData("Completed", "Cancelled", false)]
     [InlineData("Cancelled", "Accepted", false)]
+    [InlineData("Declined", "Negotiating", false)]
+    [InlineData("Expired", "Negotiating", false)]
+    [InlineData("Negotiating", "Accepted", false)]
     [InlineData("Requested", "Completed", false)]
     [InlineData("Accepted", "InProgress", false)]
     public void CanTransition_EnforcesAllowedStateChanges(string current, string next, bool expected)
@@ -24,6 +34,9 @@ public sealed class RideLifecycleTests
 
     [Theory]
     [InlineData("Requested", false)]
+    [InlineData("DriverSelected", false)]
+    [InlineData("Negotiating", false)
+    ]
     [InlineData("Accepted", true)]
     [InlineData("Arrived", true)]
     [InlineData("InProgress", true)]
