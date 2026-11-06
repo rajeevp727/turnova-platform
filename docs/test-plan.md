@@ -731,3 +731,17 @@ RIDER-03 implementation CI workflow runs [42254186398](https://github.com/rajeev
 
 - Release solution builds must include all five backend projects, including `TurnOva.Tests`.
 - CI invokes `TurnOva.Tests.csproj` explicitly and fails if its TRX result reports zero executed tests; a green job with no discovered tests is not accepted as backend test evidence.
+
+
+## DRIVER-01 — union-scoped selfie approval and membership visibility
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| UNION-SELFIE-021 | A signed-in UnionManager lists its current Cab members | Only active assignments for the caller's signed `unionId` claim(s) are returned; pending selfie is visible to that assigned reviewer; phone/email, exact coordinates, private chat and Rider/ride data are absent | `UnionManagerCanReviewOnlyCurrentAssignedCabDriverSelfiesAndReceivesMinimalData` | P0 |
+| UNION-SELFIE-022 | The current UnionManager approves a Cab driver's selfie after profile/licence/vehicle approval | Approval is recorded against the current union and an append-only union audit event is written; Rider discovery may expose the photo only after this approval | Same integration test | P0 |
+| UNION-SELFIE-023 | Rider/Driver role or a UnionManager with no matching current-union claim attempts to list/review | Access is denied; a manager from another union receives NotFound for the driver and cannot change approval | Union-manager API authorization and transfer integration tests | P0 |
+| UNION-SELFIE-024 | Operations admin-key caller attempts to approve a Cab selfie | Approval is forbidden; operations may reject/hide a selfie, but cannot grant public visibility on behalf of the union | `UnionManagerCanReviewOnlyCurrentAssignedCabDriverSelfiesAndReceivesMinimalData` | P0 |
+| UNION-SELFIE-025 | An approved Driver is transferred from Union A to Union B | Existing selfie approval is reset to Pending and the old union loses review access; Rider discovery hides the photo until Union B approves it | `UnionTransferResetsSelfieApprovalUntilTheNewUnionApprovesIt` | P0 |
+| UNION-SELFIE-026 | Driver reads its own union membership after assignment/transfer | Only the authenticated Driver can read its current active assignment; the Driver profile displays the current union and membership status | `GET /api/v1/driver/union` integration assertion + Driver Expo typecheck; physical-device check remains | P1 |
+
+Union reviewer tokens require a signed `role=UnionManager` claim and one or more signed `unionId` claims. The API does not trust a caller-supplied union ID. Provider-side issuance/mapping of these claims is an infrastructure gate. Private document storage/scanning/consent/retention and Android/iOS camera/document-permission/device tests remain launch gates; no live provider or device validation is claimed.
