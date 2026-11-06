@@ -23,6 +23,8 @@ public sealed class OfferNotificationOutboxWorkerTests
 
         await worker.StartAsync(CancellationToken.None);
         await hub.WaitForMessagesAsync();
+        await WaitUntilAsync(async () =>
+            (await store.GetByRideAsync(state.RideId))?.NotificationStatus == "Sent");
         await worker.StopAsync(CancellationToken.None);
 
         var message = Assert.Single(hub.Messages);
@@ -69,6 +71,8 @@ public sealed class OfferNotificationOutboxWorkerTests
 
         await worker.StartAsync(CancellationToken.None);
         await hub.WaitForMessagesAsync(TimeSpan.FromSeconds(5));
+        await WaitUntilAsync(async () =>
+            (await store.GetByRideAsync(state.RideId))?.NotificationStatus == "Sent");
         await worker.StopAsync(CancellationToken.None);
 
         Assert.True(attempts >= 2);
