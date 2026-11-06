@@ -559,7 +559,7 @@ This deterministic test exercises the in-memory store. Cosmos multi-instance and
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| RIDER-FARE-001 | Rider creates a ride before fare policy is approved | API returns \`estimatedFareInr: null\`; no demo amount is presented as a quote | API integration + mobile UI | P0 |
+| RIDER-FARE-001 | Rider creates a ride before fare policy is approved | API returns `estimatedFareInr: null`; no demo amount is presented as a quote | API integration + mobile UI | P0 |
 
 Fare calculation remains blocked until the product owner approves base fare, distance/time components, taxes and service-class rules.
 
