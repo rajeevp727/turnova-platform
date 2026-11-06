@@ -82,7 +82,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 10. **#16 RIDER-04 — Current:** PR #70 implements the approved CAB-RECON-01 supplemental requirement: immutable Driver-reported payment reconciliation after completed Cab rides, signed delta, Driver history and claim-scoped UnionManager oversight. Code head `d73dc0c76528ca95fff39a5d38a5512b1720b941` passed CI [42295719183](https://github.com/rajeevp727/turnova-platform/actions/runs/42295719183) with 210/210 backend tests, both mobile typechecks, nine shared tests and native non-container publish; live Cosmos/device gates remain. CAB-RECON-01 stays outside the 19-row denominator.
 11. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved.
 12. **#18 PLATFORM-01 / #19 RELEASE-01:** code/CI increments are merged; retain live hosting, Cosmos, native signing, physical-device, provider and legal gates.
-13. **AI-01 supplemental — current sequential work:** provider-agnostic Rider trip-intent draft and approved Rider/Driver help boundary; remains outside the 19-row denominator.
+13. **AI-01 supplemental — current sequential work:** provider-agnostic Rider trip-intent draft and approved Rider/Driver ride/queue-state help boundary; remains outside the 19-row denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
