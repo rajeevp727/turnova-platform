@@ -214,9 +214,9 @@ public sealed class AiAssistanceService
                 ct => _provider.DraftTripIntentAsync(prompt, ct),
                 cancellationToken);
 
-            if (IsValidProviderTripResult(providerResult))
+            if (IsValidProviderTripResult(providerResult, explicitPassengerCount))
             {
-                passengerCount = explicitPassengerCount ?? providerResult!.PassengerCount ?? 1;
+                passengerCount = explicitPassengerCount ?? 1;
                 source = "provider";
             }
         }
@@ -339,12 +339,13 @@ public sealed class AiAssistanceService
         return new SafeTripIntentPrompt(summary, PickupToken, DropoffToken, explicitPassengerCount);
     }
 
-    private static bool IsValidProviderTripResult(TripIntentProviderResult? result) =>
+    private static bool IsValidProviderTripResult(TripIntentProviderResult? result, int? explicitPassengerCount) =>
         result is not null &&
         string.Equals(result.PickupToken, PickupToken, StringComparison.Ordinal) &&
         string.Equals(result.DropoffToken, DropoffToken, StringComparison.Ordinal) &&
         string.Equals(result.ServiceClass, "Cab", StringComparison.OrdinalIgnoreCase) &&
-        (result.PassengerCount is null or >= 1 and <= 6);
+        (result.PassengerCount is null or >= 1 and <= 6) &&
+        (result.PassengerCount is null || (explicitPassengerCount.HasValue && result.PassengerCount == explicitPassengerCount));
 
     private static IReadOnlyList<string> ExtractSafeHelpKeywords(string question) =>
         SafeTokenPattern.Matches(question.ToLowerInvariant())
