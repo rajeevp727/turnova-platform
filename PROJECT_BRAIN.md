@@ -197,7 +197,7 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 
 
 ## PLATFORM-01 queue audit increment (in progress)
-- PR #51 is open: https://github.com/rajeevp727/turnova-platform/pull/51 (branch `feat/platform-observability-audit`). Implementation head `369f5dacea92885ce78c1504bcb4f9dce9cbde04` passed all four CI jobs in run 42219053050; final documentation-only head still requires CI before merge.
+- PR #51 is open: https://github.com/rajeevp727/turnova-platform/pull/51 (branch `feat/platform-observability-audit`). Implementation head `369f5dacea92885ce78c1504bcb4f9dce9cbde04` passed all four CI jobs in run 42219053050; merge remains gated on green CI for the latest PR head.
 - Existing `RideOfferState.Attempts` persists offer decisions and `DriverUnionAudit` persists union transfers, but queue membership changes were mutable state without append-only history.
 - New `QueueAuditEvent` records successful join, leave, move-to-back and offer rotation events with driver, zone/service-class partition, UTC time and optional offerId; no phone/email, exact location or fare.
 - `IQueueStore` exposes queue-scoped audit retrieval. In-memory adapter records only successful mutations; duplicate offer retries and failed/no-op operations do not create duplicate events.
