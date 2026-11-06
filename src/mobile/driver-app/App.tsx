@@ -38,6 +38,7 @@ type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
 type QueueMembership = { isQueued: boolean; position: number | null };
 type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean };
+type SelectedDriverBooking = { rideId: string; pickup: string; dropoff: string; stops: string[]; passengers: number; serviceClass: string; status: string; requestedAt: string; selectedAtUtc: string | null; negotiationExpiresAtUtc: string | null; unionId: string | null };
 
 async function saveTokens(tokens: Tokens) {
   await SecureStore.setItemAsync("turnova.access", tokens.accessToken);
@@ -75,6 +76,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [availableRides, setAvailableRides] = useState<any[]>([]);
+  const [selectedBookings, setSelectedBookings] = useState<SelectedDriverBooking[]>([]);
   const [activeRide, setActiveRide] = useState<any>(null);
   const [driverRideHistory, setDriverRideHistory] = useState<DriverRideHistoryItem[]>([]);
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
@@ -314,6 +316,12 @@ export default function App() {
     catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); }
   }, [apiFetch, legacyServiceClass]);
 
+  const loadSelectedBookings = useCallback(async () => {
+    if (legacyServiceClass) { setSelectedBookings([]); return; }
+    try { setSelectedBookings(await apiFetch("/api/v1/driver/bookings/pending") as SelectedDriverBooking[]); }
+    catch (e) { setError(e instanceof Error ? e.message : "Unable to load selected Rider requests."); }
+  }, [apiFetch, legacyServiceClass]);
+
   const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
     if (!isActive()) return;
@@ -328,8 +336,10 @@ export default function App() {
     void loadDriverRideHistory(() => active).catch(e => {
       if (active) setError(e instanceof Error ? e.message : "Unable to load trip history.");
     });
-    return () => { active = false; };
-  }, [user?.id, tab, loadDriverRideHistory, activeRide?.status]);
+    void loadSelectedBookings();
+    const timer = setInterval(() => { if (active) void loadSelectedBookings(); }, 15000);
+    return () => { active = false; clearInterval(timer); };
+  }, [user?.id, tab, loadDriverRideHistory, loadSelectedBookings, activeRide?.status]);
 
   // SignalR is at-least-once: deduplicate by the server-issued offerId before surfacing it.
   const receivedOfferIds = useRef<Set<string>>(new Set());
@@ -345,7 +355,7 @@ export default function App() {
       .configureLogging(LogLevel.Warning)
       .build();
 
-    const refreshOffers = () => { if (mounted) void loadAvailableRides(); };
+    const refreshOffers = () => { if (mounted) { void loadAvailableRides(); void loadSelectedBookings(); } };
     connection.on("RideOfferReceived", (offer: { rideId?: string; offerId?: string; expiresAtUtc?: string }) => {
       if (!mounted || !offer?.offerId || receivedOfferIds.current.has(offer.offerId)) return;
       receivedOfferIds.current.add(offer.offerId);
@@ -356,6 +366,16 @@ export default function App() {
       setNotice("A new ride offer has arrived. Review the available ride requests.");
       refreshOffers();
     });
+    connection.on("SelectedRideRequested", (booking: { rideId?: string }) => {
+      if (!mounted || !booking?.rideId) return;
+      setNotice("A Rider selected you for a direct fare negotiation. Review the request before it expires.");
+      void loadSelectedBookings();
+    });
+    connection.on("SelectedRideExpired", (booking: { rideId?: string }) => {
+      if (!mounted || !booking?.rideId) return;
+      setSelectedBookings(current => current.filter(item => item.rideId !== booking.rideId));
+      setNotice("A selected Rider request expired and your availability was released.");
+    });
     connection.onreconnected(refreshOffers);
     void connection.start().then(refreshOffers).catch(() => {
       if (mounted) setError("Live ride offers are temporarily unavailable. Available rides can still be refreshed manually.");
@@ -363,12 +383,21 @@ export default function App() {
     return () => {
       mounted = false;
       connection.off("RideOfferReceived");
+      connection.off("SelectedRideRequested");
+      connection.off("SelectedRideExpired");
       void connection.stop();
     };
-  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadSelectedBookings]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Ride declined. It remains available to other drivers."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
+  const declineSelectedBooking = async (rideId: string) => {
+    try {
+      await apiFetch(`/api/v1/driver/bookings/${rideId}/decline`, { method: "POST" });
+      setSelectedBookings(current => current.filter(item => item.rideId !== rideId));
+      setNotice("You declined the selected Rider request. Your reservation has been released.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline the selected request."); }
+  };
   useEffect(() => {
     if (!user || tab !== "Trips" || !activeRide) return;
     let mounted = true;
@@ -571,8 +600,20 @@ export default function App() {
       {tab === "Trips" && <>
         <Text style={styles.title}>Trips</Text>
         <View style={styles.card}>
-          <Text style={styles.label}>RIDE REQUESTS</Text>
-          <Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh requests</Text></Pressable>
+          <Text style={styles.label}>SELECTED RIDER REQUESTS</Text>
+          <Text style={styles.muted}>These requests come from Riders who selected you from your approved union. Fare is negotiated directly; no platform fare is shown.</Text>
+          <Pressable style={styles.primary} onPress={() => void loadSelectedBookings()}><Text style={styles.primaryText}>Refresh selected requests</Text></Pressable>
+          {selectedBookings.map(item=><View key={item.rideId} style={{marginTop:14,padding:12,borderWidth:1,borderColor:colors.border,borderRadius:10}}>
+            <Text style={styles.success}>Negotiation requested · {item.rideId}</Text>
+            <Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text>
+            {!!item.stops.length&&<Text style={styles.muted}>Stops: {item.stops.join(" → ")}</Text>}
+            <Text style={styles.muted}>Cab · {item.passengers} passenger(s) · Expires {item.negotiationExpiresAtUtc?new Date(item.negotiationExpiresAtUtc).toLocaleTimeString():"per server policy"}</Text>
+            <Text style={styles.muted}>Contact the Rider directly when call/chat providers are configured. Confirmed fare negotiation is required before starting a trip.</Text>
+            <Pressable style={styles.secondary} onPress={()=>void declineSelectedBooking(item.rideId)}><Text style={styles.secondaryText}>Decline request</Text></Pressable>
+          </View>)}
+          {!selectedBookings.length&&<Text style={styles.muted}>No selected Rider requests are waiting.</Text>}
+          <Text style={styles.label}>LEGACY FIFO REQUESTS</Text>
+          <Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh legacy requests</Text></Pressable>
           {availableRides.map(item=><View key={item.rideId} style={{marginTop:14}}>
             <Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text>
             <Text style={styles.muted}>{item.passengers} passenger(s) · {item.rideId}</Text>
