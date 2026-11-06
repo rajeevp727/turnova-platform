@@ -54,7 +54,7 @@
 | 15 | DRIVER-04 | Blocked | Driver support categories, escalation owner and operational process are not approved. |
 | 16 | RIDER-04 | In progress | PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed 210/210 backend tests, native non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history remain; customer dispute and non-zero-delta next-ride policy remain unresolved. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting categories, escalation owner, process, API/UI, audit and device acceptance remain. |
-| 18 | PLATFORM-01 | In progress | PRs #49/#51 provide CORS/health and queue audit/exception handling. Current branch adds bounded storage readiness and deterministic failure/timeout/cancellation tests; live Cosmos, broader audit, telemetry and load gates remain. |
+| 18 | PLATFORM-01 | In progress | PR [#71](https://github.com/rajeevp727/turnova-platform/pull/71) adds bounded storage readiness and deterministic failure/timeout/cancellation tests; final-head CI pending. Live Cosmos, broader audit, telemetry and load gates remain. |
 | 19 | RELEASE-01 | In progress | CI validates backend, native API publish, Expo config/typechecks and shared auth tests; Android/iOS production builds, signed artifacts and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
@@ -176,6 +176,7 @@
 
 ## PLATFORM-01 bounded storage readiness increment (2026-11-07)
 
+- Focused PR: [#71](https://github.com/rajeevp727/turnova-platform/pull/71), current sequential item #18. The branch is awaiting final-head CI; no test result is claimed until that run completes.
 - Main baseline for this sequential slice is PR #70 merge `17c489eac64dc0f99e881a1474147b2f79fe2aac`; PR #70 CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed all four jobs and 210/210 backend tests.
 - The API's liveness endpoint remains process-only. Readiness now delegates to a storage probe with a three-second bound: in-memory mode completes locally; Cosmos mode performs a database metadata read.
 - Dependency failure and the probe's own timeout map to a generic 503. Caller cancellation propagates. Logs contain only a failure-kind label, not Cosmos SDK diagnostics or endpoint details.
