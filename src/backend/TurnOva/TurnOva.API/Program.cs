@@ -2736,7 +2736,7 @@ app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
     var report = new RidePaymentReconciliation(
         rideId, current.Version, ride.RiderId, driverId!, ride.UnionId!,
         current.Amount, amountReceived,
-        decimal.Round(current.Amount - request.AmountReceived, 2, MidpointRounding.AwayFromZero),
+        decimal.Round(current.Amount - amountReceived, 2, MidpointRounding.AwayFromZero),
         current.Currency, DateTimeOffset.UtcNow, driverId!, "DriverReportedUnverified", idempotencyKeyHash);
     var updated = ride with { PaymentReconciliation = report };
     if (!await TryReplaceRideAsync(ride, updated, ct))
