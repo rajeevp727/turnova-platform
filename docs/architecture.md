@@ -126,6 +126,14 @@ Store identity documents in protected object storage rather than large Cosmos DB
 - Selfie review first authorizes the current union assignment before acquiring the per-driver exclusive reservation lease, then rechecks that assignment while holding the lease. This prevents an out-of-scope manager from reserving another driver's ID and prevents review/transfer/booking races. The profile update uses the existing ETag-aware conditional update path and rejects a stale selfie/document snapshot.
 - Union selfie audit IDs are deterministic for the driver, union, action and review timestamp. Repeated requests and retries after an ambiguous response do not create duplicate review events. Profile and audit records remain separate Cosmos writes; cross-container atomicity is not assumed and live Cosmos retry/failure validation remains a launch gate.
 
+### Driver availability and location lifecycle
+
+- Going Online requires an approved Cab profile, active membership in an Active Cab-serving Union covering the driver's assigned service zone, approved driving-licence and vehicle-registration documents, and a valid current GPS fix inside that zone.
+- Online/Offline transitions acquire the same per-driver exclusive reservation lease used by selected bookings and Union transfers. A selected negotiation/ride therefore cannot overlap an availability mutation; ETag-aware profile updates remain the persistence guard.
+- A zone-exit location update acquires that lease before clearing location and taking the Driver Offline. If a selected booking owns the lease, the location transition fails closed and retries on a later foreground update.
+- Driver location is foreground-only. The mobile app stops its watcher when backgrounded, refreshes the current GPS fix and restarts the watcher on resume, and attempts to go Offline if foreground permission is revoked.
+- Location sharing pauses during Negotiating, AgreementConfirmed and active ride states. Rider discovery still uses only server-authoritative Online state, current location freshness and the existing union/vehicle eligibility filters; exact Driver coordinates are not returned to the Rider.
+
 ## 8. Initial API resource groups
 
 - /api/v1/auth — registration, login, refresh and logout.

@@ -7,7 +7,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useColorScheme, Image } from "react-native";
+import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { singleFlight } from "../shared/refreshCoordinator";
@@ -229,11 +229,18 @@ export default function App() {
 
   useEffect(() => {
     if (!user || availabilityStatus !== "Online" || legacyServiceClass ||
-        (activeRide && ["Accepted", "Arrived", "InProgress"].includes(activeRide.status))) return;
+        (activeRide && ["Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"].includes(activeRide.status))) return;
     let mounted = true;
+    let refreshing = false;
     let subscription: Location.LocationSubscription | undefined;
 
+    const stopWatching = () => {
+      subscription?.remove();
+      subscription = undefined;
+    };
+
     const publishLocation = async (latitude: number, longitude: number): Promise<boolean> => {
+      if (!mounted || AppState.currentState !== "active") return false;
       try {
         await apiFetch("/api/v1/driver/location", {
           method: "POST",
@@ -252,10 +259,22 @@ export default function App() {
       }
     };
 
-    void (async () => {
-      const permission = await Location.getForegroundPermissionsAsync();
-      if (!permission.granted) {
-        try {
+    const startWatching = async () => {
+      if (!mounted || subscription || AppState.currentState !== "active") return;
+      const nextSubscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 50 },
+        location => { void publishLocation(location.coords.latitude, location.coords.longitude); }
+      );
+      if (!mounted || AppState.currentState !== "active") nextSubscription.remove();
+      else subscription = nextSubscription;
+    };
+
+    const refreshForegroundLocation = async () => {
+      if (!mounted || refreshing) return;
+      refreshing = true;
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (!permission.granted) {
           await apiFetch("/api/v1/driver/availability", {
             method: "POST",
             body: JSON.stringify({ isOnline: false })
@@ -264,26 +283,31 @@ export default function App() {
             setAvailabilityStatus("Offline");
             setNotice("You were taken offline because location permission is required while online.");
           }
-        } catch (e) {
-          if (mounted) setError(e instanceof Error ? e.message : "Unable to turn off availability.");
+          return;
         }
-        return;
+
+        if (!mounted || AppState.currentState !== "active") return;
+        const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!mounted || AppState.currentState !== "active" ||
+            !await publishLocation(current.coords.latitude, current.coords.longitude)) return;
+        await startWatching();
+      } catch (e) {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
+      } finally {
+        refreshing = false;
       }
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      if (!await publishLocation(current.coords.latitude, current.coords.longitude) || !mounted) return;
-      const nextSubscription = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 50 },
-        location => { void publishLocation(location.coords.latitude, location.coords.longitude); }
-      );
-      if (!mounted) nextSubscription.remove();
-      else subscription = nextSubscription;
-    })().catch(e => {
-      if (mounted) setError(e instanceof Error ? e.message : "Unable to share availability location.");
+    };
+
+    const appStateSubscription = AppState.addEventListener("change", state => {
+      if (state === "active") void refreshForegroundLocation();
+      else stopWatching();
     });
+    if (AppState.currentState === "active") void refreshForegroundLocation();
 
     return () => {
       mounted = false;
-      subscription?.remove();
+      stopWatching();
+      appStateSubscription.remove();
     };
   }, [user?.id, availabilityStatus, legacyServiceClass, activeRide?.status, apiFetch]);
 

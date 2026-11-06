@@ -3,10 +3,10 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-06  
+**Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `ef8a44da1476995bea4a5b80e4e7a24fed48d196` (PR #65 corrective revert merged; no feature work was lost from the separate union-review branch)
+**Last audited main HEAD:** `26dafc87451ba49ea4734df81c94f9e75790800d` (PR #66 union-scoped selfie approval and membership visibility merged)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -66,16 +66,18 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - Sequential #7 DISPATCH-02 is implemented in PR #55/RIDER-03: union grouping, up-to-three cap, pickup-distance then DriverId ordering, explicit Rider selection and no FIFO dependency. PR #59 merged at `508a789246cec1a9452651c62fa08aa3908140a4`; final-head CI run `42259580145` passed all four jobs.
 - PR #61 merged sequential #9 DISPATCH-04 regression coverage at `118929955d3959f078ddb59f7f5bdf3c3965d52a`; automated review found no unresolved critical/high-risk issue. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including this regression.
 
+- PR #66 merged sequential #11 DRIVER-01 at `26dafc87451ba49ea4734df81c94f9e75790800d`; final-head CI [42278673796](https://github.com/rajeevp727/turnova-platform/actions/runs/42278673796) executed 191/191 backend tests and passed all four jobs. Identity-provider claim mapping, private document storage/retention and Android/iOS onboarding evidence remain.
+
 ## Highest-priority unfinished work
 
 1. **#6 DISPATCH-01 — Blocked:** PR #55 implementation and PR #58 regression coverage are independent of the missing decision. Resume final verification only after product approval of the production pickup radius and zone boundaries, plus live Cosmos and Android/iOS pickup-zone evidence.
 2. **#7 DISPATCH-02 — Implementation audit recorded:** PR #55/RIDER-03 implement the per-union cap, pickup-proximity ordering, explicit selection and no-FIFO Rider path; PR #59 adds an equal-distance deterministic tie-break regression. Live Cosmos/device evidence and the internal FIFO role decision remain, so the acceptance row stays In progress.
 3. **#8 DISPATCH-03 / #9 DISPATCH-04:** selected negotiation expiry/idempotency and no-overlap protections are implemented and covered by in-memory/API tests, including PR #61's accepted-active-ride Union-transfer guard. Live Cosmos restart/ETag contention remains external.
 4. **#10 REALTIME-01 — Code audit recorded:** PR #63 fixes Rider reconnect state restoration. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including hub ownership tests; physical Android/iOS WebSocket/reconnect acceptance remains outstanding.
-5. **#11 DRIVER-01 — Current:** implement and verify signed UnionManager scope, union-approved selfie review, retry-safe audit, transfer reapproval and Driver membership visibility.
-5. **#11 DRIVER-01 — Current:** audit Cab-only Driver onboarding, identity/licence/Cab vehicle verification, Union approval and union-approved selfie visibility; implement only missing vertical-slice work.
-6. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
-7. **CAB-UNION-01, remaining support/platform/release areas, and AI-01 supplemental:** complete only after the agreed 19-area sequence; keep AI-01 outside the denominator.
+5. **#11 DRIVER-01 — In progress:** PR #66 merged union-scoped selfie approval and Driver membership display. Identity-provider claim mapping, private document storage/scanning/consent/retention and Android/iOS onboarding evidence remain.
+6. **#12 DRIVER-02 — Current:** serialize Online/Offline and zone-exit transitions with selected bookings/Union transfers; require active Cab Union and verified documents; refresh foreground GPS on app resume.
+7. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
+8. **CAB-UNION-01, remaining support/platform/release areas, and AI-01 supplemental:** complete only after the agreed 19-area sequence; keep AI-01 outside the denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -288,7 +290,17 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - `PUT /api/v1/union/drivers/{driverId}/selfie-review` requires the current active membership, active Cab-serving union, approved Cab profile, approved driving licence and vehicle-registration documents, and a valid selfie. Only the current assigned UnionManager can approve public visibility; operations admin-key access can reject/hide but cannot approve.
 - Selfie review serializes with selected-driver reservations and Union transfers, updates the profile through the ETag-aware conditional update path, and writes deterministic retry-safe audit events. A changed selfie/profile/document snapshot is rejected for refresh; duplicate approval does not duplicate audit.
 - Union transfer resets selfie approval to Pending unless the selfie is already approved by the exact new union. Rider discovery continues to hide the photo until the current union approves it. The Driver app reads its own `/api/v1/driver/union` membership and displays current union/status.
-- Automated API tests cover reviewer role/scope, least-privilege fields, approved-document gating, operations non-approval/rejection, active-reservation conflict, audit idempotency, transfer reset, old/new union access, Rider photo visibility and Driver membership. PR #66 final pre-evidence head CI [42278464932](https://github.com/rajeevp727/turnova-platform/actions/runs/42278464932) passed 191/191 backend tests and all four jobs.
+- Automated API tests cover reviewer role/scope, least-privilege fields, approved-document gating, operations non-approval/rejection, active-reservation conflict, audit idempotency, transfer reset, old/new union access, Rider photo visibility and Driver membership. PR #66 merged at `26dafc87451ba49ea4734df81c94f9e75790800d`; final-head CI [42278673796](https://github.com/rajeevp727/turnova-platform/actions/runs/42278673796) passed 191/191 backend tests and all four jobs.
 - Remaining DRIVER-01 gates: identity-provider issuance of the `UnionManager`/`unionId` claims; private document storage/scanning/consent/retention provider and policy; Android/iOS camera/document-permission/onboarding device acceptance; live Cosmos retry/ETag/restart validation.
 - Operations-controlled union creation/activation remains the MVP approval gate for discovery. No separate Union app is introduced. Partnership terms and legal/T&C approval remain external launch gates.
 - The 19-area denominator remains unchanged. Weighted progress is 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19).
+
+
+## DRIVER-02 availability/location increment (2026-11-07)
+
+- PR #67 is the current sequential #12 increment. It serializes Online/Offline transitions and zone-exit mutations with the same per-Driver reservation lease used by selected bookings and Union transfers.
+- Going Online requires an approved Cab profile, active membership in an Active Cab-serving Union covering the assigned zone, approved driving-licence and vehicle-registration documents, and valid GPS inside the assigned zone.
+- The Driver app tracks location only in the foreground while Online and not in Negotiating, AgreementConfirmed or an active ride. It stops the watcher in background, refreshes GPS and restarts the watcher on resume, and attempts to go Offline if foreground permission is revoked.
+- Automated API tests cover missing Union/documents and availability/location immutability during selected negotiation. PR #67 final head `a371ae9932e998ee9daaea6fd2a8fdff6e3615c1` passed CI [42286508190](https://github.com/rajeevp727/turnova-platform/actions/runs/42286508190), all four jobs and 193/193 backend tests; native API publish, both Expo typechecks and six shared mobile tests passed. Android/iOS physical-device permission/background/resume and live Cosmos ETag/race validation remain external gates.
+- Existing FIFO queue code remains compatibility-only for this Rider-selected path. No customer-facing FIFO ranking or automatic assignment is added; the internal FIFO role remains unresolved.
+- Weighted progress remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19). Next sequential area: #13 TRIP-01.

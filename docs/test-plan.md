@@ -418,17 +418,21 @@ The current increment adds the persistence contract, in-memory/Cosmos adapters a
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
 | AVAIL-001 | Unapproved driver goes online | HTTP 409; no queue membership is created | API/security | P0 |
-| AVAIL-002 | Approved driver goes online | Availability is persisted as Online and driver joins the back of the configured zone/service-class FIFO queue | API | P0 |
+| AVAIL-002 | Approved Cab driver with active Cab Union and approved licence/vehicle documents goes online | Availability and initial GPS are persisted; any retained queue membership is compatibility-only and never affects Rider discovery/assignment | API | P0 |
 | AVAIL-003 | Driver repeats online request | HTTP 200; no duplicate queue membership or position change | API | P0 |
-| AVAIL-004 | Driver goes offline | Availability is persisted as Offline and queue membership is removed | API | P0 |
+| AVAIL-004 | Driver goes offline | Availability is persisted as Offline, location is cleared and compatibility queue membership is removed | API | P0 |
 | AVAIL-005 | Offline driver attempts queue join | HTTP 409; no queue entry is created | API/security | P0 |
-| AVAIL-006 | Offline driver requests available rides or accepts/rejects | Request is forbidden; offline driver cannot dispatch | API/security | P0 |
-| AVAIL-007 | Driver goes offline with active ride | HTTP 409; availability and queue state remain unchanged | API | P0 |
-| AVAIL-008 | Driver comes online after offline period | Driver rejoins at the back of the FIFO queue | API | P0 |
-| AVAIL-009 | Driver app restarts | Availability is loaded from the server profile, not assumed from local UI state | Mobile/API | P1 |
+| AVAIL-006 | Offline driver requests legacy available rides or accepts/rejects | Request is forbidden; selected-driver booking remains a separate Rider-selected path | API/security | P0 |
+| AVAIL-007 | Driver goes offline with selected negotiation or active ride | HTTP 409; availability and location remain unchanged while the per-Driver reservation is held | API | P0 |
+| AVAIL-008 | Driver comes online after offline period | Current GPS is refreshed; any compatibility queue membership is not used for Rider ranking/assignment | API | P0 |
+| AVAIL-009 | Driver app restarts | Availability is loaded from the server profile; foreground location is refreshed before discovery eligibility resumes | Mobile/API | P1 |
 | AVAIL-010 | Cosmos mode availability change | Availability is persisted in the Drivers profile document and queue changes use the configured queue store | Cosmos integration | P0 |
+| AVAIL-011 | Driver without an active Cab Union or approved licence/vehicle documents goes online | HTTP 409; profile remains Offline and no queue membership/location is published | API/security | P0 |
+| AVAIL-012 | Driver availability transition races selected booking/Union transfer | Shared per-Driver lease allows only one mutation; conflicting operation returns 409 without changing availability | API concurrency | P0 |
+| AVAIL-013 | Driver location exits assigned zone while a selected reservation is active | Location transition cannot clear availability during the reservation; after release, a fresh zone-exit update takes the Driver Offline | API concurrency | P0 |
+| AVAIL-014 | Driver app resumes from background while Online | Foreground GPS is refreshed and the foreground watcher restarts; revoked permission attempts Offline; zone exit is enforced by API | Android/iOS device | P0 |
 
-Online/offline availability is server-authoritative. Mobile controls are presentation only; dispatch and queue APIs enforce the persisted state. Cosmos cross-container writes are not transactional and require operational reconciliation before production.
+Online/offline availability is server-authoritative. Going Online requires an approved Cab profile, active Cab-serving Union membership, approved licence/vehicle documents and a valid GPS fix in the assigned zone. Availability changes and zone-exit transitions share the selected-booking/Union-transfer reservation lease. The Driver app tracks location only in the foreground while Online and not in Negotiating, AgreementConfirmed or an active ride; it refreshes location and restarts the watcher on resume. Legacy FIFO queue membership remains compatibility-only and never controls Rider discovery or assignment. Cosmos cross-container writes and Android/iOS resume/permission behavior still require live integration/device acceptance.
 
 ## Exclusive driver reservation coverage
 

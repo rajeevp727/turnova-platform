@@ -104,6 +104,16 @@ public sealed class RideApiIntegrationTests
         approval.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         var approved = await driver.SendAsync(approval);
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        var onboardingProfiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        onboardingProfiles["driver-onboarding-pending"] = onboardingProfiles["driver-onboarding-pending"] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "drivers/test/licence", "Approved"),
+                new DriverDocumentReference("VehicleRegistration", "drivers/test/rc", "Approved")
+            ]
+        };
+        SeedActiveCabUnion(factory, "driver-onboarding-pending");
 
         var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.OK, online.StatusCode);
@@ -133,6 +143,8 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var first = factory.CreateClient("Driver", "availability-first");
         using var second = factory.CreateClient("Driver", "availability-second");
+        SeedActiveCabUnion(factory, "availability-first");
+        SeedActiveCabUnion(factory, "availability-second");
 
         Assert.Equal(HttpStatusCode.Conflict,
             (await first.PostAsJsonAsync("/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "cab" })).StatusCode);
@@ -156,6 +168,81 @@ public sealed class RideApiIntegrationTests
         var rejoined = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(rejoined);
         Assert.Equal(new[] { "availability-second", "availability-first" }, rejoined.Select(x => x.DriverId));
+    }
+
+    [Fact]
+    public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "availability-unverified-driver");
+
+        using var noUnion = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.Conflict, noUnion.StatusCode);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        Assert.Equal("Offline", profiles["availability-unverified-driver"].AvailabilityStatus);
+        var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
+            "/api/v1/zones/hyderabad-central/queues/cab");
+        Assert.DoesNotContain(queue!, entry => entry.DriverId == "availability-unverified-driver");
+
+        SeedActiveCabUnion(factory, "availability-unverified-driver");
+        profiles["availability-unverified-driver"] = profiles["availability-unverified-driver"] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/licence", "Pending"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
+        using var pendingDocuments = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.Conflict, pendingDocuments.StatusCode);
+        Assert.Equal("Offline", profiles["availability-unverified-driver"].AvailabilityStatus);
+
+        profiles["availability-unverified-driver"] = profiles["availability-unverified-driver"] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/licence", "Approved"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
+        using var eligible = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.OK, eligible.StatusCode);
+        Assert.Equal("Online", profiles["availability-unverified-driver"].AvailabilityStatus);
+    }
+
+    [Fact]
+    public async Task AvailabilityAndLocationRemainUnchangedDuringSelectedDriverNegotiation()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "availability-reservation-rider");
+        using var driver = factory.CreateClient("Driver", "availability-reservation-driver");
+        SeedBookableDriver(factory, "availability-reservation-driver", "availability-reservation-union");
+
+        using var bookingRequest = CreateSelectedBookingRequest(
+            "availability-reservation-key", "availability-reservation-driver",
+            "availability-reservation-union", "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(bookingRequest);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var before = profiles["availability-reservation-driver"];
+        using var offline = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = false });
+        Assert.Equal(HttpStatusCode.Conflict, offline.StatusCode);
+
+        using var zoneExit = await driver.PostAsJsonAsync("/api/v1/driver/location",
+            new { latitude = 0d, longitude = 0d });
+        Assert.Equal(HttpStatusCode.Conflict, zoneExit.StatusCode);
+
+        var after = profiles["availability-reservation-driver"];
+        Assert.Equal("Online", after.AvailabilityStatus);
+        Assert.Equal(before.CurrentLatitude, after.CurrentLatitude);
+        Assert.Equal(before.CurrentLongitude, after.CurrentLongitude);
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("availability-reservation-driver"));
     }
 
     [Fact]
@@ -1363,6 +1450,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-online-outside-zone");
         using var rider = factory.CreateClient("Rider", "rider-nearby-outside-zone");
+        SeedActiveCabUnion(factory, "driver-online-outside-zone");
 
         using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
             new { isOnline = true, latitude = 0d, longitude = 0d });
@@ -1386,6 +1474,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-location-zone-exit");
+        SeedActiveCabUnion(factory, "driver-location-zone-exit");
 
         using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
             new { isOnline = true, latitude = 17.493, longitude = 78.399 });
@@ -1413,6 +1502,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-location-invalid-payload");
+        SeedActiveCabUnion(factory, "driver-location-invalid-payload");
 
         using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
             new { isOnline = true, latitude = 17.493, longitude = 78.399 });
@@ -2043,6 +2133,17 @@ public sealed class RideApiIntegrationTests
         Assert.Contains("terminal-reservation-driver", discoveredDriverIds);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("terminal-reservation-driver"));
+    }
+
+    private static void SeedActiveCabUnion(TurnOvaApiFactory factory, string driverId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var unionId = "availability-union-" + driverId;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[unionId] =
+            new DriverUnion(unionId, "Availability Test Union", "AVAIL-" + driverId, "Hyderabad", null, null,
+                ["hyderabad-central"], ["cab"], "Active", now, now);
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()[driverId] =
+            new DriverUnionAssignment(driverId, unionId, "Availability Test Union", "Active", now, now, "test");
     }
 
     private static void SeedBookableDriver(TurnOvaApiFactory factory, string driverId, string unionId)
