@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
@@ -1036,7 +1037,7 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
             var existing = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
-            var existingRide = await FindRideAsync(existing.Resource.RideId, ct);
+            var existingRide = await FindRideAsync(existing.Resource.rideId, ct);
             return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(existingRide);
         }
     }
