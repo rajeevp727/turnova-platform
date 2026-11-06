@@ -162,7 +162,7 @@ TurnOva is a union-connected cab discovery and ride-coordination platform, not a
 
 ### Rider journey
 1. Rider enters pickup, destination and optional stops.
-2. Discover active, approved unions serving Cab within the configured pickup radius.
+2. Discover active, approved unions serving Cab within the configured pickup radius. In the current MVP data model, Active is the operational eligibility/approval status; union creation and status changes remain operations-controlled until authenticated union reviewer roles and legal partnership approval are completed.
 3. Group eligible, approved and available Cab drivers by union; show no more than 2–3 per union, ordered by driver-to-pickup proximity.
 4. Show only union-approved driver photos and verified Cab details. Distinguish driver-to-pickup proximity from journey distance.
 5. Rider selects a driver and can call/chat when providers are configured.
