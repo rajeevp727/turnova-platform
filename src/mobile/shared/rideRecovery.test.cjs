@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { findActiveRide } = require("./rideRecovery.js");
+const { findActiveRide, isActiveRide, canShareActiveRideLocation } = require("./rideRecovery.js");
 
 test("Rider recovery includes selected negotiation and active trip states", () => {
   const history = [
@@ -36,4 +36,25 @@ test("terminal-only or empty history clears stale active ride state", () => {
 
 test("unknown recovery roles fail explicitly", () => {
   assert.throws(() => findActiveRide([], "union"), /Unsupported ride recovery role/);
+});
+
+
+test("active ride status checks are role-specific", () => {
+  assert.equal(isActiveRide({ status: "Negotiating" }, "rider"), true);
+  assert.equal(isActiveRide({ status: "Negotiating" }, "driver"), true);
+  assert.equal(isActiveRide({ status: "Requested" }, "rider"), true);
+  assert.equal(isActiveRide({ status: "Requested" }, "driver"), false);
+  assert.equal(isActiveRide({ status: "Completed" }, "rider"), false);
+  assert.equal(isActiveRide(null, "driver"), false);
+});
+
+test("exact Driver location is shared only in accepted, arrived and in-progress states", () => {
+  for (const status of ["Accepted", "Arrived", "InProgress"]) {
+    assert.equal(canShareActiveRideLocation({ status, locationSharingActive: true }), true);
+  }
+  for (const status of ["Negotiating", "AgreementConfirmed", "Completed", "Cancelled", "Expired"]) {
+    assert.equal(canShareActiveRideLocation({ status, locationSharingActive: true }), false);
+  }
+  assert.equal(canShareActiveRideLocation({ status: "InProgress", locationSharingActive: false }), false);
+  assert.equal(canShareActiveRideLocation(null), false);
 });
