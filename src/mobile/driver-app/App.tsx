@@ -391,6 +391,13 @@ export default function App() {
       .build();
 
     const refreshOffers = () => { if (mounted) void loadAvailableRides(); };
+    connection.on("RideSelected", (selection: { rideId?: string; expiresAtUtc?: string }) => {
+      if (!mounted || !selection?.rideId) return;
+      setNotice("A Rider selected you for a Cab trip. Review the request and negotiate directly.");
+      void loadDriverRideHistory(() => mounted).catch(e => {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to load selected Rider booking.");
+      });
+    });
     connection.on("RideOfferReceived", (offer: { rideId?: string; offerId?: string; expiresAtUtc?: string }) => {
       if (!mounted || !offer?.offerId || receivedOfferIds.current.has(offer.offerId)) return;
       receivedOfferIds.current.add(offer.offerId);
@@ -408,9 +415,10 @@ export default function App() {
     return () => {
       mounted = false;
       connection.off("RideOfferReceived");
+      connection.off("RideSelected");
       void connection.stop();
     };
-  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory]);
 
   useEffect(() => {
     if (!user?.id || tab !== "Trips" || !activeRide?.rideId || !tokens) return;
