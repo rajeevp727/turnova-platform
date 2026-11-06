@@ -138,7 +138,11 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, RideAgreementsMigration>();
     builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
+    builder.Services.AddSingleton<IRideAgreementStore>(sp => new CosmosRideAgreementStore(
+        sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideAgreementVersions"),
+        sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideAgreementConfirmations")));
     builder.Services.AddSingleton<IRideOfferStore>(sp =>
         new CosmosRideOfferStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideOffers")));
     builder.Services.AddSingleton<CosmosMigrationRunner>();
@@ -161,6 +165,7 @@ else
     builder.Services.AddSingleton<IQueueStore>(queueStore);
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
+    builder.Services.AddSingleton<IRideAgreementStore, InMemoryRideAgreementStore>();
 }
 
 builder.Services.AddSingleton<IRideOfferAdvancer>(sp => new RideOfferAdvancer(
@@ -218,6 +223,7 @@ var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRid
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
 Container? rideContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null;
 var driverRideReservations = app.Services.GetRequiredService<IDriverRideReservationStore>();
+var rideAgreements = app.Services.GetRequiredService<IRideAgreementStore>();
 Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
 Container? driverContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null;
 var driverProfiles = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -1677,9 +1683,132 @@ app.MapPost("/api/v1/rides/{rideId}/arrive", (ClaimsPrincipal user, string rideI
     TransitionRideAsync(user, rideId, "Accepted", "Arrived", ct))
     .RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/start", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
-    TransitionRideAsync(user, rideId, "Arrived", "InProgress", ct))
-    .RequireAuthorization(policy => policy.RequireRole("Driver"));
+app.MapGet("/api/v1/rides/{rideId}/agreements", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+{
+    var ride = await FindRideAsync(rideId, ct);
+    var actorId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (ride is null || string.IsNullOrWhiteSpace(actorId) ||
+        !((user.IsInRole("Rider") && ride.RiderId == actorId) ||
+          (user.IsInRole("Driver") && ride.DriverId == actorId)))
+        return Results.NotFound(new { message = "Ride agreement not found." });
+
+    var versions = await rideAgreements.GetVersionsAsync(rideId, ct);
+    var history = new List<object>();
+    foreach (var version in versions)
+    {
+        var confirmations = await rideAgreements.GetConfirmationsAsync(rideId, version.Version, ct);
+        history.Add(new
+        {
+            version.RideId, version.Version, version.RiderId, version.DriverId, version.UnionId,
+            version.Amount, version.Currency, version.Pickup, version.Dropoff, version.Stops,
+            version.ProposedBy, version.CreatedAtUtc,
+            RiderConfirmed = confirmations.Any(item => item.Party == "Rider" && item.ActorId == version.RiderId),
+            DriverConfirmed = confirmations.Any(item => item.Party == "Driver" && item.ActorId == version.DriverId)
+        });
+    }
+    return Results.Ok(history);
+}).RequireAuthorization();
+
+app.MapPost("/api/v1/rides/{rideId}/agreements", async (
+    HttpContext context, ClaimsPrincipal user, string rideId, ProposeRideAgreementRequest request,
+    IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
+{
+    var ride = await FindRideAsync(rideId, ct);
+    var actorId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var isRider = user.IsInRole("Rider") && ride?.RiderId == actorId;
+    var isDriver = user.IsInRole("Driver") && ride?.DriverId == actorId;
+    if (ride is null || string.IsNullOrWhiteSpace(actorId) || (!isRider && !isDriver))
+        return Results.NotFound(new { message = "Ride not found." });
+    if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived"))
+        return Results.Conflict(new { message = "Fare negotiation is not available in the current ride state." });
+    if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount ||
+        request.Currency is null || request.Currency.Length != 3 ||
+        request.Currency.Any(character => character is < 'A' or > 'Z'))
+        return Results.BadRequest(new { message = "Provide a positive amount with at most two decimal places and a three-letter uppercase currency code." });
+
+    var idempotencyKey = context.Request.Headers["Idempotency-Key"].ToString().Trim();
+    if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 128)
+        return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
+
+    var assignment = await FindUnionAssignmentAsync(ride.DriverId!, ct);
+    if (assignment is null || assignment.Status != "Active")
+        return Results.Conflict(new { message = "The selected Driver must have an active Union membership before negotiation." });
+    var union = await FindUnionAsync(assignment.UnionId, ct);
+    var driver = await FindDriverProfileAsync(ride.DriverId!, ct);
+    if (union?.Status != "Active" || driver?.Status != "Approved" ||
+        !string.Equals(driver.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+        !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "The selected Driver or Union is not eligible for Cab negotiation." });
+
+    var existingVersions = await rideAgreements.GetVersionsAsync(rideId, ct);
+    var retry = existingVersions.FirstOrDefault(item => item.IdempotencyKey == idempotencyKey);
+    if (retry is not null)
+    {
+        var retryConfirmations = await rideAgreements.GetConfirmationsAsync(rideId, retry.Version, ct);
+        return Results.Ok(new
+        {
+            agreement = retry, riderConfirmed = retryConfirmations.Any(item => item.Party == "Rider"),
+            driverConfirmed = retryConfirmations.Any(item => item.Party == "Driver")
+        });
+    }
+
+    var version = new RideAgreementVersion(
+        rideId, (existingVersions.LastOrDefault()?.Version ?? 0) + 1,
+        ride.RiderId, ride.DriverId!, assignment.UnionId, request.Amount, request.Currency,
+        ride.Pickup, ride.Dropoff, [], isRider ? "Rider" : "Driver", idempotencyKey, DateTimeOffset.UtcNow);
+    if (!await rideAgreements.TryCreateVersionAsync(version, ct))
+        return Results.Conflict(new { message = "Another proposal was saved concurrently. Refresh the agreement history and retry with a new idempotency key." });
+
+    await hub.Clients.Group(rideId).SendAsync("RideAgreementChanged", new { rideId, version = version.Version }, ct);
+    return Results.Created($"/api/v1/rides/{rideId}/agreements", new
+    {
+        agreement = version, riderConfirmed = false, driverConfirmed = false
+    });
+}).RequireAuthorization();
+
+app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
+    ClaimsPrincipal user, string rideId, int version, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
+{
+    var ride = await FindRideAsync(rideId, ct);
+    var actorId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var isRider = user.IsInRole("Rider") && ride?.RiderId == actorId;
+    var isDriver = user.IsInRole("Driver") && ride?.DriverId == actorId;
+    if (ride is null || string.IsNullOrWhiteSpace(actorId) || (!isRider && !isDriver))
+        return Results.NotFound(new { message = "Ride agreement not found." });
+    if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived"))
+        return Results.Conflict(new { message = "Agreement confirmation is closed for this ride state." });
+
+    var versions = await rideAgreements.GetVersionsAsync(rideId, ct);
+    var current = versions.LastOrDefault();
+    if (current is null || current.Version != version)
+        return Results.Conflict(new { message = "Only the current agreement version can be confirmed." });
+    var party = isRider ? "Rider" : "Driver";
+    await rideAgreements.TryCreateConfirmationAsync(
+        new RideAgreementConfirmation(rideId, version, party, actorId, DateTimeOffset.UtcNow), ct);
+    var confirmations = await rideAgreements.GetConfirmationsAsync(rideId, version, ct);
+    var riderConfirmed = confirmations.Any(item => item.Party == "Rider" && item.ActorId == ride.RiderId);
+    var driverConfirmed = confirmations.Any(item => item.Party == "Driver" && item.ActorId == ride.DriverId);
+    await hub.Clients.Group(rideId).SendAsync("RideAgreementChanged",
+        new { rideId, version, riderConfirmed, driverConfirmed }, ct);
+    return Results.Ok(new { rideId, version, riderConfirmed, driverConfirmed, mutuallyConfirmed = riderConfirmed && driverConfirmed });
+}).RequireAuthorization();
+
+app.MapPost("/api/v1/rides/{rideId}/start", async (
+    ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var ride = await FindRideAsync(rideId, ct);
+    if (ride is null || ride.DriverId != driverId) return Results.NotFound();
+    var versions = await rideAgreements.GetVersionsAsync(rideId, ct);
+    var current = versions.LastOrDefault();
+    if (current is null)
+        return Results.Conflict(new { message = "Both Rider and Driver must confirm a current fare agreement before the ride can start." });
+    var confirmations = await rideAgreements.GetConfirmationsAsync(rideId, current.Version, ct);
+    if (!confirmations.Any(item => item.Party == "Rider" && item.ActorId == ride.RiderId) ||
+        !confirmations.Any(item => item.Party == "Driver" && item.ActorId == ride.DriverId))
+        return Results.Conflict(new { message = "Both Rider and Driver must confirm the current agreement version before the ride can start." });
+    return await TransitionRideAsync(user, rideId, "Arrived", "InProgress", ct);
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/complete", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
     TransitionRideAsync(user, rideId, "InProgress", "Completed", ct))
@@ -1835,6 +1964,7 @@ public sealed record CreateUnionRequest(string Name, string Code, string? Locati
 public sealed record UpdateUnionStatusRequest(string Status);
 public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "cab");
+public sealed record ProposeRideAgreementRequest(decimal Amount, string Currency);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude);
 public sealed record RiderDiscoveryResponse(string PickupZoneId, double? JourneyDistanceKm, IReadOnlyList<NearbyUnionDiscoveryGroup> Unions);
