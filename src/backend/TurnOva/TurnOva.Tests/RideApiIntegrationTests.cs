@@ -1014,6 +1014,11 @@ public sealed class RideApiIntegrationTests
 
         var groups = root.GetProperty("unions");
         Assert.Equal(2, groups.GetArrayLength());
+        Assert.DoesNotContain(groups.EnumerateArray(), group =>
+            group.GetProperty("unionId").GetString() == northZone.UnionId);
+        Assert.DoesNotContain(groups.EnumerateArray()
+            .SelectMany(group => group.GetProperty("drivers").EnumerateArray()), driver =>
+            driver.GetProperty("driverId").GetString() == "north-zone-union-driver");
         var centralGroup = groups.EnumerateArray()
             .Single(group => group.GetProperty("unionId").GetString() == central.UnionId);
         var centralDrivers = centralGroup.GetProperty("drivers");
