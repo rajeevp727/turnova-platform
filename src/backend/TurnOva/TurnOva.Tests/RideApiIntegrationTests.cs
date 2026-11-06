@@ -913,6 +913,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-union-discovery");
+        using var driverRole = factory.CreateClient("Driver", "driver-discovery-role");
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
         var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
@@ -996,6 +997,8 @@ public sealed class RideApiIntegrationTests
         using var response = await rider.GetAsync(
             "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=3");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await driverRole.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1")).StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
