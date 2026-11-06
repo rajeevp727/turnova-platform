@@ -83,6 +83,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DemoRide>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, string>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, RideIdempotencyRecord>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverOnboardingProfile>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnion>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAssignment>>();
@@ -481,11 +482,27 @@ async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
     await rideContainer.UpsertItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
 }
 
-async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
+async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
 {
     if (rideContainer is null) return rides.TryGetValue(rideId, out var item) ? item : null;
     try { return (await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource; }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+}
+
+async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
+{
+    var ride = await ReadRideRawAsync(rideId, ct);
+    if (ride is null || ride.Status is not ("Negotiating" or "AgreementConfirmed") ||
+        ride.NegotiationExpiresAtUtc is null || ride.NegotiationExpiresAtUtc > DateTimeOffset.UtcNow)
+        return ride;
+
+    var expired = await TryTransitionAsync(ride, "Expired", ct);
+    if (expired is null) return await ReadRideRawAsync(rideId, ct);
+    if (!string.IsNullOrWhiteSpace(expired.DriverId))
+        await driverRideReservations.TryReleaseAsync(expired.DriverId, rideId, ct);
+    await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
+        .SendAsync("RideStatusChanged", new { rideId, status = expired.Status }, ct);
+    return expired;
 }
 
 async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct) =>
@@ -1898,7 +1915,13 @@ async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, str
 async Task<DemoRide?> TryTransitionAsync(DemoRide current, string next, CancellationToken ct)
 {
     if (!RideLifecycle.CanTransition(current.Status, next)) return null;
-    var updated = current with { Status = next, LocationSharingActive = RideLifecycle.IsLocationSharingActive(next) };
+    var updated = current with
+    {
+        Status = next,
+        LocationSharingActive = RideLifecycle.IsLocationSharingActive(next),
+        NegotiationExpiresAtUtc = next is "Accepted" or "Cancelled" or "Expired" or "Completed"
+            ? null : current.NegotiationExpiresAtUtc
+    };
     return await TryReplaceRideAsync(current, updated, ct) ? updated : null;
 }
 
@@ -1911,7 +1934,9 @@ bool IsSameRideSnapshot(DemoRide left, DemoRide right)
         left.DriverLatitude != right.DriverLatitude || left.DriverLongitude != right.DriverLongitude ||
         left.AcceptedAt != right.AcceptedAt || left.LocationUpdatedAt != right.LocationUpdatedAt ||
         left.LocationSharingActive != right.LocationSharingActive || left.ServiceClass != right.ServiceClass ||
-        left.DispatchZoneId != right.DispatchZoneId || left.AgreementStateRevision != right.AgreementStateRevision)
+        left.DispatchZoneId != right.DispatchZoneId || left.AgreementStateRevision != right.AgreementStateRevision ||
+        left.UnionId != right.UnionId || left.NegotiationExpiresAtUtc != right.NegotiationExpiresAtUtc ||
+        !(left.Stops ?? []).SequenceEqual(right.Stops ?? [], StringComparer.Ordinal))
         return false;
 
     var leftVersions = left.AgreementVersions ?? [];
@@ -2044,6 +2069,8 @@ public sealed record UpdateUnionStatusRequest(string Status);
 public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "cab");
 public sealed record ProposeRideAgreementRequest(decimal Amount, string Currency);
+public sealed record RiderSelectedBookingRequest(string SelectedDriverId, string UnionId, string Pickup, string Dropoff,
+    IReadOnlyList<string>? Stops, int Passengers, double PickupLatitude, double PickupLongitude);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude);
 public sealed record RiderDiscoveryResponse(string PickupZoneId, double? JourneyDistanceKm, IReadOnlyList<NearbyUnionDiscoveryGroup> Unions);
@@ -2051,13 +2078,15 @@ public sealed record NearbyUnionDiscoveryGroup(string UnionId, string UnionName,
 public sealed record NearbyDriverDiscoveryResponse(string DriverId, string FullName, string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceToPickupKm, string? ProfilePhotoBase64, string? ProfilePhotoContentType);
 public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt);
 public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive);
-public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
+public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
 public sealed record RefreshTokenRequest(string RefreshToken);
 public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
-    string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "cab", string DispatchZoneId = "hyderabad-central", IReadOnlyList<RideAgreementVersion>? AgreementVersions = null, IReadOnlyList<RideAgreementConfirmation>? AgreementConfirmations = null, int AgreementStateRevision = 0);
+    string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "cab", string DispatchZoneId = "hyderabad-central",
+    IReadOnlyList<RideAgreementVersion>? AgreementVersions = null, IReadOnlyList<RideAgreementConfirmation>? AgreementConfirmations = null,
+    int AgreementStateRevision = 0, string? UnionId = null, IReadOnlyList<string>? Stops = null, DateTimeOffset? NegotiationExpiresAtUtc = null);
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 
