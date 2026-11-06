@@ -3,16 +3,22 @@ namespace TurnOva.Domain.Dispatch;
 public static class RideLifecycle
 {
     public const string Requested = "Requested";
+    public const string Negotiating = "Negotiating";
+    public const string AgreementConfirmed = "AgreementConfirmed";
     public const string Accepted = "Accepted";
     public const string Arrived = "Arrived";
     public const string InProgress = "InProgress";
     public const string Completed = "Completed";
     public const string Cancelled = "Cancelled";
+    public const string Expired = "Expired";
 
     public static bool CanTransition(string current, string next) =>
         (current, next) switch
         {
-            (Requested, Accepted) => true,
+            (Requested, Accepted) => true, // Legacy compatibility path only.
+            (Negotiating, AgreementConfirmed) => true,
+            (Negotiating, Cancelled or Expired) => true,
+            (AgreementConfirmed, Negotiating or Accepted or Cancelled or Expired) => true,
             (Accepted, Arrived) => true,
             (Arrived, InProgress) => true,
             (InProgress, Completed) => true,
