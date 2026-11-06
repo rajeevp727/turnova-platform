@@ -67,7 +67,7 @@
 |---|---|---|
 | CAB-SCOPE-01 | New Rider rides, Driver onboarding and new Union configuration are Cab-only; preserve historical records and exclude legacy non-Cab profiles from new eligibility. | Implemented and CI-validated for covered API/mobile paths — PRs #52/#53 merged; physical-device/production acceptance remains. |
 | CAB-DISCOVERY-01 | Show approved unions serving pickup; up to 2–3 eligible/available Cab drivers per union ordered by pickup proximity; Rider selects. No customer-facing FIFO ranking or automatic assignment. | Not started |
-| CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | Not started |
+| CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | In progress — PR #56 API/mobile increment; selected-driver booking integration, optional stops and device/Cosmos validation remain. |
 | CAB-RECON-01 | Driver reports amount received as unverified; persist agreed-minus-reported signed delta; expose only to authorised union roles. No platform payment gateway/escrow/collection. | Not started |
 | CAB-UNION-01 | Cab membership, Cab vehicle verification, union approval and approved selfie visibility. | Partially evidenced; Cab-only validation and full union workflow remain |
 | AI-01 | Separately approved provider-agnostic, bounded Rider/Driver AI assistance. Keep outside the 19-area denominator and do not let AI book, set fares, approve KYC or alter dispatch/ride state. | Not started |
@@ -84,7 +84,7 @@
 
 ## 7. Next steps
 
-1. Complete RIDER-01 / CAB-DISCOVERY-01: add durable selected-driver reservation/booking and exact expiry/cancel handling without customer-facing FIFO; then verify Android/iOS discovery and photo/location behaviour.
-2. Implement CAB-AGREEMENT-01: versioned direct negotiation and mutual confirmation gate.
-3. Implement CAB-RECON-01: Driver-reported amount and signed delta; leave dispute/next-ride policy blocked until approved.
+1. **#5 RIDER-03:** implement durable Rider-selected booking/reservation, idempotency, concurrency-safe driver hold, cancellation/expiry and exact reservation release; wire the selected driver from discovery into the agreement APIs.
+2. Revisit RIDER-02 to persist optional stops in the agreement route snapshot and complete selected-driver mobile/device validation.
+3. Continue sequentially with #6 DISPATCH-01 and later rows; retain external radius, provider, legal, Cosmos and device dependencies as explicit gates. CAB-RECON-01 remains a later approved supplemental slice. Driver-reported amount and signed delta; leave dispute/next-ride policy blocked until approved.
 4. Complete CAB-UNION-01 and remaining 19-area verification plus AI-01 sequentially. Do not open parallel feature PRs.
