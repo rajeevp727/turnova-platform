@@ -204,9 +204,9 @@ The GitHub Actions workflow currently runs:
 | TRACK-001 | Assigned driver posts valid coordinates | Latest coordinates and timestamp are persisted | API + Cosmos | P0 |
 | TRACK-002 | Unassigned driver posts coordinates | Request is denied; no location is changed | API security | P0 |
 | TRACK-003 | Rider reads another rider's ride | HTTP 404; no ride or location data is disclosed | API security | P0 |
-| TRACK-004 | Rider Activity screen is open | Map refreshes from authoritative ride state while screen is active | Mobile E2E | P1 |
-| TRACK-005 | Driver leaves Trips screen | Foreground location subscription is removed | Mobile | P0 |
-| TRACK-006 | Location permission denied | Driver sees an actionable error; no false location-sharing state | Mobile | P1 |
+| TRACK-004 | Rider switches away from Activity during an active ride | Ride SignalR subscription remains active; the map shows the latest authoritative location/status when Activity is reopened | Mobile E2E | P1 |
+| TRACK-005 | Driver switches away from Trips during an active ride | Ride-scoped foreground location watcher continues; selected UI tab is not a trip-tracking lifecycle gate | Mobile | P0 |
+| TRACK-006 | Location permission denied initially or after resume | Driver sees an actionable error; no false location-sharing state is shown and no background location permission is requested | Mobile | P1 |
 
 ## 12. Ride lifecycle, idempotency and SignalR
 
@@ -227,12 +227,15 @@ The GitHub Actions workflow currently runs:
 | TRACK-008 | Driver posts location after completion/cancellation | HTTP 404/409; no location update or broadcast | API security | P0 |
 | TRACK-009 | Rider SignalR connection uses another Rider's ride ID | Connection is aborted before group membership | SignalR security | P0 |
 | TRACK-010 | Rider reconnects after network loss | SignalR reconnects and subsequent location/status events resume | Mobile | P1 |
-| TRACK-011 | Driver leaves Trips screen | Foreground GPS subscription is disposed | Mobile | P0 |
-| TRACK-012 | Rider reconnects after missing a status/location/agreement event | Rider reloads owner-scoped ride history and current ride details plus agreement versions; terminal-only history clears stale active ride state | Mobile + API | P0 |
-| TRACK-013 | Driver selected-booking or active-trip connection reconnects | Driver reloads its own available requests and authoritative selected/active/terminal ride history | Mobile + API | P0 |
+| TRACK-011 | Driver app enters background during an active ride | Ride-scoped GPS watcher is disposed; no location posts occur after backgrounding | Mobile | P0 |
+| TRACK-012 | Rider reconnects after missing a status/location/agreement event | Rider reloads owner-scoped ride history and current ride details plus agreement versions; terminal-only history clears stale active ride state and coordinates | Mobile + API | P0 |
+| TRACK-013 | Driver selected-booking or active-trip connection reconnects | Driver reloads its own available requests and authoritative selected/active/terminal ride history independent of the selected tab | Mobile + API | P0 |
 | TRACK-014 | Non-owner Rider/Driver attempts to join a ride group, or Driver requests another Driver notification group | Hub aborts the connection before adding any group membership | SignalR security | P0 |
+| TRACK-015 | Driver app resumes while an active ride is location-sharing | Fresh foreground GPS is posted before the watcher restarts; revoked permission produces an actionable error; no background permission is requested | Android/iOS device | P0 |
+| TRACK-016 | Rider switches between Activity and another tab during an active ride | Ride SignalR connection remains subscribed and applies location/status events; Activity shows the latest state on return | Android/iOS device | P0 |
+| TRACK-017 | Rider reads ride details before sharing, during sharing and after terminal transition | Exact Driver coordinates are null before sharing and after completion/cancellation; visible only to the owning Rider while the server says sharing is active | API integration/security | P0 |
 
-The lifecycle state-machine unit tests and in-memory API integration tests are automated. API integration coverage includes Rider booking/idempotency, role restrictions, ownership, lifecycle transitions, cancellation rules, terminal location-sharing shutdown, and concurrent Driver acceptance. `RideTrackingHubTests` verifies authenticated ride/Driver group membership, and the shared `rideRecovery` tests verify Rider/Driver active-state selection. Live SignalR WebSocket delivery/reconnect and physical-device foreground/background scenarios remain device gates; Cosmos-specific concurrency still requires the configured integration environment.
+The lifecycle state-machine unit tests and in-memory API integration tests are automated. API integration coverage includes Rider booking/idempotency, role restrictions, ownership, lifecycle transitions, cancellation rules, selected-ride coordinate privacy before/after sharing, terminal coordinate clearing, and concurrent Driver acceptance. `RideTrackingHubTests` verifies authenticated ride/Driver group membership, and the shared `rideRecovery` tests verify role-specific active states and location-sharing eligibility. Live SignalR WebSocket delivery/reconnect, tab-switch behavior, foreground/background/resume and physical-device permission scenarios remain device gates; Cosmos-specific concurrency still requires the configured integration environment.
 
 ## 13. Cosmos DB configuration, migration and readiness
 
