@@ -1050,6 +1050,9 @@ app.MapPost("/api/v1/driver/availability", async (
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.Conflict(new { message = "Only an approved driver can change availability." });
 
+    if (!request.IsOnline && await driverRideReservations.HasActiveAsync(driverId, ct))
+        return Results.Conflict(new { message = "Resolve or complete the active selected booking/ride before going offline." });
+
     if (request.IsOnline)
     {
         if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
