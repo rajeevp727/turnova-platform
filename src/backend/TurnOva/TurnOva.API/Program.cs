@@ -1,4 +1,5 @@
 using TurnOva.API;
+using TurnOva.API.Assistance;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
@@ -22,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks();
+builder.Services.AddAiAssistance(builder.Configuration);
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
@@ -249,6 +251,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.MapHealthChecks("/health/live");
 if (app.Environment.IsEnvironment("Testing"))
 {
@@ -258,6 +261,7 @@ if (app.Environment.IsEnvironment("Testing"))
     });
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
+app.MapAiAssistanceEndpoints();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
