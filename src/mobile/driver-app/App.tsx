@@ -37,6 +37,7 @@ type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
 type QueueMembership = { isQueued: boolean; position: number | null };
+type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean };
 
 async function saveTokens(tokens: Tokens) {
   await SecureStore.setItemAsync("turnova.access", tokens.accessToken);
@@ -75,6 +76,7 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [availableRides, setAvailableRides] = useState<any[]>([]);
   const [activeRide, setActiveRide] = useState<any>(null);
+  const [driverRideHistory, setDriverRideHistory] = useState<DriverRideHistoryItem[]>([]);
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
   const [driverName, setDriverName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -298,6 +300,23 @@ export default function App() {
     catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); }
   }, [apiFetch]);
 
+  const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
+    const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
+    if (!isActive()) return;
+    setDriverRideHistory(history);
+    const active = history.find(item => ["Accepted", "Arrived", "InProgress"].includes(item.status));
+    setActiveRide(active ?? null);
+  }, [apiFetch]);
+
+  useEffect(() => {
+    if (!user?.id || tab !== "Trips") return;
+    let active = true;
+    void loadDriverRideHistory(() => active).catch(e => {
+      if (active) setError(e instanceof Error ? e.message : "Unable to load trip history.");
+    });
+    return () => { active = false; };
+  }, [user?.id, tab, loadDriverRideHistory, activeRide?.status]);
+
   // SignalR is at-least-once: deduplicate by the server-issued offerId before surfacing it.
   const receivedOfferIds = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -487,7 +506,7 @@ export default function App() {
   const logout = async () => {
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
-    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null });
+    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]);
   };
 
   const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
@@ -522,7 +541,39 @@ export default function App() {
     <ScrollView contentContainerStyle={styles.content}>
       {tab === "Home" && <><Text style={styles.eyebrow}>YOUR DRIVER SPACE</Text><Text style={styles.title}>Welcome, {user.name || "Driver"}</Text><Text style={styles.sub}>Your next opportunity starts with a fair turn.</Text><View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · {serviceClass.toUpperCase()}</Text><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.cardTitle}>{availabilityStatus}</Text><Text style={styles.label}>YOUR QUEUE POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "—"}</Text><Pressable style={styles.primary} onPress={() => setTab("Queue")}><Text style={styles.primaryText}>Manage availability</Text></Pressable></View></>}
       {tab === "Queue" && <><Text style={styles.eyebrow}>HYDERABAD CENTRAL · {serviceClass.toUpperCase()}</Text><Text style={styles.title}>Your queue</Text><View style={styles.card}><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.position}>{availabilityStatus}</Text><Pressable style={styles.primary} onPress={() => void toggleAvailability()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : availabilityStatus === "Online" ? "Go offline" : "Go online"}</Text></Pressable><Text style={styles.label}>CURRENT POSITION</Text><Text style={styles.position}>{position ? `#${position}` : "Not joined"}</Text><Pressable style={styles.primary} onPress={() => void loadQueue()} disabled={loading}><Text style={styles.primaryText}>{loading ? "Please wait…" : "Refresh queue"}</Text></Pressable><Pressable onPress={() => void loadQueue()}><Text style={styles.link}>Refresh list</Text></Pressable></View>{queue.map(item => <View style={styles.queueItem} key={item.driverId}><Text style={styles.cardTitle}>#{item.position} · {item.driverId}</Text><Text style={styles.muted}>{new Date(item.joinedAt).toLocaleString()}</Text></View>)}</>}
-      {tab === "Trips" && <><Text style={styles.title}>Ride requests</Text><View style={styles.card}><Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh requests</Text></Pressable>{availableRides.map(item=><View key={item.rideId} style={{marginTop:14}}><Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text><Text style={styles.muted}>{item.passengers} passenger(s) · {item.rideId}</Text><View style={{ flexDirection: "row", gap: 10 }}><Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void acceptRide(item.rideId)}><Text style={styles.secondaryText}>Accept ride</Text></Pressable><Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void rejectRide(item.rideId)}><Text style={styles.secondaryText}>Decline</Text></Pressable></View></View>)}{activeRide&&<><Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>{activeRide.status==="Accepted"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("arrive")}><Text style={styles.secondaryText}>Mark arrived</Text></Pressable>}{activeRide.status==="Arrived"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable>}{activeRide.status==="InProgress"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}</>}</View></>}
+      {tab === "Trips" && <>
+        <Text style={styles.title}>Trips</Text>
+        <View style={styles.card}>
+          <Text style={styles.label}>RIDE REQUESTS</Text>
+          <Pressable style={styles.primary} onPress={() => void loadAvailableRides()}><Text style={styles.primaryText}>Refresh requests</Text></Pressable>
+          {availableRides.map(item=><View key={item.rideId} style={{marginTop:14}}>
+            <Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text>
+            <Text style={styles.muted}>{item.passengers} passenger(s) · {item.rideId}</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void acceptRide(item.rideId)}><Text style={styles.secondaryText}>Accept ride</Text></Pressable>
+              <Pressable style={[styles.secondary, { flex: 1 }]} onPress={()=>void rejectRide(item.rideId)}><Text style={styles.secondaryText}>Decline</Text></Pressable>
+            </View>
+          </View>)}
+          {activeRide&&<>
+            <Text style={styles.label}>ACTIVE TRIP</Text>
+            <Text style={styles.success}>{activeRide.status} · {activeRide.rideId} · {activeRide.locationSharingActive?"Location sharing active":"Location sharing stopped"}</Text>
+            {activeRide.status==="Accepted"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("arrive")}><Text style={styles.secondaryText}>Mark arrived</Text></Pressable>}
+            {activeRide.status==="Arrived"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("start")}><Text style={styles.secondaryText}>Start trip</Text></Pressable>}
+            {activeRide.status==="InProgress"&&<Pressable style={styles.secondary} onPress={()=>void advanceRide("complete")}><Text style={styles.secondaryText}>Complete trip</Text></Pressable>}
+          </>}
+        </View>
+        {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).length>0&&<View style={styles.card}>
+          <Text style={styles.cardTitle}>Trip history</Text>
+          {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).map(item=><View key={item.rideId} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}>
+            <Text style={styles.status}>{item.status.toUpperCase()}</Text>
+            <Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text>
+            <Text style={styles.muted}>{item.serviceClass.toUpperCase()} · {item.passengers} passenger(s)</Text>
+            <Text style={styles.muted}>{new Date(item.requestedAt).toLocaleString()}</Text>
+            <Text style={styles.muted}>Reference · {item.rideId}</Text>
+          </View>)}
+        </View>}
+        {!activeRide&&driverRideHistory.length===0&&<View style={styles.card}><Text style={styles.muted}>No trip history yet.</Text></View>}
+      </>}
       {tab === "Payslips" && <><Text style={styles.eyebrow}>MONTHLY PDF DOCUMENTS</Text><Text style={styles.title}>Your payslips</Text><Text style={styles.sub}>Download a completed month's payslip as a PDF. Only finalized months are available.</Text><View style={styles.card}><Text style={styles.cardTitle}>Recent months</Text>{Array.from({ length: 12 }, (_, index) => { const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - index - 1); const year = date.getFullYear(); const month = date.getMonth() + 1; const label = date.toLocaleDateString(undefined, { month: "long", year: "numeric" }); return <View key={`${year}-${month}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}><Text style={styles.cardTitle}>{label}</Text><Pressable style={styles.secondary} disabled={loading} onPress={() => void downloadPayslip(year, month)}><Text style={styles.secondaryText}>Download PDF</Text></Pressable></View>; })}</View></>}
       {tab === "Profile" && <><Text style={styles.title}>Driver onboarding</Text>{themePicker}<Text style={styles.label}>APP THEME</Text><View style={styles.card}>
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
