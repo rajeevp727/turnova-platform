@@ -60,7 +60,7 @@ PR #52 merged CAB-SCOPE-01 foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e5
 
 | ID | Requirement | Status |
 |---|---|---|
-| CAB-SCOPE-01 | New Rider rides, Driver onboarding and new Union configuration are Cab-only; preserve historical records and exclude legacy non-Cab profiles from new eligibility. | In progress — PR #52 merged; PR #53 closes remaining legacy non-Cab selfie/location/queue/offer action gaps; latest-head CI pending. |
+| CAB-SCOPE-01 | New Rider rides, Driver onboarding and new Union configuration are Cab-only; preserve historical records and exclude legacy non-Cab profiles from new eligibility. | Implemented and CI-validated for covered API/mobile paths — PRs #52/#53 merged; physical-device/production acceptance remains. |
 | CAB-DISCOVERY-01 | Show approved unions serving pickup; up to 2–3 eligible/available Cab drivers per union ordered by pickup proximity; Rider selects. No customer-facing FIFO ranking or automatic assignment. | Not started |
 | CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | Not started |
 | CAB-RECON-01 | Driver reports amount received as unverified; persist agreed-minus-reported signed delta; expose only to authorised union roles. No platform payment gateway/escrow/collection. | Not started |
@@ -79,8 +79,7 @@ PR #52 merged CAB-SCOPE-01 foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e5
 
 ## 7. Next steps
 
-1. Complete automated review and fresh CI for PR #53's legacy non-Cab endpoint/UI guards; merge only when the reconciled head is green.
-2. Implement CAB-DISCOVERY-01: approved-union grouping, at most 2–3 available Cab drivers per union, pickup-proximity ordering and explicit Rider selection; no customer-facing FIFO ranking or automatic assignment.
-3. Implement CAB-AGREEMENT-01: versioned direct negotiation and mutual confirmation gate.
-4. Implement CAB-RECON-01: Driver-reported amount and signed delta; leave dispute/next-ride policy blocked until approved.
-5. Complete CAB-UNION-01 and remaining 19-area verification plus AI-01 sequentially. Do not open parallel feature PRs.
+1. Implement CAB-DISCOVERY-01: approved-union grouping, at most 2–3 available Cab drivers per union, pickup-proximity ordering and explicit Rider selection; no customer-facing FIFO ranking or automatic assignment.
+2. Implement CAB-AGREEMENT-01: versioned direct negotiation and mutual confirmation gate.
+3. Implement CAB-RECON-01: Driver-reported amount and signed delta; leave dispute/next-ride policy blocked until approved.
+4. Complete CAB-UNION-01 and remaining 19-area verification plus AI-01 sequentially. Do not open parallel feature PRs.
