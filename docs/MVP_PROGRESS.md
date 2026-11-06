@@ -55,7 +55,7 @@
 | 16 | RIDER-04 | In progress | PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed 210/210 backend tests, native non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history remain; customer dispute and non-zero-delta next-ride policy remain unresolved. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting categories, escalation owner, process, API/UI, audit and device acceptance remain. |
 | 18 | PLATFORM-01 | In progress | PR #71 merged at `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`; final-head CI [42301719963](https://github.com/rajeevp727/turnova-platform/actions/runs/42301719963) passed 214/214 backend tests, non-container API publish, both mobile config/typechecks and shared tests. Live Cosmos, broader durable audit, telemetry and load gates remain. |
-| 19 | RELEASE-01 | In progress | Current sequential PR adds Android/iOS production JavaScript bundle exports and artifact verification for both Rider and Driver apps. Native APK/AAB/IPA builds, signing, iOS bundle identifiers and physical-device pilot checks remain. |
+| 19 | RELEASE-01 | In progress | PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) adds Android/iOS production JavaScript bundle exports and artifact verification for both Rider and Driver apps; final-head CI pending. Native APK/AAB/IPA builds, signing, iOS bundle identifiers and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
 
@@ -186,7 +186,7 @@
 
 ## RELEASE-01 production bundle increment (2026-11-07)
 
-- Current sequential item #19 adds production JavaScript bundle exports for Android and iOS in both mobile apps, plus non-empty metadata checks and CI artifacts.
+- Focused PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) is the current sequential item #19. It adds production JavaScript bundle exports for Android and iOS in both mobile apps, plus non-empty metadata checks and CI artifacts; final-head CI is pending.
 - This is stronger than Expo config/typecheck alone but is not a native APK/AAB/IPA build and does not prove signing or app-store readiness.
 - Current app configs contain Android package IDs but no iOS bundle identifiers. Final iOS store identifiers, signing credentials/profiles, Android release keystore and physical-device functional/security/pilot evidence remain external gates; no values are invented.
 - The 19-area weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19) until the release row's full evidence passes.
