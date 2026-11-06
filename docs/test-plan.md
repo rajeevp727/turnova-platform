@@ -41,15 +41,19 @@
 | AUTH-LOGIN-011 | Missing refresh token | Empty/null refresh token | 400/401; no token issued | API | P1 |
 | AUTH-LOGIN-012 | Expired access token | Call protected API with expired access token | 401; app attempts refresh once and retries original request once | API + mobile | P0 |
 | AUTH-LOGIN-013 | Expired access and refresh tokens | Expire both tokens | Session cleared and sign-in screen displayed | Mobile | P0 |
-| AUTH-LOGIN-014 | App restart with valid tokens | Kill and relaunch app | Session restored using SecureStore and `/me`; no login prompt | Mobile | P0 |
-| AUTH-LOGIN-015 | App restart with invalid access but valid refresh | Store expired access token and valid refresh token, relaunch | Refresh succeeds and rotated tokens are stored | Mobile | P0 |
+| AUTH-LOGIN-014 | App restart with valid tokens | Kill and relaunch app with a complete stored pair | Session restored using SecureStore and `/me`; no login prompt | Mobile unit + device | P0 |
+| AUTH-LOGIN-015 | App restart with invalid access but valid refresh | Store expired access token and valid refresh token, relaunch | `/me` 401 triggers one refresh; rotated access/refresh pair is stored before the session is restored | Mobile unit + device | P0 |
 | AUTH-LOGIN-016 | Concurrent refresh attempts | Trigger multiple 401 responses together | No stale refresh token overwrites newer token; one refresh flow is serialized or safely coordinated | Mobile | P0 |
-| AUTH-LOGIN-017 | Logout succeeds | Sign out while online | TriSend session revoked; local tokens deleted; sign-in screen shown | API + mobile | P0 |
-| AUTH-LOGIN-018 | Logout while offline | Sign out with network unavailable | Local tokens are deleted; app signs out; server revocation may remain pending until token/session expiry | Mobile | P1 |
-| AUTH-LOGIN-019 | Secure storage failure | Simulate SecureStore read/write failure | User sees recoverable error; app does not silently claim authenticated state | Mobile | P1 |
+| AUTH-LOGIN-017 | Logout succeeds | Sign out while online | TriSend session revocation is attempted; both local token keys are deleted; sign-in screen shown | API + mobile | P0 |
+| AUTH-LOGIN-018 | Logout while offline | Sign out with network unavailable | Local token deletion proceeds even when server revocation fails; app signs out; server session may remain until expiry | Mobile unit + device | P1 |
+| AUTH-LOGIN-019 | Secure storage failure | Simulate SecureStore read/write/delete failure | User sees a recoverable error; no partial token pair is accepted; app does not silently claim a restored or completed logout state | Mobile unit + device | P1 |
 | AUTH-LOGIN-020 | Session limit reached | Sign in when TriSend's session limit is reached; test both replaceOldest false/true | TriSend policy is respected; no unexpected session is evicted | API + mobile | P1 |
 | AUTH-LOGIN-021 | Concurrent unauthorized API responses | Trigger multiple protected API requests that all receive 401 while refresh-token rotation is enabled | Both apps share one in-flight refresh operation, persist the rotated token pair once, and retry each original request with the new access token | Mobile | P0 |
 | AUTH-LOGIN-022 | Late 401 after another request rotates the session | First request refreshes and persists a new token pair; a delayed request using the old access token then receives 401 | Client reads the current stored pair inside the shared refresh operation and retries with the latest access token without reusing the rotated refresh token | Mobile unit | P0 |
+| AUTH-LOGIN-023 | Partial secure token pair | Store only the access key or only the refresh key, then restart | Both keys are cleared; no half-authenticated session is restored | Mobile unit | P0 |
+| AUTH-LOGIN-024 | Network failure during session restore | Relaunch with a complete token pair while the profile or refresh endpoint is unavailable | Preserve stored tokens and show a recoverable error; do not falsely sign out a potentially valid session | Mobile unit | P1 |
+| AUTH-LOGIN-025 | Secure token-pair write failure | Allow access-key write but fail refresh-key write | Best-effort rollback attempts deletion of both keys; no authenticated app state is accepted | Mobile unit | P1 |
+| AUTH-LOGIN-026 | Secure token deletion failure | Fail deletion of one key during logout | Attempt both deletions; surface a recoverable error and do not claim logout succeeded | Mobile unit | P1 |
 
 ## 2A. Authentication API integration contracts
 
