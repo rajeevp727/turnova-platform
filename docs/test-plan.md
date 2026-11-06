@@ -514,3 +514,12 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 - PR #39 adds API integration checks for missing/malformed JWTs, signature, issuer, audience, expiry and Rider/Driver role boundaries.
 - PR #40 verifies missing/weak JWT configuration and non-HTTPS or malformed TriSend URLs fail during API startup.
 - The shared Rider/Driver refresh coordinator is exercised by Node's built-in test runner for concurrent single-flight behaviour and retry after refresh failure. CI runs this without installing an additional mobile test framework.
+
+
+## 10. Offer notification outbox reliability tests
+
+- Verify a current pending offer is delivered to the authenticated driver's SignalR group and the sent marker is persisted.
+- Verify a stale pending-list snapshot is re-read and suppressed after the offer is resolved.
+- Verify a transient SignalR send failure leaves the outbox item pending and a later poll retries it.
+- Run two workers against a barrier-controlled shared store to prove at-least-once duplicate delivery can occur while the same offerId remains stable for client de-duplication.
+- These tests use the in-memory store; Cosmos multi-instance persistence, process-restart and ETag failure-injection remain separate required gates.

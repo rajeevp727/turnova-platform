@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12 and 14; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #40 merge `c51652cf1e4502c5b9927f14bf7094472713d29d`.
+**Last audited:** 2026-11-06 against main after PR #41 merge `2bf2ec9a1a6789545c19e724b3ef2e832d5ac7cf`.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -17,13 +17,13 @@
 | ID | In-scope acceptance criterion | Implementation evidence currently known | Evidence still required | Status |
 |---|---|---|---|---|
 | AUTH-01 | Rider and Driver registration, login, profile and role separation | PR #35 fake-TriSend API integration tests; PR #39 JWT signature/issuer/audience/expiry and Rider/Driver role-boundary integration tests; PR #40 startup JWT/TriSend HTTPS configuration guards | Duplicate-registration contract and mobile runtime/session tests; end-to-end profile lifecycle | In progress |
-| AUTH-02 | Secure access/refresh-token lifecycle and logout | SecureStore and refresh flow documented for both apps | Automated refresh rotation/reuse/concurrency, restart, expiry, logout and secure-storage failure tests on both apps | In progress |
+| AUTH-02 | Secure access/refresh-token lifecycle and logout | Both apps use SecureStore; PR #37 serializes concurrent refreshes; PR #41 extracts and tests the shared single-flight refresh coordinator and retry-after-failure behaviour | Automated token rotation/reuse, app restart, expiry, logout and secure-storage failure tests on both apps | In progress |
 | RIDER-01 | Pickup/drop-off selection, location permission, nearby compatible vehicles and capacity | Rider booking and service-class selection exist in the MVP codebase; zone matching is part of dispatch design | Physical-device location permission tests, configured-zone boundary tests, nearby vehicle/capacity acceptance | In progress |
 | RIDER-02 | Fare estimate and clear trip details before confirmation | No verified implementation evidence recorded in this audit | Fare policy decision; estimate API/UI tests for all service classes and passenger counts | In progress |
 | RIDER-03 | Booking creation, status, cancellation and duplicate-submit safety | Ride lifecycle, ownership and idempotency coverage described in README and API integration test inventory | Confirm every PRD transition, cancellation policy, persistence/restart and duplicate request against durable storage | In progress |
 | DISPATCH-01 | Pickup resolves to configured zone; matching zone and Scooty/Bike/Auto/Cab service class only | Canonical vehicle classes, queue scoping and FIFO enforcement documented; zone matching feature branch exists in history | Configured production boundaries, boundary/overlap tests, cross-zone policy decision and end-to-end rider-to-driver matching | In progress |
 | DISPATCH-02 | Only approved, online, eligible, compatible drivers are considered in server-owned FIFO order | Driver onboarding/approval, Online/Offline, FIFO queue and queue-head enforcement merged in prior PRs | End-to-end eligibility matrix, concurrent joins/dispatch, Cosmos persistence and multi-instance concurrency tests | In progress |
-| DISPATCH-03 | Offers are durable, expire server-side, advance to next driver and retain audit history | PRs #24–#33 merged: durable offer aggregate, expiry, retry-safe rejection, advancement, notification outbox and unified lifetime | Cosmos failure injection, worker restart, multi-instance duplicate delivery, stale offer races and mobile offerId de-duplication/reconnect tests | In progress |
+| DISPATCH-03 | Offers are durable, expire server-side, advance to next driver and retain audit history | PRs #24–#33 merged: durable offer aggregate, expiry, retry-safe rejection, advancement and notification outbox; PR #42 tests stale-notification suppression, transient SignalR retry and concurrent worker duplicate delivery with stable offerId | Cosmos failure injection, process-restart recovery, real Cosmos ETag races and mobile offerId de-duplication/reconnect tests | In progress |
 | DISPATCH-04 | A ride and driver cannot be assigned twice; one active ride reservation per driver | PR #27 added durable per-driver reservation and ride ETag protection | Crash recovery/reconciliation for reservation-before-ride-write window; real Cosmos simultaneous acceptance tests across instances | In progress |
 | REALTIME-01 | Rider and Driver receive consistent live trip/queue updates and recover after reconnect | SignalR ride hub, driver offer channel and pending-offer recovery documented in README | Android/iOS network interruption, reconnect, stale event, duplicate event and authoritative state refresh tests | In progress |
 | DRIVER-01 | Driver onboarding, required identity/licence/vehicle documents, approval and eligibility feedback | Onboarding and interim review endpoints documented; selfie approval by assigned union implemented | Secure private document upload/storage/scanning, consent/retention, reviewer RBAC, audit actor identity and full onboarding device tests | In progress |
@@ -44,7 +44,7 @@
 
 ## Highest-priority next work
 
-1. Add Cosmos integration and failure-injection coverage for driver reservation recovery and outbox multi-instance behaviour; production startup now rejects in-memory persistence.
+1. Add real Cosmos integration/failure-injection coverage for driver reservation recovery and outbox persistence/restart; the new worker tests currently exercise deterministic in-memory concurrency and retry behaviour.
 2. Close the P0 authentication/JWT and mobile session tests already enumerated in `docs/test-plan.md`.
 3. Implement/verify remaining Rider fare, payment, receipt, rating and support acceptance flows after recording the required provider and policy decisions.
 4. Validate both apps on physical Android and iOS devices and collect release evidence.
