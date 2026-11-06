@@ -693,7 +693,7 @@ public sealed class RideApiIntegrationTests
             ?? throw new InvalidOperationException("The API returned an empty ride response.");
     }
 
-    private sealed record TestRide(string RideId, string Status, bool LocationSharingActive);
+    private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
