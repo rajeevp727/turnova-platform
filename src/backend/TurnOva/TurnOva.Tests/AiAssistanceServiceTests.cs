@@ -72,6 +72,24 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task ProviderCannotInventPassengerCountWhenRiderDidNotSpecifyOne()
+    {
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) => Task.FromResult<TripIntentProviderResult?>(
+                new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab", 4))
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.DraftTripIntentAsync(
+            "Please book a Cab from Nizampet to HITEC City",
+            CancellationToken.None);
+
+        Assert.Equal(1, result.PassengerCount);
+        Assert.Equal("deterministic-fallback", result.Source);
+    }
+
+    [Fact]
     public async Task ProviderTimeoutUsesDeterministicTripFallback()
     {
         var provider = new FakeProvider
