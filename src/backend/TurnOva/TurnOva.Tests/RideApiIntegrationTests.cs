@@ -879,6 +879,19 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task NewRideDoesNotExposeAnInventedFareBeforeFarePolicyIsApproved()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-fare-policy-placeholder");
+
+        using var response = await rider.PostAsJsonAsync("/api/v1/rides/request",
+            CreateRideRequest("rider-fare-policy-placeholder"));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("estimatedFareInr").ValueKind);
+    }
+
+    [Fact]
     public async Task RiderWithNoTripsReceivesAnEmptyHistoryList()
     {
         using var factory = new TurnOvaApiFactory();
