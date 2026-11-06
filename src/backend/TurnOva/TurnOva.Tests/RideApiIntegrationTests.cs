@@ -955,6 +955,9 @@ public sealed class RideApiIntegrationTests
         Assert.DoesNotContain("INR", pdf);
         Assert.DoesNotContain("Net payable:", pdf);
 
+        ledger["driver-payslip-pdf|ride-4:Completed"] = new DriverWorkActivity(
+            "ride-4:Completed", "driver-payslip-pdf", "ride-4", "Completed",
+            new DateTimeOffset(2026, 10, 6, 5, 0, 0, TimeSpan.Zero));
         using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
         Assert.Equal(pdf, Encoding.ASCII.GetString(await repeated.Content.ReadAsByteArrayAsync()));
