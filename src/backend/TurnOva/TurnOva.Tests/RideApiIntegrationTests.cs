@@ -648,6 +648,13 @@ public sealed class RideApiIntegrationTests
         using var driver = factory.CreateClient("Driver", "legacy-non-cab-driver");
         using var ops = factory.CreateClient("Rider", "legacy-union-admin");
 
+        using var zonesResponse = await rider.GetAsync("/api/v1/zones");
+        Assert.Equal(HttpStatusCode.OK, zonesResponse.StatusCode);
+        using var zonesJson = JsonDocument.Parse(await zonesResponse.Content.ReadAsStringAsync());
+        var serviceClasses = zonesJson.RootElement[0].GetProperty("serviceClasses")
+            .EnumerateArray().Select(item => item.GetString()).ToArray();
+        Assert.Equal(new[] { "cab" }, serviceClasses);
+
         using var nonCabRide = await rider.SendAsync(CreateRideRequest("legacy-non-cab-request", serviceClass: "auto"));
         Assert.Equal(HttpStatusCode.BadRequest, nonCabRide.StatusCode);
 
