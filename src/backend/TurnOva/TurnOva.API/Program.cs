@@ -1659,6 +1659,35 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online" ||
         !string.Equals(approvedProfile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)) return Results.Forbid();
+    var selectedRide = await FindRideAsync(rideId, ct);
+    if (selectedRide?.DriverId == driverId && selectedRide.Status is "Negotiating" or "AgreementConfirmed")
+    {
+        if (selectedRide.Status != "AgreementConfirmed")
+            return Results.Conflict(new { message = "Both Rider and Driver must confirm the current agreement before accepting the selected booking." });
+        var assignment = await FindUnionAssignmentAsync(driverId, ct);
+        var union = assignment is null ? null : await FindUnionAsync(assignment.UnionId, ct);
+        var currentAgreement = (selectedRide.AgreementVersions ?? []).LastOrDefault();
+        var confirmations = selectedRide.AgreementConfirmations ?? [];
+        if (assignment is null || assignment.Status != "Active" || assignment.UnionId != selectedRide.UnionId ||
+            union?.Status != "Active" || !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase) ||
+            currentAgreement is null ||
+            !confirmations.Any(item => item.Version == currentAgreement.Version && item.Party == "Rider" && item.ActorId == selectedRide.RiderId) ||
+            !confirmations.Any(item => item.Version == currentAgreement.Version && item.Party == "Driver" && item.ActorId == driverId))
+            return Results.Conflict(new { message = "The selected booking or current agreement is no longer eligible." });
+
+        if (!await driverRideReservations.TryMakePermanentAsync(driverId, rideId, ct))
+            return Results.Conflict(new { message = "The selected-driver reservation expired or is no longer held. Refresh Rider discovery." });
+        var acceptedSelectedRide = await TryTransitionAsync(selectedRide, "Accepted", ct);
+        if (acceptedSelectedRide is null)
+        {
+            if (selectedRide.NegotiationExpiresAtUtc is { } expiry)
+                await driverRideReservations.TrySetExpiryAsync(driverId, rideId, expiry, ct);
+            return Results.Conflict(new { message = "The selected booking changed concurrently. Refresh and retry." });
+        }
+        await RecordWorkActivityAsync(driverId, rideId, "Accepted", DateTimeOffset.UtcNow, ct);
+        await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = acceptedSelectedRide.Status }, ct);
+        return Results.Ok(acceptedSelectedRide);
+    }
     var pendingOffer = await offerStore.GetByRideAsync(rideId, ct);
     if (pendingOffer is not null &&
         (!pendingOffer.IsPending || pendingOffer.DriverId != driverId ||
