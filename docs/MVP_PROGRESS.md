@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#18 PLATFORM-01: Add a bounded Cosmos storage readiness probe; verify dependency failures/timeouts return a generic 503 while liveness remains independent and caller cancellation is preserved.**
+**#19 RELEASE-01: Add CI production JavaScript bundle exports and artifact verification for both Rider and Driver apps on Android and iOS; keep native signing and physical-device acceptance as explicit external gates.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -55,7 +55,7 @@
 | 16 | RIDER-04 | In progress | PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed 210/210 backend tests, native non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history remain; customer dispute and non-zero-delta next-ride policy remain unresolved. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting categories, escalation owner, process, API/UI, audit and device acceptance remain. |
 | 18 | PLATFORM-01 | In progress | PR [#71](https://github.com/rajeevp727/turnova-platform/pull/71) adds bounded storage readiness and deterministic failure/timeout/cancellation tests; final-head CI pending. Live Cosmos, broader audit, telemetry and load gates remain. |
-| 19 | RELEASE-01 | In progress | CI validates backend, native API publish, Expo config/typechecks and shared auth tests; Android/iOS production builds, signed artifacts and physical-device pilot checks remain. |
+| 19 | RELEASE-01 | In progress | Current sequential PR adds Android/iOS production JavaScript bundle exports and artifact verification for both Rider and Driver apps. Native APK/AAB/IPA builds, signing, iOS bundle identifiers and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
 
@@ -101,12 +101,11 @@
 
 ## 7. Next steps
 
-1. **Current sequential #18 PLATFORM-01:** bounded storage readiness probe with generic 503 on dependency failure/timeout, independent liveness, and caller-cancellation propagation.
+1. **Current sequential #19 RELEASE-01:** export and verify production JavaScript bundles for both Rider and Driver apps on Android and iOS in CI; do not describe these as signed native binaries.
 2. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved. Do not invent a support workflow.
-3. **#19 RELEASE-01 — next:** audit Android/iOS native build, signing and pilot-readiness evidence after PLATFORM-01.
+3. After #19, begin approved supplemental AI-01 work while preserving the 19-row denominator; revisit #17 when the support decision is available.
 4. Keep #15 DRIVER-04 Blocked until Driver support categories, escalation owner and operational process are approved.
 5. Revisit #6 DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
-6. AI-01 remains a separately approved supplemental requirement outside the 19-row denominator and is still Not started.
 
 ## 8. DISPATCH-03 audit handoff (2026-11-06)
 
@@ -182,3 +181,11 @@
 - Dependency failure and the probe's own timeout map to a generic 503. Caller cancellation propagates. Logs contain only a failure-kind label, not Cosmos SDK diagnostics or endpoint details.
 - Deterministic integration/unit tests cover the failure isolation, timeout mapping and caller-cancellation behavior. No live Cosmos result is claimed.
 - Next: finish the PR review and CI on this branch, merge only if final-head checks pass, then inspect #19 RELEASE-01. #17 SUPPORT-01 remains Blocked pending approved support categories/process/owner.
+
+
+## RELEASE-01 production bundle increment (2026-11-07)
+
+- Current sequential item #19 adds production JavaScript bundle exports for Android and iOS in both mobile apps, plus non-empty metadata checks and CI artifacts.
+- This is stronger than Expo config/typecheck alone but is not a native APK/AAB/IPA build and does not prove signing or app-store readiness.
+- Current app configs contain Android package IDs but no iOS bundle identifiers. Final iOS store identifiers, signing credentials/profiles, Android release keystore and physical-device functional/security/pilot evidence remain external gates; no values are invented.
+- The 19-area weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19) until the release row's full evidence passes.
