@@ -360,6 +360,7 @@ export default function App() {
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Ride declined. It remains available to other drivers."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
   useEffect(() => {
     if (!user || tab !== "Trips" || !activeRide) return;
+    let mounted = true;
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
         accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens?.accessToken ?? "",
@@ -371,9 +372,14 @@ export default function App() {
     connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
       if (update.rideId === activeRide.rideId) setActiveRide((current: any) => current ? { ...current, status: update.status, locationSharingActive: ["Accepted", "Arrived", "InProgress"].includes(update.status) } : current);
     });
+    connection.onreconnected(() => {
+      if (mounted) void loadDriverRideHistory(() => mounted).catch(e => {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
+      });
+    });
     void connection.start().catch(() => {});
-    return () => { void connection.stop(); };
-  }, [user, tab, activeRide?.rideId, tokens?.accessToken]);
+    return () => { mounted = false; void connection.stop(); };
+  }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory]);
 
   useEffect(() => { if (!user || tab !== "Trips" || !activeRide || !activeRide.locationSharingActive || !["Accepted", "Arrived", "InProgress"].includes(activeRide.status)) return; let subscription: Location.LocationSubscription | undefined; let mounted = true; (async () => { const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) { setError("Location permission is required to share your position with the rider."); return; } subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 }, location => { if (mounted) void apiFetch(`/api/v1/rides/${activeRide.rideId}/location`, { method: "POST", body: JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }) }).catch(e => setError(e instanceof Error ? e.message : "Unable to update location.")); }); })(); return () => { mounted = false; subscription?.remove(); }; }, [user, tab, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
 
