@@ -104,7 +104,12 @@ export default function App() {
     connection.on("RideStatusChanged",(update:{rideId:string;status:string})=>{
       setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
     });
-    void connection.start().catch(()=>{});
+    const refreshAgreements=()=>{void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(setAgreementHistory).catch(()=>{});};
+    connection.on("RideAgreementChanged",(update:{rideId:string})=>{
+      if(update.rideId===ride.rideId)refreshAgreements();
+    });
+    connection.onreconnected(refreshAgreements);
+    void connection.start().then(refreshAgreements).catch(()=>{});
     return()=>{void connection.stop();};
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch]);
   const authenticate=async()=>{setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});await accept(result);}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
