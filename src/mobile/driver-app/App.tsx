@@ -540,7 +540,7 @@ export default function App() {
           setActiveRide(findActiveRide(history, "driver") ?? null);
           return;
         }
-        setActiveRide(current => current?.rideId === activeRide.rideId
+        setActiveRide((current: any) => current?.rideId === activeRide.rideId
           ? { ...current, ...authoritativeRide }
           : current);
 
