@@ -694,6 +694,8 @@ public sealed class RideApiIntegrationTests
         var availability = await driver.GetFromJsonAsync<DriverAvailabilityTest>("/api/v1/driver/availability");
         Assert.NotNull(availability);
         Assert.Equal("Offline", availability.AvailabilityStatus);
+        Assert.Equal(HttpStatusCode.Forbidden, (await driver.GetAsync("/api/v1/driver/rides/available")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await driver.GetAsync("/api/v1/driver/offers/pending")).StatusCode);
 
         var requestedAt = DateTimeOffset.UtcNow.AddDays(-30);
         var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
