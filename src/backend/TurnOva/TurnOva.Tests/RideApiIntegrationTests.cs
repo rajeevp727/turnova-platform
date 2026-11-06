@@ -441,12 +441,18 @@ public sealed class RideApiIntegrationTests
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
         Assert.Equal(HttpStatusCode.NotFound, wrongUnionReview.StatusCode);
 
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.False(await reservations.HasActiveAsync(driverId));
+        using var noClaimReview = await managerWithoutUnion.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.NotFound, noClaimReview.StatusCode);
+        Assert.False(await reservations.HasActiveAsync(driverId));
+
         using var operationsApproval = await ops.PutAsJsonAsync(
             $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
             new { status = "Approved", reason = (string?)null });
         Assert.Equal(HttpStatusCode.Forbidden, operationsApproval.StatusCode);
 
-        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
         Assert.True(await reservations.TryAcquireTemporaryAsync(
             driverId, "union-review-existing-reservation", DateTimeOffset.UtcNow.AddMinutes(5), CancellationToken.None));
         using var blockedReview = await manager.PutAsJsonAsync(
