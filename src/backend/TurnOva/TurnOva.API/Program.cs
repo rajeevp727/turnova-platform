@@ -331,6 +331,10 @@ bool IsOpsAuthorized(HttpContext context)
     return expected.Length == supplied.Length && CryptographicOperations.FixedTimeEquals(expected, supplied);
 }
 
+bool IsUnionManagerFor(ClaimsPrincipal user, string unionId) =>
+    user.IsInRole("UnionManager") &&
+    user.FindAll("unionId").Any(claim => string.Equals(claim.Value, unionId, StringComparison.Ordinal));
+
 async Task<DriverUnion?> FindUnionAsync(string unionId, CancellationToken ct)
 {
     if (unionContainer is null) return unions.TryGetValue(unionId, out var value) ? value : null;
@@ -361,6 +365,28 @@ async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct
 {
     if (unionAuditContainer is null) { unionAudit[audit.DriverId + "|" + audit.EventId] = audit; return; }
     await unionAuditContainer.CreateItemAsync(audit, new PartitionKey(audit.DriverId), cancellationToken: ct);
+}
+
+async Task EnsureUnionSelfieAuditAsync(
+    string driverId, string unionId, string unionName, string status, string? reason,
+    string actor, DateTimeOffset reviewedAtUtc, CancellationToken ct)
+{
+    var eventType = status == "Approved" ? "SelfieApprovedByUnion" : "SelfieRejectedByUnion";
+    var auditKey = $"{driverId}|{unionId}|{eventType}|{reviewedAtUtc.UtcTicks}";
+    var eventId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(auditKey)));
+    if ((await GetUnionAuditAsync(driverId, ct)).Any(item => item.EventId == eventId))
+        return;
+
+    try
+    {
+        await SaveUnionAuditAsync(new DriverUnionAuditEvent(
+            eventId, driverId, unionId, unionName, unionId, unionName, eventType,
+            reason ?? "Approved by the currently assigned union.", actor, reviewedAtUtc), ct);
+    }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+    {
+        // A previous request may have committed the same deterministic audit event before its response was lost.
+    }
 }
 
 async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
@@ -971,15 +997,21 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         return Results.NotFound(new { message = "Driver selfie not found." });
     if (request.Status == "Approved" && !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
         return Results.Conflict(new { message = "Legacy non-Cab driver photos cannot be approved for new public discovery." });
+    if (request.Status == "Approved")
+        return Results.Forbid(); // Only an authenticated manager of the current union may approve public selfie visibility.
 
+    var now = DateTimeOffset.UtcNow;
     var updated = profile with
     {
-        ProfilePhotoApprovalStatus = request.Status,
-        ProfilePhotoApprovedByUnionId = request.Status == "Approved" ? unionId : null,
-        ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
-        ProfilePhotoReviewReason = request.Status == "Rejected" ? request.Reason!.Trim() : null
+        ProfilePhotoApprovalStatus = "Rejected",
+        ProfilePhotoApprovedByUnionId = null,
+        ProfilePhotoReviewedAtUtc = now,
+        ProfilePhotoReviewReason = request.Reason!.Trim()
     };
     await SaveDriverProfileAsync(updated, ct);
+    await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
+        unionId, union.Name, unionId, union.Name, "SelfieRejectedByOperations",
+        request.Reason.Trim(), context.User.Identity?.Name ?? "Operations", now), ct);
     return Results.Ok(new
     {
         driverId,
@@ -1013,6 +1045,159 @@ opsUnions.MapGet("/{unionId}/drivers/{driverId}", async (HttpContext context, st
             profile.ProfilePhotoReviewedAtUtc, profile.ProfilePhotoReviewReason
         }
     });
+});
+
+
+var unionManagerApi = app.MapGroup("/api/v1/union")
+    .RequireAuthorization(policy => policy.RequireRole("UnionManager"));
+
+unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var unionIds = user.FindAll("unionId")
+        .Select(claim => claim.Value)
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .ToHashSet(StringComparer.Ordinal);
+    if (unionIds.Count == 0) return Results.Forbid();
+
+    var drivers = new List<object>();
+    foreach (var assignment in await ListActiveUnionAssignmentsAsync(ct))
+    {
+        if (!unionIds.Contains(assignment.UnionId)) continue;
+        var union = await FindUnionAsync(assignment.UnionId, ct);
+        if (union is null || union.Status != "Active") continue;
+        var profile = await FindDriverProfileAsync(assignment.DriverId, ct);
+        if (profile is null || !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+            continue;
+
+        drivers.Add(new
+        {
+            assignment.DriverId,
+            assignment.UnionId,
+            assignment.UnionName,
+            assignment.Status,
+            assignment.AssignedAtUtc,
+            assignment.UpdatedAtUtc,
+            driver = new
+            {
+                profile.DriverId,
+                profile.FullName,
+                profile.VehicleMake,
+                profile.VehicleModel,
+                profile.VehicleRegistration,
+                profile.ServiceClass,
+                profile.PassengerCapacity,
+                profile.Status,
+                documentStatuses = profile.Documents?.Select(document => new
+                {
+                    document.DocumentType,
+                    document.Status
+                }).ToArray() ?? [],
+                profile.ProfilePhotoBase64,
+                profile.ProfilePhotoContentType,
+                profile.ProfilePhotoCapturedAtUtc,
+                profile.ProfilePhotoApprovalStatus,
+                profile.ProfilePhotoReviewedAtUtc,
+                profile.ProfilePhotoReviewReason
+            }
+        });
+    }
+
+    return Results.Ok(drivers);
+});
+
+unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
+    ClaimsPrincipal user, string driverId, DriverSelfieReviewRequest request, CancellationToken ct) =>
+{
+    if (request.Status is not ("Approved" or "Rejected"))
+        return Results.BadRequest(new { message = "Selfie review status must be Approved or Rejected." });
+    if (request.Status == "Rejected" &&
+        (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 300))
+        return Results.BadRequest(new { message = "A rejection reason of 1–300 characters is required." });
+
+    // Serialize selfie review with membership transfer and selected-driver reservations.
+    // The lease is technical only; no customer-facing queue or ride policy is introduced.
+    var reviewLeaseId = $"UNION-SELFIE-REVIEW-{Guid.NewGuid():N}";
+    if (!await driverRideReservations.TryAcquireTemporaryAsync(
+        driverId, reviewLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct))
+        return Results.Conflict(new { message = "The Driver is reserved by a selected booking, active ride or Union membership change. Retry after it is resolved." });
+
+    try
+    {
+        var assignment = await FindUnionAssignmentAsync(driverId, ct);
+        if (assignment is null || assignment.Status != "Active" ||
+            !IsUnionManagerFor(user, assignment.UnionId))
+            return Results.NotFound(new { message = "Driver is not an active member of a union managed by this account." });
+
+        var union = await FindUnionAsync(assignment.UnionId, ct);
+        if (union is null || union.Status != "Active")
+            return Results.NotFound(new { message = "Active union membership was not found." });
+
+        var profile = await FindDriverProfileAsync(driverId, ct);
+        if (profile is null || !IsValidDriverSelfie(profile.ProfilePhotoBase64))
+            return Results.NotFound(new { message = "A valid driver selfie is not available for review." });
+        if (profile.Status != "Approved" ||
+            !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+            profile.Documents is null ||
+            !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
+            !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved") ||
+            !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase) ||
+            !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "The active union, Cab driver profile and required licence/vehicle documents must be approved before selfie review." });
+
+        var reason = request.Status == "Rejected" ? request.Reason!.Trim() : null;
+        var sameReview =
+            profile.ProfilePhotoApprovalStatus == request.Status &&
+            profile.ProfilePhotoApprovedByUnionId == (request.Status == "Approved" ? assignment.UnionId : null) &&
+            profile.ProfilePhotoReviewReason == reason;
+
+        var reviewedAtUtc = profile.ProfilePhotoReviewedAtUtc;
+        if (!sameReview || reviewedAtUtc is null)
+        {
+            reviewedAtUtc = DateTimeOffset.UtcNow;
+            var saved = await TryUpdateDriverProfileAsync(driverId, current =>
+            {
+                // Do not approve a selfie/document/profile snapshot that changed while it was being reviewed.
+                if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+                    current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
+                    current.Status != "Approved" ||
+                    !string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+                    current.Documents is null ||
+                    !current.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
+                    !current.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
+                    return null;
+
+                return current with
+                {
+                    ProfilePhotoApprovalStatus = request.Status,
+                    ProfilePhotoApprovedByUnionId = request.Status == "Approved" ? assignment.UnionId : null,
+                    ProfilePhotoReviewedAtUtc = reviewedAtUtc,
+                    ProfilePhotoReviewReason = reason
+                };
+            }, ct);
+            if (!saved)
+                return Results.Conflict(new { message = "Driver onboarding or selfie data changed during review. Refresh the member record and retry." });
+
+            profile = await FindDriverProfileAsync(driverId, ct)
+                ?? throw new InvalidOperationException("The reviewed driver profile could not be reloaded.");
+        }
+
+        await EnsureUnionSelfieAuditAsync(
+            driverId, assignment.UnionId, union.Name, request.Status, reason,
+            user.FindFirstValue("sub") ?? "UnionManager", reviewedAtUtc.Value, ct);
+
+        return Results.Ok(new
+        {
+            driverId,
+            unionId = assignment.UnionId,
+            status = profile.ProfilePhotoApprovalStatus,
+            reviewedAtUtc = profile.ProfilePhotoReviewedAtUtc,
+            reason = profile.ProfilePhotoReviewReason
+        });
+    }
+    finally
+    {
+        await driverRideReservations.TryReleaseAsync(driverId, reviewLeaseId, CancellationToken.None);
+    }
 });
 
 app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
@@ -1056,6 +1241,19 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             return Results.Conflict(new { message = "The driver is already assigned to this union." });
 
         var now = DateTimeOffset.UtcNow;
+        if (!string.Equals(profile.ProfilePhotoApprovedByUnionId, union.UnionId, StringComparison.Ordinal))
+        {
+            // A selfie approval is scoped to the current union. New/changed membership must be re-reviewed.
+            profile = profile with
+            {
+                ProfilePhotoApprovalStatus = "Pending",
+                ProfilePhotoApprovedByUnionId = null,
+                ProfilePhotoReviewedAtUtc = null,
+                ProfilePhotoReviewReason = null
+            };
+            await SaveDriverProfileAsync(profile, ct);
+        }
+
         var assignment = new DriverUnionAssignment(driverId, union.UnionId, union.Name, "Active",
             previous?.AssignedAtUtc ?? now, now, request.Reason.Trim());
         await SaveUnionAssignmentAsync(assignment, ct);
