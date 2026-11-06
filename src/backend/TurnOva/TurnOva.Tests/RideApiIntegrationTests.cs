@@ -878,6 +878,17 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Forbidden, (await driver.GetAsync("/api/v1/rides/mine")).StatusCode);
     }
 
+    [Fact]
+    public async Task RiderWithNoTripsReceivesAnEmptyHistoryList()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-history-empty");
+
+        var history = await rider.GetFromJsonAsync<List<RiderRideHistoryItemTest>>("/api/v1/rides/mine");
+        Assert.NotNull(history);
+        Assert.Empty(history);
+    }
+
     private static HttpRequestMessage CreateRideRequest(
         string? idempotencyKey,
         int passengers = 1,
