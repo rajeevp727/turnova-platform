@@ -59,12 +59,13 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Current active increment
-- PR #55 merged the sequential #3 RIDER-01 / CAB-DISCOVERY-01 slice at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run `42237572056` passed all four jobs. It adds union-grouped Cab discovery and Rider local selection cards; durable selected-driver booking/reservation remains unimplemented.
+- PR #55 merged sequential #3 RIDER-01 / CAB-DISCOVERY-01 at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run `42237572056` passed all four jobs. It adds union-grouped Cab discovery and Rider local selection cards; durable selected-driver booking/reservation remains unimplemented.
+- PR #56 is the sequential #4 RIDER-02 / CAB-AGREEMENT-01 slice. It adds immutable agreement term versions and append-only confirmations in the ride aggregate, idempotent proposals, ETag/revision concurrency protection, Rider/Driver proposal and confirmation controls, SignalR change events, and start/completion gates. CI/final review remain required. The current slice supports assigned rides; RIDER-03 must connect it to Rider-selected booking and add optional-stop route snapshots.
 
 ## Highest-priority unfinished work
 
-1. **Complete RIDER-01 / CAB-DISCOVERY-01:** finish durable selected-driver reservation/booking and exact expiry/cancel handling without customer-facing FIFO; then run Android/iOS discovery, photo and location acceptance.
-2. **CAB-AGREEMENT-01:** direct Rider/Driver fare negotiation, immutable versioned agreement, both confirm current version, and no ride start until mutual confirmation.
+1. **#5 RIDER-03:** durable Rider-selected booking/reservation, idempotency, concurrency-safe driver hold, cancellation/expiry and exact reservation release; wire discovery selection into agreement flow.
+2. **Revisit RIDER-02:** persist optional stops in agreement route snapshot and validate end-to-end on Android/iOS and live Cosmos.
 3. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
 4. **CAB-UNION-01:** Cab membership, vehicle verification, union approval/selfie visibility and minimum necessary oversight.
 5. **PLATFORM-01 and RELEASE-01:** queue audit and CORS/health increments merged; durable exception audit, metrics/traces/alerts, Cosmos failure/recovery and Android/iOS device/release gates remain.
