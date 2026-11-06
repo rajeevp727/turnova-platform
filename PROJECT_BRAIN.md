@@ -203,5 +203,6 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - `IQueueStore` exposes queue-scoped audit retrieval. In-memory adapter records only successful mutations; duplicate offer retries and failed/no-op operations do not create duplicate events.
 - Cosmos adapter stores event documents in the existing `QueueEntries` container and commits queue state plus audit event in one transactional batch within the same `zoneServiceKey` partition.
 - Global exception handler returns generic Problem Details with traceId and logs traceId plus exception type only; it does not log request bodies, tokens or exception messages.
-- Automated in-memory event tests cover event types, partition scoping and no-op/failed mutation behaviour. Real Cosmos transactional-batch/ETag/restart/retention verification remains an infrastructure-backed gate.
+- Automated in-memory event tests cover event types, partition scoping and no-op/failed mutation behaviour; API integration test verifies generic exception Problem Details with traceId and no exception message. Real Cosmos transactional-batch/ETag/restart/retention verification remains an infrastructure-backed gate.
+- Durable exception audit with actor reference and safe reason/category is still outstanding; do not claim the full PLATFORM-01 audit criterion verified.
 - Metrics/traces/exporters/alerts and Cosmos failure injection remain subsequent PLATFORM-01 work.
