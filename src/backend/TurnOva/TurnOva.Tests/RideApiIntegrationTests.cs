@@ -1453,6 +1453,46 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionTransferIsBlockedWhileDriverHasSelectedNegotiation()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "transfer-active-rider");
+        using var ops = factory.CreateClient("Rider", "transfer-active-ops");
+        SeedBookableDriver(factory, "transfer-active-driver", "transfer-active-union");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles["transfer-active-driver"] = profiles["transfer-active-driver"] with
+        {
+            ProfilePhotoBase64 = Convert.ToBase64String([1, 2, 3]),
+            ProfilePhotoContentType = "image/jpeg"
+        };
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()["transfer-target-union"] =
+            new DriverUnion("transfer-target-union", "Transfer Target Union", "TRANSFER-TARGET", "Hyderabad",
+                null, null, ["hyderabad-central"], ["cab"], "Active", now, now);
+
+        using var bookingRequest = CreateSelectedBookingRequest("transfer-active-booking", "transfer-active-driver",
+            "transfer-active-union", "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(bookingRequest);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+
+        using var transfer = new HttpRequestMessage(HttpMethod.Post,
+            "/api/v1/ops/drivers/transfer-active-driver/union-assignment")
+        {
+            Content = JsonContent.Create(new { unionId = "transfer-target-union", reason = "Approved operational transfer" })
+        };
+        transfer.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var transferResponse = await ops.SendAsync(transfer);
+        Assert.Equal(HttpStatusCode.Conflict, transferResponse.StatusCode);
+
+        var assignment = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()
+            ["transfer-active-driver"];
+        Assert.Equal("transfer-active-union", assignment.UnionId);
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("transfer-active-driver"));
+    }
+
+    [Fact]
     public async Task SelectedBookingRejectsDriverPairedWithDifferentUnion()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
