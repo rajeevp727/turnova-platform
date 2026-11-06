@@ -418,6 +418,12 @@ public sealed class RideApiIntegrationTests
             ["driver-legacy-auto"] = new DriverUnionAssignment(
                 "driver-legacy-auto", union.UnionId, union.Name, "Active", now, now, "Legacy guard test");
 
+        var pendingOffer = new RideOfferState(
+            "legacy-cab-offer", "hyderabad-central", "cab", "legacy-cab-offer-1",
+            "driver-legacy-auto", now, now.AddMinutes(1), RideOfferStatuses.Pending,
+            [new RideOfferAttempt("legacy-cab-offer-1", "driver-legacy-auto", now, now.AddMinutes(1), RideOfferStatuses.Pending)]);
+        Assert.True(await factory.Services.GetRequiredService<IRideOfferStore>().TryCreateAsync(pendingOffer));
+
         using var selfie = await driver.PutAsJsonAsync(
             "/api/v1/driver/onboarding/selfie", new { profilePhotoBase64 = "/9j/" });
         Assert.Equal(HttpStatusCode.Conflict, selfie.StatusCode);
