@@ -39,7 +39,7 @@ const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
 type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type ServiceClass = "cab";
-type Ride = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: ServiceClass; status: string; estimatedFareInr: number | null; pickupLatitude?: number; pickupLongitude?: number; driverLatitude?: number; driverLongitude?: number; locationUpdatedAt?: string };
+type Ride = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; estimatedFareInr: number | null; pickupLatitude?: number; pickupLongitude?: number; driverLatitude?: number; driverLongitude?: number; locationUpdatedAt?: string };
 type NearbyVehicle = { vehicleMake: string; vehicleModel: string; serviceClass: ServiceClass; passengerCapacity: number; distanceKm: number };
 type RideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt?: string | null };
 async function saveTokens(t: Tokens) { await SecureStore.setItemAsync("turnova.access", t.accessToken); await SecureStore.setItemAsync("turnova.refresh", t.refreshToken); }
