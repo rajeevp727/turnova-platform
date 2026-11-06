@@ -24,7 +24,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - Cab is the only supported category for new Rider, Driver and Union MVP workflows. Legacy Scooty/Bike/Auto records remain readable for history and are not destructively migrated or silently converted.
 - Rider discovery must group approved unions and show up to 2–3 eligible Cab drivers per union by driver-to-pickup proximity; the Rider selects the Driver.
 - Customer-facing FIFO ranking, automatic FIFO assignment and next-driver advancement are not part of the approved Rider flow. Whether FIFO remains an internal Union fairness mechanism is unresolved; preserve legacy queue data/code until that decision is made.
-- New non-Cab Rider requests, nearby lookups, Driver onboarding/availability/queue eligibility and Union configuration are rejected by CAB-SCOPE-01 implementation in PR #52 (CI/merge pending).
+- New non-Cab Rider requests, nearby lookups, Driver onboarding/availability/queue eligibility, Union configuration/assignment and legacy non-Cab ride acceptance are rejected by CAB-SCOPE-01 implementation in PR #52; CI run 42222681286 passed on code head `d4ff9dd32fce93a2f406eee4989e8da7a8fa39bf`, merge pending.
 - Only approved drivers with verified Cab details and current Union eligibility may enter new discovery/ride workflows.
 - Union is an employer/operating association, not a dispatch queue. Driver transfers require reasons and are audited.
 - Driver selfie is private until approved by the driver's current union; replacement or union transfer resets/hides approval.
@@ -54,7 +54,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - PR #49 merged: explicit CORS origin allow-list, wildcard rejection, separate liveness and Cosmos-aware readiness endpoints, and CORS/health integration tests. Merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; final-head CI run 42216606101 passed all four jobs.
 - PR #51 merged: append-only queue audit events in the existing `QueueEntries` partition with transactional Cosmos batches, in-memory audit tests, and generic traceId Problem Details with exception-type-only logs. Merge commit `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run 42219327319 passed all four jobs.
 - PR #50 merged: authoritative Cab-only union-selected-driver business-model documentation and 19-area acceptance reclassification. Merge commit `6bd8f734e56ce35716595307cbeb9d7ab9decc59`; final-head CI run 42220682290 passed all four jobs.
-- PR #52 is the active CAB-SCOPE-01 implementation branch: Cab-only Rider/Driver UI and API gates, new Union Cab-only configuration, and legacy non-Cab retention tests; CI/merge pending.
+- PR #52 is the active CAB-SCOPE-01 implementation: Cab-only Rider/Driver UI and API gates, new Union Cab-only configuration/assignment, legacy profile and ride-history retention tests. CI run 42222681286 passed on code head `d4ff9dd32fce93a2f406eee4989e8da7a8fa39bf`; a test/documentation follow-up is receiving final CI before merge.
 - The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
