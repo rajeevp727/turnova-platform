@@ -327,7 +327,7 @@ export default function App() {
   // SignalR is at-least-once: deduplicate by the server-issued offerId before surfacing it.
   const receivedOfferIds = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!user?.id || availabilityStatus !== "Online") return;
+    if (!user?.id || availabilityStatus !== "Online" || !isCabProfile) return;
     let mounted = true;
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?driverId=${encodeURIComponent(user.id)}`, {
@@ -358,7 +358,7 @@ export default function App() {
       connection.off("RideOfferReceived");
       void connection.stop();
     };
-  }, [user?.id, availabilityStatus, tokens?.accessToken, loadAvailableRides]);
+  }, [user?.id, availabilityStatus, isCabProfile, tokens?.accessToken, loadAvailableRides]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Ride declined. It remains available to other drivers."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
