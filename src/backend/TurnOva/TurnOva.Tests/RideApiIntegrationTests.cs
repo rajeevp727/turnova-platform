@@ -40,6 +40,7 @@ public sealed class RideApiIntegrationTests
         using var json = JsonDocument.Parse(await ready.Content.ReadAsStringAsync());
         Assert.Equal("ready", json.RootElement.GetProperty("status").GetString());
         Assert.Equal("demo-in-memory", json.RootElement.GetProperty("storage").GetString());
+        Assert.False(json.RootElement.TryGetProperty("database", out _));
     }
 
     [Fact]
