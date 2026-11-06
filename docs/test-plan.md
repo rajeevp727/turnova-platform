@@ -778,3 +778,19 @@ Union reviewer tokens require a signed `role=UnionManager` claim and one or more
 | PLATFORM-HEALTH-004 | Caller cancels the readiness request | Request cancellation propagates and is not misreported as a dependency timeout | `CheckAsyncPropagatesCallerCancellation` | P1 |
 
 The automated failure-path test uses a deterministic fake probe. It does not claim live Cosmos availability or Cosmos SDK timeout validation; those remain infrastructure gates.
+
+
+## RELEASE-01 — production mobile bundle validation
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| RELEASE-BUNDLE-001 | Rider Android production JavaScript bundle | Expo exports the Android production bundle, resolves the shared mobile workspace modules and writes non-empty metadata | CI mobile matrix: `Export Android production JavaScript bundle` + `Verify Android production bundle` | P0 |
+| RELEASE-BUNDLE-002 | Rider iOS production JavaScript bundle | Expo exports the iOS production bundle, resolves the shared mobile workspace modules and writes non-empty metadata | CI mobile matrix: `Export iOS production JavaScript bundle` + `Verify iOS production bundle` | P0 |
+| RELEASE-BUNDLE-003 | Driver Android production JavaScript bundle | Expo exports the Android production bundle, resolves the shared mobile workspace modules and writes non-empty metadata | CI mobile matrix: `Export Android production JavaScript bundle` + `Verify Android production bundle` | P0 |
+| RELEASE-BUNDLE-004 | Driver iOS production JavaScript bundle | Expo exports the iOS production bundle, resolves the shared mobile workspace modules and writes non-empty metadata | CI mobile matrix: `Export iOS production JavaScript bundle` + `Verify iOS production bundle` | P0 |
+| RELEASE-BUNDLE-005 | Metro shared workspace is available to each app | Metro config watches `src/mobile/shared` and the shared refresh module exists before production bundling | CI mobile matrix: `Verify Metro can see shared mobile modules` | P0 |
+
+These CI steps validate production JavaScript bundling for both apps and platforms; they do **not** create native APK/AAB/IPA binaries or prove signing. Native Android release artifacts, iOS archive/signing, app-store credentials and physical-device functional/security/pilot acceptance remain external release gates. The checked-in app configs have Android package IDs but no iOS bundle identifiers; do not invent the final store identifiers or signing credentials.
+
+
+The two Expo apps share modules from `src/mobile/shared`; each app's Metro configuration adds only that shared directory to `watchFolders` and leaves Metro's default hierarchical dependency resolution intact. This is required for production bundling and does not introduce a new runtime integration.

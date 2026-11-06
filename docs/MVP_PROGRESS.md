@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#18 PLATFORM-01: Add a bounded Cosmos storage readiness probe; verify dependency failures/timeouts return a generic 503 while liveness remains independent and caller cancellation is preserved.**
+**#19 RELEASE-01: Add CI production JavaScript bundle exports and artifact verification for both Rider and Driver apps on Android and iOS; keep native signing and physical-device acceptance as explicit external gates.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -54,12 +54,13 @@
 | 15 | DRIVER-04 | Blocked | Driver support categories, escalation owner and operational process are not approved. |
 | 16 | RIDER-04 | In progress | PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed 210/210 backend tests, native non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history remain; customer dispute and non-zero-delta next-ride policy remain unresolved. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting categories, escalation owner, process, API/UI, audit and device acceptance remain. |
-| 18 | PLATFORM-01 | In progress | PR [#71](https://github.com/rajeevp727/turnova-platform/pull/71) adds bounded storage readiness and deterministic failure/timeout/cancellation tests; final-head CI pending. Live Cosmos, broader audit, telemetry and load gates remain. |
-| 19 | RELEASE-01 | In progress | CI validates backend, native API publish, Expo config/typechecks and shared auth tests; Android/iOS production builds, signed artifacts and physical-device pilot checks remain. |
+| 18 | PLATFORM-01 | In progress | PR #71 merged at `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`; final-head CI [42301719963](https://github.com/rajeevp727/turnova-platform/actions/runs/42301719963) passed 214/214 backend tests, non-container API publish, both mobile config/typechecks and shared tests. Live Cosmos, broader durable audit, telemetry and load gates remain. |
+| 19 | RELEASE-01 | In progress | PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) passed all four jobs: 214/214 backend tests, Rider/Driver Android+iOS production JS exports, Metro shared-module assertion, both typechecks/shared tests and three uploaded artifacts. Native APK/AAB/IPA, signing, iOS bundle identifiers and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
 
 - PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; final head `55cbe53a044f5f1abed9096973cbc0aad06b83a6` passed CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210), all four jobs including 210/210 backend tests, non-container API publish, Rider/Driver typechecks and nine shared tests. Automated review [6695955311](https://github.com/rajeevp727/turnova-platform/pull/70#issuecomment-6695955311) found no unresolved critical/high-risk issue.
+- PR #71 merged at `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`; final head `cebb545c9aa5268e8cf6d71d999fcad7b381375f` passed CI [42301719963](https://github.com/rajeevp727/turnova-platform/actions/runs/42301719963), all four jobs including 214/214 backend tests, non-container API publish, Rider/Driver config/typechecks and shared mobile tests. Automated review [6697024986](https://github.com/rajeevp727/turnova-platform/pull/71#issuecomment-6697024986) found no unresolved critical/high-risk issue.
 - PR #58 merged sequential #6 DISPATCH-01 at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs. Automated review comment [6690682769](https://github.com/rajeevp727/turnova-platform/pull/58#issuecomment-6690682769) found no unresolved critical/high-risk issue.
 - PR #59 merged sequential #7 DISPATCH-02; final-head CI [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
 - PR #61 merged sequential #9 DISPATCH-04 regression coverage; automated review found no unresolved critical/high-risk issue. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including the accepted-active-ride/Union-transfer regression.
@@ -101,12 +102,11 @@
 
 ## 7. Next steps
 
-1. **Current sequential #18 PLATFORM-01:** bounded storage readiness probe with generic 503 on dependency failure/timeout, independent liveness, and caller-cancellation propagation.
+1. **Current sequential #19 RELEASE-01:** export and verify production JavaScript bundles for both Rider and Driver apps on Android and iOS in CI; do not describe these as signed native binaries.
 2. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved. Do not invent a support workflow.
-3. **#19 RELEASE-01 — next:** audit Android/iOS native build, signing and pilot-readiness evidence after PLATFORM-01.
+3. After #19, begin approved supplemental AI-01 work while preserving the 19-row denominator; revisit #17 when the support decision is available.
 4. Keep #15 DRIVER-04 Blocked until Driver support categories, escalation owner and operational process are approved.
 5. Revisit #6 DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
-6. AI-01 remains a separately approved supplemental requirement outside the 19-row denominator and is still Not started.
 
 ## 8. DISPATCH-03 audit handoff (2026-11-06)
 
@@ -182,3 +182,18 @@
 - Dependency failure and the probe's own timeout map to a generic 503. Caller cancellation propagates. Logs contain only a failure-kind label, not Cosmos SDK diagnostics or endpoint details.
 - Deterministic integration/unit tests cover the failure isolation, timeout mapping and caller-cancellation behavior. No live Cosmos result is claimed.
 - Next: finish the PR review and CI on this branch, merge only if final-head checks pass, then inspect #19 RELEASE-01. #17 SUPPORT-01 remains Blocked pending approved support categories/process/owner.
+
+
+## RELEASE-01 production bundle increment (2026-11-07)
+
+- Focused PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) is the current sequential item #19. It adds production JavaScript bundle exports for Android and iOS in both mobile apps, plus non-empty metadata checks and CI artifacts. Final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) passed; Rider bundle artifact [13544064077](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838/artifacts/13544064077), Driver bundle artifact [13543824695](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838/artifacts/13543824695), API publish artifact [13544163935](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838/artifacts/13544163935).
+- This is stronger than Expo config/typecheck alone but is not a native APK/AAB/IPA build and does not prove signing or app-store readiness.
+- Current app configs contain Android package IDs but no iOS bundle identifiers. Final iOS store identifiers, signing credentials/profiles, Android release keystore and physical-device functional/security/pilot evidence remain external gates; no values are invented.
+- The 19-area weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19) until the release row's full evidence passes.
+
+
+- First PR #72 CI attempt [42302220373](https://github.com/rajeevp727/turnova-platform/actions/runs/42302220373) failed at Driver Android bundling because Metro could not resolve `../shared/refreshCoordinator` outside the app root. Both apps now add only `src/mobile/shared` to Metro `watchFolders` and preserve default hierarchical dependency resolution; later final-head CI passed all four bundle exports.
+
+- After the Metro workspace fix, CI [42302392033](https://github.com/rajeevp727/turnova-platform/actions/runs/42302392033) exposed a second bundling prerequisite: Expo SDK 54's `expo-asset` package was absent from the app manifests. Added the SDK-compatible `expo-asset` dependency to both apps; final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) proved all four Android/iOS exports complete.
+
+- The next CI attempt [42302559912](https://github.com/rajeevp727/turnova-platform/actions/runs/42302559912) exposed `@react-native/virtualized-lists` resolution failing because the initial Metro config disabled hierarchical dependency lookup. Both Metro configs now only add `src/mobile/shared` to `watchFolders` and preserve Metro's normal nested dependency resolution; final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) passed.

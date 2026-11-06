@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `17c489eac64dc0f99e881a1474147b2f79fe2aac` (PR #70 direct-payment reconciliation merged)
+**Last audited main HEAD:** `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6` (PR #71 bounded storage readiness merged)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -341,6 +341,14 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 
 - PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; final-head CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed 210/210 backend tests and all four CI jobs. CAB-RECON-01 remains supplemental and outside the 19-area denominator.
 - Current sequential area is #18 PLATFORM-01 because #17 SUPPORT-01 remains blocked by unapproved Rider support categories, escalation owner and process.
-- PR [#71](https://github.com/rajeevp727/turnova-platform/pull/71) adds a three-second bounded storage readiness probe. Liveness stays independent; dependency failure/probe timeout returns generic 503; caller cancellation is propagated; diagnostics are not exposed in response/logs. Final-head CI is pending.
+- PR [#71](https://github.com/rajeevp727/turnova-platform/pull/71) adds a three-second bounded storage readiness probe. Liveness stays independent; dependency failure/probe timeout returns generic 503; caller cancellation is propagated; diagnostics are not exposed in response/logs. Final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) passed 214/214 backend tests, the Metro shared-module assertion, all four Rider/Driver Android/iOS bundle exports and three artifacts. Native signed builds and physical-device acceptance remain blocked.
 - Tests use a deterministic failing probe and a cancellable delayed probe. They do not claim live Cosmos validation.
 - Next sequential area after #18 is #19 RELEASE-01. Keep the 19-area weighted status at 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19) until row evidence is fully accepted.
+
+
+## RELEASE-01 production bundle validation (2026-11-07)
+
+- PR #71 merged at `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`; its final-head CI passed 214/214 backend tests, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile tests.
+- Focused PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) adds CI exports of production JavaScript bundles for Android and iOS in both Rider and Driver apps, with metadata verification and uploaded artifacts. The first CI attempt exposed Metro's inability to resolve `src/mobile/shared` from the app root; both apps now configure only `src/mobile/shared` in `watchFolders` while preserving Metro's normal hierarchical/nested dependency lookup. A subsequent CI run also exposed missing SDK 54 `expo-asset`; the compatible dependency is now added to both app manifests. A later run exposed a nested React Native dependency blocked by `disableHierarchicalLookup`; that override was removed. CI now also asserts the shared refresh module exists and is included in Metro's watch folders before export. Final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) passed 214/214 backend tests, the Metro assertion, all four Rider/Driver Android/iOS bundle exports and three uploaded artifacts.
+- Bundle exports are not native binaries. Android APK/AAB, iOS archive/signing, iOS bundle identifiers, store credentials and physical-device functional/security/pilot gates remain external. Do not invent identifiers or signing secrets.
+- #17 SUPPORT-01 remains blocked by unapproved Rider support categories, escalation owner and operating process. After #19, proceed to approved supplemental AI-01 while preserving the 19-row denominator.

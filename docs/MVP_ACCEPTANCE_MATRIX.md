@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; `docs/test-plan.md`.
-**Last audited:** 2026-11-07 against main after PR #70 merge `17c489eac64dc0f99e881a1474147b2f79fe2aac`. PR #70 final head `55cbe53a044f5f1abed9096973cbc0aad06b83a6` passed CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210), all four jobs: 210/210 backend tests, native non-container API publish, Rider/Driver config/typechecks and nine shared mobile tests. Automated review [6695955311](https://github.com/rajeevp727/turnova-platform/pull/70#issuecomment-6695955311) found no unresolved critical/high-risk issue. Live Cosmos and Android/iOS device acceptance remain.
+**Last audited:** 2026-11-07 against main after PR #71 merge `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`. PR #71 final head `cebb545c9aa5268e8cf6d71d999fcad7b381375f` passed CI [42301719963](https://github.com/rajeevp727/turnova-platform/actions/runs/42301719963), all four jobs: 214/214 backend tests, TRX execution guard, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile tests. Automated review [6697024986](https://github.com/rajeevp727/turnova-platform/pull/71#issuecomment-6697024986) found no unresolved critical/high-risk issue.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -34,7 +34,7 @@
 | RIDER-04 | Trip history and direct-payment reconciliation reporting; no in-app gateway, escrow or collection | Rider history API/Activity merged in PR #47; PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac` with immutable Driver-reported reconciliation, signed delta, Driver history and signed-unionId-scoped UnionManager view | PR #70 final head `55cbe53a044f5f1abed9096973cbc0aad06b83a6` passed CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210): 210/210 backend tests, non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history acceptance remain. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved. Ratings are not an explicit PRD acceptance criterion. | In progress |
 | SUPPORT-01 | Rider help and issue reporting | No verified end-to-end Rider support workflow evidence | Rider help process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
 | PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | PR #49 merged explicit CORS allow-list and distinct liveness/readiness; PR #51 merged append-only queue audit events in same-partition Cosmos batches and generic traceId Problem Details. PR #71 adds a bounded three-second storage readiness probe, maps dependency failure/timeout to generic 503 while keeping liveness independent, and preserves caller cancellation | PR #71 final-head CI and tests; remaining: durable audit coverage for all ride/agreement/reconciliation transitions, live Cosmos transactional-batch/ETag/restart/retention tests, metrics/traces/alerts, production origin configuration and load tests | In progress |
-| RELEASE-01 | Android and iOS builds pass agreed functional, security and pilot-readiness tests | PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, passed the TRX non-zero guard, native non-container API publish/artifact verification, Rider/Driver Expo config/typechecks and shared mobile tests. | Android/iOS production builds, signed artifacts, physical-device functional/security/pilot checklist | In progress |
+| RELEASE-01 | Android and iOS builds pass agreed functional, security and pilot-readiness tests | PR #64 validates backend/native API/mobile checks; PR #71 preserves the non-container API publish and 214/214 backend test gate. PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) adds Android/iOS production bundle exports, Metro shared-workspace resolution and the SDK 54 `expo-asset` dependency for both apps | PR #72 final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) passed all four jobs: 214/214 backend tests, four Android/iOS bundle exports, Metro shared-module assertion, both mobile typechecks, shared tests and three uploaded artifacts. Native Android APK/AAB and iOS archive/signing, iOS bundle identifiers and physical-device functional/security/pilot acceptance remain | In progress |
 
 ## Current verified count and weighted progress
 
@@ -76,16 +76,15 @@
 15. DRIVER-04 — Blocked
 16. RIDER-04 — In progress; PR #70 merged immutable Driver-reported direct-payment reconciliation; live Cosmos and Android/iOS report-entry/history gates remain
 17. SUPPORT-01 — Blocked
-18. PLATFORM-01 — In progress; current sequential task is bounded Cosmos storage readiness timeout/failure handling with deterministic API/unit tests
-19. RELEASE-01 — In progress
+18. PLATFORM-01 — In progress; PR #71 merged bounded storage readiness failure/timeout handling; live Cosmos, broader audit, telemetry and load gates remain
+19. RELEASE-01 — In progress; current sequential task adds CI production JavaScript bundle exports for Rider/Driver on Android and iOS; native signing/device gates remain
 
 ## Highest-priority next work
 
-1. **Current sequential #18 PLATFORM-01:** add a bounded storage readiness probe; prove dependency failure returns generic 503 while process liveness remains healthy; verify timeout and caller-cancellation semantics.
-2. **#17 SUPPORT-01 remains Blocked:** Rider support categories, escalation owner and operating process are not approved. Do not invent them; resume when those product decisions are supplied.
-3. **#19 RELEASE-01 is next actionable area after #18:** audit native Android/iOS build/signing/pilot evidence and add only missing in-scope automated gates.
+1. **Current sequential #19 RELEASE-01:** export and verify production JavaScript bundles for both Rider and Driver on Android and iOS in CI; keep native binaries/signing/device acceptance separate.
+2. **#17 SUPPORT-01 remains Blocked:** Rider support categories, escalation owner and operating process are not approved. Do not invent them.
+3. After #19, continue the separately approved AI-01 supplemental requirement without changing the 19-row denominator; return to #17 when its product decision is available.
 4. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
-5. Keep AI-01 separately tracked as an approved supplemental requirement outside the 19-area denominator.
 
 ## Deployment constraint
 
