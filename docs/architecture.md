@@ -141,6 +141,7 @@ Authenticate hub connections, scope groups, rate-limit events and protect locati
 - Role- and resource-based authorization for rider, driver, fleet and operations.
 - Rate limiting, input validation, abuse detection and audit logging.
 - Managed secret storage; no secrets in Git.
+- Browser CORS is deny-by-default and uses explicit origins from `Cors:AllowedOrigins`; wildcard origins are rejected. Native Android/iOS clients do not require CORS.
 - Minimize location/identity data and obtain appropriate consent.
 - Define retention, deletion, export and incident-response procedures.
 - Do not store raw payment-card data; use payment-provider tokenization.
@@ -152,7 +153,7 @@ Provider decisions remain open for maps/geocoding/routing, OTP/SMS, payment/refu
 
 ## 12. Deployment and operations
 
-Start with a low-cost development environment and separate development, staging and production configuration. CI should build, test and scan backend/mobile code. Use managed secrets, health checks, structured logs, metrics, distributed tracing, database backup and restore testing. Do not assume production hosting is always free; validate availability, data residency, capacity, recovery and cost.
+Start with a low-cost development environment and separate development, staging and production configuration. CI should build, test and scan backend/mobile code. Use managed secrets, health checks, structured logs, metrics, distributed tracing, database backup and restore testing. Do not assume production hosting is always free; validate availability, data residency, capacity, recovery and cost. The API exposes `/health/live` for process liveness and `/health/ready` for readiness; readiness reads the configured Cosmos database in Cosmos mode and reports ready in explicit in-memory demo/test mode.
 
 ## 13. Test strategy
 

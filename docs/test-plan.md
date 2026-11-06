@@ -588,3 +588,16 @@ The current automated tests exercise the in-memory store. Cosmos cross-partition
 | DRIVER-HISTORY-006 | Driver reconnects to SignalR after a network interruption during an active trip | Driver app reloads authoritative history and restores the current active or terminal state instead of trusting missed events | Android/iOS functional + SignalR | P0 |
 
 The automated API tests use the in-memory ride store. Cosmos cross-partition query behaviour, RU consumption, retention and larger-history performance require the configured development Cosmos environment. On Android and iOS, verify active-trip restoration, completion-to-history transition, SignalR reconnect refresh, and that leaving Trips, signing out, or session expiry prevents late history responses from changing UI state and clears the prior account's in-memory trip history before another account is shown.
+
+
+## 17. API CORS and health probes
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| PLATFORM-CORS-001 | Browser preflight uses an origin configured in `Cors:AllowedOrigins` | API returns the matching `Access-Control-Allow-Origin` header and allows the requested method | API integration/security | P0 |
+| PLATFORM-CORS-002 | Browser preflight uses an origin not in the configured allow-list | API does not emit `Access-Control-Allow-Origin` for that origin | API integration/security | P0 |
+| PLATFORM-HEALTH-001 | Liveness probe calls `/health/live` | HTTP 200 while the API process is running | API integration | P0 |
+| PLATFORM-HEALTH-002 | Readiness probe calls `/health/ready` in demo/in-memory mode | HTTP 200 with `status: ready` and the explicit demo storage mode | API integration | P0 |
+| PLATFORM-HEALTH-003 | Readiness probe calls `/health/ready` in Cosmos mode while the database is unavailable | HTTP 503; readiness does not report healthy when the configured persistent store is unreachable | Cosmos integration/failure injection | P0 |
+
+`Cors:AllowedOrigins` accepts explicit HTTPS origins; HTTP origins are allowed only in Development. Wildcards, URL paths, credentials and query strings are rejected. An empty allow-list emits no browser CORS permission; native Android/iOS clients do not depend on CORS. Cosmos-mode readiness failure and production origin configuration remain infrastructure-backed validation.

@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `32cacbf430e1443835e3bd8e4294c15d3c137fe3` (PR #47)
+**Current main HEAD:** `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135` (PR #48)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -52,18 +52,19 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #45 merged: zone-scoped nearby compatible vehicles and online Driver location handling; CI run 42209346759 passed.
 - PR #46 merged: 16-way concurrent duplicate queue-join test; CI run 42209694545 passed.
 - PR #47 merged: authenticated Rider-owned trip history, Activity restore/history, safe no-fare placeholder, stale-response/stale-active-state guards, 19-area acceptance tracker reconciliation and progress handoff. Merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed all four jobs.
+- PR #48 merged: authenticated Driver-owned trip history API/UI, active-trip restore, SignalR reconnect refresh, session-expiry state cleanup and owner/privacy/role/empty-history tests. Merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run 42215718229 passed all four jobs.
 - The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
 
-1. **TRIP-01 Driver history (in progress):** Rider history merged in PR #47. Implement authenticated Driver-owned history API/UI, owner/privacy/role/empty-history tests, and active-trip restoration in one focused PR.
+1. **PLATFORM-01 security/health (in progress):** remove wildcard CORS, enforce explicit configured origins, and keep liveness distinct from Cosmos-aware readiness. Then complete observability, audit durability and failure/recovery evidence.
 2. **RIDER-02 fare estimate (blocked):** requires approved base fare, distance/time components, taxes and service-class rules. Keep fare null; never invent pricing.
 3. **DRIVER-03 monetary earnings (blocked):** monthly PDF work-metrics payslip exists, but compensation, commission and payout treatment are not approved.
 4. **RIDER-04 payments/receipts/ratings (blocked):** requires enabled payment method/provider, sandbox and webhook/idempotency/refund policy.
 5. **DRIVER-04 and SUPPORT-01 support (blocked):** require role-specific support process, issue categories and escalation owner.
-6. **PLATFORM-01 and RELEASE-01 (in progress):** real Cosmos partition/ETag/multi-instance verification, security/observability/load evidence, Android/iOS builds and physical-device pilot gates remain.
-7. **AI-01 supplemental (not started):** implement the separately approved bounded provider-agnostic AI service only after the current sequential PRD-area work; keep it outside the 19-area denominator.
+6. **RELEASE-01 (in progress):** Android/iOS production builds, signing and physical-device pilot evidence remain.
+7. **AI-01 supplemental (not started):** implement the separately approved bounded provider-agnostic AI service after the sequential PRD-area work; keep it outside the 19-area denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -178,10 +179,17 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - PR #47 merge commit: `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed.
 - Cosmos cross-partition query RU/retention/performance and physical-device restoration remain unverified.
 
-## Driver trip history increment (in progress)
-- Branch: `feat/driver-trip-history`.
+## Driver trip history increment (merged in PR #48)
 - Add Driver-only `GET /api/v1/driver/rides/mine`, deriving ownership from the authenticated subject; return newest-first allow-listed trip summaries and active-location-sharing state only.
 - Driver app restores the latest active assigned trip on opening Trips, displays previous assigned trips, refreshes authoritative history after SignalR reconnect, and clears stale in-memory active state on terminal-only history or session expiry.
 - API tests cover owner isolation despite client-supplied driverId, ordering, private-field omission, Rider denial and empty history.
-- Implementation head `5724a3634d8a6c9f7bdbf86cf8ad0c7ecef848db` passed all four CI jobs in run 42215519184; final documentation-only updates require the current PR head to pass CI before merge.
+- PR #48 final head `2b19856b02b4722cd76cfb04459c01afb6a4e3ab` passed all four CI jobs in run 42215718229 and was merged as `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`.
 - Do not expose rider/driver IDs, exact coordinates or fare values in history. Real Cosmos cross-partition behaviour remains an infrastructure-backed gate.
+
+
+## PLATFORM-01 CORS and health increment (in progress)
+- PR #49 is open: https://github.com/rajeevp727/turnova-platform/pull/49 (branch `fix/platform-cors-health`). Implementation head `5458c7c244b3621e294cef5ae1c2ad3d24c339c7` passed all four jobs in CI run 42216452456; the final documentation-only head still needs CI before merge.
+- Replace wildcard CORS with explicit `Cors:AllowedOrigins`; reject wildcards, URL paths, query/userinfo and non-HTTPS origins outside Development. Empty allow-list denies browser CORS while native Android/iOS clients remain unaffected.
+- Keep `/health/live` as process liveness and `/health/ready` as the single Cosmos-aware readiness endpoint; remove the duplicate health-check route mapping.
+- Add integration tests for configured/disallowed browser origins and demo-mode liveness/readiness.
+- Remaining platform evidence: Cosmos-unavailable readiness failure injection, production origin configuration, secrets/logging review, metrics/traces/alerts, durable audit failure/recovery and load tests.
