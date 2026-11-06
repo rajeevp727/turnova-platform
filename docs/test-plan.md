@@ -601,3 +601,34 @@ The automated API tests use the in-memory ride store. Cosmos cross-partition que
 | PLATFORM-HEALTH-003 | Readiness probe calls `/health/ready` in Cosmos mode while the database is unavailable | HTTP 503; readiness does not report healthy when the configured persistent store is unreachable | Cosmos integration/failure injection | P0 |
 
 `Cors:AllowedOrigins` accepts explicit HTTPS origins; HTTP origins are allowed only in Development. Wildcards, URL paths, credentials and query strings are rejected. An empty allow-list emits no browser CORS permission; native Android/iOS clients do not depend on CORS. Cosmos-mode readiness failure and production origin configuration remain infrastructure-backed validation.
+
+
+## Cab-only union discovery and direct-fare tests (2026-11-06)
+
+These supplement and supersede legacy fare-estimate, payment-gateway and automatic FIFO customer-dispatch tests. Only Cab is valid for new MVP workflows.
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| CAB-SCOPE-001 | Rider submits Scooty/Bike/Auto | API rejects; no ride created | API/security | P0 |
+| CAB-SCOPE-002 | Driver attempts non-Cab onboarding | API rejects; no MVP eligibility | API/security | P0 |
+| CAB-DISC-001 | Pickup has multiple approved unions | Results grouped by eligible union | API | P0 |
+| CAB-DISC-002 | Union has more than three eligible Cab drivers | At most three returned | API | P0 |
+| CAB-DISC-003 | Drivers have different pickup distances | Ordered by pickup proximity, not FIFO | API | P0 |
+| CAB-DISC-004 | Selfie pending/rejected | Public discovery omits photo | API/privacy | P0 |
+| CAB-DISC-005 | Unverified vehicle or unavailable driver | Driver excluded | API | P0 |
+| CAB-DISC-006 | Pickup proximity differs from trip distance | Values are separately labelled | API/mobile | P1 |
+| CAB-RES-001 | Two Riders select same driver concurrently | At most one active reservation succeeds | Concurrency | P0 |
+| CAB-RES-002 | Negotiation expires/cancels | Exact reservation released; stale request cannot release newer reservation | API | P0 |
+| CAB-AGR-001 | Rider proposes and Driver counters | Negotiation history retained | API | P0 |
+| CAB-AGR-002 | Only one party confirms | Ride start rejected | API/security | P0 |
+| CAB-AGR-003 | Both confirm current version | Start allowed subject to lifecycle rules | API | P0 |
+| CAB-AGR-004 | Fare changes after confirmation | New immutable version; both reconfirm | API/persistence | P0 |
+| CAB-AGR-005 | Mutate historical confirmed version | Rejected; history unchanged | API/persistence | P0 |
+| CAB-REC-001 | Agreed 500, reported 400 | Delta +100, driver-reported/unverified shortfall | Unit/API | P0 |
+| CAB-REC-002 | Agreed 500, reported 500 | Delta 0 | Unit/API | P0 |
+| CAB-REC-003 | Agreed 400, reported 500 | Delta -100 | Unit/API | P0 |
+| CAB-REC-004 | Decimal/currency precision and invalid amount | Currency-safe validation/rounding | Unit/API | P0 |
+| CAB-REC-005 | Unrelated union/driver requests reconciliation | Forbidden; authorised minimum data only | Security | P0 |
+| CAB-REC-006 | Driver submits amount | Actor/time/status audited; not customer/bank verified | API | P0 |
+| CAB-UNION-001 | Driver transferred unions | Prior selfie approval invalidated until new union approval | API/privacy | P0 |
+
+Do not test or implement platform fare estimates, in-app payment collection, gateway/escrow or customer-facing FIFO ranking/automatic assignment as MVP behaviour. Dispute and non-zero-delta next-ride outcomes remain pending product decisions.
