@@ -9,7 +9,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -38,6 +40,23 @@ public sealed class RideApiIntegrationTests
         using var json = JsonDocument.Parse(await ready.Content.ReadAsStringAsync());
         Assert.Equal("ready", json.RootElement.GetProperty("status").GetString());
         Assert.Equal("demo-in-memory", json.RootElement.GetProperty("storage").GetString());
+    }
+
+    [Fact]
+    public async Task ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy()
+    {
+        using var factory = new TurnOvaApiFactory(storageReadinessUnavailable: true);
+        using var client = factory.CreateClient("Rider", "rider-storage-unavailable");
+
+        using var live = await client.GetAsync("/health/live");
+        Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+
+        using var ready = await client.GetAsync("/health/ready");
+        var body = await ready.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
+        Assert.Contains("Storage dependency unavailable", body);
+        Assert.DoesNotContain("test-only-storage-failure", body);
     }
 
     [Fact]
@@ -2901,13 +2920,15 @@ public sealed class RideApiIntegrationTests
         private readonly bool _legacyFifoRiderRequestsEnabled;
         private readonly double? _nearbyRadiusKm;
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
+        private readonly bool _storageReadinessUnavailable;
 
         public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double? nearbyRadiusKm = 10,
-            int? selectedDriverNegotiationLifetimeMinutes = 15)
+            int? selectedDriverNegotiationLifetimeMinutes = 15, bool storageReadinessUnavailable = false)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
             _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
+            _storageReadinessUnavailable = storageReadinessUnavailable;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -2927,6 +2948,17 @@ public sealed class RideApiIntegrationTests
                         _selectedDriverNegotiationLifetimeMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
                 }));
+
+            if (_storageReadinessUnavailable)
+            {
+                builder.ConfigureTestServices(services =>
+                {
+                    services.RemoveAll<StorageReadinessProbe>();
+                    services.AddSingleton(new StorageReadinessProbe(
+                        _ => Task.FromException(new HttpRequestException("test-only-storage-failure")),
+                        TimeSpan.FromSeconds(3)));
+                });
+            }
         }
 
         public HttpClient CreateClient(string role, string subject, string? unionId = null)
