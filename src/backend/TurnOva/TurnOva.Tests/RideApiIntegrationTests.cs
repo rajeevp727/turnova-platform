@@ -708,6 +708,7 @@ public sealed class RideApiIntegrationTests
 
         Assert.Equal(HttpStatusCode.OK,
             (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/arrive", null)).StatusCode);
+        await ConfirmRideAgreementAsync(factory, rider, driver, ride.RideId, "driver-lifecycle");
         Assert.Equal(HttpStatusCode.OK,
             (await driver.PostAsync($"/api/v1/rides/{ride.RideId}/start", null)).StatusCode);
 
@@ -776,6 +777,7 @@ public sealed class RideApiIntegrationTests
         var secondRide = await CreateRideAsync(rider, "request-cancel-after-001");
         await driver.PostAsync($"/api/v1/rides/{secondRide.RideId}/accept", null);
         await driver.PostAsync($"/api/v1/rides/{secondRide.RideId}/arrive", null);
+        await ConfirmRideAgreementAsync(factory, rider, driver, secondRide.RideId, "driver-cancel-before");
         await driver.PostAsync($"/api/v1/rides/{secondRide.RideId}/start", null);
 
         var lateCancellation = await rider.PostAsync($"/api/v1/rides/{secondRide.RideId}/cancel", null);
@@ -1462,6 +1464,28 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Created, (await rider.SendAsync(request)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/v1/rides/{rideId}/agreements")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await driver.GetAsync($"/api/v1/rides/{rideId}/agreements")).StatusCode);
+    }
+
+    private static async Task ConfirmRideAgreementAsync(
+        TurnOvaApiFactory factory, HttpClient rider, HttpClient driver, string rideId, string driverId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()["agreement-union-" + driverId] =
+            new DriverUnion("agreement-union-" + driverId, "Agreement Test Union", "AGR-" + driverId, "Hyderabad", null, null,
+                ["hyderabad-central"], ["cab"], "Active", now, now);
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()[driverId] =
+            new DriverUnionAssignment(driverId, "agreement-union-" + driverId, "Agreement Test Union", "Active", now, now, "test");
+
+        using var proposal = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 500m, currency = "INR" })
+        };
+        proposal.Headers.Add("Idempotency-Key", "lifecycle-agreement-" + rideId);
+        Assert.Equal(HttpStatusCode.Created, (await rider.SendAsync(proposal)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
     }
 
     private static void SeedAgreementRide(TurnOvaApiFactory factory, string rideId, string riderId, string driverId)
