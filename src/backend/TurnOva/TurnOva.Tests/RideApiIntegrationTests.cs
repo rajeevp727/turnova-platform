@@ -1354,6 +1354,172 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderCanBookSelectedCabDriverWithStopsAndIdempotentRetry()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "selected-booking-rider");
+        using var driver = factory.CreateClient("Driver", "selected-booking-driver");
+        SeedBookableDriver(factory, "selected-booking-driver", "selected-booking-union");
+
+        using var request = CreateSelectedBookingRequest("selected-booking-key", "selected-booking-driver",
+            "selected-booking-union", "KPHB", "HITEC City", ["JNTU", "Madhapur"]);
+        using var response = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var rideId = json.RootElement.GetProperty("rideId").GetString()!;
+        Assert.Equal("Negotiating", json.RootElement.GetProperty("status").GetString());
+        Assert.Equal("selected-booking-union", json.RootElement.GetProperty("unionId").GetString());
+        Assert.Equal(2, json.RootElement.GetProperty("stops").GetArrayLength());
+
+        using var retry = CreateSelectedBookingRequest("selected-booking-key", "selected-booking-driver",
+            "selected-booking-union", "KPHB", "HITEC City", ["JNTU", "Madhapur"]);
+        using var retryResponse = await rider.SendAsync(retry);
+        Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
+        using var retryJson = JsonDocument.Parse(await retryResponse.Content.ReadAsStringAsync());
+        Assert.Equal(rideId, retryJson.RootElement.GetProperty("rideId").GetString());
+
+        using var changedPayload = CreateSelectedBookingRequest("selected-booking-key", "selected-booking-driver",
+            "selected-booking-union", "KPHB", "Gachibowli", ["JNTU"]);
+        Assert.Equal(HttpStatusCode.Conflict, (await rider.SendAsync(changedPayload)).StatusCode);
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("selected-booking-driver"));
+    }
+
+    [Fact]
+    public async Task SelectedBookingReservationPreventsConcurrentBookingsAndRiderCancelReleasesIt()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var riderA = factory.CreateClient("Rider", "selected-rider-a");
+        using var riderB = factory.CreateClient("Rider", "selected-rider-b");
+        using var driver = factory.CreateClient("Driver", "selected-shared-driver");
+        SeedBookableDriver(factory, "selected-shared-driver", "selected-shared-union");
+
+        using var requestA = CreateSelectedBookingRequest("selected-key-a", "selected-shared-driver",
+            "selected-shared-union", "KPHB", "HITEC City", []);
+        using var requestB = CreateSelectedBookingRequest("selected-key-b", "selected-shared-driver",
+            "selected-shared-union", "KPHB", "Madhapur", []);
+        var responses = await Task.WhenAll(riderA.SendAsync(requestA), riderB.SendAsync(requestB));
+        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Created));
+        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        var created = responses.Single(response => response.StatusCode == HttpStatusCode.Created);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var rideId = createdJson.RootElement.GetProperty("rideId").GetString()!;
+        foreach (var response in responses) response.Dispose();
+
+        var owner = createdJson.RootElement.GetProperty("riderId").GetString();
+        var ownerClient = owner == "selected-rider-a" ? riderA : riderB;
+        Assert.Equal(HttpStatusCode.OK,
+            (await ownerClient.PostAsync($"/api/v1/rides/{rideId}/cancel", null)).StatusCode);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("selected-shared-driver"));
+    }
+
+    [Fact]
+    public async Task ExpiredSelectedNegotiationBecomesTerminalAndReleasesDriverReservation()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "expired-booking-rider");
+        using var driver = factory.CreateClient("Driver", "expired-booking-driver");
+        SeedBookableDriver(factory, "expired-booking-driver", "expired-booking-union");
+
+        using var request = CreateSelectedBookingRequest("expired-booking-key", "expired-booking-driver",
+            "expired-booking-union", "KPHB", "HITEC City", []);
+        using var response = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var rideId = json.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[rideId] = rides[rideId] with { NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1) };
+
+        using var expired = await rider.GetAsync($"/api/v1/rides/{rideId}");
+        Assert.Equal(HttpStatusCode.OK, expired.StatusCode);
+        using var expiredJson = JsonDocument.Parse(await expired.Content.ReadAsStringAsync());
+        Assert.Equal("Expired", expiredJson.RootElement.GetProperty("status").GetString());
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("expired-booking-driver"));
+    }
+
+    [Fact]
+    public async Task SelectedDriverCanAcceptOnlyAfterMutualAgreementAndReservationBecomesPermanent()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "selected-accept-rider");
+        using var driver = factory.CreateClient("Driver", "selected-accept-driver");
+        SeedBookableDriver(factory, "selected-accept-driver", "selected-accept-union");
+
+        using var request = CreateSelectedBookingRequest("selected-accept-key", "selected-accept-driver",
+            "selected-accept-union", "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null)).StatusCode);
+
+        using var proposal = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 420m, currency = "INR" })
+        };
+        proposal.Headers.Add("Idempotency-Key", "selected-accept-fare");
+        Assert.Equal(HttpStatusCode.Created, (await rider.SendAsync(proposal)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+
+        using var accepted = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        using var acceptedJson = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync());
+        Assert.Equal("Accepted", acceptedJson.RootElement.GetProperty("status").GetString());
+        Assert.Null(acceptedJson.RootElement.GetProperty("negotiationExpiresAtUtc").ValueKind == JsonValueKind.Null
+            ? null : acceptedJson.RootElement.GetProperty("negotiationExpiresAtUtc").GetString());
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("selected-accept-driver"));
+    }
+
+    private static void SeedBookableDriver(TurnOvaApiFactory factory, string driverId, string unionId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[unionId] =
+            new DriverUnion(unionId, "Selected Booking Union", "SEL-" + driverId, "Hyderabad", null, null,
+                ["hyderabad-central"], ["cab"], "Active", now, now);
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()[driverId] =
+            new DriverUnionAssignment(driverId, unionId, "Selected Booking Union", "Active", now, now, "test");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var profile = profiles[driverId];
+        profiles[driverId] = profile with
+        {
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = now,
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/licence", "Approved"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ],
+            ProfilePhotoApprovalStatus = "Approved",
+            ProfilePhotoApprovedByUnionId = unionId
+        };
+    }
+
+    private static HttpRequestMessage CreateSelectedBookingRequest(
+        string key, string driverId, string unionId, string pickup, string dropoff, string[] stops)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/rider/bookings")
+        {
+            Content = JsonContent.Create(new
+            {
+                selectedDriverId = driverId, unionId, pickup, dropoff, stops,
+                passengers = 1, pickupLatitude = 17.493, pickupLongitude = 78.399
+            })
+        };
+        request.Headers.Add("Idempotency-Key", key);
+        return request;
+    }
+
+    [Fact]
     public async Task RideAgreementRequiresBothPartiesToConfirmCurrentImmutableVersionBeforeStart()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
