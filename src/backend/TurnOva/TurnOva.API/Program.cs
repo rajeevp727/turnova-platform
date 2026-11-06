@@ -1732,7 +1732,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
         return Results.Conflict(new { message = "The selected Driver or Union is not eligible for Cab negotiation." });
 
     var versions = ride.AgreementVersions ?? [];
-    var scopedIdempotencyKey = $"{actorId}:{idempotencyKey}";
+    var scopedIdempotencyKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{actorId}:{idempotencyKey}")));
     var retry = versions.FirstOrDefault(item => item.IdempotencyKey == scopedIdempotencyKey);
     if (retry is not null)
     {
