@@ -37,7 +37,7 @@ type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
 type QueueMembership = { isQueued: boolean; position: number | null };
-type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean };
+type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean; stops?: string[]; negotiationExpiresAtUtc?: string | null };
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; driverConfirmed: boolean };
 
 async function saveTokens(tokens: Tokens) {
@@ -321,7 +321,7 @@ export default function App() {
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
     if (!isActive()) return;
     setDriverRideHistory(history);
-    const active = history.find(item => ["Accepted", "Arrived", "InProgress"].includes(item.status));
+    const active = history.find(item => ["Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"].includes(item.status));
     setActiveRide(active ?? null);
   }, [apiFetch]);
 
@@ -661,7 +661,7 @@ export default function App() {
                 <Text style={styles.muted}>Rider: {item.riderConfirmed?"Confirmed":"Pending"} · Driver: {item.driverConfirmed?"Confirmed":"Pending"}</Text>
               </View>)}
               <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>
-              {["Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
+              {["Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
                 <TextInput value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/>
                 <Pressable style={styles.secondary} disabled={!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>Propose / counter fare</Text></Pressable>
                 {agreementHistory.length>0&&<Pressable style={styles.secondary} disabled={agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void confirmAgreement()}><Text style={styles.secondaryText}>{agreementHistory[agreementHistory.length-1].driverConfirmed?"You confirmed this version":"Confirm current agreement"}</Text></Pressable>}
