@@ -793,7 +793,7 @@ export default function App() {
         body: JSON.stringify({ question: helpQuestion, rideState: activeRide?.status ?? null })
       }) as AssistantHelp;
       const source = result.source === "provider-approved-content" ? "AI-selected approved help" : "Approved help fallback (AI provider is not configured)";
-      setHelpAnswer(`${result.answer}\\n\\n${result.escalationRequired ? "Escalation required. " : ""}${source}.`);
+      setHelpAnswer(`${result.answer}\n\n${result.escalationRequired ? "Escalation required. " : ""}${source}.`);
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to load approved help content."); }
     finally { setHelpBusy(false); }
   };
