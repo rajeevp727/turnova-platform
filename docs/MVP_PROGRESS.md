@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Approved supplemental AI-01: final automated review and merge of the provider-agnostic Rider trip-intent draft and approved-content Rider/Driver ride/queue-state help boundary. Implementation and CI are complete; live provider validation remains external. AI-01 remains outside the 19-area denominator.**
+**Approved supplemental AI-01: finish final-head CI and automated review/merge of the provider-agnostic Rider trip-intent draft and approved-content Rider/Driver ride/queue-state help boundary. AI-01 remains outside the 19-area denominator; live provider validation remains external.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -209,6 +209,6 @@
 - Rider/Driver help uses approved in-repository FAQ/state entries. A provider may select only an approved source ID; the API returns the exact repository answer. Unsupported questions require escalation.
 - Rider UI exposes draft-only trip intent in Book and approved help in Profile; Driver Profile exposes approved ride/queue help. Draft output only pre-fills editable fields and does not invoke booking, fare, agreement or payment operations.
 - API integration tests cover Rider-only draft authorization, Rider/Driver help, unsupported escalation and per-caller rate limiting. Service unit tests cover route redaction, provider output validation, timeout/cancellation, fallback and approved source selection.
-- PR #73 final-head CI [42306272200](https://github.com/rajeevp727/turnova-platform/actions/runs/42306272200) passed: 231/231 backend tests, TRX execution guard, non-container API publish/artifact, Rider/Driver Expo config/typechecks, four Android/iOS production JS bundle exports and shared mobile tests. Automated review and merge are pending. Live provider sandbox, managed-secret wiring and provider data-processing validation remain external gates.
+- Initial AI-01 code-head CI [42306272200](https://github.com/rajeevp727/turnova-platform/actions/runs/42306272200) passed 231/231 backend tests and all mobile/API jobs. Follow-up hardening adds explicit ride-state matching and ambiguous-status escalation; final-head CI is pending. Live provider sandbox, managed-secret wiring and provider data-processing validation remain external gates.
 - The 19-area weighted score remains **42.1%** = `(0 Verified + 16 × 0.5 + 0 Not started + 3 × 0) / 19 × 100`; counts **0 Verified, 16 In progress, 0 Not started, 3 Blocked**; strict fully verified count **0/19**. AI-01 is supplemental and is not counted.
 - **Next step:** finish the current AI-01 branch review/build checks and open one focused PR. After merge, re-audit main; #17 SUPPORT-01 remains blocked pending approved support categories, escalation owner and operating process.
