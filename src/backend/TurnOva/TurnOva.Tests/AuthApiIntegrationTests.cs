@@ -60,27 +60,38 @@ public sealed class AuthApiIntegrationTests
     [Fact]
     public async Task DuplicateRegistrationPreservesTriSendConflictWithoutReturningTokens()
     {
+        var callCount = 0;
         using var handler = new RecordingHandler((request, _) =>
         {
             Assert.Equal("/auth/register", request.Path);
             Assert.Equal("rider@example.com", request.Body.GetProperty("email").GetString());
             Assert.Equal("Rider", request.Body.GetProperty("role").GetString());
             Assert.Equal("turnova", request.Body.GetProperty("appId").GetString());
+
+            if (Interlocked.Increment(ref callCount) == 1)
+            {
+                return Task.FromResult(JsonResponse(HttpStatusCode.Created,
+                    """{"accessToken":"first-access","refreshToken":"first-refresh","user":{"role":"Rider"}}"""));
+            }
+
             return Task.FromResult(JsonResponse(HttpStatusCode.Conflict,
                 """{"message":"Email already registered."}"""));
         });
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
+        var payload = new { email = "Rider@example.com", password = "StrongPassword!123", name = "Existing Rider" };
 
-        using var response = await client.PostAsJsonAsync("/api/v1/auth/rider/register",
-            new { email = "Rider@example.com", password = "StrongPassword!123", name = "Existing Rider" });
+        using var first = await client.PostAsJsonAsync("/api/v1/auth/rider/register", payload);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
+        using var second = await client.PostAsJsonAsync("/api/v1/auth/rider/register", payload);
+
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        var body = await second.Content.ReadAsStringAsync();
         Assert.Contains("Email already registered.", body, StringComparison.Ordinal);
         Assert.DoesNotContain("accessToken", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("refreshToken", body, StringComparison.OrdinalIgnoreCase);
-        Assert.Single(handler.Requests);
+        Assert.Equal(2, handler.Requests.Count);
     }
 
     [Fact]
