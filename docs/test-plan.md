@@ -554,3 +554,14 @@ The API integration tests use the in-memory store and configured test zone. They
 | QUEUE-CONC-001 | Sixteen concurrent AddAsync operations submit the same driver to one zone/service-class queue | Exactly one operation succeeds, duplicate attempts are rejected, and one active membership remains | Unit concurrency | P0 |
 
 This deterministic test exercises the in-memory store. Cosmos multi-instance and partition-level concurrency remain an infrastructure-backed verification gate.
+
+## 14. Rider trip history
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-HISTORY-001 | Rider requests trip history after creating multiple rides | Only rides owned by the authenticated Rider are returned, newest first, regardless of any client-supplied riderId query value | API integration/security | P0 |
+| RIDER-HISTORY-002 | Rider history response is inspected for private fields | Response includes only ride reference, pickup/drop-off notes, passengers, service class, status and timestamps; rider/driver IDs and exact coordinates are omitted | API integration/security | P0 |
+| RIDER-HISTORY-003 | Rider with no trips requests history | HTTP 200 with an empty array | API integration | P1 |
+| RIDER-HISTORY-004 | Driver requests Rider history endpoint | HTTP 403 | API authorization | P0 |
+
+The current automated tests exercise the in-memory store. Cosmos cross-partition history query behaviour, retention and larger-history performance require the configured development Cosmos environment.
