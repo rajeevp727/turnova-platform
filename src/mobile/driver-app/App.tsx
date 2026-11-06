@@ -635,7 +635,7 @@ export default function App() {
                 <Text style={styles.muted}>Rider: {item.riderConfirmed?"Confirmed":"Pending"} · Driver: {item.driverConfirmed?"Confirmed":"Pending"}</Text>
               </View>)}
               <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>
-              {["Accepted","Arrived"].includes(activeRide.status)&&<>
+              {["Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
                 <TextInput value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/>
                 <Pressable style={styles.secondary} disabled={!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>Propose / counter fare</Text></Pressable>
                 {agreementHistory.length>0&&<Pressable style={styles.secondary} disabled={agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void confirmAgreement()}><Text style={styles.secondaryText}>{agreementHistory[agreementHistory.length-1].driverConfirmed?"You confirmed this version":"Confirm current agreement"}</Text></Pressable>}
