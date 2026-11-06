@@ -367,18 +367,12 @@ export default function App() {
       setError("Enter an amount received of zero or more with up to two decimal places.");
       return;
     }
-    const amountReceived = Number(rawAmount);
-    if (!Number.isFinite(amountReceived) || amountReceived < 0) {
-      setError("Enter a valid non-negative amount received.");
-      return;
-    }
-
     setLoading(true); setError(""); setNotice("");
     try {
       await apiFetch(`/api/v1/driver/rides/${rideId}/payment-report`, {
         method: "POST",
         headers: { "Idempotency-Key": "driver-payment-report-" + rideId },
-        body: JSON.stringify({ amountReceived })
+        body: '{"amountReceived":' + rawAmount + '}'
       });
       await loadDriverRideHistory(() => true);
       setPaymentReportAmounts(current => {
