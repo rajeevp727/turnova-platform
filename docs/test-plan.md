@@ -601,3 +601,18 @@ The automated API tests use the in-memory ride store. Cosmos cross-partition que
 | PLATFORM-HEALTH-003 | Readiness probe calls `/health/ready` in Cosmos mode while the database is unavailable | HTTP 503; readiness does not report healthy when the configured persistent store is unreachable | Cosmos integration/failure injection | P0 |
 
 `Cors:AllowedOrigins` accepts explicit HTTPS origins; HTTP origins are allowed only in Development. Wildcards, URL paths, credentials and query strings are rejected. An empty allow-list emits no browser CORS permission; native Android/iOS clients do not depend on CORS. Cosmos-mode readiness failure and production origin configuration remain infrastructure-backed validation.
+
+
+## 18. Persistent dispatch audit and safe exception logging
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| PLATFORM-AUDIT-001 | Driver successfully joins a zone/service-class queue | Append-only `Joined` audit event is persisted with driver, queue scope and UTC timestamp | Unit + Cosmos integration | P0 |
+| PLATFORM-AUDIT-002 | Driver successfully leaves a queue | Append-only `Left` event is committed with the queue membership removal | Unit + Cosmos integration | P0 |
+| PLATFORM-AUDIT-003 | Driver is moved to the back or rotated once for an offer | `MovedToBack` or `RotatedToBack` event is committed with the state mutation; offerId is recorded only for offer rotation | Unit + Cosmos integration | P0 |
+| PLATFORM-AUDIT-004 | Queue join conflicts, missing membership removal, stale ETag or duplicate offer rotation occurs | No audit event is written for a failed/no-op state mutation; retrying the same offer does not duplicate its audit event | Unit + Cosmos failure injection | P0 |
+| PLATFORM-AUDIT-005 | Audit events are queried for a zone/service-class queue | Only events for that partition are returned, newest first; payload contains no phone/email, exact location or fare | Unit + Cosmos integration/security | P0 |
+| PLATFORM-LOG-001 | An unhandled API exception occurs | API returns a generic 500 Problem Details response with traceId; structured error log records traceId and exception type only, not request body, token, exception message or PII | API integration/security | P0 |
+| PLATFORM-AUDIT-006 | A business-relevant dispatch exception occurs while processing an authenticated action | A durable exception audit event records traceId, actor reference, safe exception category/reason and UTC timestamp without request body, token, contact data or exact location | Cosmos integration/security | P0 |
+
+The Cosmos implementation writes queue state and its audit event in one transactional batch within the existing `QueueEntries` container partition (`zoneServiceKey`). In-memory tests validate event semantics; real Cosmos transactional-batch atomicity, ETag conflict, process-restart and audit retention must be verified against the configured development Cosmos account.

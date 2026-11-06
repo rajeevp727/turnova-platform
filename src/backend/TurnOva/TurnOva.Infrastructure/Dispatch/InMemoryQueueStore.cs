@@ -10,6 +10,7 @@ public sealed class InMemoryQueueStore : IQueueStore
     private readonly ConcurrentDictionary<string, FifoQueue> _queues = new();
     private long _sequence;
     private readonly ConcurrentDictionary<string, string> _rotations = new(StringComparer.Ordinal);
+    private readonly ConcurrentQueue<QueueAuditEvent> _auditEvents = new();
 
     public Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
@@ -29,6 +30,7 @@ public sealed class InMemoryQueueStore : IQueueStore
         lock (queue)
         {
             queue.Enqueue(entry with { Sequence = Interlocked.Increment(ref _sequence) });
+            RecordAudit(key, entry.DriverId, QueueAuditEventTypes.Joined);
         }
         return Task.CompletedTask;
     }
@@ -42,7 +44,12 @@ public sealed class InMemoryQueueStore : IQueueStore
             return Task.FromResult(false);
 
         lock (queue)
-            return Task.FromResult(queue.Remove(driverId));
+        {
+            var removed = queue.Remove(driverId);
+            if (removed)
+                RecordAudit(key, driverId, QueueAuditEventTypes.Left);
+            return Task.FromResult(removed);
+        }
     }
 
     public Task<bool> MoveToBackAsync(
@@ -63,6 +70,7 @@ public sealed class InMemoryQueueStore : IQueueStore
                 JoinedAt = DateTimeOffset.UtcNow,
                 Sequence = Interlocked.Increment(ref _sequence)
             });
+            RecordAudit(key, driverId, QueueAuditEventTypes.MovedToBack);
             return Task.FromResult(true);
         }
     }
@@ -83,9 +91,27 @@ public sealed class InMemoryQueueStore : IQueueStore
             queue.Remove(driverId);
             queue.Enqueue(current with { JoinedAt = DateTimeOffset.UtcNow, Sequence = Interlocked.Increment(ref _sequence) });
             _rotations[rotationKey] = offerId;
+            RecordAudit(key, driverId, QueueAuditEventTypes.RotatedToBack, offerId);
             return Task.FromResult(true);
         }
     }
+
+    public Task<IReadOnlyList<QueueAuditEvent>> GetAuditEventsAsync(
+        string zoneId, string serviceClass, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = Key(zoneId, serviceClass);
+        IReadOnlyList<QueueAuditEvent> events = _auditEvents
+            .Where(item => item.ZoneServiceKey == key)
+            .OrderByDescending(item => item.OccurredAtUtc)
+            .ThenByDescending(item => item.EventId, StringComparer.Ordinal)
+            .ToArray();
+        return Task.FromResult(events);
+    }
+
+    private void RecordAudit(string zoneServiceKey, string driverId, string eventType, string? offerId = null) =>
+        _auditEvents.Enqueue(new QueueAuditEvent(
+            Guid.NewGuid().ToString("N"), zoneServiceKey, driverId, eventType, DateTimeOffset.UtcNow, offerId));
 
     private static string Key(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";

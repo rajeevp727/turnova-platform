@@ -164,4 +164,34 @@ public sealed class QueueStoreTests
         await Assert.ThrowsAsync<ArgumentException>(() =>
             store.MoveToBackOnceAsync("driver-a", "zone-a", "auto", " ", CancellationToken.None));
     }
+
+    [Fact]
+    public async Task QueueAuditEventsRecordOnlySuccessfulMutationsAndStayScopedToQueue()
+    {
+        var store = new InMemoryQueueStore();
+        var start = DateTimeOffset.Parse("2026-11-06T00:00:00Z");
+        await store.AddAsync(Entry("driver-a", "zone-a", "auto", start), CancellationToken.None);
+        await store.AddAsync(Entry("driver-b", "zone-a", "auto", start.AddMinutes(1)), CancellationToken.None);
+        await store.AddAsync(Entry("driver-c", "zone-b", "auto", start.AddMinutes(2)), CancellationToken.None);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.AddAsync(Entry("driver-a", "zone-a", "auto", start.AddMinutes(3)), CancellationToken.None));
+        Assert.True(await store.MoveToBackOnceAsync("driver-a", "zone-a", "auto", "offer-1", CancellationToken.None));
+        Assert.True(await store.MoveToBackOnceAsync("driver-a", "zone-a", "auto", "offer-1", CancellationToken.None));
+        Assert.True(await store.RemoveAsync("driver-b", "zone-a", "auto", CancellationToken.None));
+        Assert.False(await store.RemoveAsync("missing-driver", "zone-a", "auto", CancellationToken.None));
+        Assert.False(await store.MoveToBackAsync("missing-driver", "zone-a", "auto", CancellationToken.None));
+        Assert.True(await store.MoveToBackAsync("driver-a", "zone-a", "auto", CancellationToken.None));
+
+        var events = await store.GetAuditEventsAsync("zone-a", "auto", CancellationToken.None);
+        Assert.Equal(5, events.Count);
+        Assert.Equal(2, events.Count(item => item.EventType == QueueAuditEventTypes.Joined));
+        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.RotatedToBack));
+        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.Left));
+        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.MovedToBack));
+        Assert.Equal("offer-1", Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.RotatedToBack)).OfferId);
+        Assert.All(events, item => Assert.Equal("zone-a|auto", item.ZoneServiceKey));
+        Assert.DoesNotContain(events, item => item.DriverId == "driver-c");
+        Assert.Empty(await store.GetAuditEventsAsync("zone-b", "auto", CancellationToken.None));
+    }
 }

@@ -41,32 +41,31 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             IsEligible = entry.IsEligible
         };
 
-        try
-        {
-            await queueContainer.CreateItemAsync(
-                document, new PartitionKey(document.ZoneServiceKey),
-                cancellationToken: cancellationToken);
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-        {
-            throw new InvalidOperationException("Driver is already in this queue.", ex);
-        }
+        var audit = CreateAuditEvent(document.ZoneServiceKey, entry.DriverId, QueueAuditEventTypes.Joined);
+        var response = await queueContainer.CreateTransactionalBatch(new PartitionKey(document.ZoneServiceKey))
+            .CreateItem(document)
+            .CreateItem(audit)
+            .ExecuteAsync(cancellationToken);
+        if (response.IsSuccessStatusCode) return;
+        if (response[0].StatusCode == System.Net.HttpStatusCode.Conflict)
+            throw new InvalidOperationException("Driver is already in this queue.");
+        throw new InvalidOperationException(
+            $"Queue join and audit event could not be committed atomically (Cosmos status {(int)response.StatusCode}).");
     }
 
     public async Task<bool> RemoveAsync(
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
         var key = QueueKey(zoneId, serviceClass);
-        try
-        {
-            await queueContainer.DeleteItemAsync<QueueEntryDocument>(
-                driverId, new PartitionKey(key), cancellationToken: cancellationToken);
-            return true;
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return false;
-        }
+        var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.Left);
+        var response = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
+            .DeleteItem(driverId)
+            .CreateItem(audit)
+            .ExecuteAsync(cancellationToken);
+        if (response.IsSuccessStatusCode) return true;
+        if (response[0].StatusCode == System.Net.HttpStatusCode.NotFound) return false;
+        throw new InvalidOperationException(
+            $"Queue leave and audit event could not be committed atomically (Cosmos status {(int)response.StatusCode}).");
     }
 
     public async Task<bool> MoveToBackAsync(
@@ -80,10 +79,16 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             var document = response.Resource;
             document.JoinedAt = DateTimeOffset.UtcNow;
             document.Sequence = document.JoinedAt.UtcTicks;
-            await queueContainer.ReplaceItemAsync(
-                document, driverId, new PartitionKey(key),
-                new ItemRequestOptions { IfMatchEtag = response.ETag }, cancellationToken);
-            return true;
+            var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.MovedToBack);
+            var batch = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
+                .ReplaceItem(driverId, document, new TransactionalBatchItemRequestOptions { IfMatchEtag = response.ETag })
+                .CreateItem(audit)
+                .ExecuteAsync(cancellationToken);
+            if (batch.IsSuccessStatusCode) return true;
+            if (batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+                return false;
+            throw new InvalidOperationException(
+                $"Queue rotation and audit event could not be committed atomically (Cosmos status {(int)batch.StatusCode}).");
         }
         catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
         {
@@ -103,13 +108,40 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             document.JoinedAt = DateTimeOffset.UtcNow;
             document.Sequence = document.JoinedAt.UtcTicks;
             document.LastRotationOfferId = offerId;
-            await queueContainer.ReplaceItemAsync(document, driverId, new PartitionKey(key),
-                new ItemRequestOptions { IfMatchEtag = response.ETag }, cancellationToken);
-            return true;
+            var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.RotatedToBack, offerId);
+            var batch = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
+                .ReplaceItem(driverId, document, new TransactionalBatchItemRequestOptions { IfMatchEtag = response.ETag })
+                .CreateItem(audit)
+                .ExecuteAsync(cancellationToken);
+            if (batch.IsSuccessStatusCode) return true;
+            if (batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+                return false;
+            throw new InvalidOperationException(
+                $"Offer rotation and audit event could not be committed atomically (Cosmos status {(int)batch.StatusCode}).");
         }
         catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
         { return false; }
     }
+
+    public async Task<IReadOnlyList<QueueAuditEvent>> GetAuditEventsAsync(
+        string zoneId, string serviceClass, CancellationToken cancellationToken)
+    {
+        var key = QueueKey(zoneId, serviceClass);
+        var query = new QueryDefinition(
+                "SELECT * FROM c WHERE c.zoneServiceKey = @key AND c.documentType = @documentType ORDER BY c.occurredAtUtc DESC")
+            .WithParameter("@key", key)
+            .WithParameter("@documentType", "queue-audit");
+        using var iterator = queueContainer.GetItemQueryIterator<QueueAuditEvent>(
+            query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(key) });
+        var events = new List<QueueAuditEvent>();
+        while (iterator.HasMoreResults)
+            events.AddRange(await iterator.ReadNextAsync(cancellationToken));
+        return events;
+    }
+
+    private static QueueAuditEvent CreateAuditEvent(
+        string zoneServiceKey, string driverId, string eventType, string? offerId = null) =>
+        new(Guid.NewGuid().ToString("N"), zoneServiceKey, driverId, eventType, DateTimeOffset.UtcNow, offerId);
 
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";

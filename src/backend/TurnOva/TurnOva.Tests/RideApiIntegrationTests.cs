@@ -64,6 +64,21 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnhandledExceptionReturnsGenericProblemDetailsWithTraceId()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var client = factory.CreateClient("Rider", "rider-exception");
+
+        using var response = await client.GetAsync("/__test/throw");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Contains("An unexpected error occurred.", body);
+        Assert.Contains("traceId", body);
+        Assert.DoesNotContain("sensitive-test-exception", body);
+    }
+
+    [Fact]
     public async Task DriverMustSubmitOnboardingAndBeApprovedBeforeJoiningQueue()
     {
         using var factory = new TurnOvaApiFactory();

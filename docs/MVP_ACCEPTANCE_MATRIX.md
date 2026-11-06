@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12 and 14; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #48 merge `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; PLATFORM-01 hardening increment is underway.
+**Last audited:** 2026-11-06 against main after PR #49 merge `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; PLATFORM-01 audit/observability work remains in progress.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -33,7 +33,7 @@
 | DRIVER-04 | Driver support and issue reporting | No verified end-to-end Driver support workflow evidence recorded in this audit | Driver support process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
 | RIDER-04 | Payment through enabled methods, trip history, receipts and ratings | Rider-owned trip history API and Activity list filter by authenticated rider and expose only safe ride summary fields; PR #47 adds ownership, ordering, privacy and empty-history API tests | Cosmos history query integration; payment provider/method decision, sandbox integration, webhook/idempotency/refund tests, receipts and rating flows | Blocked |
 | SUPPORT-01 | Rider help and issue reporting | No verified end-to-end Rider support workflow evidence recorded in this audit | Rider help process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
-| PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations and selected audit stores; explicit `Cors:AllowedOrigins` allow-list replaces wildcard CORS, `/health/live` and Cosmos-aware `/health/ready` are distinct, and integration tests cover allowed/disallowed origins and demo readiness in PR #49 (open; implementation head `5458c7c244b3621e294cef5ae1c2ad3d24c339c7` passed CI run 42216452456) | Cosmos-unavailable readiness failure injection, production origin configuration, secrets/logging review, metrics/traces/alerts, audit durability and load tests | In progress |
+| PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations and selected audit stores; PR #49 merged explicit CORS allow-list and distinct liveness/readiness endpoints; append-only `QueueAuditEvent` records successful queue join/leave/rotation, Cosmos writes state+audit in one `QueueEntries` partition batch, and unhandled exceptions return generic traceId Problem Details with exception-type-only structured logs; tests cover in-memory audit semantics and safe error response | Durable exception audit with actor/reason, real Cosmos transactional-batch/ETag/restart/retention failure tests, metrics/traces/alerts, Cosmos-unavailable readiness, production origin configuration and load tests | In progress |
 | RELEASE-01 | Android and iOS builds pass agreed functional, security and pilot-readiness tests | Main CI run 42209834591 passed backend build/tests, non-container API publish/artifact verification, Rider/Driver Expo config and TypeScript checks, and shared mobile auth tests | Android/iOS production builds, signed artifacts, physical-device functional/security/pilot checklist | In progress |
 
 ## Current verified count and weighted progress
@@ -44,6 +44,7 @@
 - Strict fully verified count: **0 / 19**. A weighted score is not a claim that the MVP is accepted or production-ready.
 - PR #47 merged at `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; its latest head `1c08b96e78bef42c175b29593de153a151382f96` passed all four jobs in CI run 42214516012. The Rider history feature is now merged; real Cosmos cross-partition/RU verification remains open.
 - PR #48 merged at `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final head `2b19856b02b4722cd76cfb04459c01afb6a4e3ab` passed all four jobs in CI run 42215718229. Rider and Driver history code is merged; TRIP-01 remains In progress pending Cosmos/device acceptance.
+- PR #49 merged at `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; final head `617195e15d82bb93f6367ec462e60d74576dea62` passed all four jobs in CI run 42216606101. CORS is now explicit allow-list/deny-by-default and health liveness/readiness routes are distinct; PLATFORM-01 remains In Progress.
 - Main CI run 42209834591 passed backend build/tests, native non-container API publish/artifact verification, both mobile Expo config/typechecks and shared mobile auth tests. This remains automated CI evidence, not Android/iOS physical-device or provider acceptance proof.
 - Do not mark an area Verified until all evidence in its row has passed and the links/results are recorded.
 
@@ -72,12 +73,12 @@
 15. DRIVER-04 — Blocked
 16. RIDER-04 — Blocked
 17. SUPPORT-01 — Blocked
-18. PLATFORM-01 — In progress; CORS allow-list and health-probe hardening in progress
+18. PLATFORM-01 — In progress; PR #49 CORS/health merged; queue audit and safe exception logging under implementation; metrics/traces/Cosmos gates remain
 19. RELEASE-01 — In progress
 
 ## Highest-priority next work
 
-1. Complete PLATFORM-01 security/health hardening: verify explicit CORS allow-list and unambiguous liveness/readiness endpoints, then continue metrics/traces/audit and Cosmos reliability evidence.
+1. Complete the append-only queue audit and safe exception logging increment; then add metrics/traces and Cosmos transactional-batch/readiness failure-recovery evidence.
 2. Keep RIDER-02 blocked until base fare, distance/time components, taxes and service-class pricing rules are approved; never invent a quote.
 3. Keep DRIVER-03 blocked until compensation, commission and payout treatment are approved; the existing monthly PDF is a work-metrics payslip, not monetary earnings.
 4. Keep RIDER-04 blocked until payment method/provider, sandbox, webhook/idempotency/refund, receipt and rating decisions are supplied.
@@ -90,4 +91,4 @@ The MVP API is validated through a native .NET 10 publish artifact. Docker, cont
 
 ## Audit limitations
 
-This audit reflects main after PR #48 merge `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`, the PRD, README, test plan and current source inventory. It is not a substitute for executing Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.
+This audit reflects main after PR #49 merge `67621e02b00d823b84d8d5e3f74f199c283fa3e7`, the PRD, README, test plan and current source inventory. It is not a substitute for executing Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.

@@ -1,4 +1,5 @@
 using TurnOva.API;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
@@ -186,10 +187,31 @@ if (useCosmos)
 }
 
 app.UseCors();
+
+app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+{
+    var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+    app.Logger.LogError("Unhandled API exception. TraceId {TraceId} ExceptionType {ExceptionType}", context.TraceIdentifier, exception?.GetType().Name ?? "Unknown");
+    context.Response.Clear();
+    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+    await Results.Problem(
+        title: "An unexpected error occurred.",
+        statusCode: StatusCodes.Status500InternalServerError,
+        extensions: new Dictionary<string, object?> { ["traceId"] = context.TraceIdentifier })
+        .ExecuteAsync(context);
+}));
+
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
+if (app.Environment.IsEnvironment("Testing"))
+{
+    app.MapGet("/__test/throw", () =>
+    {
+        throw new InvalidOperationException("sensitive-test-exception");
+    });
+}
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();

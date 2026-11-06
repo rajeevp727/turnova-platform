@@ -6,7 +6,7 @@
 ## 1. Current step
 
 **18/19 — PLATFORM-01: Secure, observable, reliable API with persistent audit trail.**  
-Current task: remove wildcard CORS, enforce an explicit origin allow-list, and keep process liveness distinct from Cosmos-aware readiness; add integration coverage.
+Current task: add append-only queue membership audit events committed atomically with Cosmos queue state, and return safe trace-correlated Problem Details for unhandled API exceptions.
 
 ## 2. Overall MVP completion
 
@@ -37,17 +37,20 @@ Current task: remove wildcard CORS, enforce an explicit origin allow-list, and k
 | 15 | DRIVER-04 | Blocked | Driver support workflow needs approved categories, escalation owner and process. |
 | 16 | RIDER-04 | Blocked | Rider history sub-work is in PR #47; payment provider/method, sandbox, webhook/idempotency/refund, receipts and ratings remain. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting process, categories, escalation owner, API/UI, audit and device acceptance remain. |
-| 18 | PLATFORM-01 | In progress | Explicit CORS allow-list and separate liveness/readiness endpoints are being added with integration tests; Cosmos failure injection, security/logging, metrics/traces/audit and load gates remain. |
+| 18 | PLATFORM-01 | In progress | PR #49 merged CORS/health hardening; current increment adds append-only queue audit events in the QueueEntries partition and safe exception logging; metrics/traces, Cosmos failure injection and load gates remain. |
 | 19 | RELEASE-01 | In progress | CI validates backend, native API publish, Expo config/typechecks and shared auth tests; Android/iOS production builds, signed artifacts and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
 
 - PR #47 merged: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed all four jobs.
-- PR #48 merged: https://github.com/rajeevp727/turnova-platform/pull/48; merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42215718229 passed backend restore/build/tests, native API publish/artifact verification, Rider/Driver Expo config/typechecks and shared auth tests.
-- TRIP-01 Rider and Driver history code is merged. The row remains In progress pending Cosmos cross-partition/RU verification, Android/iOS active-trip/device recovery and location-privacy acceptance.
-- Current PLATFORM-01 branch: `fix/platform-cors-health`. It removes wildcard CORS, accepts explicit `Cors:AllowedOrigins` origins only (HTTPS except HTTP in Development), rejects wildcard/path/query/userinfo origins, removes the duplicate `/health/ready` mapping, and adds CORS and liveness/readiness integration tests.
-- PR #49 is open: https://github.com/rajeevp727/turnova-platform/pull/49. Implementation head `5458c7c244b3621e294cef5ae1c2ad3d24c339c7` passed all four CI jobs in run https://github.com/rajeevp727/turnova-platform/actions/runs/42216452456 (backend build/tests, native API publish, Rider/Driver Expo config/typechecks and shared auth tests). A final documentation-only follow-up commit requires its own latest-head CI run before merge.
-- Remaining platform gates include Cosmos-unavailable readiness failure injection, production CORS origin configuration, secrets/logging review, metrics/traces/alerts, durable audit failure/recovery tests and load tests.
+- PR #48 merged: https://github.com/rajeevp727/turnova-platform/pull/48; merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run 42215718229 passed all four jobs.
+- PR #49 merged: https://github.com/rajeevp727/turnova-platform/pull/49; merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; final-head CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42216606101 passed all four jobs.
+- PR #49 removes wildcard CORS, enforces explicit `Cors:AllowedOrigins`, removes the duplicate readiness mapping, and tests allowed/disallowed preflight plus liveness/readiness in demo mode.
+- TRIP-01 Rider and Driver history code is merged; the row remains In Progress pending Cosmos cross-partition/RU verification and Android/iOS device recovery/location-privacy acceptance.
+- Current PLATFORM-01 branch: `feat/platform-observability-audit`. It adds `QueueAuditEvent` records for successful queue join/leave/move/offer rotation; Cosmos queue state and audit events are written in one transactional batch in the existing `QueueEntries` partition. In-memory tests cover event types, queue scoping, no-op/failed mutations and duplicate offer retry; API integration test covers generic exception Problem Details with traceId and no exception message.
+- Adds an exception handler that returns generic Problem Details with traceId and logs only traceId plus exception type; no request body, token or exception message is logged.
+- PR #51 is open: https://github.com/rajeevp727/turnova-platform/pull/51. Implementation head `369f5dacea92885ce78c1504bcb4f9dce9cbde04` passed all four CI jobs in run https://github.com/rajeevp727/turnova-platform/actions/runs/42219053050 (backend build/tests, native API publish, Rider/Driver Expo config/typechecks and shared auth tests). Merge remains gated on green CI for the latest PR head. Real Cosmos transactional batch/ETag/restart/retention verification is not available without the development Cosmos environment.
+- Remaining platform gates: metrics/traces/alerts, Cosmos-unavailable readiness failure injection, production CORS origin configuration, secrets/logging review and load tests.
 
 ## 5. Approved supplemental requirement (not counted in the 19 rows)
 
