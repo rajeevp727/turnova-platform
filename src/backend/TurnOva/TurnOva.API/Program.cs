@@ -459,6 +459,36 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
     try { return (await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource; }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
+
+async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct)
+{
+    var query = new QueryDefinition(
+        "SELECT TOP 1 * FROM c WHERE c.driverId = @driverId AND c.status IN ('Accepted', 'Arrived', 'InProgress')")
+        .WithParameter("@driverId", driverId);
+    return rideContainer is null
+        ? rides.Values.Any(ride => ride.DriverId == driverId && (ride.Status is "Accepted" or "Arrived" or "InProgress"))
+        : await HasActiveRideAsync(rideContainer, query, ct);
+}
+
+async Task<HashSet<string>> GetActiveDriverIdsAsync(CancellationToken ct)
+{
+    if (rideContainer is null)
+        return rides.Values
+            .Where(ride => ride.DriverId is not null && (ride.Status is "Accepted" or "Arrived" or "InProgress"))
+            .Select(ride => ride.DriverId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+    var query = new QueryDefinition(
+        "SELECT DISTINCT VALUE c.driverId FROM c WHERE IS_DEFINED(c.driverId) " +
+        "AND c.status IN ('Accepted', 'Arrived', 'InProgress')");
+    var driverIds = new HashSet<string>(StringComparer.Ordinal);
+    using var iterator = rideContainer.GetItemQueryIterator<string>(query);
+    while (iterator.HasMoreResults)
+        foreach (var activeDriverId in await iterator.ReadNextAsync(ct))
+            driverIds.Add(activeDriverId);
+    return driverIds;
+}
+
 string? ResolveDispatchZone(double latitude, double longitude)
 {
     var zones = app.Configuration.GetSection("Dispatch:Zones").Get<DispatchZoneConfig[]>() ?? [];
@@ -999,6 +1029,8 @@ app.MapPost("/api/v1/driver/availability", async (
         var currentZoneId = ResolveDispatchZone(request.Latitude.Value, request.Longitude.Value);
         if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "Your current location is outside your assigned service zone." });
+        if (await HasActiveDriverRideAsync(driverId, ct))
+            return Results.Conflict(new { message = "Complete your active ride before going online." });
 
         await SaveDriverProfileAsync(profile with
         {
@@ -1015,7 +1047,13 @@ app.MapPost("/api/v1/driver/availability", async (
         }
         catch
         {
-            await SaveDriverProfileAsync(profile with { AvailabilityStatus = "Offline" }, ct);
+            await SaveDriverProfileAsync(profile with
+        {
+            AvailabilityStatus = "Offline",
+            CurrentLatitude = null,
+            CurrentLongitude = null,
+            LocationUpdatedAtUtc = null
+        }, ct);
             throw;
         }
         var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
@@ -1023,12 +1061,8 @@ app.MapPost("/api/v1/driver/availability", async (
         return Results.Ok(new { availabilityStatus = "Online", isOnline = true, isQueued = position > 0, position });
     }
 
-    var activeRideQuery = new QueryDefinition("SELECT TOP 1 * FROM c WHERE c.driverId = @driverId AND c.status IN ('Accepted', 'Arrived', 'InProgress')")
-        .WithParameter("@driverId", driverId);
-    var hasActiveRide = rideContainer is null
-        ? rides.Values.Any(ride => ride.DriverId == driverId && (ride.Status is "Accepted" or "Arrived" or "InProgress"))
-        : await HasActiveRideAsync(rideContainer, activeRideQuery, ct);
-    if (hasActiveRide) return Results.Conflict(new { message = "Complete your active ride before going offline." });
+    if (await HasActiveDriverRideAsync(driverId, ct))
+        return Results.Conflict(new { message = "Complete your active ride before going offline." });
 
     await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
     await SaveDriverProfileAsync(profile with
@@ -1053,6 +1087,8 @@ app.MapPost("/api/v1/driver/location", async (
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null || profile.AvailabilityStatus != "Online")
         return Results.Conflict(new { message = "Only an approved online driver can share availability location." });
+    if (await HasActiveDriverRideAsync(driverId, ct))
+        return Results.Conflict(new { message = "Availability location is paused while you have an active ride." });
 
     var currentZoneId = ResolveDispatchZone(request.Latitude, request.Longitude);
     if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
@@ -1190,10 +1226,12 @@ app.MapGet("/api/v1/rides/nearby", async (
         app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds") ?? 120, 30, 600);
     var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds);
     var profiles = await GetOnlineDriverProfilesAsync(zoneId, normalizedServiceClass, passengers, ct);
+    var activeDriverIds = await GetActiveDriverIdsAsync(ct);
 
     var vehicles = profiles
         .Where(profile => queuedDriverIds.Contains(profile.DriverId) &&
-            profile.LocationUpdatedAtUtc >= freshAfter &&
+            !activeDriverIds.Contains(profile.DriverId) &&
+            profile.LocationUpdatedAtUtc is { } locationUpdatedAt && locationUpdatedAt >= freshAfter &&
             profile.CurrentLatitude is not null &&
             profile.CurrentLongitude is not null)
         .Select(profile => new
