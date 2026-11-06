@@ -21,8 +21,27 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks();
+
+var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+foreach (var origin in corsAllowedOrigins)
+{
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin) ||
+        (parsedOrigin.Scheme != Uri.UriSchemeHttps &&
+         !(builder.Environment.IsDevelopment() && parsedOrigin.Scheme == Uri.UriSchemeHttp)) ||
+        parsedOrigin.AbsolutePath != "/" ||
+        !string.IsNullOrEmpty(parsedOrigin.UserInfo) ||
+        !string.IsNullOrEmpty(parsedOrigin.Query) ||
+        !string.IsNullOrEmpty(parsedOrigin.Fragment))
+        throw new InvalidOperationException(
+            "Cors:AllowedOrigins must contain explicit HTTPS origins (HTTP is allowed only in Development); wildcards and URL paths are not allowed.");
+}
+
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
-    policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+{
+    policy.AllowAnyHeader().AllowAnyMethod();
+    if (corsAllowedOrigins.Length > 0)
+        policy.WithOrigins(corsAllowedOrigins);
+}));
 
 var jwtIssuer = builder.Configuration["Auth:Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Auth:Jwt:Audience"];
@@ -171,7 +190,6 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
-app.MapHealthChecks("/health/ready");
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
