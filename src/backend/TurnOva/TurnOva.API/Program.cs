@@ -2691,10 +2691,14 @@ async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, str
 async Task<DemoRide?> TryTransitionAsync(DemoRide current, string next, CancellationToken ct)
 {
     if (!RideLifecycle.CanTransition(current.Status, next)) return null;
+    var locationSharingActive = RideLifecycle.IsLocationSharingActive(next);
     var updated = current with
     {
         Status = next,
-        LocationSharingActive = RideLifecycle.IsLocationSharingActive(next),
+        LocationSharingActive = locationSharingActive,
+        DriverLatitude = locationSharingActive ? current.DriverLatitude : null,
+        DriverLongitude = locationSharingActive ? current.DriverLongitude : null,
+        LocationUpdatedAt = locationSharingActive ? current.LocationUpdatedAt : null,
         NegotiationExpiresAtUtc = next is "Accepted" or "Cancelled" or "Expired" or "Completed"
             ? null : current.NegotiationExpiresAtUtc
     };
@@ -2844,9 +2848,14 @@ app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId,
 {
     var ride = await FindRideAsync(rideId, ct);
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
-    return ride is not null && ride.RiderId == riderId
-        ? Results.Ok(ride)
-        : Results.NotFound(new { message = "Ride not found." });
+    if (ride is null || ride.RiderId != riderId)
+        return Results.NotFound(new { message = "Ride not found." });
+
+    var canShareDriverLocation = ride.LocationSharingActive && RideLifecycle.IsLocationSharingActive(ride.Status);
+    var riderVisibleRide = canShareDriverLocation
+        ? ride
+        : ride with { DriverLatitude = null, DriverLongitude = null, LocationUpdatedAt = null };
+    return Results.Ok(riderVisibleRide);
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.Run();
