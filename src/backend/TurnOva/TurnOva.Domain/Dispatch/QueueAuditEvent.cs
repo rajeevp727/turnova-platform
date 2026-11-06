@@ -1,5 +1,3 @@
-using System.Text.Json.Serialization;
-
 namespace TurnOva.Domain.Dispatch;
 
 public static class QueueAuditEventTypes
@@ -18,7 +16,6 @@ public sealed record QueueAuditEvent(
     DateTimeOffset OccurredAtUtc,
     string? OfferId = null)
 {
-    [JsonPropertyName("id")]
     public string Id => EventId;
 
     public string DocumentType => "queue-audit";
