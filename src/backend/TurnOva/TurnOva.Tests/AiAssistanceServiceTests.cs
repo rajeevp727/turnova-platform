@@ -221,7 +221,7 @@ public sealed class AiAssistanceServiceTests
         var service = CreateService(provider, enabled: true);
 
         var result = await service.ExplainHelpAsync(
-            "How is money received after the trip reported?",
+            "How is the payment received after the trip reported?",
             null,
             CancellationToken.None);
 
