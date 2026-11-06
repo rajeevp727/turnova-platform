@@ -11,7 +11,7 @@
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
 - CAB-SCOPE-01 is implemented and CI-validated for the covered API/mobile paths. Physical-device and production acceptance remain outstanding.
 - PR #54 merged tracker reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; its final-head CI run 42234802360 passed all four jobs.
-- PR #55 is open with union-grouped API discovery, eligibility/radius/photo/privacy rules, legacy customer-facing FIFO paths disabled by default and Rider grouped-card/local selection UI. Latest-head CI run 42236711865 passed all four jobs; automated review found no critical/high-risk issue. Durable selected-driver reservation/booking and device/provider gates remain.
+- PR #55 is open with union-grouped API discovery, eligibility/radius/photo/privacy rules, legacy customer-facing FIFO paths disabled by default and Rider grouped-card/local selection UI. CI run 42236711865 passed all four jobs for the discovery implementation. A Rider/anonymous authorization regression test was then added; final-head CI run 42237040525 is in progress. Automated review found no critical/high-risk issue. Durable selected-driver reservation/booking and device/provider gates remain.
 
 ## 2. Overall MVP completion
 
