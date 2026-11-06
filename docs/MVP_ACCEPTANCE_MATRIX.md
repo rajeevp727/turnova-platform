@@ -46,7 +46,7 @@
 - PR #48 merged Driver history at `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; CI run 42215718229 passed all four jobs.
 - PR #49 merged CORS/health hardening at `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; CI run 42216606101 passed all four jobs.
 - PR #51 merged queue audit and safe exception handling at `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; CI run 42219327319 passed all four jobs.
-- PR #50 contains the approved Cab-only documentation reset. Its original CI run 42217994808 passed on its old head; the branch is now reconciled with PR #51 and requires latest-head CI before merge.
+- PR #50 contains the approved Cab-only documentation reset. Original CI run 42217994808 passed on its initial head; the branch was reconciled with current main in merge commit `5eda5a9a4800e67c028018a8395c85efaa1fa7b3`, and final-head CI run 42220458874 passed all four jobs; merge remains pending.
 - Do not mark an area Verified until all evidence in its row has passed and links/results are recorded.
 
 ## Approved supplemental requirement (not counted in the 19 PRD areas)
