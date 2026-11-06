@@ -64,8 +64,8 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 
 ## Highest-priority unfinished work
 
-1. **#5 RIDER-03:** durable Rider-selected booking/reservation, idempotency, concurrency-safe driver hold, cancellation/expiry and exact reservation release; wire discovery selection into agreement flow.
-2. **Revisit RIDER-02:** persist optional stops in agreement route snapshot and validate end-to-end on Android/iOS and live Cosmos.
+1. **Complete #5 RIDER-03:** automated review and final-head CI, then merge if all checks pass and repository rules permit.
+2. **#6 DISPATCH-01:** inspect the exact PRD acceptance row and implement the next smallest in-scope dispatch slice without customer-facing FIFO or automatic advancement.
 3. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
 4. **CAB-UNION-01:** Cab membership, vehicle verification, union approval/selfie visibility and minimum necessary oversight.
 5. **PLATFORM-01 and RELEASE-01:** queue audit and CORS/health increments merged; durable exception audit, metrics/traces/alerts, Cosmos failure/recovery and Android/iOS device/release gates remain.
@@ -238,4 +238,4 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - `AgreementStateRevision` increments on proposal/confirmation changes. Cosmos writes use the existing Rides partition and ETag replacement; concurrent proposal/confirmation or stale start/completion attempts return conflict.
 - Proposal API requires party ownership, active Cab union membership, approved Cab profile, `Idempotency-Key`, positive two-decimal amount and uppercase three-letter currency. No platform fare or payment collection is introduced.
 - Start and completion require both parties to confirm the current version. A fare renegotiated during the trip invalidates prior confirmations and blocks completion until both reconfirm.
-- Optional stops are not yet present in the existing ride aggregate; the full route snapshot is dependent on RIDER-03 selected booking. Do not mark RIDER-02 verified yet.
+- RIDER-03 adds optional stops to selected rides and agreement route snapshots; live Cosmos/device evidence remains required before the related acceptance rows can be marked Verified.
