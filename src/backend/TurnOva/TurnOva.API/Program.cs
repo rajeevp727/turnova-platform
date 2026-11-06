@@ -527,8 +527,9 @@ async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct,
     // expiry; only after its terminal transition (or an expired orphan lease) may the
     // matching reservation be released and another booking acquire the driver.
     var reservation = await driverRideReservations.GetActiveAsync(driverId, ct);
-    if (reservation is null || reservation.RideId == exceptRideId) return false;
+    if (reservation is null) return false;
 
+    var isSameIdempotentRide = reservation.RideId == exceptRideId;
     var reservedRide = await FindRideAsync(reservation.RideId, ct);
     if (reservedRide is not null && reservedRide.Status is "Completed" or "Cancelled" or "Expired")
     {
@@ -542,6 +543,12 @@ async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct,
         await driverRideReservations.TryReleaseAsync(driverId, reservation.RideId, ct);
         return false;
     }
+
+    // An idempotent retry may continue using its own live lease if the ride write was
+    // interrupted. Other requests remain blocked. A live/expired lease with a ride that
+    // is still active remains exclusive until the authoritative lifecycle resolves it.
+    if (isSameIdempotentRide && (reservedRide is null || reservedRide.Status is "Negotiating" or "AgreementConfirmed"))
+        return false;
 
     // An expired lease with a still-active ride is inconsistent and must fail closed.
     // FindRideAsync has already attempted the authoritative Negotiating/AgreementConfirmed expiry transition.
