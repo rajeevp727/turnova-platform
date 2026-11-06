@@ -21,10 +21,6 @@ public sealed class DriverRideReservationStoreTests
     }
 
     [Fact]
-    public async Task ExpiredNegotiationReservationCanBeReplacedButActiveRideReservationCannot()
-    {
-        var store = new InMemoryDriverRideReservationStore();
-    [Fact]
     public async Task ExpiredNegotiationReservationIsReleasedAndOnlyMatchingBookingCanRelease()
     {
         var store = new InMemoryDriverRideReservationStore();
