@@ -46,7 +46,9 @@ Current task: review and verify Driver-owned trip history in [PR #48](https://gi
 - Latest PR #47 head `1c08b96e78bef42c175b29593de153a151382f96` passed all four jobs in CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42214516012.
 - Rider history API tests cover owner isolation despite client-supplied riderId, newest-first ordering, response privacy, Rider/Driver role separation and empty history. Rider UI restores the latest active ride, ignores stale responses after Activity unmount/session change, and clears stale active state when history contains no active ride.
 - PR #48 is open: https://github.com/rajeevp727/turnova-platform/pull/48. It adds Driver-only `GET /api/v1/driver/rides/mine`, an owner-scoped safe summary, active-trip restoration in Driver Trips UI with SignalR reconnect refresh, and API ownership/privacy/role/empty-history tests.
-- Initial CI run 42215153478 failed only the Driver app TypeScript check (`styles.status` did not exist); backend build/tests, native publish, Rider typecheck and shared auth tests passed. The style reference was corrected to the existing `styles.label`; a fresh latest-head CI run is required before merge.
+- Initial CI runs 42215153478 and 42215250054 exposed the same Driver TypeScript issue (`styles.status` did not exist); it was corrected to the existing `styles.label` in commit `213ac477c1868f4768d60938436dd86c742e106d`.
+- Driver-history implementation head `5724a3634d8a6c9f7bdbf86cf8ad0c7ecef848db` passed all four jobs in CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42215519184: backend restore/build/tests, native API publish/artifact verification, Rider and Driver Expo config/typechecks, and shared mobile auth tests.
+- A final documentation-only reconciliation commit follows that validated implementation head; require its PR CI run to pass before merge.
 - Real Cosmos cross-partition query/RU behaviour is not verified by the in-memory API tests.
 
 ## 5. Approved supplemental requirement (not counted in the 19 rows)
