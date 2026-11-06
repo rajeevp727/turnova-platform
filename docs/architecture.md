@@ -29,7 +29,7 @@ Use the latest supported .NET 10 servicing patch. Keep secrets out of source con
     TurnOva Driver ├── HTTPS / SignalR ── ASP.NET Core API (.NET 10)
     TurnOva Fleet ─┤                         ├── Authentication / Authorization
     TurnOva Ops ───┘                         ├── Application use cases
-                                             ├── Zone FIFO dispatch engine
+                                             ├── Selected-driver booking + legacy queue compatibility
                                              ├── SignalR hubs
                                              ├── Cosmos DB repositories
                                              └── External provider adapters
@@ -114,6 +114,15 @@ Candidate entities/containers:
 Partition keys must follow access patterns and transaction boundaries. Candidate keys include a zone/service-class queue identifier for queue operations and ride/request identifiers for trip lookups. Validate hot-partition risk, queue size, query patterns, indexing, TTL and consistency with representative load tests. Avoid cross-partition transaction assumptions.
 
 Store identity documents in protected object storage rather than large Cosmos DB documents; retain secured metadata/references. Apply least privilege and retention controls.
+
+### Union reviewer authorization and selfie lifecycle
+
+- Union reviewers authenticate with a signed `role=UnionManager` claim and one or more signed `unionId` claims. The API does not infer union scope from request-body values.
+- `GET /api/v1/union/drivers` returns only active Cab memberships for the caller's claimed unions. It includes only the driver/vehicle fields and document-status metadata needed for review, plus the selfie for the assigned union reviewer. It excludes phone/email, exact coordinates, private chat and Rider/ride data.
+- `PUT /api/v1/union/drivers/{driverId}/selfie-review` accepts review only when the driver has an active membership in a union claimed by the caller, the union is Active, the Cab profile and required licence/vehicle documents are approved, and a valid selfie exists.
+- Operations admin-key access may reject/hide a selfie, but cannot approve public visibility. Approval must come from the currently assigned union manager.
+- A new/changed union assignment resets selfie approval to Pending unless the selfie was already approved by that exact current union. Rider discovery returns the photo only after current-union approval. The Driver app reads its own `/api/v1/driver/union` membership and displays the current union/status.
+- TriSend/identity-provider issuance of the `UnionManager` role and `unionId` claims is a configuration gate. Private document storage, malware scanning, consent and retention remain blocked on provider/policy selection; no storage provider or credentials are hardcoded.
 
 ## 8. Initial API resource groups
 
