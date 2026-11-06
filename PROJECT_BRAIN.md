@@ -71,9 +71,10 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 1. **#6 DISPATCH-01 — Blocked:** PR #55 implementation and PR #58 regression coverage are independent of the missing decision. Resume final verification only after product approval of the production pickup radius and zone boundaries, plus live Cosmos and Android/iOS pickup-zone evidence.
 2. **#7 DISPATCH-02 — Implementation audit recorded:** PR #55/RIDER-03 implement the per-union cap, pickup-proximity ordering, explicit selection and no-FIFO Rider path; PR #59 adds an equal-distance deterministic tie-break regression. Live Cosmos/device evidence and the internal FIFO role decision remain, so the acceptance row stays In progress.
 3. **#8 DISPATCH-03 / #9 DISPATCH-04:** selected negotiation expiry/idempotency and no-overlap protections are implemented and covered by in-memory/API tests, including PR #61's accepted-active-ride Union-transfer guard. Live Cosmos restart/ETag contention remains external.
-4. **#10 REALTIME-01 — Current:** audit authenticated SignalR event delivery and Rider/Driver reconnect recovery; add only missing deterministic tests. Android/iOS device-to-device acceptance remains outstanding.
-5. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
-6. **CAB-UNION-01, remaining support/platform/release areas, and AI-01 supplemental:** complete only after the agreed 19-area sequence; keep AI-01 outside the denominator.
+4. **#10 REALTIME-01 — Implementation audit recorded:** PR #63 fixes Rider reconnect state restoration, tests authenticated hub group ownership and role-specific active-state selection, and passes CI run `42267819480` all four jobs. Physical Android/iOS WebSocket/reconnect acceptance remains outstanding.
+5. **#11 DRIVER-01 — Current:** audit Cab-only Driver onboarding, identity/licence/Cab vehicle verification, Union approval and union-approved selfie visibility; implement only missing vertical-slice work.
+6. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
+7. **CAB-UNION-01, remaining support/platform/release areas, and AI-01 supplemental:** complete only after the agreed 19-area sequence; keep AI-01 outside the denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -261,3 +262,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - `UnionTransferIsBlockedWhileDriverHasAcceptedActiveRide` verifies a Rider-selected Cab booking proceeds through proposal, both confirmations and Driver acceptance; the permanent per-driver reservation remains held; transfer to another Union returns conflict; the original membership and reservation remain unchanged.
 - The test is in-memory/API integration evidence. Live Cosmos multi-instance contention, ETag conflict behaviour under real service, process restart/crash recovery and approved negotiation-lifetime configuration remain unverified.
 - Sequential next item: #10 REALTIME-01. Audit SignalR authorization, group membership, agreement/trip event coverage and reconnect recovery before changing code.
+
+
+## REALTIME-01 Rider reconnect audit (2026-11-06)
+
+- PR #63 fixes the Rider's stale-state gap after a SignalR disconnect: initial connection and reconnect now reload owner-scoped ride history/current ride details and agreement versions. Rider status/location/agreement callbacks are guarded after cleanup. Driver reconnect continues to reload available requests and authoritative selected/active/terminal history.
+- A shared role-specific active-ride selector is used by Rider and Driver. Automated tests cover Rider and Driver active states, terminal-only history clearing and invalid roles.
+- `RideTrackingHubTests` verifies Rider and assigned Driver can join only their own ride group, and a Driver can subscribe only to their own selected-booking notification group.
+- PR #63 head `d51acc55093f71efec190b10ba85b8cc738f985c` passed CI run [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480), all four jobs. This includes backend tests and native non-container publish, both mobile app config/typechecks, and shared Node tests.
+- Physical Android/iOS WebSocket delivery/reconnect, background/resume and device-to-device trip updates remain external acceptance gates. No production or device readiness is claimed.
+- Next sequential work: #11 DRIVER-01.
