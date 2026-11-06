@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `43cb52f4652990d1ddc88efb765f8fef72ec0753` (PR #72 Rider/Driver Android+iOS production JavaScript bundle CI merged; native signing/device gates remain)
+**Last audited main HEAD:** `3a2e37e610e8660fa8ecca1a3e1f42e8899251ff` (PR #73 AI-01 merged; final-head CI 233/233 backend tests and all API/mobile jobs passed; native signing/device and live AI provider gates remain)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -82,7 +82,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 10. **#16 RIDER-04 — Current:** PR #70 implements the approved CAB-RECON-01 supplemental requirement: immutable Driver-reported payment reconciliation after completed Cab rides, signed delta, Driver history and claim-scoped UnionManager oversight. Code head `d73dc0c76528ca95fff39a5d38a5512b1720b941` passed CI [42295719183](https://github.com/rajeevp727/turnova-platform/actions/runs/42295719183) with 210/210 backend tests, both mobile typechecks, nine shared tests and native non-container publish; live Cosmos/device gates remain. CAB-RECON-01 stays outside the 19-row denominator.
 11. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved.
 12. **#18 PLATFORM-01 / #19 RELEASE-01:** code/CI increments are merged; retain live hosting, Cosmos, native signing, physical-device, provider and legal gates.
-13. **AI-01 supplemental — current sequential work:** provider-agnostic Rider trip-intent draft and approved Rider/Driver ride/queue-state help boundary; remains outside the 19-row denominator.
+13. **Current sequential #1 AUTH-01:** duplicate-registration conflict and authenticated profile-read contract verification; AI-01 remains separately tracked outside the 19-row denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -351,18 +351,28 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #71 merged at `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`; its final-head CI passed 214/214 backend tests, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile tests.
 - Focused PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) adds CI exports of production JavaScript bundles for Android and iOS in both Rider and Driver apps, with metadata verification and uploaded artifacts. The first CI attempt exposed Metro's inability to resolve `src/mobile/shared` from the app root; both apps now configure only `src/mobile/shared` in `watchFolders` while preserving Metro's normal hierarchical/nested dependency lookup. A subsequent CI run also exposed missing SDK 54 `expo-asset`; the compatible dependency is now added to both app manifests. A later run exposed a nested React Native dependency blocked by `disableHierarchicalLookup`; that override was removed. CI now also asserts the shared refresh module exists and is included in Metro's watch folders before export. Final-head CI [42303066838](https://github.com/rajeevp727/turnova-platform/actions/runs/42303066838) passed 214/214 backend tests, the Metro assertion, all four Rider/Driver Android/iOS bundle exports and three uploaded artifacts.
 - Bundle exports are not native binaries. Android APK/AAB, iOS archive/signing, iOS bundle identifiers, store credentials and physical-device functional/security/pilot gates remain external. Do not invent identifiers or signing secrets.
-- #17 SUPPORT-01 remains blocked by unapproved Rider support categories, escalation owner and operating process. After PR #72 completed the #19 bundle-export increment, AI-01 is the current supplemental sequential task; preserve the 19-row denominator.
+- #17 SUPPORT-01 remains blocked by unapproved Rider support categories, escalation owner and operating process. PR #73 completed the AI-01 coding increment; current sequential work resumes at #1 AUTH-01 without changing the 19-row denominator.
 
 
 
 ## AI-01 — approved supplemental Rider/Driver assistance (2026-11-07)
 
-- Current sequential work is the approved AI-01 supplemental requirement; the 19 PRD acceptance-area denominator remains unchanged.
+- PR #73 merged AI-01 at `3a2e37e610e8660fa8ecca1a3e1f42e8899251ff`; its code and CI are verified. Live provider sandbox, managed-secret wiring and data-processing review remain external gates. AI-01 stays outside the 19-area denominator.
 - Focused branch: `feat/ai-01-rider-intent-help`. The .NET Application layer defines `IAiAssistantProvider`, typed contracts, disabled-by-default provider fallback, strict output validation, timeout/cancellation and deterministic parsing/help content.
 - Rider route values are extracted locally and never sent to a provider. The provider boundary receives fixed pickup/drop-off placeholders and allow-listed generic intent words only. Provider output cannot replace the locally parsed route or select a non-Cab category.
 - Help requests are reduced to allow-listed keywords and a canonical ride state. The provider can select only an approved source ID; the API returns the exact in-repository answer. Unsupported topics require escalation.
 - Rider UI exposes a human-reviewed trip draft in Book and approved help in Profile; Driver Profile exposes approved ride/queue help. Drafting does not create a booking or call fare/agreement/payment APIs.
 - Authenticated API routes are Rider-only for trip-intent drafting and Rider/Driver for help. Per-caller rate limiting is enabled; logs exclude prompt and personal data.
-- Final-head AI-01 CI [42306708252](https://github.com/rajeevp727/turnova-platform/actions/runs/42306708252) passed all four jobs: 233/233 backend tests, TRX guard, non-container API publish/artifact, Rider/Driver Expo config/typechecks, four Android/iOS production JS bundle exports and shared mobile tests/artifacts. Automated review/merge are pending.
+- Automated review [6697690613](https://github.com/rajeevp727/turnova-platform/pull/73#issuecomment-6697690613) found no unresolved critical/high-risk issue. Final-head CI [42306913746](https://github.com/rajeevp727/turnova-platform/actions/runs/42306913746) passed 233/233 backend tests and all API/mobile jobs.
 - Live AI provider/model/credential selection, sandbox validation and data-processing review remain post-coding infrastructure gates. Do not choose a provider or commit secrets.
-- PR #72 is merged at main HEAD `43cb52f4652990d1ddc88efb765f8fef72ec0753`; final-head CI [42303396400](https://github.com/rajeevp727/turnova-platform/actions/runs/42303396400) passed 214/214 backend tests, native non-container API publish, all four Rider/Driver Android+iOS JavaScript bundle exports, Metro assertions, both app typechecks, shared mobile tests and artifacts. Native signed APK/AAB/IPA and physical-device acceptance remain separate release gates.
+- PR #72 remains merged at `43cb52f4652990d1ddc88efb765f8fef72ec0753`; PR #73 is the current main HEAD `3a2e37e610e8660fa8ecca1a3e1f42e8899251ff`. Native signed APK/AAB/IPA, physical-device acceptance and live provider validation remain separate release gates.
+
+
+
+## AUTH-01 — duplicate registration and profile read contract (2026-11-07)
+
+- Current sequential area: #1 AUTH-01. Focused branch: `feat/auth-01-registration-profile-contract`.
+- The existing API proxy already preserves upstream TriSend status/body. New fake-TriSend integration tests assert a duplicate Rider registration preserves HTTP 409 and returns no access/refresh token.
+- A new `GET /api/v1/auth/me` integration test verifies the bearer token is forwarded to TriSend and the authenticated Rider profile is returned.
+- The PRD says profile management but does not define editable fields or an upstream profile-update endpoint. Do not invent a TriSend route or field contract. Record profile editing as unresolved until an approved provider contract exists.
+- Mobile runtime/session and physical-device profile lifecycle evidence remain outstanding. Next ordered area after AUTH-01 is #2 AUTH-02 token lifecycle.
