@@ -28,4 +28,7 @@ public sealed record DriverOnboardingProfile(
     string? ProfilePhotoApprovedByUnionId = null,
     DateTimeOffset? ProfilePhotoReviewedAtUtc = null,
     string? ProfilePhotoReviewReason = null,
-    string AvailabilityStatus = "Offline");
+    string AvailabilityStatus = "Offline",
+    double? CurrentLatitude = null,
+    double? CurrentLongitude = null,
+    DateTimeOffset? LocationUpdatedAtUtc = null);
