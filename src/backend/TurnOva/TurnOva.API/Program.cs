@@ -9,8 +9,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
+using System.Threading.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
@@ -22,6 +24,34 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks();
+
+builder.Services.AddOptions<AiAssistantOptions>()
+    .Bind(builder.Configuration.GetSection(AiAssistantOptions.SectionName))
+    .Validate(options => options.TimeoutSeconds is >= 1 and <= 30, "AiAssistant:TimeoutSeconds must be between 1 and 30.")
+    .Validate(options => options.MaxInputCharacters is >= 100 and <= 2000, "AiAssistant:MaxInputCharacters must be between 100 and 2000.")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.Provider) && !string.IsNullOrWhiteSpace(options.Model),
+        "AiAssistant provider and model must remain explicit placeholders until configured.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<IAiAssistantProvider, DisabledAiAssistantProvider>();
+builder.Services.AddSingleton<IAiAssistantService, AiAssistantService>();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("ai-assistant", context =>
+    {
+        var partitionKey = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.User.FindFirstValue("sub")
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
@@ -248,6 +278,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
 if (app.Environment.IsEnvironment("Testing"))
@@ -2975,6 +3006,8 @@ app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId,
         ? Results.Ok(ride)
         : Results.NotFound(new { message = "Ride not found." });
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
+
+app.MapAiAssistantEndpoints();
 
 app.Run();
 
