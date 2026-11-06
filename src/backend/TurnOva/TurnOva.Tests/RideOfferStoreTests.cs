@@ -40,7 +40,7 @@ public sealed class RideOfferStoreTests
         Assert.True(await store.TryCreateAsync(CreateState("resolved", "driver-3", now.AddSeconds(-1)) with
         {
             Status = RideOfferStatuses.Accepted
-        });
+        }));
 
         var expired = await store.GetExpiredAsync(now, 10);
 
