@@ -532,3 +532,16 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 - Reject missing pickup coordinates and latitude/longitude values outside their valid ranges.
 - Reject unsupported service classes and pickup coordinates outside configured service zones.
 - Verify a rejected request does not consume its idempotency key, allowing a corrected retry to create the ride.
+
+## 12. Nearby available vehicles and online driver location
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| NEARBY-001 | Driver goes online without GPS coordinates or with coordinates outside the assigned zone | HTTP 400/409; driver remains Offline and is not added to the queue | API integration | P0 |
+| NEARBY-002 | Rider searches for nearby vehicles | Only approved, online drivers with active queue membership in the pickup zone, matching service class and sufficient passenger capacity are returned, ordered by distance | API integration | P0 |
+| NEARBY-003 | Nearby search privacy and stale location | Response omits driver ID, name, phone, registration and exact coordinates; locations older than the configured freshness window are excluded | API integration + security | P0 |
+| NEARBY-004 | Driver leaves assigned zone while online | Driver is taken Offline, queue membership is removed and current location is cleared | API integration | P0 |
+| NEARBY-005 | Driver app is online in foreground | Foreground location updates are sent only while Online; leaving the screen/session or going Offline stops the watcher | Android/iOS functional | P0 |
+| NEARBY-006 | Rider searches without location permission or outside configured zones | Clear recoverable permission/zone error; no nearby driver data is returned | Android/iOS + API | P0 |
+
+The API integration tests use the in-memory store and configured test zone. They do not establish Cosmos cross-partition query behaviour or physical-device permission/resume behaviour. Driver GPS is foreground-only and is not intended as background tracking.
