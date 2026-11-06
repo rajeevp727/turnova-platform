@@ -1771,6 +1771,19 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     if (profile is null || profile.AvailabilityStatus != "Online" ||
         !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
+    if (ride is not null && ride.DriverId == driverId &&
+        (ride.Status is "Negotiating" or "AgreementConfirmed"))
+    {
+        var cancelledSelection = await TryTransitionAsync(ride, "Cancelled", ct);
+        if (cancelledSelection is null)
+            return Results.Conflict(new { message = "The selected booking changed concurrently. Refresh and retry." });
+        await driverRideReservations.TryReleaseAsync(driverId, rideId, ct);
+        await RecordWorkActivityAsync(driverId, rideId, "Rejected", DateTimeOffset.UtcNow, ct);
+        await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
+            .SendAsync("RideStatusChanged", new { rideId, status = cancelledSelection.Status }, ct);
+        return Results.NoContent();
+    }
+
     if (ride is null || ride.Status != "Requested" || ride.Passengers > profile.PassengerCapacity ||
         !string.Equals(ride.DispatchZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(ride.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase))
@@ -2062,6 +2075,8 @@ app.MapPost("/api/v1/rides/{rideId}/complete", async (
         return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to Completed." });
     var completed = await TryTransitionAsync(ride, "Completed", ct);
     if (completed is null) return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh and retry." });
+    await RecordWorkActivityAsync(driverId!, rideId, "Completed", DateTimeOffset.UtcNow, ct);
+    await driverRideReservations.TryReleaseAsync(driverId!, rideId, ct);
     await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = completed.Status }, ct);
     return Results.Ok(completed);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
@@ -2071,7 +2086,7 @@ app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.RiderId != riderId) return Results.NotFound();
-    if (ride.Status is not ("Requested" or "Accepted" or "Arrived"))
+    if (ride.Status is not ("Requested" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived"))
         return Results.Conflict(new { message = "A ride can only be cancelled before it starts." });
     var updated = await TryTransitionAsync(ride, "Cancelled", ct);
     if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
