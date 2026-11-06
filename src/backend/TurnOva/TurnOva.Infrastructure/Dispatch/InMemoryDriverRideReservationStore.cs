@@ -38,6 +38,14 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         return Task.FromResult(_items.TryUpdate(driverId, current with { ExpiresAtUtc = null }, current));
     }
 
+    public Task<bool> TrySetExpiryAsync(string driverId, string rideId, DateTimeOffset? expiresAtUtc, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow) return Task.FromResult(false);
+        if (!_items.TryGetValue(driverId, out var current) || current.RideId != rideId) return Task.FromResult(false);
+        return Task.FromResult(_items.TryUpdate(driverId, current with { ExpiresAtUtc = expiresAtUtc }, current));
+    }
+
     public Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
