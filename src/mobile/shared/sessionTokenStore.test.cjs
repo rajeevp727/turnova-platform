@@ -6,6 +6,7 @@ const {
   readSessionTokens,
   saveSessionTokens,
   clearSessionTokens,
+  logoutSession,
   restoreStoredSession
 } = require("./sessionTokenStore.js");
 
@@ -195,4 +196,35 @@ test("surfaces secure-store read failures without creating an authenticated sess
   });
 
   await assert.rejects(readSessionTokens(storage), /secure read failed/);
+});
+
+test("clears local credentials when server logout is offline", async () => {
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "access-1",
+    [REFRESH_TOKEN_KEY]: "refresh-1"
+  });
+
+  await logoutSession(storage, async () => { throw new Error("network unavailable"); });
+
+  assert.equal(storage.values.size, 0);
+  assert.deepEqual(storage.calls.filter(call => call[0] === "delete").map(call => call[1]), [
+    ACCESS_TOKEN_KEY,
+    REFRESH_TOKEN_KEY
+  ]);
+});
+
+test("reports local logout failure after attempting both secure deletions", async () => {
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "access-1",
+    [REFRESH_TOKEN_KEY]: "refresh-1"
+  }, {
+    delete: async key => { if (key === REFRESH_TOKEN_KEY) throw new Error("secure delete failed"); }
+  });
+
+  await assert.rejects(
+    logoutSession(storage, async () => { throw new Error("network unavailable"); }),
+    /Unable to clear stored session tokens/
+  );
+
+  assert.equal(storage.calls.filter(call => call[0] === "delete").length, 2);
 });
