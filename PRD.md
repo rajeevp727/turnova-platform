@@ -168,6 +168,8 @@ TurnOva is a union-connected cab discovery and ride-coordination platform, not a
 5. Rider selects a driver and can call/chat when providers are configured.
 6. Rider and selected driver negotiate directly. No platform fare estimate or recommendation.
 
+The Rider discovery API returns active eligible unions grouped with up to three eligible drivers each. A driver card may include the driver's name, verified Cab make/model and passenger capacity, pickup proximity, and a selfie only when approved by the driver's current union. It must not expose phone number, full vehicle registration or exact driver coordinates. journeyDistanceKm remains null until a routing provider is configured; driver-to-pickup proximity must never be presented as journey distance. If Dispatch:NearbyRadiusKm is not configured, discovery fails closed rather than silently using an assumed radius.
+
 ### Agreement and ride
 - Record proposals/counterproposals or equivalent negotiation history.
 - Persist a durable, immutable, versioned agreement with ride, Rider, Driver, Union, amount, currency, route/stops, timestamps and both confirmations.
