@@ -1975,7 +1975,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
         return Results.Conflict(new { message = "This agreement party has already been confirmed by a different account." });
 
     var nextConfirmations = existing is null
-        ? new[] { .. confirmations, new RideAgreementConfirmation(rideId, version, party, actorId, DateTimeOffset.UtcNow) }
+        ? confirmations.Append(new RideAgreementConfirmation(rideId, version, party, actorId, DateTimeOffset.UtcNow)).ToArray()
         : confirmations.ToArray();
     var riderConfirmed = nextConfirmations.Any(item => item.Version == version && item.Party == "Rider" && item.ActorId == current.RiderId);
     var driverConfirmed = nextConfirmations.Any(item => item.Version == version && item.Party == "Driver" && item.ActorId == current.DriverId);
