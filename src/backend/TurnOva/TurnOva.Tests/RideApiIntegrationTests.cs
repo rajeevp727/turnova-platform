@@ -1624,6 +1624,7 @@ public sealed class RideApiIntegrationTests
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
                     ["Cors:AllowedOrigins:0"] = "https://app.turnova.test",
                     ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] = "15",
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
                 }));
         }
