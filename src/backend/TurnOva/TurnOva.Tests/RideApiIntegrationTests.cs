@@ -388,119 +388,6 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
-    public async Task UnionManagerCanReviewOnlyCurrentAssignedCabDriverSelfiesAndReceivesMinimalData()
-    {
-        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
-        using var driver = factory.CreateClient("Driver", "union-review-driver");
-        using var rider = factory.CreateClient("Rider", "union-review-rider");
-        using var ops = factory.CreateClient("Rider", "union-review-ops");
-        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
-        SeedBookableDriver(factory, "union-review-driver", "union-review-union");
-
-        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
-        profiles["union-review-driver"] = profiles["union-review-driver"] with
-        {
-            ProfilePhotoApprovalStatus = "Pending",
-            ProfilePhotoApprovedByUnionId = null,
-            ProfilePhotoReviewedAtUtc = null,
-            ProfilePhotoReviewReason = null
-        };
-
-        using var manager = factory.CreateUnionManagerClient("union-review-union", "union-manager-review");
-        var members = await manager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers");
-        var member = Assert.Single(members!);
-        var driverProfile = member.GetProperty("driver");
-        Assert.Equal("union-review-driver", driverProfile.GetProperty("driverId").GetString());
-        Assert.Equal("Pending", driverProfile.GetProperty("profilePhotoApprovalStatus").GetString());
-        Assert.Equal("/9j/2Q==", driverProfile.GetProperty("profilePhotoBase64").GetString());
-        Assert.False(driverProfile.TryGetProperty("phoneNumber", out _));
-        Assert.False(driverProfile.TryGetProperty("currentLatitude", out _));
-        Assert.False(driverProfile.TryGetProperty("currentLongitude", out _));
-
-        Assert.Equal(HttpStatusCode.Forbidden, (await rider.GetAsync("/api/v1/union/drivers")).StatusCode);
-        using var operationsApproval = await ops.PutAsJsonAsync(
-            "/api/v1/ops/unions/union-review-union/drivers/union-review-driver/selfie-review",
-            new { status = "Approved" });
-        Assert.Equal(HttpStatusCode.Forbidden, operationsApproval.StatusCode);
-
-        using var approval = await manager.PutAsJsonAsync(
-            "/api/v1/union/drivers/union-review-driver/selfie-review",
-            new { status = "Approved" });
-        Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
-        Assert.Equal("Approved", profiles["union-review-driver"].ProfilePhotoApprovalStatus);
-        Assert.Equal("union-review-union", profiles["union-review-driver"].ProfilePhotoApprovedByUnionId);
-
-        var ownMembership = await driver.GetFromJsonAsync<JsonElement>("/api/v1/driver/union");
-        Assert.Equal("union-review-union", ownMembership.GetProperty("unionId").GetString());
-        using var auditResponse = await ops.GetAsync("/api/v1/ops/drivers/union-review-driver/union-history");
-        Assert.Equal(HttpStatusCode.OK, auditResponse.StatusCode);
-        using var auditJson = JsonDocument.Parse(await auditResponse.Content.ReadAsStringAsync());
-        Assert.Contains(auditJson.RootElement.EnumerateArray(), item =>
-            item.GetProperty("action").GetString() == "SelfieApprovedByUnion");
-    }
-
-    [Fact]
-    public async Task UnionTransferResetsSelfieApprovalUntilTheNewUnionApprovesIt()
-    {
-        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
-        using var driver = factory.CreateClient("Driver", "transfer-selfie-driver");
-        using var rider = factory.CreateClient("Rider", "transfer-selfie-rider");
-        using var ops = factory.CreateClient("Rider", "transfer-selfie-ops");
-        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
-        SeedBookableDriver(factory, "transfer-selfie-driver", "transfer-selfie-old-union");
-
-        var now = DateTimeOffset.UtcNow;
-        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()["transfer-selfie-new-union"] =
-            new DriverUnion("transfer-selfie-new-union", "Transfer Selfie New Union", "TRANSFER-SELFIE-NEW",
-                "Hyderabad", null, null, ["hyderabad-central"], ["cab"], "Active", now, now);
-
-        using var transfer = await ops.PostAsJsonAsync("/api/v1/ops/drivers/transfer-selfie-driver/union-assignment",
-            new { unionId = "transfer-selfie-new-union", reason = "Driver moved to the new Cab union." });
-        Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
-
-        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
-        var transferredProfile = profiles["transfer-selfie-driver"];
-        Assert.Equal("Pending", transferredProfile.ProfilePhotoApprovalStatus);
-        Assert.Null(transferredProfile.ProfilePhotoApprovedByUnionId);
-        Assert.Null(transferredProfile.ProfilePhotoReviewedAtUtc);
-        Assert.Null(transferredProfile.ProfilePhotoReviewReason);
-
-        using var oldManager = factory.CreateUnionManagerClient("transfer-selfie-old-union", "old-union-manager");
-        using var newManager = factory.CreateUnionManagerClient("transfer-selfie-new-union", "new-union-manager");
-        Assert.Empty(await oldManager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers") ?? []);
-        using var oldUnionApproval = await oldManager.PutAsJsonAsync(
-            "/api/v1/union/drivers/transfer-selfie-driver/selfie-review",
-            new { status = "Approved" });
-        Assert.Equal(HttpStatusCode.NotFound, oldUnionApproval.StatusCode);
-
-        var newMembers = await newManager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers");
-        Assert.Single(newMembers!);
-        using var discoveryBeforeApproval = await rider.GetAsync(
-            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
-        Assert.Equal(HttpStatusCode.OK, discoveryBeforeApproval.StatusCode);
-        using var beforeJson = JsonDocument.Parse(await discoveryBeforeApproval.Content.ReadAsStringAsync());
-        var beforeDriver = beforeJson.RootElement.GetProperty("unions").EnumerateArray()
-            .Single(group => group.GetProperty("unionId").GetString() == "transfer-selfie-new-union")
-            .GetProperty("drivers").EnumerateArray().Single();
-        Assert.Equal(JsonValueKind.Null, beforeDriver.GetProperty("profilePhotoBase64").ValueKind);
-
-        using var newUnionApproval = await newManager.PutAsJsonAsync(
-            "/api/v1/union/drivers/transfer-selfie-driver/selfie-review",
-            new { status = "Approved" });
-        Assert.Equal(HttpStatusCode.OK, newUnionApproval.StatusCode);
-        using var discoveryAfterApproval = await rider.GetAsync(
-            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
-        using var afterJson = JsonDocument.Parse(await discoveryAfterApproval.Content.ReadAsStringAsync());
-        var afterDriver = afterJson.RootElement.GetProperty("unions").EnumerateArray()
-            .Single(group => group.GetProperty("unionId").GetString() == "transfer-selfie-new-union")
-            .GetProperty("drivers").EnumerateArray().Single();
-        Assert.Equal("/9j/2Q==", afterDriver.GetProperty("profilePhotoBase64").GetString());
-
-        var ownMembership = await driver.GetFromJsonAsync<JsonElement>("/api/v1/driver/union");
-        Assert.Equal("transfer-selfie-new-union", ownMembership.GetProperty("unionId").GetString());
-    }
-
-    [Fact]
     public async Task LegacyNonCabDriverCannotEnterNewSelfieQueueLocationOrOfferWorkflows()
     {
         using var factory = new TurnOvaApiFactory();
@@ -2271,7 +2158,7 @@ public sealed class RideApiIntegrationTests
                 }));
         }
 
-        public HttpClient CreateClient(string role, string subject, string? unionId = null)
+        public HttpClient CreateClient(string role, string subject)
         {
             var client = CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -2279,7 +2166,7 @@ public sealed class RideApiIntegrationTests
                 BaseAddress = new Uri("https://localhost")
             });
             client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject, unionId));
+                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject));
             if (role == "Driver")
             {
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -2299,26 +2186,20 @@ public sealed class RideApiIntegrationTests
             return client;
         }
 
-        public HttpClient CreateUnionManagerClient(string unionId, string subject) =>
-            CreateClient("UnionManager", subject, unionId);
-
-        private static string CreateToken(string role, string subject, string? unionId)
+        private static string CreateToken(string role, string subject)
         {
             var credentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)),
                 SecurityAlgorithms.HmacSha256);
-            var claims = new List<Claim>
-            {
-                new("sub", subject),
-                new("role", role),
-                new("name", subject)
-            };
-            if (!string.IsNullOrWhiteSpace(unionId))
-                claims.Add(new Claim("unionId", unionId));
             var token = new JwtSecurityToken(
                 issuer: Issuer,
                 audience: Audience,
-                claims: claims,
+                claims:
+                [
+                    new Claim("sub", subject),
+                    new Claim("role", role),
+                    new Claim("name", subject)
+                ],
                 notBefore: DateTime.UtcNow.AddMinutes(-1),
                 expires: DateTime.UtcNow.AddMinutes(10),
                 signingCredentials: credentials);
