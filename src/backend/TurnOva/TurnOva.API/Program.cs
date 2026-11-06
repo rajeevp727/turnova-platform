@@ -557,6 +557,11 @@ async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct,
 
 string? ResolveDispatchZone(double latitude, double longitude)
 {
+    // The checked-in zone rectangle is a development placeholder. Production discovery
+    // remains disabled until the product-approved zone configuration is explicitly enabled.
+    if (!app.Configuration.GetValue<bool>("Dispatch:ZoneConfigurationApproved"))
+        return null;
+
     if (!double.IsFinite(latitude) || !double.IsFinite(longitude) ||
         latitude is < -90 or > 90 || longitude is < -180 or > 180)
         return null;
