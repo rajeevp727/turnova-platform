@@ -650,19 +650,38 @@ export default function App() {
 
   const downloadPayslip = async (year: number, month: number) => {
     if (!tokens) return;
+    const requestEpoch = sessionEpoch.current;
     setLoading(true); setError(""); setNotice("");
     try {
-      let accessToken = tokens.accessToken;
       let response = await fetch(`${API}/api/v1/driver/payslips/${year}/${month}.pdf`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${tokens.accessToken}` }
       });
+      if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
       if (response.status === 401) {
-        const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-        if (!refreshToken) throw new Error("Session expired. Please sign in again.");
-        accessToken = await refreshSession(refreshToken);
+        let accessToken: string;
+        try {
+          accessToken = await getFreshAccessToken(
+            refreshInFlight,
+            tokens.accessToken,
+            async () => ({
+              accessToken: await SecureStore.getItemAsync("turnova.access"),
+              refreshToken: await SecureStore.getItemAsync("turnova.refresh")
+            }),
+            (refreshToken: string) => refreshSession(refreshToken, requestEpoch)
+          );
+        } catch {
+          if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
+          sessionEpoch.current += 1;
+          await clearTokens();
+          setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
+          setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
+          throw new Error("Session expired. Please sign in again.");
+        }
+        if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
         response = await fetch(`${API}/api/v1/driver/payslips/${year}/${month}.pdf`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
+        if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
       }
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
