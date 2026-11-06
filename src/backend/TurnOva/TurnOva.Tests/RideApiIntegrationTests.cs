@@ -433,6 +433,20 @@ public sealed class RideApiIntegrationTests
         Assert.All(driverDetails.GetProperty("documentStatuses").EnumerateArray(),
             document => Assert.False(document.TryGetProperty("storageReference", out _)));
 
+        var approvedDocuments = profiles[driverId].Documents;
+        profiles[driverId] = profiles[driverId] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", "test/licence", "Pending"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
+        using var pendingDocumentsReview = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.Conflict, pendingDocumentsReview.StatusCode);
+        profiles[driverId] = profiles[driverId] with { Documents = approvedDocuments };
+
         Assert.Empty(await otherManager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers") ?? []);
         Assert.Equal(HttpStatusCode.Forbidden, (await managerWithoutUnion.GetAsync("/api/v1/union/drivers")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await rider.GetAsync("/api/v1/union/drivers")).StatusCode);
