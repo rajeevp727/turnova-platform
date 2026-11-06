@@ -151,9 +151,9 @@ else
     var queueStore = new InMemoryQueueStore();
     var demoDrivers = new[]
     {
-        new DriverQueueEntry("DRV-1001", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
-        new DriverQueueEntry("DRV-1002", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
-        new DriverQueueEntry("DRV-1003", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
+        new DriverQueueEntry("DRV-1001", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
+        new DriverQueueEntry("DRV-1002", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
+        new DriverQueueEntry("DRV-1003", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
     };
     foreach (var driver in demoDrivers)
         await queueStore.AddAsync(driver, CancellationToken.None);
@@ -482,6 +482,9 @@ double CalculateDistanceKm(double firstLatitude, double firstLongitude, double s
     return earthRadiusKm * 2 * Math.Asin(Math.Min(1, Math.Sqrt(haversine)));
 }
 
+bool IsCabServiceClass(string? serviceClass) =>
+    string.Equals(serviceClass?.Trim(), "cab", StringComparison.OrdinalIgnoreCase);
+
 var storageMode = useCosmos ? "cosmos-db" : "demo-in-memory";
 
 app.MapGet("/", () => Results.Ok(new
@@ -634,6 +637,8 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         return Results.BadRequest(new { message = "Provide a valid JPEG selfie no larger than 300 KB." });
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.NotFound(new { message = "Complete driver onboarding before adding a profile selfie." });
+    if (!IsCabServiceClass(profile.ServiceClass))
+        return Results.Conflict(new { message = "Only Cab driver profiles can enter the new MVP onboarding flow." });
     var updated = profile with
     {
         ProfilePhotoBase64 = request.ProfilePhotoBase64,
@@ -662,7 +667,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         string.IsNullOrWhiteSpace(request.VehicleModel) || request.VehicleModel.Trim().Length > 60 ||
         string.IsNullOrWhiteSpace(request.VehicleRegistration) || request.VehicleRegistration.Trim().Length > 20 ||
         request.PassengerCapacity is < 1 or > 8 ||
-        request.ServiceClass is not ("scooty" or "bike" or "auto" or "cab") ||
+        !IsCabServiceClass(request.ServiceClass) ||
         request.Documents is null || request.Documents.Count is < 1 or > 8 ||
         request.Documents.Any(document => document is null ||
             document.DocumentType is not ("DrivingLicence" or "VehicleRegistration" or "Insurance" or "Permit" or "ProfilePhoto") ||
@@ -678,7 +683,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
     var profile = new DriverOnboardingProfile(
         driverId, driverId, request.ZoneId.Trim(), request.FullName.Trim(), request.PhoneNumber.Trim(),
         request.VehicleMake.Trim(), request.VehicleModel.Trim(), request.VehicleRegistration.Trim().ToUpperInvariant(),
-        request.ServiceClass, request.PassengerCapacity,
+        "cab", request.PassengerCapacity,
         request.Documents.Select(document => new DriverDocumentReference(document.DocumentType, document.StorageReference)).ToArray(),
         "Pending", existing?.SubmittedAtUtc ?? DateTimeOffset.UtcNow,
         ProfilePhotoBase64: request.ProfilePhotoBase64,
@@ -716,6 +721,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
     if (profile is null) return Results.NotFound();
     if (profile.Status == "Suspended" && request.Status == "Approved")
         return Results.Conflict(new { message = "A suspended driver cannot be re-approved through this endpoint." });
+    if (request.Status == "Approved" && !IsCabServiceClass(profile.ServiceClass))
+        return Results.Conflict(new { message = "Only Cab driver profiles can be approved for new MVP workflows." });
     if (request.Status == "Approved" &&
         (!profile.Documents.Any(document => document.DocumentType == "DrivingLicence") ||
          !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration")))
@@ -743,7 +750,7 @@ opsUnions.MapPost("/", async (HttpContext context, CreateUnionRequest request, C
         request.ZoneIds is null || request.ZoneIds.Count == 0 ||
         request.ZoneIds.Any(zone => string.IsNullOrWhiteSpace(zone) || zone.Trim().Length > 80) ||
         request.ServiceClasses is null || request.ServiceClasses.Count == 0 ||
-        request.ServiceClasses.Any(serviceClass => serviceClass is not ("scooty" or "bike" or "auto" or "cab")))
+        request.ServiceClasses.Any(serviceClass => !IsCabServiceClass(serviceClass)))
         return Results.BadRequest(new { message = "Provide a name, unique code, at least one service zone and supported service class." });
 
     var code = request.Code.Trim().ToUpperInvariant();
@@ -754,7 +761,7 @@ opsUnions.MapPost("/", async (HttpContext context, CreateUnionRequest request, C
     var union = new DriverUnion(Guid.NewGuid().ToString("N"), request.Name.Trim(), code,
         request.Location?.Trim(), request.ManagerName?.Trim(), request.ManagerPhone?.Trim(),
         request.ZoneIds.Select(zone => zone.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-        request.ServiceClasses.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+        new[] { "cab" },
         "Active", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
     await SaveUnionAsync(union, ct);
     return Results.Created($"/api/v1/ops/unions/{union.UnionId}", union);
@@ -844,6 +851,8 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null || string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
         return Results.NotFound(new { message = "Driver selfie not found." });
+    if (!IsCabServiceClass(profile.ServiceClass))
+        return Results.Conflict(new { message = "Only Cab driver profiles can be approved for the new MVP workflow." });
 
     var updated = profile with
     {
@@ -897,6 +906,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.NotFound(new { message = "Driver onboarding profile not found." });
     if (profile.Status != "Approved") return Results.Conflict(new { message = "Only approved drivers can be assigned to a union." });
+    if (!IsCabServiceClass(profile.ServiceClass))
+        return Results.Conflict(new { message = "Only approved Cab drivers can be assigned to unions for the new MVP workflow." });
     if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
         return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
     var union = await FindUnionAsync(request.UnionId, ct);
@@ -981,7 +992,7 @@ app.MapGet("/api/v1/driver/availability", async (ClaimsPrincipal user, Cancellat
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var profile = await FindDriverProfileAsync(driverId, ct);
-    var status = profile?.Status == "Approved" ? profile.AvailabilityStatus : "Offline";
+    var status = profile?.Status == "Approved" && IsCabServiceClass(profile.ServiceClass) ? profile.AvailabilityStatus : "Offline";
     return Results.Ok(new { availabilityStatus = status, isOnline = status == "Online" });
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
@@ -992,6 +1003,8 @@ app.MapPost("/api/v1/driver/availability", async (
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.Conflict(new { message = "Only an approved driver can change availability." });
+    if (!IsCabServiceClass(profile.ServiceClass))
+        return Results.Conflict(new { message = "Legacy non-Cab profiles are preserved for history but cannot join new MVP workflows." });
 
     if (request.IsOnline)
     {
@@ -1083,6 +1096,8 @@ app.MapPost("/api/v1/driver/location", async (
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null || profile.AvailabilityStatus != "Online")
         return Results.Conflict(new { message = "Only an approved online driver can share availability location." });
+    if (!IsCabServiceClass(profile.ServiceClass))
+        return Results.Conflict(new { message = "Legacy non-Cab profiles cannot share location for new MVP workflows." });
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "Availability location is paused while you have an active ride." });
 
@@ -1132,12 +1147,13 @@ app.MapGet("/api/v1/driver/union", async (ClaimsPrincipal user, CancellationToke
 
 app.MapGet("/api/v1/zones", () => Results.Ok(new[]
 {
-    new { id = "hyderabad-central", name = "Hyderabad Central", serviceClasses = new[] { "scooty", "bike", "auto", "cab" } }
+    new { id = "hyderabad-central", name = "Hyderabad Central", serviceClasses = new[] { "cab" } }
 })).RequireAuthorization();
 
 app.MapGet("/api/v1/zones/{zoneId}/queues/{serviceClass}", async (
     string zoneId, string serviceClass, QueueService service, CancellationToken ct) =>
 {
+    if (!IsCabServiceClass(serviceClass)) return Results.BadRequest(new { message = "Only the Cab queue is available in the MVP." });
     var entries = await service.GetPositionedQueueAsync(zoneId, serviceClass, ct);
     return Results.Ok(entries.Select((entry, index) => new
     {
@@ -1155,6 +1171,7 @@ app.MapGet("/api/v1/zones/{zoneId}/queues/{serviceClass}/me", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId))
         return Results.Forbid();
+    if (!IsCabServiceClass(serviceClass)) return Results.BadRequest(new { message = "Only the Cab queue is available in the MVP." });
 
     var entries = await service.GetPositionedQueueAsync(zoneId, serviceClass, ct);
     var position = entries.ToList().FindIndex(entry => entry.DriverId == driverId);
@@ -1167,6 +1184,7 @@ app.MapDelete("/api/v1/zones/{zoneId}/queues/{serviceClass}/me", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId))
         return Results.Forbid();
+    if (!IsCabServiceClass(serviceClass)) return Results.BadRequest(new { message = "Only the Cab queue is available in the MVP." });
 
     await service.LeaveAsync(driverId, zoneId, serviceClass, ct);
     return Results.NoContent();
@@ -1183,12 +1201,14 @@ app.MapPost("/api/v1/queues/join", async (
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (approvedProfile is null)
         return Results.Conflict(new { message = "Driver onboarding must be approved before joining a queue." });
+    if (!IsCabServiceClass(approvedProfile.ServiceClass))
+        return Results.Conflict(new { message = "Only approved Cab drivers can join the new MVP queue." });
     if (approvedProfile.AvailabilityStatus != "Online")
         return Results.Conflict(new { message = "Go online before joining the FIFO queue." });
 
     try
     {
-        var serviceClass = string.IsNullOrWhiteSpace(request.ServiceClass) ? "auto" : request.ServiceClass.Trim();
+        var serviceClass = string.IsNullOrWhiteSpace(request.ServiceClass) ? "cab" : request.ServiceClass.Trim();
         if (!string.Equals(serviceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(request.ZoneId.Trim(), approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
             return Results.Forbid();
@@ -1212,7 +1232,7 @@ app.MapGet("/api/v1/rides/nearby", async (
     var normalizedServiceClass = serviceClass.Trim().ToLowerInvariant();
     if (latitude is < -90 or > 90 || longitude is < -180 or > 180 ||
         passengers is < 1 or > 6 ||
-        normalizedServiceClass is not ("scooty" or "bike" or "auto" or "cab"))
+        !IsCabServiceClass(normalizedServiceClass))
         return Results.BadRequest(new { message = "Provide valid pickup coordinates, passenger count and vehicle type." });
 
     var zoneId = ResolveDispatchZone(latitude, longitude);
@@ -1258,8 +1278,8 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
     if (request.PickupLatitude is null or < -90 or > 90 || request.PickupLongitude is null or < -180 or > 180)
         return Results.BadRequest(new { message = "Valid pickup coordinates are required." });
     var serviceClass = request.ServiceClass?.Trim().ToLowerInvariant();
-    if (serviceClass is not ("scooty" or "bike" or "auto" or "cab"))
-        return Results.BadRequest(new { message = "Choose a valid vehicle type: scooty, bike, auto or cab." });
+    if (!IsCabServiceClass(serviceClass))
+        return Results.BadRequest(new { message = "TurnOva MVP currently supports Cab rides only." });
     var dispatchZoneId = ResolveDispatchZone(request.PickupLatitude.Value, request.PickupLongitude.Value);
     if (string.IsNullOrWhiteSpace(dispatchZoneId))
         return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
@@ -1355,9 +1375,9 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueS
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online") return Results.Forbid();
+    if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online" || !IsCabServiceClass(approvedProfile.ServiceClass)) return Results.Forbid();
 
-    // Only the current FIFO head may see actionable ride requests.
+    // Legacy internal queue head behaviour remains temporarily; CAB-DISCOVERY-01 replaces customer-facing FIFO assignment.
     var queue = await queueService.GetPositionedQueueAsync(approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
     if (queue.FirstOrDefault()?.DriverId != driverId)
         return Results.Ok(Array.Empty<DemoRide>());
@@ -1381,7 +1401,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var approvedProfile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online") return Results.Forbid();
+    if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online" || !IsCabServiceClass(approvedProfile.ServiceClass)) return Results.Forbid();
     var pendingOffer = await offerStore.GetByRideAsync(rideId, ct);
     if (pendingOffer is not null &&
         (!pendingOffer.IsPending || pendingOffer.DriverId != driverId ||
@@ -1461,7 +1481,7 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (profile is null || profile.AvailabilityStatus != "Online") return Results.Forbid();
+    if (profile is null || profile.AvailabilityStatus != "Online" || !IsCabServiceClass(profile.ServiceClass)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.Status != "Requested" || ride.Passengers > profile.PassengerCapacity ||
         !string.Equals(ride.DispatchZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
@@ -1521,7 +1541,8 @@ app.MapPost("/api/v1/queues/{zoneId}/{serviceClass}/offer-timeout", async (
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
 
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
-    if (profile is null || profile.AvailabilityStatus != "Online") return Results.Forbid();
+    if (profile is null || profile.AvailabilityStatus != "Online" || !IsCabServiceClass(profile.ServiceClass)) return Results.Forbid();
+    if (!IsCabServiceClass(serviceClass)) return Results.BadRequest(new { message = "Only the Cab queue is available in the MVP." });
     if (!string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(profile.ServiceClass, serviceClass, StringComparison.OrdinalIgnoreCase))
         return Results.Forbid();
@@ -1724,7 +1745,7 @@ public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateUnionRequest(string Name, string Code, string? Location, string? ManagerName, string? ManagerPhone, IReadOnlyList<string> ZoneIds, IReadOnlyList<string> ServiceClasses);
 public sealed record UpdateUnionStatusRequest(string Status);
 public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
-public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "auto");
+public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "cab");
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude);
 public sealed record NearbyVehicleResponse(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
