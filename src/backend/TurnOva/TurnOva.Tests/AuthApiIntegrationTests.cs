@@ -208,7 +208,7 @@ public sealed class AuthApiIntegrationTests
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-            "Bearer", CreateToken(expires: DateTime.UtcNow.AddMinutes(-5)));
+            "Bearer", CreateToken(notBefore: DateTime.UtcNow.AddMinutes(-10), expires: DateTime.UtcNow.AddMinutes(-5)));
 
         using var response = await client.GetAsync("/api/v1/driver/availability");
 
