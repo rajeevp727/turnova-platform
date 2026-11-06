@@ -228,3 +228,17 @@ test("reports local logout failure after attempting both secure deletions", asyn
 
   assert.equal(storage.calls.filter(call => call[0] === "delete").length, 2);
 });
+
+test("does not wait for an unresponsive server logout before clearing local tokens", async () => {
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "access-1",
+    [REFRESH_TOKEN_KEY]: "refresh-1"
+  });
+  let resolveRevoke;
+  const pendingRevoke = new Promise(resolve => { resolveRevoke = resolve; });
+
+  await logoutSession(storage, () => pendingRevoke);
+
+  assert.equal(storage.values.size, 0);
+  resolveRevoke();
+});
