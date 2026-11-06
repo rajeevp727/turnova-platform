@@ -1,4 +1,5 @@
 using TurnOva.API;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
@@ -184,6 +185,19 @@ if (useCosmos)
     // Do not accept traffic until all pending schema migrations have completed.
     await app.Services.GetRequiredService<CosmosMigrationRunner>().RunAsync();
 }
+
+app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+{
+    var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+    app.Logger.LogError(exception, "Unhandled API exception. TraceId {TraceId}", context.TraceIdentifier);
+    context.Response.Clear();
+    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+    await Results.Problem(
+        title: "An unexpected error occurred.",
+        statusCode: StatusCodes.Status500InternalServerError,
+        extensions: new Dictionary<string, object?> { ["traceId"] = context.TraceIdentifier })
+        .ExecuteAsync(context);
+}));
 
 app.UseCors();
 app.UseHttpsRedirection();
