@@ -205,6 +205,13 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
+if (app.Environment.IsEnvironment("Testing"))
+{
+    app.MapGet("/__test/throw", () =>
+    {
+        throw new InvalidOperationException("sensitive-test-exception");
+    });
+}
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
