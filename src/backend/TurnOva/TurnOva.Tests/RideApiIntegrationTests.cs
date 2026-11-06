@@ -934,6 +934,7 @@ public sealed class RideApiIntegrationTests
             int capacity = 4,
             string serviceClass = "cab",
             string status = "Approved",
+            bool documentsApproved = true,
             DateTimeOffset? locationUpdatedAtUtc = null,
             string photoStatus = "Approved",
             string? photoApprovedByUnionId = null)
@@ -948,8 +949,8 @@ public sealed class RideApiIntegrationTests
                 Status = status,
                 Documents =
                 [
-                    new DriverDocumentReference("DrivingLicence", $"test/{driverId}/licence", status == "Approved" ? "Approved" : "Pending"),
-                    new DriverDocumentReference("VehicleRegistration", $"test/{driverId}/registration", status == "Approved" ? "Approved" : "Pending")
+                    new DriverDocumentReference("DrivingLicence", $"test/{driverId}/licence", documentsApproved ? "Approved" : "Pending"),
+                    new DriverDocumentReference("VehicleRegistration", $"test/{driverId}/registration", documentsApproved ? "Approved" : "Pending")
                 ],
                 AvailabilityStatus = "Online",
                 CurrentLatitude = latitude,
@@ -972,6 +973,7 @@ public sealed class RideApiIntegrationTests
         var central = AddUnion("union-central", "Central Cab Union");
         var metro = AddUnion("union-metro", "Metro Cab Union");
         var inactive = AddUnion("union-inactive", "Inactive Cab Union", "Inactive");
+        var outer = AddUnion("union-outer", "Outer Cab Union");
 
         AddDriver("central-1", central.UnionId, 17.493, 78.400);
         AddDriver("central-2", central.UnionId, 17.494, 78.402);
@@ -985,8 +987,9 @@ public sealed class RideApiIntegrationTests
         AddDriver("unassigned-driver", null, 17.493, 78.399);
         AddDriver("stale-driver", central.UnionId, 17.493, 78.399,
             locationUpdatedAtUtc: now.AddMinutes(-5));
-        AddDriver("outside-radius-driver", central.UnionId, 17.590, 78.399);
+        AddDriver("outside-radius-driver", outer.UnionId, 17.590, 78.399);
         AddDriver("too-small-driver", central.UnionId, 17.493, 78.399, capacity: 2);
+        AddDriver("unverified-documents-driver", central.UnionId, 17.493, 78.399, documentsApproved: false);
         AddDriver("not-approved-driver", central.UnionId, 17.493, 78.399, status: "Pending");
         AddDriver("wrong-class-driver", central.UnionId, 17.493, 78.399, serviceClass: "bike");
 
