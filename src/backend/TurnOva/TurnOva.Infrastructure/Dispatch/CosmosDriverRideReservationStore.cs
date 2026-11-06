@@ -31,14 +31,12 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 }
                 catch (CosmosException missing) when (missing.StatusCode == System.Net.HttpStatusCode.NotFound) { continue; }
 
-                if (current.Resource.ExpiresAtUtc is null || current.Resource.ExpiresAtUtc > DateTimeOffset.UtcNow)
-                    return current.Resource.RideId == rideId;
-                try
-                {
-                    await container.DeleteItemAsync<DriverRideReservation>(driverId, new PartitionKey(driverId),
-                        new ItemRequestOptions { IfMatchEtag = current.ETag }, cancellationToken);
-                }
-                catch (CosmosException race) when (race.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed) { }
+                // Expiry must be reconciled against the authoritative ride state by the API.
+                // Never steal/delete a lease here: doing so could leave an active Negotiating
+                // ride without its exclusive driver reservation.
+                if (current.Resource.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+                    return false;
+                return current.Resource.RideId == rideId;
             }
         }
         return false;
@@ -77,32 +75,17 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
 
     public async Task<DriverRideReservation?> GetActiveAsync(string driverId, CancellationToken cancellationToken = default)
     {
-        DriverRideReservation? lastRead = null;
-        for (var attempt = 0; attempt < 3; attempt++)
+        try
         {
-            try
-            {
-                var current = await container.ReadItemAsync<DriverRideReservation>(
-                    driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
-                lastRead = current.Resource;
-                if (lastRead.ExpiresAtUtc is null || lastRead.ExpiresAtUtc > DateTimeOffset.UtcNow)
-                    return lastRead;
-
-                try
-                {
-                    await container.DeleteItemAsync<DriverRideReservation>(driverId, new PartitionKey(driverId),
-                        new ItemRequestOptions { IfMatchEtag = current.ETag }, cancellationToken);
-                    return null;
-                }
-                catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
-                {
-                    // Re-read after a concurrent renewal/release; after bounded retries, fail closed.
-                }
-            }
-            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+            // Return expired leases too. The API must expire/reconcile the linked ride
+            // before releasing the reservation; the store cannot infer ride lifecycle.
+            return (await container.ReadItemAsync<DriverRideReservation>(
+                driverId, new PartitionKey(driverId), cancellationToken: cancellationToken)).Resource;
         }
-
-        return lastRead;
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
     }
 
     public async Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
