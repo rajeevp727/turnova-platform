@@ -5,21 +5,23 @@
 
 ## 1. Current step
 
-**#5 RIDER-03: durable Rider-selected Cab booking, driver reservation, lifecycle and idempotency.**
+**#6 DISPATCH-01: pickup-zone and approved-radius union eligibility — latest code/test head passed PR #58 CI run [42258271193](https://github.com/rajeevp727/turnova-platform/actions/runs/42258271193); production configuration remains blocked by the unapproved radius/zone decision.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
 - CAB-SCOPE-01 is implemented and CI-validated for the covered API/mobile paths. Physical-device and production acceptance remain outstanding.
 - PR #54 merged tracker reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; its final-head CI run 42234802360 passed all four jobs.
-- PR #55 merged at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run [42237572056](https://github.com/rajeevp727/turnova-platform/actions/runs/42237572056) passed all four jobs. RIDER-01 discovery is implemented; selected booking/reservation and optional stops are tracked under sequential #5 RIDER-03. Routing/provider actions and physical-device validation remain.
+- PR #55 merged at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run [42237572056](https://github.com/rajeevp727/turnova-platform/actions/runs/42237572056) passed all four jobs. It implements Cab union discovery, radius filtering, proximity ordering and photo privacy.
+- PR #57 merged at `c5ff07843365e949b70fe1d4b9753bcd88022e10`; final synchronized PR head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs. Automated reviews [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440) found no unresolved critical/high-risk issue.
+- DISPATCH-01 already fails closed when the configured radius is absent, zero, negative or non-finite; pickup outside configured zones returns Bad Request; only Active unions serving Cab in the resolved zone are eligible. PR #58 adds a regression for an otherwise eligible driver assigned to an Active Cab union serving a different zone, plus missing/zero/negative/NaN/infinite radius cases. Earlier PR #58 heads `e2ebe8d13a6e0379f8cddd945d6140a380c2b96a`, `f5381975e171b9fc2fc77fd86b32045419e7664a` and `9d5d7a5a0c3f996a61205a0a7b292d09885200ab` passed runs [42257212012](https://github.com/rajeevp727/turnova-platform/actions/runs/42257212012), [42257488325](https://github.com/rajeevp727/turnova-platform/actions/runs/42257488325) and [42257773007](https://github.com/rajeevp727/turnova-platform/actions/runs/42257773007). The latest code/test head `0384c8dc9f72cc40e55a85120cf1c862bfaeec2d` passed [42258271193](https://github.com/rajeevp727/turnova-platform/actions/runs/42258271193), all four jobs; final documentation-only PR-head CI remains the merge gate.
 
 ## 2. Overall MVP completion
 
-- **Weighted progress: 44.7%** under the revised Cab-only acceptance mapping.
+- **Weighted progress: 42.1%** under the revised Cab-only acceptance mapping.
 - Formula: `(Verified × 1 + In progress × 0.5 + Not started × 0 + Blocked × 0) ÷ 19 × 100`.
-- Counts: **0 Verified, 17 In progress, 0 Not started, 2 Blocked**.
-- Calculation: `(0 + 17 × 0.5 + 0 × 0 + 2 × 0) ÷ 19 × 100 = 44.7%`.
-- **Strict fully verified: 0/19.** The pre-reset 36.8% used the obsolete fare-estimate/payment-gateway/customer-facing FIFO mapping and is not directly comparable.
+- Counts: **0 Verified, 16 In progress, 0 Not started, 3 Blocked**.
+- Calculation: `(0 + 16 × 0.5 + 0 × 0 + 3 × 0) ÷ 19 × 100 = 42.1%`.
+- **Strict fully verified: 0/19.** DISPATCH-01 is blocked after independent code/test work because the production pickup radius and zone boundaries require explicit product approval; live Cosmos/device evidence also remains.
 - This is a conservative status reclassification from current merged code evidence, not production acceptance. Each row remains unverified until all evidence in the matrix passes.
 
 ## 3. Ordered acceptance checklist (1–19)
@@ -30,8 +32,8 @@
 | 2 | AUTH-02 | In progress | PRs #37 and #41 plus shared mobile refresh tests cover single-flight refresh and retry-after-failure; rotation/reuse, restart, expiry, logout and secure-storage device tests remain. |
 | 3 | RIDER-01 | In progress | PR #55 merged; union-grouped Cab discovery, three-driver cap, pickup-proximity order, approved-photo gating and local Rider selection are CI-validated. Production radius, routing/provider actions, Cosmos and device gates remain. |
 | 4 | RIDER-02 | In progress | PR #56 merged at `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8`; final-head CI run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) passed all four jobs. RIDER-03 supplies the selected-booking and optional-stop route snapshot connection; live Cosmos and physical-device acceptance remain. |
-| 5 | RIDER-03 | In progress | PR #57 adds durable selected-driver Negotiating rides, Union/route snapshots, create-if-absent idempotent persistence, per-driver leases that are reconciled against ride state before release, Union transfer exclusion through the same driver lease, expiry/cancel/decline/completion handling, Driver notification/reconnect recovery and Rider/Driver UI wiring. Implementation head `b65bbe7e74e1f4669c07e7df121f9473c8611a3a` passed CI run [42254186398](https://github.com/rajeevp727/turnova-platform/actions/runs/42254186398); documentation-synchronized head `9efd4ad354fe440a203f670bf1688e7ba314f9b4` passed run [42254417468](https://github.com/rajeevp727/turnova-platform/actions/runs/42254417468), all four jobs green. Automated review comments [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440) found no unresolved critical/high-risk issue. Final progress/matrix pre-refresh head `4b2b0516141badebfd33460d1726eb144d7749b4` passed run [42254713959](https://github.com/rajeevp727/turnova-platform/actions/runs/42254713959), all four jobs green. This tracker refresh is documentation-only and will receive one final CI rerun before merge. |
-| 6 | DISPATCH-01 | In progress | PR #55 adds Active Cab union/zone filtering and requires Dispatch:NearbyRadiusKm; checked-in radius is 0 until product approval. |
+| 5 | RIDER-03 | In progress | PR #57 merged at `c5ff07843365e949b70fe1d4b9753bcd88022e10`; final synchronized PR head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs green. Automated review found no unresolved critical/high-risk issue. Live Cosmos ETag/restart and Android/iOS booking/expiry acceptance remain. |
+| 6 | DISPATCH-01 | Blocked | PR #55 implements zone/radius and Active Cab union filtering; PR #58 adds out-of-zone-union and invalid-radius regressions. Latest code/test head [42258271193](https://github.com/rajeevp727/turnova-platform/actions/runs/42258271193) passed all four jobs; final documentation-only PR-head CI remains the merge gate. Production radius and zone boundaries require product approval; live Cosmos query/index and Android/iOS pickup-zone tests remain. |
 | 7 | DISPATCH-02 | In progress | PR #55 plus RIDER-03 provide up to three per union, pickup-distance order, explicit Rider selection and server reservation; live Cosmos/device evidence and internal FIFO decision remain. |
 | 8 | DISPATCH-03 | In progress | RIDER-03 adds expiring selected-driver leases, lazy expiry, deterministic interrupted-write recovery and terminal cleanup; live Cosmos restart/ETag/outbox validation remains. No customer-facing automatic advancement. |
 | 9 | DISPATCH-04 | In progress | RIDER-03 uses temporary per-driver reservation leases, permanent promotion after mutual agreement/Driver acceptance, ETag-protected release/expiry, terminal-reservation reconciliation and offline protection; live Cosmos multi-instance contention remains. |
@@ -84,6 +86,7 @@
 
 ## 7. Next steps
 
-1. Re-run CI on the final progress/matrix-synchronized PR #57 head, then merge only if all required checks remain green and repository rules permit.
-2. Re-audit main after merge and continue sequentially with #6 DISPATCH-01; revisit RIDER-02/RIDER-03 live Cosmos, approved radius/negotiation lifetime and Android/iOS device evidence when those external gates become available.
-3. Continue approved supplemental slices (CAB-RECON-01, CAB-UNION-01 and AI-01) in the agreed sequential order without expanding Phase 2. Keep customer dispute/confirmation and non-zero-delta next-ride policy blocked until approved.
+1. Re-run CI on the final documentation-synchronized PR #58 head, then complete the automated diff review and merge only if all required jobs remain green.
+2. Continue sequentially with #7 DISPATCH-02: re-audit the three-driver-per-union cap, pickup-proximity ordering, deterministic tie-break and no-FIFO Rider selection; add only missing tests and keep Cosmos/device evidence explicit.
+3. Revisit blocked DISPATCH-01 when the product owner approves the production pickup radius and reviewed zone boundaries; then run live Cosmos query/index and Android/iOS pickup-zone acceptance.
+4. Continue the remaining 19-area sequence before the separately approved supplemental CAB-RECON-01, CAB-UNION-01 and AI-01 work. Keep customer dispute/confirmation, non-zero-delta next-ride policy and internal FIFO role unresolved until approved.

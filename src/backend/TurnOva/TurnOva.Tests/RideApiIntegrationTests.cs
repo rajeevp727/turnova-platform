@@ -922,10 +922,10 @@ public sealed class RideApiIntegrationTests
         var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
         var now = DateTimeOffset.UtcNow;
 
-        DriverUnion AddUnion(string unionId, string name, string status = "Active")
+        DriverUnion AddUnion(string unionId, string name, string status = "Active", string zoneId = "hyderabad-central")
         {
             var union = new DriverUnion(unionId, name, unionId.ToUpperInvariant(), "Hyderabad",
-                null, null, ["hyderabad-central"], ["cab"], status, now, now);
+                null, null, [zoneId], ["cab"], status, now, now);
             unions[unionId] = union;
             return union;
         }
@@ -978,6 +978,7 @@ public sealed class RideApiIntegrationTests
         var metro = AddUnion("union-metro", "Metro Cab Union");
         var inactive = AddUnion("union-inactive", "Inactive Cab Union", "Inactive");
         var outer = AddUnion("union-outer", "Outer Cab Union");
+        var northZone = AddUnion("union-north", "North Cab Union", zoneId: "hyderabad-north");
 
         AddDriver("central-1", central.UnionId, 17.493, 78.400);
         AddDriver("central-2", central.UnionId, 17.494, 78.402);
@@ -992,6 +993,7 @@ public sealed class RideApiIntegrationTests
         AddDriver("stale-driver", central.UnionId, 17.493, 78.399,
             locationUpdatedAtUtc: now.AddMinutes(-5));
         AddDriver("outside-radius-driver", outer.UnionId, 17.590, 78.399);
+        AddDriver("north-zone-union-driver", northZone.UnionId, 17.493, 78.399);
         AddDriver("too-small-driver", central.UnionId, 17.493, 78.399, capacity: 2);
         AddDriver("unverified-documents-driver", central.UnionId, 17.493, 78.399, documentsApproved: false);
         AddDriver("not-approved-driver", central.UnionId, 17.493, 78.399, status: "Pending");
@@ -1012,6 +1014,11 @@ public sealed class RideApiIntegrationTests
 
         var groups = root.GetProperty("unions");
         Assert.Equal(2, groups.GetArrayLength());
+        Assert.DoesNotContain(groups.EnumerateArray(), group =>
+            group.GetProperty("unionId").GetString() == northZone.UnionId);
+        Assert.DoesNotContain(groups.EnumerateArray()
+            .SelectMany(group => group.GetProperty("drivers").EnumerateArray()), driver =>
+            driver.GetProperty("driverId").GetString() == "north-zone-union-driver");
         var centralGroup = groups.EnumerateArray()
             .Single(group => group.GetProperty("unionId").GetString() == central.UnionId);
         var centralDrivers = centralGroup.GetProperty("drivers");
@@ -1085,11 +1092,16 @@ public sealed class RideApiIntegrationTests
             (await rider.GetAsync("/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=cab&passengers=1")).StatusCode);
     }
 
-    [Fact]
-    public async Task RiderDiscoveryFailsClosedWhenNearbyRadiusIsNotConfigured()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public async Task RiderDiscoveryFailsClosedWhenNearbyRadiusIsMissingOrInvalid(double? radiusKm)
     {
-        using var factory = new TurnOvaApiFactory(nearbyRadiusKm: 0);
-        using var rider = factory.CreateClient("Rider", "rider-discovery-radius-missing");
+        using var factory = new TurnOvaApiFactory(nearbyRadiusKm: radiusKm);
+        using var rider = factory.CreateClient("Rider", "rider-discovery-radius-invalid");
 
         using var response = await rider.GetAsync(
             "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
@@ -2020,10 +2032,10 @@ public sealed class RideApiIntegrationTests
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
-        private readonly double _nearbyRadiusKm;
+        private readonly double? _nearbyRadiusKm;
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
 
-        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double nearbyRadiusKm = 10,
+        public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double? nearbyRadiusKm = 10,
             int? selectedDriverNegotiationLifetimeMinutes = 15)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
@@ -2043,7 +2055,7 @@ public sealed class RideApiIntegrationTests
                     ["TriSend:BaseUrl"] = "https://localhost:7443",
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
                     ["Cors:AllowedOrigins:0"] = "https://app.turnova.test",
-                    ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] =
                         _selectedDriverNegotiationLifetimeMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
