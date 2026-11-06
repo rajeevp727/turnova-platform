@@ -55,7 +55,7 @@
 | 16 | RIDER-04 | In progress | PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed 210/210 backend tests, native non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history remain; customer dispute and non-zero-delta next-ride policy remain unresolved. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting categories, escalation owner, process, API/UI, audit and device acceptance remain. |
 | 18 | PLATFORM-01 | In progress | PR #71 merged at `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`; final-head CI [42301719963](https://github.com/rajeevp727/turnova-platform/actions/runs/42301719963) passed 214/214 backend tests, non-container API publish, both mobile config/typechecks and shared tests. Live Cosmos, broader durable audit, telemetry and load gates remain. |
-| 19 | RELEASE-01 | In progress | PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) adds Android/iOS production JavaScript bundle exports and artifact verification for both Rider and Driver apps; final-head CI pending. Native APK/AAB/IPA builds, signing, iOS bundle identifiers and physical-device pilot checks remain. |
+| 19 | RELEASE-01 | In progress | PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) adds Android/iOS production JS bundle exports, artifact checks and explicit Metro shared-workspace resolution for both apps. First CI attempt exposed unresolved `../shared/refreshCoordinator`; Metro configs now include the shared workspace. Final-head CI pending. Native APK/AAB/IPA, signing, iOS bundle identifiers and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
 
@@ -190,3 +190,6 @@
 - This is stronger than Expo config/typecheck alone but is not a native APK/AAB/IPA build and does not prove signing or app-store readiness.
 - Current app configs contain Android package IDs but no iOS bundle identifiers. Final iOS store identifiers, signing credentials/profiles, Android release keystore and physical-device functional/security/pilot evidence remain external gates; no values are invented.
 - The 19-area weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19) until the release row's full evidence passes.
+
+
+- First PR #72 CI attempt [42302220373](https://github.com/rajeevp727/turnova-platform/actions/runs/42302220373) failed at Driver Android bundling because Metro could not resolve `../shared/refreshCoordinator` outside the app root. Both apps now have Metro configs that watch the shared mobile workspace and restrict package resolution to the app's own dependencies; rerun final-head CI before merge.
