@@ -1118,6 +1118,44 @@ unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToke
     return Results.Ok(drivers);
 });
 
+
+unionManagerApi.MapGet("/reconciliation", async (ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var unionIds = user.FindAll("unionId")
+        .Select(claim => claim.Value)
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .ToHashSet(StringComparer.Ordinal);
+    if (unionIds.Count == 0) return Results.Forbid();
+
+    var reconciliationRides = new List<DemoRide>();
+    if (rideContainer is null)
+    {
+        reconciliationRides.AddRange(rides.Values.Where(ride =>
+            ride.PaymentReconciliation is not null && unionIds.Contains(ride.UnionId ?? "")));
+    }
+    else
+    {
+        foreach (var unionId in unionIds)
+        {
+            var query = new QueryDefinition(
+                    "SELECT * FROM c WHERE c.unionId = @unionId AND IS_DEFINED(c.paymentReconciliation)")
+                .WithParameter("@unionId", unionId);
+            using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
+            while (iterator.HasMoreResults)
+                reconciliationRides.AddRange(await iterator.ReadNextAsync(ct));
+        }
+    }
+
+    return Results.Ok(reconciliationRides
+        .Where(ride => string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
+            ride.PaymentReconciliation is { } report &&
+            string.Equals(ride.UnionId, report.UnionId, StringComparison.Ordinal) &&
+            unionIds.Contains(report.UnionId))
+        .OrderByDescending(ride => ride.PaymentReconciliation!.ReportedAtUtc)
+        .Select(ride => ToPaymentReconciliationResponse(ride.PaymentReconciliation)!)
+        .ToArray());
+});
+
 unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
     ClaimsPrincipal user, string driverId, DriverSelfieReviewRequest request, CancellationToken ct) =>
 {
@@ -2654,6 +2692,66 @@ app.MapPost("/api/v1/rides/{rideId}/complete", async (
     return Results.Ok(completed);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
+
+app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
+    HttpContext context, ClaimsPrincipal user, string rideId, ReportRidePaymentRequest request, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var ride = await FindRideAsync(rideId, ct);
+    if (ride is null || ride.DriverId != driverId) return Results.NotFound();
+    if (!string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+        return Results.Conflict(new { message = "Direct-payment reporting is available only for Cab rides." });
+    if (ride.Status != "Completed")
+        return Results.Conflict(new { message = "The Driver can report payment only after the ride is completed." });
+
+    var current = (ride.AgreementVersions ?? []).LastOrDefault();
+    var confirmations = ride.AgreementConfirmations ?? [];
+    if (current is null || current.RiderId != ride.RiderId || current.DriverId != driverId ||
+        string.IsNullOrWhiteSpace(ride.UnionId) ||
+        !string.Equals(current.UnionId, ride.UnionId, StringComparison.Ordinal) ||
+        !confirmations.Any(item => item.Version == current.Version &&
+            item.Party == "Rider" && item.ActorId == ride.RiderId) ||
+        !confirmations.Any(item => item.Version == current.Version &&
+            item.Party == "Driver" && item.ActorId == driverId))
+        return Results.Conflict(new { message = "A current, mutually confirmed Cab agreement and Union assignment are required." });
+
+    if (request.AmountReceived < 0 ||
+        decimal.Round(request.AmountReceived, 2, MidpointRounding.AwayFromZero) != request.AmountReceived)
+        return Results.BadRequest(new { message = "Amount received must be zero or more with at most two decimal places." });
+
+    var idempotencyKey = context.Request.Headers["Idempotency-Key"].ToString().Trim();
+    if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 128)
+        return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
+    var idempotencyKeyHash = Convert.ToHexString(
+        SHA256.HashData(Encoding.UTF8.GetBytes($"{rideId}:{driverId}:{idempotencyKey}")));
+
+    if (ride.PaymentReconciliation is { } existing)
+    {
+        if (existing.IdempotencyKeyHash == idempotencyKeyHash &&
+            existing.AmountReceived == request.AmountReceived)
+            return Results.Ok(ToPaymentReconciliationResponse(existing));
+        return Results.Conflict(new { message = "A payment report is already recorded for this ride and is immutable." });
+    }
+
+    var report = new RidePaymentReconciliation(
+        rideId, current.Version, ride.RiderId, driverId!, ride.UnionId!,
+        current.Amount, request.AmountReceived,
+        decimal.Round(current.Amount - request.AmountReceived, 2, MidpointRounding.AwayFromZero),
+        current.Currency, DateTimeOffset.UtcNow, driverId!, "DriverReportedUnverified", idempotencyKeyHash);
+    var updated = ride with { PaymentReconciliation = report };
+    if (!await TryReplaceRideAsync(ride, updated, ct))
+    {
+        var latest = await ReadRideRawAsync(rideId, ct);
+        if (latest?.PaymentReconciliation is { } concurrent &&
+            concurrent.IdempotencyKeyHash == idempotencyKeyHash &&
+            concurrent.AmountReceived == request.AmountReceived)
+            return Results.Ok(ToPaymentReconciliationResponse(concurrent));
+        return Results.Conflict(new { message = "The ride or payment report changed concurrently. Refresh the trip history before retrying." });
+    }
+
+    return Results.Ok(ToPaymentReconciliationResponse(report));
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
 app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
@@ -2715,7 +2813,7 @@ bool IsSameRideSnapshot(DemoRide left, DemoRide right)
         left.UnionId != right.UnionId || left.NegotiationExpiresAtUtc != right.NegotiationExpiresAtUtc ||
         left.DriverDisplayName != right.DriverDisplayName || left.DriverVehicleMake != right.DriverVehicleMake ||
         left.DriverVehicleModel != right.DriverVehicleModel || left.DriverDistanceToPickupKm != right.DriverDistanceToPickupKm ||
-        left.UnionName != right.UnionName ||
+        left.UnionName != right.UnionName || left.PaymentReconciliation != right.PaymentReconciliation ||
         !(left.Stops ?? []).SequenceEqual(right.Stops ?? [], StringComparer.Ordinal))
         return false;
 
@@ -2737,6 +2835,12 @@ bool IsSameRideSnapshot(DemoRide left, DemoRide right)
 
     return (left.AgreementConfirmations ?? []).SequenceEqual(right.AgreementConfirmations ?? []);
 }
+
+RidePaymentReconciliationResponse? ToPaymentReconciliationResponse(RidePaymentReconciliation? report) =>
+    report is null ? null : new RidePaymentReconciliationResponse(
+        report.RideId, report.AgreementVersion, report.UnionId, report.AgreedAmount,
+        report.AmountReceived, report.Delta, report.Currency, report.ReportedAtUtc,
+        report.ReportedByDriverId, report.Status);
 
 async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, CancellationToken ct)
 {
@@ -2794,7 +2898,8 @@ app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, Cancellatio
             ride.AcceptedAt,
             ride.LocationSharingActive,
             ride.Stops ?? [],
-            ride.NegotiationExpiresAtUtc))
+            ride.NegotiationExpiresAtUtc,
+            ToPaymentReconciliationResponse(ride.PaymentReconciliation)))
         .ToArray();
     return Results.Ok(items);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
@@ -2864,6 +2969,7 @@ public sealed record UpdateUnionStatusRequest(string Status);
 public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "cab");
 public sealed record ProposeRideAgreementRequest(decimal Amount, string Currency);
+public sealed record ReportRidePaymentRequest(decimal AmountReceived);
 public sealed record RiderSelectedBookingRequest(string SelectedDriverId, string UnionId, string Pickup, string Dropoff,
     IReadOnlyList<string>? Stops, int Passengers, double PickupLatitude, double PickupLongitude);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
@@ -2872,7 +2978,8 @@ public sealed record RiderDiscoveryResponse(string PickupZoneId, double? Journey
 public sealed record NearbyUnionDiscoveryGroup(string UnionId, string UnionName, IReadOnlyList<NearbyDriverDiscoveryResponse> Drivers);
 public sealed record NearbyDriverDiscoveryResponse(string DriverId, string FullName, string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceToPickupKm, string? ProfilePhotoBase64, string? ProfilePhotoContentType);
 public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, IReadOnlyList<string> Stops);
-public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive, IReadOnlyList<string> Stops, DateTimeOffset? NegotiationExpiresAtUtc = null);
+public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive, IReadOnlyList<string> Stops, DateTimeOffset? NegotiationExpiresAtUtc = null, RidePaymentReconciliationResponse? PaymentReconciliation = null);
+public sealed record RidePaymentReconciliationResponse(string RideId, int AgreementVersion, string UnionId, decimal AgreedAmount, decimal AmountReceived, decimal Delta, string Currency, DateTimeOffset ReportedAtUtc, string ReportedByDriverId, string Status);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null, DateTimeOffset? CreatedAtUtc = null);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
@@ -2883,7 +2990,8 @@ public sealed record DemoRide(
     IReadOnlyList<RideAgreementVersion>? AgreementVersions = null, IReadOnlyList<RideAgreementConfirmation>? AgreementConfirmations = null,
     int AgreementStateRevision = 0, string? UnionId = null, IReadOnlyList<string>? Stops = null, DateTimeOffset? NegotiationExpiresAtUtc = null,
     string? DriverDisplayName = null, string? DriverVehicleMake = null, string? DriverVehicleModel = null,
-    double? DriverDistanceToPickupKm = null, string? UnionName = null);
+    double? DriverDistanceToPickupKm = null, string? UnionName = null,
+    RidePaymentReconciliation? PaymentReconciliation = null);
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 
