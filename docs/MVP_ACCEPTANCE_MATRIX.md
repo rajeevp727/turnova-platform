@@ -33,7 +33,7 @@
 | DRIVER-04 | Driver support and issue reporting | No verified end-to-end Driver support workflow evidence recorded in this audit | Driver support process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
 | RIDER-04 | Payment through enabled methods, trip history, receipts and ratings | Rider-owned trip history API and Activity list filter by authenticated rider and expose only safe ride summary fields; PR #47 adds ownership, ordering, privacy and empty-history API tests | Cosmos history query integration; payment provider/method decision, sandbox integration, webhook/idempotency/refund tests, receipts and rating flows | Blocked |
 | SUPPORT-01 | Rider help and issue reporting | No verified end-to-end Rider support workflow evidence recorded in this audit | Rider help process, issue categories, escalation owner, API/UI, audit and device acceptance | Blocked |
-| PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations and selected audit stores; PR #49 merged explicit `Cors:AllowedOrigins` allow-list and distinct liveness/Cosmos-aware readiness endpoints with allow/disallow/readiness integration tests; RideOfferState attempts and DriverUnionAudit are persisted | Queue-change append-only audit evidence, exception/security-safe logging, metrics/traces/alerts, Cosmos-unavailable readiness and ETag/partition/failure tests, production origin configuration and load tests | In progress |
+| PLATFORM-01 | Secure, observable, reliable API with persistent audit trail | .NET 10 API, Cosmos migrations and selected audit stores; PR #49 merged explicit CORS allow-list and distinct liveness/readiness endpoints; append-only `QueueAuditEvent` records queue joins/leaves/rotations, Cosmos writes state+audit in one `QueueEntries` partition batch, and unhandled exceptions return generic traceId Problem Details with exception-type-only structured logs | Real Cosmos transactional-batch/ETag/restart/retention failure tests, exception middleware integration test, metrics/traces/alerts, Cosmos-unavailable readiness, production origin configuration and load tests | In progress |
 | RELEASE-01 | Android and iOS builds pass agreed functional, security and pilot-readiness tests | Main CI run 42209834591 passed backend build/tests, non-container API publish/artifact verification, Rider/Driver Expo config and TypeScript checks, and shared mobile auth tests | Android/iOS production builds, signed artifacts, physical-device functional/security/pilot checklist | In progress |
 
 ## Current verified count and weighted progress
@@ -73,12 +73,12 @@
 15. DRIVER-04 — Blocked
 16. RIDER-04 — Blocked
 17. SUPPORT-01 — Blocked
-18. PLATFORM-01 — In progress; PR #49 CORS/health hardening merged; durable queue audit and observability remain
+18. PLATFORM-01 — In progress; PR #49 CORS/health merged; queue audit and safe exception logging under implementation; metrics/traces/Cosmos gates remain
 19. RELEASE-01 — In progress
 
 ## Highest-priority next work
 
-1. Continue PLATFORM-01 with append-only queue-change audit events and structured exception/security-safe logging; then add metrics/traces and Cosmos failure/recovery evidence.
+1. Complete the append-only queue audit and safe exception logging increment; then add metrics/traces and Cosmos transactional-batch/readiness failure-recovery evidence.
 2. Keep RIDER-02 blocked until base fare, distance/time components, taxes and service-class pricing rules are approved; never invent a quote.
 3. Keep DRIVER-03 blocked until compensation, commission and payout treatment are approved; the existing monthly PDF is a work-metrics payslip, not monetary earnings.
 4. Keep RIDER-04 blocked until payment method/provider, sandbox, webhook/idempotency/refund, receipt and rating decisions are supplied.
