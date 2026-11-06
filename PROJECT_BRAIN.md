@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `7dd1aedf56fdc9ef36b6b04add952d78687a4266` (PR #54; PR #53 and earlier changes are ancestors)
+**Current main HEAD:** `78ddb9558b453b9171bc020ea83e51087f6e5f2f` (PR #55; PR #54 and earlier changes are ancestors)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -25,6 +25,8 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - Rider discovery must group approved unions and show up to 2–3 eligible Cab drivers per union by driver-to-pickup proximity; the Rider selects the Driver.
 - Customer-facing FIFO ranking, automatic FIFO assignment and next-driver advancement are not part of the approved Rider flow. Whether FIFO remains an internal Union fairness mechanism is unresolved; preserve legacy queue data/code until that decision is made.
 - PR #52 merged Cab-only Rider/Driver/Union foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`; post-merge CI run 42223126817 passed all four jobs. PR #53 merged legacy non-Cab endpoint/UI action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run 42232390997 passed all four jobs.
+- PR #54 merged tracker reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; final-head CI run 42234802360 passed all four jobs.
+- PR #55 merged union-grouped Cab Rider discovery at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run 42237572056 passed backend, non-container API publish, Rider/Driver Expo config/typechecks and shared mobile-auth tests.
 - Only approved drivers with verified Cab details and current Union eligibility may enter new discovery/ride workflows.
 - Union is an employer/operating association, not a dispatch queue. Driver transfers require reasons and are audited.
 - Driver selfie is private until approved by the driver's current union; replacement or union transfer resets/hides approval.
@@ -59,12 +61,12 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Current active increment
-- PR #55 is the sequential #3 RIDER-01 / CAB-DISCOVERY-01 slice. It adds union-grouped Cab discovery and Rider selection cards; the client selection is not yet a durable booking/reservation. CI run `42237256233` passed all four jobs on code/test head `5b5d57d79b10b64b0fe9b475deb46d2ca9c21f69`: backend restore/build/tests, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile-auth tests. Subsequent changes are documentation-only; final PR-head checks remain a merge gate. Automated diff review found no critical/high-risk issue.
+- PR #56 (`feature/selected-driver-booking-reservation`) is the sequential #3 RIDER-01 / RIDER-03 / DISPATCH-03 / DISPATCH-04 slice. It adds idempotent selected-driver booking, route/stops persistence, submit-time eligibility revalidation, expiring per-driver reservation leases, Rider cancellation, Driver decline/pending request UI, SignalR request/expiry notifications and a server-owned expiry worker. Automated diff review and final-head CI are pending; do not merge until all four jobs pass on the exact reviewed head. No physical-device or live Cosmos validation is claimed.
 
 ## Highest-priority unfinished work
 
-1. **Complete RIDER-01 / CAB-DISCOVERY-01:** finish durable selected-driver reservation/booking and exact expiry/cancel handling without customer-facing FIFO; then run Android/iOS discovery, photo and location acceptance.
-2. **CAB-AGREEMENT-01:** direct Rider/Driver fare negotiation, immutable versioned agreement, both confirm current version, and no ride start until mutual confirmation.
+1. **Finish PR #56:** automated review, backend tests, native non-container API publish, Rider/Driver Expo typechecks and shared mobile-auth tests; merge only on a green final head.
+2. **#4 RIDER-02 / CAB-AGREEMENT-01:** implement direct proposal/counterproposal, immutable agreement versions, mutual confirmation and a server-side ride-start gate. No platform fare quote/payment. direct Rider/Driver fare negotiation, immutable versioned agreement, both confirm current version, and no ride start until mutual confirmation.
 3. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
 4. **CAB-UNION-01:** Cab membership, vehicle verification, union approval/selfie visibility and minimum necessary oversight.
 5. **PLATFORM-01 and RELEASE-01:** queue audit and CORS/health increments merged; durable exception audit, metrics/traces/alerts, Cosmos failure/recovery and Android/iOS device/release gates remain.
@@ -74,6 +76,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
 - Ride model currently includes in-memory/demo paths; Cosmos-backed persistence exists for selected resources, not proof that all ride/dispatch state is production durable.
 - Development zone `hyderabad-central` uses a placeholder bounding rectangle; replace with reviewed operational boundaries before pilot.
+- Dispatch:NearbyRadiusKm and Dispatch:SelectedDriverNegotiationLifetimeSeconds are both 0 placeholders. Discovery and selected booking fail closed until the radius and negotiation lifetime are product-approved and configured.
 - Existing driver/union records with legacy Scooty/Bike/Auto service classes are retained for history and are not eligible for new Cab discovery; never silently map them to Cab.
 - Interim Ops endpoints use a backend-only admin API key. This is not production RBAC.
 - Payslip work-activity append is not transactionally coupled to ride transitions; add outbox/reconciliation before production.
@@ -229,4 +232,10 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #53 merged legacy non-Cab selfie replacement/approval, location, queue-read, pending-offer, rejection and timeout guards; the Driver app suppresses legacy-profile queue/offer polling and SignalR subscriptions while retaining read-only history and Offline cleanup.
 - PR #54 merged documentation reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; latest-head CI run 42234802360 passed backend, Rider app, Driver app and shared mobile-auth jobs.
 - PR #53 merge commit: `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run `42232390997` passed all four jobs. This is CI validation, not physical-device or production acceptance.
-- Legacy customer-facing FIFO/automatic-offer flow still exists for Cab and is not the approved final flow; CAB-DISCOVERY-01 must replace it. Internal FIFO role remains unresolved.
+- Legacy FIFO/offer code remains for compatibility and historical state, but customer-facing nearby discovery returns 410 and new FIFO Rider requests are disabled by default. Do not expose it in the selected-driver flow. Internal FIFO role remains unresolved.
+## Selected-driver booking and reservation increment (PR #56)
+- Rider POST /api/v1/rider/bookings revalidates current approved Cab profile/documents, Online/fresh location, zone, capacity, current Active union, Cab coverage and configured pickup radius. It stores selected Driver/Union, pickup/drop-off/stops, passenger count, Negotiating state and expiry; no fare is supplied or generated.
+- The Rider idempotency key prevents duplicate bookings. The Driver receives SelectedRideRequested in their authenticated driver group and can read only their own pending bookings. Driver decline and Rider cancellation conditionally transition the ride and release only the exact driver/ride reservation.
+- DriverRideReservations now supports time-bounded negotiation leases. Expired leases can be conditionally replaced using Cosmos ETags; active ride reservations have no expiry. The hosted expiry worker marks due Negotiating rides Expired and releases the matching lease. Rides and reservation containers are not cross-transactional; Cosmos crash/restart/multi-instance validation remains outstanding.
+- Tests added: RiderSelectedBookingPersistsStopsReservesDriverAndCanBeCancelledIdempotently; DriverCanDeclineSelectedBookingAndReleaseOnlyItsReservation; ConcurrentRidersCannotReserveTheSameSelectedDriver; SelectedDriverBookingExpiryMarksRideExpiredAndReleasesReservation; plus expired-lease store coverage. CI is pending on the PR head.
+- Booking remains fail-closed because Dispatch:SelectedDriverNegotiationLifetimeSeconds=0; discovery also remains fail-closed while Dispatch:NearbyRadiusKm=0. No duration or radius has been invented.
