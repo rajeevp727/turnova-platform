@@ -555,6 +555,14 @@ The API integration tests use the in-memory store and configured test zone. They
 
 This deterministic test exercises the in-memory store. Cosmos multi-instance and partition-level concurrency remain an infrastructure-backed verification gate.
 
+## 15. Fare policy placeholder
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-FARE-001 | Rider creates a ride before fare policy is approved | API returns \`estimatedFareInr: null\`; no demo amount is presented as a quote | API integration + mobile UI | P0 |
+
+Fare calculation remains blocked until the product owner approves base fare, distance/time components, taxes and service-class rules.
+
 ## 14. Rider trip history
 
 | ID | Scenario | Expected result | Type | Priority |
