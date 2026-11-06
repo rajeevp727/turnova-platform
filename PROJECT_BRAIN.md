@@ -198,8 +198,10 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 
 ## PLATFORM-01 queue audit increment (in progress)
 - Branch: `feat/platform-observability-audit`.
-- Existing `RideOfferState.Attempts` persists offer decisions and `DriverUnionAudit` persists union transfers, but queue joins/leaves/rotations are currently mutable queue state without an append-only queue audit history.
-- Add append-only queue events for successful join, leave and rotation-to-back, preserving event order and scope by zone/service-class queue. Avoid personal data and exact locations in event payloads.
-- For Cosmos mode, prefer transactional writes in the existing queue container/partition so queue state and its audit event commit together; in-memory store must expose equivalent audit evidence for tests.
-- Add tests for event sequence, no event on failed/no-op mutations, and audit retrieval. Real Cosmos transaction/partition/failure verification remains a later infrastructure gate.
-- Add safe structured logs for readiness and operational exceptions without exposing tokens, secrets, phone numbers, exact coordinates or request bodies. Metrics/traces/exporters and alert configuration remain subsequent PLATFORM-01 work.
+- Existing `RideOfferState.Attempts` persists offer decisions and `DriverUnionAudit` persists union transfers, but queue membership changes were mutable state without append-only history.
+- New `QueueAuditEvent` records successful join, leave, move-to-back and offer rotation events with driver, zone/service-class partition, UTC time and optional offerId; no phone/email, exact location or fare.
+- `IQueueStore` exposes queue-scoped audit retrieval. In-memory adapter records only successful mutations; duplicate offer retries and failed/no-op operations do not create duplicate events.
+- Cosmos adapter stores event documents in the existing `QueueEntries` container and commits queue state plus audit event in one transactional batch within the same `zoneServiceKey` partition.
+- Global exception handler returns generic Problem Details with traceId and logs traceId plus exception type only; it does not log request bodies, tokens or exception messages.
+- Automated in-memory event tests cover event types, partition scoping and no-op/failed mutation behaviour. Real Cosmos transactional-batch/ETag/restart/retention verification remains an infrastructure-backed gate.
+- Metrics/traces/exporters/alerts and Cosmos failure injection remain subsequent PLATFORM-01 work.
