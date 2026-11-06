@@ -1253,7 +1253,7 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
     }
 
     var ride = new DemoRide(rideId, request.Pickup.Trim(), request.Dropoff.Trim(), request.Passengers,
-        "Requested", DateTimeOffset.UtcNow, 85m, riderId, null, request.PickupLatitude, request.PickupLongitude,
+        "Requested", DateTimeOffset.UtcNow, null, riderId, null, request.PickupLatitude, request.PickupLongitude,
         null, null, null, null, ServiceClass: serviceClass, DispatchZoneId: dispatchZoneId);
     try { await SaveRideAsync(ride, ct); }
     catch
@@ -1659,7 +1659,7 @@ public sealed record PasswordLoginRequest(string Email, string Password, bool Re
 public sealed record RefreshTokenRequest(string RefreshToken);
 public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
-    string Status, DateTimeOffset RequestedAt, decimal EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "auto", string DispatchZoneId = "hyderabad-central");
+    string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "auto", string DispatchZoneId = "hyderabad-central");
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 
