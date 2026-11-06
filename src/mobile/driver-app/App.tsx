@@ -68,6 +68,7 @@ export default function App() {
   const systemColorScheme = useColorScheme();
   const [tokens, setTokens] = useState<Tokens | null>(null);
   const refreshInFlight = useRef<Promise<string> | null>(null);
+  const sessionEpoch = useRef(0);
   const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Payslips" | "Profile">("Home");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -114,24 +115,28 @@ export default function App() {
     void SecureStore.setItemAsync("turnova.theme", preference);
   };
 
-  const acceptSession = useCallback(async (result: any) => {
+  const acceptSession = useCallback(async (result: any, newSession = false) => {
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
     await saveTokens(next);
+    if (newSession) sessionEpoch.current += 1;
     setTokens(next);
     setUser(result.user);
     setError("");
   }, []);
 
-  const refreshSession = useCallback(async (refreshToken: string) => {
+  const refreshSession = useCallback(async (refreshToken: string, expectedEpoch: number) => {
+    if (sessionEpoch.current !== expectedEpoch) return "";
     const result = await jsonRequest("/api/v1/auth/refresh", {
       method: "POST", body: JSON.stringify({ refreshToken })
     });
+    if (sessionEpoch.current !== expectedEpoch) return "";
     await acceptSession(result);
     return result.accessToken as string;
   }, [acceptSession]);
 
   const apiFetch = useCallback(async (path: string, init: RequestInit = {}) => {
     if (!tokens) throw new Error("Please sign in again.");
+    const requestEpoch = sessionEpoch.current;
     let response = await fetch(`${API}${path}`, {
       ...init,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens.accessToken}`, ...init.headers }
@@ -146,9 +151,11 @@ export default function App() {
             accessToken: await SecureStore.getItemAsync("turnova.access"),
             refreshToken: await SecureStore.getItemAsync("turnova.refresh")
           }),
-          refreshSession
+          (refreshToken: string) => refreshSession(refreshToken, requestEpoch)
         );
       } catch {
+        if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
+        sessionEpoch.current += 1;
         await clearTokens();
         setTokens(null);
         setUser(null);
@@ -159,6 +166,7 @@ export default function App() {
         setAvailableRides([]);
         throw new Error("Session expired. Please sign in again.");
       }
+      if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
       response = await fetch(`${API}${path}`, {
         ...init,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...init.headers }
@@ -178,11 +186,11 @@ export default function App() {
         if (accessToken && refreshToken) {
           try {
             const me = await jsonRequest("/api/v1/auth/me", {}, accessToken);
-            if (active) { setTokens({ accessToken, refreshToken }); setUser(me); }
+            if (active) { sessionEpoch.current += 1; setTokens({ accessToken, refreshToken }); setUser(me); }
           } catch {
             try {
               const result = await jsonRequest("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) });
-              if (active) await acceptSession(result);
+              if (active) await acceptSession(result, true);
             } catch { await clearTokens(); }
           }
         }
@@ -200,7 +208,7 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ email: email.trim(), password, name: name.trim() || null, replaceOldest })
       });
-      await acceptSession(result);
+      await acceptSession(result, true);
     } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed."); }
     finally { setLoading(false); }
   };
@@ -786,6 +794,7 @@ export default function App() {
   };
 
   const logout = async () => {
+    sessionEpoch.current += 1;
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
     await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
