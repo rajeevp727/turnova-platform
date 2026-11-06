@@ -131,7 +131,7 @@ export default function App() {
     });
     if (response.status === 401) {
       const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); throw new Error("Session expired. Please sign in again."); }
+      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); setUnionAssignment(null); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
         accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
@@ -141,6 +141,7 @@ export default function App() {
         setUser(null);
         setActiveRide(null);
         setDriverRideHistory([]);
+        setUnionAssignment(null);
         setAvailableRides([]);
         throw new Error("Session expired. Please sign in again.");
       }
@@ -527,6 +528,7 @@ export default function App() {
 
   const loadOnboarding = useCallback(async () => {
     try {
+      setUnionAssignment(null);
       const [profile, assignment] = await Promise.all([
         apiFetch("/api/v1/driver/onboarding/me"),
         apiFetch("/api/v1/driver/union")
