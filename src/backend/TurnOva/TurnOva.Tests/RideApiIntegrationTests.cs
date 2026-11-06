@@ -1410,8 +1410,12 @@ public sealed class RideApiIntegrationTests
         var ownerClient = owner == "selected-rider-a" ? riderA : riderB;
         Assert.Equal(HttpStatusCode.OK,
             (await ownerClient.PostAsync($"/api/v1/rides/{rideId}/cancel", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await ownerClient.PostAsync($"/api/v1/rides/{rideId}/cancel", null)).StatusCode);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("selected-shared-driver"));
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync("/api/v1/driver/availability", JsonContent.Create(new { isOnline = false }))).StatusCode);
     }
 
     [Fact]
@@ -1431,6 +1435,8 @@ public sealed class RideApiIntegrationTests
 
         using var declined = await driver.PostAsync($"/api/v1/rides/{rideId}/reject", null);
         Assert.Equal(HttpStatusCode.NoContent, declined.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/reject", null)).StatusCode);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("decline-booking-driver"));
         using var rideResponse = await rider.GetAsync($"/api/v1/rides/{rideId}");
@@ -1516,6 +1522,8 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
         using var acceptedJson = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync());
         Assert.Equal("Accepted", acceptedJson.RootElement.GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null)).StatusCode);
         if (acceptedJson.RootElement.TryGetProperty("negotiationExpiresAtUtc", out var expiry))
             Assert.Equal(JsonValueKind.Null, expiry.ValueKind);
         Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
