@@ -59,7 +59,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Current active increment
-- PR #55 is the sequential #3 RIDER-01 / CAB-DISCOVERY-01 slice. It adds union-grouped Cab discovery and Rider selection cards; the client selection is not yet a durable booking/reservation. CI run 42237040525 passed all four jobs on code/test head `140a7249d9242a1dc0e1377e2514cc29d1dba851`, including the Rider/anonymous authorization regression test. Current branch head `8421e5de9b16e0a4bb1a49d697711ac924ad395b` contains documentation-only reconciliation after that test run; final-head CI is pending. Automated diff review found no critical/high-risk issue.
+- PR #55 is the sequential #3 RIDER-01 / CAB-DISCOVERY-01 slice. It adds union-grouped Cab discovery and Rider selection cards; the client selection is not yet a durable booking/reservation. CI run 42237040525 passed all four jobs on code/test head `140a7249d9242a1dc0e1377e2514cc29d1dba851`, including the Rider/anonymous authorization regression test. Subsequent commits are documentation-only and do not alter application or test code; final-head CI is pending. Automated diff review found no critical/high-risk issue.
 
 ## Highest-priority unfinished work
 
