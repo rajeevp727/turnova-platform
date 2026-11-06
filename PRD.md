@@ -173,8 +173,8 @@ The Rider discovery API returns active eligible unions grouped with up to three 
 ### Agreement and ride
 - Record proposals/counterproposals or equivalent negotiation history.
 - Persist a durable, immutable, versioned agreement with ride, Rider, Driver, Union, amount, currency, route/stops, timestamps and both confirmations.
-- A changed fare creates a new version; both parties must confirm the current version.
-- Driver cannot start until the current agreement is mutually confirmed.
+- A changed fare creates a new version; both parties must confirm the current version. A renegotiation during an active trip must also be mutually confirmed before trip completion.
+- Driver cannot start until the current agreement is mutually confirmed; completion is also gated on mutual confirmation of the latest version.
 - Enforce server-owned legal transitions, idempotency, safe expiry/cancellation and concurrency-safe driver reservations. No overlapping active negotiation or ride.
 
 ### Direct payment reporting
@@ -190,3 +190,7 @@ The Rider discovery API returns active eligible unions grouped with up to three 
 - FIFO must not rank Rider discovery or automatically assign a driver. Whether it remains internal union fairness/availability is unresolved.
 
 Out of scope: Scooty, Bike, Auto, platform fare estimates/pricing, payment gateway/escrow, fleet/corporate workflows and customer-facing FIFO dispatch.
+
+
+### Agreement implementation evidence note (2026-11-06)
+The first RIDER-02 implementation increment stores immutable agreement term versions and append-only party confirmations inside the ride aggregate. Every agreement mutation increments an aggregate revision and uses the ride document's conditional ETag replacement, so concurrent proposals/confirmations cannot silently overwrite one another and a start/completion transition conflicts with a concurrent agreement change. The existing ride model does not yet persist optional intermediate stops; the agreement route snapshot currently includes pickup and drop-off, and stop persistence remains coupled to the sequential selected-driver booking increment (RIDER-03). This note records the current implementation gap and does not relax the acceptance criterion.
