@@ -740,6 +740,30 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task DriverCannotGoOnlineOutsideAssignedZoneAndRiderCannotSearchOutsideConfiguredZones()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-online-outside-zone");
+        using var rider = factory.CreateClient("Rider", "rider-nearby-outside-zone");
+
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 0d, longitude = 0d });
+        Assert.Equal(HttpStatusCode.Conflict, online.StatusCode);
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["driver-online-outside-zone"];
+        Assert.Equal("Offline", profile.AvailabilityStatus);
+
+        var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
+            "/api/v1/zones/hyderabad-central/queues/auto");
+        Assert.NotNull(queue);
+        Assert.DoesNotContain(queue, entry => entry.DriverId == "driver-online-outside-zone");
+
+        using var nearby = await rider.GetAsync(
+            "/api/v1/rides/nearby?latitude=0&longitude=0&serviceClass=auto&passengers=1");
+        Assert.Equal(HttpStatusCode.BadRequest, nearby.StatusCode);
+    }
+
+    [Fact]
     public async Task DriverLocationOutsideAssignedZoneTakesDriverOfflineAndRemovesQueueMembership()
     {
         using var factory = new TurnOvaApiFactory();
