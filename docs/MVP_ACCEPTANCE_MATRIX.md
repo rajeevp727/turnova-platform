@@ -1,8 +1,8 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
-**Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12 and 14; `docs/test-plan.md`.
-**Last audited:** 2026-11-06 against main after PR #51 merge `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; Cab-only union business model approved and being reconciled.
+**Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; `docs/test-plan.md`.
+**Last audited:** 2026-11-06 using main after PR #51 merge `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; Cab-only scope is reconciled on PR #50 and awaits merge.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -46,7 +46,7 @@
 - PR #48 merged Driver history at `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; CI run 42215718229 passed all four jobs.
 - PR #49 merged CORS/health hardening at `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; CI run 42216606101 passed all four jobs.
 - PR #51 merged queue audit and safe exception handling at `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; CI run 42219327319 passed all four jobs.
-- PR #50 contains the approved Cab-only documentation reset. Its original CI run 42217994808 passed on its old head; the branch must be reconciled with PR #51 and rechecked before merge.
+- PR #50 contains the approved Cab-only documentation reset. Its original CI run 42217994808 passed on its old head; the branch is now reconciled with PR #51 and requires latest-head CI before merge.
 - Do not mark an area Verified until all evidence in its row has passed and links/results are recorded.
 
 ## Approved supplemental requirement (not counted in the 19 PRD areas)
@@ -79,12 +79,12 @@
 
 ## Highest-priority next work
 
-1. Complete the append-only queue audit and safe exception logging increment; then add metrics/traces and Cosmos transactional-batch/readiness failure-recovery evidence.
-2. Keep RIDER-02 blocked until base fare, distance/time components, taxes and service-class pricing rules are approved; never invent a quote.
-3. Keep DRIVER-03 blocked until compensation, commission and payout treatment are approved; the existing monthly PDF is a work-metrics payslip, not monetary earnings.
-4. Keep RIDER-04 blocked until payment method/provider, sandbox, webhook/idempotency/refund, receipt and rating decisions are supplied.
-5. Keep DRIVER-04 and SUPPORT-01 blocked until the role-specific support process, categories and escalation owner are approved.
-6. Continue independent PLATFORM-01 and RELEASE-01 evidence work in sequence; real Cosmos, observability/security, Android/iOS builds and physical-device validation remain explicit gates.
+1. Implement CAB-SCOPE-01: reject Scooty/Bike/Auto in new Rider ride requests and Driver onboarding; allow Cab only and preserve historical records without destructive migration.
+2. Implement CAB-DISCOVERY-01: discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by pickup proximity; Rider explicitly selects. No customer-facing FIFO ranking or automatic assignment.
+3. Implement CAB-AGREEMENT-01: direct Rider/Driver negotiation, immutable versioned agreement, both parties confirm current version, and no ride start before mutual confirmation.
+4. Implement CAB-RECON-01: Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
+5. Complete CAB-UNION-01 and the remaining Driver/Rider support, platform observability and release evidence.
+6. Keep AI-01 as the separately approved supplemental requirement, outside the 19-area denominator.
 
 ## Deployment constraint
 
@@ -114,4 +114,4 @@ This clarification supersedes conflicting legacy row descriptions without changi
 | CAB-RECON-01 | Driver-reported/unverified amount, signed delta, authorised union visibility and audit | Not verified |
 | CAB-UNION-01 | Approved membership, Cab/vehicle verification, union selfie approval and least-privilege oversight | Partially evidenced; end-to-end pending |
 
-Unresolved: internal FIFO role; customer dispute/confirmation; non-zero-delta next-ride policy; cancellation policy; legal partnership/T&C review. Do not invent decisions. Re-audit code before recalculating progress; documentation alignment does not verify features.
+Unresolved: internal FIFO role; customer dispute/confirmation; non-zero-delta next-ride policy; cancellation policy; legal partnership/T&C review. Do not invent decisions. The 42.1% weighted score is a reclassification from current merged code evidence; no CAB supplemental requirement is verified yet.
