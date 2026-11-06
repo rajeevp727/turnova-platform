@@ -15,6 +15,6 @@ export interface StoredSessionTokens {
 export function getFreshAccessToken(
   ref: InFlightPromiseRef<string>,
   rejectedAccessToken: string,
-  readTokens: () => Promise<StoredSessionTokens>,
+  readTokens: () => Promise<StoredSessionTokens | null>,
   refresh: (refreshToken: string) => Promise<string>
 ): Promise<string>;
