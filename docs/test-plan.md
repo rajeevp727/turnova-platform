@@ -555,7 +555,7 @@ The API integration tests use the in-memory store and configured test zone. They
 
 This deterministic test exercises the in-memory store. Cosmos multi-instance and partition-level concurrency remain an infrastructure-backed verification gate.
 
-## 15. Fare policy placeholder
+## 14. Fare policy placeholder
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
@@ -563,7 +563,7 @@ This deterministic test exercises the in-memory store. Cosmos multi-instance and
 
 Fare calculation remains blocked until the product owner approves base fare, distance/time components, taxes and service-class rules.
 
-## 14. Rider trip history
+## 15. Rider trip history
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
@@ -573,4 +573,4 @@ Fare calculation remains blocked until the product owner approves base fare, dis
 | RIDER-HISTORY-004 | Driver requests Rider history endpoint | HTTP 403 | API authorization | P0 |
 | RIDER-HISTORY-005 | Rider reopens Activity while a ride is Requested, Offered, Accepted, Arrived or InProgress | Latest active ride details are restored from the owner-scoped history result so status/live tracking can reconnect | Android/iOS functional + SignalR | P0 |
 
-The current automated tests exercise the in-memory store. Cosmos cross-partition history query behaviour, retention and larger-history performance require the configured development Cosmos environment.
+The current automated tests exercise the in-memory store. Cosmos cross-partition history query behaviour, retention and larger-history performance require the configured development Cosmos environment. On Android and iOS, also verify that reopening Activity clears a previously active in-memory ride when the server history contains only terminal states, and that a late response after leaving Activity or signing out cannot overwrite current UI state.
