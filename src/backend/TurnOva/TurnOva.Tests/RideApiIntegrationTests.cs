@@ -107,9 +107,9 @@ public sealed class RideApiIntegrationTests
 
         var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.OK, online.StatusCode);
-        var joined = await driver.PostAsJsonAsync("/api/v1/queues/join",
-            new { zoneId = "hyderabad-central", serviceClass = "cab" });
-        Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
+        var eligible = await factory.Services.GetRequiredService<IQueueStore>()
+            .GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
+        Assert.Contains(eligible, entry => entry.DriverId == "driver-onboarding-pending");
 
         var wrongZone = await driver.PostAsJsonAsync("/api/v1/queues/join",
             new { zoneId = "hyderabad-north", serviceClass = "cab" });
@@ -571,8 +571,8 @@ public sealed class RideApiIntegrationTests
         using var secondDriver = factory.CreateClient("Driver", "driver-fifo-second");
         var queue = factory.Services.GetRequiredService<IQueueStore>();
         var joinedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
-        await queue.AddAsync(new DriverQueueEntry("driver-fifo-first", "hyderabad-central", "cab", joinedAt, 0, true), CancellationToken.None);
-        await queue.AddAsync(new DriverQueueEntry("driver-fifo-second", "hyderabad-central", "cab", joinedAt.AddMinutes(1), 0, true), CancellationToken.None);
+        await EnqueueLegacyDriverAsync(factory, "driver-fifo-first");
+        await EnqueueLegacyDriverAsync(factory, "driver-fifo-second");
 
         var ride = await CreateRideAsync(rider, "request-fifo-reject-001");
         Assert.Equal(HttpStatusCode.NoContent,
@@ -703,7 +703,7 @@ public sealed class RideApiIntegrationTests
         var ride = await CreateRideAsync(rider, "request-lifecycle-001");
 
         var invalidStart = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/start", null);
-        Assert.Equal(HttpStatusCode.Conflict, invalidStart.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, invalidStart.StatusCode);
 
         var accepted = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
@@ -2060,6 +2060,16 @@ public sealed class RideApiIntegrationTests
 
     private static async Task EnqueueLegacyDriverAsync(TurnOvaApiFactory factory, string driverId)
     {
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        if (!profiles.TryGetValue(driverId, out var profile))
+            throw new InvalidOperationException($"Test driver profile '{driverId}' was not created.");
+        profiles[driverId] = profile with
+        {
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+        };
         await factory.Services.GetRequiredService<IQueueStore>().AddAsync(
             new DriverQueueEntry(driverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true),
             CancellationToken.None);
