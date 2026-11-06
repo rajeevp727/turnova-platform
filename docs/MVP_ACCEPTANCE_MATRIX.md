@@ -82,8 +82,9 @@
 ## Highest-priority next work
 
 1. Current sequential #14 DRIVER-03: fix current-month payslip acceptance, add missing/changed Union assignment and cross-Driver privacy tests, and verify work-metrics-only PDF content.
-2. After #14, inspect #15 DRIVER-04 support requirements; if the support categories/owner/process remain unapproved, record the blocker and proceed to #16 RIDER-04 without inventing policy.
-3. Implement CAB-RECON-01 in its later Rider/Driver acceptance rows: driver-reported/unverified amount, signed agreed-minus-reported delta, durable audit and least-privilege Union visibility. Keep customer dispute/confirmation and non-zero-delta next-ride policy unresolved.
+2. #15 DRIVER-04 remains Blocked because Driver support categories, escalation owner and operational process are unapproved; do not invent a support workflow.
+3. Current sequential #16 RIDER-04: PR #70 implements the approved CAB-RECON-01 supplemental requirement; complete final-head checks and review before merge.
+4. After #16, inspect #17 SUPPORT-01; preserve its blocker if Rider support categories, escalation owner and process remain unapproved.
 4. Keep #11 DRIVER-01 In progress until identity-provider claim mapping, private document storage/scanning/consent/retention and Android/iOS onboarding evidence pass.
 5. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
 
@@ -112,7 +113,7 @@ This clarification supersedes conflicting legacy row descriptions without changi
 | CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | Cab-only guards and historical record preservation are implemented in PR #52/#53. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests and passed native API publish/mobile checks. Physical-device/production acceptance remains. |
 | CAB-DISCOVERY-01 | Approved nearby unions; max 2–3 eligible drivers per union; pickup proximity ordering; customer selection | In progress — PR #55 implements server grouping/eligibility/cap/order/photo privacy and Rider local card selection; PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests. Durable reservation/booking, production radius and device gates remain |
 | CAB-AGREEMENT-01 | Direct negotiation; durable immutable versioned agreement; both confirm; no start without current mutual confirmation | In progress — PR #56 implements API/mobile proposal and confirmation controls, append-only terms/confirmation history and start/completion gates; booking integration, optional stops and device/Cosmos validation remain. |
-| CAB-RECON-01 | Driver-reported/unverified amount, signed delta, authorised union visibility and audit | Not verified |
+| CAB-RECON-01 | Driver-reported/unverified amount, signed delta, authorised union visibility and audit | In progress — PR #70 adds the completed-Cab Driver report, immutable ride-linked delta, idempotency/concurrency protection, Driver history and claim-scoped minimum-data UnionManager list; final-head CI/Cosmos/device evidence pending. Not counted in the 19-area score. |
 | CAB-UNION-01 | Approved membership, Cab/vehicle verification, union selfie approval and least-privilege oversight | PR #66 merged at `26dafc87451ba49ea4734df81c94f9e75790800d`; final-head CI [42278673796](https://github.com/rajeevp727/turnova-platform/actions/runs/42278673796) passed all four jobs, including 191/191 backend tests. Active-union creation/activation remains operations-controlled; private document storage/scanning/consent/retention and legal partnership terms remain external gates | In progress |
 
 Unresolved: internal FIFO role; customer dispute/confirmation; non-zero-delta next-ride policy; cancellation policy; legal partnership/T&C review. Do not invent decisions. The 42.1% weighted score is a reclassification from current merged code evidence; no CAB supplemental requirement is verified yet.
