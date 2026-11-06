@@ -1664,6 +1664,9 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         !string.Equals(approvedProfile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)) return Results.Forbid();
     var selectedRide = await FindRideAsync(rideId, ct);
     if (selectedRide is not null && selectedRide.DriverId == driverId &&
+        selectedRide.UnionId is not null && selectedRide.Status == "Accepted")
+        return Results.Ok(selectedRide);
+    if (selectedRide is not null && selectedRide.DriverId == driverId &&
         (selectedRide.Status is "Negotiating" or "AgreementConfirmed"))
     {
         if (selectedRide.Status != "AgreementConfirmed")
@@ -1774,6 +1777,8 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     if (profile is null || profile.AvailabilityStatus != "Online" ||
         !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
+    if (ride is not null && ride.DriverId == driverId && ride.UnionId is not null && ride.Status == "Cancelled")
+        return Results.NoContent();
     if (ride is not null && ride.DriverId == driverId &&
         (ride.Status is "Negotiating" or "AgreementConfirmed"))
     {
@@ -2054,6 +2059,7 @@ app.MapPost("/api/v1/rides/{rideId}/start", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
+    if (ride.Status == "InProgress") return Results.Ok(ride);
     var current = (ride.AgreementVersions ?? []).LastOrDefault();
     var confirmations = ride.AgreementConfirmations ?? [];
     if (current is null ||
@@ -2074,6 +2080,7 @@ app.MapPost("/api/v1/rides/{rideId}/complete", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
+    if (ride.Status == "Completed") return Results.Ok(ride);
     var current = (ride.AgreementVersions ?? []).LastOrDefault();
     var confirmations = ride.AgreementConfirmations ?? [];
     if (current is null ||
@@ -2095,6 +2102,7 @@ app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.RiderId != riderId) return Results.NotFound();
+    if (ride.Status == "Cancelled") return Results.Ok(ride);
     if (ride.Status is not ("Requested" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived"))
         return Results.Conflict(new { message = "A ride can only be cancelled before it starts." });
     var updated = await TryTransitionAsync(ride, "Cancelled", ct);
@@ -2110,6 +2118,7 @@ async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, str
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
+    if (ride.Status == next) return Results.Ok(ride);
     if (ride.Status != expected) return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to {next}." });
     var updated = await TryTransitionAsync(ride, next, ct);
     if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
