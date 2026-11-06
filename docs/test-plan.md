@@ -624,6 +624,9 @@ These supplement and supersede legacy fare-estimate, payment-gateway and automat
 |---|---|---|---|---|
 | CAB-SCOPE-001 | Rider submits Scooty/Bike/Auto | API rejects; no ride created | API/security | P0 |
 | CAB-SCOPE-002 | Driver attempts non-Cab onboarding | API rejects; no MVP eligibility | API/security | P0 |
+| CAB-SCOPE-003 | Existing historical non-Cab ride is requested from Rider history | Historical record remains readable with its original service class; no destructive migration or rewrite occurs | API/persistence | P0 |
+| CAB-SCOPE-004 | Existing approved non-Cab Driver attempts to go Online or retrieve actionable offers | Driver remains Offline and cannot join Cab queue or receive new Cab offers; historical trips remain readable | API/security | P0 |
+| CAB-SCOPE-005 | Rider requests configured service zones | New workflow service-class catalog exposes Cab only | API | P1 |
 | CAB-DISC-001 | Pickup has multiple approved unions | Results grouped by eligible union | API | P0 |
 | CAB-DISC-002 | Union has more than three eligible Cab drivers | At most three returned | API | P0 |
 | CAB-DISC-003 | Drivers have different pickup distances | Ordered by pickup proximity, not FIFO | API | P0 |
