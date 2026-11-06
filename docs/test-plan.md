@@ -61,7 +61,9 @@ The API contract tests use a fake named TriSend HTTP handler; CI must never call
 | AUTH-API-003 | Unsupported registration role | HTTP 404; TriSend is not called | API integration | P0 |
 | AUTH-API-004 | Login returns a different app role | HTTP 403; returned access token is sent to TriSend logout | API integration | P0 |
 | AUTH-API-005 | Refresh request | Refresh token is forwarded unchanged to TriSend | API integration | P0 |
-| AUTH-API-006 | TriSend connection failure | Stable HTTP 503; upstream exception details are not exposed | API integration | P0 |\n| AUTH-API-007 | Duplicate registration | TriSend HTTP 409 is preserved as a conflict and no access/refresh token is returned | API integration | P0 |\n| AUTH-API-008 | Rider profile read | `/api/v1/auth/me` forwards the bearer token and returns the authenticated profile from TriSend | API integration | P0 |
+| AUTH-API-006 | TriSend connection failure | Stable HTTP 503; upstream exception details are not exposed | API integration | P0 |
+| AUTH-API-007 | Duplicate registration | TriSend HTTP 409 is preserved as a conflict and no access/refresh token is returned | API integration | P0 |
+| AUTH-API-008 | Rider profile read | `/api/v1/auth/me` forwards the bearer token and returns the authenticated profile from TriSend | API integration | P0 |
 
 ## 3. JWT validation and authorization
 
@@ -817,7 +819,9 @@ The two Expo apps share modules from `src/mobile/shared`; each app's Metro confi
 | AI-014 | Caller exceeds assistance request limit | Further requests receive HTTP 429 within that caller's rate-limit partition | API abuse control | P1 |
 | AI-015 | Prompt/log privacy review | Precise route, identity/KYC, phone/email, payment details, tokens and private chat are not sent to provider or written to logs | Security review | P0 |
 | AI-016 | AI output attempts to set fare, approve KYC, rank drivers or change ride state | Contract exposes none of these operations; only a human-reviewed draft or approved help source can be returned | Architecture + tests | P0 |
-| AI-017 | Rider/Driver asks what queue status means | Approved answer states Rider discovery is not FIFO-ranked or auto-assigned and leaves the internal FIFO role unresolved | Unit | P0 |\n| AI-018 | Driver asks about Online/Offline eligibility | Approved answer explains availability as one server-side eligibility input without promising discovery or assignment | Unit | P1 |
-| AI-019 | Provider proposes a passenger count absent from Rider text | Provider count is rejected and the safe local default remains visible for Rider review | Unit | P0 |\n| AI-020 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
+| AI-017 | Rider/Driver asks what queue status means | Approved answer states Rider discovery is not FIFO-ranked or auto-assigned and leaves the internal FIFO role unresolved | Unit | P0 |
+| AI-018 | Driver asks about Online/Offline eligibility | Approved answer explains availability as one server-side eligibility input without promising discovery or assignment | Unit | P1 |
+| AI-019 | Provider proposes a passenger count absent from Rider text | Provider count is rejected and the safe local default remains visible for Rider review | Unit | P0 |
+| AI-020 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
 
 The CI provider is a deterministic fake. Live provider sandbox behavior, managed-secret wiring and data-processing terms are not claimed until infrastructure is configured. AI assistance must never invoke booking, fare agreement, payment, eligibility, discovery ordering or ride-state mutation endpoints.
