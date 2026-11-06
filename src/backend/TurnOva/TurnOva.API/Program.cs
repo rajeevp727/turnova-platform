@@ -480,7 +480,7 @@ async Task<HashSet<string>> GetActiveDriverIdsAsync(CancellationToken ct)
 
     var query = new QueryDefinition(
         "SELECT DISTINCT VALUE c.driverId FROM c WHERE IS_DEFINED(c.driverId) " +
-        "AND c.status IN ('Accepted', 'Arrived', 'InProgress')");
+        "AND NOT IS_NULL(c.driverId) AND c.status IN ('Accepted', 'Arrived', 'InProgress')");
     var driverIds = new HashSet<string>(StringComparer.Ordinal);
     using var iterator = rideContainer.GetItemQueryIterator<string>(query);
     while (iterator.HasMoreResults)
