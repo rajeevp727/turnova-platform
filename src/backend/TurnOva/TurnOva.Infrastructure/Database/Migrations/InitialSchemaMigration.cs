@@ -7,7 +7,7 @@ public sealed class InitialSchemaMigration : ICosmosMigration
     public string Id => "202611050001_InitialSchema";
     public string Description => "Create the initial TurnOva MVP containers.";
 
-    public async Task UpAsync(Database database, CancellationToken cancellationToken)
+    public async Task UpAsync(Microsoft.Azure.Cosmos.Database database, CancellationToken cancellationToken)
     {
         var containers = new[]
         {

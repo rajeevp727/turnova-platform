@@ -17,6 +17,21 @@ public sealed class AuthApiIntegrationTests
     private const string Audience = "turnova-api";
     private const string SigningKey = "turnova-auth-integration-test-signing-key-32-bytes";
 
+    [Theory]
+    [InlineData("/health/live")]
+    [InlineData("/health/ready")]
+    public async Task HealthProbesAreAvailableWithoutAuthentication(string path)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Health probes must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
     [Fact]
     public async Task DriverRegistrationForwardsNormalizedIdentityAndServerOwnedRole()
     {

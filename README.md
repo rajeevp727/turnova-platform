@@ -90,7 +90,7 @@ Use free tiers and low-cost services for development where practical. Production
 
 ## Status
 
-The repository contains the initial API, Driver and Rider demo clients, Cosmos DB queue adapter/migrations, and CI validation. Authentication now integrates with TriSend email/password endpoints. Ride storage and dispatch remain demo-level; do not treat the current build as production-ready.
+The repository contains the .NET 10 API, native Expo Rider and Driver apps, Cosmos adapters/migrations, FIFO dispatch and ride-offer foundations, TriSend email/password authentication, and CI validation. The API exposes health probes and refuses to start in Production without Cosmos DB configuration. Full Cosmos concurrency/recovery, provider sandbox, mobile device, payment and release acceptance remain outstanding; do not treat CI green as production readiness.
 
 ## MVP development notes
 
@@ -182,3 +182,8 @@ Work activity is recorded as an append-only per-driver ledger and monthly paysli
 ## Application themes
 
 TurnOva Driver and TurnOva Rider support Light, Dark and System appearance modes. System is the default and follows the device appearance; Light and Dark can be selected from the sign-in screen or the Profile screen. The preference is persisted locally using Expo SecureStore and applied across the app shell, authentication screens, cards, inputs, navigation, status bar, feedback states and the Rider map. Theme selection does not change account/session data or backend APIs.
+
+
+## Infrastructure placeholders
+
+Deployment inputs are documented in [infrastructure/README.md](./infrastructure/README.md). The API is published as a native .NET application artifact; no Docker or container deployment is used. Hosting provider, Cosmos, TriSend and other required external-provider values remain placeholders until infrastructure is supplied. The MVP interfaces are native Android/iOS apps; Azure Static Web Apps is not their deployment target.
