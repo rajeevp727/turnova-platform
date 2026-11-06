@@ -981,7 +981,7 @@ public sealed class RideApiIntegrationTests
         var northZone = AddUnion("union-north", "North Cab Union", zoneId: "hyderabad-north");
 
         AddDriver("central-1", central.UnionId, 17.493, 78.400);
-        AddDriver("central-2", central.UnionId, 17.494, 78.402);
+        AddDriver("central-2", central.UnionId, 17.493, 78.400);
         AddDriver("central-3", central.UnionId, 17.495, 78.404);
         AddDriver("central-4", central.UnionId, 17.496, 78.406);
         AddDriver("metro-photo-approved", metro.UnionId, 17.493, 78.401);
@@ -1029,6 +1029,7 @@ public sealed class RideApiIntegrationTests
         var distances = centralDrivers.EnumerateArray()
             .Select(driver => driver.GetProperty("distanceToPickupKm").GetDouble()).ToArray();
         Assert.Equal(distances.OrderBy(distance => distance), distances);
+        Assert.Equal(distances[0], distances[1]);
 
         var metroGroup = groups.EnumerateArray()
             .Single(group => group.GetProperty("unionId").GetString() == metro.UnionId);
