@@ -8,6 +8,9 @@ public static class RideLifecycle
     public const string InProgress = "InProgress";
     public const string Completed = "Completed";
     public const string Cancelled = "Cancelled";
+    public const string Negotiating = "Negotiating";
+    public const string Declined = "Declined";
+    public const string Expired = "Expired";
 
     public static bool CanTransition(string current, string next) =>
         (current, next) switch
@@ -16,7 +19,8 @@ public static class RideLifecycle
             (Accepted, Arrived) => true,
             (Arrived, InProgress) => true,
             (InProgress, Completed) => true,
-            (Requested or Accepted or Arrived, Cancelled) => true,
+            (Requested or Accepted or Arrived or Negotiating, Cancelled) => true,
+            (Negotiating, Declined or Expired) => true,
             _ => false
         };
 
