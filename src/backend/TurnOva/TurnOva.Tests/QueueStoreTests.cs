@@ -47,6 +47,31 @@ public sealed class QueueStoreTests
     }
 
     [Fact]
+    public async Task ConcurrentDuplicateJoinsForSameDriverKeepSingleQueueMembership()
+    {
+        var store = new InMemoryQueueStore();
+        var entry = Entry("driver-concurrent-join", "zone-a", "auto", DateTimeOffset.UtcNow);
+
+        var attempts = await Task.WhenAll(Enumerable.Range(0, 16).Select(async _ =>
+        {
+            try
+            {
+                await store.AddAsync(entry, CancellationToken.None);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }));
+
+        Assert.Single(attempts.Where(succeeded => succeeded));
+        var queue = await store.GetEligibleAsync("zone-a", "auto", CancellationToken.None);
+        Assert.Single(queue);
+        Assert.Equal("driver-concurrent-join", queue[0].DriverId);
+    }
+
+    [Fact]
     public async Task AddAsync_StillRejectsDuplicateActiveMembership()
     {
         var store = new InMemoryQueueStore();
