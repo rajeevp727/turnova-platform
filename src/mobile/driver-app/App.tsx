@@ -42,6 +42,7 @@ type QueueMembership = { isQueued: boolean; position: number | null };
 type PaymentReconciliation = { rideId: string; agreementVersion: number; unionId: string; agreedAmount: number; amountReceived: number; delta: number; currency: string; reportedAtUtc: string; reportedByDriverId: string; status: string };
 type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean; stops?: string[]; negotiationExpiresAtUtc?: string | null; paymentReconciliation?: PaymentReconciliation | null };
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; driverConfirmed: boolean };
+type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
 
 async function saveTokens(tokens: Tokens) {
   await SecureStore.setItemAsync("turnova.access", tokens.accessToken);
@@ -78,6 +79,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [helpQuestion, setHelpQuestion] = useState("");
+  const [helpBusy, setHelpBusy] = useState(false);
+  const [helpAnswer, setHelpAnswer] = useState("");
   const [availableRides, setAvailableRides] = useState<any[]>([]);
   const [activeRide, setActiveRide] = useState<any>(null);
   const [driverRideHistory, setDriverRideHistory] = useState<DriverRideHistoryItem[]>([]);
@@ -781,6 +785,19 @@ export default function App() {
     await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
   };
 
+  const askHelp = async () => {
+    setHelpBusy(true); setHelpAnswer(""); setError("");
+    try {
+      const result = await apiFetch("/api/v1/assistance/help", {
+        method: "POST",
+        body: JSON.stringify({ question: helpQuestion, rideState: activeRide?.status ?? null })
+      }) as AssistantHelp;
+      const source = result.source === "provider-approved-content" ? "AI-selected approved help" : "Approved in-repository help content";
+      setHelpAnswer(`${result.answer}\n\n${result.escalationRequired ? "Escalation required. " : ""}${source}.`);
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to load approved help content."); }
+    finally { setHelpBusy(false); }
+  };
+
   const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
   const colors = resolvedTheme === "dark" ? darkColors : lightColors;
   const styles = createStyles(colors);
@@ -907,7 +924,7 @@ export default function App() {
           <TextInput value={registrationReference} onChangeText={setRegistrationReference} style={styles.input} placeholderTextColor={colors.muted} placeholder="Vehicle RC object reference" autoCapitalize="none" />
           <Pressable style={styles.primary} disabled={loading || !driverName.trim() || !phoneNumber.trim() || !vehicleMake.trim() || !vehicleModel.trim() || !vehicleRegistration.trim() || !licenceReference.trim() || !registrationReference.trim() || !profilePhotoBase64} onPress={() => void submitOnboarding()}><Text style={styles.primaryText}>{loading ? "Please wait…" : onboardingProfile ? "Resubmit for review" : "Submit for approval"}</Text></Pressable>
         </>}
-      </View><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
+      </View><View style={styles.card}><Text style={styles.cardTitle}>{user.name || "Driver"}</Text><Text style={styles.muted}>{user.email}</Text><Text style={styles.muted}>Account role: {user.role}</Text><Text style={styles.label}>TURNOVA HELP</Text><TextInput value={helpQuestion} onChangeText={setHelpQuestion} multiline maxLength={1000} style={[styles.input,{minHeight:64,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Ask about queue, availability, ride states, fare agreements or payment reports"/><Pressable style={styles.secondary} disabled={helpBusy||!helpQuestion.trim()} onPress={() => void askHelp()}><Text style={styles.secondaryText}>{helpBusy ? "Checking approved help…" : "Ask TurnOva assistant"}</Text></Pressable>{!!helpAnswer && <Text style={styles.muted}>{helpAnswer}</Text>}<Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable></View></>}
       {!!error && <Text style={styles.error}>{error}</Text>}{!!notice && <Text style={styles.success}>{notice}</Text>}
     </ScrollView>
     <View style={styles.tabBar}>{tabs.map(item => <Pressable key={item} style={styles.tab} onPress={() => setTab(item)}><Text style={[styles.tabText, tab === item && styles.tabActive]}>{item}</Text></Pressable>)}</View>

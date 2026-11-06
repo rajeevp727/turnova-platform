@@ -16,6 +16,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
+using TurnOva.Application.Assistance;
 using TurnOva.Domain.Dispatch;
 
 namespace TurnOva.Tests;
@@ -2895,6 +2896,104 @@ public sealed class RideApiIntegrationTests
         if (idempotencyKey is not null)
             request.Headers.Add("Idempotency-Key", idempotencyKey);
         return request;
+    }
+
+    [Fact]
+    public async Task RiderTripIntentDraftRequiresReviewAndDriverCannotUseRiderDraftEndpoint()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "ai-intent-rider");
+        using var driver = factory.CreateClient("Driver", "ai-intent-driver");
+
+        using var response = await rider.PostAsJsonAsync("/api/v1/assistance/trip-intent", new
+        {
+            text = "Please book a Cab from Nizampet to HITEC City for 2 passengers"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var draft = await response.Content.ReadFromJsonAsync<TripIntentDraftResponse>();
+        Assert.NotNull(draft);
+        Assert.Equal("Nizampet", draft.Pickup);
+        Assert.Equal("HITEC City", draft.Dropoff);
+        Assert.Equal("Cab", draft.ServiceClass);
+        Assert.Equal(2, draft.PassengerCount);
+        Assert.True(draft.RequiresUserConfirmation);
+        Assert.Equal("deterministic-fallback", draft.Source);
+
+        using var historyResponse = await rider.GetAsync("/api/v1/rides/mine");
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        using var history = JsonDocument.Parse(await historyResponse.Content.ReadAsStringAsync());
+        Assert.Equal(0, history.RootElement.GetArrayLength());
+
+        using var forbidden = await driver.PostAsJsonAsync("/api/v1/assistance/trip-intent", new
+        {
+            text = "Cab from Nizampet to HITEC City"
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Fact]
+    public async Task RiderAndDriverCanUseApprovedHelpAndUnsupportedQuestionsEscalate()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "ai-help-rider");
+        using var driver = factory.CreateClient("Driver", "ai-help-driver");
+
+        using var stateResponse = await rider.PostAsJsonAsync("/api/v1/assistance/help", new
+        {
+            question = "Explain my current trip",
+            rideState = "InProgress"
+        });
+        Assert.Equal(HttpStatusCode.OK, stateResponse.StatusCode);
+        var stateHelp = await stateResponse.Content.ReadFromJsonAsync<HelpResponse>();
+        Assert.NotNull(stateHelp);
+        Assert.Equal("state-in-progress", stateHelp.SourceId);
+        Assert.Contains("foreground", stateHelp.Answer, StringComparison.OrdinalIgnoreCase);
+
+        using var driverResponse = await driver.PostAsJsonAsync("/api/v1/assistance/help", new
+        {
+            question = "How is the fare negotiated?",
+            rideState = (string?)null
+        });
+        Assert.Equal(HttpStatusCode.OK, driverResponse.StatusCode);
+        var driverHelp = await driverResponse.Content.ReadFromJsonAsync<HelpResponse>();
+        Assert.NotNull(driverHelp);
+        Assert.False(driverHelp.EscalationRequired);
+
+        using var unsupportedResponse = await rider.PostAsJsonAsync("/api/v1/assistance/help", new
+        {
+            question = "What is the weather on Mars?",
+            rideState = (string?)null
+        });
+        Assert.Equal(HttpStatusCode.OK, unsupportedResponse.StatusCode);
+        var unsupported = await unsupportedResponse.Content.ReadFromJsonAsync<HelpResponse>();
+        Assert.NotNull(unsupported);
+        Assert.True(unsupported.EscalationRequired);
+        Assert.Equal("unsupported", unsupported.SourceId);
+    }
+
+    [Fact]
+    public async Task AssistantRateLimitIsAppliedPerAuthenticatedCaller()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "ai-rate-limit-rider");
+
+        for (var index = 0; index < 10; index++)
+        {
+            using var response = await rider.PostAsJsonAsync("/api/v1/assistance/help", new
+            {
+                question = "How is the fare negotiated?",
+                rideState = (string?)null
+            });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        using var limited = await rider.PostAsJsonAsync("/api/v1/assistance/help", new
+        {
+            question = "How is the fare negotiated?",
+            rideState = (string?)null
+        });
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
     }
 
     private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key)
