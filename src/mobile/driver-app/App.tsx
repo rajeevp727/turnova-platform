@@ -568,7 +568,7 @@ export default function App() {
         {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).length>0&&<View style={styles.card}>
           <Text style={styles.cardTitle}>Trip history</Text>
           {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).map(item=><View key={item.rideId} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}>
-            <Text style={styles.status}>{item.status.toUpperCase()}</Text>
+            <Text style={styles.label}>{item.status.toUpperCase()}</Text>
             <Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text>
             <Text style={styles.muted}>{item.serviceClass.toUpperCase()} · {item.passengers} passenger(s)</Text>
             <Text style={styles.muted}>{new Date(item.requestedAt).toLocaleString()}</Text>
