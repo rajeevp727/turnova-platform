@@ -694,13 +694,27 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, (await ops.SendAsync(nonCabUnion)).StatusCode);
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
-        profiles["legacy-non-cab-driver"] = profiles["legacy-non-cab-driver"] with { ServiceClass = "auto" };
+        var queueStore = factory.Services.GetRequiredService<IQueueStore>();
+        await queueStore.AddAsync(new DriverQueueEntry(
+            "legacy-non-cab-driver", "hyderabad-central", "auto", DateTimeOffset.UtcNow.AddMinutes(-5), 0, true),
+            CancellationToken.None);
+        profiles["legacy-non-cab-driver"] = profiles["legacy-non-cab-driver"] with
+        {
+            ServiceClass = "auto",
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+        };
         using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
             new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.Conflict, online.StatusCode);
+        using var offline = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = false });
+        Assert.Equal(HttpStatusCode.OK, offline.StatusCode);
         var availability = await driver.GetFromJsonAsync<DriverAvailabilityTest>("/api/v1/driver/availability");
         Assert.NotNull(availability);
         Assert.Equal("Offline", availability.AvailabilityStatus);
+        Assert.Empty(await queueStore.GetEligibleAsync("hyderabad-central", "auto", CancellationToken.None));
         Assert.Equal(HttpStatusCode.Forbidden, (await driver.GetAsync("/api/v1/driver/rides/available")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await driver.GetAsync("/api/v1/driver/offers/pending")).StatusCode);
 
