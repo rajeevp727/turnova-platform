@@ -1415,7 +1415,9 @@ app.MapPost("/api/v1/driver/availability", async (
                 return Results.Conflict(new { message = "An active approved Cab Union membership is required before going online." });
             var union = await FindUnionAsync(assignment.UnionId, ct);
             if (union is null || union.Status != "Active" ||
+                union.ServiceClasses is null ||
                 !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase) ||
+                union.ZoneIds is null ||
                 !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
                 return Results.Conflict(new { message = "The assigned Union must be active, serve Cab and cover the Driver's approved service zone." });
             if (profile.Documents is null ||
