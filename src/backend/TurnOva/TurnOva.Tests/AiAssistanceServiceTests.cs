@@ -158,6 +158,37 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task QueueHelpExplainsRiderSelectionWithoutInventingInternalFifoPolicy()
+    {
+        var service = CreateService(new UnavailableAiAssistantProvider());
+
+        var result = await service.ExplainHelpAsync(
+            "What does my queue status mean?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("queue-status", result.SourceId);
+        Assert.Contains("does not use FIFO", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unresolved", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.False(result.EscalationRequired);
+    }
+
+    [Fact]
+    public async Task AvailabilityHelpExplainsOnlineAndOfflineEligibility()
+    {
+        var service = CreateService(new UnavailableAiAssistantProvider());
+
+        var result = await service.ExplainHelpAsync(
+            "Why am I offline and not eligible?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("availability-status", result.SourceId);
+        Assert.Contains("Online is one input", result.Answer, StringComparison.Ordinal);
+        Assert.False(result.EscalationRequired);
+    }
+
+    [Fact]
     public async Task ProviderCanSelectOnlyAnApprovedHelpSourceAndServiceReturnsRepositoryContent()
     {
         var provider = new FakeProvider
