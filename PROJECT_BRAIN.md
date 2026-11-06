@@ -79,7 +79,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 7. **#13 TRIP-01 — In progress:** PR #68 merged the selected-Cab lifecycle/location safety slice; live Cosmos and Android/iOS SignalR/map/permission/background-resume acceptance remain.
 8. **#14 DRIVER-03 — In progress:** PR #69 merged at `70738af97d17cb8be715410898138d3e2f10f1cf`; final-head CI [42291337082](https://github.com/rajeevp727/turnova-platform/actions/runs/42291337082) passed 196/196 backend tests, native non-container API publish, both mobile typechecks and nine shared mobile tests. Android/iOS PDF document acceptance and live Cosmos snapshot/recovery remain.
 9. **#15 DRIVER-04 — Blocked:** Driver support categories, escalation owner and operational process are not approved. Do not invent them.
-10. **#16 RIDER-04 — Current:** immutable Driver-reported direct-payment reconciliation after completed Cab rides, signed delta, Driver history and claim-scoped UnionManager oversight; final-head CI pending.
+10. **#16 RIDER-04 — Current:** PR #70 implements the approved CAB-RECON-01 supplemental requirement: immutable Driver-reported payment reconciliation after completed Cab rides, signed delta, Driver history and claim-scoped UnionManager oversight; final-head CI pending. CAB-RECON-01 stays outside the 19-row denominator.
 11. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved.
 12. **#18 PLATFORM-01 / #19 RELEASE-01:** continue sequentially after #17 is audited; retain live hosting, Cosmos, provider, legal and Android/iOS release gates.
 13. **AI-01 supplemental:** provider-agnostic Rider intent/help boundary remains separately tracked outside the 19-row denominator.
