@@ -49,6 +49,10 @@
 3. Implement/verify remaining Rider fare, payment, receipt, rating and support acceptance flows after recording the required provider and policy decisions.
 4. Validate both apps on physical Android and iOS devices and collect release evidence.
 
+## Deployment constraint
+
+The MVP API is validated through a native .NET 10 publish artifact. Docker, container images, container registries and container-based hosting are explicitly excluded. The API hosting provider remains a post-coding infrastructure decision; Azure Static Web Apps is not the API host or native mobile distribution target.
+
 ## Audit limitations
 
 This is a conservative baseline derived from the PRD, README, test plan, project brain, merged PR #33 and the repository's current source inventory. It is not a substitute for executing CI, Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.
