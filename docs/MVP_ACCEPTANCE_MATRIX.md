@@ -55,7 +55,7 @@
 
 | ID | Scope | Status | Evidence / remaining work |
 |---|---|---|---|
-| AI-01 | Provider-agnostic, privacy-safe, bounded Rider/Driver AI assistance: Rider trip-intent draft for human review and approved FAQ/ride-state explanations with escalation. AI must not book, charge, set fares, approve KYC, alter eligibility/FIFO or change ride state. | In progress — current focused branch adds the Application service/provider contract, disabled-by-default provider placeholder, locally parsed route draft, approved-content help classifier, Rider UI entry points and per-caller API rate limiting. | Unit/API tests cover redaction, provider output validation, timeout/cancellation, fallback, Rider-only drafting, Rider/Driver help, escalation and rate limits. CI and final PR review are pending. Live provider sandbox and managed-secret validation remain external gates. |
+| AI-01 | Provider-agnostic, privacy-safe, bounded Rider/Driver AI assistance: Rider trip-intent draft for human review and approved FAQ/ride/queue-state explanations with escalation. AI must not book, charge, set fares, approve KYC, alter eligibility/FIFO or change ride state. | In progress — current focused branch adds the Application service/provider contract, disabled-by-default provider placeholder, locally parsed route draft, approved-content help classifier, Rider UI entry points and per-caller API rate limiting. | Unit/API tests cover redaction, provider output validation, timeout/cancellation, fallback, Rider-only drafting, Rider/Driver help, escalation and rate limits. CI and final PR review are pending. Live provider sandbox and managed-secret validation remain external gates. |
 
 ## Ordered 1–19 checklist
 
