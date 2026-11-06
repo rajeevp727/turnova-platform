@@ -20,12 +20,9 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         {
             if (!_items.TryGetValue(driverId, out var current))
                 return Task.FromResult(_items.TryAdd(driverId, new(driverId, rideId, DateTimeOffset.UtcNow, expiresAtUtc)));
+            // The API must reconcile an expired lease against the ride before release.
             if (current.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
-            {
-                if (((ICollection<KeyValuePair<string, DriverRideReservation>>)_items).Remove(new(driverId, current)))
-                    continue;
-                continue;
-            }
+                return Task.FromResult(false);
             return Task.FromResult(current.RideId == rideId);
         }
     }
@@ -50,14 +47,8 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
     public Task<DriverRideReservation?> GetActiveAsync(string driverId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        while (_items.TryGetValue(driverId, out var current))
-        {
-            if (current.ExpiresAtUtc is null || current.ExpiresAtUtc > DateTimeOffset.UtcNow)
-                return Task.FromResult<DriverRideReservation?>(current);
-            if (((ICollection<KeyValuePair<string, DriverRideReservation>>)_items).Remove(new(driverId, current)))
-                return Task.FromResult<DriverRideReservation?>(null);
-        }
-        return Task.FromResult<DriverRideReservation?>(null);
+        // Return expired leases too; the API reconciles the linked ride before release.
+        return Task.FromResult(_items.TryGetValue(driverId, out var current) ? current : null);
     }
 
     public async Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
