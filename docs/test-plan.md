@@ -49,6 +49,19 @@
 | AUTH-LOGIN-019 | Secure storage failure | Simulate SecureStore read/write failure | User sees recoverable error; app does not silently claim authenticated state | Mobile | P1 |
 | AUTH-LOGIN-020 | Session limit reached | Sign in when TriSend's session limit is reached; test both replaceOldest false/true | TriSend policy is respected; no unexpected session is evicted | API + mobile | P1 |
 
+## 2A. Authentication API integration contracts
+
+The API contract tests use a fake named TriSend HTTP handler; CI must never call the production authentication service.
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-001 | Driver registration | API trims email/name and sends server-owned appId=turnova and role=Driver | API integration | P0 |
+| AUTH-API-002 | Missing registration credentials | HTTP 400; TriSend is not called | API integration | P0 |
+| AUTH-API-003 | Unsupported registration role | HTTP 404; TriSend is not called | API integration | P0 |
+| AUTH-API-004 | Login returns a different app role | HTTP 403; returned access token is sent to TriSend logout | API integration | P0 |
+| AUTH-API-005 | Refresh request | Refresh token is forwarded unchanged to TriSend | API integration | P0 |
+| AUTH-API-006 | TriSend connection failure | Stable HTTP 503; upstream exception details are not exposed | API integration | P0 |
+
 ## 3. JWT validation and authorization
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |
