@@ -4,5 +4,6 @@
     <ProjectReference Include="..\TurnOva.Domain\TurnOva.Domain.csproj" />
     <ProjectReference Include="..\TurnOva.Application\TurnOva.Application.csproj" />
     <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.54.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 </Project>
