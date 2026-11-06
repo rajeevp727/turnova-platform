@@ -767,6 +767,26 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task DriverAvailabilityLocationRequiresBothCoordinatesAndKeepsOnlineStateOnBadPayload()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-location-invalid-payload");
+
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
+
+        using var invalid = await driver.PostAsJsonAsync("/api/v1/driver/location", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["driver-location-invalid-payload"];
+        Assert.Equal("Online", profile.AvailabilityStatus);
+        Assert.Equal(17.493, profile.CurrentLatitude);
+        Assert.Equal(78.399, profile.CurrentLongitude);
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutValidCurrentLocation()
     {
         using var factory = new TurnOvaApiFactory();
@@ -820,7 +840,7 @@ public sealed class RideApiIntegrationTests
             ?? throw new InvalidOperationException("The API returned an empty ride response.");
     }
 
-    private sealed record NearbyVehicleTest(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm, DateTimeOffset LocationUpdatedAtUtc);
+    private sealed record NearbyVehicleTest(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 
