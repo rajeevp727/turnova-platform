@@ -107,13 +107,19 @@ builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAuditEvent
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverWorkActivity>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverRideReservation>>();
-var triSendBaseUrl = builder.Configuration["TriSend:BaseUrl"];
-if (!Uri.TryCreate(triSendBaseUrl, UriKind.Absolute, out var triSendUri) || triSendUri.Scheme != Uri.UriSchemeHttps)
-    throw new InvalidOperationException("TriSend:BaseUrl must be a valid HTTPS URL.");
+builder.Services.AddOptions<TriSendSettings>()
+    .Bind(builder.Configuration.GetSection("TriSend"))
+    .Validate(settings =>
+        !string.IsNullOrWhiteSpace(settings.BaseUrl) &&
+        Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps,
+        "TriSend:BaseUrl must be a valid HTTPS URL.")
+    .ValidateOnStart();
 
-builder.Services.AddHttpClient("TriSend", client =>
+builder.Services.AddHttpClient("TriSend", (services, client) =>
 {
-    client.BaseAddress = triSendUri;
+    var settings = services.GetRequiredService<IOptions<TriSendSettings>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl!, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
@@ -166,14 +172,17 @@ if (useCosmos)
 else
 {
     var queueStore = new InMemoryQueueStore();
-    var demoDrivers = new[]
+    if (builder.Environment.IsDevelopment())
     {
-        new DriverQueueEntry("DRV-1001", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
-        new DriverQueueEntry("DRV-1002", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
-        new DriverQueueEntry("DRV-1003", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
-    };
-    foreach (var driver in demoDrivers)
-        await queueStore.AddAsync(driver, CancellationToken.None);
+        var demoDrivers = new[]
+        {
+            new DriverQueueEntry("DRV-1001", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
+            new DriverQueueEntry("DRV-1002", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
+            new DriverQueueEntry("DRV-1003", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
+        };
+        foreach (var driver in demoDrivers)
+            await queueStore.AddAsync(driver, CancellationToken.None);
+    }
 
     builder.Services.AddSingleton<IQueueStore>(queueStore);
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
@@ -646,7 +655,7 @@ authGroup.MapPost("/{role}/register", async (
 
     var payload = new
     {
-        email = request.Email.Trim(),
+        email = request.Email.Trim().ToLowerInvariant(),
         password = request.Password,
         name = request.Name?.Trim(),
         appId = "turnova",
@@ -666,7 +675,7 @@ authGroup.MapPost("/{role}/login", async (
 
     var payload = new
     {
-        email = request.Email.Trim(),
+        email = request.Email.Trim().ToLowerInvariant(),
         password = request.Password,
         appId = "turnova",
         replaceOldest = request.ReplaceOldest
