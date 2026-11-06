@@ -33,7 +33,8 @@ public sealed class DriverRideReservationStoreTests
         Assert.True(await store.TryReleaseAsync("driver-1", "booking-1"));
         Assert.False(await store.HasActiveAsync("driver-1"));
 
-        Assert.True(await store.TryAcquireNegotiationAsync("driver-1", "booking-expired", DateTimeOffset.UtcNow.AddMilliseconds(-1)));
+        Assert.True(await store.TryAcquireNegotiationAsync("driver-1", "booking-expired", DateTimeOffset.UtcNow.AddMilliseconds(20)));
+        await Task.Delay(40);
         Assert.False(await store.HasActiveAsync("driver-1"));
         Assert.True(await store.TryAcquireAsync("driver-1", "active-ride"));
         Assert.False(await store.TryAcquireNegotiationAsync("driver-1", "new-booking", DateTimeOffset.UtcNow.AddMinutes(1)));
