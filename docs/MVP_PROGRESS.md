@@ -20,7 +20,7 @@
 - PR #64 merged the Release test-execution correction at `c90699d8fd5e9140d2daccbced106075d86118bb`; final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) passed all four jobs and executed **189/189 backend tests**. The TRX non-zero guard, native non-container API publish/artifact verification, Rider/Driver Expo config/typechecks and shared mobile tests also passed.
 - PR #66 merged at `26dafc87451ba49ea4734df81c94f9e75790800d`; final-head CI [42278673796](https://github.com/rajeevp727/turnova-platform/actions/runs/42278673796) passed all four jobs: **191/191 backend tests**, TRX non-zero guard, non-container API publish/artifact verification, both Expo config/typechecks and shared mobile tests.
 - PR #67 merged at `213832f7f1e6f4eaa5ea3fdabf099c7b63e18979`; verified PR head `125f3f5ae58d1debdf4c453a9f67b0625643ef4e` passed CI [42286793305](https://github.com/rajeevp727/turnova-platform/actions/runs/42286793305), all four jobs: **193/193 backend tests**, TRX non-zero guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and six shared mobile tests passed.
-- TRIP-01 current increment: selected-Cab lifecycle integration, finite coordinate validation and foreground-only active-trip watcher are on branch `feat/trip-01-location-safety`; final-head CI and PR review are pending.
+- PR #68 opened for sequential #13 TRIP-01. CI run [42289992974](https://github.com/rajeevp727/turnova-platform/actions/runs/42289992974) exposed TS7006 on the new active-ride state updater; commit `a2624a0566f79767c27967f699f457e5bed86a7e` adds the explicit state type. Final-head CI is pending.
 
 ## 2. Overall MVP completion
 
