@@ -254,7 +254,6 @@ export default function App() {
     return () => {
       mounted = false;
       connection.off("RideOfferReceived");
-      connection.off("reconnected");
       void connection.stop();
     };
   }, [user?.id, availabilityStatus, tokens?.accessToken, loadAvailableRides]);
