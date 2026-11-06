@@ -372,7 +372,7 @@ async Task EnsureUnionSelfieAuditAsync(
     string actor, DateTimeOffset reviewedAtUtc, CancellationToken ct)
 {
     var eventType = status == "Approved" ? "SelfieApprovedByUnion" : "SelfieRejectedByUnion";
-    var auditKey = $"{driverId}|{unionId}|{eventType}|{reviewedAtUtc.UtcTicks}";
+    var auditKey = $"{driverId}|{unionId}|{eventType}|{reviewedAtUtc.UtcDateTime.Ticks}";
     var eventId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(auditKey)));
     if ((await GetUnionAuditAsync(driverId, ct)).Any(item => item.EventId == eventId))
         return;
@@ -1168,9 +1168,13 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
                 // Do not approve a selfie/document/profile snapshot that changed while it was being reviewed.
                 if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
                     current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
+                    current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
+                    current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
+                    current.ProfilePhotoReviewReason != profile.ProfilePhotoReviewReason ||
+                    current.Documents is null || profile.Documents is null ||
+                    !current.Documents.SequenceEqual(profile.Documents) ||
                     current.Status != "Approved" ||
                     !string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
-                    current.Documents is null ||
                     !current.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
                     !current.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
                     return null;
