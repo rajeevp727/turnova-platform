@@ -6,10 +6,10 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `67621e02b00d823b84d8d5e3f74f199c283fa3e7` (PR #49)
+**Current main HEAD:** `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0` (PR #51)
 
 ## Product in one line
-Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
+Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
 
 ## Stack and app scope
 - Backend: .NET 10 LTS / ASP.NET Core Web API / C# 14.
@@ -54,18 +54,19 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #47 merged: authenticated Rider-owned trip history, Activity restore/history, safe no-fare placeholder, stale-response/stale-active-state guards, 19-area acceptance tracker reconciliation and progress handoff. Merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed all four jobs.
 - PR #48 merged: authenticated Driver-owned trip history API/UI, active-trip restore, SignalR reconnect refresh, session-expiry state cleanup and owner/privacy/role/empty-history tests. Merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run 42215718229 passed all four jobs.
 - PR #49 merged: explicit CORS origin allow-list, wildcard rejection, separate liveness and Cosmos-aware readiness endpoints, and CORS/health integration tests. Merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; final-head CI run 42216606101 passed all four jobs.
+- PR #51 merged: append-only queue audit events in the existing `QueueEntries` partition with transactional Cosmos batches, in-memory audit tests, and generic traceId Problem Details with exception-type-only logs. Merge commit `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run 42219327319 passed all four jobs.
 - The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
 
-1. **PLATFORM-01 audit/observability (in progress):** PR #49 hardened CORS and liveness/readiness. Next add append-only queue membership audit events and safe structured operational failure logging; then metrics/traces and Cosmos failure/recovery evidence.
-2. **RIDER-02 fare estimate (blocked):** requires approved base fare, distance/time components, taxes and service-class rules. Keep fare null; never invent pricing.
-3. **DRIVER-03 monetary earnings (blocked):** monthly PDF work-metrics payslip exists, but compensation, commission and payout treatment are not approved.
-4. **RIDER-04 payments/receipts/ratings (blocked):** requires enabled payment method/provider, sandbox and webhook/idempotency/refund policy.
-5. **DRIVER-04 and SUPPORT-01 support (blocked):** require role-specific support process, issue categories and escalation owner.
-6. **RELEASE-01 (in progress):** Android/iOS production builds, signing and physical-device pilot evidence remain.
-7. **AI-01 supplemental (not started):** implement the separately approved bounded provider-agnostic AI service after the sequential PRD-area work; keep it outside the 19-area denominator.
+1. **CAB-SCOPE-01 (current):** reject Scooty/Bike/Auto for new Rider rides and Driver onboarding; allow Cab only and preserve historical records without destructive migration.
+2. **CAB-DISCOVERY-01:** discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by driver-to-pickup proximity; Rider selects, no customer-facing FIFO ranking or automatic assignment.
+3. **CAB-AGREEMENT-01:** direct Rider/Driver fare negotiation, immutable versioned agreement, both confirm current version, and no ride start until mutual confirmation.
+4. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
+5. **CAB-UNION-01:** Cab membership, vehicle verification, union approval/selfie visibility and minimum necessary oversight.
+6. **PLATFORM-01 and RELEASE-01:** queue audit and CORS/health increments merged; durable exception audit, metrics/traces/alerts, Cosmos failure/recovery and Android/iOS device/release gates remain.
+7. **AI-01 supplemental (not started):** implement the separately approved bounded provider-agnostic AI service after the Cab-only vertical slices; keep it outside the 19-area denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -196,8 +197,8 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Remaining platform evidence: Cosmos-unavailable readiness failure injection, production origin configuration, secrets/logging review, metrics/traces/alerts, durable audit failure/recovery and load tests.
 
 
-## PLATFORM-01 queue audit increment (in progress)
-- PR #51 is open: https://github.com/rajeevp727/turnova-platform/pull/51 (branch `feat/platform-observability-audit`). Implementation head `369f5dacea92885ce78c1504bcb4f9dce9cbde04` passed all four CI jobs in run 42219053050; merge remains gated on green CI for the latest PR head.
+## PLATFORM-01 queue audit increment (merged in PR #51)
+- PR #51 merged as `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run 42219327319 passed all four jobs.
 - Existing `RideOfferState.Attempts` persists offer decisions and `DriverUnionAudit` persists union transfers, but queue membership changes were mutable state without append-only history.
 - New `QueueAuditEvent` records successful join, leave, move-to-back and offer rotation events with driver, zone/service-class partition, UTC time and optional offerId; no phone/email, exact location or fare.
 - `IQueueStore` exposes queue-scoped audit retrieval. In-memory adapter records only successful mutations; duplicate offer retries and failed/no-op operations do not create duplicate events.
@@ -206,3 +207,15 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Automated in-memory event tests cover event types, partition scoping and no-op/failed mutation behaviour; API integration test verifies generic exception Problem Details with traceId and no exception message. Real Cosmos transactional-batch/ETag/restart/retention verification remains an infrastructure-backed gate.
 - Durable exception audit with actor reference and safe reason/category is still outstanding; do not claim the full PLATFORM-01 audit criterion verified.
 - Metrics/traces/exporters/alerts and Cosmos failure injection remain subsequent PLATFORM-01 work.
+
+## Authoritative product scope update — Cab-only union model (2026-11-06)
+
+This section overrides conflicting legacy rules. TurnOva MVP is CAB rides only; Scooty, Bike and Auto are out of scope for new workflows. Preserve historical records safely.
+
+Flow: Rider enters pickup/destination/stops → discover active approved unions → show up to 2–3 approved, available, verified Cab drivers per union ordered by pickup proximity → Rider selects → call/chat if configured → direct fare negotiation → both confirm immutable agreement version → ride lifecycle → Driver reports amount received → authorised reconciliation.
+
+No platform fare estimates, fixed/dynamic pricing, payment gateway, escrow or in-app collection. Driver-reported amount is unverified. Delta = agreed minus reported; positive shortfall, zero exact, negative excess. Do not invent customer dispute or next-ride blocking policy.
+
+Customer-facing discovery must not rank or auto-assign by FIFO. Internal FIFO role remains unresolved. Union membership/approval, Cab/vehicle verification, union-approved selfie before public display, least-privilege oversight and audit are in-scope. Partnership terms require legal review.
+
+Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, CAB-RECON-01 and CAB-UNION-01. Keep the 19-row denominator; reclassify obsolete fare estimate/payment gateway/FIFO dispatch requirements. See PRD.md §15 and docs/MVP_ACCEPTANCE_MATRIX.md.
