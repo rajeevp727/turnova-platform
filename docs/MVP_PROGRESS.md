@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#6 DISPATCH-01: pickup-zone and approved-radius union eligibility — automated guard coverage is being completed; production configuration remains blocked by the unapproved radius/zone decision.**
+**#6 DISPATCH-01: pickup-zone and approved-radius union eligibility — automated guard coverage passed PR #58 code/test CI run [42257212012](https://github.com/rajeevp727/turnova-platform/actions/runs/42257212012); production configuration remains blocked by the unapproved radius/zone decision.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -13,7 +13,7 @@
 - PR #54 merged tracker reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; its final-head CI run 42234802360 passed all four jobs.
 - PR #55 merged at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run [42237572056](https://github.com/rajeevp727/turnova-platform/actions/runs/42237572056) passed all four jobs. It implements Cab union discovery, radius filtering, proximity ordering and photo privacy.
 - PR #57 merged at `c5ff07843365e949b70fe1d4b9753bcd88022e10`; final synchronized PR head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs. Automated reviews [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440) found no unresolved critical/high-risk issue.
-- DISPATCH-01 already fails closed when the configured radius is absent, zero, negative or non-finite; pickup outside configured zones returns Bad Request; only Active unions serving Cab in the resolved zone are eligible. PR #58 adds a regression for an otherwise eligible driver assigned to an Active Cab union serving a different zone, plus zero/negative/NaN/infinite radius cases.
+- DISPATCH-01 already fails closed when the configured radius is absent, zero, negative or non-finite; pickup outside configured zones returns Bad Request; only Active unions serving Cab in the resolved zone are eligible. PR #58 adds a regression for an otherwise eligible driver assigned to an Active Cab union serving a different zone, plus zero/negative/NaN/infinite radius cases. Code/test head `e2ebe8d13a6e0379f8cddd945d6140a380c2b96a` passed CI run [42257212012](https://github.com/rajeevp727/turnova-platform/actions/runs/42257212012), all four jobs; final docs-only head must be checked before merge.
 
 ## 2. Overall MVP completion
 
@@ -33,7 +33,7 @@
 | 3 | RIDER-01 | In progress | PR #55 merged; union-grouped Cab discovery, three-driver cap, pickup-proximity order, approved-photo gating and local Rider selection are CI-validated. Production radius, routing/provider actions, Cosmos and device gates remain. |
 | 4 | RIDER-02 | In progress | PR #56 merged at `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8`; final-head CI run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) passed all four jobs. RIDER-03 supplies the selected-booking and optional-stop route snapshot connection; live Cosmos and physical-device acceptance remain. |
 | 5 | RIDER-03 | In progress | PR #57 merged at `c5ff07843365e949b70fe1d4b9753bcd88022e10`; final synchronized PR head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs green. Automated review found no unresolved critical/high-risk issue. Live Cosmos ETag/restart and Android/iOS booking/expiry acceptance remain. |
-| 6 | DISPATCH-01 | Blocked | PR #55 implements zone/radius and Active Cab union filtering; PR #58 adds out-of-zone-union and invalid-radius regressions. Production radius and zone boundaries require product approval; live Cosmos query/index and Android/iOS pickup-zone tests remain. |
+| 6 | DISPATCH-01 | Blocked | PR #55 implements zone/radius and Active Cab union filtering; PR #58 adds out-of-zone-union and invalid-radius regressions. Code/test head CI run [42257212012](https://github.com/rajeevp727/turnova-platform/actions/runs/42257212012) passed all four jobs; final docs-only head check remains. Production radius and zone boundaries require product approval; live Cosmos query/index and Android/iOS pickup-zone tests remain. |
 | 7 | DISPATCH-02 | In progress | PR #55 plus RIDER-03 provide up to three per union, pickup-distance order, explicit Rider selection and server reservation; live Cosmos/device evidence and internal FIFO decision remain. |
 | 8 | DISPATCH-03 | In progress | RIDER-03 adds expiring selected-driver leases, lazy expiry, deterministic interrupted-write recovery and terminal cleanup; live Cosmos restart/ETag/outbox validation remains. No customer-facing automatic advancement. |
 | 9 | DISPATCH-04 | In progress | RIDER-03 uses temporary per-driver reservation leases, permanent promotion after mutual agreement/Driver acceptance, ETag-protected release/expiry, terminal-reservation reconciliation and offline protection; live Cosmos multi-instance contention remains. |
@@ -86,7 +86,7 @@
 
 ## 7. Next steps
 
-1. Complete PR #58 automated verification and merge only after final-head review and all required CI jobs pass.
+1. Re-run CI on the final documentation-synchronized PR #58 head, then complete the automated diff review and merge only if all required jobs remain green.
 2. Continue sequentially with #7 DISPATCH-02: re-audit the three-driver-per-union cap, pickup-proximity ordering, deterministic tie-break and no-FIFO Rider selection; add only missing tests and keep Cosmos/device evidence explicit.
 3. Revisit blocked DISPATCH-01 when the product owner approves the production pickup radius and reviewed zone boundaries; then run live Cosmos query/index and Android/iOS pickup-zone acceptance.
 4. Continue the remaining 19-area sequence before the separately approved supplemental CAB-RECON-01, CAB-UNION-01 and AI-01 work. Keep customer dispute/confirmation, non-zero-delta next-ride policy and internal FIFO role unresolved until approved.
