@@ -14,6 +14,20 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict) { return false; }
     }
+    public async Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await container.ReadItemAsync<DriverRideReservation>(
+                driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
+            return true;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
     public async Task<bool> TryReleaseAsync(string driverId, string rideId, CancellationToken cancellationToken = default)
     {
         try

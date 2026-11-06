@@ -62,7 +62,7 @@ public sealed class RideApiIntegrationTests
         var approved = await driver.SendAsync(approval);
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
 
-        var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true });
+        var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.OK, online.StatusCode);
         var joined = await driver.PostAsJsonAsync("/api/v1/queues/join",
             new { zoneId = "hyderabad-central", serviceClass = "auto" });
@@ -94,9 +94,9 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Conflict,
             (await first.PostAsJsonAsync("/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "auto" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
-            (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true })).StatusCode);
+            (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
-            (await second.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true })).StatusCode);
+            (await second.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
 
         var before = await first.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
         Assert.NotNull(before);
@@ -109,7 +109,7 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(new[] { "availability-second" }, afterOffline.Select(x => x.DriverId));
 
         Assert.Equal(HttpStatusCode.OK,
-            (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true })).StatusCode);
+            (await first.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 })).StatusCode);
         var rejoined = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/auto");
         Assert.NotNull(rejoined);
         Assert.Equal(new[] { "availability-second", "availability-first" }, rejoined.Select(x => x.DriverId));
@@ -653,6 +653,180 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync("/api/v1/rides/request", driverRequest)).StatusCode);
     }
 
+    [Fact]
+    public async Task NearbyVehicleDiscoveryReturnsOnlyFreshQueuedDriversMatchingZoneClassAndCapacity()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-nearby-discovery");
+        using var matching = factory.CreateClient("Driver", "nearby-matching");
+        using var tooSmall = factory.CreateClient("Driver", "nearby-too-small");
+        using var wrongClass = factory.CreateClient("Driver", "nearby-wrong-class");
+        using var stale = factory.CreateClient("Driver", "nearby-stale");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles["nearby-too-small"] = profiles["nearby-too-small"] with { PassengerCapacity = 2 };
+        profiles["nearby-wrong-class"] = profiles["nearby-wrong-class"] with { ServiceClass = "bike" };
+
+        async Task GoOnlineAsync(HttpClient driver)
+        {
+            using var response = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+                new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        await GoOnlineAsync(matching);
+        await GoOnlineAsync(tooSmall);
+        await GoOnlineAsync(wrongClass);
+        await GoOnlineAsync(stale);
+        profiles["nearby-stale"] = profiles["nearby-stale"] with
+        {
+            LocationUpdatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5)
+        };
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=3");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+        var vehicles = json.RootElement;
+        Assert.Equal(JsonValueKind.Array, vehicles.ValueKind);
+        Assert.Equal(1, vehicles.GetArrayLength());
+        var vehicle = vehicles[0];
+        Assert.Equal("Bajaj", vehicle.GetProperty("vehicleMake").GetString());
+        Assert.Equal("RE", vehicle.GetProperty("vehicleModel").GetString());
+        Assert.Equal("auto", vehicle.GetProperty("serviceClass").GetString());
+        Assert.Equal(3, vehicle.GetProperty("passengerCapacity").GetInt32());
+        Assert.True(vehicle.GetProperty("distanceKm").GetDouble() >= 0);
+
+        Assert.False(body.Contains("driverId", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("latitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("longitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("phoneNumber", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("vehicleRegistration", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await matching.GetAsync(
+                "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1")).StatusCode);
+    }
+
+    [Fact]
+    public async Task NearbyVehicleDiscoveryExcludesDriversWithActiveRidesAndPausesAvailabilityLocation()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-nearby-active-trip");
+        using var driver = factory.CreateClient("Driver", "driver-nearby-active-trip");
+
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
+
+        var ride = await CreateRideAsync(rider, "nearby-active-trip-001");
+        using var accepted = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+
+        using var location = await driver.PostAsJsonAsync("/api/v1/driver/location",
+            new { latitude = 17.494, longitude = 78.400 });
+        Assert.Equal(HttpStatusCode.Conflict, location.StatusCode);
+        using var offline = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = false });
+        Assert.Equal(HttpStatusCode.Conflict, offline.StatusCode);
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["driver-nearby-active-trip"];
+        Assert.Equal("Online", profile.AvailabilityStatus);
+
+        using var nearby = await rider.GetAsync(
+            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=auto&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, nearby.StatusCode);
+        var vehicles = await nearby.Content.ReadFromJsonAsync<List<NearbyVehicleTest>>();
+        Assert.NotNull(vehicles);
+        Assert.Empty(vehicles);
+    }
+
+    [Fact]
+    public async Task DriverCannotGoOnlineOutsideAssignedZoneAndRiderCannotSearchOutsideConfiguredZones()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-online-outside-zone");
+        using var rider = factory.CreateClient("Rider", "rider-nearby-outside-zone");
+
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 0d, longitude = 0d });
+        Assert.Equal(HttpStatusCode.Conflict, online.StatusCode);
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["driver-online-outside-zone"];
+        Assert.Equal("Offline", profile.AvailabilityStatus);
+
+        var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
+            "/api/v1/zones/hyderabad-central/queues/auto");
+        Assert.NotNull(queue);
+        Assert.DoesNotContain(queue, entry => entry.DriverId == "driver-online-outside-zone");
+
+        using var nearby = await rider.GetAsync(
+            "/api/v1/rides/nearby?latitude=0&longitude=0&serviceClass=auto&passengers=1");
+        Assert.Equal(HttpStatusCode.BadRequest, nearby.StatusCode);
+    }
+
+    [Fact]
+    public async Task DriverLocationOutsideAssignedZoneTakesDriverOfflineAndRemovesQueueMembership()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-location-zone-exit");
+
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
+
+        using var location = await driver.PostAsJsonAsync("/api/v1/driver/location",
+            new { latitude = 0d, longitude = 0d });
+        Assert.Equal(HttpStatusCode.Conflict, location.StatusCode);
+
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["driver-location-zone-exit"];
+        Assert.Equal("Offline", profile.AvailabilityStatus);
+        Assert.Null(profile.CurrentLatitude);
+        Assert.Null(profile.CurrentLongitude);
+        Assert.Null(profile.LocationUpdatedAtUtc);
+
+        var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
+            "/api/v1/zones/hyderabad-central/queues/auto");
+        Assert.NotNull(queue);
+        Assert.DoesNotContain(queue, entry => entry.DriverId == "driver-location-zone-exit");
+    }
+
+    [Fact]
+    public async Task DriverAvailabilityLocationRequiresBothCoordinatesAndKeepsOnlineStateOnBadPayload()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-location-invalid-payload");
+
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
+
+        using var invalid = await driver.PostAsJsonAsync("/api/v1/driver/location", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["driver-location-invalid-payload"];
+        Assert.Equal("Online", profile.AvailabilityStatus);
+        Assert.Equal(17.493, profile.CurrentLatitude);
+        Assert.Equal(78.399, profile.CurrentLongitude);
+    }
+
+    [Fact]
+    public async Task DriverCannotGoOnlineWithoutValidCurrentLocation()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-online-without-location");
+
+        using var response = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["driver-online-without-location"];
+        Assert.Equal("Offline", profile.AvailabilityStatus);
+    }
+
     private static HttpRequestMessage CreateRideRequest(
         string? idempotencyKey,
         int passengers = 1,
@@ -693,6 +867,7 @@ public sealed class RideApiIntegrationTests
             ?? throw new InvalidOperationException("The API returned an empty ride response.");
     }
 
+    private sealed record NearbyVehicleTest(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 

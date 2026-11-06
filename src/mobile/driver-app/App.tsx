@@ -189,13 +189,87 @@ export default function App() {
     setLoading(true); setError(""); setNotice("");
     try {
       const nextOnline = availabilityStatus !== "Online";
-      const result = await apiFetch("/api/v1/driver/availability", { method: "POST", body: JSON.stringify({ isOnline: nextOnline }) });
+      let position: Location.LocationObject | undefined;
+      if (nextOnline) {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (!permission.granted)
+          throw new Error("Location permission is required while online so riders can find nearby vehicles.");
+        position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      }
+      const result = await apiFetch("/api/v1/driver/availability", {
+        method: "POST",
+        body: JSON.stringify({
+          isOnline: nextOnline,
+          latitude: position?.coords.latitude,
+          longitude: position?.coords.longitude
+        })
+      });
       setAvailabilityStatus(result.availabilityStatus);
-      setNotice(nextOnline ? "You are online and have joined the back of the FIFO queue." : "You are offline and have left the FIFO queue.");
+      setNotice(nextOnline ? "You are online and have joined the back of the FIFO queue. Your location is shared only while online." : "You are offline and have left the FIFO queue.");
       await loadQueue();
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to change availability."); }
     finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    if (!user || availabilityStatus !== "Online" ||
+        (activeRide && ["Accepted", "Arrived", "InProgress"].includes(activeRide.status))) return;
+    let mounted = true;
+    let subscription: Location.LocationSubscription | undefined;
+
+    const publishLocation = async (latitude: number, longitude: number): Promise<boolean> => {
+      try {
+        await apiFetch("/api/v1/driver/location", {
+          method: "POST",
+          body: JSON.stringify({ latitude, longitude })
+        });
+        return true;
+      } catch (e) {
+        if (!mounted) return false;
+        if (e instanceof Error && e.message.includes("left your assigned service zone")) {
+          setAvailabilityStatus("Offline");
+          setNotice("You were taken offline because your current location left your assigned service zone.");
+        } else {
+          setError(e instanceof Error ? e.message : "Unable to update availability location.");
+        }
+        return false;
+      }
+    };
+
+    void (async () => {
+      const permission = await Location.getForegroundPermissionsAsync();
+      if (!permission.granted) {
+        try {
+          await apiFetch("/api/v1/driver/availability", {
+            method: "POST",
+            body: JSON.stringify({ isOnline: false })
+          });
+          if (mounted) {
+            setAvailabilityStatus("Offline");
+            setNotice("You were taken offline because location permission is required while online.");
+          }
+        } catch (e) {
+          if (mounted) setError(e instanceof Error ? e.message : "Unable to turn off availability.");
+        }
+        return;
+      }
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (!await publishLocation(current.coords.latitude, current.coords.longitude) || !mounted) return;
+      const nextSubscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 50 },
+        location => { void publishLocation(location.coords.latitude, location.coords.longitude); }
+      );
+      if (!mounted) nextSubscription.remove();
+      else subscription = nextSubscription;
+    })().catch(e => {
+      if (mounted) setError(e instanceof Error ? e.message : "Unable to share availability location.");
+    });
+
+    return () => {
+      mounted = false;
+      subscription?.remove();
+    };
+  }, [user?.id, availabilityStatus, activeRide?.status, apiFetch]);
 
   const loadQueue = useCallback(async () => {
     try {

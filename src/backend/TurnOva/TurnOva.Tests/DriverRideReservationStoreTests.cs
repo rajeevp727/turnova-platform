@@ -10,6 +10,17 @@ public sealed class DriverRideReservationStoreTests
         Assert.Single(results.Where(x => x));
     }
     [Fact]
+    public async Task HasActiveReturnsWhetherDriverReservationExists()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+        Assert.False(await store.HasActiveAsync("driver-1"));
+        Assert.True(await store.TryAcquireAsync("driver-1", "ride-1"));
+        Assert.True(await store.HasActiveAsync("driver-1"));
+        Assert.True(await store.TryReleaseAsync("driver-1", "ride-1"));
+        Assert.False(await store.HasActiveAsync("driver-1"));
+    }
+
+    [Fact]
     public async Task ReleaseOnlyRemovesMatchingRide()
     {
         var store = new InMemoryDriverRideReservationStore();

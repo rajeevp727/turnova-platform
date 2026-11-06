@@ -10,6 +10,12 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(_items.TryAdd(driverId, new(driverId, rideId, DateTimeOffset.UtcNow)));
     }
+    public Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(_items.ContainsKey(driverId));
+    }
+
     public Task<bool> TryReleaseAsync(string driverId, string rideId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
