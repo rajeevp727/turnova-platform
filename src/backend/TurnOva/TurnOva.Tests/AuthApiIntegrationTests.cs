@@ -101,10 +101,10 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/auth/me");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var profile = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var profileBody = await response.Content.ReadAsStringAsync();
+        using var profile = JsonDocument.Parse(profileBody);
         Assert.Equal("rider-1", profile.RootElement.GetProperty("id").GetString());
         Assert.Equal("Rider", profile.RootElement.GetProperty("role").GetString());
-        var profileBody = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("accessToken", profileBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("refreshToken", profileBody, StringComparison.OrdinalIgnoreCase);
         var request = Assert.Single(handler.Requests);
