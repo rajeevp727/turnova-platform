@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD before PR #59:** `a3a5835c66ec5f77f4b7505b4d99d5a43de18403` (PR #58 merged; PR #57, #56, #55 and earlier changes are ancestors)
+**Last audited main HEAD:** `ef8a44da1476995bea4a5b80e4e7a24fed48d196` (PR #65 corrective revert merged; no feature work was lost from the separate union-review branch)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -279,3 +279,15 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Inspected GitHub Actions logs for PR #61 run `42262634978` and PR #63 runs `42267819480` and `42268079249`. `TurnOva.sln` lacked Release project configuration mappings. `dotnet build` emitted `MSB4121`; `dotnet test` exited successfully without any test-run summary or test execution. Previous workflow-level green status must not be represented as backend test evidence.
 - PR #64 fixes Release mappings for all solution projects, runs `TurnOva.Tests.csproj` explicitly, emits a TRX result and fails when zero tests execute. Re-run the complete backend suite before relying on prior API test claims.
 - #11 DRIVER-01 remains the current acceptance item; finish this verification correction first, then continue the Driver onboarding/RBAC audit.
+
+
+## DRIVER-01 union-scoped selfie approval increment (2026-11-07)
+
+- PR #66 adds a signed `UnionManager` role plus one or more signed `unionId` claims. `GET /api/v1/union/drivers` returns only active Cab members of claimed active unions and only the review fields needed for vehicle/selfie checks; it excludes phone/email, exact coordinates, private chat and Rider/ride data.
+- `PUT /api/v1/union/drivers/{driverId}/selfie-review` requires the current active membership, active Cab-serving union, approved Cab profile, approved driving licence and vehicle-registration documents, and a valid selfie. Only the current assigned UnionManager can approve public visibility; operations admin-key access can reject/hide but cannot approve.
+- Selfie review serializes with selected-driver reservations and Union transfers, updates the profile through the ETag-aware conditional update path, and writes deterministic retry-safe audit events. A changed selfie/profile/document snapshot is rejected for refresh; duplicate approval does not duplicate audit.
+- Union transfer resets selfie approval to Pending unless the selfie is already approved by the exact new union. Rider discovery continues to hide the photo until the current union approves it. The Driver app reads its own `/api/v1/driver/union` membership and displays current union/status.
+- Automated API tests cover reviewer role/scope, least-privilege fields, operations non-approval, active-reservation conflict, audit idempotency, transfer reset, old/new union access, Rider photo visibility and Driver membership. PR #66 final-head CI must pass before merge; no test result is claimed before it runs.
+- Remaining DRIVER-01 gates: identity-provider issuance of the `UnionManager`/`unionId` claims; private document storage/scanning/consent/retention provider and policy; Android/iOS camera/document-permission/onboarding device acceptance; live Cosmos retry/ETag/restart validation.
+- Operations-controlled union creation/activation remains the MVP approval gate for discovery. No separate Union app is introduced. Partnership terms and legal/T&C approval remain external launch gates.
+- The 19-area denominator remains unchanged. Weighted progress is 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19).
