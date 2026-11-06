@@ -75,7 +75,7 @@ public static class AiAssistanceEndpoints
         var group = app.MapGroup("/api/v1/assistance")
             .RequireRateLimiting(RateLimitPolicy);
 
-        group.MapPost("/trip-intent", async (
+        group.MapPost("/trip-intent", async Task<IResult> (
             TripIntentRequest request,
             AiAssistanceService assistant,
             ILoggerFactory loggerFactory,
@@ -98,7 +98,7 @@ public static class AiAssistanceEndpoints
             }
         }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
-        group.MapPost("/help", async (
+        group.MapPost("/help", async Task<IResult> (
             HelpRequest request,
             AiAssistanceService assistant,
             ILoggerFactory loggerFactory,
