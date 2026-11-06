@@ -123,6 +123,7 @@ A free-tier-first approach is intended for development. Production hosting, maps
 - Riders can enter pickup, destination and optional stops, discover active approved unions serving Cab, and see at most 2–3 eligible/available Cab drivers per union ordered by pickup proximity.
 - Discovery exposes only union-approved driver photos and verified Cab details; journey distance and driver-to-pickup distance are distinct.
 - Riders explicitly select a Driver; the customer-facing flow does not rank by FIFO or automatically assign/advance a Driver.
+- Selected-driver booking revalidates eligibility at submit, persists idempotently, reserves the Driver against overlapping negotiations/rides, and releases only the matching reservation on cancellation, decline or expiry.
 - Rider and selected Driver can negotiate directly and persist immutable agreement versions; both must confirm the current version before ride start.
 - A selected Driver cannot be held by overlapping active negotiations or rides; expiry/cancellation releases only the matching reservation.
 - Trip transitions, idempotency, live updates, reconnect and history are server-authoritative and auditable.
@@ -141,7 +142,7 @@ A free-tier-first approach is intended for development. Production hosting, maps
 
 ## 14. Open decisions before launch
 
-Pickup radius/zone boundaries; internal FIFO role; negotiation/booking cancellation and expiry policy; customer dispute/confirmation handling; non-zero-delta next-ride eligibility policy; support categories and escalation owner; maps/routing, chat/call and notification providers; Union partnership terms and legal/T&C approval; retention/privacy policy; production hosting and applicable transport/aggregator requirements. Do not invent fares, payment collection or reconciliation outcomes. These require product, legal and operational validation.
+Pickup radius/zone boundaries; internal FIFO role; approved selected-driver negotiation lifetime and cancellation/expiry policy; customer dispute/confirmation handling; non-zero-delta next-ride eligibility policy; support categories and escalation owner; maps/routing, chat/call and notification providers; Union partnership terms and legal/T&C approval; retention/privacy policy; production hosting and applicable transport/aggregator requirements. Do not invent fares, payment collection or reconciliation outcomes. These require product, legal and operational validation.
 
 
 ### Server-owned expiry increment
@@ -153,6 +154,13 @@ The API host runs a bounded background expiry worker in both Cosmos and in-memor
 
 A driver may hold at most one active ride reservation at a time. The backend acquires a durable per-driver reservation before attempting the ride's conditional Requested-to-Accepted transition. The ride's ETag remains the single-winner guard when multiple drivers race for the same ride. A failed ride claim releases the matching driver reservation; successful assignment retains it until ride completion or rider cancellation. Reservation release is scoped to the exact driver/ride pair so a stale request cannot clear a different ride's reservation. The reservation and ride are stored in separate Cosmos partitions, so crash recovery and reconciliation remain required before production.
 
+
+
+### Selected-driver booking reservation increment
+
+The selected-driver booking endpoint revalidates the driver's current approved Cab profile, approved licence and vehicle-registration document statuses, Online state, fresh in-zone location, passenger capacity, current Active union membership and pickup-radius eligibility. It persists the Rider's route and optional stops with the selected Driver and Union, creates a time-limited Negotiating state, and acquires the driver's exclusive reservation before returning success. An idempotency key prevents duplicate booking creation. The Driver receives a scoped SignalR notification and can read only their own pending selected-driver requests. Rider cancellation, Driver decline and server expiry release only the exact driver/ride reservation pair. Cosmos reservation replacement/release uses ETags; the booking and reservation remain separate Cosmos items, so multi-instance/failure-injection validation is still required.
+
+`Dispatch:SelectedDriverNegotiationLifetimeSeconds` is deliberately 0 in checked-in configuration. A positive product-approved value is required before bookings are enabled; the API fails closed while it is unset. The expiry worker's polling interval is configurable. No default negotiation duration or cancellation policy is inferred. The configured discovery radius is also 0 until product approval, so live discovery/booking remains disabled by default.
 
 ## 15. Approved MVP business model — Cab only (2026-11-06)
 
@@ -166,7 +174,8 @@ TurnOva is a union-connected cab discovery and ride-coordination platform, not a
 3. Group eligible, approved and available Cab drivers by union; show no more than 2–3 per union, ordered by driver-to-pickup proximity.
 4. Show only union-approved driver photos and verified Cab details. Distinguish driver-to-pickup proximity from journey distance.
 5. Rider selects a driver and can call/chat when providers are configured.
-6. Rider and selected driver negotiate directly. No platform fare estimate or recommendation.
+6. Rider submits the selected driver request. The API revalidates current Cab, union, document, availability, capacity, location and radius eligibility; creates an idempotent Negotiating booking; acquires an exclusive per-driver reservation; and notifies the selected Driver. The Rider may cancel and the Driver may decline. A server-owned expiry worker expires abandoned requests and releases only the matching reservation.
+7. Rider and selected Driver negotiate directly. No platform fare estimate or recommendation.
 
 The Rider discovery API returns active eligible unions grouped with up to three eligible drivers each. A driver card may include the driver's name, verified Cab make/model and passenger capacity, pickup proximity, and a selfie only when approved by the driver's current union. It must not expose phone number, full vehicle registration or exact driver coordinates. journeyDistanceKm remains null until a routing provider is configured; driver-to-pickup proximity must never be presented as journey distance. If Dispatch:NearbyRadiusKm is not configured, discovery fails closed rather than silently using an assumed radius.
 
