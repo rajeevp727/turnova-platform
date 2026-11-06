@@ -349,6 +349,98 @@ async Task SaveDriverProfileAsync(DriverOnboardingProfile profile, CancellationT
     await driverContainer.UpsertItemAsync(profile, new PartitionKey(profile.DriverId), cancellationToken: ct);
 }
 
+async Task<bool> TryUpdateDriverProfileAsync(
+    string driverId,
+    Func<DriverOnboardingProfile, DriverOnboardingProfile?> update,
+    CancellationToken ct)
+{
+    if (driverContainer is null)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (!driverProfiles.TryGetValue(driverId, out var current))
+                return false;
+            var updated = update(current);
+            if (updated is null)
+                return false;
+            if (driverProfiles.TryUpdate(driverId, updated, current))
+                return true;
+        }
+        return false;
+    }
+
+    for (var attempt = 0; attempt < 3; attempt++)
+    {
+        ItemResponse<DriverOnboardingProfile> response;
+        try
+        {
+            response = await driverContainer.ReadItemAsync<DriverOnboardingProfile>(
+                driverId, new PartitionKey(driverId), cancellationToken: ct);
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+
+        var updated = update(response.Resource);
+        if (updated is null)
+            return false;
+
+        try
+        {
+            await driverContainer.ReplaceItemAsync(
+                updated, driverId, new PartitionKey(driverId),
+                new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+            return true;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+        {
+            // Retry against the latest profile so location updates cannot overwrite an
+            // availability, approval or onboarding change made by another API instance.
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    return false;
+}
+
+async Task<IReadOnlyList<DriverOnboardingProfile>> GetOnlineDriverProfilesAsync(
+    string zoneId, string serviceClass, int passengers, CancellationToken ct)
+{
+    if (driverContainer is null)
+    {
+        return driverProfiles.Values.Where(profile =>
+            profile.Status == "Approved" &&
+            profile.AvailabilityStatus == "Online" &&
+            profile.ZoneId == zoneId &&
+            profile.ServiceClass == serviceClass &&
+            profile.PassengerCapacity >= passengers &&
+            profile.CurrentLatitude is not null &&
+            profile.CurrentLongitude is not null &&
+            profile.LocationUpdatedAtUtc is not null).ToArray();
+    }
+
+    var query = new QueryDefinition(
+        "SELECT * FROM c WHERE c.status = @status AND c.availabilityStatus = @availabilityStatus " +
+        "AND c.zoneId = @zoneId AND c.serviceClass = @serviceClass " +
+        "AND c.passengerCapacity >= @passengers AND IS_DEFINED(c.currentLatitude) " +
+        "AND IS_DEFINED(c.currentLongitude) AND IS_DEFINED(c.locationUpdatedAtUtc)")
+        .WithParameter("@status", "Approved")
+        .WithParameter("@availabilityStatus", "Online")
+        .WithParameter("@zoneId", zoneId)
+        .WithParameter("@serviceClass", serviceClass)
+        .WithParameter("@passengers", passengers);
+
+    var profiles = new List<DriverOnboardingProfile>();
+    using var iterator = driverContainer.GetItemQueryIterator<DriverOnboardingProfile>(query);
+    while (iterator.HasMoreResults)
+        profiles.AddRange(await iterator.ReadNextAsync(ct));
+    return profiles;
+}
+
 async Task<DriverOnboardingProfile?> GetApprovedDriverProfileAsync(string driverId, CancellationToken ct)
 {
     var profile = await FindDriverProfileAsync(driverId, ct);
@@ -373,6 +465,19 @@ string? ResolveDispatchZone(double latitude, double longitude)
     return zones.FirstOrDefault(zone =>
         latitude >= zone.MinLatitude && latitude <= zone.MaxLatitude &&
         longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude)?.ZoneId;
+}
+
+double CalculateDistanceKm(double firstLatitude, double firstLongitude, double secondLatitude, double secondLongitude)
+{
+    const double earthRadiusKm = 6371.0088;
+    var latitudeDelta = (secondLatitude - firstLatitude) * Math.PI / 180;
+    var longitudeDelta = (secondLongitude - firstLongitude) * Math.PI / 180;
+    var firstLatitudeRadians = firstLatitude * Math.PI / 180;
+    var secondLatitudeRadians = secondLatitude * Math.PI / 180;
+    var haversine = Math.Pow(Math.Sin(latitudeDelta / 2), 2) +
+        Math.Cos(firstLatitudeRadians) * Math.Cos(secondLatitudeRadians) *
+        Math.Pow(Math.Sin(longitudeDelta / 2), 2);
+    return earthRadiusKm * 2 * Math.Asin(Math.Min(1, Math.Sqrt(haversine)));
 }
 
 var storageMode = useCosmos ? "cosmos-db" : "demo-in-memory";
@@ -888,7 +993,20 @@ app.MapPost("/api/v1/driver/availability", async (
 
     if (request.IsOnline)
     {
-        await SaveDriverProfileAsync(profile with { AvailabilityStatus = "Online" }, ct);
+        if (request.Latitude is null or < -90 or > 90 ||
+            request.Longitude is null or < -180 or > 180)
+            return Results.BadRequest(new { message = "Valid GPS coordinates are required before going online." });
+        var currentZoneId = ResolveDispatchZone(request.Latitude.Value, request.Longitude.Value);
+        if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "Your current location is outside your assigned service zone." });
+
+        await SaveDriverProfileAsync(profile with
+        {
+            AvailabilityStatus = "Online",
+            CurrentLatitude = request.Latitude,
+            CurrentLongitude = request.Longitude,
+            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+        }, ct);
         try
         {
             var current = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
@@ -913,8 +1031,60 @@ app.MapPost("/api/v1/driver/availability", async (
     if (hasActiveRide) return Results.Conflict(new { message = "Complete your active ride before going offline." });
 
     await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
-    await SaveDriverProfileAsync(profile with { AvailabilityStatus = "Offline" }, ct);
+    await SaveDriverProfileAsync(profile with
+    {
+        AvailabilityStatus = "Offline",
+        CurrentLatitude = null,
+        CurrentLongitude = null,
+        LocationUpdatedAtUtc = null
+    }, ct);
     return Results.Ok(new { availabilityStatus = "Offline", isOnline = false, isQueued = false, position = (int?)null });
+}).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapPost("/api/v1/driver/location", async (
+    ClaimsPrincipal user, DriverLocationRequest request, QueueService queueService, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId))
+        return Results.Forbid();
+    if (request.Latitude is < -90 or > 90 || request.Longitude is < -180 or > 180)
+        return Results.BadRequest(new { message = "Valid latitude and longitude are required." });
+
+    var profile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (profile is null || profile.AvailabilityStatus != "Online")
+        return Results.Conflict(new { message = "Only an approved online driver can share availability location." });
+
+    var currentZoneId = ResolveDispatchZone(request.Latitude, request.Longitude);
+    if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
+    {
+        var takenOffline = await TryUpdateDriverProfileAsync(driverId, current =>
+            current.Status == "Approved" && current.AvailabilityStatus == "Online"
+                ? current with
+                {
+                    AvailabilityStatus = "Offline",
+                    CurrentLatitude = null,
+                    CurrentLongitude = null,
+                    LocationUpdatedAtUtc = null
+                }
+                : null, ct);
+        if (takenOffline)
+            await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
+        return Results.Conflict(new { message = "You left your assigned service zone and were taken offline." });
+    }
+
+    var saved = await TryUpdateDriverProfileAsync(driverId, current =>
+        current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
+        string.Equals(current.ZoneId, currentZoneId, StringComparison.OrdinalIgnoreCase)
+            ? current with
+            {
+                CurrentLatitude = request.Latitude,
+                CurrentLongitude = request.Longitude,
+                LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+            }
+            : null, ct);
+    return saved
+        ? Results.NoContent()
+        : Results.Conflict(new { message = "Driver availability changed. Refresh before sharing location." });
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapGet("/api/v1/driver/union", async (ClaimsPrincipal user, CancellationToken ct) =>
@@ -999,6 +1169,48 @@ app.MapPost("/api/v1/queues/join", async (
         return Results.Conflict(new { message = ex.Message });
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
+
+app.MapGet("/api/v1/rides/nearby", async (
+    double latitude, double longitude, string serviceClass, int passengers,
+    QueueService queueService, CancellationToken ct) =>
+{
+    var normalizedServiceClass = serviceClass.Trim().ToLowerInvariant();
+    if (latitude is < -90 or > 90 || longitude is < -180 or > 180 ||
+        passengers is < 1 or > 6 ||
+        normalizedServiceClass is not ("scooty" or "bike" or "auto" or "cab"))
+        return Results.BadRequest(new { message = "Provide valid pickup coordinates, passenger count and vehicle type." });
+
+    var zoneId = ResolveDispatchZone(latitude, longitude);
+    if (string.IsNullOrWhiteSpace(zoneId))
+        return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
+
+    var queue = await queueService.GetPositionedQueueAsync(zoneId, normalizedServiceClass, ct);
+    var queuedDriverIds = queue.Select(entry => entry.DriverId).ToHashSet(StringComparer.Ordinal);
+    var maxAgeSeconds = Math.Clamp(
+        app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds") ?? 120, 30, 600);
+    var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds);
+    var profiles = await GetOnlineDriverProfilesAsync(zoneId, normalizedServiceClass, passengers, ct);
+
+    var vehicles = profiles
+        .Where(profile => queuedDriverIds.Contains(profile.DriverId) &&
+            profile.LocationUpdatedAtUtc >= freshAfter &&
+            profile.CurrentLatitude is not null &&
+            profile.CurrentLongitude is not null)
+        .Select(profile => new
+        {
+            vehicleMake = profile.VehicleMake,
+            vehicleModel = profile.VehicleModel,
+            serviceClass = profile.ServiceClass,
+            passengerCapacity = profile.PassengerCapacity,
+            distanceKm = Math.Round(CalculateDistanceKm(
+                latitude, longitude, profile.CurrentLatitude!.Value, profile.CurrentLongitude!.Value), 1),
+            locationUpdatedAtUtc = profile.LocationUpdatedAtUtc
+        })
+        .OrderBy(vehicle => vehicle.distanceKm)
+        .ToArray();
+
+    return Results.Ok(vehicles);
+}).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal user, CreateRideRequest request, QueueService queueService, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
@@ -1395,7 +1607,7 @@ app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId,
 app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
-public sealed record DriverAvailabilityRequest(bool IsOnline);
+public sealed record DriverAvailabilityRequest(bool IsOnline, double? Latitude = null, double? Longitude = null);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
 public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);
 public sealed record DriverSelfieRequest(string ProfilePhotoBase64);
