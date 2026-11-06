@@ -391,6 +391,13 @@ export default function App() {
       .build();
 
     const refreshOffers = () => { if (mounted) void loadAvailableRides(); };
+    const refreshDriverState = () => {
+      if (!mounted) return;
+      refreshOffers();
+      void loadDriverRideHistory(() => mounted).catch(e => {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to recover selected Rider bookings.");
+      });
+    };
     connection.on("RideSelected", (selection: { rideId?: string; expiresAtUtc?: string }) => {
       if (!mounted || !selection?.rideId) return;
       setNotice("A Rider selected you for a Cab trip. Review the request and negotiate directly.");
@@ -408,8 +415,10 @@ export default function App() {
       setNotice("A new ride offer has arrived. Review the available ride requests.");
       refreshOffers();
     });
-    connection.onreconnected(refreshOffers);
-    void connection.start().then(refreshOffers).catch(() => {
+    // Recover selected bookings as well as legacy offers after initial connect/reconnect;
+    // SignalR delivery is at-least-once and may be missed while the app is suspended.
+    connection.onreconnected(refreshDriverState);
+    void connection.start().then(refreshDriverState).catch(() => {
       if (mounted) setError("Live ride offers are temporarily unavailable. Available rides can still be refreshed manually.");
     });
     return () => {
