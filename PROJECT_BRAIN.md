@@ -261,7 +261,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #61 merged at `118929955d3959f078ddb59f7f5bdf3c3965d52a` after an automated review found no unresolved critical/high-risk issue and final-head CI run [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) passed all four jobs.
 - `UnionTransferIsBlockedWhileDriverHasAcceptedActiveRide` verifies a Rider-selected Cab booking proceeds through proposal, both confirmations and Driver acceptance; the permanent per-driver reservation remains held; transfer to another Union returns conflict; the original membership and reservation remain unchanged.
 - The test is in-memory/API integration evidence. Live Cosmos multi-instance contention, ETag conflict behaviour under real service, process restart/crash recovery and approved negotiation-lifetime configuration remain unverified.
-- Sequential next item: #10 REALTIME-01. Audit SignalR authorization, group membership, agreement/trip event coverage and reconnect recovery before changing code.
+- PR #63 completes the #10 REALTIME-01 code/test audit; physical Android/iOS delivery and reconnect acceptance remain external. Sequential next item: #11 DRIVER-01.
 
 
 ## REALTIME-01 Rider reconnect audit (2026-11-06)
