@@ -1592,6 +1592,41 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
     { return false; }
 }
 
+app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(riderId))
+        return Results.Forbid();
+
+    var history = new List<DemoRide>();
+    if (rideContainer is null)
+    {
+        history.AddRange(rides.Values.Where(ride => ride.RiderId == riderId));
+    }
+    else
+    {
+        var query = new QueryDefinition("SELECT * FROM c WHERE c.riderId = @riderId")
+            .WithParameter("@riderId", riderId);
+        using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
+        while (iterator.HasMoreResults)
+            history.AddRange(await iterator.ReadNextAsync(ct));
+    }
+
+    var items = history
+        .OrderByDescending(ride => ride.RequestedAt)
+        .Select(ride => new RiderRideHistoryItem(
+            ride.RideId,
+            ride.Pickup,
+            ride.Dropoff,
+            ride.Passengers,
+            ride.ServiceClass,
+            ride.Status,
+            ride.RequestedAt,
+            ride.AcceptedAt))
+        .ToArray();
+    return Results.Ok(items);
+}).RequireAuthorization(policy => policy.RequireRole("Rider"));
+
 app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
 {
     var ride = await FindRideAsync(rideId, ct);
@@ -1617,6 +1652,7 @@ public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passen
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude);
 public sealed record NearbyVehicleResponse(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
+public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
