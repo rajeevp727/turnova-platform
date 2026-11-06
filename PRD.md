@@ -6,19 +6,19 @@
 
 ## 1. Vision
 
-TurnOva is a ride-hailing platform designed to make driver ride allocation transparent and fair. Its core differentiator is a rules-based First In, First Out (FIFO) dispatch model that gives eligible drivers fair opportunities while respecting geographic zones, vehicle type and passenger capacity.
+TurnOva is a union-connected Cab discovery and ride-coordination platform. Riders discover approved nearby unions, select an eligible Cab driver, and negotiate the fare directly with that driver. The platform records mutually confirmed agreements, trip progress and driver-reported direct-payment reconciliation; it does not set fares or automatically dispatch a FIFO candidate.
 
 ## 2. Problem and opportunity
 
-Drivers need confidence that ride opportunities are allocated fairly and transparently. Riders need to discover nearby vehicles, understand availability and capacity, book trips and track progress. TurnOva combines clear queue rules with a practical rider experience.
+Drivers need a trusted union relationship, verified Cab onboarding and clear ride/agreement records. Riders need to discover approved nearby unions, compare eligible Cab drivers by pickup proximity, select a driver and coordinate the trip directly. TurnOva records the agreement and the Driver’s report of money received without collecting payment.
 
 ## 3. Goals
 
-- Provide auditable, zone-based FIFO dispatch.
-- Give drivers clear queue status and assignment updates.
-- Match rides to eligible drivers and compatible vehicles.
-- Support reliable booking, trip lifecycle, tracking, payment and support.
-- Establish a secure foundation that can scale to additional cities and fleet operations.
+- Discover approved unions serving Cab near the Rider’s pickup and let the Rider select an eligible Driver.
+- Verify Cab Driver membership, vehicle details and union-approved public selfie visibility.
+- Record direct Rider/Driver fare negotiation and a mutually confirmed, versioned agreement.
+- Protect selected Drivers from overlapping negotiations and active rides.
+- Record completed trips and Driver-reported direct-payment reconciliation with least-privilege union oversight.
 
 ## 4. Non-goals for MVP
 
@@ -32,8 +32,8 @@ Drivers need confidence that ride opportunities are allocated fairly and transpa
 
 | App | Audience | Phase | Main capabilities |
 |---|---|---|---|
-| TurnOva Driver | Individual drivers | MVP | Onboarding, availability, FIFO queue, trips, earnings |
-| TurnOva Rider | Passengers | MVP | Nearby vehicles, booking, fare estimate, tracking, payment, history |
+| TurnOva Driver | Individual drivers | MVP | Cab onboarding, union membership, availability, selected-trip negotiation, trip lifecycle, payment reporting |
+| TurnOva Rider | Passengers | MVP | Union-grouped Cab discovery, driver selection, direct negotiation, trip tracking and history |
 | TurnOva Fleet | Fleet owners/managers | Phase 2 | Vehicles, driver assignment, documents, availability, reporting |
 | TurnOva Ops | Internal operations | Phase 2 | Approvals, zones, queue monitoring, support, disputes, configuration |
 
@@ -41,8 +41,8 @@ All apps are Android/iOS mobile apps. They share one backend and dispatch engine
 
 ## 6. User roles
 
-- Rider: searches, books, tracks and pays for rides.
-- Driver: completes onboarding, manages availability, joins eligible queues and fulfils trips.
+- Rider: discovers approved Cab unions, selects a Driver, negotiates and confirms the fare, tracks the trip and pays the Driver directly.
+- Driver: completes Cab and union onboarding, manages availability, negotiates and confirms the fare, fulfils the trip and reports the amount received directly from the Rider.
 - Fleet manager: manages vehicles, drivers and fleet performance (Phase 2).
 - Operations/admin: manages approvals, service zones, incidents and platform configuration (Phase 2).
 
@@ -50,71 +50,49 @@ All apps are Android/iOS mobile apps. They share one backend and dispatch engine
 
 ### TurnOva Rider
 - Account registration, login and profile management.
-- Pickup/drop-off selection and location permission.
-- Nearby available vehicles and relevant capacity information.
-- Fare estimate and trip details before confirmation.
-- Booking creation, status and cancellation under a published policy.
-- Driver/vehicle details and live trip progress after assignment.
-- Payment through enabled methods, trip history, receipts and ratings.
-- Help and issue reporting.
+- Pickup, destination and optional intermediate-stop entry with location permission.
+- Discovery of active, approved unions serving Cab within configured pickup coverage.
+- Display up to 2–3 approved, eligible and available Cab drivers per union, ordered by driver-to-pickup proximity; distinguish this from journey distance.
+- Show only union-approved driver photos and verified Cab vehicle details.
+- Select one Driver and use call/chat actions when the configured providers are available.
+- Negotiate directly with the selected Driver and explicitly confirm the current agreement version.
+- View trip status, live progress, history and support information.
+- Pay the Driver directly outside TurnOva; no in-app payment collection, gateway or escrow.
 
 ### TurnOva Driver
-- Registration and onboarding with identity, licence, vehicle and required documents.
-- Approval status and eligibility feedback.
-- Explicit Online/Offline availability controls; going online joins the back of the eligible FIFO queue, and going offline removes queue membership. A driver with an active ride cannot go offline.
-- Join the FIFO queue for an eligible service zone.
-- View current zone, queue position and queue state.
-- Receive trip offers and accept/reject within a defined response window.
-- Clear queue behaviour for rejection, timeout, trip completion and re-entry.
-- Trip lifecycle controls, history, earnings and support.
+- Registration and Cab-only onboarding with identity, licence, verified vehicle and required documents.
+- Approved union membership and eligibility feedback; public selfie visibility only after approval by the current union.
+- Explicit Online/Offline availability and current pickup location, subject to approval and active-ride reservation.
+- Receive Rider-selected Cab negotiation requests; propose/counter-propose and confirm the current agreement.
+- Start a ride only after both Rider and Driver confirm the same current agreement version.
+- Complete the trip, view history and report the amount received directly from the Rider as unverified.
+- Access work-metrics payslips and support; monetary earnings/commission/payout policy is not assumed.
 
 ### Shared platform
-- Driver eligibility and availability validation.
-- Queue membership and ordering by zone and compatible service/vehicle class.
-- Matching by pickup geography, service type and passenger capacity.
-- Atomic ride/driver assignment to prevent duplicate allocation.
-- Realtime queue and trip updates.
-- Persistent audit trail for queue changes, dispatch decisions and exceptions.
+- Cab-only validation for new Rider requests, Driver onboarding and new Union configuration; retain historical non-Cab records without destructive migration.
+- Discover eligible unions and drivers by pickup coverage, approved status, availability, vehicle verification, passenger capacity and pickup proximity.
+- Concurrency-safe selected-Driver reservations; no overlapping active negotiation or ride.
+- Durable, immutable agreement versions with both-party confirmation and server-owned ride-state transitions.
+- Driver-reported amount, signed agreed-minus-reported delta, least-privilege Union visibility and audit history.
+- Realtime negotiation/agreement/trip updates and reconnect recovery.
+- Persistent audit trail for membership, reservation, agreement, trip and reconciliation changes.
 
-## 8. FIFO allocation policy
+## 8. FIFO and legacy queue compatibility boundary
 
-### Queue scope
-Queues are scoped to operationally meaningful geographic zones and compatible service/vehicle classes. A citywide queue is not the default because it may produce unreasonable pickup distances. Zone boundaries and cross-zone fallback must be explicitly configured.
+The approved Cab-only Rider flow is customer-selected-driver discovery, not customer-facing FIFO dispatch.
 
-### Ordering and eligibility
-The server assigns queue-entry order and timestamps. A client cannot set its own queue position. A driver is eligible only when approved, online, available, active in the relevant queue, document-valid, compatible with the requested service and capacity, and free of conflicting assignments.
-
-### Fairness rules
-- Consider eligible drivers in queue-entry order.
-- A driver on a trip or temporarily unavailable must not block the queue.
-- Define consistent rules for rejection, timeout, cancellation, no-show, connectivity loss and rejoining.
-- Do not silently penalize drivers or change priority.
-- Record every exception/override with a reason, actor and timestamp.
-- Prevent duplicate queue entries, queue jumping and client-side manipulation.
-- Define boundary and cross-zone behaviour before pilot.
-
-### Dispatch sequence
-1. Validate and persist the ride request.
-2. Resolve pickup zone and requested service class.
-3. Retrieve ordered eligible candidates.
-4. Revalidate candidate availability and compatibility.
-5. Offer the ride to the next candidate under the published policy.
-6. Atomically reserve/assign the ride to prevent double allocation.
-7. On decline, timeout or failure, apply the documented policy and consider the next candidate.
-8. Notify rider and driver and persist the dispatch audit trail.
-
-Offer timeout, retry, queue advancement and cross-zone fallback are configurable policy decisions and must not be hidden in client code.
-
-
-### Durable offer record
-
-Each ride may have only one active offer at a time. An offer has a unique offer ID, target driver, zone/service class, creation time, expiry deadline and status. The ride's offer history must be retained for audit. The server—not the mobile client—owns offer expiry and retry. Acceptance, rejection and expiry must be conditional on the current offer ID so stale clients cannot resolve a later offer. A driver must not hold more than one active offer at a time.
+- Do not rank Rider discovery results by queue position.
+- Do not automatically assign a Rider request to the FIFO head or advance the request to another Driver after a decline/timeout.
+- Rider discovery is grouped by active, approved unions and ordered by Driver-to-pickup proximity, subject to eligibility and the per-union result limit.
+- Whether FIFO remains as an internal Union fairness/availability mechanism or is retired is an unresolved product decision. Do not extend FIFO as a customer-facing ranking or assignment rule until explicitly decided.
+- Preserve existing queue and offer history safely while the selected-Driver flow replaces legacy Rider dispatch. Existing FIFO/offer endpoints and expiry workers are legacy compatibility code, not evidence that customer-selected negotiation is implemented.
+- Any retained internal queue policy must be server-owned, auditable, idempotent and prevented from overriding a Rider-selected Driver.
 
 ## 9. Trip lifecycle
 
-Proposed flow: Requested → Matching → Offered → Accepted → DriverArriving → InProgress → Completed.
+Approved MVP flow: Rider request → Driver selected → Negotiating → AgreementConfirmed → InProgress → Completed → DriverPaymentReported.
 
-Terminal alternatives include Cancelled, Expired and NoDriverAvailable. All state transitions are validated server-side and timestamped.
+Terminal alternatives include Cancelled and Expired. All state transitions are validated server-side, idempotent and timestamped. A Driver cannot start until both parties confirm the same current immutable agreement version. A fare change creates a new agreement version and invalidates prior confirmations for the new version.
 
 ## 10. Non-functional requirements
 
@@ -141,15 +119,15 @@ A free-tier-first approach is intended for development. Production hosting, maps
 
 ## 12. MVP acceptance criteria
 
-- Riders can request rides, explicitly choose Scooty, Bike, Auto or Cab, and see clear booking states.
-- Drivers select the same supported vehicle category during onboarding; queue membership, ride eligibility and union service-class support use the same Scooty, Bike, Auto and Cab values.
-- Pickup coordinates resolve to a configured dispatch zone; rides are visible only to drivers in the matching zone and vehicle-class queue.
-- Only approved, eligible and compatible drivers are considered.
-- Queue order is server-controlled and reproducible from persisted events.
-- Eligible drivers are considered in FIFO order within the configured zone/service class, subject to documented exceptions.
-- No ride or driver can be assigned twice.
-- Rider and driver receive consistent realtime updates and can recover state after reconnecting.
-- Queue changes and dispatch outcomes are auditable.
+- New Rider requests, Driver onboarding and new Union service configuration accept Cab only; historical Scooty/Bike/Auto records are preserved and excluded from new MVP eligibility.
+- Riders can enter pickup, destination and optional stops, discover active approved unions serving Cab, and see at most 2–3 eligible/available Cab drivers per union ordered by pickup proximity.
+- Discovery exposes only union-approved driver photos and verified Cab details; journey distance and driver-to-pickup distance are distinct.
+- Riders explicitly select a Driver; the customer-facing flow does not rank by FIFO or automatically assign/advance a Driver.
+- Rider and selected Driver can negotiate directly and persist immutable agreement versions; both must confirm the current version before ride start.
+- A selected Driver cannot be held by overlapping active negotiations or rides; expiry/cancellation releases only the matching reservation.
+- Trip transitions, idempotency, live updates, reconnect and history are server-authoritative and auditable.
+- After completion, Driver-reported amount received and signed agreed-minus-reported delta are persisted and labelled unverified; authorised Union users see only minimum necessary data.
+- No platform fare estimate, payment gateway, escrow or in-app payment collection is part of the MVP.
 - Android and iOS builds pass agreed functional, security and pilot-readiness tests.
 
 ## 13. Roadmap
@@ -157,13 +135,13 @@ A free-tier-first approach is intended for development. Production hosting, maps
 1. Finalize zone design, dispatch policy, data model and architecture.
 2. Build identity, eligibility, queue and dispatch backend foundations.
 3. Deliver TurnOva Driver and TurnOva Rider MVP apps.
-4. Integrate realtime trip lifecycle, payments and support.
+4. Integrate realtime selected-Driver negotiation, agreement, trip lifecycle, direct-payment reporting and support.
 5. Complete automated testing, security/load testing and Hyderabad pilot.
 6. Add TurnOva Fleet and TurnOva Ops in Phase 2.
 
 ## 14. Open decisions before launch
 
-Initial zones and boundaries; vehicle categories and capacity; fares, taxes, commissions and cancellations; driver offer timeout and re-entry rules; cross-zone fallback; KYC requirements; maps, routing, OTP, payment and notification providers; safety/support escalation; retention and privacy policy; and applicable transport/aggregator requirements. These require product, legal and operational validation.
+Pickup radius/zone boundaries; internal FIFO role; negotiation/booking cancellation and expiry policy; customer dispute/confirmation handling; non-zero-delta next-ride eligibility policy; support categories and escalation owner; maps/routing, chat/call and notification providers; Union partnership terms and legal/T&C approval; retention/privacy policy; production hosting and applicable transport/aggregator requirements. Do not invent fares, payment collection or reconciliation outcomes. These require product, legal and operational validation.
 
 
 ### Server-owned expiry increment
