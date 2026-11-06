@@ -727,6 +727,9 @@ public sealed class RideApiIntegrationTests
         using var location = await driver.PostAsJsonAsync("/api/v1/driver/location",
             new { latitude = 17.494, longitude = 78.400 });
         Assert.Equal(HttpStatusCode.Conflict, location.StatusCode);
+        using var offline = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = false });
+        Assert.Equal(HttpStatusCode.Conflict, offline.StatusCode);
         var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
             ["driver-nearby-active-trip"];
         Assert.Equal("Online", profile.AvailabilityStatus);
