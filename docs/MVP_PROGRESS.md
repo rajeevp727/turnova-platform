@@ -105,7 +105,7 @@
 - PR #59 is merged; final PR-head CI run [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
 - API and integration-test audit found coverage for temporary reservation acquisition, concurrent booking exclusion, Rider cancellation release, Driver decline release, expiry via ride read and discovery, terminal-state reconciliation, permanent promotion after mutual agreement/acceptance, and interrupted-write idempotent recovery.
 - Reservation stores deliberately retain expired leases until the API reconciles the linked ride; Cosmos mutation paths use ETag conditions for promotion, expiry changes and release. Live Cosmos multi-instance/restart/ETag testing remains unavailable and is not claimed.
-- No customer-facing FIFO ranking or automatic advancement is permitted. Current sequential focus advances to DISPATCH-04.
+- No customer-facing FIFO ranking or automatic advancement is permitted. DISPATCH-04 is now audited with PR #61; current sequential focus advances to #10 REALTIME-01.
 
 
 ## 9. DISPATCH-04 audit handoff (2026-11-06)
