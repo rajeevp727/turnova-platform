@@ -292,6 +292,6 @@ This is not a transactional outbox. A process stop after offer persistence but b
 
 The API exposes unauthenticated `/health/live` and `/health/ready` probes for hosting-platform health checks. These currently confirm process health; they do not independently prove every downstream provider is healthy. Cosmos schema migrations run before the app accepts traffic. Production startup rejects missing Cosmos endpoint/key configuration, preventing accidental in-memory persistence in production.
 
-Render configuration is maintained as a placeholder blueprint in `render.yaml`; secrets are supplied through Render environment variables and are never committed. The container listens on port 8080 and uses `/health/ready` as its platform probe.
+The API is published as a standard .NET 10 application directory and hosted on a native .NET-capable platform selected during infrastructure setup. Docker and container-based deployment are explicitly excluded. Hosting secrets are supplied through the selected provider's secret store and are never committed. The API exposes `/health/live` and `/health/ready` probes.
 
 TurnOva MVP clients are native Android/iOS Expo applications, not browser SPAs. Azure Static Web Apps cannot host or distribute native binaries. SWA is documented only as an optional future static companion/API-documentation host; native app builds and distribution require EAS Build and/or the app stores.
