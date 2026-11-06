@@ -1660,7 +1660,8 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
     if (approvedProfile is null || approvedProfile.AvailabilityStatus != "Online" ||
         !string.Equals(approvedProfile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)) return Results.Forbid();
     var selectedRide = await FindRideAsync(rideId, ct);
-    if (selectedRide?.DriverId == driverId && selectedRide.Status is "Negotiating" or "AgreementConfirmed")
+    if (selectedRide is not null && selectedRide.DriverId == driverId &&
+        (selectedRide.Status is "Negotiating" or "AgreementConfirmed"))
     {
         if (selectedRide.Status != "AgreementConfirmed")
             return Results.Conflict(new { message = "Both Rider and Driver must confirm the current agreement before accepting the selected booking." });
