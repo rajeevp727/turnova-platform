@@ -563,5 +563,6 @@ This deterministic test exercises the in-memory store. Cosmos multi-instance and
 | RIDER-HISTORY-002 | Rider history response is inspected for private fields | Response includes only ride reference, pickup/drop-off notes, passengers, service class, status and timestamps; rider/driver IDs and exact coordinates are omitted | API integration/security | P0 |
 | RIDER-HISTORY-003 | Rider with no trips requests history | HTTP 200 with an empty array | API integration | P1 |
 | RIDER-HISTORY-004 | Driver requests Rider history endpoint | HTTP 403 | API authorization | P0 |
+| RIDER-HISTORY-005 | Rider reopens Activity while a ride is Requested, Offered, Accepted, Arrived or InProgress | Latest active ride details are restored from the owner-scoped history result so status/live tracking can reconnect | Android/iOS functional + SignalR | P0 |
 
 The current automated tests exercise the in-memory store. Cosmos cross-partition history query behaviour, retention and larger-history performance require the configured development Cosmos environment.
