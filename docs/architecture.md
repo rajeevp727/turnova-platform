@@ -63,9 +63,10 @@ Keep domain and application logic independent of Cosmos DB and transport concern
 - Vehicle: category, passenger capacity, registration and document validity.
 - ServiceZone: geographic boundary and dispatch policy.
 - QueueMembership: driver, zone, service class, server-assigned entry order and state.
-- RideRequest: rider, pickup/drop-off, service type and passenger count.
-- DispatchOffer: request, candidate, expiry and response.
-- Trip: accepted assignment and trip lifecycle.
+- RideRequest/SelectedDriverBooking: Rider, selected Cab driver and union, pickup/drop-off/stops, passenger count, idempotency and negotiation expiry.
+- DriverRideReservation: exclusive per-driver lock; a negotiation lease has ExpiresAtUtc, while an active ride reservation has no expiry.
+- DispatchOffer: legacy compatibility request, candidate, expiry and response; it is not used to rank or auto-assign the selected-driver Rider flow.
+- Trip: mutually agreed assignment and trip lifecycle.
 - QueueAuditEvent: append-only queue join/leave/rotation record in the queue partition; RideOfferState.Attempts retain ride-offer decisions; DriverUnionAuditEvent retains union transfers.
 
 ## 6. FIFO dispatch architecture
@@ -107,7 +108,8 @@ Candidate entities/containers:
 - Vehicles and document metadata.
 - Service zones and configuration.
 - Queue memberships and queue events.
-- Ride requests, offers and trips.
+- Ride requests, selected-driver bookings, offers and trips.
+- DriverRideReservations (/driverId) stores the current exclusive driver reservation; negotiation leases are time-bounded.
 - Queue audit events in `QueueEntries` (`/zoneServiceKey`), offer-attempt history in `RideOffers` (`/rideId`) and union assignment history in `DriverUnionAudit` (`/driverId`).
 
 Partition keys must follow access patterns and transaction boundaries. Candidate keys include a zone/service-class queue identifier for queue operations and ride/request identifiers for trip lookups. Validate hot-partition risk, queue size, query patterns, indexing, TTL and consistency with representative load tests. Avoid cross-partition transaction assumptions.
@@ -122,14 +124,16 @@ Store identity documents in protected object storage rather than large Cosmos DB
 - /api/v1/vehicles — vehicle information.
 - /api/v1/zones — zone discovery and eligibility.
 - /api/v1/queues — join, leave and queue status.
-- /api/v1/rides — quote, request, cancel and trip history.
-- /api/v1/dispatch — privileged internal dispatch operations only.
+- /api/v1/rider/discovery and /api/v1/rider/bookings — approved-union Cab discovery and idempotent Rider-selected booking.
+- /api/v1/driver/bookings — authenticated pending selected-driver requests and Driver decline.
+- /api/v1/rides — trip status, cancellation and history; no platform fare quote is provided.
+- /api/v1/dispatch — legacy/internal compatibility only; never customer-facing FIFO assignment.
 
 Apply resource ownership checks and authorization policies to every endpoint. Never accept queue rank or dispatch priority from a mobile client.
 
 ## 9. Realtime
 
-SignalR delivers queue-position changes, ride offers, driver location updates and trip lifecycle events. Ride offers are persisted with a notification-pending marker before publication. A hosted outbox worker retries pending notifications and marks them sent with an ETag update. Delivery is at-least-once: a crash after SignalR send but before the sent marker can produce duplicates, so clients must de-duplicate by offerId. Realtime is not the source of truth: after reconnect, clients fetch authoritative current state. Initial and subsequent offers share clamped Dispatch:OfferLifetimeSeconds configuration (10–120 seconds, default 30).
+SignalR delivers selected-driver request/expiry events, legacy queue/offer compatibility events, driver location updates and trip lifecycle events. Ride offers are persisted with a notification-pending marker before publication. A hosted outbox worker retries pending notifications and marks them sent with an ETag update. Delivery is at-least-once: a crash after SignalR send but before the sent marker can produce duplicates, so clients must de-duplicate by offerId. Realtime is not the source of truth: after reconnect, clients fetch authoritative current state. Initial and subsequent offers share clamped Dispatch:OfferLifetimeSeconds configuration (10–120 seconds, default 30).
 
 Authenticate hub connections, scope groups, rate-limit events and protect location privacy. Do not expose precise driver location to unrelated riders.
 
@@ -325,6 +329,17 @@ Discovery does not read QueueEntries, queue positions or FIFO offer order. It re
 
 Candidates are grouped by Union. Each group returns no more than three drivers, sorted by unrounded Haversine driver-to-pickup distance with DriverId as a deterministic tie-breaker. Union groups are sorted by UnionName then UnionId. The response includes opaque DriverId for selection, display name, approved Cab make/model, passenger capacity and rounded pickup proximity. It omits phone number, full registration, exact coordinates and queue data. ProfilePhotoBase64/content type are returned only when the selfie is Approved by the driver's current assigned Union; pending, rejected or old-union approval yields a null public photo.
 
-JourneyDistanceKm is currently null because no routing/maps provider is configured. The Rider app labels journey distance unavailable and separately labels driver-to-pickup proximity; it must not substitute one for the other. Call/chat controls remain unavailable until a provider is configured. Driver selection in this increment is a client-side discovery selection only; durable selected-driver negotiation reservation and booking are the next sequential slice.
+JourneyDistanceKm is currently null because no routing/maps provider is configured. The Rider app labels journey distance unavailable and separately labels driver-to-pickup proximity; it must not substitute one for the other. Call/chat controls remain unavailable until a provider is configured. PR #55 supplies the selectable discovery cards; PR #56 adds durable selected-driver booking and exclusive reservation as described below.
 
 The legacy Rider GET /api/v1/rides/nearby endpoint returns 410 Gone so the app cannot consume FIFO-ranked results. Legacy POST /api/v1/rides/request is disabled by default through Dispatch:LegacyFifoRiderRequestsEnabled=false; the true override exists only in integration-test fixtures to preserve regression coverage for legacy ride/offer code. Never enable that override in a deployed Rider API. Internal FIFO policy remains unresolved and is not used by discovery.
+## 28. Selected-driver booking and expiring reservation (RIDER-01 / RIDER-03 / DISPATCH-03 / DISPATCH-04)
+
+The authenticated Rider POST /api/v1/rider/bookings accepts the selected Driver ID, pickup/drop-off notes, optional stops, passenger count and pickup coordinates. It requires an Idempotency-Key and revalidates the selected Driver at submit time: approved Cab profile, approved licence and vehicle-registration documents, Online state, fresh in-zone GPS, capacity, current Active Union membership, Active Cab/zone coverage and configured pickup radius. It does not accept a client-supplied fare, service category, queue position or Union ID.
+
+The API creates a Rides item with status Negotiating, selected Driver/Union, route/stops and NegotiationExpiresAtUtc, after acquiring a per-driver reservation. The Driver can read only their own pending requests at GET /api/v1/driver/bookings/pending, receives SelectedRideRequested through their authenticated SignalR driver group, and may decline. The Rider may cancel the booking. Both actions use conditional ride updates and release only the exact driver/ride reservation pair. The Rider's existing ride resource returns the authoritative status.
+
+DriverRideReservations remains partitioned by /driverId. A negotiation reservation stores ExpiresAtUtc; an active ride reservation stores null and cannot be reclaimed as an expired lease. TryAcquireNegotiationAsync creates the reservation or replaces an expired negotiation lease with an ETag condition. HasActiveAsync conditionally removes an expired lease. The hosted expiry worker queries Negotiating rides whose NegotiationExpiresAtUtc is due, conditionally changes the ride to Expired, and releases the matching reservation. A stale release cannot delete a newer reservation for another ride. The worker emits RideStatusChanged and SelectedRideExpired notifications; clients still reload authoritative API state after reconnect.
+
+Rides, RideIdempotency and DriverRideReservations are separate Cosmos containers/partitions; no cross-container transaction is assumed. The API rolls back a reservation/idempotency record if ride persistence fails. A process stop between reservation and ride persistence can temporarily hold the driver until the lease expires; ETag/lease recovery is the safe fallback, not proof of cross-instance atomicity. Real Cosmos race, crash/restart and expiry tests remain a development-infrastructure gate.
+
+Dispatch:SelectedDriverNegotiationLifetimeSeconds is 0 in checked-in configuration. Booking fails closed until a product-approved positive duration is configured (maximum accepted configuration: 3600 seconds). The expiry polling interval is configurable. The checked-in discovery radius also remains 0 until approved. This increment does not implement fare proposals, agreement confirmation, call/chat provider integrations or ride start; those remain the next agreement increment/provider gates.
