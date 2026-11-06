@@ -44,7 +44,8 @@ All apps are Android/iOS mobile apps. They share one backend and dispatch engine
 - Rider: discovers approved Cab unions, selects a Driver, negotiates and confirms the fare, tracks the trip and pays the Driver directly.
 - Driver: completes Cab and union onboarding, manages availability, negotiates and confirms the fare, fulfils the trip and reports the amount received directly from the Rider.
 - Fleet manager: manages vehicles, drivers and fleet performance (Phase 2).
-- Operations/admin: manages approvals, service zones, incidents and platform configuration (Phase 2).
+- Operations/admin: manages platform approvals, service zones, incidents and configuration (Phase 2).
+- Union manager (partner API role; no separate MVP app): reviews only Cab drivers actively assigned to the manager's union and approves public selfie visibility using a signed `role=UnionManager` plus one or more `unionId` claims.
 
 ## 7. MVP requirements
 
@@ -61,7 +62,7 @@ All apps are Android/iOS mobile apps. They share one backend and dispatch engine
 
 ### TurnOva Driver
 - Registration and Cab-only onboarding with identity, licence, verified vehicle and required documents.
-- Approved union membership and eligibility feedback; public selfie visibility only after approval by the current union.
+- Approved union membership and eligibility feedback; only an authenticated manager scoped to the current union may approve public selfie visibility. A union transfer resets selfie approval and requires approval by the new current union.
 - Explicit Online/Offline availability and current pickup location, subject to approval and active-ride reservation.
 - Receive Rider-selected Cab negotiation requests; propose/counter-propose and confirm the current agreement.
 - Start a ride only after both Rider and Driver confirm the same current agreement version.
@@ -141,7 +142,7 @@ A free-tier-first approach is intended for development. Production hosting, maps
 
 ## 14. Open decisions before launch
 
-Pickup radius/zone boundaries; internal FIFO role; negotiation/booking cancellation and expiry policy; customer dispute/confirmation handling; non-zero-delta next-ride eligibility policy; support categories and escalation owner; maps/routing, chat/call and notification providers; Union partnership terms and legal/T&C approval; retention/privacy policy; production hosting and applicable transport/aggregator requirements. Do not invent fares, payment collection or reconciliation outcomes. These require product, legal and operational validation.
+Pickup radius/zone boundaries; internal FIFO role; negotiation/booking cancellation and expiry policy; customer dispute/confirmation handling; non-zero-delta next-ride eligibility policy; support categories and escalation owner; maps/routing, chat/call and notification providers; Union-manager identity-provider claim mapping; private document storage/scanning/consent/retention policy; Union partnership terms and legal/T&C approval; production hosting and applicable transport/aggregator requirements. Do not invent fares, payment collection or reconciliation outcomes. These require product, legal and operational validation.
 
 
 ### Server-owned expiry increment
@@ -186,6 +187,8 @@ The Rider discovery API returns active eligible unions grouped with up to three 
 
 ### Union and FIFO
 - Support approved union participation, Cab driver membership, authorised transfer, Cab/vehicle verification and union selfie approval before public photo display.
+- Union-manager access is scoped by signed `unionId` claims; expose only current assigned Cab drivers and minimum review data. Never expose driver phone/email, exact location, private chat or unrelated customer data to union reviewers.
+- Operations may reject/hide a selfie for safety, but only the current union's authenticated manager may approve public selfie visibility.
 - Union oversight exposes minimum necessary ride/reconciliation data, never private chat or unrelated customer data. Partnership terms require legal review.
 - FIFO must not rank Rider discovery or automatically assign a driver. Whether it remains internal union fairness/availability is unresolved.
 
