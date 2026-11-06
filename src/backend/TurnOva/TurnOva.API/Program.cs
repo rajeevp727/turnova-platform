@@ -992,7 +992,7 @@ app.MapGet("/api/v1/driver/availability", async (ClaimsPrincipal user, Cancellat
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var profile = await FindDriverProfileAsync(driverId, ct);
-    var status = profile?.Status == "Approved" && IsCabServiceClass(profile.ServiceClass) ? profile.AvailabilityStatus : "Offline";
+    var status = profile?.Status == "Approved" ? profile.AvailabilityStatus : "Offline";
     return Results.Ok(new { availabilityStatus = status, isOnline = status == "Online" });
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
@@ -1003,8 +1003,8 @@ app.MapPost("/api/v1/driver/availability", async (
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null) return Results.Conflict(new { message = "Only an approved driver can change availability." });
-    if (!IsCabServiceClass(profile.ServiceClass))
-        return Results.Conflict(new { message = "Legacy non-Cab profiles are preserved for history but cannot join new MVP workflows." });
+    if (request.IsOnline && !IsCabServiceClass(profile.ServiceClass))
+        return Results.Conflict(new { message = "Legacy non-Cab profiles are preserved for history but cannot join new MVP workflows. They may still go offline." });
 
     if (request.IsOnline)
     {
@@ -1184,8 +1184,6 @@ app.MapDelete("/api/v1/zones/{zoneId}/queues/{serviceClass}/me", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId))
         return Results.Forbid();
-    if (!IsCabServiceClass(serviceClass)) return Results.BadRequest(new { message = "Only the Cab queue is available in the MVP." });
-
     await service.LeaveAsync(driverId, zoneId, serviceClass, ct);
     return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
