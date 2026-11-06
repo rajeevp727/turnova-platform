@@ -108,37 +108,37 @@ public sealed class AiAssistanceService
     private static readonly HashSet<string> SafeHelpWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "agreement", "arrived", "cancel", "cab", "confirm", "counter", "driver",
-        "availability", "eligible", "expired", "fare", "fifo", "help", "inprogress", "progress", "negotiate", "negotiated", "negotiating",
-        "offline", "online", "payment", "photo", "pickup", "price", "queue", "queued", "received", "ride",
-        "selection", "selfie", "status", "trip", "union", "version"
+        "accepted", "agreementconfirmed", "arrival", "availability", "cancelled", "canceled", "completed", "completion", "counter", "discovery", "eligible", "expired", "fare", "fifo", "help", "inprogress", "progress", "negotiate", "negotiated", "negotiating",
+        "offline", "online", "overlap", "paid", "payment", "photo", "pickup", "price", "proximity", "proposal", "queue", "queued", "received", "report", "reservation", "reserved", "ride",
+        "select", "selection", "selfie", "status", "trip", "union", "version"
     };
 
     private static readonly IReadOnlyList<HelpEntry> HelpEntries =
     [
         new("state-negotiating",
             "You and the selected Driver are negotiating directly. TurnOva does not set or recommend a fare. Both parties must confirm the same current agreement version before the Driver can start.",
-            ["negotiating", "negotiate", "fare", "counter", "proposal"]),
+            ["negotiating"]),
         new("state-agreement-confirmed",
             "The Rider and Driver have confirmed the current agreement version. The Driver must still follow the server-owned trip start flow. Any new fare or route version requires both parties to confirm that new version.",
-            ["agreement", "confirm", "version"]),
+            ["agreementconfirmed"]),
         new("state-accepted",
             "The selected Driver has accepted the trip. The API remains the source of truth for trip status; reconnecting refreshes the latest ride state.",
-            ["driver", "status", "ride"]),
+            ["accepted"]),
         new("state-arrived",
             "The selected Driver has marked arrival at the pickup. Check the trip details and current mutually confirmed agreement before the ride starts.",
-            ["arrived", "pickup", "driver"]),
+            ["arrived", "arrival"]),
         new("state-in-progress",
             "The Driver has started the trip. Active-trip location sharing is available only while the Driver app is in the foreground and the required location permission remains granted.",
-            ["inprogress", "progress", "ride", "status"]),
+            ["inprogress", "progress"]),
         new("state-completed",
             "The trip is marked completed. The Driver can report the amount received directly from the Rider. That report is labelled Driver-reported and unverified.",
-            ["ride", "status", "payment", "received"]),
+            ["completed", "completion"]),
         new("state-cancelled",
             "The selected trip is cancelled and cannot be started. A new trip requires a fresh discovery and Driver selection.",
-            ["cancel", "ride", "status"]),
+            ["cancelled", "canceled"]),
         new("state-expired",
             "The selected-driver negotiation expired. The API reconciles the ride state and releases only the matching Driver reservation.",
-            ["expired", "negotiating", "driver"]),
+            ["expired"]),
         new("fare-negotiation",
             "The Rider and selected Driver negotiate the fare directly. TurnOva does not calculate, quote or recommend a fare. Both parties must confirm the current agreement version before the Driver starts.",
             ["fare", "price", "negotiate", "negotiated", "counter"]),
@@ -147,22 +147,22 @@ public sealed class AiAssistanceService
             ["agreement", "confirm", "version"]),
         new("direct-payment",
             "The Rider pays the Driver directly outside TurnOva. TurnOva does not collect money, operate a payment gateway or hold funds. After completion, the Driver reports the amount received; this report is unverified.",
-            ["payment", "received", "fare"]),
+            ["payment", "received", "paid", "report"]),
         new("driver-photo",
             "A Driver photo is shown to Riders only after approval by that Driver's current Union. A Union transfer resets selfie approval until the new current Union approves it.",
-            ["driver", "photo", "selfie", "union"]),
+            ["photo", "selfie"]),
         new("driver-selection",
             "Riders choose an eligible Cab Driver from approved nearby Unions. Discovery is grouped by Union and ordered by Driver-to-pickup proximity; it does not use customer-facing FIFO ranking or automatic assignment.",
-            ["driver", "cab", "pickup", "queue", "union", "selection"]),
+            ["cab", "discovery", "pickup", "proximity", "select", "selection", "union"]),
         new("reservation",
             "A selected Driver is reserved against overlapping negotiations and active rides. Cancellation or expiry releases only the reservation belonging to that exact ride.",
-            ["driver", "negotiating", "expired", "cancel"]),
+            ["overlap", "reservation", "reserved"]),
         new("queue-status",
             "Rider discovery does not use FIFO queue rank or automatic assignment. Riders see eligible approved Cab Drivers grouped by Union and ordered by pickup proximity, then select one. Whether legacy FIFO remains an internal fairness mechanism is unresolved; do not infer a customer ranking or dispatch rule from it.",
             ["queue", "queued", "fifo", "driver", "status"]),
         new("availability-status",
             "Online is one input to server-side Cab eligibility and nearby discovery; it does not guarantee that a Driver will be shown or selected. Offline means the Driver is not available for new ride discovery. Rider selection is explicit and no FIFO assignment occurs.",
-            ["online", "offline", "eligible", "availability", "driver", "status"])
+            ["online", "offline", "eligible", "availability"])
     ];
 
     private static readonly IReadOnlyDictionary<string, string> RideStateEntryIds =
@@ -355,8 +355,9 @@ public sealed class AiAssistanceService
             .Take(12)
             .ToArray();
 
-    private static HelpEntry? FindDeterministicHelpEntry(IReadOnlyList<string> keywords) =>
-        HelpEntries
+    private static HelpEntry? FindDeterministicHelpEntry(IReadOnlyList<string> keywords)
+    {
+        var ranked = HelpEntries
             .Select(entry => new
             {
                 Entry = entry,
@@ -365,8 +366,13 @@ public sealed class AiAssistanceService
             .Where(item => item.Score > 0)
             .OrderByDescending(item => item.Score)
             .ThenBy(item => item.Entry.Id, StringComparer.Ordinal)
-            .Select(item => item.Entry)
-            .FirstOrDefault();
+            .ToArray();
+
+        if (ranked.Length == 0 || (ranked.Length > 1 && ranked[0].Score == ranked[1].Score))
+            return null;
+
+        return ranked[0].Entry;
+    }
 
     private static HelpResponse UnsupportedHelp(string source) =>
         new(
