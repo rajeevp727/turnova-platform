@@ -133,7 +133,7 @@ A free-tier-first approach is intended for development. Production hosting, maps
 ## 13. Roadmap
 
 1. Finalize zone design, dispatch policy, data model and architecture.
-2. Build identity, eligibility, queue and dispatch backend foundations.
+2. Build identity, Cab eligibility, Union discovery, selected-Driver reservation and negotiation foundations.
 3. Deliver TurnOva Driver and TurnOva Rider MVP apps.
 4. Integrate realtime selected-Driver negotiation, agreement, trip lifecycle, direct-payment reporting and support.
 5. Complete automated testing, security/load testing and Hyderabad pilot.
