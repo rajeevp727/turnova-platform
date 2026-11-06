@@ -1,5 +1,3 @@
-using System.Text.Json.Serialization;
-
 namespace TurnOva.Domain.Dispatch;
 
 /// <summary>
@@ -18,19 +16,11 @@ public sealed record RideAgreementVersion(
     IReadOnlyList<string> Stops,
     string ProposedBy,
     string IdempotencyKey,
-    DateTimeOffset CreatedAtUtc)
-{
-    [JsonPropertyName("id")]
-    public string Id => $"{RideId}:v{Version:D6}";
-}
+    DateTimeOffset CreatedAtUtc);
 
 public sealed record RideAgreementConfirmation(
     string RideId,
     int Version,
     string Party,
     string ActorId,
-    DateTimeOffset ConfirmedAtUtc)
-{
-    [JsonPropertyName("id")]
-    public string Id => $"{RideId}:v{Version:D6}:confirm:{Party.ToLowerInvariant()}";
-}
+    DateTimeOffset ConfirmedAtUtc);
