@@ -11,7 +11,7 @@ import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { getFreshAccessToken } from "../shared/refreshCoordinator";
-import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession } from "../shared/sessionTokenStore";
+import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 
@@ -803,10 +803,11 @@ export default function App() {
 
   const logout = async () => {
     sessionEpoch.current += 1;
-    try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
-    catch { /* Local credentials are cleared even if the network is unavailable. */ }
-    try { await clearTokens(); }
-    catch { setError("Unable to clear secure session storage. Please retry sign-out."); return; }
+    try {
+      await logoutSession(SecureStore, async () => {
+        if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken);
+      });
+    } catch { setError("Unable to clear secure session storage. Please retry sign-out."); return; }
     setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
   };
 
