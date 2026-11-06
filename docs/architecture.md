@@ -297,3 +297,17 @@ The API exposes unauthenticated `/health/live` and `/health/ready` probes for ho
 The API is published as a standard .NET 10 application directory and hosted on a native .NET-capable platform selected during infrastructure setup. Docker and container-based deployment are explicitly excluded. Hosting secrets are supplied through the selected provider's secret store and are never committed. The API exposes `/health/live` and `/health/ready` probes.
 
 TurnOva MVP clients are native Android/iOS Expo applications, not browser SPAs. Azure Static Web Apps cannot host or distribute native binaries. SWA is documented only as an optional future static companion/API-documentation host; native app builds and distribution require EAS Build and/or the app stores.
+
+## 26. Approved Cab-only MVP business model (2026-11-06)
+
+This section supersedes the earlier four-category and customer-facing FIFO descriptions in sections 6, 17 and 23–25 for the Rider/Driver MVP.
+
+- New Rider bookings and new Driver onboarding are Cab-only. Do not destructively migrate or delete historical Scooty/Bike/Auto records; legacy records remain readable where needed for history.
+- Resolve pickup to configured service coverage, discover approved unions serving Cab, and show at most 2–3 eligible/available Cab drivers per union ordered by pickup proximity. The Rider explicitly selects a driver. Do not rank customer-facing choices by FIFO or automatically assign/advance a driver.
+- The internal role of FIFO/queue fairness remains unresolved. Preserve legacy implementation until the selected-driver flow is introduced, but do not extend it as customer-facing dispatch behaviour.
+- Rider and Driver negotiate the fare directly. Persist immutable, versioned agreement proposals/counterproposals; both parties must confirm the current version. A ride cannot start until mutual confirmation of that exact version.
+- Platform fare estimates, in-app payment gateway, escrow and payment collection are out of scope. Do not fabricate or calculate a platform quote.
+- After the trip, the Driver reports the amount received. Treat it as driver-reported/unverified, persist the agreed-minus-reported signed delta, and expose only the minimum required fields to authorised union roles. Do not imply bank/customer verification.
+- Customer dispute/confirmation handling and the next-ride policy for non-zero deltas remain product decisions; do not implement an assumed outcome.
+- Union approval controls Cab membership, vehicle verification and public selfie visibility. Existing union approval and assignment audit remain relevant; legal partnership terms and production reviewer authorization require separate review.
+
