@@ -1144,6 +1144,7 @@ public sealed class RideApiIntegrationTests
     private sealed record DriverRideHistoryItemTest(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive);
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
+    private sealed record DriverAvailabilityTest(string AvailabilityStatus);
 
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
