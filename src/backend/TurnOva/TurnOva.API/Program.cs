@@ -1789,7 +1789,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
     var isDriver = user.IsInRole("Driver") && ride?.DriverId == actorId;
     if (ride is null || string.IsNullOrWhiteSpace(actorId) || (!isRider && !isDriver))
         return Results.NotFound(new { message = "Ride agreement not found." });
-    if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived"))
+    if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived" or "InProgress"))
         return Results.Conflict(new { message = "Agreement confirmation is closed for this ride state." });
 
     var versions = ride.AgreementVersions ?? [];
@@ -1842,7 +1842,8 @@ app.MapPost("/api/v1/rides/{rideId}/start", async (
     return Results.Ok(started);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/complete", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/complete", async (
+    ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
@@ -1853,7 +1854,12 @@ app.MapPost("/api/v1/rides/{rideId}/complete", async (ClaimsPrincipal user, stri
         !confirmations.Any(item => item.Version == current.Version && item.Party == "Rider" && item.ActorId == ride.RiderId) ||
         !confirmations.Any(item => item.Version == current.Version && item.Party == "Driver" && item.ActorId == ride.DriverId))
         return Results.Conflict(new { message = "Both parties must confirm the current agreement version before completing the ride." });
-    return await TransitionRideAsync(user, rideId, "InProgress", "Completed", ct);
+    if (ride.Status != "InProgress")
+        return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to Completed." });
+    var completed = await TryTransitionAsync(ride, "Completed", ct);
+    if (completed is null) return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh and retry." });
+    await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = completed.Status }, ct);
+    return Results.Ok(completed);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
