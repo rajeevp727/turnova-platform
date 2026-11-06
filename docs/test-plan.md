@@ -54,6 +54,7 @@
 | AUTH-LOGIN-024 | Network failure during session restore | Relaunch with a complete token pair while the profile or refresh endpoint is unavailable | Preserve stored tokens and show a recoverable error; do not falsely sign out a potentially valid session | Mobile unit | P1 |
 | AUTH-LOGIN-025 | Secure token-pair write failure | Allow access-key write but fail refresh-key write | Best-effort rollback attempts deletion of both keys; no authenticated app state is accepted | Mobile unit | P1 |
 | AUTH-LOGIN-026 | Secure token deletion failure | Fail deletion of one key during logout | Attempt both deletions; surface a recoverable error and do not claim logout succeeded | Mobile unit | P1 |
+| AUTH-LOGIN-027 | Logout races an in-flight token rotation write | Pause the access-token write, begin local logout, then release the write | Storage mutations are serialized; logout clears both keys after the pending pair write and no credentials remain | Mobile unit | P0 |
 
 ## 2A. Authentication API integration contracts
 

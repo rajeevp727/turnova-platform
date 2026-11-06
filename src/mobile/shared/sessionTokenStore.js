@@ -1,7 +1,15 @@
 const ACCESS_TOKEN_KEY = "turnova.access";
 const REFRESH_TOKEN_KEY = "turnova.refresh";
+const mutationQueues = new WeakMap();
 
-async function clearSessionTokens(storage) {
+function serializeMutation(storage, operation) {
+  const previous = mutationQueues.get(storage) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(operation);
+  mutationQueues.set(storage, current.catch(() => undefined));
+  return current;
+}
+
+async function clearSessionTokensCore(storage) {
   const results = await Promise.allSettled([
     Promise.resolve().then(() => storage.deleteItemAsync(ACCESS_TOKEN_KEY)),
     Promise.resolve().then(() => storage.deleteItemAsync(REFRESH_TOKEN_KEY))
@@ -11,7 +19,11 @@ async function clearSessionTokens(storage) {
   }
 }
 
-async function saveSessionTokens(storage, tokens) {
+function clearSessionTokens(storage) {
+  return serializeMutation(storage, () => clearSessionTokensCore(storage));
+}
+
+function saveSessionTokens(storage, tokens) {
   if (
     !tokens ||
     typeof tokens.accessToken !== "string" ||
@@ -22,17 +34,19 @@ async function saveSessionTokens(storage, tokens) {
     throw new Error("Invalid session tokens.");
   }
 
-  try {
-    await storage.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken);
-    await storage.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken);
-  } catch {
+  return serializeMutation(storage, async () => {
     try {
-      await clearSessionTokens(storage);
+      await storage.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken);
+      await storage.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken);
     } catch {
-      // Preserve the save failure; callers surface a recoverable storage error.
+      try {
+        await clearSessionTokensCore(storage);
+      } catch {
+        // Preserve the save failure; callers surface a recoverable storage error.
+      }
+      throw new Error("Unable to securely save session tokens.");
     }
-    throw new Error("Unable to securely save session tokens.");
-  }
+  });
 }
 
 async function readSessionTokens(storage) {

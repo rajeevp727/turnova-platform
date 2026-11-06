@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current sequential item #2 AUTH-02: PR #75 is merged; PR #76 secure storage/restart-recovery code and tests passed latest-head CI [42310407898](https://github.com/rajeevp727/turnova-platform/actions/runs/42310407898) (26/26 shared mobile tests, 235/235 backend, both app typechecks and Android/iOS bundles). Automated review/merge remains.**
+**Current sequential item #2 AUTH-02: automated review identified a race between a token-pair write already in progress and logout clearing. PR #76 now serializes SecureStore writes/clears and adds AUTH-LOGIN-027; final-head CI is pending.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -42,7 +42,7 @@
 | # | ID | Status | Current evidence / remaining gate |
 |---:|---|---|---|
 | 1 | AUTH-01 | In progress | PR #74 merged duplicate-registration HTTP 409 and authenticated `/auth/me` profile-read tests; CI [42307569528](https://github.com/rajeevp727/turnova-platform/actions/runs/42307569528) passed 235/235 backend tests and all four jobs. Mobile runtime/session and editable profile lifecycle remain; no profile-update upstream contract is defined. |
-| 2 | AUTH-02 | In progress | PR #75 merged at `b05a62990f767064c1cf333936fe8be7ab4d7ebc`. PR #76 latest-head CI [42310407898](https://github.com/rajeevp727/turnova-platform/actions/runs/42310407898) passed 26/26 shared tests, 235/235 backend, both app typechecks, four Android/iOS bundle exports and native non-container API publish. Live TriSend and physical-device validation remain. |
+| 2 | AUTH-02 | In progress | PR #75 merged at `b05a62990f767064c1cf333936fe8be7ab4d7ebc`. PR #76 prior-head CI [42311127685](https://github.com/rajeevp727/turnova-platform/actions/runs/42311127685) passed 26/26 shared tests, 235/235 backend, both app typechecks, four Android/iOS bundle exports and native non-container API publish; AUTH-LOGIN-027 serialization regression is pending final-head CI. Live TriSend and physical-device validation remain. |
 | 3 | RIDER-01 | In progress | PR #55 merged; union-grouped Cab discovery, three-driver cap, pickup-proximity order, approved-photo gating and local Rider selection are CI-validated. Production radius, routing/provider actions, Cosmos and device gates remain. |
 | 4 | RIDER-02 | In progress | PR #56 merged at `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8`; final-head CI run [42245873224](https://github.com/rajeevp727/turnova-platform/actions/runs/42245873224) passed all four jobs. RIDER-03 supplies the selected-booking and optional-stop route snapshot connection; live Cosmos and physical-device acceptance remain. |
 | 5 | RIDER-03 | In progress | PR #57 merged at `c5ff07843365e949b70fe1d4b9753bcd88022e10`; final synchronized PR head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs green. Automated review found no unresolved critical/high-risk issue. Live Cosmos ETag/restart and Android/iOS booking/expiry acceptance remain. |

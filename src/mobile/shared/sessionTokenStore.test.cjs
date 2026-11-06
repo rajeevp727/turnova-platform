@@ -229,6 +229,32 @@ test("reports local logout failure after attempting both secure deletions", asyn
   assert.equal(storage.calls.filter(call => call[0] === "delete").length, 2);
 });
 
+test("serializes logout clearing after a token-pair write already in progress", async () => {
+  let signalAccessWriteStarted;
+  let releaseAccessWrite;
+  const accessWriteStarted = new Promise(resolve => { signalAccessWriteStarted = resolve; });
+  const blockedAccessWrite = new Promise(resolve => { releaseAccessWrite = resolve; });
+  const storage = createStorage({}, {
+    set: async key => {
+      if (key === ACCESS_TOKEN_KEY) {
+        signalAccessWriteStarted();
+        await blockedAccessWrite;
+      }
+    }
+  });
+
+  const saving = saveSessionTokens(storage, { accessToken: "access-1", refreshToken: "refresh-1" });
+  await accessWriteStarted;
+  const clearing = clearSessionTokens(storage);
+
+  assert.deepEqual(storage.calls.map(call => call[0]), ["set"]);
+  releaseAccessWrite();
+  await Promise.all([saving, clearing]);
+
+  assert.equal(storage.values.size, 0);
+  assert.deepEqual(storage.calls.map(call => call[0]), ["set", "set", "delete", "delete"]);
+});
+
 test("does not wait for an unresponsive server logout before clearing local tokens", async () => {
   const storage = createStorage({
     [ACCESS_TOKEN_KEY]: "access-1",
