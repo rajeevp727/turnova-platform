@@ -46,7 +46,7 @@ Current task: remove wildcard CORS, enforce an explicit origin allow-list, and k
 - PR #48 merged: https://github.com/rajeevp727/turnova-platform/pull/48; merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42215718229 passed backend restore/build/tests, native API publish/artifact verification, Rider/Driver Expo config/typechecks and shared auth tests.
 - TRIP-01 Rider and Driver history code is merged. The row remains In progress pending Cosmos cross-partition/RU verification, Android/iOS active-trip/device recovery and location-privacy acceptance.
 - Current PLATFORM-01 branch: `fix/platform-cors-health`. It removes wildcard CORS, accepts explicit `Cors:AllowedOrigins` origins only (HTTPS except HTTP in Development), rejects wildcard/path/query/userinfo origins, removes the duplicate `/health/ready` mapping, and adds CORS and liveness/readiness integration tests.
-- PR #49 is open: https://github.com/rajeevp727/turnova-platform/pull/49. The full eight-file diff is under review; latest-head CI is required before merge.
+- PR #49 is open: https://github.com/rajeevp727/turnova-platform/pull/49. Implementation head `5458c7c244b3621e294cef5ae1c2ad3d24c339c7` passed all four CI jobs in run https://github.com/rajeevp727/turnova-platform/actions/runs/42216452456 (backend build/tests, native API publish, Rider/Driver Expo config/typechecks and shared auth tests). A final documentation-only follow-up commit requires its own latest-head CI run before merge.
 - Remaining platform gates include Cosmos-unavailable readiness failure injection, production CORS origin configuration, secrets/logging review, metrics/traces/alerts, durable audit failure/recovery tests and load tests.
 
 ## 5. Approved supplemental requirement (not counted in the 19 rows)
@@ -55,7 +55,7 @@ Current task: remove wildcard CORS, enforce an explicit origin allow-list, and k
 
 ## 6. Next step
 
-Finish the PLATFORM-01 CORS/health slice on `fix/platform-cors-health`, add its focused PR, review the full diff, and merge only with latest-head green CI. Then continue the remaining PLATFORM-01 observability/audit/reliability gaps before RELEASE-01. Do not start a parallel feature PR.
+Finish review of PR #49 and require the latest documentation-only head to pass CI before merging. Then continue the remaining PLATFORM-01 observability/audit/reliability gaps before RELEASE-01. Do not start a parallel feature PR.
 
 ## 7. Blockers
 
