@@ -641,6 +641,74 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task CabOnlyScopeRejectsNonCabNewWorkflowsAndPreservesLegacyHistory()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "legacy-rider");
+        using var driver = factory.CreateClient("Driver", "legacy-non-cab-driver");
+        using var ops = factory.CreateClient("Rider", "legacy-union-admin");
+
+        using var nonCabRide = await rider.SendAsync(CreateRideRequest("legacy-non-cab-request", serviceClass: "auto"));
+        Assert.Equal(HttpStatusCode.BadRequest, nonCabRide.StatusCode);
+
+        using var nonCabNearby = await rider.GetAsync(
+            "/api/v1/rides/nearby?latitude=17.493&longitude=78.399&serviceClass=bike&passengers=1");
+        Assert.Equal(HttpStatusCode.BadRequest, nonCabNearby.StatusCode);
+
+        using var nonCabOnboarding = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", new
+        {
+            zoneId = "hyderabad-central",
+            fullName = "Legacy Driver",
+            phoneNumber = "+919876543210",
+            vehicleMake = "Bajaj",
+            vehicleModel = "RE",
+            vehicleRegistration = "TS09AB1234",
+            serviceClass = "scooty",
+            passengerCapacity = 2,
+            profilePhotoBase64 = "AA==",
+            documents = new[] { new { documentType = "DrivingLicence", storageReference = "private/licence" } }
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, nonCabOnboarding.StatusCode);
+
+        using var nonCabUnion = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "Legacy Union",
+                code = "LEGACY",
+                location = "Hyderabad",
+                managerName = "Union Manager",
+                managerPhone = "+919876543210",
+                zoneIds = new[] { "hyderabad-central" },
+                serviceClasses = new[] { "auto" }
+            })
+        };
+        nonCabUnion.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        Assert.Equal(HttpStatusCode.BadRequest, (await ops.SendAsync(nonCabUnion)).StatusCode);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles["legacy-non-cab-driver"] = profiles["legacy-non-cab-driver"] with { ServiceClass = "auto" };
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.Conflict, online.StatusCode);
+        var availability = await driver.GetFromJsonAsync<DriverAvailabilityTest>("/api/v1/driver/availability");
+        Assert.NotNull(availability);
+        Assert.Equal("Offline", availability.AvailabilityStatus);
+
+        var requestedAt = DateTimeOffset.UtcNow.AddDays(-30);
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides["legacy-auto-ride"] = new DemoRide(
+            "legacy-auto-ride", "Old pickup", "Old dropoff", 1, "Completed", requestedAt,
+            85m, "legacy-rider", "legacy-non-cab-driver", 17.493, 78.399, null, null,
+            requestedAt.AddMinutes(8), requestedAt.AddMinutes(9), false, "auto", "hyderabad-central");
+
+        var history = await rider.GetFromJsonAsync<List<RiderRideHistoryItemTest>>("/api/v1/rides/mine");
+        Assert.NotNull(history);
+        var legacyRide = Assert.Single(history, item => item.RideId == "legacy-auto-ride");
+        Assert.Equal("auto", legacyRide.ServiceClass);
+    }
+
+    [Fact]
     public async Task RideRequestRejectsPickupOutsideConfiguredZones()
     {
         using var factory = new TurnOvaApiFactory();
