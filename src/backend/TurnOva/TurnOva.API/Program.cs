@@ -996,33 +996,54 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
     if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 300)
         return Results.BadRequest(new { message = "A transfer/assignment reason of 1–300 characters is required." });
-    var profile = await FindDriverProfileAsync(driverId, ct);
-    if (profile is null) return Results.NotFound(new { message = "Driver onboarding profile not found." });
-    if (profile.Status != "Approved") return Results.Conflict(new { message = "Only approved drivers can be assigned to a union." });
-    if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
-        return Results.Conflict(new { message = "Only Cab drivers can receive new MVP Union assignments. Legacy non-Cab membership records are retained for history." });
-    if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
-        return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
-    var union = await FindUnionAsync(request.UnionId, ct);
-    if (union is null) return Results.NotFound(new { message = "Union not found." });
-    if (union.Status != "Active") return Results.Conflict(new { message = "Drivers can only be assigned to an active union." });
-    if (!union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase) ||
-        !union.ServiceClasses.Contains(profile.ServiceClass, StringComparer.OrdinalIgnoreCase))
-        return Results.Conflict(new { message = "The union does not support this driver's approved zone and service class." });
 
-    var previous = await FindUnionAssignmentAsync(driverId, ct);
-    if (previous?.UnionId == union.UnionId && previous.Status == "Active")
-        return Results.Conflict(new { message = "The driver is already assigned to this union." });
+    // Membership changes share the same per-driver exclusive lease as selected bookings.
+    // This closes the check-then-transfer race: either a ride or a transfer owns the lease,
+    // never both. The bounded technical lease is not a customer negotiation policy.
+    if (await HasActiveDriverRideAsync(driverId, ct))
+        return Results.Conflict(new { message = "A Driver with an active selected negotiation or ride cannot be transferred between Unions." });
 
-    var now = DateTimeOffset.UtcNow;
-    var assignment = new DriverUnionAssignment(driverId, union.UnionId, union.Name, "Active",
-        previous?.AssignedAtUtc ?? now, now, request.Reason.Trim());
-    await SaveUnionAssignmentAsync(assignment, ct);
-    await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
-        previous?.UnionId, previous?.UnionName, union.UnionId, union.Name,
-        previous is null ? "Assigned" : "Transferred", request.Reason.Trim(),
-        context.User.Identity?.Name ?? "Operations", now), ct);
-    return Results.Ok(assignment);
+    var transferLeaseId = $"UNION-TRANSFER-{Guid.NewGuid():N}";
+    if (!await driverRideReservations.TryAcquireTemporaryAsync(
+        driverId, transferLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct))
+        return Results.Conflict(new { message = "The Driver is already reserved by a booking, ride or Union membership change. Retry after it is resolved." });
+
+    try
+    {
+        // Re-read all membership inputs while holding the exclusive per-driver lease.
+        var profile = await FindDriverProfileAsync(driverId, ct);
+        if (profile is null) return Results.NotFound(new { message = "Driver onboarding profile not found." });
+        if (profile.Status != "Approved") return Results.Conflict(new { message = "Only approved drivers can be assigned to a union." });
+        if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "Only Cab drivers can receive new MVP Union assignments. Legacy non-Cab membership records are retained for history." });
+        if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
+            return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
+
+        var union = await FindUnionAsync(request.UnionId, ct);
+        if (union is null) return Results.NotFound(new { message = "Union not found." });
+        if (union.Status != "Active") return Results.Conflict(new { message = "Drivers can only be assigned to an active union." });
+        if (!union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase) ||
+            !union.ServiceClasses.Contains(profile.ServiceClass, StringComparer.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "The union does not support this driver's approved zone and service class." });
+
+        var previous = await FindUnionAssignmentAsync(driverId, ct);
+        if (previous?.UnionId == union.UnionId && previous.Status == "Active")
+            return Results.Conflict(new { message = "The driver is already assigned to this union." });
+
+        var now = DateTimeOffset.UtcNow;
+        var assignment = new DriverUnionAssignment(driverId, union.UnionId, union.Name, "Active",
+            previous?.AssignedAtUtc ?? now, now, request.Reason.Trim());
+        await SaveUnionAssignmentAsync(assignment, ct);
+        await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
+            previous?.UnionId, previous?.UnionName, union.UnionId, union.Name,
+            previous is null ? "Assigned" : "Transferred", request.Reason.Trim(),
+            context.User.Identity?.Name ?? "Operations", now), ct);
+        return Results.Ok(assignment);
+    }
+    finally
+    {
+        await driverRideReservations.TryReleaseAsync(driverId, transferLeaseId, CancellationToken.None);
+    }
 });
 
 app.MapGet("/api/v1/ops/drivers/{driverId}/union-history", async (
