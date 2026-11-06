@@ -64,14 +64,14 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - PR #57 merged sequential #5 RIDER-03 at `c5ff07843365e949b70fe1d4b9753bcd88022e10`; final synchronized PR head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs green. It adds durable selected-driver bookings, route/Union snapshots, idempotent create-if-absent persistence, per-driver temporary/permanent reservation lifecycle, safe expiry/cancel/decline/completion release, Union-transfer exclusion and Driver reconnect recovery. Automated reviews [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440) found no unresolved critical/high-risk issue.
 - Sequential #6 DISPATCH-01 is implemented in PR #55 and its independent regression work merged in PR #58 at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs. Automated review comment [6690682769](https://github.com/rajeevp727/turnova-platform/pull/58#issuecomment-6690682769) found no unresolved critical/high-risk issue. Production radius/zone approval, live Cosmos query/index and Android/iOS pickup-zone acceptance remain blockers.
 - Sequential #7 DISPATCH-02 is implemented in PR #55/RIDER-03: union grouping, up-to-three cap, pickup-distance then DriverId ordering, explicit Rider selection and no FIFO dependency. PR #59 merged at `508a789246cec1a9452651c62fa08aa3908140a4`; final-head CI run `42259580145` passed all four jobs.
-- PR #61 merged sequential #9 DISPATCH-04 regression coverage at `118929955d3959f078ddb59f7f5bdf3c3965d52a`; automated review found no unresolved critical/high-risk issue and final-head CI run `42262634978` passed all four jobs.
+- PR #61 merged sequential #9 DISPATCH-04 regression coverage at `118929955d3959f078ddb59f7f5bdf3c3965d52a`; automated review found no unresolved critical/high-risk issue. Later job-log inspection found CI run `42262634978` did not execute the backend test project because Release solution mappings were missing; test evidence is pending PR #64.
 
 ## Highest-priority unfinished work
 
 1. **#6 DISPATCH-01 — Blocked:** PR #55 implementation and PR #58 regression coverage are independent of the missing decision. Resume final verification only after product approval of the production pickup radius and zone boundaries, plus live Cosmos and Android/iOS pickup-zone evidence.
 2. **#7 DISPATCH-02 — Implementation audit recorded:** PR #55/RIDER-03 implement the per-union cap, pickup-proximity ordering, explicit selection and no-FIFO Rider path; PR #59 adds an equal-distance deterministic tie-break regression. Live Cosmos/device evidence and the internal FIFO role decision remain, so the acceptance row stays In progress.
 3. **#8 DISPATCH-03 / #9 DISPATCH-04:** selected negotiation expiry/idempotency and no-overlap protections are implemented and covered by in-memory/API tests, including PR #61's accepted-active-ride Union-transfer guard. Live Cosmos restart/ETag contention remains external.
-4. **#10 REALTIME-01 — Implementation audit recorded:** PR #63 fixes Rider reconnect state restoration, tests authenticated hub group ownership and role-specific active-state selection, and passes CI run `42267819480` all four jobs. Physical Android/iOS WebSocket/reconnect acceptance remains outstanding.
+4. **#10 REALTIME-01 — Code audit recorded:** PR #63 fixes Rider reconnect state restoration; mobile typechecks/shared Node tests passed. Backend hub tests were added but not executed by the prior CI workflow; PR #64 repairs that CI gap. Physical Android/iOS WebSocket/reconnect acceptance remains outstanding.
 5. **#11 DRIVER-01 — Current:** audit Cab-only Driver onboarding, identity/licence/Cab vehicle verification, Union approval and union-approved selfie visibility; implement only missing vertical-slice work.
 6. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
 7. **CAB-UNION-01, remaining support/platform/release areas, and AI-01 supplemental:** complete only after the agreed 19-area sequence; keep AI-01 outside the denominator.
@@ -231,7 +231,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 
 
 ## CAB-SCOPE-01 implementation and legacy action hardening
-- PR #52 merged Cab-only new-workflow validation and historical data retention. Post-merge CI run 42223126817 passed backend build/tests, native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile auth tests.
+- PR #52 merged Cab-only new-workflow validation and historical data retention. Post-merge CI run 42223126817 was green at workflow level and validated native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile auth tests; backend test execution is not valid until PR #64 corrects the Release solution mappings.
 - PR #53 merged legacy non-Cab selfie replacement/approval, location, queue-read, pending-offer, rejection and timeout guards; the Driver app suppresses legacy-profile queue/offer polling and SignalR subscriptions while retaining read-only history and Offline cleanup.
 - PR #54 merged documentation reconciliation at `7dd1aedf56fdc9ef36b6b04add952d78687a4266`; latest-head CI run 42234802360 passed backend, Rider app, Driver app and shared mobile-auth jobs.
 - PR #53 merge commit: `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run `42232390997` passed all four jobs. This is CI validation, not physical-device or production acceptance.
@@ -258,7 +258,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 
 ## DISPATCH-04 accepted-ride transfer audit (2026-11-06)
 
-- PR #61 merged at `118929955d3959f078ddb59f7f5bdf3c3965d52a` after an automated review found no unresolved critical/high-risk issue and final-head CI run [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) passed all four jobs.
+- PR #61 merged at `118929955d3959f078ddb59f7f5bdf3c3965d52a` after an automated review found no unresolved critical/high-risk issue. CI run [42262634978](https://github.com/rajeevp727/turnova-platform/actions/runs/42262634978) was green at workflow level, but backend test execution was a no-op because Release solution mappings were missing.
 - `UnionTransferIsBlockedWhileDriverHasAcceptedActiveRide` verifies a Rider-selected Cab booking proceeds through proposal, both confirmations and Driver acceptance; the permanent per-driver reservation remains held; transfer to another Union returns conflict; the original membership and reservation remain unchanged.
 - The test is in-memory/API integration evidence. Live Cosmos multi-instance contention, ETag conflict behaviour under real service, process restart/crash recovery and approved negotiation-lifetime configuration remain unverified.
 - PR #63 completes the #10 REALTIME-01 code/test audit; physical Android/iOS delivery and reconnect acceptance remain external. Sequential next item: #11 DRIVER-01.
@@ -269,6 +269,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #63 fixes the Rider's stale-state gap after a SignalR disconnect: initial connection and reconnect now reload owner-scoped ride history/current ride details and agreement versions. Rider status/location/agreement callbacks are guarded after cleanup. Driver reconnect continues to reload available requests and authoritative selected/active/terminal history.
 - A shared role-specific active-ride selector is used by Rider and Driver. Automated tests cover Rider and Driver active states, terminal-only history clearing and invalid roles.
 - `RideTrackingHubTests` verifies Rider and assigned Driver can join only their own ride group, and a Driver can subscribe only to their own selected-booking notification group.
-- PR #63 head `d51acc55093f71efec190b10ba85b8cc738f985c` passed CI run [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480), all four jobs. This includes backend tests and native non-container publish, both mobile app config/typechecks, and shared Node tests.
+- PR #63 head `d51acc55093f71efec190b10ba85b8cc738f985c` passed workflow-level CI run [42267819480](https://github.com/rajeevp727/turnova-platform/actions/runs/42267819480): native non-container API publish, both mobile app config/typechecks and shared Node tests passed. Backend test execution was a no-op because Release solution mappings were missing; PR #64 will rerun the tests.
 - Physical Android/iOS WebSocket delivery/reconnect, background/resume and device-to-device trip updates remain external acceptance gates. No production or device readiness is claimed.
 - Next sequential work: #11 DRIVER-01.
+
+
+## CI backend-test execution correction (2026-11-06)
+
+- Inspected GitHub Actions logs for PR #61 run `42262634978` and PR #63 runs `42267819480` and `42268079249`. `TurnOva.sln` lacked Release project configuration mappings. `dotnet build` emitted `MSB4121`; `dotnet test` exited successfully without any test-run summary or test execution. Previous workflow-level green status must not be represented as backend test evidence.
+- PR #64 fixes Release mappings for all solution projects, runs `TurnOva.Tests.csproj` explicitly, emits a TRX result and fails when zero tests execute. Re-run the complete backend suite before relying on prior API test claims.
+- #11 DRIVER-01 remains the current acceptance item; finish this verification correction first, then continue the Driver onboarding/RBAC audit.

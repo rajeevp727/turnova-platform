@@ -107,9 +107,9 @@ public sealed class RideApiIntegrationTests
 
         var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.OK, online.StatusCode);
-        var joined = await driver.PostAsJsonAsync("/api/v1/queues/join",
-            new { zoneId = "hyderabad-central", serviceClass = "cab" });
-        Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
+        var eligible = await factory.Services.GetRequiredService<IQueueStore>()
+            .GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
+        Assert.Contains(eligible, entry => entry.DriverId == "driver-onboarding-pending");
 
         var wrongZone = await driver.PostAsJsonAsync("/api/v1/queues/join",
             new { zoneId = "hyderabad-north", serviceClass = "cab" });
@@ -520,6 +520,7 @@ public sealed class RideApiIntegrationTests
 
     private static object ValidOnboardingRequest(string serviceClass = "cab") => new
     {
+        profilePhotoBase64 = "/9j/2Q==",
         zoneId = "hyderabad-central",
         fullName = "Test Driver",
         phoneNumber = "+919876543210",
@@ -544,6 +545,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-decline-test");
         using var driver = factory.CreateClient("Driver", "driver-decline-test");
+        await EnqueueLegacyDriverAsync(factory, "driver-decline-test");
         var ride = await CreateRideAsync(rider, "request-driver-decline-001");
 
         Assert.Equal(HttpStatusCode.NoContent,
@@ -568,9 +570,8 @@ public sealed class RideApiIntegrationTests
         using var firstDriver = factory.CreateClient("Driver", "driver-fifo-first");
         using var secondDriver = factory.CreateClient("Driver", "driver-fifo-second");
         var queue = factory.Services.GetRequiredService<IQueueStore>();
-        var joinedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
-        await queue.AddAsync(new DriverQueueEntry("driver-fifo-first", "hyderabad-central", "cab", joinedAt, 0, true), CancellationToken.None);
-        await queue.AddAsync(new DriverQueueEntry("driver-fifo-second", "hyderabad-central", "cab", joinedAt.AddMinutes(1), 0, true), CancellationToken.None);
+        await EnqueueLegacyDriverAsync(factory, "driver-fifo-first");
+        await EnqueueLegacyDriverAsync(factory, "driver-fifo-second");
 
         var ride = await CreateRideAsync(rider, "request-fifo-reject-001");
         Assert.Equal(HttpStatusCode.NoContent,
@@ -678,11 +679,11 @@ public sealed class RideApiIntegrationTests
         using var rider = factory.CreateClient("Rider", "rider-idempotency");
         using var firstRequest = CreateRideRequest("request-idempotency-001");
 
-        var firstResponse = await rider.PostAsync("/api/v1/rides/request", firstRequest);
+        var firstResponse = await rider.SendAsync(firstRequest);
         var firstRide = await ReadRideAsync(firstResponse);
 
         using var retryRequest = CreateRideRequest("request-idempotency-001");
-        var retryResponse = await rider.PostAsync("/api/v1/rides/request", retryRequest);
+        var retryResponse = await rider.SendAsync(retryRequest);
         var retryRide = await ReadRideAsync(retryResponse);
 
         Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
@@ -697,10 +698,11 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-lifecycle");
         using var driver = factory.CreateClient("Driver", "driver-lifecycle");
+        await EnqueueLegacyDriverAsync(factory, "driver-lifecycle");
         var ride = await CreateRideAsync(rider, "request-lifecycle-001");
 
         var invalidStart = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/start", null);
-        Assert.Equal(HttpStatusCode.Conflict, invalidStart.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, invalidStart.StatusCode);
 
         var accepted = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
@@ -731,6 +733,8 @@ public sealed class RideApiIntegrationTests
         using var otherRider = factory.CreateClient("Rider", "rider-other");
         using var driver = factory.CreateClient("Driver", "driver-assigned");
         using var otherDriver = factory.CreateClient("Driver", "driver-other");
+        await EnqueueLegacyDriverAsync(factory, "driver-assigned");
+        SetLegacyDriverOnline(factory, "driver-other");
         var ride = await CreateRideAsync(rider, "request-ownership-001");
 
         Assert.Equal(HttpStatusCode.NotFound,
@@ -751,6 +755,8 @@ public sealed class RideApiIntegrationTests
         using var rider = factory.CreateClient("Rider", "rider-concurrency");
         using var firstDriver = factory.CreateClient("Driver", "driver-race-a");
         using var secondDriver = factory.CreateClient("Driver", "driver-race-b");
+        await EnqueueLegacyDriverAsync(factory, "driver-race-a");
+        await EnqueueLegacyDriverAsync(factory, "driver-race-b");
         var ride = await CreateRideAsync(rider, "request-concurrency-001");
 
         var results = await Task.WhenAll(
@@ -767,6 +773,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-cancel-before");
         using var driver = factory.CreateClient("Driver", "driver-cancel-before");
+        await EnqueueLegacyDriverAsync(factory, "driver-cancel-before");
         var cancelBefore = await CreateRideAsync(rider, "request-cancel-before-001");
         await driver.PostAsync($"/api/v1/rides/{cancelBefore.RideId}/accept", null);
 
@@ -903,11 +910,11 @@ public sealed class RideApiIntegrationTests
 
         using var requestWithoutKey = CreateRideRequest(null);
         Assert.Equal(HttpStatusCode.BadRequest,
-            (await rider.PostAsync("/api/v1/rides/request", requestWithoutKey)).StatusCode);
+            (await rider.SendAsync(requestWithoutKey)).StatusCode);
 
         using var driverRequest = CreateRideRequest("driver-must-not-book-001");
         Assert.Equal(HttpStatusCode.Forbidden,
-            (await driver.PostAsync("/api/v1/rides/request", driverRequest)).StatusCode);
+            (await driver.SendAsync(driverRequest)).StatusCode);
     }
 
     [Fact]
@@ -1095,8 +1102,8 @@ public sealed class RideApiIntegrationTests
 
     [Theory]
     [InlineData(null)]
-    [InlineData(0)]
-    [InlineData(-1)]
+    [InlineData(0d)]
+    [InlineData(-1d)]
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]
     public async Task RiderDiscoveryFailsClosedWhenNearbyRadiusIsMissingOrInvalid(double? radiusKm)
@@ -1116,7 +1123,7 @@ public sealed class RideApiIntegrationTests
         using var rider = factory.CreateClient("Rider", "rider-fifo-disabled");
 
         using var request = CreateRideRequest("legacy-fifo-disabled-001");
-        using var response = await rider.PostAsync("/api/v1/rides/request", request);
+        using var response = await rider.SendAsync(request);
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
@@ -1471,6 +1478,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "transfer-active-rider");
         using var ops = factory.CreateClient("Rider", "transfer-active-ops");
+        using var driver = factory.CreateClient("Driver", "transfer-active-driver");
         SeedBookableDriver(factory, "transfer-active-driver", "transfer-active-union");
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -1619,6 +1627,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "discovery-expiry-rider");
+        using var driver = factory.CreateClient("Driver", "discovery-expiry-driver");
         SeedBookableDriver(factory, "discovery-expiry-driver", "discovery-expiry-union");
 
         using var request = CreateSelectedBookingRequest("discovery-expiry-key", "discovery-expiry-driver",
@@ -2049,6 +2058,28 @@ public sealed class RideApiIntegrationTests
                 17.493, 78.399, null, null, now, null, false, "cab", "hyderabad-central");
     }
 
+    private static void SetLegacyDriverOnline(TurnOvaApiFactory factory, string driverId)
+    {
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        if (!profiles.TryGetValue(driverId, out var profile))
+            throw new InvalidOperationException($"Test driver profile '{driverId}' was not created.");
+        profiles[driverId] = profile with
+        {
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static async Task EnqueueLegacyDriverAsync(TurnOvaApiFactory factory, string driverId)
+    {
+        SetLegacyDriverOnline(factory, driverId);
+        await factory.Services.GetRequiredService<IQueueStore>().AddAsync(
+            new DriverQueueEntry(driverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true),
+            CancellationToken.None);
+    }
+
     private static HttpRequestMessage CreateRideRequest(
         string? idempotencyKey,
         int passengers = 1,
@@ -2077,7 +2108,7 @@ public sealed class RideApiIntegrationTests
 
     private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key)
     {
-        using var response = await rider.PostAsync("/api/v1/rides/request", CreateRideRequest(key));
+        using var response = await rider.SendAsync(CreateRideRequest(key));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return await ReadRideAsync(response);
     }
@@ -2142,8 +2173,15 @@ public sealed class RideApiIntegrationTests
                 profiles[subject] = new DriverOnboardingProfile(
                     subject, subject, "hyderabad-central", "Approved Test Driver", "+919876543210",
                     "Maruti", "Dzire", "TS09AB1234", "cab", 3,
-                    [new DriverDocumentReference("DrivingLicence", "test/licence")],
-                    "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+                    [
+                        new DriverDocumentReference("DrivingLicence", "test/licence", "Approved"),
+                        new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+                    ],
+                    "Approved", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+                    ProfilePhotoBase64: "/9j/2Q==",
+                    ProfilePhotoContentType: "image/jpeg",
+                    ProfilePhotoCapturedAtUtc: DateTimeOffset.UtcNow,
+                    ProfilePhotoApprovalStatus: "Approved");
             }
             return client;
         }
