@@ -43,6 +43,7 @@
 - Weighted progress: **36.8%** = `(Verified × 1 + In progress × 0.5 + Not started × 0 + Blocked × 0) ÷ 19` = `(0 + 7 + 0 + 0) ÷ 19`.
 - Strict fully verified count: **0 / 19**. A weighted score is not a claim that the MVP is accepted or production-ready.
 - PR #47 merged at `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; its latest head `1c08b96e78bef42c175b29593de153a151382f96` passed all four jobs in CI run 42214516012. The Rider history feature is now merged; real Cosmos cross-partition/RU verification remains open.
+- PR #48 merged at `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final head `2b19856b02b4722cd76cfb04459c01afb6a4e3ab` passed all four jobs in CI run 42215718229. Rider and Driver history code is merged; TRIP-01 remains In progress pending Cosmos/device acceptance.
 - Main CI run 42209834591 passed backend build/tests, native non-container API publish/artifact verification, both mobile Expo config/typechecks and shared mobile auth tests. This remains automated CI evidence, not Android/iOS physical-device or provider acceptance proof.
 - Do not mark an area Verified until all evidence in its row has passed and the links/results are recorded.
 
