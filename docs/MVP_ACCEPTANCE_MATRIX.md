@@ -91,3 +91,26 @@ The MVP API is validated through a native .NET 10 publish artifact. Docker, cont
 ## Audit limitations
 
 This audit reflects main after PR #48 merge `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`, the PRD, README, test plan and current source inventory. It is not a substitute for executing Cosmos integration tests, provider sandbox tests or physical-device acceptance. Keep the matrix current in every feature PR.
+
+
+## Approved Cab-only business-model reconciliation (2026-11-06)
+
+This clarification supersedes conflicting legacy row descriptions without changing the 19-row denominator. Cab is the only supported new MVP service category. Reject Scooty/Bike/Auto in new workflows; preserve historical records safely.
+
+- RIDER-01 / DISPATCH-01: pickup-based approved-union discovery and customer-selected Cab drivers; maximum 2–3 eligible, approved, available drivers per union, ordered by pickup proximity. No FIFO ranking/automatic Rider assignment.
+- RIDER-02: platform fare estimate is explicitly not required. Direct negotiation and mutual agreement are tracked as CAB-AGREEMENT-01.
+- RIDER-03 / DISPATCH-04 / REALTIME-01: include negotiation reservation/expiry, mutual-agreement start gate, immutable agreement versions and Cab ride lifecycle.
+- DRIVER-01 / DRIVER-02: Cab-only onboarding, verified vehicle, union-approved selfie visibility and availability/location eligibility.
+- RIDER-04: in-app payment gateway/escrow/collection is out of scope. Driver-reported direct-payment reconciliation is CAB-RECON-01.
+- DRIVER-03: work-metrics PDF is not monetary earnings. Do not invent compensation, commission or payout policy.
+
+### Approved supplemental acceptance requirements (not counted in 19)
+| ID | Acceptance requirement | Status |
+|---|---|---|
+| CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | Not verified |
+| CAB-DISCOVERY-01 | Approved nearby unions; max 2–3 eligible drivers per union; pickup proximity ordering; customer selection | Not verified |
+| CAB-AGREEMENT-01 | Direct negotiation; durable immutable versioned agreement; both confirm; no start without current mutual confirmation | Not verified |
+| CAB-RECON-01 | Driver-reported/unverified amount, signed delta, authorised union visibility and audit | Not verified |
+| CAB-UNION-01 | Approved membership, Cab/vehicle verification, union selfie approval and least-privilege oversight | Partially evidenced; end-to-end pending |
+
+Unresolved: internal FIFO role; customer dispute/confirmation; non-zero-delta next-ride policy; cancellation policy; legal partnership/T&C review. Do not invent decisions. Re-audit code before recalculating progress; documentation alignment does not verify features.
