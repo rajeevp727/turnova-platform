@@ -138,11 +138,7 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
-    builder.Services.AddSingleton<ICosmosMigration, RideAgreementsMigration>();
     builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
-    builder.Services.AddSingleton<IRideAgreementStore>(sp => new CosmosRideAgreementStore(
-        sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideAgreementVersions"),
-        sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideAgreementConfirmations")));
     builder.Services.AddSingleton<IRideOfferStore>(sp =>
         new CosmosRideOfferStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideOffers")));
     builder.Services.AddSingleton<CosmosMigrationRunner>();
@@ -165,7 +161,6 @@ else
     builder.Services.AddSingleton<IQueueStore>(queueStore);
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
-    builder.Services.AddSingleton<IRideAgreementStore, InMemoryRideAgreementStore>();
 }
 
 builder.Services.AddSingleton<IRideOfferAdvancer>(sp => new RideOfferAdvancer(
@@ -223,7 +218,6 @@ var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRid
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
 Container? rideContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null;
 var driverRideReservations = app.Services.GetRequiredService<IDriverRideReservationStore>();
-var rideAgreements = app.Services.GetRequiredService<IRideAgreementStore>();
 Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
 Container? driverContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null;
 var driverProfiles = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -1692,21 +1686,18 @@ app.MapGet("/api/v1/rides/{rideId}/agreements", async (ClaimsPrincipal user, str
           (user.IsInRole("Driver") && ride.DriverId == actorId)))
         return Results.NotFound(new { message = "Ride agreement not found." });
 
-    var versions = await rideAgreements.GetVersionsAsync(rideId, ct);
-    var history = new List<object>();
-    foreach (var version in versions)
+    var versions = ride.AgreementVersions ?? [];
+    var confirmations = ride.AgreementConfirmations ?? [];
+    return Results.Ok(versions.OrderBy(item => item.Version).Select(version => new
     {
-        var confirmations = await rideAgreements.GetConfirmationsAsync(rideId, version.Version, ct);
-        history.Add(new
-        {
-            version.RideId, version.Version, version.RiderId, version.DriverId, version.UnionId,
-            version.Amount, version.Currency, version.Pickup, version.Dropoff, version.Stops,
-            version.ProposedBy, version.CreatedAtUtc,
-            RiderConfirmed = confirmations.Any(item => item.Party == "Rider" && item.ActorId == version.RiderId),
-            DriverConfirmed = confirmations.Any(item => item.Party == "Driver" && item.ActorId == version.DriverId)
-        });
-    }
-    return Results.Ok(history);
+        version.RideId, version.Version, version.RiderId, version.DriverId, version.UnionId,
+        version.Amount, version.Currency, version.Pickup, version.Dropoff, version.Stops,
+        version.ProposedBy, version.CreatedAtUtc,
+        RiderConfirmed = confirmations.Any(item => item.Version == version.Version &&
+            item.Party == "Rider" && item.ActorId == version.RiderId),
+        DriverConfirmed = confirmations.Any(item => item.Version == version.Version &&
+            item.Party == "Driver" && item.ActorId == version.DriverId)
+    }));
 }).RequireAuthorization();
 
 app.MapPost("/api/v1/rides/{rideId}/agreements", async (
@@ -1740,24 +1731,30 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
         !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
         return Results.Conflict(new { message = "The selected Driver or Union is not eligible for Cab negotiation." });
 
-    var existingVersions = await rideAgreements.GetVersionsAsync(rideId, ct);
-    var retry = existingVersions.FirstOrDefault(item => item.IdempotencyKey == idempotencyKey);
+    var versions = ride.AgreementVersions ?? [];
+    var retry = versions.FirstOrDefault(item => item.IdempotencyKey == idempotencyKey);
     if (retry is not null)
     {
-        var retryConfirmations = await rideAgreements.GetConfirmationsAsync(rideId, retry.Version, ct);
+        var confirmations = ride.AgreementConfirmations ?? [];
         return Results.Ok(new
         {
-            agreement = retry, riderConfirmed = retryConfirmations.Any(item => item.Party == "Rider"),
-            driverConfirmed = retryConfirmations.Any(item => item.Party == "Driver")
+            agreement = retry,
+            riderConfirmed = confirmations.Any(item => item.Version == retry.Version && item.Party == "Rider"),
+            driverConfirmed = confirmations.Any(item => item.Version == retry.Version && item.Party == "Driver")
         });
     }
 
     var version = new RideAgreementVersion(
-        rideId, (existingVersions.LastOrDefault()?.Version ?? 0) + 1,
+        rideId, (versions.LastOrDefault()?.Version ?? 0) + 1,
         ride.RiderId, ride.DriverId!, assignment.UnionId, request.Amount, request.Currency,
         ride.Pickup, ride.Dropoff, [], isRider ? "Rider" : "Driver", idempotencyKey, DateTimeOffset.UtcNow);
-    if (!await rideAgreements.TryCreateVersionAsync(version, ct))
-        return Results.Conflict(new { message = "Another proposal was saved concurrently. Refresh the agreement history and retry with a new idempotency key." });
+    var updated = ride with
+    {
+        AgreementVersions = [.. versions, version],
+        AgreementStateRevision = ride.AgreementStateRevision + 1
+    };
+    if (!await TryReplaceRideAsync(ride, updated, ct))
+        return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh the agreement history and retry with a new idempotency key." });
 
     await hub.Clients.Group(rideId).SendAsync("RideAgreementChanged", new { rideId, version = version.Version }, ct);
     return Results.Created($"/api/v1/rides/{rideId}/agreements", new
@@ -1778,16 +1775,31 @@ app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
     if (ride.Status is not ("Selected" or "Negotiating" or "Accepted" or "Arrived"))
         return Results.Conflict(new { message = "Agreement confirmation is closed for this ride state." });
 
-    var versions = await rideAgreements.GetVersionsAsync(rideId, ct);
+    var versions = ride.AgreementVersions ?? [];
     var current = versions.LastOrDefault();
     if (current is null || current.Version != version)
         return Results.Conflict(new { message = "Only the current agreement version can be confirmed." });
+
     var party = isRider ? "Rider" : "Driver";
-    await rideAgreements.TryCreateConfirmationAsync(
-        new RideAgreementConfirmation(rideId, version, party, actorId, DateTimeOffset.UtcNow), ct);
-    var confirmations = await rideAgreements.GetConfirmationsAsync(rideId, version, ct);
-    var riderConfirmed = confirmations.Any(item => item.Party == "Rider" && item.ActorId == ride.RiderId);
-    var driverConfirmed = confirmations.Any(item => item.Party == "Driver" && item.ActorId == ride.DriverId);
+    var confirmations = ride.AgreementConfirmations ?? [];
+    var existing = confirmations.FirstOrDefault(item => item.Version == version && item.Party == party);
+    if (existing is not null && existing.ActorId != actorId)
+        return Results.Conflict(new { message = "This agreement party has already been confirmed by a different account." });
+    if (existing is null)
+    {
+        var confirmation = new RideAgreementConfirmation(rideId, version, party, actorId, DateTimeOffset.UtcNow);
+        var updated = ride with
+        {
+            AgreementConfirmations = [.. confirmations, confirmation],
+            AgreementStateRevision = ride.AgreementStateRevision + 1
+        };
+        if (!await TryReplaceRideAsync(ride, updated, ct))
+            return Results.Conflict(new { message = "Agreement changed concurrently. Refresh and confirm the current version." });
+        confirmations = updated.AgreementConfirmations!;
+    }
+
+    var riderConfirmed = confirmations.Any(item => item.Version == version && item.Party == "Rider" && item.ActorId == ride.RiderId);
+    var driverConfirmed = confirmations.Any(item => item.Version == version && item.Party == "Driver" && item.ActorId == ride.DriverId);
     await hub.Clients.Group(rideId).SendAsync("RideAgreementChanged",
         new { rideId, version, riderConfirmed, driverConfirmed }, ct);
     return Results.Ok(new { rideId, version, riderConfirmed, driverConfirmed, mutuallyConfirmed = riderConfirmed && driverConfirmed });
@@ -1799,15 +1811,18 @@ app.MapPost("/api/v1/rides/{rideId}/start", async (
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
-    var versions = await rideAgreements.GetVersionsAsync(rideId, ct);
-    var current = versions.LastOrDefault();
-    if (current is null)
-        return Results.Conflict(new { message = "Both Rider and Driver must confirm a current fare agreement before the ride can start." });
-    var confirmations = await rideAgreements.GetConfirmationsAsync(rideId, current.Version, ct);
-    if (!confirmations.Any(item => item.Party == "Rider" && item.ActorId == ride.RiderId) ||
-        !confirmations.Any(item => item.Party == "Driver" && item.ActorId == ride.DriverId))
+    var current = (ride.AgreementVersions ?? []).LastOrDefault();
+    var confirmations = ride.AgreementConfirmations ?? [];
+    if (current is null ||
+        !confirmations.Any(item => item.Version == current.Version && item.Party == "Rider" && item.ActorId == ride.RiderId) ||
+        !confirmations.Any(item => item.Version == current.Version && item.Party == "Driver" && item.ActorId == ride.DriverId))
         return Results.Conflict(new { message = "Both Rider and Driver must confirm the current agreement version before the ride can start." });
-    return await TransitionRideAsync(user, rideId, "Arrived", "InProgress", ct);
+    if (ride.Status != "Arrived")
+        return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to InProgress." });
+    var started = await TryTransitionAsync(ride, "InProgress", ct);
+    if (started is null) return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh and retry." });
+    await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = started.Status }, ct);
+    return Results.Ok(started);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/rides/{rideId}/complete", (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
@@ -1861,7 +1876,8 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
     try
     {
         var response = await rideContainer.ReadItemAsync<DemoRide>(current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
-        if (response.Resource.Status != current.Status || response.Resource.DriverId != current.DriverId)
+        if (response.Resource.Status != current.Status || response.Resource.DriverId != current.DriverId ||
+            response.Resource.AgreementStateRevision != current.AgreementStateRevision)
             return false;
         await rideContainer.ReplaceItemAsync(updated, current.RideId, new PartitionKey(current.RideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
@@ -1978,7 +1994,7 @@ public sealed record PasswordLoginRequest(string Email, string Password, bool Re
 public sealed record RefreshTokenRequest(string RefreshToken);
 public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
-    string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "cab", string DispatchZoneId = "hyderabad-central");
+    string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "cab", string DispatchZoneId = "hyderabad-central", IReadOnlyList<RideAgreementVersion>? AgreementVersions = null, IReadOnlyList<RideAgreementConfirmation>? AgreementConfirmations = null, int AgreementStateRevision = 0);
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 
