@@ -109,7 +109,7 @@ This clarification supersedes conflicting legacy row descriptions without changi
 ### Approved supplemental acceptance requirements (not counted in 19)
 | ID | Acceptance requirement | Status |
 |---|---|---|
-| CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | Implemented and CI-validated for covered API/mobile paths — PR #52/#53 merged; PR #53 final-head CI run 42232390997 passed all four jobs. Physical-device/production acceptance remains. |
+| CAB-SCOPE-01 | Cab-only new Rider/Driver/Union/API workflows; reject Scooty/Bike/Auto; preserve legacy records | Cab-only guards and historical record preservation are implemented in PR #52/#53. Their workflow runs were green for publish/mobile checks, but backend test execution is not valid until PR #64 fixes the missing Release solution mappings. Physical-device/production acceptance remains. |
 | CAB-DISCOVERY-01 | Approved nearby unions; max 2–3 eligible drivers per union; pickup proximity ordering; customer selection | In progress — PR #55 implements server grouping/eligibility/cap/order/photo privacy and Rider local card selection; CI run 42237256233 passed all four jobs. Durable reservation/booking and production radius/device gates remain |
 | CAB-AGREEMENT-01 | Direct negotiation; durable immutable versioned agreement; both confirm; no start without current mutual confirmation | In progress — PR #56 implements API/mobile proposal and confirmation controls, append-only terms/confirmation history and start/completion gates; booking integration, optional stops and device/Cosmos validation remain. |
 | CAB-RECON-01 | Driver-reported/unverified amount, signed delta, authorised union visibility and audit | Not verified |
