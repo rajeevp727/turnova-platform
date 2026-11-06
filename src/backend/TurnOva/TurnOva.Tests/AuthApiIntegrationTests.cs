@@ -58,6 +58,73 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task DuplicateRegistrationPreservesTriSendConflictWithoutReturningTokens()
+    {
+        var callCount = 0;
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/auth/register", request.Path);
+            Assert.Equal("rider@example.com", request.Body.GetProperty("email").GetString());
+            Assert.Equal("Rider", request.Body.GetProperty("role").GetString());
+            Assert.Equal("turnova", request.Body.GetProperty("appId").GetString());
+
+            if (Interlocked.Increment(ref callCount) == 1)
+            {
+                return Task.FromResult(JsonResponse(HttpStatusCode.Created,
+                    """{"accessToken":"first-access","refreshToken":"first-refresh","user":{"role":"Rider"}}"""));
+            }
+
+            return Task.FromResult(JsonResponse(HttpStatusCode.Conflict,
+                """{"message":"Email already registered."}"""));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        var payload = new { email = "Rider@example.com", password = "StrongPassword!123", name = "Existing Rider" };
+
+        using var first = await client.PostAsJsonAsync("/api/v1/auth/rider/register", payload);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        using var second = await client.PostAsJsonAsync("/api/v1/auth/rider/register", payload);
+
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        var body = await second.Content.ReadAsStringAsync();
+        Assert.Contains("Email already registered.", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("accessToken", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("refreshToken", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task MeEndpointReturnsUpstreamProfileAndForwardsBearerToken()
+    {
+        const string accessToken = "rider-profile-access-token";
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/auth/me", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK,
+                """{"id":"rider-1","email":"rider@example.com","name":"Rider","role":"Rider"}"""));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var profileBody = await response.Content.ReadAsStringAsync();
+        using var profile = JsonDocument.Parse(profileBody);
+        Assert.Equal("rider-1", profile.RootElement.GetProperty("id").GetString());
+        Assert.Equal("Rider", profile.RootElement.GetProperty("role").GetString());
+        Assert.DoesNotContain("accessToken", profileBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("refreshToken", profileBody, StringComparison.OrdinalIgnoreCase);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("GET", request.Method);
+        Assert.Equal("Bearer", request.AuthorizationScheme);
+        Assert.Equal(accessToken, request.AuthorizationParameter);
+    }
+
+    [Fact]
     public async Task RegistrationWithMissingCredentialsDoesNotCallTriSend()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("TriSend must not be called."));

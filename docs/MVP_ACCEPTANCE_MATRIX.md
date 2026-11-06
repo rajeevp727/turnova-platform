@@ -2,7 +2,7 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Source of truth:** `PRD.md`, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; `docs/test-plan.md`.
-**Last audited:** 2026-11-07 against main after PR #72 merge `43cb52f4652990d1ddc88efb765f8fef72ec0753`. PR #72 final head `6a025a19d61427a1ed8eb3ec10f5640ab5646fcd` passed CI [42303396400](https://github.com/rajeevp727/turnova-platform/actions/runs/42303396400), all four jobs: 214/214 backend tests, TRX execution guard, native non-container API publish, Rider/Driver Android+iOS production bundle exports, Metro shared-module assertions, Expo config/typechecks, shared mobile tests and three artifacts. Automated review [6697233888](https://github.com/rajeevp727/turnova-platform/pull/72#issuecomment-6697233888) found no unresolved critical/high-risk issue.
+**Last audited:** 2026-11-07 against main after PR #73 merge `3a2e37e610e8660fa8ecca1a3e1f42e8899251ff`. PR #73 final-head CI [42306913746](https://github.com/rajeevp727/turnova-platform/actions/runs/42306913746) passed all four jobs: 233/233 backend tests, TRX guard, native non-container API publish, Rider/Driver Android+iOS production bundle exports, Metro assertions, both app typechecks, shared mobile tests and artifacts. Automated review [6697690613](https://github.com/rajeevp727/turnova-platform/pull/73#issuecomment-6697690613) found no unresolved critical/high-risk issue.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.
 
 ## Status definitions
@@ -16,7 +16,7 @@
 
 | ID | In-scope acceptance criterion | Implementation evidence currently known | Evidence still required | Status |
 |---|---|---|---|---|
-| AUTH-01 | Rider and Driver registration, login, profile and role separation | PR #35 fake-TriSend API integration tests; PR #39 JWT signature/issuer/audience/expiry and Rider/Driver role-boundary integration tests; PR #40 startup JWT/TriSend HTTPS configuration guards | Duplicate-registration contract and mobile runtime/session tests; end-to-end profile lifecycle | In progress |
+| AUTH-01 | Rider and Driver registration, login, profile and role separation | PRs #35, #39 and #40 cover fake-TriSend registration, JWT validation/role boundaries and startup guards; PR #74 adds duplicate-registration 409 and authenticated `/auth/me` profile-read integration tests. | Mobile runtime/session tests and editable profile lifecycle remain. No upstream profile-update endpoint/field contract is specified, so do not invent one. | In progress |
 | AUTH-02 | Secure access/refresh-token lifecycle and logout | Both apps use SecureStore; PR #37 serializes concurrent refreshes; PR #41 extracts and tests the shared single-flight refresh coordinator and retry-after-failure behaviour | Automated token rotation/reuse, app restart, expiry, logout and secure-storage failure tests on both apps | In progress |
 | RIDER-01 | Cab-only pickup/drop-off selection, location permission and union-grouped nearby Cab discovery | PR #45 zone/capacity/freshness groundwork; PRs #52/#53 Cab-only and legacy guards; PR #55 adds union-grouped discovery and Rider local selection cards | Approved production radius, call/chat provider actions, live Cosmos multi-instance validation and Android/iOS device tests | In progress |
 | RIDER-02 | Direct Rider/Driver fare negotiation and mutually confirmed agreement before ride start; no platform fare estimate | PR #56 adds authenticated proposal/counterproposal APIs, immutable agreement versions, append-only confirmations, idempotency, SignalR events and mutual-confirmation gates; PR #57 connects selected booking and optional-stop agreement snapshots. | PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including agreement version/confirmation tests; native API publish and mobile checks passed. Live Cosmos ETag/multi-instance and Android/iOS device acceptance remain. | In progress |
@@ -55,7 +55,7 @@
 
 | ID | Scope | Status | Evidence / remaining work |
 |---|---|---|---|
-| AI-01 | Provider-agnostic, privacy-safe, bounded Rider/Driver AI assistance: Rider trip-intent draft for human review and approved FAQ/ride/queue-state explanations with escalation. AI must not book, charge, set fares, approve KYC, alter eligibility/FIFO or change ride state. | In progress — current focused branch adds the Application service/provider contract, disabled-by-default provider placeholder, locally parsed route draft, approved-content help classifier with ambiguous-state escalation, Rider trip-draft UI, Rider/Driver help UI and per-caller API rate limiting. | Unit/API tests cover redaction, provider output validation, timeout/cancellation, fallback, Rider-only drafting, Rider/Driver help, queue/availability explanations, escalation and rate limits. Final-head CI [42306708252](https://github.com/rajeevp727/turnova-platform/actions/runs/42306708252) passed all four jobs: 233/233 backend tests, TRX execution guard, native non-container API publish/artifact verification, Rider/Driver Expo config/typechecks, Android+iOS production JavaScript bundle exports, Metro checks and shared mobile tests/artifacts. Automated review/merge are pending. Live provider sandbox and managed-secret validation remain external gates. |
+| AI-01 | Provider-agnostic, privacy-safe, bounded Rider/Driver AI assistance: Rider trip-intent draft for human review and approved FAQ/ride/queue-state explanations with escalation. AI must not book, charge, set fares, approve KYC, alter eligibility/FIFO or change ride state. | In progress — PR #73 merged at `3a2e37e610e8660fa8ecca1a3e1f42e8899251ff`; code and CI are verified. | Final-head CI [42306913746](https://github.com/rajeevp727/turnova-platform/actions/runs/42306913746): 233/233 backend tests and all four API/mobile jobs passed. Automated review [6697690613](https://github.com/rajeevp727/turnova-platform/pull/73#issuecomment-6697690613) found no unresolved critical/high-risk issue. Live provider sandbox and managed-secret validation remain external gates. |
 
 ## Ordered 1–19 checklist
 
@@ -81,10 +81,11 @@
 
 ## Highest-priority next work
 
-1. **Current sequential AI-01 supplemental requirement:** finish the provider-agnostic Rider trip-intent and approved-help boundary, run final-head CI, complete automated review and merge only when all required checks pass. Keep AI-01 outside the 19-row denominator.
-2. **#17 SUPPORT-01 remains Blocked:** Rider support categories, escalation owner and operating process are not approved. Do not invent them.
-3. **#19 RELEASE-01 remains In progress:** PR #72 verifies production JavaScript bundles, not native signed APK/AAB/IPA or physical-device acceptance.
-4. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
+1. **Current sequential #1 AUTH-01:** complete duplicate-registration conflict and authenticated `/auth/me` profile-read contract tests, then re-audit the remaining profile lifecycle gap without inventing an upstream update contract.
+2. **Next:** #2 AUTH-02 — inspect refresh rotation/reuse, app restart, expiry, logout and SecureStore failure tests; implement the next missing token-lifecycle vertical slice.
+3. **#17 SUPPORT-01 remains Blocked:** Rider support categories, escalation owner and operating process are not approved. Do not invent them.
+4. **#19 RELEASE-01 remains In progress:** PR #72 verifies production JavaScript bundles, not native signed APK/AAB/IPA or physical-device acceptance.
+5. Revisit blocked DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
 
 ## Deployment constraint
 
