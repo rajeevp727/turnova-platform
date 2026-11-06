@@ -108,9 +108,9 @@ public sealed class AiAssistanceService
     private static readonly HashSet<string> SafeHelpWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "agreement", "arrived", "cancel", "cab", "confirm", "counter", "driver",
-        "expired", "fare", "help", "inprogress", "negotiate", "negotiating",
+        "expired", "fare", "help", "inprogress", "progress", "negotiate", "negotiated", "negotiating",
         "payment", "photo", "pickup", "price", "queue", "received", "ride",
-        "selfie", "status", "trip", "union", "version"
+        "selection", "selfie", "status", "trip", "union", "version"
     };
 
     private static readonly IReadOnlyList<HelpEntry> HelpEntries =
@@ -129,7 +129,7 @@ public sealed class AiAssistanceService
             ["arrived", "pickup", "driver"]),
         new("state-in-progress",
             "The Driver has started the trip. Active-trip location sharing is available only while the Driver app is in the foreground and the required location permission remains granted.",
-            ["inprogress", "ride", "status"]),
+            ["inprogress", "progress", "ride", "status"]),
         new("state-completed",
             "The trip is marked completed. The Driver can report the amount received directly from the Rider. That report is labelled Driver-reported and unverified.",
             ["ride", "status", "payment", "received"]),
@@ -141,7 +141,7 @@ public sealed class AiAssistanceService
             ["expired", "negotiating", "driver"]),
         new("fare-negotiation",
             "The Rider and selected Driver negotiate the fare directly. TurnOva does not calculate, quote or recommend a fare. Both parties must confirm the current agreement version before the Driver starts.",
-            ["fare", "price", "negotiate", "counter"]),
+            ["fare", "price", "negotiate", "negotiated", "counter"]),
         new("agreement-version",
             "A fare or route change creates a new immutable agreement version. The previous version remains in history, and both Rider and Driver must confirm the new current version.",
             ["agreement", "confirm", "version"]),
@@ -153,7 +153,7 @@ public sealed class AiAssistanceService
             ["driver", "photo", "selfie", "union"]),
         new("driver-selection",
             "Riders choose an eligible Cab Driver from approved nearby Unions. Discovery is grouped by Union and ordered by Driver-to-pickup proximity; it does not use customer-facing FIFO ranking or automatic assignment.",
-            ["driver", "cab", "pickup", "queue", "union"]),
+            ["driver", "cab", "pickup", "queue", "union", "selection"]),
         new("reservation",
             "A selected Driver is reserved against overlapping negotiations and active rides. Cancellation or expiry releases only the reservation belonging to that exact ride.",
             ["driver", "negotiating", "expired", "cancel"])
