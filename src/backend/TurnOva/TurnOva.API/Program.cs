@@ -1114,6 +1114,13 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
         (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 300))
         return Results.BadRequest(new { message = "A rejection reason of 1–300 characters is required." });
 
+    // Authorize against the current assignment before acquiring any per-driver lease.
+    // This prevents a manager from another Union from reserving an unrelated Driver ID.
+    var assignment = await FindUnionAssignmentAsync(driverId, ct);
+    if (assignment is null || assignment.Status != "Active" ||
+        !IsUnionManagerFor(user, assignment.UnionId))
+        return Results.NotFound(new { message = "Driver is not an active member of a union managed by this account." });
+
     // Serialize selfie review with membership transfer and selected-driver reservations.
     // The lease is technical only; no customer-facing queue or ride policy is introduced.
     var reviewLeaseId = $"UNION-SELFIE-REVIEW-{Guid.NewGuid():N}";
@@ -1123,7 +1130,9 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
 
     try
     {
-        var assignment = await FindUnionAssignmentAsync(driverId, ct);
+        // Re-read and re-authorize while holding the lease so a completed transfer cannot
+        // leave a stale UnionManager able to approve the previous Union's selfie.
+        assignment = await FindUnionAssignmentAsync(driverId, ct);
         if (assignment is null || assignment.Status != "Active" ||
             !IsUnionManagerFor(user, assignment.UnionId))
             return Results.NotFound(new { message = "Driver is not an active member of a union managed by this account." });
