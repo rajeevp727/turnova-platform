@@ -226,14 +226,6 @@ async Task<DriverMonthlyPayslip?> FindPayslipAsync(string driverId, string paysl
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
-async Task<bool> HasActiveRideAsync(Container container, QueryDefinition query, CancellationToken ct)
-{
-    using var iterator = container.GetItemQueryIterator<DemoRide>(query, requestOptions: new QueryRequestOptions { MaxItemCount = 1 });
-    while (iterator.HasMoreResults)
-        if ((await iterator.ReadNextAsync(ct)).Count > 0) return true;
-    return false;
-}
-
 async Task SavePayslipIfAbsentAsync(DriverMonthlyPayslip payslip, CancellationToken ct)
 {
     if (payslipContainer is null)
@@ -407,40 +399,6 @@ async Task<bool> TryUpdateDriverProfileAsync(
     return false;
 }
 
-async Task<IReadOnlyList<DriverOnboardingProfile>> GetOnlineDriverProfilesAsync(
-    string zoneId, string serviceClass, int passengers, CancellationToken ct)
-{
-    if (driverContainer is null)
-    {
-        return driverProfiles.Values.Where(profile =>
-            profile.Status == "Approved" &&
-            profile.AvailabilityStatus == "Online" &&
-            profile.ZoneId == zoneId &&
-            profile.ServiceClass == serviceClass &&
-            profile.PassengerCapacity >= passengers &&
-            profile.CurrentLatitude is not null &&
-            profile.CurrentLongitude is not null &&
-            profile.LocationUpdatedAtUtc is not null).ToArray();
-    }
-
-    var query = new QueryDefinition(
-        "SELECT * FROM c WHERE c.status = @status AND c.availabilityStatus = @availabilityStatus " +
-        "AND c.zoneId = @zoneId AND c.serviceClass = @serviceClass " +
-        "AND c.passengerCapacity >= @passengers AND IS_DEFINED(c.currentLatitude) " +
-        "AND IS_DEFINED(c.currentLongitude) AND IS_DEFINED(c.locationUpdatedAtUtc)")
-        .WithParameter("@status", "Approved")
-        .WithParameter("@availabilityStatus", "Online")
-        .WithParameter("@zoneId", zoneId)
-        .WithParameter("@serviceClass", serviceClass)
-        .WithParameter("@passengers", passengers);
-
-    var profiles = new List<DriverOnboardingProfile>();
-    using var iterator = driverContainer.GetItemQueryIterator<DriverOnboardingProfile>(query);
-    while (iterator.HasMoreResults)
-        profiles.AddRange(await iterator.ReadNextAsync(ct));
-    return profiles;
-}
-
 async Task<DriverOnboardingProfile?> GetApprovedDriverProfileAsync(string driverId, CancellationToken ct)
 {
     var profile = await FindDriverProfileAsync(driverId, ct);
@@ -460,34 +418,8 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
-async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct)
-{
-    var query = new QueryDefinition(
-        "SELECT TOP 1 * FROM c WHERE c.driverId = @driverId AND c.status IN ('Accepted', 'Arrived', 'InProgress')")
-        .WithParameter("@driverId", driverId);
-    return rideContainer is null
-        ? rides.Values.Any(ride => ride.DriverId == driverId && (ride.Status is "Accepted" or "Arrived" or "InProgress"))
-        : await HasActiveRideAsync(rideContainer, query, ct);
-}
-
-async Task<HashSet<string>> GetActiveDriverIdsAsync(CancellationToken ct)
-{
-    if (rideContainer is null)
-        return rides.Values
-            .Where(ride => ride.DriverId is not null && (ride.Status is "Accepted" or "Arrived" or "InProgress"))
-            .Select(ride => ride.DriverId!)
-            .ToHashSet(StringComparer.Ordinal);
-
-    var query = new QueryDefinition(
-        "SELECT DISTINCT VALUE c.driverId FROM c WHERE IS_DEFINED(c.driverId) " +
-        "AND NOT IS_NULL(c.driverId) AND c.status IN ('Accepted', 'Arrived', 'InProgress')");
-    var driverIds = new HashSet<string>(StringComparer.Ordinal);
-    using var iterator = rideContainer.GetItemQueryIterator<string>(query);
-    while (iterator.HasMoreResults)
-        foreach (var activeDriverId in await iterator.ReadNextAsync(ct))
-            driverIds.Add(activeDriverId);
-    return driverIds;
-}
+async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct) =>
+    await driverRideReservations.HasActiveAsync(driverId, ct);
 
 string? ResolveDispatchZone(double latitude, double longitude)
 {
@@ -1224,32 +1156,33 @@ app.MapGet("/api/v1/rides/nearby", async (
         return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
 
     var queue = await queueService.GetPositionedQueueAsync(zoneId, normalizedServiceClass, ct);
-    var queuedDriverIds = queue.Select(entry => entry.DriverId).ToHashSet(StringComparer.Ordinal);
     var maxAgeSeconds = Math.Clamp(
         app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds") ?? 120, 30, 600);
     var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds);
-    var profiles = await GetOnlineDriverProfilesAsync(zoneId, normalizedServiceClass, passengers, ct);
-    var activeDriverIds = await GetActiveDriverIdsAsync(ct);
+    var vehicles = new List<NearbyVehicleResponse>();
 
-    var vehicles = profiles
-        .Where(profile => queuedDriverIds.Contains(profile.DriverId) &&
-            !activeDriverIds.Contains(profile.DriverId) &&
-            profile.LocationUpdatedAtUtc is { } locationUpdatedAt && locationUpdatedAt >= freshAfter &&
-            profile.CurrentLatitude is not null &&
-            profile.CurrentLongitude is not null)
-        .Select(profile => new
-        {
-            vehicleMake = profile.VehicleMake,
-            vehicleModel = profile.VehicleModel,
-            serviceClass = profile.ServiceClass,
-            passengerCapacity = profile.PassengerCapacity,
-            distanceKm = Math.Round(CalculateDistanceKm(
-                latitude, longitude, profile.CurrentLatitude!.Value, profile.CurrentLongitude!.Value), 1),
-        })
-        .OrderBy(vehicle => vehicle.distanceKm)
-        .ToArray();
+    foreach (var entry in queue)
+    {
+        var profile = await GetApprovedDriverProfileAsync(entry.DriverId, ct);
+        if (profile is null || profile.AvailabilityStatus != "Online" ||
+            !string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(profile.ServiceClass, normalizedServiceClass, StringComparison.OrdinalIgnoreCase) ||
+            profile.PassengerCapacity < passengers ||
+            profile.LocationUpdatedAtUtc is null || profile.LocationUpdatedAtUtc.Value < freshAfter ||
+            profile.CurrentLatitude is null || profile.CurrentLongitude is null ||
+            await driverRideReservations.HasActiveAsync(entry.DriverId, ct))
+            continue;
 
-    return Results.Ok(vehicles);
+        vehicles.Add(new NearbyVehicleResponse(
+            profile.VehicleMake,
+            profile.VehicleModel,
+            profile.ServiceClass,
+            profile.PassengerCapacity,
+            Math.Round(CalculateDistanceKm(
+                latitude, longitude, profile.CurrentLatitude.Value, profile.CurrentLongitude.Value), 1)));
+    }
+
+    return Results.Ok(vehicles.OrderBy(vehicle => vehicle.DistanceKm).ToArray());
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal user, CreateRideRequest request, QueueService queueService, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
@@ -1659,6 +1592,7 @@ public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "auto");
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
 public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude);
+public sealed record NearbyVehicleResponse(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
