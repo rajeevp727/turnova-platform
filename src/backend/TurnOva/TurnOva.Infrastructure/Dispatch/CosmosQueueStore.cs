@@ -128,7 +128,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     {
         var key = QueueKey(zoneId, serviceClass);
         var query = new QueryDefinition(
-                "SELECT * FROM c WHERE c.zoneServiceKey = @key AND c.documentType = @documentType ORDER BY c.occurredAtUtc DESC, c.eventId DESC")
+                "SELECT * FROM c WHERE c.zoneServiceKey = @key AND c.documentType = @documentType ORDER BY c.occurredAtUtc DESC")
             .WithParameter("@key", key)
             .WithParameter("@documentType", "queue-audit");
         using var iterator = queueContainer.GetItemQueryIterator<QueueAuditEvent>(
