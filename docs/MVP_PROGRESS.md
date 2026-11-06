@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**#16 RIDER-04: Implement immutable Driver-reported direct-payment reconciliation after completed Cab rides, expose the report only to the assigned Driver and claim-scoped UnionManager, and verify signed delta, idempotency and privacy.**
+**#18 PLATFORM-01: Add a bounded Cosmos storage readiness probe; verify dependency failures/timeouts return a generic 503 while liveness remains independent and caller cancellation is preserved.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -22,6 +22,7 @@
 - PR #67 merged at `213832f7f1e6f4eaa5ea3fdabf099c7b63e18979`; verified PR head `125f3f5ae58d1debdf4c453a9f67b0625643ef4e` passed CI [42286793305](https://github.com/rajeevp727/turnova-platform/actions/runs/42286793305), all four jobs: **193/193 backend tests**, TRX non-zero guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and six shared mobile tests passed.
 - PR #68 merged at `1a545048fee86111a7c55724275d93a1458e90f3`; final PR head `0d7331aa2a93d1fa61862bf56710bd31290d9c3f` passed CI [42290510329](https://github.com/rajeevp727/turnova-platform/actions/runs/42290510329), all four jobs: **195/195 backend tests**, TRX non-zero guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and **9 shared mobile tests**. Automated review comment [6695007160](https://github.com/rajeevp727/turnova-platform/pull/68#issuecomment-6695007160) found no unresolved critical/high-risk issue; live Cosmos and physical-device gates remain.
 - PR #69 merged at `70738af97d17cb8be715410898138d3e2f10f1cf`; final head `047564de5e4d07ee2ca34fe92e87ce1aed29d9b6` passed CI [42291337082](https://github.com/rajeevp727/turnova-platform/actions/runs/42291337082), all four jobs: 196/196 backend tests, TRX guard, native non-container API publish/artifact, Rider/Driver Expo config/typechecks and nine shared tests. Android/iOS payslip document tests and live Cosmos snapshot/recovery remain.
+- PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; final PR head `55cbe53a044f5f1abed9096973cbc0aad06b83a6` passed CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210), all four jobs: 210/210 backend tests, native non-container API publish, both mobile config/typechecks and nine shared mobile tests. Automated review [6695955311](https://github.com/rajeevp727/turnova-platform/pull/70#issuecomment-6695955311) found no unresolved critical/high-risk issue.
 
 ## 2. Overall MVP completion
 
@@ -51,13 +52,14 @@
 | 13 | TRIP-01 | In progress | PR #68 merged at `1a545048fee86111a7c55724275d93a1458e90f3`; final PR head `0d7331aa2a93d1fa61862bf56710bd31290d9c3f` passed CI [42290510329](https://github.com/rajeevp727/turnova-platform/actions/runs/42290510329): 195/195 backend tests, non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos and Android/iOS physical-device acceptance remain. |
 | 14 | DRIVER-03 | In progress | PR #69 merged at `70738af97d17cb8be715410898138d3e2f10f1cf`; final-head CI [42291337082](https://github.com/rajeevp727/turnova-platform/actions/runs/42291337082) passed 196/196 backend tests, non-container API publish, both mobile typechecks and nine shared tests. Android/iOS PDF save/share/accessibility and live Cosmos snapshot/recovery remain. |
 | 15 | DRIVER-04 | Blocked | Driver support categories, escalation owner and operational process are not approved. |
-| 16 | RIDER-04 | In progress | PR #70 code head `d73dc0c76528ca95fff39a5d38a5512b1720b941` passed CI [42295719183](https://github.com/rajeevp727/turnova-platform/actions/runs/42295719183): 210/210 backend tests, non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history device acceptance remain. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved. Ratings are not an explicit PRD acceptance criterion. |
+| 16 | RIDER-04 | In progress | PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed 210/210 backend tests, native non-container API publish, both mobile typechecks and nine shared tests. Live Cosmos ETag/restart and Android/iOS report-entry/history remain; customer dispute and non-zero-delta next-ride policy remain unresolved. |
 | 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting categories, escalation owner, process, API/UI, audit and device acceptance remain. |
-| 18 | PLATFORM-01 | In progress | PR #49 CORS/health and PR #51 queue audit/safe exception response merged; durable exception audit, metrics/traces/alerts, Cosmos failure/recovery and load gates remain. |
+| 18 | PLATFORM-01 | In progress | PR [#71](https://github.com/rajeevp727/turnova-platform/pull/71) adds bounded storage readiness and deterministic failure/timeout/cancellation tests; final-head CI pending. Live Cosmos, broader audit, telemetry and load gates remain. |
 | 19 | RELEASE-01 | In progress | CI validates backend, native API publish, Expo config/typechecks and shared auth tests; Android/iOS production builds, signed artifacts and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
 
+- PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; final head `55cbe53a044f5f1abed9096973cbc0aad06b83a6` passed CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210), all four jobs including 210/210 backend tests, non-container API publish, Rider/Driver typechecks and nine shared tests. Automated review [6695955311](https://github.com/rajeevp727/turnova-platform/pull/70#issuecomment-6695955311) found no unresolved critical/high-risk issue.
 - PR #58 merged sequential #6 DISPATCH-01 at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs. Automated review comment [6690682769](https://github.com/rajeevp727/turnova-platform/pull/58#issuecomment-6690682769) found no unresolved critical/high-risk issue.
 - PR #59 merged sequential #7 DISPATCH-02; final-head CI [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs.
 - PR #61 merged sequential #9 DISPATCH-04 regression coverage; automated review found no unresolved critical/high-risk issue. PR #64 final-head CI [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) executed 189/189 backend tests, including the accepted-active-ride/Union-transfer regression.
@@ -99,10 +101,12 @@
 
 ## 7. Next steps
 
-1. Current sequential #16 RIDER-04: complete the immutable Driver-reported payment reconciliation vertical slice, run final-head backend/mobile CI, review the full diff and merge only when all required checks are green.
-2. #15 DRIVER-04 remains Blocked because Driver support categories, escalation owner and operational process are unapproved; no support workflow is invented. After #16, inspect #17 SUPPORT-01 and preserve its blocker if Rider support categories/owner/process remain unapproved.
-3. Continue #18 PLATFORM-01 and #19 RELEASE-01 only after #17 is audited; keep the 19-row denominator and approved AI-01 supplemental tracking unchanged.
-4. Keep customer dispute/confirmation, non-zero-delta next-ride policy, internal FIFO role, legal partnership terms, provider configuration and physical-device gates explicit; do not invent decisions.
+1. **Current sequential #18 PLATFORM-01:** bounded storage readiness probe with generic 503 on dependency failure/timeout, independent liveness, and caller-cancellation propagation.
+2. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved. Do not invent a support workflow.
+3. **#19 RELEASE-01 — next:** audit Android/iOS native build, signing and pilot-readiness evidence after PLATFORM-01.
+4. Keep #15 DRIVER-04 Blocked until Driver support categories, escalation owner and operational process are approved.
+5. Revisit #6 DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
+6. AI-01 remains a separately approved supplemental requirement outside the 19-row denominator and is still Not started.
 
 ## 8. DISPATCH-03 audit handoff (2026-11-06)
 
@@ -168,3 +172,13 @@
 - Weighted progress remains **42.1%**: 0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. The 19-area denominator is unchanged.
 
 - Approved supplemental **CAB-RECON-01 is In progress in PR #70** and remains outside the 19-area denominator; AI-01 remains separately Not started.
+
+
+## PLATFORM-01 bounded storage readiness increment (2026-11-07)
+
+- Focused PR: [#71](https://github.com/rajeevp727/turnova-platform/pull/71), current sequential item #18. The branch is awaiting final-head CI; no test result is claimed until that run completes.
+- Main baseline for this sequential slice is PR #70 merge `17c489eac64dc0f99e881a1474147b2f79fe2aac`; PR #70 CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210) passed all four jobs and 210/210 backend tests.
+- The API's liveness endpoint remains process-only. Readiness now delegates to a storage probe with a three-second bound: in-memory mode completes locally; Cosmos mode performs a database metadata read.
+- Dependency failure and the probe's own timeout map to a generic 503. Caller cancellation propagates. Logs contain only a failure-kind label, not Cosmos SDK diagnostics or endpoint details.
+- Deterministic integration/unit tests cover the failure isolation, timeout mapping and caller-cancellation behavior. No live Cosmos result is claimed.
+- Next: finish the PR review and CI on this branch, merge only if final-head checks pass, then inspect #19 RELEASE-01. #17 SUPPORT-01 remains Blocked pending approved support categories/process/owner.

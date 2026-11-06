@@ -766,3 +766,15 @@ Union reviewer tokens require a signed `role=UnionManager` claim and one or more
 - PR #64 merged at `c90699d8fd5e9140d2daccbced106075d86118bb`.
 - Final-head CI run [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) passed all four jobs. The backend Release job executed **189/189 tests**, the TRX non-zero guard passed, and the native non-container API publish/artifact check succeeded.
 - Rider and Driver Expo config/typechecks and shared mobile state/refresh tests passed. This restores automated backend evidence for the prior dispatch, agreement and realtime tests; it does not replace live Cosmos, identity-provider, Android/iOS physical-device or production gates.
+
+
+## PLATFORM-01 — bounded storage readiness
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| PLATFORM-HEALTH-001 | API runs in demo in-memory mode | Liveness and readiness return HTTP 200; readiness identifies demo storage mode | `HealthEndpointsExposeLivenessAndCosmosAwareReadiness` | P0 |
+| PLATFORM-HEALTH-002 | Storage dependency probe fails | Readiness returns generic HTTP 503 while liveness remains HTTP 200; response omits provider exception details | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
+| PLATFORM-HEALTH-003 | Storage probe exceeds its configured bound | Probe cancels after three seconds in production wiring; unit test verifies timeout maps to a readiness failure | `CheckAsyncMapsProbeTimeoutToReadinessFailure` | P0 |
+| PLATFORM-HEALTH-004 | Caller cancels the readiness request | Request cancellation propagates and is not misreported as a dependency timeout | `CheckAsyncPropagatesCallerCancellation` | P1 |
+
+The automated failure-path test uses a deterministic fake probe. It does not claim live Cosmos availability or Cosmos SDK timeout validation; those remain infrastructure gates.

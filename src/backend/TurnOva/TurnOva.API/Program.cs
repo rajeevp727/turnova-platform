@@ -189,6 +189,25 @@ else
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
 }
 
+builder.Services.AddSingleton<StorageReadinessProbe>(sp =>
+{
+    Func<CancellationToken, Task> storageProbe;
+    if (useCosmos)
+    {
+        storageProbe = async ct =>
+        {
+            await sp.GetRequiredService<CosmosClient>()
+                .GetDatabase(databaseName).ReadAsync(cancellationToken: ct);
+        };
+    }
+    else
+    {
+        storageProbe = _ => Task.CompletedTask;
+    }
+
+    return new StorageReadinessProbe(storageProbe, TimeSpan.FromSeconds(3));
+});
+
 builder.Services.AddSingleton<IRideOfferAdvancer>(sp => new RideOfferAdvancer(
     sp.GetRequiredService<IRideOfferStore>(), sp.GetRequiredService<IQueueStore>(),
     sp.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>(),
@@ -647,22 +666,24 @@ app.MapGet("/health", () => Results.Ok(new
     database = useCosmos ? databaseName : null
 }));
 
-app.MapGet("/health/ready", async (CancellationToken ct) =>
+app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, CancellationToken ct) =>
 {
-    if (!useCosmos)
-        return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode });
-
     try
     {
-        await app.Services.GetRequiredService<CosmosClient>()
-            .GetDatabase(databaseName).ReadAsync(cancellationToken: ct);
+        await storageReadiness.CheckAsync(ct);
+        if (!useCosmos)
+            return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode });
+
         return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode, database = databaseName });
     }
-    catch (CosmosException ex)
+    catch (StorageReadinessException ex)
     {
-        app.Logger.LogWarning(ex, "Cosmos DB readiness check failed.");
+        // Keep diagnostics useful without exposing Cosmos endpoints or SDK diagnostics.
+        app.Logger.LogWarning(
+            "Storage readiness check failed. FailureKind {FailureKind}",
+            ex.FailureKind);
         return Results.Problem(
-            "The configured Cosmos DB database is not reachable.",
+            "The configured storage dependency is not reachable.",
             statusCode: StatusCodes.Status503ServiceUnavailable,
             title: "Storage dependency unavailable");
     }
