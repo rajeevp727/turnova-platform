@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135` (PR #48)
+**Current main HEAD:** `67621e02b00d823b84d8d5e3f74f199c283fa3e7` (PR #49)
 
 ## Product in one line
 Mobile-first ride-hailing platform where eligible drivers receive rides fairly through zone + vehicle-class FIFO queues.
@@ -53,12 +53,13 @@ Mobile-first ride-hailing platform where eligible drivers receive rides fairly t
 - PR #46 merged: 16-way concurrent duplicate queue-join test; CI run 42209694545 passed.
 - PR #47 merged: authenticated Rider-owned trip history, Activity restore/history, safe no-fare placeholder, stale-response/stale-active-state guards, 19-area acceptance tracker reconciliation and progress handoff. Merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed all four jobs.
 - PR #48 merged: authenticated Driver-owned trip history API/UI, active-trip restore, SignalR reconnect refresh, session-expiry state cleanup and owner/privacy/role/empty-history tests. Merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run 42215718229 passed all four jobs.
+- PR #49 merged: explicit CORS origin allow-list, wildcard rejection, separate liveness and Cosmos-aware readiness endpoints, and CORS/health integration tests. Merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; final-head CI run 42216606101 passed all four jobs.
 - The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
 
-1. **PLATFORM-01 security/health (in progress):** remove wildcard CORS, enforce explicit configured origins, and keep liveness distinct from Cosmos-aware readiness. Then complete observability, audit durability and failure/recovery evidence.
+1. **PLATFORM-01 audit/observability (in progress):** PR #49 hardened CORS and liveness/readiness. Next add append-only queue membership audit events and safe structured operational failure logging; then metrics/traces and Cosmos failure/recovery evidence.
 2. **RIDER-02 fare estimate (blocked):** requires approved base fare, distance/time components, taxes and service-class rules. Keep fare null; never invent pricing.
 3. **DRIVER-03 monetary earnings (blocked):** monthly PDF work-metrics payslip exists, but compensation, commission and payout treatment are not approved.
 4. **RIDER-04 payments/receipts/ratings (blocked):** requires enabled payment method/provider, sandbox and webhook/idempotency/refund policy.
@@ -187,9 +188,18 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Do not expose rider/driver IDs, exact coordinates or fare values in history. Real Cosmos cross-partition behaviour remains an infrastructure-backed gate.
 
 
-## PLATFORM-01 CORS and health increment (in progress)
+## PLATFORM-01 CORS and health increment (merged in PR #49)
 - PR #49 is open: https://github.com/rajeevp727/turnova-platform/pull/49 (branch `fix/platform-cors-health`). Implementation head `5458c7c244b3621e294cef5ae1c2ad3d24c339c7` passed all four jobs in CI run 42216452456; the final documentation-only head still needs CI before merge.
 - Replace wildcard CORS with explicit `Cors:AllowedOrigins`; reject wildcards, URL paths, query/userinfo and non-HTTPS origins outside Development. Empty allow-list denies browser CORS while native Android/iOS clients remain unaffected.
 - Keep `/health/live` as process liveness and `/health/ready` as the single Cosmos-aware readiness endpoint; remove the duplicate health-check route mapping.
 - Add integration tests for configured/disallowed browser origins and demo-mode liveness/readiness.
 - Remaining platform evidence: Cosmos-unavailable readiness failure injection, production origin configuration, secrets/logging review, metrics/traces/alerts, durable audit failure/recovery and load tests.
+
+
+## PLATFORM-01 queue audit increment (in progress)
+- Branch: `feat/platform-observability-audit`.
+- Existing `RideOfferState.Attempts` persists offer decisions and `DriverUnionAudit` persists union transfers, but queue joins/leaves/rotations are currently mutable queue state without an append-only queue audit history.
+- Add append-only queue events for successful join, leave and rotation-to-back, preserving event order and scope by zone/service-class queue. Avoid personal data and exact locations in event payloads.
+- For Cosmos mode, prefer transactional writes in the existing queue container/partition so queue state and its audit event commit together; in-memory store must expose equivalent audit evidence for tests.
+- Add tests for event sequence, no event on failed/no-op mutations, and audit retrieval. Real Cosmos transaction/partition/failure verification remains a later infrastructure gate.
+- Add safe structured logs for readiness and operational exceptions without exposing tokens, secrets, phone numbers, exact coordinates or request bodies. Metrics/traces/exporters and alert configuration remain subsequent PLATFORM-01 work.
