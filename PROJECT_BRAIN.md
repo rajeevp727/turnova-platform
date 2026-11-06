@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `3a2e37e610e8660fa8ecca1a3e1f42e8899251ff` (PR #73 AI-01 merged; final-head CI 233/233 backend tests and all API/mobile jobs passed; native signing/device and live AI provider gates remain)
+**Last audited main HEAD:** `7fa2fc3490e7d914fa8bdfea7006025e84f6739d` (PR #74 AUTH-01 evidence merged; final-head CI 235/235 backend tests and all four API/mobile jobs passed; native signing/device and live provider gates remain)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -82,7 +82,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 10. **#16 RIDER-04 — Current:** PR #70 implements the approved CAB-RECON-01 supplemental requirement: immutable Driver-reported payment reconciliation after completed Cab rides, signed delta, Driver history and claim-scoped UnionManager oversight. Code head `d73dc0c76528ca95fff39a5d38a5512b1720b941` passed CI [42295719183](https://github.com/rajeevp727/turnova-platform/actions/runs/42295719183) with 210/210 backend tests, both mobile typechecks, nine shared tests and native non-container publish; live Cosmos/device gates remain. CAB-RECON-01 stays outside the 19-row denominator.
 11. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved.
 12. **#18 PLATFORM-01 / #19 RELEASE-01:** code/CI increments are merged; retain live hosting, Cosmos, native signing, physical-device, provider and legal gates.
-13. **Current sequential #1 AUTH-01:** duplicate-registration conflict and authenticated profile-read contract verification; AI-01 remains separately tracked outside the 19-row denominator.
+13. **Current sequential #2 AUTH-02:** prevent stale refresh-token reuse after delayed 401 responses; AI-01 remains separately tracked outside the 19-row denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -376,3 +376,12 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - A new `GET /api/v1/auth/me` integration test verifies the bearer token is forwarded to TriSend and the authenticated Rider profile is returned.
 - The PRD says profile management but does not define editable fields or an upstream profile-update endpoint. Do not invent a TriSend route or field contract. Record profile editing as unresolved until an approved provider contract exists.
 - Mobile runtime/session and physical-device profile lifecycle evidence remain outstanding. Next ordered area after AUTH-01 is #2 AUTH-02 token lifecycle.
+
+
+## AUTH-02 — late 401 refresh-token race (2026-11-07)
+
+- Current sequential area: #2 AUTH-02. Focused branch: `fix/auth-02-late-401-refresh-race`.
+- PR #74 completed the AUTH-01 duplicate-registration and authenticated profile-read contract increment; it merged at `7fa2fc3490e7d914fa8bdfea7006025e84f6739d`. CI [42307569528](https://github.com/rajeevp727/turnova-platform/actions/runs/42307569528) passed 235/235 backend tests and all four jobs.
+- Both Rider and Driver now read the latest SecureStore access/refresh pair only after joining the shared in-flight refresh operation. If a delayed request's old access token receives 401 after another request has already rotated the session, the helper reuses the new access token rather than sending the stale refresh token again.
+- Shared Node tests cover one stored-token read/refresh for concurrent unauthorized requests, delayed 401 after rotation and missing refresh-token rejection. CI is pending; do not claim these tests passed until the workflow completes.
+- Remaining AUTH-02 gaps: live TriSend rotation/reuse contract, app restart/expiry/logout behavior and SecureStore read/write/delete failure behavior on Android/iOS runtimes.
