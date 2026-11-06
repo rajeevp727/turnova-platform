@@ -48,6 +48,7 @@
 | AUTH-LOGIN-018 | Logout while offline | Sign out with network unavailable | Local tokens are deleted; app signs out; server revocation may remain pending until token/session expiry | Mobile | P1 |
 | AUTH-LOGIN-019 | Secure storage failure | Simulate SecureStore read/write failure | User sees recoverable error; app does not silently claim authenticated state | Mobile | P1 |
 | AUTH-LOGIN-020 | Session limit reached | Sign in when TriSend's session limit is reached; test both replaceOldest false/true | TriSend policy is respected; no unexpected session is evicted | API + mobile | P1 |
+| AUTH-LOGIN-021 | Concurrent unauthorized API responses | Trigger multiple protected API requests that all receive 401 while refresh-token rotation is enabled | Both apps share one in-flight refresh operation, persist the rotated token pair once, and retry each original request with the new access token | Mobile | P0 |
 
 ## 2A. Authentication API integration contracts
 
