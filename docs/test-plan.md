@@ -784,9 +784,12 @@ The automated failure-path test uses a deterministic fake probe. It does not cla
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
 |---|---|---|---|---|
-| RELEASE-BUNDLE-001 | Rider Android production JavaScript bundle | Expo exports the Android production bundle and writes non-empty metadata | CI mobile matrix: `Export Android production JavaScript bundle` + `Verify Android production bundle` | P0 |
-| RELEASE-BUNDLE-002 | Rider iOS production JavaScript bundle | Expo exports the iOS production bundle and writes non-empty metadata | CI mobile matrix: `Export iOS production JavaScript bundle` + `Verify iOS production bundle` | P0 |
+| RELEASE-BUNDLE-001 | Rider Android production JavaScript bundle | Expo exports the Android production bundle, resolves the shared mobile workspace modules and writes non-empty metadata | CI mobile matrix: `Export Android production JavaScript bundle` + `Verify Android production bundle` | P0 |
+| RELEASE-BUNDLE-002 | Rider iOS production JavaScript bundle | Expo exports the iOS production bundle, resolves the shared mobile workspace modules and writes non-empty metadata | CI mobile matrix: `Export iOS production JavaScript bundle` + `Verify iOS production bundle` | P0 |
 | RELEASE-BUNDLE-003 | Driver Android production JavaScript bundle | Expo exports the Android production bundle and writes non-empty metadata | CI mobile matrix: `Export Android production JavaScript bundle` + `Verify Android production bundle` | P0 |
 | RELEASE-BUNDLE-004 | Driver iOS production JavaScript bundle | Expo exports the iOS production bundle and writes non-empty metadata | CI mobile matrix: `Export iOS production JavaScript bundle` + `Verify iOS production bundle` | P0 |
 
 These CI steps validate production JavaScript bundling for both apps and platforms; they do **not** create native APK/AAB/IPA binaries or prove signing. Native Android release artifacts, iOS archive/signing, app-store credentials and physical-device functional/security/pilot acceptance remain external release gates. The checked-in app configs have Android package IDs but no iOS bundle identifiers; do not invent the final store identifiers or signing credentials.
+
+
+The two Expo apps share modules from `src/mobile/shared`; each app's Metro configuration explicitly watches the mobile workspace and resolves dependencies from that app's own `node_modules`. This is required for production bundling and does not introduce a new runtime integration.
