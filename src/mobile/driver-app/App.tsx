@@ -39,7 +39,8 @@ type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
 type QueueMembership = { isQueued: boolean; position: number | null };
-type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean; stops?: string[]; negotiationExpiresAtUtc?: string | null };
+type PaymentReconciliation = { rideId: string; agreementVersion: number; unionId: string; agreedAmount: number; amountReceived: number; delta: number; currency: string; reportedAtUtc: string; reportedByDriverId: string; status: string };
+type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean; stops?: string[]; negotiationExpiresAtUtc?: string | null; paymentReconciliation?: PaymentReconciliation | null };
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; driverConfirmed: boolean };
 
 async function saveTokens(tokens: Tokens) {
@@ -82,6 +83,7 @@ export default function App() {
   const [driverRideHistory, setDriverRideHistory] = useState<DriverRideHistoryItem[]>([]);
   const [agreementHistory, setAgreementHistory] = useState<AgreementVersion[]>([]);
   const [agreementAmount, setAgreementAmount] = useState("");
+  const [paymentReportAmounts, setPaymentReportAmounts] = useState<Record<string, string>>({});
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
   const [unionAssignment, setUnionAssignment] = useState<any>(null);
   const [driverName, setDriverName] = useState("");
@@ -132,7 +134,7 @@ export default function App() {
     });
     if (response.status === 401) {
       const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); setUnionAssignment(null); throw new Error("Session expired. Please sign in again."); }
+      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); setPaymentReportAmounts({}); setUnionAssignment(null); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
         accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
@@ -143,6 +145,7 @@ export default function App() {
         setActiveRide(null);
         setDriverRideHistory([]);
         setUnionAssignment(null);
+        setPaymentReportAmounts({});
         setAvailableRides([]);
         throw new Error("Session expired. Please sign in again.");
       }
@@ -357,6 +360,39 @@ export default function App() {
     const result = await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];
     setAgreementHistory(result);
   }, [apiFetch]);
+
+  const reportPaymentReceived = async (rideId: string) => {
+    const rawAmount = (paymentReportAmounts[rideId] ?? "").trim();
+    if (!/^\d+(?:\.\d{1,2})?$/.test(rawAmount)) {
+      setError("Enter an amount received of zero or more with up to two decimal places.");
+      return;
+    }
+    const amountReceived = Number(rawAmount);
+    if (!Number.isFinite(amountReceived) || amountReceived < 0) {
+      setError("Enter a valid non-negative amount received.");
+      return;
+    }
+
+    setLoading(true); setError(""); setNotice("");
+    try {
+      await apiFetch(`/api/v1/driver/rides/${rideId}/payment-report`, {
+        method: "POST",
+        headers: { "Idempotency-Key": "driver-payment-report-" + rideId },
+        body: JSON.stringify({ amountReceived })
+      });
+      await loadDriverRideHistory(() => true);
+      setPaymentReportAmounts(current => {
+        const next = { ...current };
+        delete next[rideId];
+        return next;
+      });
+      setNotice("Amount recorded as Driver-reported and unverified. TurnOva does not verify cash or bank receipt.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to record the amount received.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!activeRide?.rideId) { setAgreementHistory([]); setAgreementAmount(""); return; }
@@ -748,7 +784,7 @@ export default function App() {
   const logout = async () => {
     try { if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken); }
     catch { /* Local credentials are cleared even if the network is unavailable. */ }
-    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null);
+    await clearTokens(); setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
   };
 
   const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
@@ -824,13 +860,26 @@ export default function App() {
         </View>
         {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).length>0&&<View style={styles.card}>
           <Text style={styles.cardTitle}>Trip history</Text>
-          {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).map(item=><View key={item.rideId} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}>
-            <Text style={styles.label}>{item.status.toUpperCase()}</Text>
-            <Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text>
-            <Text style={styles.muted}>{item.serviceClass.toUpperCase()} · {item.passengers} passenger(s)</Text>
-            <Text style={styles.muted}>{new Date(item.requestedAt).toLocaleString()}</Text>
-            <Text style={styles.muted}>Reference · {item.rideId}</Text>
-          </View>)}
+          {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).map(item=>{
+            const report = item.paymentReconciliation;
+            return <View key={item.rideId} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}>
+              <Text style={styles.label}>{item.status.toUpperCase()}</Text>
+              <Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text>
+              <Text style={styles.muted}>{item.serviceClass.toUpperCase()} · {item.passengers} passenger(s)</Text>
+              <Text style={styles.muted}>{new Date(item.requestedAt).toLocaleString()}</Text>
+              <Text style={styles.muted}>Reference · {item.rideId}</Text>
+              {report ? <View style={{marginTop:10,paddingTop:10,borderTopWidth:1,borderTopColor:colors.border}}>
+                <Text style={styles.label}>DIRECT PAYMENT · DRIVER-REPORTED / UNVERIFIED</Text>
+                <Text style={styles.muted}>Agreed {report.currency} {report.agreedAmount.toFixed(2)} · Received {report.currency} {report.amountReceived.toFixed(2)}</Text>
+                <Text style={styles.muted}>Delta {report.delta > 0 ? "+" : ""}{report.delta.toFixed(2)} {report.currency} · {report.delta > 0 ? "Reported shortfall" : report.delta < 0 ? "Reported excess" : "Exact reported match"}</Text>
+                <Text style={styles.muted}>Reported {new Date(report.reportedAtUtc).toLocaleString()}</Text>
+              </View> : item.status === "Completed" ? <View style={{marginTop:10}}>
+                <Text style={styles.muted}>Report the amount received directly from the Rider. This report is not independently verified.</Text>
+                <TextInput value={paymentReportAmounts[item.rideId] ?? ""} onChangeText={value=>setPaymentReportAmounts(current=>({...current,[item.rideId]:value}))} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder="Amount received (INR)"/>
+                <Pressable style={styles.secondary} disabled={loading || !(paymentReportAmounts[item.rideId] ?? "").trim()} onPress={()=>void reportPaymentReceived(item.rideId)}><Text style={styles.secondaryText}>Record amount received</Text></Pressable>
+              </View> : null}
+            </View>;
+          })}
         </View>}
         {!activeRide&&driverRideHistory.length===0&&<View style={styles.card}><Text style={styles.muted}>No trip history yet.</Text></View>}
       </>}
