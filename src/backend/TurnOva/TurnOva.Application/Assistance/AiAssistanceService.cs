@@ -108,8 +108,8 @@ public sealed class AiAssistanceService
     private static readonly HashSet<string> SafeHelpWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "agreement", "arrived", "cancel", "cab", "confirm", "counter", "driver",
-        "expired", "fare", "help", "inprogress", "progress", "negotiate", "negotiated", "negotiating",
-        "payment", "photo", "pickup", "price", "queue", "received", "ride",
+        "availability", "eligible", "expired", "fare", "fifo", "help", "inprogress", "progress", "negotiate", "negotiated", "negotiating",
+        "offline", "online", "payment", "photo", "pickup", "price", "queue", "queued", "received", "ride",
         "selection", "selfie", "status", "trip", "union", "version"
     };
 
@@ -156,7 +156,13 @@ public sealed class AiAssistanceService
             ["driver", "cab", "pickup", "queue", "union", "selection"]),
         new("reservation",
             "A selected Driver is reserved against overlapping negotiations and active rides. Cancellation or expiry releases only the reservation belonging to that exact ride.",
-            ["driver", "negotiating", "expired", "cancel"])
+            ["driver", "negotiating", "expired", "cancel"]),
+        new("queue-status",
+            "Rider discovery does not use FIFO queue rank or automatic assignment. Riders see eligible approved Cab Drivers grouped by Union and ordered by pickup proximity, then select one. Whether legacy FIFO remains an internal fairness mechanism is unresolved; do not infer a customer ranking or dispatch rule from it.",
+            ["queue", "queued", "fifo", "driver", "status"]),
+        new("availability-status",
+            "Online is one input to server-side Cab eligibility and nearby discovery; it does not guarantee that a Driver will be shown or selected. Offline means the Driver is not available for new ride discovery. Rider selection is explicit and no FIFO assignment occurs.",
+            ["online", "offline", "eligible", "availability", "driver", "status"])
     ];
 
     private static readonly IReadOnlyDictionary<string, string> RideStateEntryIds =
