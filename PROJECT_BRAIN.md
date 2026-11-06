@@ -209,6 +209,7 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Metrics/traces/exporters/alerts and Cosmos failure injection remain subsequent PLATFORM-01 work.
 
 ## Authoritative product scope update — Cab-only union model (2026-11-06)
+- PR #50 is reconciled with main after PR #51; final-head CI run 42220458874 passed all four jobs. Documentation scope reset is ready for merge; no feature implementation is claimed by this PR.
 
 This section overrides conflicting legacy rules. TurnOva MVP is CAB rides only; Scooty, Bike and Auto are out of scope for new workflows. Preserve historical records safely.
 
