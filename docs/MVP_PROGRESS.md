@@ -5,16 +5,18 @@
 
 ## 1. Current step
 
-**18/19 — PLATFORM-01: Secure, observable, reliable API with persistent audit trail.**  
-Current task: remove wildcard CORS, enforce an explicit origin allow-list, and keep process liveness distinct from Cosmos-aware readiness; add integration coverage.
+**CAB-SCOPE-01 (approved supplemental requirement; not part of the 19-area denominator): enforce Cab-only new Rider and Driver workflows while preserving historical records.**
+
+Current code gap: new ride requests and Driver onboarding still accept non-Cab service/vehicle classes. Implement Cab-only validation first; do not destructively migrate existing historical records.
 
 ## 2. Overall MVP completion
 
-- **Weighted progress: 36.8%.**
+- **Weighted progress: 42.1%** under the revised Cab-only acceptance mapping.
 - Formula: `(Verified × 1 + In progress × 0.5 + Not started × 0 + Blocked × 0) ÷ 19 × 100`.
-- Counts: **0 Verified, 14 In progress, 0 Not started, 5 Blocked**.
-- Calculation: `(0 + 14 × 0.5 + 0 + 0) ÷ 19 × 100 = 36.8%`.
-- **Strict fully verified: 0/19.** Weighted implementation progress is not acceptance completion or production readiness.
+- Counts: **0 Verified, 16 In progress, 1 Not started, 2 Blocked**.
+- Calculation: `(0 + 16 × 0.5 + 1 × 0 + 2 × 0) ÷ 19 × 100 = 42.1%`.
+- **Strict fully verified: 0/19.** The pre-reset 36.8% used the obsolete fare-estimate/payment-gateway/customer-facing FIFO mapping and is not directly comparable.
+- This is a conservative status reclassification from current merged code evidence, not production acceptance. Each row remains unverified until all evidence in the matrix passes.
 
 ## 3. Ordered acceptance checklist (1–19)
 
@@ -22,58 +24,63 @@ Current task: remove wildcard CORS, enforce an explicit origin allow-list, and k
 |---:|---|---|---|
 | 1 | AUTH-01 | In progress | PRs #35, #39 and #40 cover fake-TriSend API contracts, JWT/role boundaries and startup configuration guards; mobile runtime/session and full profile lifecycle remain. |
 | 2 | AUTH-02 | In progress | PRs #37 and #41 plus shared mobile refresh tests cover single-flight refresh and retry-after-failure; rotation/reuse, restart, expiry, logout and secure-storage device tests remain. |
-| 3 | RIDER-01 | In progress | PR #45 and CI run 42209346759 cover nearby filtering and API boundaries; maps/geocoding and Android/iOS location-permission/resume/device checks remain. |
-| 4 | RIDER-02 | Blocked | Fare estimate stays null; requires approved base fare, distance/time components, taxes and service-class rules. |
-| 5 | RIDER-03 | In progress | Ride lifecycle, ownership and idempotency tests exist; full transition/cancellation and durable persistence/restart verification remain. |
-| 6 | DISPATCH-01 | In progress | Zone and service-class matching implemented; reviewed production boundaries, overlap/cross-zone policy and end-to-end matching remain. |
-| 7 | DISPATCH-02 | In progress | Approval, availability, FIFO and queue-head enforcement exist; full eligibility matrix and Cosmos multi-instance verification remain. |
-| 8 | DISPATCH-03 | In progress | Durable offers, expiry, retry-safe rejection, next-driver advancement and outbox tests exist; Cosmos restart/ETag/failure injection remains. |
-| 9 | DISPATCH-04 | In progress | Per-driver reservation and ride ETag guards exist; cross-partition crash recovery and simultaneous multi-instance acceptance remain. |
-| 10 | REALTIME-01 | In progress | SignalR ride/offer flows and reconnect recovery exist; Android/iOS interruption, reconnect and device-to-device checks remain. |
-| 11 | DRIVER-01 | In progress | Onboarding and union selfie approval exist; secure document storage/scanning, retention, reviewer RBAC and device tests remain. |
-| 12 | DRIVER-02 | In progress | GPS-gated Online, zone exit and queue removal exist; full offer/timeout/re-entry and physical-device checks remain. |
-| 13 | TRIP-01 | In progress | Rider and Driver history code merged in PRs #47 and #48; Cosmos cross-partition history, device-to-device and location-privacy checks remain. |
-| 14 | DRIVER-03 | Blocked | Work-metrics PDF exists; monetary earnings need approved compensation, commission and payout policy. |
-| 15 | DRIVER-04 | Blocked | Driver support workflow needs approved categories, escalation owner and process. |
-| 16 | RIDER-04 | Blocked | Rider history sub-work is in PR #47; payment provider/method, sandbox, webhook/idempotency/refund, receipts and ratings remain. |
-| 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting process, categories, escalation owner, API/UI, audit and device acceptance remain. |
-| 18 | PLATFORM-01 | In progress | Explicit CORS allow-list and separate liveness/readiness endpoints are being added with integration tests; Cosmos failure injection, security/logging, metrics/traces/audit and load gates remain. |
+| 3 | RIDER-01 | In progress | PR #45 covers pickup-zone/capacity/freshness filtering; Cab-only approved-union grouping, max 2–3 drivers per union, pickup-proximity ordering and Rider selection are not implemented. |
+| 4 | RIDER-02 | Not started | Platform fare estimates are out of scope; direct fare negotiation, immutable agreement versions and mutual confirmation before ride start are not implemented. |
+| 5 | RIDER-03 | In progress | Ride lifecycle, ownership and idempotency exist; selected-driver booking/negotiation reservation and agreement start gate remain. |
+| 6 | DISPATCH-01 | In progress | Zone resolution exists; approved-union discovery for Cab is not implemented. |
+| 7 | DISPATCH-02 | In progress | Existing FIFO/offer flow is not to be used for customer-facing ranking/assignment; Rider selection of 2–3 approved Cab drivers per union is not implemented. Internal FIFO role remains unresolved. |
+| 8 | DISPATCH-03 | In progress | Durable offer/expiry/outbox exists; selected-driver negotiation reservation/expiry remains, and automatic next-driver advancement must not drive customer-facing assignment. |
+| 9 | DISPATCH-04 | In progress | Per-driver reservation and ride ETag guards exist; adapt them to selected-driver negotiation and exact expiry/cancel release; Cosmos concurrency remains. |
+| 10 | REALTIME-01 | In progress | SignalR ride/offer flows and reconnect recovery exist; negotiation/agreement version events and device-to-device checks remain. |
+| 11 | DRIVER-01 | In progress | Onboarding and union selfie approval exist; Cab-only validation, Cab vehicle checks and secure document controls remain. |
+| 12 | DRIVER-02 | In progress | GPS-gated Online, zone exit and queue removal exist; Cab-only availability and selected-driver negotiation remain. Internal FIFO role is unresolved. |
+| 13 | TRIP-01 | In progress | Rider and Driver history merged in PRs #47/#48; mutual-agreement start gate, Cosmos history and Android/iOS device/location-privacy checks remain. |
+| 14 | DRIVER-03 | In progress | Monthly PDF work-metrics payslip exists; no monetary earnings/commission/payout policy is assumed. Direct-payment report is tracked under CAB-RECON-01. |
+| 15 | DRIVER-04 | Blocked | Driver support categories, escalation owner and operational process are not approved. |
+| 16 | RIDER-04 | In progress | Rider history merged in PR #47; direct-payment reporting/reconciliation and ratings remain. Customer dispute/confirmation and non-zero-delta next-ride policy are unresolved. |
+| 17 | SUPPORT-01 | Blocked | Rider help/issue-reporting categories, escalation owner, process, API/UI, audit and device acceptance remain. |
+| 18 | PLATFORM-01 | In progress | PR #49 CORS/health and PR #51 queue audit/safe exception response merged; durable exception audit, metrics/traces/alerts, Cosmos failure/recovery and load gates remain. |
 | 19 | RELEASE-01 | In progress | CI validates backend, native API publish, Expo config/typechecks and shared auth tests; Android/iOS production builds, signed artifacts and physical-device pilot checks remain. |
 
 ## 4. Current item evidence and review
 
-- PR #47 merged: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; latest-head CI run 42214516012 passed all four jobs.
-- PR #48 merged: https://github.com/rajeevp727/turnova-platform/pull/48; merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42215718229 passed backend restore/build/tests, native API publish/artifact verification, Rider/Driver Expo config/typechecks and shared auth tests.
-- TRIP-01 Rider and Driver history code is merged. The row remains In progress pending Cosmos cross-partition/RU verification, Android/iOS active-trip/device recovery and location-privacy acceptance.
-- Current PLATFORM-01 branch: `fix/platform-cors-health`. It removes wildcard CORS, accepts explicit `Cors:AllowedOrigins` origins only (HTTPS except HTTP in Development), rejects wildcard/path/query/userinfo origins, removes the duplicate `/health/ready` mapping, and adds CORS and liveness/readiness integration tests.
-- PR #49 is open: https://github.com/rajeevp727/turnova-platform/pull/49. Implementation head `5458c7c244b3621e294cef5ae1c2ad3d24c339c7` passed all four CI jobs in run https://github.com/rajeevp727/turnova-platform/actions/runs/42216452456 (backend build/tests, native API publish, Rider/Driver Expo config/typechecks and shared auth tests). A final documentation-only follow-up commit requires its own latest-head CI run before merge.
-- Remaining platform gates include Cosmos-unavailable readiness failure injection, production CORS origin configuration, secrets/logging review, metrics/traces/alerts, durable audit failure/recovery tests and load tests.
+- PR #47 merged Rider history: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; CI run 42214516012 passed all four jobs.
+- PR #48 merged Driver history: https://github.com/rajeevp727/turnova-platform/pull/48; merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; CI run 42215718229 passed all four jobs.
+- PR #49 merged CORS/health hardening: https://github.com/rajeevp727/turnova-platform/pull/49; merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; CI run 42216606101 passed all four jobs.
+- PR #51 merged queue audit/safe exception handling: https://github.com/rajeevp727/turnova-platform/pull/51; merge commit `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run https://github.com/rajeevp727/turnova-platform/actions/runs/42219327319 passed all four jobs.
+- PR #50 contains the approved Cab-only documentation reset. Its original CI run 42217994808 passed on its original head; the branch was based before PR #51 and required conflict reconciliation with current main before merge.
+- Current main code still accepts non-Cab service/vehicle classes in new Rider/Driver workflows. CAB-SCOPE-01 is not implemented yet.
+- Current discovery is service-class/FIFO-oriented; approved-union grouping, 2–3 driver limit per union, pickup-proximity ordering and Rider selection are not implemented.
+- Fare estimate remains null; platform payment gateway/escrow/collection is not part of the approved Cab-only scope. Direct negotiation/agreement and Driver-reported payment reconciliation remain code gaps.
+- The old FIFO/offer machinery exists; do not extend customer-facing FIFO or automatic assignment. Internal FIFO role remains unresolved.
+- Real Cosmos transactional batch/ETag/restart/retention, Android/iOS physical-device tests and release signing remain infrastructure/device gates.
 
-## 5. Approved supplemental requirement (not counted in the 19 rows)
+## 5. Approved supplemental requirements (not counted in the 19 areas)
 
-**AI-01 — Not started.** Provider-agnostic, privacy-safe Rider/Driver assistance: rider natural-language trip intent becomes a human-reviewed draft; explain only approved ride/queue states and in-repo help with escalation; optional driver offer explanation from authoritative API state. No booking, charging, fare setting, KYC approval, FIFO/eligibility override or autonomous ride-state change. Provider/model/credentials remain placeholders. Implement service boundary, validated contracts, timeout/cancellation, redaction, abuse controls, deterministic fallback and mock-based tests in a separate focused increment, updating PRD, architecture, test plan, matrix and PROJECT_BRAIN.md together.
+| ID | Requirement | Status |
+|---|---|---|
+| CAB-SCOPE-01 | New Rider rides and Driver onboarding are Cab-only; preserve historical records and do not destructively migrate legacy vehicle classes. | Not started |
+| CAB-DISCOVERY-01 | Show approved unions serving pickup; up to 2–3 eligible/available Cab drivers per union ordered by pickup proximity; Rider selects. No customer-facing FIFO ranking or automatic assignment. | Not started |
+| CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | Not started |
+| CAB-RECON-01 | Driver reports amount received as unverified; persist agreed-minus-reported signed delta; expose only to authorised union roles. No platform payment gateway/escrow/collection. | Not started |
+| CAB-UNION-01 | Cab membership, Cab vehicle verification, union approval and approved selfie visibility. | Partially evidenced; Cab-only validation and full union workflow remain |
+| AI-01 | Separately approved provider-agnostic, bounded Rider/Driver AI assistance. Keep outside the 19-area denominator and do not let AI book, set fares, approve KYC or alter dispatch/ride state. | Not started |
 
-## 6. Next step
+## 6. Unresolved decisions and blockers
 
-Finish review of PR #49 and require the latest documentation-only head to pass CI before merging. Then continue the remaining PLATFORM-01 observability/audit/reliability gaps before RELEASE-01. Do not start a parallel feature PR.
+- Internal FIFO role: no customer-facing FIFO ranking or automatic assignment; do not assume whether internal fairness/rotation remains.
+- Payment reconciliation: customer dispute/confirmation process and the next-ride rule for a non-zero signed delta are unresolved.
+- Negotiation/booking: cancellation and negotiation expiry policy need explicit approval before implementing policy-dependent behaviour.
+- Union operations: legal partnership terms and minimum necessary union oversight/retention require review before production.
+- Support: Rider/Driver issue categories, escalation owner and operating process are not approved.
+- Infrastructure/device gates: development Cosmos access for transactional-batch/ETag/partition tests; Android/iOS physical-device validation; production provider/hosting/signing configuration.
+- No credentials or secrets are stored in this file. Docker/container builds and deployments remain prohibited.
 
-## 7. Blockers
+## 7. Next steps
 
-- Fare policy: base fare, distance/time components, taxes and service-class rules.
-- Driver monetary earnings: compensation, commission and payout treatment.
-- Payments/receipts/ratings: enabled method/provider, sandbox and webhook/refund policy.
-- Driver and Rider support: issue categories, escalation owner and operational workflow.
-- Infrastructure-backed verification: development Cosmos access for cross-partition, ETag, partition and multi-instance tests.
-- Release evidence: Android/iOS production build/signing and physical devices; maps/geocoding and other provider sandboxes as applicable.
-- API hosting remains a post-coding decision; Docker/container builds and deployments are prohibited. No credentials or secrets are stored in this file.
-
-
-## Approved scope reset — Cab-only business model (2026-11-06)
-
-The user's latest instruction makes the entire MVP Cab-only and requires the union-connected, customer-selected-driver and direct-negotiation model. This supersedes older notes treating fare estimates, payment gateways and customer-facing FIFO dispatch as MVP requirements.
-
-Current task: reconcile PRD, acceptance matrix, test plan and project brain to Cab-only scope. Documentation branch: docs/cab-only-business-model-alignment.
-
-This documentation change does not implement the Rider/Driver/Union vertical slice and does not increase verified feature completion. The previously recorded 36.8% is historical from the pre-reset matrix and must be recalculated after a fresh code/evidence audit. Strict fully verified remains 0/19 on the last recorded audit.
-
-Next: review and merge this focused documentation PR only after latest-head CI and automated review; then implement Cab-only union discovery/customer selection, followed by negotiation/agreement and reconciliation in sequential focused PRs. Keep internal FIFO role, dispute policy, non-zero-delta next-ride policy, cancellation policy and legal review explicit.
+1. Reconcile and merge PR #50 only after current-main conflict resolution, full documentation review and latest-head green CI.
+2. Implement CAB-SCOPE-01 in one focused PR: reject non-Cab for new ride requests and Driver onboarding; preserve historical records.
+3. Implement CAB-DISCOVERY-01: approved-union grouping, 2–3 available Cab drivers per union, pickup-proximity ordering and Rider selection.
+4. Implement CAB-AGREEMENT-01: versioned direct negotiation and mutual confirmation gate.
+5. Implement CAB-RECON-01: Driver-reported amount and signed delta; leave dispute/next-ride policy blocked until approved.
+6. Continue the remaining 19-area verification and AI-01 supplemental work sequentially. Do not open parallel feature PRs.
