@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
+import { singleFlight } from "../shared/refreshCoordinator";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -125,10 +126,7 @@ export default function App() {
       if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
-        if (!refreshInFlight.current) {
-          refreshInFlight.current = refreshSession(refreshToken).finally(() => { refreshInFlight.current = null; });
-        }
-        accessToken = await refreshInFlight.current;
+        accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
       } catch {
         await clearTokens();
         setTokens(null);

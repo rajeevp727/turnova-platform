@@ -507,3 +507,10 @@ These scenarios still need API/SignalR and multi-instance Cosmos integration cov
 | OFFER-LIFETIME-002 | Next offer is advanced after rejection or expiry | Expiry uses the same configured lifetime as initial offers | API | P0 |
 
 The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-least-once, not exactly-once; client offerId de-duplication is required. Cosmos multi-instance concurrency and restart behaviour need validation before production.
+
+
+## 9. Automated authentication coverage added
+
+- PR #39 adds API integration checks for missing/malformed JWTs, signature, issuer, audience, expiry and Rider/Driver role boundaries.
+- PR #40 verifies missing/weak JWT configuration and non-HTTPS or malformed TriSend URLs fail during API startup.
+- The shared Rider/Driver refresh coordinator is exercised by Node's built-in test runner for concurrent single-flight behaviour and retry after refresh failure. CI runs this without installing an additional mobile test framework.
