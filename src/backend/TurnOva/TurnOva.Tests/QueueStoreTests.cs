@@ -192,6 +192,7 @@ public sealed class QueueStoreTests
         Assert.Equal("offer-1", Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.RotatedToBack)).OfferId);
         Assert.All(events, item => Assert.Equal("zone-a|auto", item.ZoneServiceKey));
         Assert.DoesNotContain(events, item => item.DriverId == "driver-c");
-        Assert.Empty(await store.GetAuditEventsAsync("zone-b", "auto", CancellationToken.None));
+        var zoneBEvents = await store.GetAuditEventsAsync("zone-b", "auto", CancellationToken.None);
+        Assert.Equal("driver-c", Assert.Single(zoneBEvents).DriverId);
     }
 }
