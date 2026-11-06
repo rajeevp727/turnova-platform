@@ -902,6 +902,92 @@ public sealed class RideApiIntegrationTests
         Assert.Empty(history);
     }
 
+    [Fact]
+    public async Task DriverTripHistoryReturnsOnlyAuthenticatedDriversRidesNewestFirstAndOmitsPrivateFields()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "driver-history-rider");
+        using var otherRider = factory.CreateClient("Rider", "driver-history-other-rider");
+        using var driver = factory.CreateClient("Driver", "driver-history-owner");
+        using var otherDriver = factory.CreateClient("Driver", "driver-history-other");
+
+        var first = await CreateRideAsync(rider, "driver-history-first");
+        var second = await CreateRideAsync(rider, "driver-history-second");
+        var other = await CreateRideAsync(otherRider, "driver-history-other");
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[first.RideId] = rides[first.RideId] with
+        {
+            DriverId = "driver-history-owner",
+            RequestedAt = DateTimeOffset.UtcNow.AddMinutes(-10),
+            Status = "Completed",
+            EstimatedFareInr = 125m,
+            PickupLatitude = 17.493,
+            PickupLongitude = 78.399,
+            DriverLatitude = 17.494,
+            DriverLongitude = 78.400,
+            LocationSharingActive = false
+        };
+        rides[second.RideId] = rides[second.RideId] with
+        {
+            DriverId = "driver-history-owner",
+            RequestedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            Status = "InProgress",
+            EstimatedFareInr = 175m,
+            PickupLatitude = 17.495,
+            PickupLongitude = 78.401,
+            DriverLatitude = 17.496,
+            DriverLongitude = 78.402,
+            LocationSharingActive = true
+        };
+        rides[other.RideId] = rides[other.RideId] with
+        {
+            DriverId = "driver-history-other",
+            RequestedAt = DateTimeOffset.UtcNow.AddMinutes(-2)
+        };
+
+        using var response = await driver.GetAsync("/api/v1/driver/rides/mine?driverId=driver-history-other");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        var history = JsonSerializer.Deserialize<List<DriverRideHistoryItemTest>>(
+            body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(history);
+        Assert.Equal(2, history.Count);
+        Assert.Equal(second.RideId, history[0].RideId);
+        Assert.Equal(first.RideId, history[1].RideId);
+        Assert.Equal("InProgress", history[0].Status);
+        Assert.True(history[0].LocationSharingActive);
+        Assert.False(history[1].LocationSharingActive);
+
+        Assert.False(body.Contains("driverId", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("riderId", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("pickupLatitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("pickupLongitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("driverLatitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("driverLongitude", StringComparison.OrdinalIgnoreCase));
+        Assert.False(body.Contains("estimatedFareInr", StringComparison.OrdinalIgnoreCase));
+
+        var otherHistory = await otherDriver.GetFromJsonAsync<List<DriverRideHistoryItemTest>>("/api/v1/driver/rides/mine");
+        Assert.NotNull(otherHistory);
+        Assert.Single(otherHistory);
+        Assert.Equal(other.RideId, otherHistory[0].RideId);
+        Assert.Equal(HttpStatusCode.Forbidden, (await rider.GetAsync("/api/v1/driver/rides/mine")).StatusCode);
+    }
+
+    [Fact]
+    public async Task DriverWithNoAssignedTripsReceivesAnEmptyHistoryList()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-history-empty");
+
+        var history = await driver.GetFromJsonAsync<List<DriverRideHistoryItemTest>>("/api/v1/driver/rides/mine");
+        Assert.NotNull(history);
+        Assert.Empty(history);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await factory.CreateClient("Rider", "driver-history-empty-rider").GetAsync("/api/v1/driver/rides/mine")).StatusCode);
+    }
+
     private static HttpRequestMessage CreateRideRequest(
         string? idempotencyKey,
         int passengers = 1,
@@ -944,6 +1030,7 @@ public sealed class RideApiIntegrationTests
 
     private sealed record NearbyVehicleTest(string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceKm);
     private sealed record RiderRideHistoryItemTest(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt);
+    private sealed record DriverRideHistoryItemTest(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive);
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 
