@@ -685,3 +685,19 @@ Do not test or implement platform fare estimates, in-app payment collection, gat
 
 Mobile acceptance still requires Android/iOS device checks for union grouping, selected-card state, approved-photo rendering, location permission denial, no-provider call/chat messaging and the distinct unavailable journey-distance label. The discovery selection is local to the screen in this increment; durable selected-driver reservation/negotiation is a subsequent acceptance slice. Live maps/routing, production radius approval and Cosmos multi-instance query/concurrency validation remain external gates.
 
+
+
+### RIDER-02 / CAB-AGR-01 — Direct fare negotiation and immutable agreement
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| CAB-AGR-007 | Rider proposes and Driver counters with a different amount | Two immutable versions are retained; earlier terms remain unchanged | RideAgreementRequiresBothPartiesToConfirmCurrentImmutableVersionBeforeStart | P0 |
+| CAB-AGR-008 | A party confirms an older version after a counterproposal | API rejects stale-version confirmation | Same integration test | P0 |
+| CAB-AGR-009 | Proposal is retried with the same Idempotency-Key | Existing version is returned; no duplicate version is created | Same integration test | P0 |
+| CAB-AGR-010 | Only one party confirms the current version | Driver start is rejected; after both confirm the current version, start succeeds | Same integration test | P0 |
+| CAB-AGR-011 | Fare is renegotiated during an active trip | New version invalidates prior confirmations; completion is blocked until both reconfirm | Same integration test | P0 |
+| CAB-AGR-012 | Amount is zero/negative, has more than two decimals, or currency is malformed/lowercase | API rejects the proposal | RideAgreementRejectsInvalidAmountOrCurrency | P0 |
+| CAB-AGR-013 | Unrelated Rider attempts to read an agreement | API returns not found; only the assigned Rider and Driver can read | RideAgreementIsVisibleOnlyToTheAssignedRiderAndDriver | P0 |
+| CAB-AGR-014 | Two different proposals race for the same current version | One wins; the other receives conflict; only one version is current | ConcurrentAgreementProposalsCannotCreateTheSameCurrentVersion | P0 |
+
+The first increment includes the API and Rider/Driver negotiation controls for rides that already have an assigned Driver. It does not yet connect those controls to the selected-driver booking flow; that dependency is sequenced under RIDER-03. Optional stop persistence, Android/iOS device acceptance, live Cosmos ETag/multi-instance contention, and production data recovery remain open. The tests above are CI evidence only when the PR's final head has passed its required workflow.
