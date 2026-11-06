@@ -33,7 +33,9 @@ function canShareActiveRideLocation(ride) {
 }
 
 function findActiveRide(history, role) {
-  return history.find(ride => isActiveRide(ride, role)) ?? null;
+  const allowedStatuses = ACTIVE_RIDE_STATUSES[role];
+  if (!allowedStatuses) throw new TypeError("Unsupported ride recovery role.");
+  return history.find(ride => ride && allowedStatuses.has(ride.status)) ?? null;
 }
 
 module.exports = { findActiveRide, isActiveRide, canShareActiveRideLocation };
