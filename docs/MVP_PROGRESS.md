@@ -29,7 +29,7 @@
 | 1 | AUTH-01 | In progress | PRs #35, #39 and #40 cover fake-TriSend API contracts, JWT/role boundaries and startup configuration guards; mobile runtime/session and full profile lifecycle remain. |
 | 2 | AUTH-02 | In progress | PRs #37 and #41 plus shared mobile refresh tests cover single-flight refresh and retry-after-failure; rotation/reuse, restart, expiry, logout and secure-storage device tests remain. |
 | 3 | RIDER-01 | In progress | PR #55 merged at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run 42237572056 passed all four jobs. Durable selection reservation/booking, stops persistence, route distance, provider actions and device validation remain. |
-| 4 | RIDER-02 | In progress | PR #56 adds versioned direct negotiation, append-only confirmations, start/completion gates and Rider/Driver controls. Booking integration, stop snapshot, negotiation expiry/cancellation policy, live Cosmos concurrency and physical-device acceptance remain. |
+| 4 | RIDER-02 | In progress | [PR #56](https://github.com/rajeevp727/turnova-platform/pull/56), code/test head `750543cee2a9d46fe9e951f7b992a4cc8c24d500`: versioned direct negotiation, append-only confirmations, start/completion gates and Rider/Driver controls. CI run [42245656414](https://github.com/rajeevp727/turnova-platform/actions/runs/42245656414) passed all four jobs. Booking integration, stop snapshot, negotiation expiry/cancellation policy, live Cosmos concurrency and physical-device acceptance remain. |
 | 5 | RIDER-03 | In progress | PR #55 disables legacy FIFO Rider request creation by default; selected-driver booking/reservation, agreement start gate and end-to-end status remain. |
 | 6 | DISPATCH-01 | In progress | PR #55 adds Active Cab union/zone filtering and requires Dispatch:NearbyRadiusKm; checked-in radius is 0 until product approval. |
 | 7 | DISPATCH-02 | In progress | PR #55 adds up to three per union, pickup-distance order and Rider local selection; durable server reservation is still missing. Internal FIFO role remains unresolved. |
@@ -48,7 +48,7 @@
 
 ## 4. Current item evidence and review
 
-- RIDER-02 implementation branch `feature/rider-driver-agreement-v1`: API, ride-aggregate agreement persistence, Rider/Driver controls and integration tests. PR #56 CI/review evidence will be recorded after opening and validating the final PR head.
+- RIDER-02 PR #56 is open: https://github.com/rajeevp727/turnova-platform/pull/56. Latest verified code/test head `750543cee2a9d46fe9e951f7b992a4cc8c24d500`; CI run [42245656414](https://github.com/rajeevp727/turnova-platform/actions/runs/42245656414) passed all four jobs. Automated review comment #6688847543 found no critical/high-risk issue. Merge is still gated on the next documentation-updated head's CI and repository merge rules.
 
 - PR #47 merged Rider history: https://github.com/rajeevp727/turnova-platform/pull/47; merge commit `32cacbf430e1443835e3bd8e4294c15d3c137fe3`; CI run 42214516012 passed all four jobs.
 - PR #48 merged Driver history: https://github.com/rajeevp727/turnova-platform/pull/48; merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; CI run 42215718229 passed all four jobs.
