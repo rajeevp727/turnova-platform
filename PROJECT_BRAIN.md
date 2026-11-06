@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-06  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Current main HEAD:** `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0` (PR #51)
+**Current main HEAD:** `6bd8f734e56ce35716595307cbeb9d7ab9decc59` (PR #50)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -55,12 +55,13 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - PR #48 merged: authenticated Driver-owned trip history API/UI, active-trip restore, SignalR reconnect refresh, session-expiry state cleanup and owner/privacy/role/empty-history tests. Merge commit `2ec84e4eb99b5b1f66fb8b059d71fa36b01c6135`; final-head CI run 42215718229 passed all four jobs.
 - PR #49 merged: explicit CORS origin allow-list, wildcard rejection, separate liveness and Cosmos-aware readiness endpoints, and CORS/health integration tests. Merge commit `67621e02b00d823b84d8d5e3f74f199c283fa3e7`; final-head CI run 42216606101 passed all four jobs.
 - PR #51 merged: append-only queue audit events in the existing `QueueEntries` partition with transactional Cosmos batches, in-memory audit tests, and generic traceId Problem Details with exception-type-only logs. Merge commit `1f30ffd7e268a09ba5863f8f9f58e3457e1ef9f0`; final-head CI run 42219327319 passed all four jobs.
+- PR #50 merged: authoritative Cab-only business model, 19-area matrix reclassification, architecture and test-plan alignment. Merge commit `6bd8f734e56ce35716595307cbeb9d7ab9decc59`; final-head CI run 42220682290 passed all four jobs.
 - The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
 ## Highest-priority unfinished work
 
-1. **CAB-SCOPE-01 (current):** reject Scooty/Bike/Auto for new Rider rides and Driver onboarding; allow Cab only and preserve historical records without destructive migration.
+1. **CAB-SCOPE-01 (in progress on `feat/cab-only-scope`):** reject Scooty/Bike/Auto for new Rider rides, Driver onboarding, union creation/assignment and availability/offer workflows; preserve historical records. Focused PR and CI are pending.
 2. **CAB-DISCOVERY-01:** discover approved nearby unions and show at most 2–3 eligible, available Cab drivers per union ordered by driver-to-pickup proximity; Rider selects, no customer-facing FIFO ranking or automatic assignment.
 3. **CAB-AGREEMENT-01:** direct Rider/Driver fare negotiation, immutable versioned agreement, both confirm current version, and no ride start until mutual confirmation.
 4. **CAB-RECON-01:** Driver reports amount received as unverified; persist agreed-minus-reported signed delta and least-privilege union visibility. Customer dispute/confirmation and non-zero-delta next-ride policy remain unresolved.
@@ -209,7 +210,7 @@ A hosted worker polls overdue durable offers in bounded batches in Cosmos and in
 - Metrics/traces/exporters/alerts and Cosmos failure injection remain subsequent PLATFORM-01 work.
 
 ## Authoritative product scope update — Cab-only union model (2026-11-06)
-- PR #50 is reconciled with main after PR #51; final-head CI run 42220458874 passed all four jobs. Documentation scope reset is ready for merge; no feature implementation is claimed by this PR.
+- PR #50 merged at `6bd8f734e56ce35716595307cbeb9d7ab9decc59`; final-head CI run 42220682290 passed all four jobs.
 
 This section overrides conflicting legacy rules. TurnOva MVP is CAB rides only; Scooty, Bike and Auto are out of scope for new workflows. Preserve historical records safely.
 
@@ -220,3 +221,12 @@ No platform fare estimates, fixed/dynamic pricing, payment gateway, escrow or in
 Customer-facing discovery must not rank or auto-assign by FIFO. Internal FIFO role remains unresolved. Union membership/approval, Cab/vehicle verification, union-approved selfie before public display, least-privilege oversight and audit are in-scope. Partnership terms require legal review.
 
 Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, CAB-RECON-01 and CAB-UNION-01. Keep the 19-row denominator; reclassify obsolete fare estimate/payment gateway/FIFO dispatch requirements. See PRD.md §15 and docs/MVP_ACCEPTANCE_MATRIX.md.
+
+
+## CAB-SCOPE-01 implementation (in progress)
+- Branch: `feat/cab-only-scope`.
+- API now rejects non-Cab ride requests, nearby searches, new Driver onboarding, new union service classes, non-Cab union assignment/approval and non-Cab queue/availability/location/actionable-offer workflows. Zone catalog exposes Cab only.
+- Driver app defaults to Cab, displays Cab-only onboarding, and keeps approved legacy non-Cab profiles read-only for new workflows while retaining history. Rider app exposes Cab only; Rider history keeps serviceClass as string so old non-Cab records remain readable.
+- Integration test covers non-Cab ride/nearby/onboarding/union creation rejection, non-Cab Driver availability/offer denial, Cab-only zone catalog and historical non-Cab ride visibility.
+- Legacy customer-facing FIFO/automatic-offer flow still exists for Cab and is not the approved final flow; CAB-DISCOVERY-01 must replace it. Internal FIFO role remains unresolved.
+- Current branch needs final diff review, PR creation and latest-head CI before merge.
