@@ -129,7 +129,7 @@ export default function App() {
     });
     if (response.status === 401) {
       const refreshToken = await SecureStore.getItemAsync("turnova.refresh");
-      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); throw new Error("Session expired. Please sign in again."); }
+      if (!refreshToken) { await clearTokens(); setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setAgreementHistory([]); setAgreementAmount(""); throw new Error("Session expired. Please sign in again."); }
       let accessToken: string;
       try {
         accessToken = await singleFlight(refreshInFlight, () => refreshSession(refreshToken));
@@ -331,7 +331,8 @@ export default function App() {
   }, [apiFetch]);
 
   useEffect(() => {
-    if (!activeRide?.rideId || tab !== "Trips") return;
+    if (!activeRide?.rideId) { setAgreementHistory([]); setAgreementAmount(""); return; }
+    if (tab !== "Trips") return;
     let active = true;
     void apiFetch(`/api/v1/rides/${activeRide.rideId}/agreements`).then(result => {
       if (active) setAgreementHistory(result as AgreementVersion[]);
