@@ -1048,12 +1048,12 @@ app.MapPost("/api/v1/driver/availability", async (
         catch
         {
             await SaveDriverProfileAsync(profile with
-        {
-            AvailabilityStatus = "Offline",
-            CurrentLatitude = null,
-            CurrentLongitude = null,
-            LocationUpdatedAtUtc = null
-        }, ct);
+            {
+                AvailabilityStatus = "Offline",
+                CurrentLatitude = null,
+                CurrentLongitude = null,
+                LocationUpdatedAtUtc = null
+            }, ct);
             throw;
         }
         var queue = await queueService.GetPositionedQueueAsync(profile.ZoneId, profile.ServiceClass, ct);
@@ -1076,21 +1076,24 @@ app.MapPost("/api/v1/driver/availability", async (
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapPost("/api/v1/driver/location", async (
-    ClaimsPrincipal user, DriverLocationRequest request, QueueService queueService, CancellationToken ct) =>
+    ClaimsPrincipal user, DriverAvailabilityLocationRequest request, QueueService queueService, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId))
         return Results.Forbid();
-    if (request.Latitude is < -90 or > 90 || request.Longitude is < -180 or > 180)
+    if (request.Latitude is null or < -90 or > 90 ||
+        request.Longitude is null or < -180 or > 180)
         return Results.BadRequest(new { message = "Valid latitude and longitude are required." });
 
+    var latitude = request.Latitude.Value;
+    var longitude = request.Longitude.Value;
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null || profile.AvailabilityStatus != "Online")
         return Results.Conflict(new { message = "Only an approved online driver can share availability location." });
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "Availability location is paused while you have an active ride." });
 
-    var currentZoneId = ResolveDispatchZone(request.Latitude, request.Longitude);
+    var currentZoneId = ResolveDispatchZone(latitude, longitude);
     if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
     {
         var takenOffline = await TryUpdateDriverProfileAsync(driverId, current =>
@@ -1113,8 +1116,8 @@ app.MapPost("/api/v1/driver/location", async (
         string.Equals(current.ZoneId, currentZoneId, StringComparison.OrdinalIgnoreCase)
             ? current with
             {
-                CurrentLatitude = request.Latitude,
-                CurrentLongitude = request.Longitude,
+                CurrentLatitude = latitude,
+                CurrentLongitude = longitude,
                 LocationUpdatedAtUtc = DateTimeOffset.UtcNow
             }
             : null, ct);
@@ -1242,7 +1245,6 @@ app.MapGet("/api/v1/rides/nearby", async (
             passengerCapacity = profile.PassengerCapacity,
             distanceKm = Math.Round(CalculateDistanceKm(
                 latitude, longitude, profile.CurrentLatitude!.Value, profile.CurrentLongitude!.Value), 1),
-            locationUpdatedAtUtc = profile.LocationUpdatedAtUtc
         })
         .OrderBy(vehicle => vehicle.distanceKm)
         .ToArray();
@@ -1656,6 +1658,7 @@ public sealed record UpdateUnionStatusRequest(string Status);
 public sealed record AssignDriverUnionRequest(string UnionId, string Reason);
 public sealed record CreateRideRequest(string Pickup, string Dropoff, int Passengers = 1, double? PickupLatitude = null, double? PickupLongitude = null, string ServiceClass = "auto");
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
+public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
