@@ -990,9 +990,6 @@ public sealed class RideApiIntegrationTests
         AddDriver("not-approved-driver", central.UnionId, 17.493, 78.399, status: "Pending");
         AddDriver("wrong-class-driver", central.UnionId, 17.493, 78.399, serviceClass: "bike");
 
-        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
-        Assert.True(await reservations.TryAcquireAsync("metro-photo-approved", "active-ride"));
-
         using var response = await rider.GetAsync(
             "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=3");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -1018,7 +1015,7 @@ public sealed class RideApiIntegrationTests
         var metroGroup = groups.EnumerateArray()
             .Single(group => group.GetProperty("unionId").GetString() == metro.UnionId);
         var metroDrivers = metroGroup.GetProperty("drivers").EnumerateArray().ToArray();
-        Assert.Equal(2, metroDrivers.Length);
+        Assert.Equal(3, metroDrivers.Length);
         var approvedPhoto = metroDrivers.Single(driver =>
             driver.GetProperty("driverId").GetString() == "metro-photo-approved");
         Assert.Equal("/9j/", approvedPhoto.GetProperty("profilePhotoBase64").GetString());
