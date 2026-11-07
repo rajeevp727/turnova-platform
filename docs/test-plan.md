@@ -775,6 +775,19 @@ RIDER-02 backend tests are now executed evidence: PR #64 final-head CI run [4227
 RIDER-03 backend tests are now executed evidence: PR #64 final-head CI run [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) ran 189/189 tests successfully, including booking/reservation and Union-transfer coverage. Native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile tests also passed. Live Cosmos ETag/multi-instance/restart and Android/iOS acceptance remain external gates. Automated reviews remain recorded in PR comments [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440).
 
 
+### RIDER-01 / RIDER-03 — selected booking input boundaries
+
+| ID | Scenario | Expected result | Automated evidence | Status |
+|---|---|---|---|---|
+| RIDER-BOOK-INPUT-001 | Selected Driver or Union ID is blank/whitespace or exceeds 128 characters | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
+| RIDER-BOOK-INPUT-002 | Pickup or drop-off is blank/whitespace or exceeds 250 characters | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
+| RIDER-BOOK-INPUT-003 | Passenger count is below 1 or above 6 | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
+| RIDER-BOOK-INPUT-004 | Pickup latitude or longitude is outside its valid geographic range | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
+| RIDER-BOOK-INPUT-005 | Idempotency-Key is missing or exceeds 128 characters | HTTP 400; no reservation or idempotency record is created | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
+| RIDER-BOOK-INPUT-006 | Request uses exact supported maxima: six passengers, ten stops, and 250 characters for pickup, drop-off and each stop | HTTP 201; all route fields and stops are persisted; selected Driver reservation is held | SelectedBookingAcceptsMaximumSupportedRouteAndPassengerBoundaries | CI pending on final documentation head |
+
+PR #105 merged at `b4833a210fbb31ea6faefe5892272abcf36357e3`; its final-head CI [42401645940](https://github.com/rajeevp727/turnova-platform/actions/runs/42401645940) passed all eight jobs and executed 257/257 backend tests. PR #106 adds the 14 invalid-input cases plus the positive maximum-boundary case. Its code commit `2d76c556ade57eea01621121859532f5a06c1fcd` passed backend build/tests (272/272) and the Rider/Driver mobile typecheck/bundle jobs in CI [42404536969](https://github.com/rajeevp727/turnova-platform/actions/runs/42404536969); four native Android/iOS jobs were still running when this documentation update was prepared. This is API boundary evidence only; the final PR head must pass all required jobs before merge.
+
 ### DISPATCH-03 — selected-driver expiry and reservation reconciliation evidence
 
 - `ExpiredSelectedNegotiationBecomesTerminalAndReleasesDriverReservation` verifies an expired Negotiating ride becomes terminal and releases only its selected Driver lease.
