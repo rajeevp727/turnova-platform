@@ -153,7 +153,7 @@ export default function App() {
       if (active) setError("Live ride updates are temporarily unavailable. Retrying connection…");
     }).then(connected => {
       if (connected && active) {
-        setError("");
+        setError(current => current === "Live ride updates are temporarily unavailable. Retrying connection…" ? "" : current);
         void refreshRiderState();
       }
     });

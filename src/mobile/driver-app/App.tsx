@@ -491,7 +491,7 @@ export default function App() {
       if (mounted) setError("Live ride offers are temporarily unavailable. Retrying connection…");
     }).then(connected => {
       if (connected && mounted) {
-        setError("");
+        setError(current => current === "Live ride offers are temporarily unavailable. Retrying connection…" ? "" : current);
         refreshDriverState();
       }
     });
@@ -526,7 +526,7 @@ export default function App() {
       if (mounted) setError("Live fare agreement updates are temporarily unavailable. Retrying connection…");
     }).then(connected => {
       if (connected && mounted) {
-        setError("");
+        setError(current => current === "Live fare agreement updates are temporarily unavailable. Retrying connection…" ? "" : current);
         refreshAgreement();
       }
     });
@@ -558,7 +558,7 @@ export default function App() {
       if (mounted) setError("Live trip status updates are temporarily unavailable. Retrying connection…");
     }).then(connected => {
       if (connected && mounted) {
-        setError("");
+        setError(current => current === "Live trip status updates are temporarily unavailable. Retrying connection…" ? "" : current);
         void loadDriverRideHistory(() => mounted).catch(e => {
           if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
         });
