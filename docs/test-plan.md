@@ -55,6 +55,7 @@
 | AUTH-LOGIN-025 | Secure token-pair write failure | Allow access-key write but fail refresh-key write | Best-effort rollback attempts deletion of both keys; no authenticated app state is accepted | Mobile unit | P1 |
 | AUTH-LOGIN-026 | Secure token deletion failure | Fail deletion of one key during logout | Attempt both deletions; surface a recoverable error and do not claim logout succeeded | Mobile unit | P1 |
 | AUTH-LOGIN-027 | Logout races an in-flight token rotation write | Pause the access-token write, begin local logout, then release the write | Storage mutations are serialized; logout clears both keys after the pending pair write and no credentials remain | Mobile unit | P0 |
+| AUTH-MOBILE-028 | App-specific profile role guard | Return a Rider profile to the Driver app or a Driver profile to the Rider app during login/register or /me restoration | The client rejects the mismatched profile before saving a new token pair or setting authenticated app state | Shared mobile unit + Rider/Driver typecheck | P0 |
 
 ## 2A. Authentication API integration contracts
 
@@ -70,6 +71,7 @@ The API contract tests use a fake named TriSend HTTP handler; CI must never call
 | AUTH-API-006 | TriSend connection failure | Stable HTTP 503; upstream exception details are not exposed | API integration | P0 |
 | AUTH-API-007 | Duplicate registration | TriSend HTTP 409 is preserved as a conflict and no access/refresh token is returned | API integration | P0 |
 | AUTH-API-008 | Rider profile read | `/api/v1/auth/me` forwards the bearer token and returns the authenticated profile from TriSend | API integration | P0 |
+| AUTH-API-009 | Rider app rejects a Driver account | Log in to the Rider route with a TriSend profile whose role is Driver | HTTP 403; returned access token is revoked through TriSend logout and is not returned to the Rider client | API integration | P0 |
 
 ## 3. JWT validation and authorization
 
