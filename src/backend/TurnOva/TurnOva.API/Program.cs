@@ -1766,9 +1766,10 @@ app.MapGet("/api/v1/rider/discovery", async (
     if (string.IsNullOrWhiteSpace(zoneId))
         return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
 
-    var maxAgeSeconds = Math.Clamp(
-        app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds") ?? 120, 30, 600);
-    var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds);
+    var maxAgeSeconds = app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds");
+    if (maxAgeSeconds is null || maxAgeSeconds <= 0)
+        return Results.Problem("The approved maximum Driver location age is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds.Value);
     var eligibleUnions = (await ListUnionsAsync(ct))
         .Where(union => union.Status == "Active" &&
             union.ZoneIds.Contains(zoneId, StringComparer.OrdinalIgnoreCase) &&
@@ -1952,8 +1953,10 @@ app.MapPost("/api/v1/rider/bookings", async (
     if (assignment is null || assignment.Status != "Active" || assignment.UnionId != unionId)
         return Results.Conflict(new { message = "The selected Driver is not an active member of this Union." });
     var profile = await GetApprovedDriverProfileAsync(selectedDriverId, ct);
-    var maxAgeSeconds = Math.Clamp(app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds") ?? 120, 30, 600);
-    var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds);
+    var maxAgeSeconds = app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds");
+    if (maxAgeSeconds is null || maxAgeSeconds <= 0)
+        return Results.Problem("The approved maximum Driver location age is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds.Value);
     if (profile is null || profile.AvailabilityStatus != "Online" ||
         !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
@@ -2027,7 +2030,7 @@ app.MapPost("/api/v1/rider/bookings", async (
     var latestAssignment = await FindUnionAssignmentAsync(selectedDriverId, ct);
     var latestUnion = await FindUnionAsync(unionId, ct);
     var latestProfile = await GetApprovedDriverProfileAsync(selectedDriverId, ct);
-    var latestFreshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds);
+    var latestFreshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds.Value);
     if (latestAssignment is null || latestAssignment.Status != "Active" || latestAssignment.UnionId != unionId ||
         latestUnion is null || latestUnion.Status != "Active" ||
         !latestUnion.ZoneIds.Contains(zoneId, StringComparer.OrdinalIgnoreCase) ||

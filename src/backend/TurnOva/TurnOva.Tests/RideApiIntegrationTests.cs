@@ -1468,6 +1468,50 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderDiscoveryFailsClosedWhenLocationFreshnessPolicyIsNotConfigured()
+    {
+        using var factory = new TurnOvaApiFactory(nearbyLocationMaxAgeSeconds: null);
+        using var rider = factory.CreateClient("Rider", "location-freshness-unconfigured-rider");
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task RiderDiscoveryFailsClosedWhenLocationFreshnessPolicyIsNonPositive(int maxAgeSeconds)
+    {
+        using var factory = new TurnOvaApiFactory(nearbyLocationMaxAgeSeconds: maxAgeSeconds);
+        using var rider = factory.CreateClient("Rider", $"location-freshness-invalid-{maxAgeSeconds}");
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SelectedBookingFailsClosedWhenLocationFreshnessPolicyIsNotConfigured()
+    {
+        using var factory = new TurnOvaApiFactory(nearbyLocationMaxAgeSeconds: null);
+        using var rider = factory.CreateClient("Rider", "location-freshness-booking-rider");
+        using var driver = factory.CreateClient("Driver", "location-freshness-booking-driver");
+        SeedBookableDriver(factory, "location-freshness-booking-driver", "location-freshness-booking-union");
+
+        using var request = CreateSelectedBookingRequest(
+            "location-freshness-booking-key", "location-freshness-booking-driver",
+            "location-freshness-booking-union", "KPHB", "HITEC City", []);
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync("location-freshness-booking-driver"));
+    }
+
+    [Fact]
     public async Task RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency()
     {
         using var factory = new TurnOvaApiFactory();
@@ -3179,14 +3223,18 @@ public sealed class RideApiIntegrationTests
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
         private readonly double? _nearbyRadiusKm;
+        // Test-only fixture; production appsettings intentionally leaves this product policy unset.
+        private readonly int? _nearbyLocationMaxAgeSeconds;
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
         private readonly bool _storageReadinessUnavailable;
 
         public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double? nearbyRadiusKm = 10,
-            int? selectedDriverNegotiationLifetimeMinutes = 15, bool storageReadinessUnavailable = false)
+            int? selectedDriverNegotiationLifetimeMinutes = 15, bool storageReadinessUnavailable = false,
+            int? nearbyLocationMaxAgeSeconds = 120)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
+            _nearbyLocationMaxAgeSeconds = nearbyLocationMaxAgeSeconds;
             _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
             _storageReadinessUnavailable = storageReadinessUnavailable;
         }
@@ -3204,6 +3252,7 @@ public sealed class RideApiIntegrationTests
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
                     ["Cors:AllowedOrigins:0"] = "https://app.turnova.test",
                     ["Dispatch:NearbyRadiusKm"] = _nearbyRadiusKm?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["Dispatch:NearbyLocationMaxAgeSeconds"] = _nearbyLocationMaxAgeSeconds?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] =
                         _selectedDriverNegotiationLifetimeMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
