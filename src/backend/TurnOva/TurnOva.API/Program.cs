@@ -2736,13 +2736,26 @@ app.MapPost("/api/v1/rides/{rideId}/start", async (
     return Results.Ok(started);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
+async Task EnsureCompletedRideSideEffectsAsync(DemoRide completedRide, string driverId, CancellationToken ct)
+{
+    var completedAtUtc = (completedRide.AuditEvents ?? [])
+        .LastOrDefault(item => item.EventType == "RideStatusChanged" && item.NewStatus == "Completed")
+        ?.OccurredAtUtc ?? DateTimeOffset.UtcNow;
+    await RecordWorkActivityAsync(driverId, completedRide.RideId, "Completed", completedAtUtc, ct);
+    await driverRideReservations.TryReleaseAsync(driverId, completedRide.RideId, ct);
+}
+
 app.MapPost("/api/v1/rides/{rideId}/complete", async (
     ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
-    if (ride.Status == "Completed") return Results.Ok(ride);
+    if (ride.Status == "Completed")
+    {
+        await EnsureCompletedRideSideEffectsAsync(ride, driverId!, ct);
+        return Results.Ok(ride);
+    }
     var current = (ride.AgreementVersions ?? []).LastOrDefault();
     var confirmations = ride.AgreementConfirmations ?? [];
     if (current is null ||
@@ -2752,9 +2765,15 @@ app.MapPost("/api/v1/rides/{rideId}/complete", async (
     if (ride.Status != "InProgress")
         return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to Completed." });
     var completed = await TryTransitionAsync(ride, "Completed", driverId!, "Driver", ct);
-    if (completed is null) return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh and retry." });
-    await RecordWorkActivityAsync(driverId!, rideId, "Completed", DateTimeOffset.UtcNow, ct);
-    await driverRideReservations.TryReleaseAsync(driverId!, rideId, ct);
+    if (completed is null)
+    {
+        var latest = await ReadRideRawAsync(rideId, ct);
+        if (latest is null || latest.DriverId != driverId || latest.Status != "Completed")
+            return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh and retry." });
+        await EnsureCompletedRideSideEffectsAsync(latest, driverId!, ct);
+        return Results.Ok(latest);
+    }
+    await EnsureCompletedRideSideEffectsAsync(completed, driverId!, ct);
     await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = completed.Status }, ct);
     return Results.Ok(completed);
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
