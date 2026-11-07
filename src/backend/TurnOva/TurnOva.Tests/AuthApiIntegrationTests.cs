@@ -58,6 +58,27 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderRegistrationForwardsNormalizedIdentityAndServerOwnedRole()
+    {
+        using var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.Created,
+            """{"accessToken":"access","refreshToken":"refresh","user":{"role":"Rider"}}""")));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/rider/register",
+            new { email = "  RIDER@example.com  ", password = "StrongPassword!123", name = "  Test Rider  ", role = "Admin" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("/auth/register", request.Path);
+        Assert.Equal("rider@example.com", request.Body.GetProperty("email").GetString());
+        Assert.Equal("Test Rider", request.Body.GetProperty("name").GetString());
+        Assert.Equal("turnova", request.Body.GetProperty("appId").GetString());
+        Assert.Equal("Rider", request.Body.GetProperty("role").GetString());
+        Assert.NotEqual("Admin", request.Body.GetProperty("role").GetString());
+    }
+
+    [Fact]
     public async Task DuplicateRegistrationPreservesTriSendConflictWithoutReturningTokens()
     {
         var callCount = 0;
@@ -167,6 +188,28 @@ public sealed class AuthApiIntegrationTests
 
         using var response = await client.PostAsJsonAsync("/api/v1/auth/driver/login",
             new { email = "rider@example.com", password = "password" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(new[] { "/auth/login", "/auth/logout" }, handler.Requests.Select(x => x.Path));
+        Assert.Equal("Bearer", handler.Requests[1].AuthorizationScheme);
+        Assert.Equal("wrong-role-access-token", handler.Requests[1].AuthorizationParameter);
+    }
+
+    [Fact]
+    public async Task RiderLoginRejectsDriverAccountAndRevokesReturnedSession()
+    {
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            if (request.Path == "/auth/login")
+                return Task.FromResult(JsonResponse(HttpStatusCode.OK,
+                    """{"accessToken":"wrong-role-access-token","refreshToken":"refresh","user":{"role":"Driver"}}"""));
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"success":true}"""));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/rider/login",
+            new { email = "driver@example.com", password = "password" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(new[] { "/auth/login", "/auth/logout" }, handler.Requests.Select(x => x.Path));
