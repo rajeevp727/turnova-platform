@@ -6,6 +6,7 @@ import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
+import { getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -454,7 +455,7 @@ export default function App() {
         accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens?.accessToken ?? "",
         transport: HttpTransportType.WebSockets
       })
-      .withAutomaticReconnect()
+      .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
 
@@ -486,8 +487,13 @@ export default function App() {
     // Recover selected bookings as well as legacy offers after initial connect/reconnect;
     // SignalR delivery is at-least-once and may be missed while the app is suspended.
     connection.onreconnected(refreshDriverState);
-    void connection.start().then(refreshDriverState).catch(() => {
-      if (mounted) setError("Live ride offers are temporarily unavailable. Available rides can still be refreshed manually.");
+    void startSignalRConnection(connection, () => mounted, () => {
+      if (mounted) setError("Live ride offers are temporarily unavailable. Retrying connection…");
+    }).then(connected => {
+      if (connected && mounted) {
+        setError("");
+        refreshDriverState();
+      }
     });
     return () => {
       mounted = false;
@@ -505,7 +511,7 @@ export default function App() {
         accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens.accessToken,
         transport: HttpTransportType.WebSockets
       })
-      .withAutomaticReconnect()
+      .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
     const refreshAgreement = (update?: { rideId?: string }) => {
@@ -516,8 +522,13 @@ export default function App() {
     };
     connection.on("RideAgreementChanged", refreshAgreement);
     connection.onreconnected(() => refreshAgreement());
-    void connection.start().then(() => refreshAgreement()).catch(() => {
-      if (mounted) setError("Live fare agreement updates are unavailable. Refresh the agreement manually.");
+    void startSignalRConnection(connection, () => mounted, () => {
+      if (mounted) setError("Live fare agreement updates are temporarily unavailable. Retrying connection…");
+    }).then(connected => {
+      if (connected && mounted) {
+        setError("");
+        refreshAgreement();
+      }
     });
     return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
   }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
@@ -532,7 +543,7 @@ export default function App() {
         accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens?.accessToken ?? "",
         transport: HttpTransportType.WebSockets
       })
-      .withAutomaticReconnect()
+      .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
     connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
@@ -543,7 +554,16 @@ export default function App() {
         if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
       });
     });
-    void connection.start().catch(() => {});
+    void startSignalRConnection(connection, () => mounted, () => {
+      if (mounted) setError("Live trip status updates are temporarily unavailable. Retrying connection…");
+    }).then(connected => {
+      if (connected && mounted) {
+        setError("");
+        void loadDriverRideHistory(() => mounted).catch(e => {
+          if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
+        });
+      }
+    });
     return () => { mounted = false; void connection.stop(); };
   }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory]);
 

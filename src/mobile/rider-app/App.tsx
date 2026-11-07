@@ -10,6 +10,7 @@ import { findActiveRide } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
+import { getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -125,7 +126,7 @@ export default function App() {
         accessTokenFactory:async()=>await SecureStore.getItemAsync("turnova.access")??tokens.accessToken,
         transport:HttpTransportType.WebSockets
       })
-      .withAutomaticReconnect()
+      .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
     const refreshAgreements=async()=>{
@@ -148,8 +149,13 @@ export default function App() {
       if(active&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>setError(e instanceof Error?e.message:"Unable to refresh fare agreement."));
     });
     connection.onreconnected(()=>{void refreshRiderState();});
-    void connection.start().then(refreshRiderState).catch(()=>{
-      if(active)setError("Live ride updates are temporarily unavailable. Reopen Activity to refresh the current trip state.");
+    void startSignalRConnection(connection, () => active, () => {
+      if (active) setError("Live ride updates are temporarily unavailable. Retrying connection…");
+    }).then(connected => {
+      if (connected && active) {
+        setError("");
+        void refreshRiderState();
+      }
     });
     return()=>{
       active=false;
