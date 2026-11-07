@@ -2674,6 +2674,151 @@ public sealed class RideApiIntegrationTests
     }
 
     [Theory]
+    [InlineData("selected-driver-whitespace")]
+    [InlineData("selected-driver-too-long")]
+    [InlineData("union-whitespace")]
+    [InlineData("union-too-long")]
+    [InlineData("pickup-whitespace")]
+    [InlineData("pickup-too-long")]
+    [InlineData("dropoff-whitespace")]
+    [InlineData("dropoff-too-long")]
+    [InlineData("passengers-below-range")]
+    [InlineData("passengers-above-range")]
+    [InlineData("latitude-out-of-range")]
+    [InlineData("longitude-out-of-range")]
+    [InlineData("idempotency-key-missing")]
+    [InlineData("idempotency-key-too-long")]
+    public async Task SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver(string invalidCase)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        var driverId = "invalid-booking-driver-" + invalidCase;
+        var unionId = "invalid-booking-union-" + invalidCase;
+        using var rider = factory.CreateClient("Rider", "invalid-booking-rider-" + invalidCase);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["selectedDriverId"] = driverId,
+            ["unionId"] = unionId,
+            ["pickup"] = "KPHB",
+            ["dropoff"] = "HITEC City",
+            ["stops"] = Array.Empty<string>(),
+            ["passengers"] = 1,
+            ["pickupLatitude"] = 17.493,
+            ["pickupLongitude"] = 78.399
+        };
+        var idempotencyKey = "invalid-booking-key-" + invalidCase;
+        switch (invalidCase)
+        {
+            case "selected-driver-whitespace":
+                payload["selectedDriverId"] = "   ";
+                break;
+            case "selected-driver-too-long":
+                payload["selectedDriverId"] = new string('d', 129);
+                break;
+            case "union-whitespace":
+                payload["unionId"] = "   ";
+                break;
+            case "union-too-long":
+                payload["unionId"] = new string('u', 129);
+                break;
+            case "pickup-whitespace":
+                payload["pickup"] = "   ";
+                break;
+            case "pickup-too-long":
+                payload["pickup"] = new string('p', 251);
+                break;
+            case "dropoff-whitespace":
+                payload["dropoff"] = "   ";
+                break;
+            case "dropoff-too-long":
+                payload["dropoff"] = new string('d', 251);
+                break;
+            case "passengers-below-range":
+                payload["passengers"] = 0;
+                break;
+            case "passengers-above-range":
+                payload["passengers"] = 7;
+                break;
+            case "latitude-out-of-range":
+                payload["pickupLatitude"] = 91d;
+                break;
+            case "longitude-out-of-range":
+                payload["pickupLongitude"] = 181d;
+                break;
+            case "idempotency-key-missing":
+                idempotencyKey = "";
+                break;
+            case "idempotency-key-too-long":
+                idempotencyKey = new string('k', 129);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(invalidCase), invalidCase, "Unknown invalid booking case.");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/rider/bookings")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        if (idempotencyKey.Length > 0)
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
+
+        using var response = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync(driverId));
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+    }
+
+    [Fact]
+    public async Task SelectedBookingAcceptsMaximumSupportedRouteAndPassengerBoundaries()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "booking-boundary-driver";
+        const string unionId = "booking-boundary-union";
+        using var rider = factory.CreateClient("Rider", "booking-boundary-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with { PassengerCapacity = 6 };
+        var stops = Enumerable.Range(0, 10)
+            .Select(index => new string((char)('A' + index), 250))
+            .ToArray();
+        var payload = new Dictionary<string, object?>
+        {
+            ["selectedDriverId"] = driverId,
+            ["unionId"] = unionId,
+            ["pickup"] = new string('p', 250),
+            ["dropoff"] = new string('d', 250),
+            ["stops"] = stops,
+            ["passengers"] = 6,
+            ["pickupLatitude"] = 17.493,
+            ["pickupLongitude"] = 78.399
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/rider/bookings")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Add("Idempotency-Key", "booking-boundary-valid-key");
+
+        using var response = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(250, json.RootElement.GetProperty("pickup").GetString()!.Length);
+        Assert.Equal(250, json.RootElement.GetProperty("dropoff").GetString()!.Length);
+        Assert.Equal(6, json.RootElement.GetProperty("passengers").GetInt32());
+        var persistedStops = json.RootElement.GetProperty("stops").EnumerateArray()
+            .Select(item => item.GetString()!)
+            .ToArray();
+        Assert.Equal(10, persistedStops.Length);
+        Assert.All(persistedStops, stop => Assert.Equal(250, stop.Length));
+        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync(driverId));
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("x")]
