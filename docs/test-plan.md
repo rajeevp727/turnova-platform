@@ -843,6 +843,17 @@ Ride audit events are embedded in the existing Rides aggregate and use the same 
 
 These CI steps validate production JavaScript bundling for both apps and platforms; they do **not** create native APK/AAB/IPA binaries or prove signing. Native Android release artifacts, iOS archive/signing, app-store credentials and physical-device functional/security/pilot acceptance remain external release gates. The checked-in app configs have Android package IDs but no iOS bundle identifiers; do not invent the final store identifiers or signing credentials.
 
+### Native project compilation preflight (unsigned)
+
+| Test ID | Scenario | Expected result | Evidence | Priority |
+|---|---|---|---|
+| RELEASE-NATIVE-005 | Rider Android native build | Expo prebuild succeeds and Gradle produces a non-empty debug APK | `native-android` CI matrix (`rider-app`) | P0 |
+| RELEASE-NATIVE-006 | Driver Android native build | Expo prebuild succeeds and Gradle produces a non-empty debug APK | `native-android` CI matrix (`driver-app`) | P0 |
+| RELEASE-NATIVE-007 | Rider iOS native build | CocoaPods resolves; CI selects the root Rider `.xcworkspace` matching the root app `.xcodeproj` (not the nested project workspace); Xcode compiles an unsigned Release configuration for iOS Simulator | `native-ios` CI matrix (`rider-app`) | P0 |
+| RELEASE-NATIVE-008 | Driver iOS native build | CocoaPods resolves; CI selects the root Driver `.xcworkspace` matching the root app `.xcodeproj` (not the nested project workspace); Xcode compiles an unsigned Release configuration for iOS Simulator | `native-ios` CI matrix (`driver-app`) | P0 |
+
+The CI-only iOS bundle identifier overrides (`com.turnova.rider` / `com.turnova.driver`) are build settings and are not committed as production store identifiers. The Android output is a debug APK; the iOS output is a simulator `.app`. Neither is a signed production AAB/IPA, and neither replaces physical-device, signing, store-submission or pilot acceptance.
+
 
 The two Expo apps share modules from `src/mobile/shared`; each app's Metro configuration adds only that shared directory to `watchFolders` and leaves Metro's default hierarchical dependency resolution intact. This is required for production bundling and does not introduce a new runtime integration.
 
