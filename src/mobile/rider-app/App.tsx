@@ -6,6 +6,7 @@ import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleShe
 import TurnOvaLogo from "./TurnOvaLogo";
 import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
+import { requireAppRole } from "../shared/appRole";
 import { findActiveRide } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
@@ -88,7 +89,16 @@ export default function App() {
     void SecureStore.setItemAsync("turnova.theme", preference);
   };
 
-  const accept=useCallback(async(result:any,newSession=false)=>{const t={accessToken:result.accessToken,refreshToken:result.refreshToken};await saveTokens(t);if(newSession)sessionEpoch.current+=1;setTokens(t);setUser(result.user);setError("");},[]);
+  const accept=useCallback(async(result:any,newSession=false)=>{
+    const acceptedUser=result?.user?requireAppRole<User>(result.user,"Rider"):null;
+    if(newSession&&!acceptedUser)throw new Error("Authentication response did not include a Rider profile.");
+    const t={accessToken:result.accessToken,refreshToken:result.refreshToken};
+    await saveTokens(t);
+    if(newSession)sessionEpoch.current+=1;
+    setTokens(t);
+    if(acceptedUser)setUser(acceptedUser);
+    setError("");
+  },[]);
   const refresh=useCallback(async(rt:string,expectedEpoch:number)=>{if(sessionEpoch.current!==expectedEpoch)return "";const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(sessionEpoch.current!==expectedEpoch)return "";await accept(result);return result.accessToken as string;},[accept]);
   const apiFetch=useCallback(async(path:string,init:RequestInit={})=>{
     if(!tokens)throw new Error("Please sign in again.");
@@ -117,7 +127,7 @@ export default function App() {
     const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current?.rideId===details.rideId?{...current,...details}:details);}else if(isActive()){setRide(null);}},[apiFetch]);
-  useEffect(()=>{let active=true;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request);if(active&&restored){sessionEpoch.current+=1;setTokens(restored.tokens);setUser(restored.user as User);}}catch{if(active)setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request);if(active&&restored){sessionEpoch.current+=1;const restoredUser=requireAppRole<User>(restored.user,"Rider");setTokens(restored.tokens);setUser(restoredUser);}}catch{if(active)setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{
     if(!ride||tab!=="Activity"||!tokens)return;
     let active=true;

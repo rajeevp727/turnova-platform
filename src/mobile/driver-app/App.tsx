@@ -13,6 +13,7 @@ import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Tex
 import TurnOvaLogo from "./TurnOvaLogo";
 import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
+import { requireAppRole } from "../shared/appRole";
 import { findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
@@ -117,11 +118,14 @@ export default function App() {
   };
 
   const acceptSession = useCallback(async (result: any, newSession = false) => {
+    const acceptedUser = result?.user ? requireAppRole<User>(result.user, "Driver") : null;
+    if (newSession && !acceptedUser)
+      throw new Error("Authentication response did not include a Driver profile.");
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
     await saveTokens(next);
     if (newSession) sessionEpoch.current += 1;
     setTokens(next);
-    setUser(result.user);
+    if (acceptedUser) setUser(acceptedUser);
     setError("");
   }, []);
 
@@ -184,8 +188,9 @@ export default function App() {
         const restored = await restoreStoredSession(SecureStore, jsonRequest);
         if (active && restored) {
           sessionEpoch.current += 1;
+          const restoredUser = requireAppRole<User>(restored.user, "Driver");
           setTokens(restored.tokens);
-          setUser(restored.user as User);
+          setUser(restoredUser);
         }
       } catch {
         if (active) setError("Unable to restore your session. Check your connection or secure storage and retry.");
