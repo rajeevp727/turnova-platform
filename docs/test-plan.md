@@ -441,7 +441,7 @@ The current increment adds the persistence contract, in-memory/Cosmos adapters a
 | AVAIL-009 | Driver app restarts | Availability is loaded from the server profile; foreground location is refreshed before discovery eligibility resumes | Mobile/API | P1 |
 | AVAIL-010 | Cosmos mode availability change | Availability is persisted in the Drivers profile document and queue changes use the configured queue store | Cosmos integration | P0 |
 | AVAIL-011 | Driver without an active Cab Union or approved licence/vehicle documents goes online | HTTP 409; profile remains Offline and no queue membership/location is published | API/security | P0 |
-| AVAIL-012 | Driver availability transition races selected booking/Union transfer | Shared per-Driver lease allows only one mutation; conflicting operation returns 409 without changing availability | API concurrency | P0 |
+| AVAIL-012 | Driver availability transition races selected booking/Union transfer | `ConcurrentSelectedBookingAndDriverOfflineTransitionCannotBothSucceed` proves exactly one of a selected booking or Offline transition wins the shared per-Driver lease; `AcceptedSelectedRideBlocksAnotherBookingAndDriverAvailabilityChange` proves a permanent active-ride lease blocks both operations | API concurrency | P0 |
 | AVAIL-013 | Driver location exits assigned zone while a selected reservation is active | Location transition cannot clear availability during the reservation; after release, a fresh zone-exit update takes the Driver Offline | API concurrency | P0 |
 | AVAIL-014 | Driver app resumes from background while Online | Foreground GPS is refreshed and the foreground watcher restarts; revoked permission attempts Offline; zone exit is enforced by API | Android/iOS device | P0 |
 
@@ -458,9 +458,10 @@ Online/offline availability is server-authoritative. Going Online requires an ap
 | RESERVE-005 | Rider cancels an accepted ride | Matching reservation is released | API integration | P0 |
 | RESERVE-006 | Stale release references a different ride | Existing reservation is unchanged | Unit + Cosmos integration | P0 |
 | RESERVE-007 | API process stops between reservation and ride update | Reservation may remain held; reconciliation is a tracked production blocker | Failure injection | P0 |
-| RESERVE-008 | Union transfer is attempted while a selected Driver is negotiating or has an accepted active Cab ride | Transfer returns conflict; original Union assignment and the matching active reservation remain unchanged | API integration | P0 |
+| RESERVE-008 | Union transfer races a selected booking or is attempted while a Driver has an accepted active Cab ride | `ConcurrentSelectedBookingAndUnionTransferCannotBothSucceed` proves only one operation wins the per-Driver lease; existing `UnionTransferIsBlockedWhileDriverHasSelectedNegotiation` and `UnionTransferIsBlockedWhileDriverHasAcceptedActiveRide` prove sequential conflict behavior and unchanged assignment | API concurrency | P0 |
+| RESERVE-009 | A Driver already holding an accepted active Cab ride is selected for another booking or attempts to go Offline | `AcceptedSelectedRideBlocksAnotherBookingAndDriverAvailabilityChange` returns conflict for both operations and retains the permanent reservation for the original ride | API integration | P0 |
 
-In-memory store concurrency tests are included in CI. Multi-instance Cosmos races and crash-window recovery require a real development Cosmos account and are not claimed as executed by CI unless separately configured.
+In-memory store concurrency tests and API-level selected-booking/availability/Union-transfer race tests are included in CI. Multi-instance Cosmos races and crash-window recovery require a real development Cosmos account and are not claimed as executed by CI unless separately configured.
 
 ## FIFO offer delivery checks
 | ID | Scenario | Expected result | Type | Priority |
