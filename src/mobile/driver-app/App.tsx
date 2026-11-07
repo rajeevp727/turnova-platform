@@ -15,6 +15,7 @@ import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
+import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -940,7 +941,7 @@ export default function App() {
         </View>}
         {!activeRide&&driverRideHistory.length===0&&<View style={styles.card}><Text style={styles.muted}>No trip history yet.</Text></View>}
       </>}
-      {tab === "Payslips" && <><Text style={styles.eyebrow}>MONTHLY PDF DOCUMENTS</Text><Text style={styles.title}>Your payslips</Text><Text style={styles.sub}>Download a completed month's payslip as a PDF. Only finalized months are available.</Text><View style={styles.card}><Text style={styles.cardTitle}>Recent months</Text>{Array.from({ length: 12 }, (_, index) => { const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - index - 1); const year = date.getFullYear(); const month = date.getMonth() + 1; const label = date.toLocaleDateString(undefined, { month: "long", year: "numeric" }); return <View key={`${year}-${month}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}><Text style={styles.cardTitle}>{label}</Text><Pressable style={styles.secondary} disabled={loading} onPress={() => void downloadPayslip(year, month)}><Text style={styles.secondaryText}>Download PDF</Text></Pressable></View>; })}</View></>}
+      {tab === "Payslips" && <><Text style={styles.eyebrow}>MONTHLY PDF DOCUMENTS</Text><Text style={styles.title}>Your payslips</Text><Text style={styles.sub}>Download a completed month's payslip as a PDF. Only finalized months are available.</Text><View style={styles.card}><Text style={styles.cardTitle}>Recent months</Text>{getCompletedIndiaMonths(new Date(), 12).map(({ year, month }) => { const label = formatIndiaMonthLabel(year, month); return <View key={`${year}-${month}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}><Text style={styles.cardTitle}>{label}</Text><Pressable style={styles.secondary} disabled={loading} onPress={() => void downloadPayslip(year, month)}><Text style={styles.secondaryText}>Download PDF</Text></Pressable></View>; })}</View></>}
       {tab === "Profile" && <><Text style={styles.title}>Driver onboarding</Text>{themePicker}<Text style={styles.label}>APP THEME</Text><View style={styles.card}>
         <Text style={styles.cardTitle}>Verification status: {onboardingProfile?.status ?? "Not submitted"}</Text>
         {profilePhotoBase64 ? <Image source={{ uri: `data:image/jpeg;base64,${profilePhotoBase64}` }} style={{ width: 112, height: 112, borderRadius: 56, alignSelf: "center", marginVertical: 12 }} /> : <Text style={styles.muted}>No driver selfie saved yet.</Text>}
