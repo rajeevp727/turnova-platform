@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** 66f217a599ef694847b2490a656120f198a970f6 (PR #101 completed the #16 RIDER-04 currency-aware Driver report-entry increment; exact-head CI [42373804446](https://github.com/rajeevp727/turnova-platform/actions/runs/42373804446) passed all eight jobs, including 252/252 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish. #17 SUPPORT-01 remains Blocked pending Product approval; current sequential item is #18 PLATFORM-01.)
+**Last audited main HEAD:** `0bedcf5f7ec6c85ba7dff25a8fc09a66a43733ee` after PR #102 merge. PR #102 final head `7b4320bfdad460511280251963e1b6c4ffc51c80`; exact-head CI [42380032068](https://github.com/rajeevp727/turnova-platform/actions/runs/42380032068) passed all eight jobs, including 254/254 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Current sequential item #19 RELEASE-01 is Blocked by production signing and physical-device gates.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -625,3 +625,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - New evidence: `CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment` observes metrics/spans from the actual API audit path; `ReadinessProbeEmitsBoundedMetricsAndTraceWithoutDependencyDetails` verifies readiness metrics/activity without exposing dependency details. PR #102 exact-head CI [42375960785](https://github.com/rajeevp727/turnova-platform/actions/runs/42375960785) passed all eight jobs on `1cb1a5f2cb8af18d932990f0269d1f3d63f5164f`: 254/254 backend tests, 53/53 shared mobile tests, both app typechecks/bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish. Automated review [6707392983](https://github.com/rajeevp727/turnova-platform/pull/102#issuecomment-6707392983) found no unresolved critical/high-risk issue.
 - Next: #19 RELEASE-01 — audit native release/signing/device evidence without confusing debug APKs or unsigned simulator apps with production-signed artifacts.
 - Progress remains 42.1% = (0 Verified + 16 × 0.5 + 0 Not Started + 3 Blocked) / 19; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental.
+
+
+## Latest sequential handoff — #19 RELEASE-01 (2026-11-07)
+
+- Main after PR #102 is `0bedcf5f7ec6c85ba7dff25a8fc09a66a43733ee`; no open PRs were present at the start of the release audit.
+- PR #102 final-head CI [42380032068](https://github.com/rajeevp727/turnova-platform/actions/runs/42380032068) passed 8/8 jobs on `7b4320bfdad460511280251963e1b6c4ffc51c80`: 254/254 backend, 53/53 shared mobile, Rider/Driver typechecks and production JS bundles, both Android debug APKs, both unsigned iOS Simulator apps and non-container .NET API publish. Seven expected artifacts were uploaded.
+- Automated native compilation is evidenced; signed Android AAB/iOS IPA, final iOS store identifiers/certificates/profiles, physical-device install/runtime and pilot acceptance are not. Do not claim RELEASE-01 Verified or production-ready.
+- No independent code-only release gap was found. RELEASE-01 is Blocked pending signing/store inputs and physical-device acceptance.
+- The 19-area weighted progress is 39.5% = (0 Verified + 15 × 0.5 + 0 Not started + 4 Blocked) / 19; strict fully verified count is 0/19. AI-01 and Cab supplemental requirements remain outside the denominator.
+- Next: final end-to-end gap audit across all 19 rows and approved supplemental requirements; make no feature changes unless a concrete code/test gap is found.
