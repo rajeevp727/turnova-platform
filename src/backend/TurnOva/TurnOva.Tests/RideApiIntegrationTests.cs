@@ -1162,12 +1162,13 @@ public sealed class RideApiIntegrationTests
         Assert.NotNull(completedRide.AuditEvents);
         rides[completedRideId] = completedRide with
         {
-            AuditEvents = completedRide.AuditEvents!.Select(item => item.NewStatus switch
-            {
-                "Accepted" => item with { OccurredAtUtc = acceptedAt },
-                "Completed" => item with { OccurredAtUtc = completedAt },
-                _ => item
-            }).ToArray()
+            AuditEvents = completedRide.AuditEvents!.Select(item =>
+                item.EventType == "RideStatusChanged" ? item.NewStatus switch
+                {
+                    "Accepted" => item with { OccurredAtUtc = acceptedAt },
+                    "Completed" => item with { OccurredAtUtc = completedAt },
+                    _ => item
+                } : item).ToArray()
         };
 
         var rejectedAt = new DateTimeOffset(2026, 10, 4, 4, 0, 0, TimeSpan.Zero);
@@ -1176,6 +1177,7 @@ public sealed class RideApiIntegrationTests
         rides[rejectedRideId] = rejectedRide with
         {
             AuditEvents = rejectedRide.AuditEvents!.Select(item =>
+                item.EventType == "RideStatusChanged" &&
                 item.NewStatus == "Cancelled" && item.ActorRole == "Driver"
                     ? item with { OccurredAtUtc = rejectedAt }
                     : item).ToArray()

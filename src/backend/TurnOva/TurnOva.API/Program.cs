@@ -329,7 +329,9 @@ async Task ReconcileSelectedRideWorkActivitiesAsync(
 
     foreach (var ride in driverRides)
     {
-        if (ride.DriverId != driverId || (ride.AgreementVersions ?? []).Count == 0)
+        if (ride.DriverId != driverId ||
+            !string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+            (ride.AgreementVersions ?? []).Count == 0)
             continue;
 
         var auditEvents = ride.AuditEvents ?? [];
