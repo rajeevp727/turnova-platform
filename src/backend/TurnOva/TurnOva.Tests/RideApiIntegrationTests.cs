@@ -2895,10 +2895,15 @@ public sealed class RideApiIntegrationTests
         Assert.True(rides.TryRemove(rideId, out _));
         var idempotency = factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
         var idempotencyIndex = idempotency.Keys.Single();
+        var originalBookingCreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2);
         idempotency[idempotencyIndex] = idempotency[idempotencyIndex] with
         {
-            CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2)
+            CreatedAtUtc = originalBookingCreatedAtUtc
         };
+        var originalNegotiationExpiryUtc = originalBookingCreatedAtUtc.AddMinutes(15);
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.True(await reservations.TrySetExpiryAsync(
+            "recovery-booking-driver", rideId, originalNegotiationExpiryUtc));
 
         using var retry = CreateSelectedBookingRequest("recovery-booking-key", "recovery-booking-driver",
             "recovery-booking-union", "KPHB", "HITEC City", ["JNTU"]);
@@ -2907,8 +2912,14 @@ public sealed class RideApiIntegrationTests
         using var recoveredJson = JsonDocument.Parse(await recovered.Content.ReadAsStringAsync());
         Assert.Equal(rideId, recoveredJson.RootElement.GetProperty("rideId").GetString());
         Assert.Equal(1, recoveredJson.RootElement.GetProperty("stops").GetArrayLength());
-        Assert.True(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
-            .HasActiveAsync("recovery-booking-driver"));
+        Assert.Equal(originalBookingCreatedAtUtc,
+            recoveredJson.RootElement.GetProperty("requestedAt").GetDateTimeOffset());
+        Assert.Equal(originalNegotiationExpiryUtc,
+            recoveredJson.RootElement.GetProperty("negotiationExpiresAtUtc").GetDateTimeOffset());
+        var recoveredReservation = await reservations.GetActiveAsync("recovery-booking-driver");
+        Assert.NotNull(recoveredReservation);
+        Assert.Equal(rideId, recoveredReservation.RideId);
+        Assert.Equal(originalNegotiationExpiryUtc, recoveredReservation.ExpiresAtUtc);
     }
 
     [Fact]
