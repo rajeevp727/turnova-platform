@@ -3134,6 +3134,192 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(451.00, "INR")]
+    [InlineData(450.00, "USD")]
+    public async Task RideAgreementIdempotencyRejectsChangedAmountOrCurrency(decimal retryAmount, string retryCurrency)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-idempotency-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-idempotency-driver");
+        const string rideId = "RIDE-AGREEMENT-IDEMPOTENCY";
+        const string key = "agreement-idempotency-same-key";
+        SeedAgreementRide(factory, rideId, "agreement-idempotency-rider", "agreement-idempotency-driver");
+
+        HttpRequestMessage Proposal(decimal amount, string currency)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount, currency })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var first = Proposal(450.00m, "INR");
+        using var firstResponse = await rider.SendAsync(first);
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+
+        var storedBeforeRetry = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+            .GetValueOrDefault(rideId)!.AgreementVersions!;
+        Assert.Single(storedBeforeRetry);
+        Assert.Matches("^[A-F0-9]{64}$", storedBeforeRetry[0].RequestHash!);
+
+        using var changed = Proposal(retryAmount, retryCurrency);
+        using var changedResponse = await rider.SendAsync(changed);
+        Assert.Equal(HttpStatusCode.Conflict, changedResponse.StatusCode);
+
+        var storedAfterRetry = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+            .GetValueOrDefault(rideId)!.AgreementVersions!;
+        Assert.Single(storedAfterRetry);
+        Assert.Equal(450.00m, storedAfterRetry[0].Amount);
+        Assert.Equal("INR", storedAfterRetry[0].Currency);
+    }
+
+    [Fact]
+    public async Task LegacyAgreementWithoutRequestHashReplaysOnlyMatchingStoredTerms()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-legacy-idempotency-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-legacy-idempotency-driver");
+        const string rideId = "RIDE-AGREEMENT-LEGACY-IDEMPOTENCY";
+        const string key = "agreement-legacy-idempotency-key";
+        SeedAgreementRide(factory, rideId, "agreement-legacy-idempotency-rider", "agreement-legacy-idempotency-driver");
+
+        HttpRequestMessage Proposal(decimal amount)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var first = Proposal(450m);
+        using var firstResponse = await rider.SendAsync(first);
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var persisted = rides[rideId];
+        rides[rideId] = persisted with
+        {
+            AgreementVersions = [persisted.AgreementVersions![0] with { RequestHash = null }]
+        };
+
+        using var matchingRetry = Proposal(450.00m);
+        using var matchingResponse = await rider.SendAsync(matchingRetry);
+        Assert.Equal(HttpStatusCode.OK, matchingResponse.StatusCode);
+
+        using var changedRetry = Proposal(451m);
+        using var changedResponse = await rider.SendAsync(changedRetry);
+        Assert.Equal(HttpStatusCode.Conflict, changedResponse.StatusCode);
+        Assert.Single(rides[rideId].AgreementVersions!);
+        Assert.Null(rides[rideId].AgreementVersions![0].RequestHash);
+    }
+
+    [Fact]
+    public async Task ConcurrentSameKeyAgreementProposalsRejectDifferentPayloads()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var riderOne = factory.CreateClient("Rider", "agreement-idempotency-race-rider");
+        using var riderTwo = factory.CreateClient("Rider", "agreement-idempotency-race-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-idempotency-race-driver");
+        const string rideId = "RIDE-AGREEMENT-IDEMPOTENCY-RACE";
+        const string key = "agreement-idempotency-race-same-key";
+        SeedAgreementRide(factory, rideId, "agreement-idempotency-race-rider", "agreement-idempotency-race-driver");
+
+        HttpRequestMessage Proposal(decimal amount)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var first = Proposal(450m);
+        using var second = Proposal(475m);
+        var responses = await Task.WhenAll(riderOne.SendAsync(first), riderTwo.SendAsync(second));
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
+        foreach (var response in responses) response.Dispose();
+
+        var stored = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+            .GetValueOrDefault(rideId)!.AgreementVersions!;
+        Assert.Single(stored);
+        Assert.Contains(stored[0].Amount, new[] { 450m, 475m });
+        Assert.Equal("INR", stored[0].Currency);
+        Assert.Matches("^[A-F0-9]{64}$", stored[0].RequestHash!);
+    }
+
+    [Fact]
+    public async Task RideAgreementIdempotencyNormalizesEquivalentDecimalScale()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-scale-idempotency-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-scale-idempotency-driver");
+        const string rideId = "RIDE-AGREEMENT-SCALE-IDEMPOTENCY";
+        const string key = "agreement-scale-idempotency-key";
+        SeedAgreementRide(factory, rideId, "agreement-scale-idempotency-rider", "agreement-scale-idempotency-driver");
+
+        HttpRequestMessage Proposal(decimal amount)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var first = Proposal(450.0m);
+        using var firstResponse = await rider.SendAsync(first);
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+
+        using var equivalentRetry = Proposal(450.00m);
+        using var retryResponse = await rider.SendAsync(equivalentRetry);
+        Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
+        Assert.Single(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+            .GetValueOrDefault(rideId)!.AgreementVersions!);
+    }
+
+    [Fact]
+    public async Task ConcurrentSameKeyAgreementProposalsWithSamePayloadReturnOneVersion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var riderOne = factory.CreateClient("Rider", "agreement-same-payload-race-rider");
+        using var riderTwo = factory.CreateClient("Rider", "agreement-same-payload-race-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-same-payload-race-driver");
+        const string rideId = "RIDE-AGREEMENT-SAME-PAYLOAD-RACE";
+        const string key = "agreement-same-payload-race-key";
+        SeedAgreementRide(factory, rideId, "agreement-same-payload-race-rider", "agreement-same-payload-race-driver");
+
+        HttpRequestMessage Proposal()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount = 450m, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var first = Proposal();
+        using var second = Proposal();
+        var responses = await Task.WhenAll(riderOne.SendAsync(first), riderTwo.SendAsync(second));
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+        foreach (var response in responses) response.Dispose();
+
+        var stored = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+            .GetValueOrDefault(rideId)!.AgreementVersions!;
+        Assert.Single(stored);
+        Assert.Equal(450m, stored[0].Amount);
+        Assert.Equal("INR", stored[0].Currency);
+    }
+
     [Fact]
     public async Task ConcurrentAgreementProposalsCannotCreateTheSameCurrentVersion()
     {
@@ -3758,6 +3944,8 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
     }
 
+    // Callers must create the Driver test client first so the factory registers its approved onboarding profile;
+    // this helper seeds the active Cab Union membership and ride aggregate only.
     private static void SeedAgreementRide(TurnOvaApiFactory factory, string rideId, string riderId, string driverId)
     {
         var now = DateTimeOffset.UtcNow;

@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-08  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `b4833a210fbb31ea6faefe5892272abcf36357e3` after PR #105 merged. PR #105 exact-head CI [42401645940](https://github.com/rajeevp727/turnova-platform/actions/runs/42401645940) passed all eight jobs and 257/257 backend tests. PR #106 is the single active Rider boundary-test PR; code head `2d76c556ade57eea01621121859532f5a06c1fcd` passed 272/272 backend tests and Rider/Driver mobile typecheck/bundle jobs in CI [42404536969](https://github.com/rajeevp727/turnova-platform/actions/runs/42404536969); native Android/iOS jobs were still in progress before the documentation refresh.
+**Last audited main HEAD:** `1cfe9818190800777686516ce394d492988879ad` after PR #106 merged. PR #106 exact-head CI [42404990956](https://github.com/rajeevp727/turnova-platform/actions/runs/42404990956) passed all eight jobs and 272/272 backend tests, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Sequential #4 RIDER-02 is active on `fix/rider-02-agreement-idempotency-payload`; final CI is pending.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -654,3 +654,14 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - After the documentation commit, rerun and inspect all required checks on the exact latest PR head before squash merge.
 - Next sequential task (#4 RIDER-02): fix agreement-proposal idempotency payload mismatch. Current API lookup replays an existing agreement for the same actor-scoped Idempotency-Key without comparing the new amount/currency; the ETag-conflict retry path also replays without comparing. Add an optional backward-compatible RequestHash to RideAgreementVersion, compare the amount/currency fingerprint on both paths, return 409 for changed payloads, and add same-key retry plus concurrent changed-payload regression tests.
 - Do not change approved Cab-only discovery, direct negotiation, no-payment-gateway model, FIFO guard or no-container policy. Live Cosmos and physical-device checks remain external gates.
+
+
+## Latest sequential handoff — #4 RIDER-02 (2026-11-08)
+
+- PR #106 completed #3 RIDER-01 and merged at `1cfe9818190800777686516ce394d492988879ad`; exact-head CI [42404990956](https://github.com/rajeevp727/turnova-platform/actions/runs/42404990956) passed 8/8 jobs and 272/272 backend tests.
+- #4 fixes an idempotency correctness gap in `POST /api/v1/rides/{rideId}/agreements`: a replay with the same actor-scoped key but a changed amount/currency must return HTTP 409 instead of replaying the original agreement as success.
+- The optional `RideAgreementVersion.RequestHash` stores SHA-256 over invariant canonical two-decimal amount plus currency. Existing persisted versions without the field reconstruct the hash from immutable stored terms; no migration or rewrite is required.
+- Both the initial idempotency lookup and the ETag-conflict concurrent retry path compare the request fingerprint before returning the prior version.
+- New deterministic tests cover changed amount, changed currency, legacy records without a fingerprint, concurrent same-key requests with matching and mismatched payloads, and equivalent decimal-scale normalization. PR [#107](https://github.com/rajeevp727/turnova-platform/pull/107) is open; exact-head CI is pending.
+- **Next:** #5 RIDER-03 — audit selected booking/reservation expiry, cancellation, release and history-triggered recovery for any remaining independent engineering gaps.
+- Live Cosmos ETag/multi-instance/restart and physical Android/iOS negotiation/device acceptance remain external gates. No credentials or product defaults are invented.

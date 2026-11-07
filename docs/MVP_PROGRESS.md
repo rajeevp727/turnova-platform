@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current sequential item #3 RIDER-01 — In progress:** PR #105 merged at `b4833a210fbb31ea6faefe5892272abcf36357e3`; exact-head CI [42401645940](https://github.com/rajeevp727/turnova-platform/actions/runs/42401645940) passed all eight jobs and 257/257 backend tests. PR #106 is the single active focused PR (`test/rider-01-booking-input-boundaries`), code head `2d76c556ade57eea01621121859532f5a06c1fcd`; it adds 14 invalid selected-booking cases and one positive maximum-boundary case. CI [42404536969](https://github.com/rajeevp727/turnova-platform/actions/runs/42404536969) passed backend build/tests (272/272), Rider/Driver typechecks and production JS bundle jobs; four native Android/iOS jobs were still in progress when this handoff was written. Automated review comment [6711746199](https://github.com/rajeevp727/turnova-platform/pull/106#issuecomment-6711746199) found no critical/high-risk issue. Final documentation-head CI is required before merge.
+**Current sequential item #4 RIDER-02 — In progress:** PR #106 completed #3 RIDER-01 and merged at `1cfe9818190800777686516ce394d492988879ad`; exact-head CI [42404990956](https://github.com/rajeevp727/turnova-platform/actions/runs/42404990956) passed all eight jobs and 272/272 backend tests. #4 now addresses agreement proposal idempotency: the same actor-scoped key must not replay a version when amount/currency differs. Active focused PR: [#107](https://github.com/rajeevp727/turnova-platform/pull/107), branch `fix/rider-02-agreement-idempotency-payload`; implementation commit `26f10d4b4b6176cf90df9647097bd4cfb94ecdb2`. It adds a canonical amount/currency SHA-256 fingerprint, legacy-record fallback, changed-payload conflicts and same/different-payload concurrency regressions. Exact-head CI is pending.
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -354,7 +354,7 @@
 
 ## 5. Next step
 
-**Between runs:** the final end-to-end audit of all 19 rows and approved supplemental requirements is complete. No safe code-only feature gap is currently identified. On the next run, re-read main and resume the first acceptance item whose named product/provider/device blocker has been cleared, or implement a concrete newly evidenced code/test gap. Do not request credentials before the coding milestone and do not invent product defaults.
+**Current:** #4 RIDER-02 — agreement idempotency payload matching is being implemented and tested in one focused PR. **Next sequential item:** #5 RIDER-03 — audit selected-booking idempotency, reservation expiry/cancellation/release, history-triggered reconciliation and Driver recovery for any remaining independent code/test gaps. Do not wait for infrastructure; keep live Cosmos and physical-device validation as external gates.
 
 ## 6. Current blockers
 
@@ -373,3 +373,15 @@
 - **Automated review:** [6711746199](https://github.com/rajeevp727/turnova-platform/pull/106#issuecomment-6711746199); no critical/high-risk finding. Do not merge until the latest documentation head has all required checks green.
 - **Next sequential item after #3:** #4 RIDER-02. Audit and fix agreement proposal idempotency so reusing the same actor-scoped Idempotency-Key with a different amount/currency returns 409 (including the concurrent retry path); add deterministic tests and update the existing agreement model with a backward-compatible optional request fingerprint.
 - **External gates:** production radius/zones, maps/geocoding/routing, Call/Chat, live Cosmos multi-instance validation and physical Android/iOS acceptance. These do not stop independent engineering.
+
+
+## Latest execution handoff — 2026-11-08, RIDER-02
+
+- **Current item:** #4 RIDER-02 — agreement proposal idempotency must bind an actor-scoped key to the canonical amount and currency.
+- **Previous item completed:** #3 RIDER-01 PR #106 merged at `1cfe9818190800777686516ce394d492988879ad`; exact-head CI [42404990956](https://github.com/rajeevp727/turnova-platform/actions/runs/42404990956) passed 8/8 jobs and 272/272 backend tests, both mobile typechecks/bundles, Rider/Driver Android debug APKs, unsigned iOS Simulator builds and non-container API publish.
+- **Current branch:** `fix/rider-02-agreement-idempotency-payload`. Implementation adds an optional backward-compatible `RideAgreementVersion.RequestHash`, SHA-256 over invariant canonical two-decimal amount plus currency, mismatch HTTP 409 on both ordinary and ETag-conflict replay paths, and legacy hash reconstruction from stored immutable terms.
+- **New API regressions:** `RideAgreementIdempotencyRejectsChangedAmountOrCurrency`, `LegacyAgreementWithoutRequestHashReplaysOnlyMatchingStoredTerms`, `ConcurrentSameKeyAgreementProposalsRejectDifferentPayloads`, `RideAgreementIdempotencyNormalizesEquivalentDecimalScale`, and `ConcurrentSameKeyAgreementProposalsWithSamePayloadReturnOneVersion`. Final CI and automated review are pending.
+- **CI feedback/fix:** initial backend run [42408861668](https://github.com/rajeevp727/turnova-platform/actions/runs/42408861668) exposed a test-fixture omission: new cases seeded the Union assignment but did not create the approved Driver onboarding profile, so the first proposal correctly failed eligibility with HTTP 409. The test setup now creates the Driver client/profile before seeding each ride (commit `20ba9c28fd4fda171d35394d0c2940d50ed27250`). This was a test setup issue, not a production-code failure; all checks must be rerun on the updated head.
+- **Acceptance accounting:** 19 rows remain 0 Verified, 16 In progress, 3 Blocked; strict fully verified count 0/19. Existing weighted status index is 42.1% = (0 + 16 × 0.5 + 0 + 0) / 19. This status index is not engineering implementation completion. AI-01 and approved Cab supplemental requirements remain outside the denominator.
+- **Next sequential item after #4:** #5 RIDER-03 — re-audit booking idempotency, reservation lease lifecycle, expiry/cancel/decline/completion cleanup, history-triggered recovery and notification recovery for concrete missing deterministic coverage.
+- **External gates:** live Cosmos ETag/multi-instance/restart behavior, physical Android/iOS negotiation and recovery, production negotiation-lifetime approval. These do not block the independent API code/tests.
