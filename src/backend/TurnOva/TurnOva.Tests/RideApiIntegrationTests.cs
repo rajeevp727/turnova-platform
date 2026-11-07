@@ -2912,12 +2912,12 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(afterReport.PaymentReconciliation!.ReportedAtUtc, paymentEvent.OccurredAtUtc);
 
         var auditJson = JsonSerializer.Serialize(afterReport.AuditEvents);
-        Assert.DoesNotContain("KPHB", auditJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("HITEC City", auditJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("17.493", auditJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("phone", auditJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("email", auditJson, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("chat", auditJson, StringComparison.OrdinalIgnoreCase);
+        Assert.False(auditJson.Contains("KPHB", StringComparison.OrdinalIgnoreCase));
+        Assert.False(auditJson.Contains("HITEC City", StringComparison.OrdinalIgnoreCase));
+        Assert.False(auditJson.Contains("17.493", StringComparison.OrdinalIgnoreCase));
+        Assert.False(auditJson.Contains("phone", StringComparison.OrdinalIgnoreCase));
+        Assert.False(auditJson.Contains("email", StringComparison.OrdinalIgnoreCase));
+        Assert.False(auditJson.Contains("chat", StringComparison.OrdinalIgnoreCase));
 
         var eventCount = afterReport.AuditEvents!.Count;
         using var retryRequest = CreatePaymentReportRequest(rideId, "ride-audit-payment-key", 450m);
