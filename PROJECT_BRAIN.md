@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `7fa2fc3490e7d914fa8bdfea7006025e84f6739d` (PR #74 AUTH-01 evidence merged; final-head CI 235/235 backend tests and all four API/mobile jobs passed; native signing/device and live provider gates remain)
+**Last audited main HEAD:** `b05a62990f767064c1cf333936fe8be7ab4d7ebc` (PR #75 AUTH-02 late-401 refresh race merged; final PR-head CI 235/235 backend, 12/12 shared mobile and all four jobs passed; main push CI also green; native signing/device and live provider gates remain)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -82,7 +82,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 10. **#16 RIDER-04 — Current:** PR #70 implements the approved CAB-RECON-01 supplemental requirement: immutable Driver-reported payment reconciliation after completed Cab rides, signed delta, Driver history and claim-scoped UnionManager oversight. Code head `d73dc0c76528ca95fff39a5d38a5512b1720b941` passed CI [42295719183](https://github.com/rajeevp727/turnova-platform/actions/runs/42295719183) with 210/210 backend tests, both mobile typechecks, nine shared tests and native non-container publish; live Cosmos/device gates remain. CAB-RECON-01 stays outside the 19-row denominator.
 11. **#17 SUPPORT-01 — Blocked:** Rider support categories, escalation owner and operating process remain unapproved.
 12. **#18 PLATFORM-01 / #19 RELEASE-01:** code/CI increments are merged; retain live hosting, Cosmos, native signing, physical-device, provider and legal gates.
-13. **Current sequential #2 AUTH-02:** prevent stale refresh-token reuse after delayed 401 responses; AI-01 remains separately tracked outside the 19-row denominator.
+13. **Current sequential #2 AUTH-02:** secure token-pair persistence, startup restoration and offline logout failure handling; AI-01 remains separately tracked outside the 19-row denominator.
 
 ## Known constraints and migration cautions
 - Cosmos DB transactions are limited to one logical partition. Do not assume atomic writes across Rides, QueueEntries, Driver profiles or other containers.
@@ -386,5 +386,14 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - A per-app session epoch prevents requests started under a previous login from retrying with a replacement user's token or returning stale responses after logout/session replacement.
 - Shared Node tests cover one stored-token read/refresh for concurrent unauthorized requests, delayed 401 after rotation and missing refresh-token rejection. CI [42309061896](https://github.com/rajeevp727/turnova-platform/actions/runs/42309061896) passed **12/12** shared mobile tests, **235/235** backend tests, both Rider/Driver Expo config/typechecks, all four Android/iOS production JavaScript bundle exports and native non-container API publish/artifact verification.
 - The Driver payslip direct-fetch path now uses the same refresh coordinator. Session epoch checks prevent old requests/responses from crossing logout or a replacement session.
-- PR #75 remains open for automated review and merge. Feature code commit `d50eb5992930dbbcd0dc520048a4d640fafdafc4` passed CI [42309061896](https://github.com/rajeevp727/turnova-platform/actions/runs/42309061896); documentation-evidence head `fdbc96774e324215f07501c37007497cedb226eb` passed CI [42309350006](https://github.com/rajeevp727/turnova-platform/actions/runs/42309350006).
+- PR #75 merged at `b05a62990f767064c1cf333936fe8be7ab4d7ebc`; final PR-head CI [42309594059](https://github.com/rajeevp727/turnova-platform/actions/runs/42309594059) and main push CI [42309804461](https://github.com/rajeevp727/turnova-platform/actions/runs/42309804461) passed all four jobs.
 - Remaining AUTH-02 gaps: live TriSend rotation/reuse contract, app restart/expiry/logout behavior and SecureStore read/write/delete failure behavior on Android/iOS runtimes.
+
+
+## AUTH-02 — secure storage recovery and app restart (2026-11-07)
+
+- PR #75 merged at `b05a62990f767064c1cf333936fe8be7ab4d7ebc`; final PR-head CI [42309594059](https://github.com/rajeevp727/turnova-platform/actions/runs/42309594059) and main push CI [42309804461](https://github.com/rajeevp727/turnova-platform/actions/runs/42309804461) passed all four jobs.
+- Current sequential branch: `fix/auth-02-secure-storage-restore`.
+- Shared `sessionTokenStore` helpers now roll back both token keys when pair persistence fails, attempt both deletes, reject/clear partial pairs, restore from `/me`, refresh only after a 401, preserve credentials on network/5xx failures, and clear local credentials without waiting for online revocation.
+- Mock tests cover successful save, write rollback, delete failures, partial-pair cleanup, valid restart, expired-access refresh rotation, expired refresh cleanup, network/503 preservation, secure read failure and offline logout.
+- Automated review found that an already-started token-pair save could race with logout deletion. The shared SecureStore adapter now serializes pair writes and deletes; logout clearing queues after an in-flight write, with AUTH-LOGIN-027 regression coverage. Final code/test head `10858a88a35b686b51d8a7a47efe227b652c593f` passed CI [42315482037](https://github.com/rajeevp727/turnova-platform/actions/runs/42315482037): 27/27 shared mobile tests, 235/235 backend tests, both app typechecks, four Android/iOS production bundle exports and native non-container API publish/artifact verification. No unresolved critical/high-risk issue was found in the automated review. AUTH-02 remains In progress pending live TriSend rotation/reuse and Android/iOS runtime/device gates; next sequential item after this code/test increment is #3 RIDER-01.
