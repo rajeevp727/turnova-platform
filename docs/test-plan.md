@@ -882,6 +882,12 @@ The two Expo apps share modules from `src/mobile/shared`; each app's Metro confi
 
 
 
+### Latest native CI evidence and release boundary (2026-11-07)
+
+The latest-main verification is PR #102 exact-head CI [42380032068](https://github.com/rajeevp727/turnova-platform/actions/runs/42380032068), head `7b4320bfdad460511280251963e1b6c4ffc51c80`. All 8/8 jobs passed: backend, Rider and Driver mobile, Rider and Driver Android native, Rider and Driver iOS native, and shared mobile-auth tests. The run executed 254/254 backend tests and 53/53 shared mobile tests, typechecked and exported production JS bundles for both apps, compiled both Android debug APKs and both unsigned iOS Simulator apps, and published the .NET API as a non-container artifact. Seven artifacts were uploaded: API publish; Rider/Driver Android APKs; Rider/Driver iOS Simulator apps; Rider/Driver production JS bundles.
+
+This evidence closes the automated native-compilation preflight only. It does not prove signed Android AAB or iOS IPA generation, production store identifiers/profiles, physical-device installation/runtime, permissions, device-to-device realtime, security or pilot acceptance. Those remain blocked pending approved store/signing inputs and physical Android/iOS validation. Do not place signing credentials or final identifiers in the repository.
+
 ## 15. AI-01 — bounded Rider trip intent and approved-content help
 
 | ID | Scenario | Expected result | Type | Priority |
