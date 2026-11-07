@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current sequential item #19 RELEASE-01: close the code-side native build gap by compiling Android debug APKs and unsigned iOS Simulator apps for both Rider and Driver in CI. PR #89 PLATFORM-01 is merged and its final-head checks passed; native compilation is a preflight only and does not claim production signing or physical-device acceptance.**
+**Current sequential item #19 RELEASE-01: compile Android debug APKs and unsigned iOS Simulator apps for both Rider and Driver in CI. The first PR #90 CI run [42329529454](https://github.com/rajeevp727/turnova-platform/actions/runs/42329529454) produced both Android APKs but exposed an iOS project-discovery bug: `find` selected CocoaPods' aggregate `Pods.xcodeproj`, so both iOS jobs stopped at scheme selection before compilation. The workflow now selects only the root Expo app `.xcodeproj` and explicitly rejects a Pods project. PR #90 remains open pending a green rerun; production signing and physical-device acceptance are not claimed.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -37,6 +37,7 @@
 - PR #87 merged DRIVER-03 India-local payslip month selection at `76057ee852e5726c6fd412d3fafca027069387c9`; final-head CI [42323626642](https://github.com/rajeevp727/turnova-platform/actions/runs/42323626642) passed 243/243 backend tests, 34/34 shared mobile tests, Rider/Driver typechecks, four Android/iOS JS bundle exports and native non-container API publish.
 - PR #88 merged RIDER-04 original-Union reconciliation retention at `0e1865fdbe46138ddd05202a1c8a84221a5de237`; final-head CI [42327178578](https://github.com/rajeevp727/turnova-platform/actions/runs/42327178578) passed 244/244 backend tests, 34/34 shared tests, both app typechecks, four Android/iOS JS bundle exports and native non-container API publish.
 - PR #89 merged PLATFORM-01 append-only ride audit events at `818c624e139f6c77c674f6466aee352e79701726`; final-head CI [42328297135](https://github.com/rajeevp727/turnova-platform/actions/runs/42328297135) passed all four jobs: 246/246 backend tests, 34/34 shared mobile tests, both app typechecks, four Android/iOS production JS bundle exports and native non-container API publish. Automated review [6700893842](https://github.com/rajeevp727/turnova-platform/pull/89#issuecomment-6700893842) found no unresolved critical/high-risk issue.
+- PR #90 initial native CI [42329529454](https://github.com/rajeevp727/turnova-platform/actions/runs/42329529454): both Rider/Driver Android debug APK builds succeeded; both iOS jobs failed before Xcode compilation because project discovery selected `Pods.xcodeproj` and therefore found no app scheme. The PR branch now limits discovery to the root Expo app project and rejects CocoaPods aggregate projects; rerun evidence is pending.
 
 ## 2. Overall MVP completion
 
