@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
@@ -88,7 +89,7 @@ public sealed class RideApiIntegrationTests
     public async Task UnhandledExceptionReturnsGenericProblemDetailsWithTraceId()
     {
         using var factory = new TurnOvaApiFactory();
-        using var client = factory.CreateClient("Rider", "rider-exception");
+        using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/__test/throw");
         var body = await response.Content.ReadAsStringAsync();
@@ -97,6 +98,45 @@ public sealed class RideApiIntegrationTests
         Assert.Contains("An unexpected error occurred.", body);
         Assert.Contains("traceId", body);
         Assert.DoesNotContain("sensitive-test-exception", body);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, ApiExceptionAuditEvent>>());
+    }
+
+    [Fact]
+    public async Task AuthenticatedDispatchExceptionPersistsPrivacyMinimisedAuditEvent()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string actorId = "driver-exception-audit-private-subject";
+        using var driver = factory.CreateClient("Driver", actorId);
+
+        using var response = await driver.GetAsync(
+            "/__test/dispatch-exception?email=private@example.test&phone=%2B919876543210");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.DoesNotContain("sensitive-test-exception", body);
+        using var problem = JsonDocument.Parse(body);
+        var traceId = problem.RootElement.GetProperty("traceId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(traceId));
+
+        var audits = factory.Services.GetRequiredService<ConcurrentDictionary<string, ApiExceptionAuditEvent>>();
+        var audit = Assert.Single(audits.Values);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(actorId))), audit.ActorReference);
+        Assert.Equal("Driver", audit.ActorRole);
+        Assert.Equal("GET", audit.HttpMethod);
+        Assert.Contains("dispatch-exception", audit.RouteTemplate, StringComparison.Ordinal);
+        Assert.Equal("InvalidOperation", audit.ExceptionCategory);
+        Assert.Equal("UnhandledApiException", audit.ReasonCode);
+        Assert.Equal(traceId, audit.TraceId);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(traceId!))), audit.Id);
+        Assert.Equal(StatusCodes.Status500InternalServerError, audit.StatusCode);
+        Assert.Equal(TimeSpan.Zero, audit.OccurredAtUtc.Offset);
+
+        var serializedAudit = JsonSerializer.Serialize(audit);
+        Assert.DoesNotContain(actorId, serializedAudit);
+        Assert.DoesNotContain("private@example.test", serializedAudit);
+        Assert.DoesNotContain("919876543210", serializedAudit);
+        Assert.DoesNotContain("sensitive-test-exception", serializedAudit);
+        Assert.False(serializedAudit.Contains("token", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
