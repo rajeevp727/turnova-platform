@@ -331,7 +331,7 @@ async Task ReconcileSelectedRideWorkActivitiesAsync(
     {
         if (ride.DriverId != driverId ||
             !string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
-            (ride.AgreementVersions ?? []).Count == 0)
+            string.IsNullOrWhiteSpace(ride.UnionId))
             continue;
 
         var auditEvents = ride.AuditEvents ?? [];
