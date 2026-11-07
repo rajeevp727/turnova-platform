@@ -3020,6 +3020,73 @@ public sealed class RideApiIntegrationTests
             (await managerWithoutUnion.GetAsync("/api/v1/union/reconciliation")).StatusCode);
     }
 
+
+    [Fact]
+    public async Task UnionReconciliationRemainsLinkedToOriginalRideUnionAfterDriverTransfer()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-transfer-driver";
+        const string originalUnionId = "payment-transfer-original-union";
+        using var rider = factory.CreateClient("Rider", "payment-transfer-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, originalUnionId, "payment-transfer-ride", 500m);
+        using var reportRequest = CreatePaymentReportRequest(
+            rideId, "payment-transfer-report", 450m);
+        using var reportResponse = await driver.SendAsync(reportRequest);
+        Assert.Equal(HttpStatusCode.OK, reportResponse.StatusCode);
+
+        using var ops = factory.CreateClient("Rider", "payment-transfer-ops");
+        using var createUnionRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "Payment Transfer Target Union",
+                code = "PAYMENT-TRANSFER-TARGET",
+                location = "Hyderabad",
+                managerName = (string?)null,
+                managerPhone = (string?)null,
+                zoneIds = new[] { "hyderabad-central" },
+                serviceClasses = new[] { "cab" }
+            })
+        };
+        createUnionRequest.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var createUnionResponse = await ops.SendAsync(createUnionRequest);
+        Assert.Equal(HttpStatusCode.Created, createUnionResponse.StatusCode);
+        using var unionJson = JsonDocument.Parse(await createUnionResponse.Content.ReadAsStringAsync());
+        var targetUnionId = unionJson.RootElement.GetProperty("unionId").GetString()!;
+
+        using var transferRequest = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/v1/ops/drivers/{driverId}/union-assignment")
+        {
+            Content = JsonContent.Create(new
+            {
+                unionId = targetUnionId,
+                reason = "Completed ride reconciliation remains with the original union"
+            })
+        };
+        transferRequest.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var transferResponse = await ops.SendAsync(transferRequest);
+        Assert.Equal(HttpStatusCode.OK, transferResponse.StatusCode);
+
+        using var originalManager = factory.CreateUnionManagerClient(
+            originalUnionId, "payment-transfer-original-manager");
+        using var originalResponse = await originalManager.GetAsync("/api/v1/union/reconciliation");
+        Assert.Equal(HttpStatusCode.OK, originalResponse.StatusCode);
+        using var originalJson = JsonDocument.Parse(await originalResponse.Content.ReadAsStringAsync());
+        var originalRecord = Assert.Single(originalJson.RootElement.EnumerateArray());
+        Assert.Equal(rideId, originalRecord.GetProperty("rideId").GetString());
+        Assert.Equal(originalUnionId, originalRecord.GetProperty("unionId").GetString());
+        Assert.Equal(450m, originalRecord.GetProperty("amountReceived").GetDecimal());
+
+        var driverHistory = await driver.GetFromJsonAsync<List<JsonElement>>("/api/v1/driver/rides/mine");
+        var driverRecord = Assert.Single(driverHistory!);
+        var driverReport = driverRecord.GetProperty("paymentReconciliation");
+        Assert.Equal(originalUnionId, driverReport.GetProperty("unionId").GetString());
+        Assert.Equal(driverId, driverReport.GetProperty("reportedByDriverId").GetString());
+    }
+
     private static async Task<string> CreateSelectedRideWithConfirmedAgreementAsync(
         TurnOvaApiFactory factory, HttpClient rider, HttpClient driver,
         string driverId, string unionId, string bookingKey, decimal agreedAmount, string currency = "INR")

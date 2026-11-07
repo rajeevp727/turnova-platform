@@ -681,6 +681,7 @@ These supplement and supersede legacy fare-estimate, payment-gateway and automat
 | CAB-REC-007 | Driver reports before completion or without the current mutual agreement | Conflict; no report is stored | API integration | P0 |
 | CAB-REC-008 | Same idempotency key is retried or a competing report is submitted | Same key/payload returns the immutable report; another key/payload cannot overwrite it | API/concurrency | P0 |
 | CAB-REC-009 | UnionManager lists reconciliation records | Only records matching signed unionId claims are returned; no Rider identity, route/stops, contact data, exact location or chat is exposed | API/privacy | P0 |
+| CAB-REC-010 | Driver transfers to another Union after a completed ride has a report | Report remains linked to the original ride Union, remains visible to that Union's authorised manager, and stays in Driver history; cross-Union sharing is not assumed without an approved next-ride eligibility/visibility policy | API/privacy/data-retention | P0 |
 | CAB-UNION-001 | Driver transferred unions | Prior selfie approval invalidated until new union approval | API/privacy | P0 |
 
 Do not test or implement platform fare estimates, in-app payment collection, gateway/escrow or customer-facing FIFO ranking/automatic assignment as MVP behaviour. Dispute and non-zero-delta next-ride outcomes remain pending product decisions.
