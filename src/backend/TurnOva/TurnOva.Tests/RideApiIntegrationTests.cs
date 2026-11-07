@@ -2398,6 +2398,13 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
+        var auditCountBeforeLocation = factory.Services
+            .GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId].AuditEvents!.Count;
+        using var locationUpdate = await driver.PostAsJsonAsync(
+            $"/api/v1/rides/{rideId}/location", new { latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.NoContent, locationUpdate.StatusCode);
+        Assert.Equal(auditCountBeforeLocation,
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId].AuditEvents!.Count);
 
         using var started = await driver.PostAsync($"/api/v1/rides/{rideId}/start", null);
         Assert.Equal(HttpStatusCode.OK, started.StatusCode);
