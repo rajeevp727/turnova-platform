@@ -96,14 +96,14 @@ jobs:
         app: [driver-app, rider-app]
     defaults:
       run:
-        working-directory: src/mobile/\${{ matrix.app }}
+        working-directory: src/mobile/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/mobile/\${{ matrix.app }}/package.json
+          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -112,14 +112,14 @@ jobs:
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
       - name: Compile Android debug APK
-        working-directory: src/mobile/\${{ matrix.app }}/android
+        working-directory: src/mobile/${{ matrix.app }}/android
         run: ./gradlew --no-daemon assembleDebug
       - name: Verify Android APK artifact
         run: test -s android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v6
         with:
-          name: \${{ matrix.app }}-android-native-debug-apk
-          path: src/mobile/\${{ matrix.app }}/android/app/build/outputs/apk/debug/app-debug.apk
+          name: ${{ matrix.app }}-android-native-debug-apk
+          path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
   native-ios:
@@ -130,14 +130,14 @@ jobs:
         app: [driver-app, rider-app]
     defaults:
       run:
-        working-directory: src/mobile/\${{ matrix.app }}
+        working-directory: src/mobile/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/mobile/\${{ matrix.app }}/package.json
+          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
       - run: npm install
       - name: Generate iOS native project
         run: npx expo prebuild --platform ios --no-install --clean
@@ -145,7 +145,7 @@ jobs:
         run: pod install --project-directory=ios
       - name: Compile unsigned iOS Simulator app
         env:
-          APP_NAME: \${{ matrix.app }}
+          APP_NAME: ${{ matrix.app }}
         run: |
           set -euo pipefail
           WORKSPACE="$(find ios -maxdepth 2 -name '*.xcworkspace' -print -quit)"
@@ -193,8 +193,8 @@ jobs:
           echo "Unsigned simulator build produced: $APP_BUNDLE"
       - uses: actions/upload-artifact@v6
         with:
-          name: \${{ matrix.app }}-ios-simulator-app
-          path: \${{ runner.temp }}/turnova-\${{ matrix.app }}-ios/Build/Products/Release-iphonesimulator/*.app
+          name: ${{ matrix.app }}-ios-simulator-app
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-ios/Build/Products/Release-iphonesimulator/*.app
           if-no-files-found: error
 
   mobile-auth-tests:

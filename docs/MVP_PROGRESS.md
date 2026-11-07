@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current sequential item #19 RELEASE-01: close the code-side native build gap by compiling Android debug APKs and unsigned iOS Simulator apps for both Rider and Driver in CI. PR #89 PLATFORM-01 is merged and its final-head checks passed; native compilation is a preflight only and does not claim production signing or physical-device acceptance.
+**Current sequential item #19 RELEASE-01: close the code-side native build gap by compiling Android debug APKs and unsigned iOS Simulator apps for both Rider and Driver in CI. PR #89 PLATFORM-01 is merged and its final-head checks passed; native compilation is a preflight only and does not claim production signing or physical-device acceptance.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
