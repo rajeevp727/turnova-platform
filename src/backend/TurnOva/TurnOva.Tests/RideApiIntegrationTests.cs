@@ -2546,6 +2546,48 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task CompletedRideRetryRepairsWorkActivityAndReservationReleaseAfterInterruptedCompletion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "completion-recovery-driver";
+        using var rider = factory.CreateClient("Rider", "completion-recovery-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, driverId, "completion-recovery-union",
+            "completion-recovery-booking", 500m);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/start", null)).StatusCode);
+
+        // Simulate a process interruption after the Completed ride write but before
+        // the separate work-activity and reservation-release writes.
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[rideId] = rides[rideId] with { Status = "Completed", LocationSharingActive = false };
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.True(await reservations.HasActiveAsync(driverId));
+
+        var activities = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        Assert.DoesNotContain(activities.Values, item =>
+            item.RideId == rideId && item.ActivityType == "Completed");
+
+        using var repair = await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null);
+        Assert.Equal(HttpStatusCode.OK, repair.StatusCode);
+        Assert.Equal("Completed", (await ReadRideAsync(repair)).Status);
+        Assert.False(await reservations.HasActiveAsync(driverId));
+        Assert.Single(activities.Values, item =>
+            item.RideId == rideId && item.ActivityType == "Completed");
+
+        using var retry = await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Single(activities.Values, item =>
+            item.RideId == rideId && item.ActivityType == "Completed");
+    }
+
+    [Fact]
     public async Task SelectedBookingRejectsMoreThanTenIntermediateStops()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
