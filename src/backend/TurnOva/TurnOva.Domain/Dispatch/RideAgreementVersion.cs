@@ -16,7 +16,8 @@ public sealed record RideAgreementVersion(
     IReadOnlyList<string> Stops,
     string ProposedBy,
     string IdempotencyKey,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    string? RequestHash = null);
 
 public sealed record RideAgreementConfirmation(
     string RideId,
