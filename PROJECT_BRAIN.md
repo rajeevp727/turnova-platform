@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `16e075730556ea9fdab77ddfc740c5c05ea872aa` (PR #94 RIDER-02 merged; final-head CI [42352025790](https://github.com/rajeevp727/turnova-platform/actions/runs/42352025790) passed all eight jobs: 248/248 backend, 51/51 shared mobile tests, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Current sequential area is #5 RIDER-03; the current increment adds Rider/Driver history-triggered expiry reconciliation integration coverage.
+**Last audited main HEAD:** `fce4e58c4f9c21b6270328d82771a3eeb5c87d63` (PR #96 merged the sequential dispatch handoff documentation; exact-head CI [42354011278](https://github.com/rajeevp727/turnova-platform/actions/runs/42354011278) passed all eight jobs, including 249/249 backend tests, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Current sequential area is #8 DISPATCH-03; the current increment adds a direct regression guard proving selected-driver expiry does not invoke the legacy FIFO offer advancer.)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -565,3 +565,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - #7 DISPATCH-02 was audited on main commit `1b2a881f574cbfac0c8f1be6db3ac3116a114982`. The API already groups eligible approved Cab drivers by union, caps at three, orders by unrounded pickup proximity with deterministic DriverId tie-break, enforces current-union selfie approval and response privacy; Rider UI renders those groups/order without FIFO ranking. Existing API tests cover the deterministic acceptance cases. No additional code change was justified; live Cosmos/device gates and the internal FIFO role decision remain.
 - Current sequential item is #8 DISPATCH-03. Re-audit the existing lazy expiry, exact lease release, history/discovery/availability reconciliation and isolation from the legacy FIFO offer-expiry worker. Only implement a concrete independent gap; production negotiation lifetime remains unset until product approval.
 - Weighted progress remains 42.1%: 0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
+
+
+## DISPATCH-03 selected-expiry FIFO isolation (2026-11-07)
+
+- PR #96 merged at `fce4e58c4f9c21b6270328d82771a3eeb5c87d63`; exact-head CI [42354011278](https://github.com/rajeevp727/turnova-platform/actions/runs/42354011278) passed all eight jobs and executed 249/249 backend tests.
+- The selected-booking `FindRideAsync` path performs the authoritative conditional expiry transition, releases only the matching Driver reservation and emits the ride-status event without depending on `IRideOfferAdvancer`. Existing tests proved terminal state and lease release, but did not directly guard this boundary against a future accidental FIFO call.
+- PR #97 adds `ExpiredSelectedNegotiationDoesNotAdvanceLegacyFifoOffer`, injecting a recording advancer into the API test host and asserting zero calls after selected negotiation expiry. The existing legacy offer-expiry positive-control test remains unchanged.
+- PR #97 commit [`f8774f4`](https://github.com/rajeevp727/turnova-platform/commit/f8774f40b53b8f6d389c260adbc8f60fef8b313b) is open; exact-head CI and automated review are pending. No production behavior or FIFO policy changes. Production `Dispatch:SelectedDriverNegotiationLifetimeMinutes` remains unset and fails closed until approved.
+- Next sequential item after this increment: #9 DISPATCH-04 — re-audit exclusive Driver reservation across concurrent selected bookings, availability transitions and Union transfer; implement only a concrete remaining gap.
+- Weighted progress remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19). AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
