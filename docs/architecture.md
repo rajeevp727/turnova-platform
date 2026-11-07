@@ -389,3 +389,9 @@ The MVP AI boundary lives in `TurnOva.Application.Assistance` and is exposed thr
 - The Rider-only trip-intent endpoint and Rider/Driver help endpoint use JWT role authorization and a per-authenticated-caller fixed-window rate limit. Input lengths, provider tokens/source IDs, service class and passenger count are validated. Logs include only use-case/source/outcome metadata; prompts, routes, identity, contact, payment and token values are never logged.
 - AI is prohibited from setting fares, changing payment decisions, approving identity/KYC/selfies, determining Driver eligibility, ranking discovery/FIFO, accepting/rejecting rides or changing authoritative ride state. The deterministic backend remains the source of truth.
 - No provider credentials are required for local fallback or CI. Live provider sandbox validation, data-processing terms and managed-secret wiring remain post-coding infrastructure gates.
+
+
+### Driver history and direct-payment report projection
+
+- The authenticated Driver history response may include a minimal current-agreement summary (version, agreed amount and currency) so a completed-ride payment-report form uses the actual agreement currency. It does not expose agreement route snapshots or confirmation/audit internals through this summary.
+- Driver payment reconciliation remains a separate immutable, Driver-reported/unverified record in the ride aggregate. Rider history does not add the Driver-only current-agreement summary or reconciliation report; the UnionManager reconciliation endpoint remains scoped by signed union claims and its minimum-data response.
