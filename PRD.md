@@ -243,3 +243,10 @@ This approved Rider/Driver MVP requirement is tracked separately from the existi
 - The append-only guard rejects removal, reordering or mutation of prior events; snapshot comparison includes the event list so concurrent ETag updates cannot silently drop audit history. Same-key agreement/payment retries and already-completed state retries do not append duplicate events.
 - Audit events deliberately omit route/stops, precise coordinates, phone/email, KYC/document references, tokens and private chat. The existing Driver history and signed-unionId-scoped UnionManager reconciliation views remain least-privilege; no cross-Union preceding-ride disclosure policy is inferred.
 - Automated evidence is deterministic in-memory integration coverage. Live Cosmos multi-instance ETag/restart/retention validation, production telemetry/alerts, origin configuration and load testing remain separate PLATFORM-01 gates.
+
+
+### PLATFORM-01 provider-neutral telemetry implementation evidence note (2026-11-07)
+
+- The API emits low-cardinality .NET Meter metrics for ride-audit write attempts and storage-readiness outcomes/duration, plus ActivitySource spans for those operations. Event types are allow-listed and outcomes are bounded to success/conflict/failure; ride, user, Union, route, contact and credential identifiers are not tags.
+- Instrumentation uses only the .NET diagnostics APIs already in the target framework. No exporter, telemetry vendor, credentials, public metrics endpoint or new package is selected; a host-provided listener/exporter can consume the signals after infrastructure is chosen.
+- CI tests observe the real selected-Cab audit write path and the storage readiness probe. Live Cosmos multi-instance ETag/restart/retention, telemetry export, alert rules, production CORS origins and load testing remain external PLATFORM-01 gates.
