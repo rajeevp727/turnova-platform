@@ -3141,6 +3141,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "agreement-idempotency-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-idempotency-driver");
         const string rideId = "RIDE-AGREEMENT-IDEMPOTENCY";
         const string key = "agreement-idempotency-same-key";
         SeedAgreementRide(factory, rideId, "agreement-idempotency-rider", "agreement-idempotency-driver");
@@ -3180,6 +3181,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "agreement-legacy-idempotency-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-legacy-idempotency-driver");
         const string rideId = "RIDE-AGREEMENT-LEGACY-IDEMPOTENCY";
         const string key = "agreement-legacy-idempotency-key";
         SeedAgreementRide(factory, rideId, "agreement-legacy-idempotency-rider", "agreement-legacy-idempotency-driver");
@@ -3222,6 +3224,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var riderOne = factory.CreateClient("Rider", "agreement-idempotency-race-rider");
         using var riderTwo = factory.CreateClient("Rider", "agreement-idempotency-race-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-idempotency-race-driver");
         const string rideId = "RIDE-AGREEMENT-IDEMPOTENCY-RACE";
         const string key = "agreement-idempotency-race-same-key";
         SeedAgreementRide(factory, rideId, "agreement-idempotency-race-rider", "agreement-idempotency-race-driver");
@@ -3256,6 +3259,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "agreement-scale-idempotency-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-scale-idempotency-driver");
         const string rideId = "RIDE-AGREEMENT-SCALE-IDEMPOTENCY";
         const string key = "agreement-scale-idempotency-key";
         SeedAgreementRide(factory, rideId, "agreement-scale-idempotency-rider", "agreement-scale-idempotency-driver");
@@ -3287,6 +3291,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var riderOne = factory.CreateClient("Rider", "agreement-same-payload-race-rider");
         using var riderTwo = factory.CreateClient("Rider", "agreement-same-payload-race-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-same-payload-race-driver");
         const string rideId = "RIDE-AGREEMENT-SAME-PAYLOAD-RACE";
         const string key = "agreement-same-payload-race-key";
         SeedAgreementRide(factory, rideId, "agreement-same-payload-race-rider", "agreement-same-payload-race-driver");
