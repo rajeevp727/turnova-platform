@@ -307,6 +307,60 @@ async Task<IReadOnlyList<DriverWorkActivity>> GetWorkActivitiesAsync(string driv
     return results;
 }
 
+async Task ReconcileSelectedRideWorkActivitiesAsync(
+    string driverId, DateTimeOffset periodStart, DateTimeOffset periodEnd, CancellationToken ct)
+{
+    // Ride audit events share the authoritative ride snapshot. Rebuild selected-driver
+    // activity rows before creating the first immutable monthly snapshot so an API
+    // interruption between the ride write and the separate ledger write cannot omit work.
+    var driverRides = new List<DemoRide>();
+    if (rideContainer is null)
+    {
+        driverRides.AddRange(rides.Values.Where(ride => ride.DriverId == driverId));
+    }
+    else
+    {
+        var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId")
+            .WithParameter("@driverId", driverId);
+        using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
+        while (iterator.HasMoreResults)
+            driverRides.AddRange(await iterator.ReadNextAsync(ct));
+    }
+
+    foreach (var ride in driverRides)
+    {
+        if (ride.DriverId != driverId || (ride.AgreementVersions ?? []).Count == 0)
+            continue;
+
+        var auditEvents = ride.AuditEvents ?? [];
+        var completedEvent = auditEvents.LastOrDefault(item =>
+            item.EventType == "RideStatusChanged" &&
+            item.NewStatus == "Completed" &&
+            item.ActorRole == "Driver" &&
+            item.ActorId == driverId);
+        if (ride.Status == "Completed" && completedEvent is not null)
+            await EnsureCompletedRideSideEffectsAsync(ride, driverId, ct);
+
+        foreach (var auditEvent in auditEvents.Where(item =>
+            item.EventType == "RideStatusChanged" &&
+            item.ActorRole == "Driver" &&
+            item.ActorId == driverId &&
+            item.OccurredAtUtc >= periodStart &&
+            item.OccurredAtUtc < periodEnd))
+        {
+            if (auditEvent.NewStatus == "Accepted")
+            {
+                await RecordWorkActivityAsync(driverId, ride.RideId, "Accepted", auditEvent.OccurredAtUtc, ct);
+            }
+            else if (auditEvent.NewStatus == "Cancelled" &&
+                     auditEvent.PreviousStatus is "Negotiating" or "AgreementConfirmed")
+            {
+                await RecordWorkActivityAsync(driverId, ride.RideId, "Rejected", auditEvent.OccurredAtUtc, ct);
+            }
+        }
+    }
+}
+
 async Task<DriverMonthlyPayslip?> FindPayslipAsync(string driverId, string payslipId, CancellationToken ct)
 {
     if (payslipContainer is null)
@@ -1417,6 +1471,7 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
             return Results.Conflict(new { message = "The employer union record for this pay period is unavailable." });
         var profile = await FindDriverProfileAsync(driverId, ct);
         if (profile is null) return Results.Conflict(new { message = "Driver profile is unavailable." });
+        await ReconcileSelectedRideWorkActivitiesAsync(driverId, periodStart, periodEnd, ct);
         var activities = await GetWorkActivitiesAsync(driverId, periodStart, periodEnd, ct);
         var completedActivities = activities.Where(item => item.ActivityType == "Completed").ToArray();
         payslip = new DriverMonthlyPayslip(
