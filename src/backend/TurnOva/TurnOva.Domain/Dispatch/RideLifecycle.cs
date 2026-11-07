@@ -53,3 +53,24 @@ public sealed record RidePaymentReconciliation(
     string ReportedByDriverId,
     string Status,
     string IdempotencyKeyHash);
+
+/// <summary>
+/// Append-only, privacy-minimised ride audit fact stored in the same ride aggregate and
+/// Cosmos partition as the state it describes. Do not add route, precise location,
+/// contact details, tokens or private chat content to this record.
+/// </summary>
+public sealed record RideAuditEvent(
+    string EventId,
+    string RideId,
+    string? UnionId,
+    string EventType,
+    string ActorId,
+    string ActorRole,
+    string? PreviousStatus,
+    string? NewStatus,
+    int? AgreementVersion,
+    decimal? Amount,
+    decimal? AmountReceived,
+    decimal? Delta,
+    string? Currency,
+    DateTimeOffset OccurredAtUtc);
