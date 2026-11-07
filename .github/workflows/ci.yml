@@ -88,6 +88,96 @@ jobs:
             ${{ runner.temp }}/turnova-${{ matrix.app }}-ios/
           if-no-files-found: error
 
+  mobile-native-android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [driver-app, rider-app]
+    defaults:
+      run:
+        working-directory: src/mobile/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: npm install
+      - name: Generate Android native project for build validation
+        run: CI=1 npx expo prebuild --platform android --no-install
+      - name: Build Android debug APK without release signing credentials
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleDebug --no-daemon
+      - name: Verify Android debug APK
+        run: |
+          apk="$(find android/app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -size +0c -print -quit)"
+          test -n "$apk"
+          echo "Built native Android debug APK: $apk"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-android-debug-apk
+          path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  mobile-native-ios:
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [driver-app, rider-app]
+    defaults:
+      run:
+        working-directory: src/mobile/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
+      - run: npm install
+      - name: Set ephemeral build-only iOS bundle identifier
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
+          const role = app.expo.slug === "turnova-rider" ? "rider" : "driver";
+          const identifier = `com.example.turnova.${role}.ci`;
+          app.expo.ios = { ...(app.expo.ios || {}), bundleIdentifier: identifier };
+          fs.writeFileSync("app.json", `${JSON.stringify(app, null, 2)}\n`);
+          console.log(`Using ephemeral build-only iOS bundle identifier: ${identifier}`);
+          NODE
+      - name: Generate iOS native project for simulator build validation
+        run: CI=1 npx expo prebuild --platform ios --no-install
+      - name: Install iOS CocoaPods dependencies
+        run: cd ios && pod install --repo-update
+      - name: Build unsigned iOS Simulator app
+        run: |
+          workspace="$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
+          test -n "$workspace"
+          scheme="$(xcodebuild -list -workspace "$workspace" | awk '/Schemes:/ {in_schemes=1; next} in_schemes && NF {gsub(/^[[:space:]]+|[[:space:]]+$/, ""); print; exit}')"
+          test -n "$scheme"
+          xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -derivedDataPath "$RUNNER_TEMP/turnova-${{ matrix.app }}-ios-derived" build
+          app_path="$(find "$RUNNER_TEMP/turnova-${{ matrix.app }}-ios-derived/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app_path"
+          test -d "$app_path"
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "$RUNNER_TEMP/turnova-${{ matrix.app }}-ios-simulator.app.zip"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-ios-simulator-app
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-ios-simulator.app.zip
+          if-no-files-found: error
+
   mobile-auth-tests:
     runs-on: ubuntu-24.04
     steps:
