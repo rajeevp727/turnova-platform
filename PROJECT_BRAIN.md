@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `17cb46017b215b0e29f26b5a68be6399ec7885f9` (PR #93 RIDER-01 merged; exact-head CI [42350780382](https://github.com/rajeevp727/turnova-platform/actions/runs/42350780382) passed all eight jobs, including 248/248 backend, 47/47 shared mobile, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Current sequential area is #4 RIDER-02; agreement confirmation timestamps are returned by the API and rendered by both apps, and the current increment adds shared deterministic display-label coverage.
+**Last audited main HEAD:** `16e075730556ea9fdab77ddfc740c5c05ea872aa` (PR #94 RIDER-02 merged; final-head CI [42352025790](https://github.com/rajeevp727/turnova-platform/actions/runs/42352025790) passed all eight jobs: 248/248 backend, 51/51 shared mobile tests, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Current sequential area is #5 RIDER-03; the current increment adds Rider/Driver history-triggered expiry reconciliation integration coverage.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -550,3 +550,10 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Current focused increment extracts the existing formatting into `agreementConfirmationLabel`, used by Rider Activity and Driver Trips, with shared Node tests. It does not alter agreement state or timestamps.
 - Live Cosmos ETag/multi-instance and Android/iOS physical-device negotiation, confirmation, reconnect and in-trip renegotiation remain external gates. Weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19).
 - Next sequential item after this increment: #5 RIDER-03 — audit selected-driver booking idempotency, cancellation/expiry and reservation release.
+
+## RIDER-03 history-triggered expiry reconciliation (2026-11-07)
+
+- PR #94 merged at `16e075730556ea9fdab77ddfc740c5c05ea872aa`; final-head CI [42352025790](https://github.com/rajeevp727/turnova-platform/actions/runs/42352025790) passed 248/248 backend, 51/51 shared mobile, both app typechecks/bundles, both Android debug APKs, both unsigned iOS Simulator builds and native non-container API publish.
+- The Rider and Driver history endpoints both call `FindRideAsync` for each returned ride, but explicit expiry coverage previously exercised direct ride reads and discovery rather than history. Current increment adds one integration test for both history routes, asserting one System Expired event and matching lease release.
+- Production `Dispatch:SelectedDriverNegotiationLifetimeMinutes` remains unset. No expiry default is inferred; the API returns 503 until the Product Owner approves the lifetime. Live Cosmos ETag/multi-instance/restart and Android/iOS booking/cancel/expiry device acceptance remain external gates.
+- Weighted score remains 42.1% (0 Verified, 16 In Progress, 0 Not started, 3 Blocked; strict 0/19). Next sequential item after this increment is #6 DISPATCH-01 — pickup zone/radius boundary audit.

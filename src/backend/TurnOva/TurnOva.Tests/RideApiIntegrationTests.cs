@@ -2237,6 +2237,63 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderAndDriverHistoryReconcileExpiredSelectedNegotiationsAndReleaseOnlyTheirReservations()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "history-expiry-driver";
+        const string unionId = "history-expiry-union";
+        using var rider = factory.CreateClient("Rider", "history-expiry-rider");
+        using var secondRider = factory.CreateClient("Rider", "history-expiry-second-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var riderBookingRequest = CreateSelectedBookingRequest(
+            "history-expiry-rider-booking", driverId, unionId, "KPHB", "HITEC City", []);
+        using var riderBooking = await rider.SendAsync(riderBookingRequest);
+        Assert.Equal(HttpStatusCode.Created, riderBooking.StatusCode);
+        using var riderBookingJson = JsonDocument.Parse(await riderBooking.Content.ReadAsStringAsync());
+        var riderRideId = riderBookingJson.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[riderRideId] = rides[riderRideId] with
+        {
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1)
+        };
+
+        using var riderHistoryResponse = await rider.GetAsync("/api/v1/rides/mine");
+        Assert.Equal(HttpStatusCode.OK, riderHistoryResponse.StatusCode);
+        using var riderHistoryJson = JsonDocument.Parse(await riderHistoryResponse.Content.ReadAsStringAsync());
+        var riderHistoryRide = riderHistoryJson.RootElement.EnumerateArray()
+            .Single(item => item.GetProperty("rideId").GetString() == riderRideId);
+        Assert.Equal("Expired", riderHistoryRide.GetProperty("status").GetString());
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync(driverId));
+        Assert.Single(rides[riderRideId].AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Expired");
+
+        using var driverBookingRequest = CreateSelectedBookingRequest(
+            "history-expiry-driver-booking", driverId, unionId, "KPHB", "Madhapur", []);
+        using var driverBooking = await secondRider.SendAsync(driverBookingRequest);
+        Assert.Equal(HttpStatusCode.Created, driverBooking.StatusCode);
+        using var driverBookingJson = JsonDocument.Parse(await driverBooking.Content.ReadAsStringAsync());
+        var driverRideId = driverBookingJson.RootElement.GetProperty("rideId").GetString()!;
+        rides[driverRideId] = rides[driverRideId] with
+        {
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1)
+        };
+
+        using var driverHistoryResponse = await driver.GetAsync("/api/v1/driver/rides/mine");
+        Assert.Equal(HttpStatusCode.OK, driverHistoryResponse.StatusCode);
+        using var driverHistoryJson = JsonDocument.Parse(await driverHistoryResponse.Content.ReadAsStringAsync());
+        var driverHistoryRide = driverHistoryJson.RootElement.EnumerateArray()
+            .Single(item => item.GetProperty("rideId").GetString() == driverRideId);
+        Assert.Equal("Expired", driverHistoryRide.GetProperty("status").GetString());
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync(driverId));
+        Assert.Single(rides[driverRideId].AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Expired");
+    }
+
+    [Fact]
     public async Task DiscoveryExpiresAnExpiredNegotiationBeforeReleasingItsDriverReservation()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
