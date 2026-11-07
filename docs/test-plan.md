@@ -850,6 +850,7 @@ Ride audit events are embedded in the existing Rides aggregate and use the same 
 | PLATFORM-OBS-001 | A selected Cab ride creates, negotiates, confirms, transitions and records an unverified payment report | Audit write metrics and spans are emitted for each persisted audit event with allow-listed event type and success/conflict/failure outcome; no ride/actor/Union identifiers or PII appear as tags | CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment | P0 |
 | PLATFORM-OBS-002 | Storage readiness succeeds or its dependency fails | A bounded outcome counter and duration histogram plus one readiness activity are emitted; failure details and endpoint values are not included | ReadinessProbeEmitsBoundedMetricsAndTraceWithoutDependencyDetails | P0 |
 | PLATFORM-OBS-003 | A caller cancels readiness | Cancellation propagates and is recorded as the bounded cancelled outcome, not as a dependency timeout | CheckAsyncPropagatesCallerCancellation | P1 |
+| PLATFORM-OBS-004 | An audit write conflicts or fails and an unexpected event label is supplied to the diagnostics boundary | Conflict/failure outcomes remain bounded and event types outside the allow-list collapse to other; only event_type/outcome tags are emitted | RideAuditMetricsNormalizeEventTypeAndOutcomeTags | P1 |
 
 These tests validate in-process .NET diagnostic signals only. No telemetry exporter, vendor, public metrics endpoint or alert routing is configured; live export, dashboards/alerts and production collection remain infrastructure gates.
 

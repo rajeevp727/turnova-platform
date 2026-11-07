@@ -107,4 +107,36 @@ public sealed class StorageReadinessProbeTests
             tag.Value?.Contains("private-storage-endpoint", StringComparison.OrdinalIgnoreCase) == true);
     }
 
+    [Fact]
+    public void RideAuditMetricsNormalizeEventTypeAndOutcomeTags()
+    {
+        var measurements = new ConcurrentBag<(string EventType, string Outcome, string[] TagKeys)>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                instrument.Name == "turnova.ride.audit.write_attempts")
+                listener.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+        {
+            var values = tags.ToArray();
+            measurements.Add((
+                values.FirstOrDefault(tag => tag.Key == "event_type").Value?.ToString() ?? "",
+                values.FirstOrDefault(tag => tag.Key == "outcome").Value?.ToString() ?? "",
+                values.Select(tag => tag.Key).OrderBy(key => key, StringComparer.Ordinal).ToArray()));
+        });
+        meterListener.Start();
+
+        TurnOvaDiagnostics.RecordRideAuditWrite("PaymentReportedUnverified", "failure");
+        TurnOvaDiagnostics.RecordRideAuditWrite("untrusted-driver-identifier", "conflict");
+
+        Assert.Contains(measurements, item =>
+            item.EventType == "payment_reported_unverified" && item.Outcome == "failure");
+        Assert.Contains(measurements, item =>
+            item.EventType == "other" && item.Outcome == "conflict");
+        Assert.All(measurements, item =>
+            Assert.Equal(new[] { "event_type", "outcome" }, item.TagKeys));
+    }
+
 }
