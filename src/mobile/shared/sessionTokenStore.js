@@ -23,7 +23,7 @@ function clearSessionTokens(storage) {
   return serializeMutation(storage, () => clearSessionTokensCore(storage));
 }
 
-function saveSessionTokens(storage, tokens) {
+async function saveSessionTokens(storage, tokens) {
   if (
     !tokens ||
     typeof tokens.accessToken !== "string" ||
