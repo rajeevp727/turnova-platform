@@ -554,20 +554,29 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 - Reject unsupported service classes and pickup coordinates outside configured service zones.
 - Verify a rejected request does not consume its idempotency key, allowing a corrected retry to create the ride.
 
-## 12. Nearby available vehicles and online driver location
+## 12. Driver availability and Rider-selected Cab discovery
+
+Legacy FIFO queue tests are compatibility regressions only. They do not define the Rider booking path, rank discovery results, or automatically assign a Driver.
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| NEARBY-001 | Driver goes online without GPS coordinates or with coordinates outside the assigned zone | HTTP 400/409; driver remains Offline and is not added to the queue | API integration | P0 |
-| NEARBY-002 | Rider searches for nearby vehicles | Only approved, online drivers with active queue membership in the pickup zone, matching service class and sufficient passenger capacity are returned, ordered by distance | API integration | P0 |
-| NEARBY-003 | Nearby search privacy and stale location | Response omits driver ID, name, phone, registration and exact coordinates; locations older than the configured freshness window are excluded | API integration + security | P0 |
-| NEARBY-004 | Driver leaves assigned zone while online | Driver is taken Offline, queue membership is removed and current location is cleared | API integration | P0 |
-| NEARBY-005 | Driver app is online in foreground or an active ride begins | Foreground availability updates run only while Online, pause during Accepted/Arrived/InProgress rides and stop when Offline or signed out; active-trip location uses the trip tracking endpoint | Android/iOS functional | P0 |
-| NEARBY-006 | Rider searches without location permission or outside configured zones | Clear recoverable permission/zone error; no nearby driver data is returned | Android/iOS + API | P0 |
+| NEARBY-001 | Driver goes online without GPS coordinates or with coordinates outside the assigned zone | HTTP 400/409; Driver remains Offline and is not eligible for discovery | API integration | P0 |
+| CAB-DISC-001 | Rider searches with valid current pickup coordinates and passenger count | Return only active approved unions covering the pickup zone and Cab service, with active Driver membership; each Driver is approved, Online, location-fresh, document-approved, has sufficient capacity and has no active reservation/ride | API integration | P0 |
+| CAB-DISC-002 | More than three eligible Cab Drivers belong to one union | Return at most three for that union, ordered by driver-to-pickup distance ascending with a deterministic Driver ID tie-break | API integration | P0 |
+| CAB-DISC-003 | Driver selfie is missing, pending, rejected or approved by a previous union | Expose the selfie only when approval is current and belongs to the Driver's active union; otherwise return a null photo | API security | P0 |
+| CAB-DISC-004 | Rider discovery is requested when eligible Drivers have no FIFO queue membership | Discovery still returns eligible union Drivers; it does not use queue position, customer-facing FIFO ranking or automatic assignment. The legacy Rider FIFO booking route remains retired | API integration | P0 |
+| NEARBY-003 | Discovery response privacy and stale Driver location | Return selection-safe Driver/vehicle fields only; omit phone, email, vehicle registration, exact coordinates and queue position; exclude stale locations and hide unapproved selfies | API integration + security | P0 |
+| NEARBY-004 | Driver leaves the assigned zone while Online | Driver becomes Offline and current location is cleared; any legacy queue removal is compatibility cleanup only and does not affect Rider discovery | API integration | P0 |
+| CAB-DISC-005 | Nearby radius is missing/invalid or pickup is outside configured service zones | Fail closed: HTTP 503 for missing/invalid radius and HTTP 400 for an unsupported pickup zone; no candidate list is returned | API integration | P0 |
+| CAB-DISC-006 | Routing provider is not configured | `journeyDistanceKm` is null and the Rider UI says journey distance is unavailable; `distanceToPickupKm` remains a separate driver-proximity value and no route distance is fabricated | API + mobile | P0 |
+| NEARBY-005 | Driver app is Online in foreground or an active ride begins | Foreground availability updates run only while Online, pause during Negotiating/AgreementConfirmed/active rides and stop when Offline or signed out; active-trip location uses the trip tracking endpoint | Android/iOS functional | P0 |
+| NEARBY-006 | Rider denies location permission or searches outside configured zones | No discovery request is made without foreground location permission; show a recoverable permission/zone error and return no driver data | Android/iOS + API | P0 |
 | NEARBY-007 | Driver submits a location update with missing coordinates or has an active ride | HTTP 400 for missing coordinates; HTTP 409 during an active ride without changing Online state or trip location | API integration | P0 |
+| CAB-DISC-007 | Maps/geocoding and Call/Chat providers are not configured | Current foreground device GPS is the pickup coordinate; free-text pickup is a landmark/driver instruction, not a geocoded pin. Journey distance remains unavailable and Call/Chat controls stay disabled with a provider-pending label | Android/iOS functional; external integration gate | P1 |
 
-The API integration tests use the in-memory store and configured test zone. They do not establish Cosmos cross-partition query behaviour or physical-device permission/resume behaviour. Driver GPS is foreground-only and is not intended as background tracking.
+The API integration tests use deterministic in-memory fixtures and a configured test zone. `RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency` verifies union filtering, the three-driver cap, proximity ordering, current-union selfie approval, privacy and null journey distance. `RiderDiscoveryExcludesReservedDriversAndLegacyFifoRiderRoutesAreRetired` verifies reservation exclusion and the retired customer-facing FIFO route. `RiderDiscoveryFailsClosedWhenNearbyRadiusIsMissingOrInvalid` verifies fail-closed configuration behavior. These tests do not establish production Cosmos multi-instance behavior or Android/iOS physical-device permission/resume behavior.
 
+The Rider currently uses foreground device GPS as the pickup coordinate; the pickup text is a label/landmark for the Driver. Custom pickup pin/geocoding, route-distance calculation and live Call/Chat require configured providers and are not claimed as working. Driver GPS is foreground-only and is not intended as background tracking.
 ## 13. Concurrent queue membership
 
 | ID | Scenario | Expected result | Type | Priority |
