@@ -718,9 +718,18 @@ async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct,
 string? ResolveDispatchZone(double latitude, double longitude)
 {
     var zones = app.Configuration.GetSection("Dispatch:Zones").Get<DispatchZoneConfig[]>() ?? [];
-    return zones.FirstOrDefault(zone =>
-        latitude >= zone.MinLatitude && latitude <= zone.MaxLatitude &&
-        longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude)?.ZoneId;
+    var matches = zones
+        .Where(zone =>
+            latitude >= zone.MinLatitude && latitude <= zone.MaxLatitude &&
+            longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude)
+        .Take(2)
+        .ToArray();
+
+    // Never let configuration order decide a pickup zone. Overlapping rectangles
+    // (including inclusive shared boundaries) are ambiguous and must fail closed.
+    return matches.Length == 1 && !string.IsNullOrWhiteSpace(matches[0].ZoneId)
+        ? matches[0].ZoneId
+        : null;
 }
 
 double CalculateDistanceKm(double firstLatitude, double firstLongitude, double secondLatitude, double secondLongitude)
