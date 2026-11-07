@@ -4,7 +4,7 @@
 
 - Ride audit facts are stored as an optional append-only `AuditEvents` list on the existing `DemoRide` aggregate in the existing Rides container.
 - The Rides partition key and document identity do not change. Existing ride documents without `AuditEvents` deserialize as an empty history on the next audited mutation; no destructive migration or new container is required.
-- Each audit event is appended in the same `TryReplaceRideAsync` write as the state/agreement/reconciliation mutation. Cosmos ETag replacement therefore commits the mutation and its event together within the existing ride partition.
+- The initial `RideCreated`/`RideRequested` event is written with the initial ride document. Subsequent events are appended in the same `TryReplaceRideAsync` write as the state/agreement/reconciliation mutation. Cosmos ETag replacement therefore commits each subsequent mutation and its event together within the existing ride partition.
 - Snapshot comparison includes the event list. A prefix guard rejects any update that removes, reorders or rewrites an existing event. The in-memory fixture path uses the same append-only guard.
 
 ## Event contract
