@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `baa4a17140333d04a26efe4babdd92c35e81de3e` (PR #92 AUTH-02 merged; final-head CI [42341545410](https://github.com/rajeevp727/turnova-platform/actions/runs/42341545410) passed all eight jobs: 248/248 backend tests, 40/40 shared mobile tests, Rider/Driver typechecks and JS bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. AUTH-02 startup restore now loads the authoritative profile with the rotated access token; live TriSend and physical-device validation remain. Current sequential area is #3 RIDER-01; the foreground pickup permission gate is being made deterministically testable.
+**Last audited main HEAD:** `17cb46017b215b0e29f26b5a68be6399ec7885f9` (PR #93 RIDER-01 merged; exact-head CI [42350780382](https://github.com/rajeevp727/turnova-platform/actions/runs/42350780382) passed all eight jobs, including 248/248 backend, 47/47 shared mobile, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Current sequential area is #4 RIDER-02; agreement confirmation timestamps are returned by the API and rendered by both apps, and the current increment adds shared deterministic display-label coverage.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -541,3 +541,12 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - This test slice does not replace Android/iOS physical-device location permission, accuracy, app resume or map acceptance. Production radius/zone approval, custom pickup geocoding/routing, live Call/Chat and live Cosmos remain external gates.
 - Next sequential item after this RIDER-01 increment: #4 RIDER-02 — audit immutable direct-fare agreement versioning, both-party confirmation and start/completion gates.
 - The 19-area weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19). AI-01 remains supplemental outside the denominator.
+
+
+## RIDER-02 confirmation display consistency (2026-11-07)
+
+- PR #93 completed the RIDER-01 foreground pickup permission/coordinate test increment and merged at `17cb46017b215b0e29f26b5a68be6399ec7885f9`; final-head CI [42350780382](https://github.com/rajeevp727/turnova-platform/actions/runs/42350780382) passed all eight jobs.
+- The agreement API and both app screens already support per-party UTC confirmation timestamps. The remaining deterministic mobile-test gap is shared label formatting for Pending, Confirmed with timestamp, and older/malformed timestamp values.
+- Current focused increment extracts the existing formatting into `agreementConfirmationLabel`, used by Rider Activity and Driver Trips, with shared Node tests. It does not alter agreement state or timestamps.
+- Live Cosmos ETag/multi-instance and Android/iOS physical-device negotiation, confirmation, reconnect and in-trip renegotiation remain external gates. Weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19).
+- Next sequential item after this increment: #5 RIDER-03 — audit selected-driver booking idempotency, cancellation/expiry and reservation release.
