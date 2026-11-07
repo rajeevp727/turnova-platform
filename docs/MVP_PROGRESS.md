@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current sequential item #4 RIDER-02 — In progress:** PR #106 completed #3 RIDER-01 and merged at `1cfe9818190800777686516ce394d492988879ad`; exact-head CI [42404990956](https://github.com/rajeevp727/turnova-platform/actions/runs/42404990956) passed all eight jobs and 272/272 backend tests. #4 now addresses agreement proposal idempotency: the same actor-scoped key must not replay a version when amount/currency differs. Active focused PR: [#107](https://github.com/rajeevp727/turnova-platform/pull/107), branch `fix/rider-02-agreement-idempotency-payload`; implementation commit `26f10d4b4b6176cf90df9647097bd4cfb94ecdb2`. It adds a canonical amount/currency SHA-256 fingerprint, legacy-record fallback, changed-payload conflicts and same/different-payload concurrency regressions. Exact-head CI is pending.
+**Current sequential item #5 RIDER-03 — In progress:** #4 RIDER-02 PR #107 merged at 0d315b3d96729ed2d0129fd962de170879ebf743; exact-head CI [42409103030](https://github.com/rajeevp727/turnova-platform/actions/runs/42409103030) passed all 8/8 jobs. #5 audits selected booking/reservation recovery. PR [#108](https://github.com/rajeevp727/turnova-platform/pull/108) is the single active focused PR on fix/rider-03-preserve-negotiation-expiry-on-recovery, code head 18f09c83ee56911436d21acbdc8d715efe864496. It preserves the original idempotency timestamp across interrupted-write recovery so the ride negotiation deadline cannot drift beyond the existing Driver reservation lease. Deterministic regression assertions are added; final-head CI is pending.
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -385,3 +385,14 @@
 - **Acceptance accounting:** 19 rows remain 0 Verified, 16 In progress, 3 Blocked; strict fully verified count 0/19. Existing weighted status index is 42.1% = (0 + 16 × 0.5 + 0 + 0) / 19. This status index is not engineering implementation completion. AI-01 and approved Cab supplemental requirements remain outside the denominator.
 - **Next sequential item after #4:** #5 RIDER-03 — re-audit booking idempotency, reservation lease lifecycle, expiry/cancel/decline/completion cleanup, history-triggered recovery and notification recovery for concrete missing deterministic coverage.
 - **External gates:** live Cosmos ETag/multi-instance/restart behavior, physical Android/iOS negotiation and recovery, production negotiation-lifetime approval. These do not block the independent API code/tests.
+
+
+## Latest execution handoff — #5 RIDER-03 (2026-11-08)
+
+- Main after previous merge: PR #107 merged at 0d315b3d96729ed2d0129fd962de170879ebf743; exact-head CI [42409103030](https://github.com/rajeevp727/turnova-platform/actions/runs/42409103030) passed 8/8 jobs.
+- Finding: interrupted selected-booking recovery could reuse the original Driver reservation lease but calculate a new NegotiationExpiresAtUtc from retry time. The ride and lease deadlines could drift, leaving a still-negotiating ride whose Driver lease had already expired and could no longer be promoted.
+- Active PR: [#108](https://github.com/rajeevp727/turnova-platform/pull/108), branch fix/rider-03-preserve-negotiation-expiry-on-recovery, code head 18f09c83ee56911436d21acbdc8d715efe864496. Recovery now reuses the idempotency record original CreatedAtUtc for RequestedAt, RideCreated audit and negotiation expiry. The deterministic recovery test asserts exact equality between ride and reservation expiry.
+- CI/review: PR #108 final-head CI and automated security/concurrency review are pending. Do not merge until all required jobs pass on the exact latest head and the complete diff has been reviewed.
+- Acceptance accounting: 19 rows remain 0 Verified, 16 In Progress, 3 Blocked; strict fully verified count 0/19. The weighted status index remains 42.1% = (0 + 16 x 0.5 + 0 + 0) / 19; it is not engineering implementation completion.
+- Next sequential item after #5: #6 DISPATCH-01 — re-audit configured pickup zone/radius and active Cab-serving Union enforcement. Product-approved production radius and zone boundaries are external inputs; keep fail-closed behavior, finish any independent deterministic tests, then continue to #7 DISPATCH-02 rather than pausing.
+- External gates: Product-approved radius/zone boundaries; production negotiation lifetime and Driver location-freshness age; live Cosmos ETag/multi-instance/restart behavior; Android/iOS booking/cancel/expiry/reconnect/notification acceptance. No product defaults or credentials are inferred.

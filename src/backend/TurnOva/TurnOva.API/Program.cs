@@ -1969,6 +1969,7 @@ app.MapPost("/api/v1/rider/bookings", async (
     var idempotencyIndex = $"{riderId}:{keyId}";
     var bookingIdempotency = app.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
     var now = DateTimeOffset.UtcNow;
+    var bookingCreatedAtUtc = now;
     var rideId = $"RIDE-SEL-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{riderId}:{keyId}")))}";
     var isIdempotencyRecovery = false;
 
@@ -2004,6 +2005,7 @@ app.MapPost("/api/v1/rider/bookings", async (
             return Results.Conflict(new { message = "The original booking is still being processed. Retry shortly." });
 
         rideId = prior.rideId;
+        bookingCreatedAtUtc = prior.CreatedAtUtc.Value;
         isIdempotencyRecovery = true;
         return null;
     }
@@ -2060,7 +2062,10 @@ app.MapPost("/api/v1/rider/bookings", async (
     if (distanceKm > radiusKm.Value)
         return Results.Conflict(new { message = "The selected Driver is no longer within the approved pickup radius." });
 
-    var expiresAtUtc = now.AddMinutes(lifetimeMinutes.Value);
+    // Recovery must retain the original negotiation deadline. The reservation lease was
+    // acquired for this timestamp; extending only the ride deadline would leave an active
+    // negotiation with an expired lease that the Driver can no longer promote.
+    var expiresAtUtc = bookingCreatedAtUtc.AddMinutes(lifetimeMinutes.Value);
     var idempotencyRecord = new RideIdempotencyRecord(keyId, riderId, rideId, requestFingerprint, now);
     if (!isIdempotencyRecovery)
     {
@@ -2148,7 +2153,7 @@ app.MapPost("/api/v1/rider/bookings", async (
     }
 
     var ride = new DemoRide(
-        rideId, pickup, dropoff, request.Passengers, "Negotiating", now, null, riderId, selectedDriverId,
+        rideId, pickup, dropoff, request.Passengers, "Negotiating", bookingCreatedAtUtc, null, riderId, selectedDriverId,
         request.PickupLatitude, request.PickupLongitude, null, null, null, null, false, "cab", zoneId,
         UnionId: unionId, Stops: stops, NegotiationExpiresAtUtc: expiresAtUtc,
         DriverDisplayName: latestProfile.FullName, DriverVehicleMake: latestProfile.VehicleMake,
@@ -2157,7 +2162,7 @@ app.MapPost("/api/v1/rider/bookings", async (
     ride = ride with
     {
         AuditEvents = AppendRideAuditEvent(ride, "RideCreated", riderId, "Rider",
-            newStatus: ride.Status, occurredAtUtc: now)
+            newStatus: ride.Status, occurredAtUtc: bookingCreatedAtUtc)
     };
     bool MatchesSelectedBooking(DemoRide existing) =>
         existing.RiderId == riderId &&
