@@ -2630,7 +2630,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
         AgreementStateRevision = ride.AgreementStateRevision + 1,
         Status = nextStatus,
         AuditEvents = AppendRideAuditEvent(ride, "AgreementProposed", actorId, isRider ? "Rider" : "Driver",
-            ride.Status, nextStatus, version.Version, request.Amount, currency: request.Currency,
+            ride.Status, nextStatus, version.Version, version.Amount, currency: version.Currency,
             occurredAtUtc: version.CreatedAtUtc)
     };
     if (!await TryReplaceRideAsync(ride, updated, ct))
@@ -2894,7 +2894,9 @@ bool IsRideAuditAppendOnly(IReadOnlyList<RideAuditEvent>? current, IReadOnlyList
 {
     var previous = current ?? [];
     var next = updated ?? [];
-    return next.Count >= previous.Count && previous.SequenceEqual(next.Take(previous.Count));
+    return next.Count >= previous.Count &&
+        previous.SequenceEqual(next.Take(previous.Count)) &&
+        next.Select(item => item.EventId).Distinct(StringComparer.Ordinal).Count() == next.Count;
 }
 
 bool IsSameRideSnapshot(DemoRide left, DemoRide right)
