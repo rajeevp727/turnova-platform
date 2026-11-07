@@ -1140,6 +1140,89 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task PayslipSnapshotRepairsMissingSelectedRideActivitiesFromAuditBeforeSnapshot()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payslip-audit-recovery-driver";
+        const string unionId = "payslip-audit-recovery-union";
+        using var rider = factory.CreateClient("Rider", "payslip-audit-recovery-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        var completedRideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "payslip-audit-completed", 500m);
+
+        // A selected Driver can decline while the ride is still Negotiating,
+        // before either party has proposed an agreement version.
+        SeedBookableDriver(factory, driverId, unionId);
+        using var rejectedBookingRequest = CreateSelectedBookingRequest(
+            "payslip-audit-rejected-before-agreement", driverId, unionId, "KPHB", "HITEC City", []);
+        using var rejectedBooking = await rider.SendAsync(rejectedBookingRequest);
+        Assert.Equal(HttpStatusCode.Created, rejectedBooking.StatusCode);
+        using var rejectedBookingJson = JsonDocument.Parse(await rejectedBooking.Content.ReadAsStringAsync());
+        var rejectedRideId = rejectedBookingJson.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        Assert.Empty(rides[rejectedRideId].AgreementVersions ?? []);
+
+        using var rejected = await driver.PostAsync($"/api/v1/rides/{rejectedRideId}/reject", null);
+        Assert.Equal(HttpStatusCode.NoContent, rejected.StatusCode);
+        var acceptedAt = new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero);
+        var completedAt = new DateTimeOffset(2026, 10, 3, 5, 0, 0, TimeSpan.Zero);
+        var completedRide = rides[completedRideId];
+        Assert.NotNull(completedRide.AuditEvents);
+        rides[completedRideId] = completedRide with
+        {
+            AuditEvents = completedRide.AuditEvents!.Select(item =>
+                item.EventType == "RideStatusChanged" ? item.NewStatus switch
+                {
+                    "Accepted" => item with { OccurredAtUtc = acceptedAt },
+                    "Completed" => item with { OccurredAtUtc = completedAt },
+                    _ => item
+                } : item).ToArray()
+        };
+
+        var rejectedAt = new DateTimeOffset(2026, 10, 4, 4, 0, 0, TimeSpan.Zero);
+        var rejectedRide = rides[rejectedRideId];
+        Assert.NotNull(rejectedRide.AuditEvents);
+        rides[rejectedRideId] = rejectedRide with
+        {
+            AuditEvents = rejectedRide.AuditEvents!.Select(item =>
+                item.EventType == "RideStatusChanged" &&
+                item.NewStatus == "Cancelled" && item.ActorRole == "Driver"
+                    ? item with { OccurredAtUtc = rejectedAt }
+                    : item).ToArray()
+        };
+
+        var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        Assert.True(ledger.TryRemove($"{driverId}|{completedRideId}:Accepted", out _));
+        Assert.True(ledger.TryRemove($"{driverId}|{completedRideId}:Completed", out _));
+        Assert.True(ledger.TryRemove($"{driverId}|{rejectedRideId}:Rejected", out _));
+
+        var union = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[unionId];
+        var assignment = new DriverUnionAuditEvent(
+            "payslip-audit-assignment", driverId, null, null,
+            unionId, union.Name, "Assigned", "Initial assignment", "Operations",
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            [$"{driverId}|{assignment.EventId}"] = assignment;
+
+        using var response = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var pdf = Encoding.ASCII.GetString(await response.Content.ReadAsByteArrayAsync());
+        Assert.StartsWith("%PDF-1.4", pdf);
+        Assert.Contains("Total days worked: 1", pdf);
+        Assert.Contains("Rides accepted: 1", pdf);
+        Assert.Contains("Rides completed: 1", pdf);
+        Assert.Contains("Rides rejected: 1", pdf);
+        Assert.Single(ledger.Values, item => item.RideId == completedRideId && item.ActivityType == "Accepted");
+        Assert.Single(ledger.Values, item => item.RideId == completedRideId && item.ActivityType == "Completed");
+        Assert.Single(ledger.Values, item => item.RideId == rejectedRideId && item.ActivityType == "Rejected");
+
+        using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.Equal(pdf, Encoding.ASCII.GetString(await repeated.Content.ReadAsByteArrayAsync()));
+    }
+
+    [Fact]
     public async Task PayslipRejectsMissingUnionAssignmentAndUnionTransferWithinMonth()
     {
         using var factory = new TurnOvaApiFactory();

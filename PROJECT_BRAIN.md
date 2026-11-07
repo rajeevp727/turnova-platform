@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `722e022b17f16e206e865d0d8c0e1d606b26f28d` (PR #97 merged the DISPATCH-03 no-FIFO-expiry regression; exact-head CI [42357835735](https://github.com/rajeevp727/turnova-platform/actions/runs/42357835735) passed all eight jobs and 250/250 backend tests. Duplicate PR #98 was closed without deleting its branch. Current sequential item is #13 TRIP-01; PR #99 is the focused completion-side-effect recovery increment.)
+**Last audited main HEAD:** `1863586eebe210eaae78b041f8567f6e9bf85be0` (PR #99 completed #13 TRIP-01; exact-head CI [42362228646](https://github.com/rajeevp727/turnova-platform/actions/runs/42362228646) passed all eight jobs and 251/251 backend tests, including Android debug APKs, unsigned iOS Simulator apps and native non-container API publish. Current sequential item is #14 DRIVER-03.)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -587,3 +587,21 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - #13 TRIP-01 finding: the completion handler returned immediately when the ride was already `Completed`, so a retry could not repair a process interruption between the ride write and the separate work-activity/reservation-release writes. PR #99 makes the deterministic activity create-if-absent and exact reservation release retryable, including a lost compare-and-swap when another completion request already won. The new in-memory regression simulates that interruption and checks no duplicate activity.
 - **Next sequential item:** #14 DRIVER-03 — audit completed-month work-metrics payslips, authenticated Driver isolation, Union-period rules, PDF content privacy and Android/iOS save/share.
 - **Progress:** 19-area weighted score remains 42.1% = (0 Verified + 16 × 0.5 + 0 Not started + 3 × 0) / 19; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
+
+
+## DRIVER-03 — selected-ride payslip audit recovery (2026-11-07)
+
+- Main after PR #99: `1863586eebe210eaae78b041f8567f6e9bf85be0`; exact-head CI [42362228646](https://github.com/rajeevp727/turnova-platform/actions/runs/42362228646) passed all eight jobs and 251/251 backend tests.
+- A selected Cab ride's state transition and append-only ride audit are persisted together, but the `DriverWorkActivities` append occurs afterward in a separate container. The first immutable payslip snapshot previously read only the activity container, so a process interruption could omit Accepted/Completed/Driver-decline metrics permanently from that snapshot.
+- The current #14 increment replays missing selected-ride Driver events from the ride audit before first snapshot creation, using deterministic create-if-absent activity IDs. Selected-ride detection uses non-null Union linkage rather than requiring an agreement version, because a Driver may decline during initial Negotiating state before any proposal. Completed rides also retry the exact completion activity and reservation release. No snapshot is rewritten after creation; no compensation or monetary policy is added.
+- Live Cosmos cross-container query/create-conflict/restart/ETag and physical Android/iOS PDF save/share/accessibility remain external verification gates.
+- Next sequential item: #15 DRIVER-04 (blocked pending Product Owner approval of Driver support categories, escalation owner and process); next actionable row is #16 RIDER-04 if the blocker remains.
+
+
+## DRIVER-03 selected-ride payslip read-repair verification (2026-11-07)
+
+- PR #100 final head `d4e4f9c79f305034027340b4d211984180e1dcf4` passed exact-head CI [42368222460](https://github.com/rajeevp727/turnova-platform/actions/runs/42368222460): all eight jobs, 252/252 backend tests, Rider/Driver typechecks and bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish.
+- Automated review follow-up [6706246591](https://github.com/rajeevp727/turnova-platform/pull/100#issuecomment-6706246591) found no unresolved critical/high-risk issue in the reviewed head. The correction explicitly covers a selected Driver decline before any agreement version exists.
+- DRIVER-03 remains In progress: live Cosmos cross-container restart/ETag recovery and physical Android/iOS PDF save/share/accessibility are not represented by the in-memory integration test or simulator compilation.
+- Next sequential row #15 DRIVER-04 remains Blocked until Product approves Driver support categories, escalation owner and operating process. If unresolved, proceed to #16 RIDER-04 and continue independent acceptance work.
+- Weighted score remains 42.1% = (0 Verified + 16 × 0.5 + 0 Not started + 3 Blocked) / 19; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
