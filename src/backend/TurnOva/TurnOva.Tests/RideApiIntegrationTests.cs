@@ -1150,12 +1150,21 @@ public sealed class RideApiIntegrationTests
 
         var completedRideId = await CreateCompletedSelectedRideAsync(
             factory, rider, driver, driverId, unionId, "payslip-audit-completed", 500m);
-        var rejectedRideId = await CreateSelectedRideWithConfirmedAgreementAsync(
-            factory, rider, driver, driverId, unionId, "payslip-audit-rejected", 400m);
+
+        // A selected Driver can decline while the ride is still Negotiating,
+        // before either party has proposed an agreement version.
+        SeedBookableDriver(factory, driverId, unionId);
+        using var rejectedBookingRequest = CreateSelectedBookingRequest(
+            "payslip-audit-rejected-before-agreement", driverId, unionId, "KPHB", "HITEC City", []);
+        using var rejectedBooking = await rider.SendAsync(rejectedBookingRequest);
+        Assert.Equal(HttpStatusCode.Created, rejectedBooking.StatusCode);
+        using var rejectedBookingJson = JsonDocument.Parse(await rejectedBooking.Content.ReadAsStringAsync());
+        var rejectedRideId = rejectedBookingJson.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        Assert.Empty(rides[rejectedRideId].AgreementVersions ?? []);
+
         using var rejected = await driver.PostAsync($"/api/v1/rides/{rejectedRideId}/reject", null);
         Assert.Equal(HttpStatusCode.NoContent, rejected.StatusCode);
-
-        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
         var acceptedAt = new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero);
         var completedAt = new DateTimeOffset(2026, 10, 3, 5, 0, 0, TimeSpan.Zero);
         var completedRide = rides[completedRideId];
