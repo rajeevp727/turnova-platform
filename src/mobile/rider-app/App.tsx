@@ -90,7 +90,7 @@ export default function App() {
   };
 
   const accept=useCallback(async(result:any,newSession=false)=>{
-    const acceptedUser=result?.user?requireAppRole(result.user,"Rider"):null;
+    const acceptedUser=result?.user?requireAppRole<User>(result.user,"Rider"):null;
     if(newSession&&!acceptedUser)throw new Error("Authentication response did not include a Rider profile.");
     const t={accessToken:result.accessToken,refreshToken:result.refreshToken};
     await saveTokens(t);
