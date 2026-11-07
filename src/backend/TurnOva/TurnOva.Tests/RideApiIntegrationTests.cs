@@ -2673,6 +2673,27 @@ public sealed class RideApiIntegrationTests
             item.RideId == rideId && item.ActivityType == "Completed");
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("x")]
+    public async Task SelectedBookingRejectsBlankOrOverlongIntermediateStopsBeforeReservation(string invalidStop)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "invalid-stop-rider-" + invalidStop.Length);
+        SeedBookableDriver(factory, "invalid-stop-driver", "invalid-stop-union");
+
+        var stop = invalidStop.Length == 1 ? new string('x', 251) : invalidStop;
+        using var request = CreateSelectedBookingRequest(
+            "invalid-stop-key-" + stop.Length, "invalid-stop-driver", "invalid-stop-union",
+            "KPHB", "HITEC City", [stop]);
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("invalid-stop-driver"));
+    }
+
     [Fact]
     public async Task SelectedBookingRejectsMoreThanTenIntermediateStops()
     {
