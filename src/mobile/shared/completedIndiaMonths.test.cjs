@@ -42,4 +42,5 @@ test("rejects invalid dates, month values and month-list lengths", () => {
   assert.throws(() => getCompletedIndiaMonths(new Date(), 0), RangeError);
   assert.throws(() => getCompletedIndiaMonths(new Date(), 13), RangeError);
   assert.throws(() => formatIndiaMonthLabel(2026, 13), RangeError);
+  assert.throws(() => formatIndiaMonthLabel(2019, 10), RangeError);
 });
