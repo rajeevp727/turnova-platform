@@ -3944,6 +3944,8 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
     }
 
+    // Callers must create the Driver test client first so the factory registers its approved onboarding profile;
+    // this helper seeds the active Cab Union membership and ride aggregate only.
     private static void SeedAgreementRide(TurnOvaApiFactory factory, string rideId, string riderId, string driverId)
     {
         var now = DateTimeOffset.UtcNow;
