@@ -42,7 +42,7 @@ type QueueEntry = { driverId: string; position: number; joinedAt: string };
 type QueueMembership = { isQueued: boolean; position: number | null };
 type PaymentReconciliation = { rideId: string; agreementVersion: number; unionId: string; agreedAmount: number; amountReceived: number; delta: number; currency: string; reportedAtUtc: string; reportedByDriverId: string; status: string };
 type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean; stops?: string[]; negotiationExpiresAtUtc?: string | null; paymentReconciliation?: PaymentReconciliation | null };
-type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; driverConfirmed: boolean };
+type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
 
 async function saveTokens(tokens: Tokens) {
@@ -879,7 +879,7 @@ export default function App() {
               <Text style={styles.cardTitle}>Direct fare negotiation · INR</Text>
               {agreementHistory.map(item=><View key={item.version} style={{paddingVertical:7}}>
                 <Text style={styles.muted}>Version {item.version} · ₹{item.amount.toFixed(2)} · proposed by {item.proposedBy}</Text>
-                <Text style={styles.muted}>Rider: {item.riderConfirmed?"Confirmed":"Pending"} · Driver: {item.driverConfirmed?"Confirmed":"Pending"}</Text>
+                <Text style={styles.muted}>Rider: {item.riderConfirmed?(item.riderConfirmedAtUtc?"Confirmed at "+new Date(item.riderConfirmedAtUtc).toLocaleString():"Confirmed"):"Pending"}</Text><Text style={styles.muted}>Driver: {item.driverConfirmed?(item.driverConfirmedAtUtc?"Confirmed at "+new Date(item.driverConfirmedAtUtc).toLocaleString():"Confirmed"):"Pending"}</Text>
               </View>)}
               <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>
               {["Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>

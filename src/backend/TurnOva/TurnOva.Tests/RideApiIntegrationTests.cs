@@ -2429,6 +2429,16 @@ public sealed class RideApiIntegrationTests
         Assert.True(versions[2].GetProperty("driverConfirmed").GetBoolean());
         Assert.False(versions[0].GetProperty("riderConfirmed").GetBoolean());
         Assert.False(versions[0].GetProperty("driverConfirmed").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, versions[0].GetProperty("riderConfirmedAtUtc").ValueKind);
+        Assert.Equal(JsonValueKind.Null, versions[0].GetProperty("driverConfirmedAtUtc").ValueKind);
+        foreach (var confirmedVersion in versions.Skip(1))
+        {
+            Assert.Equal(JsonValueKind.String, confirmedVersion.GetProperty("riderConfirmedAtUtc").ValueKind);
+            Assert.Equal(JsonValueKind.String, confirmedVersion.GetProperty("driverConfirmedAtUtc").ValueKind);
+            var riderConfirmedAt = DateTimeOffset.Parse(confirmedVersion.GetProperty("riderConfirmedAtUtc").GetString()!);
+            var driverConfirmedAt = DateTimeOffset.Parse(confirmedVersion.GetProperty("driverConfirmedAtUtc").GetString()!);
+            Assert.True(riderConfirmedAt <= driverConfirmedAt);
+        }
     }
 
     [Theory]
