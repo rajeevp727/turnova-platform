@@ -1,6 +1,7 @@
 using TurnOva.API;
 using TurnOva.API.Assistance;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
@@ -106,6 +107,7 @@ builder.Services.AddSingleton<ConcurrentDictionary<string, DriverOnboardingProfi
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnion>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAssignment>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+builder.Services.AddSingleton<ConcurrentDictionary<string, ApiExceptionAuditEvent>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverWorkActivity>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverRideReservation>>();
@@ -163,6 +165,7 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, ApiExceptionAuditMigration>();
     builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
     builder.Services.AddSingleton<IRideOfferStore>(sp =>
         new CosmosRideOfferStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideOffers")));
@@ -233,12 +236,80 @@ if (useCosmos)
     await app.Services.GetRequiredService<CosmosMigrationRunner>().RunAsync();
 }
 
+var apiExceptionAudits = app.Services.GetRequiredService<ConcurrentDictionary<string, ApiExceptionAuditEvent>>();
+Container? apiExceptionAuditContainer = useCosmos
+    ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "ApiExceptionAudit")
+    : null;
+const string apiExceptionAuditRouteTemplateItemKey = "TurnOva.ApiExceptionAudit.RouteTemplate";
+
+string GetSafeExceptionCategory(Exception? exception) => exception switch
+{
+    CosmosException => "StorageDependency",
+    TimeoutException or OperationCanceledException => "Timeout",
+    InvalidOperationException => "InvalidOperation",
+    _ => "Unhandled"
+};
+
+async Task RecordApiExceptionAuditAsync(HttpContext context, Exception? exception)
+{
+    if (context.User.Identity?.IsAuthenticated != true) return;
+    var actorId = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(actorId)) return;
+
+    var actorRole = context.User.IsInRole("Rider") ? "Rider" :
+        context.User.IsInRole("Driver") ? "Driver" :
+        context.User.IsInRole("UnionManager") ? "UnionManager" : "Authenticated";
+    var actorReference = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(actorId)));
+    var traceId = context.TraceIdentifier;
+    var routeTemplate = context.Items.TryGetValue(apiExceptionAuditRouteTemplateItemKey, out var routeValue) &&
+        routeValue is string route ? route : "unknown";
+    var audit = new ApiExceptionAuditEvent(
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(traceId))),
+        actorReference, actorRole, context.Request.Method, routeTemplate,
+        GetSafeExceptionCategory(exception), "UnhandledApiException", traceId,
+        StatusCodes.Status500InternalServerError, DateTimeOffset.UtcNow);
+
+    try
+    {
+        if (apiExceptionAuditContainer is null)
+        {
+            apiExceptionAudits.TryAdd($"{actorReference}|{traceId}", audit);
+            return;
+        }
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try
+        {
+            await apiExceptionAuditContainer.CreateItemAsync(
+                audit, new PartitionKey(actorReference), cancellationToken: timeout.Token);
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // The same trace ID has already been recorded.
+        }
+    }
+    catch (Exception)
+    {
+        // Audit persistence must not replace the generic error response or expose exception details.
+        app.Logger.LogWarning("API exception audit persistence failed. TraceId {TraceId}", traceId);
+    }
+}
+
+app.UseRouting();
+app.Use(async (context, next) =>
+{
+    if (context.GetEndpoint()?.Metadata.GetMetadata<RouteEndpoint>() is { } endpoint)
+        context.Items[apiExceptionAuditRouteTemplateItemKey] = endpoint.RoutePattern.RawText ?? "unknown";
+    await next(context);
+});
 app.UseCors();
 
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-    app.Logger.LogError("Unhandled API exception. TraceId {TraceId} ExceptionType {ExceptionType}", context.TraceIdentifier, exception?.GetType().Name ?? "Unknown");
+    await RecordApiExceptionAuditAsync(context, exception);
+    app.Logger.LogError("Unhandled API exception. TraceId {TraceId} ExceptionCategory {ExceptionCategory}",
+        context.TraceIdentifier, GetSafeExceptionCategory(exception));
     context.Response.Clear();
     context.Response.StatusCode = StatusCodes.Status500InternalServerError;
     await Results.Problem(
@@ -259,6 +330,10 @@ if (app.Environment.IsEnvironment("Testing"))
     {
         throw new InvalidOperationException("sensitive-test-exception");
     });
+    app.MapGet("/__test/dispatch-exception", () =>
+    {
+        throw new InvalidOperationException("sensitive-test-exception");
+    }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
