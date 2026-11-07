@@ -35,10 +35,12 @@ Use the latest supported .NET 10 servicing patch. Keep secrets out of source con
                                              └── External provider adapters
                                                       ├── Maps / Routing
                                                       ├── OTP / SMS
-                                                      ├── Payments
+                                                      ├── Call / Chat (optional)
                                                       └── Push notifications
 
-Fleet and Ops clients are Phase 2. The backend and dispatch engine are shared platform services, not separate apps.
+There is no payment gateway or escrow adapter in the MVP. The Rider pays the Driver directly; the API stores only the Driver-reported/unverified amount received and its signed reconciliation delta. Call/Chat and the other external adapters remain provider placeholders until configured.
+
+Fleet and Ops clients are Phase 2. The backend and ride-coordination services are shared platform services, not separate apps.
 
 ## 4. Backend solution structure
 

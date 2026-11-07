@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `0bedcf5f7ec6c85ba7dff25a8fc09a66a43733ee` after PR #102 merge. PR #102 final head `7b4320bfdad460511280251963e1b6c4ffc51c80`; exact-head CI [42380032068](https://github.com/rajeevp727/turnova-platform/actions/runs/42380032068) passed all eight jobs, including 254/254 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Current sequential item #19 RELEASE-01 is Blocked by production signing and physical-device gates.
+**Last audited main HEAD:** `7222c5e4dccc2ca0f804eae92105455df89d3fb9` after PR #103 merged. PR #103 exact-head CI [42382259118](https://github.com/rajeevp727/turnova-platform/actions/runs/42382259118) passed all eight jobs: 254/254 backend, 53/53 shared mobile, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. The final gap audit is complete; #19 RELEASE-01 remains Blocked by signing and physical-device gates.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -58,7 +58,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - The 19 PRD acceptance areas are tracked in `docs/MVP_ACCEPTANCE_MATRIX.md`; AI-01 is a separately approved supplemental requirement and is not counted among the 19.
 - No open PR is being treated as approved/merged unless rechecked live.
 
-## Current active increment
+## Historical implementation milestones (merged)
 - PR #55 merged sequential #3 RIDER-01 / CAB-DISCOVERY-01 at `78ddb9558b453b9171bc020ea83e51087f6e5f2f`; final-head CI run `42237572056` passed all four jobs. It adds union-grouped Cab discovery, eligibility filtering, pickup-proximity ordering, approved-photo privacy and Rider local selection.
 - PR #56 merged sequential #4 RIDER-02 / CAB-AGREEMENT-01 at `9d39c83d13f619bcc7a5ec575669a4167b3cc5f8`; final-head CI run `42245873224` passed all four jobs. It adds immutable agreement term versions, append-only confirmations, ETag/revision concurrency protection, Rider/Driver proposal and confirmation controls, SignalR agreement events, and start/completion gates.
 - PR #57 merged sequential #5 RIDER-03 at `c5ff07843365e949b70fe1d4b9753bcd88022e10`; final synchronized PR head `8c846db3c93cfbe6f1eb574c838eb3ab0bf4fb9e` passed CI run [42254924983](https://github.com/rajeevp727/turnova-platform/actions/runs/42254924983), all four jobs green. It adds durable selected-driver bookings, route/Union snapshots, idempotent create-if-absent persistence, per-driver temporary/permanent reservation lifecycle, safe expiry/cancel/decline/completion release, Union-transfer exclusion and Driver reconnect recovery. Automated reviews [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440) found no unresolved critical/high-risk issue.
@@ -73,7 +73,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 - PR #88 merged RIDER-04 original-Union reconciliation retention at `0e1865fdbe46138ddd05202a1c8a84221a5de237`; final-head CI [42327178578](https://github.com/rajeevp727/turnova-platform/actions/runs/42327178578) passed 244/244 backend tests and all four jobs.
 - PR #89 merged PLATFORM-01 append-only ride audit events at `818c624e139f6c77c674f6466aee352e79701726`; final-head CI [42328297135](https://github.com/rajeevp727/turnova-platform/actions/runs/42328297135) passed 246/246 backend tests, 34/34 shared mobile tests and all four jobs. Automated review [6700893842](https://github.com/rajeevp727/turnova-platform/pull/89#issuecomment-6700893842) found no unresolved critical/high-risk issue.
 
-## Highest-priority unfinished work
+## Historical sequential handoff (superseded by latest handoff below)
 
 1. **#6 DISPATCH-01 — Blocked:** PR #55 implementation and PR #58 regression coverage are independent of the missing decision. Resume final verification only after product approval of the production pickup radius and zone boundaries, plus live Cosmos and Android/iOS pickup-zone evidence.
 2. **#7 DISPATCH-02 — Implementation audit recorded:** PR #55/RIDER-03 implement the per-union cap, pickup-proximity ordering, explicit selection and no-FIFO Rider path; PR #59 adds an equal-distance deterministic tie-break regression. Live Cosmos/device evidence and the internal FIFO role decision remain, so the acceptance row stays In progress.
@@ -635,3 +635,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - No independent code-only release gap was found. RELEASE-01 is Blocked pending signing/store inputs and physical-device acceptance.
 - The 19-area weighted progress is 39.5% = (0 Verified + 15 × 0.5 + 0 Not started + 4 Blocked) / 19; strict fully verified count is 0/19. AI-01 and Cab supplemental requirements remain outside the denominator.
 - Next: final end-to-end gap audit across all 19 rows and approved supplemental requirements; make no feature changes unless a concrete code/test gap is found.
+
+
+## Latest sequential handoff — final MVP gap audit (2026-11-07)
+
+- PR #103 merged at `7222c5e4dccc2ca0f804eae92105455df89d3fb9`; final-head CI [42382259118](https://github.com/rajeevp727/turnova-platform/actions/runs/42382259118) passed 8/8 jobs: 254/254 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and bundles, Rider/Driver Android debug APKs, Rider/Driver unsigned iOS Simulator apps and non-container API publish.
+- The final audit rechecked PRD sections 15/16, architecture, test plan, all 19 matrix rows, AI-01 and the five Cab supplemental acceptance areas. It found stale CAB-DISCOVERY-01/CAB-AGREEMENT-01 evidence and a legacy Payments adapter entry in the architecture diagram; this follow-up reconciles those documents. No additional safe code-only implementation gap was found.
+- The architecture now states the MVP has no payment gateway/escrow adapter; payment is direct between Rider and Driver, with only Driver-reported/unverified reconciliation stored. Call/Chat remains an optional provider placeholder.
+- 19-area progress: 39.5% = (0 Verified + 15 × 0.5 + 0 Not started + 4 Blocked) / 19; strict fully verified 0/19. Supplemental AI-01 and CAB requirements remain outside the denominator and are not fully verified.
+- Current sequential #19 RELEASE-01 is Blocked: signed Android AAB/iOS IPA, final iOS store identifiers/certificates/profiles, physical-device install/runtime and pilot acceptance remain. Other blockers include approved pickup radius/zone, Driver location-freshness age, selected-negotiation lifetime, Driver/Rider support categories/process/owner, live Cosmos/TriSend/maps/Call/Chat/push/telemetry, document storage/retention, legal partnership/T&C, production API hosting and load tests.
+- **Next:** between runs. Re-read main on the next scheduled run and resume the first item whose external blocker has cleared, or implement a concrete newly evidenced code/test gap. Do not invent product policy or request infrastructure credentials before the coding milestone.
