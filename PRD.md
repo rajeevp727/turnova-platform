@@ -131,6 +131,8 @@ A free-tier-first approach is intended for development. Production hosting, maps
 - No platform fare estimate, payment gateway, escrow or in-app payment collection is part of the MVP.
 - Android and iOS builds pass agreed functional, security and pilot-readiness tests.
 
+**Release evidence note:** JavaScript bundle exports alone are not native Android/iOS builds. CI must also compile an Android debug APK and an unsigned iOS Simulator app for both Rider and Driver. These are native compilation checks only; signed production AAB/IPA artifacts, final store identifiers and physical-device functional/security/pilot acceptance remain separate release gates.
+
 ## 13. Roadmap
 
 1. Finalize zone design, dispatch policy, data model and architecture.
