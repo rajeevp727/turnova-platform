@@ -1797,37 +1797,42 @@ public sealed class RideApiIntegrationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RiderDiscoveryFailsClosedWhenPickupMatchesOverlappingConfiguredZones(bool reverseZoneOrder)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RiderDiscoveryFailsClosedWhenPickupMatchesOverlappingConfiguredZones(
+        bool reverseZoneOrder, bool sharedBoundary)
     {
-        var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
-        var overlapping = new DispatchZoneConfig("hyderabad-east", 17.4, 17.8, 78.3, 78.7);
-        var zones = reverseZoneOrder ? new[] { overlapping, central } : new[] { central, overlapping };
+        var zones = CreateAmbiguousDispatchZones(reverseZoneOrder, sharedBoundary);
+        var pickupLatitude = sharedBoundary ? 17.6 : 17.493;
+        var pickupLongitude = sharedBoundary ? 78.4 : 78.399;
         using var factory = new TurnOvaApiFactory(dispatchZones: zones);
         using var rider = factory.CreateClient("Rider", "rider-ambiguous-zone");
 
         using var response = await rider.GetAsync(
-            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+            $"/api/v1/rider/discovery?latitude={pickupLatitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}&longitude={pickupLongitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}&passengers=1");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("not available in this pickup zone", await response.Content.ReadAsStringAsync());
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
     public async Task SelectedBookingFailsClosedWhenPickupMatchesOverlappingConfiguredZonesBeforeReservation(
-        bool reverseZoneOrder)
+        bool reverseZoneOrder, bool sharedBoundary)
     {
-        var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
-        var overlapping = new DispatchZoneConfig("hyderabad-east", 17.4, 17.8, 78.3, 78.7);
-        var zones = reverseZoneOrder ? new[] { overlapping, central } : new[] { central, overlapping };
+        var zones = CreateAmbiguousDispatchZones(reverseZoneOrder, sharedBoundary);
+        var pickupLatitude = sharedBoundary ? 17.6 : 17.493;
+        var pickupLongitude = sharedBoundary ? 78.4 : 78.399;
         using var factory = new TurnOvaApiFactory(dispatchZones: zones);
         using var rider = factory.CreateClient("Rider", "rider-ambiguous-booking-zone");
         using var request = CreateSelectedBookingRequest(
             "ambiguous-booking-key", "ambiguous-booking-driver", "ambiguous-booking-union",
-            "KPHB", "HITEC City", []);
+            "KPHB", "HITEC City", [], pickupLatitude, pickupLongitude);
 
         using var response = await rider.SendAsync(request);
 
@@ -1839,27 +1844,29 @@ public sealed class RideApiIntegrationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
     public async Task DriverLocationTakesDriverOfflineWhenPickupMatchesOverlappingConfiguredZones(
-        bool reverseZoneOrder)
+        bool reverseZoneOrder, bool sharedBoundary)
     {
-        var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
-        var overlapping = new DispatchZoneConfig("hyderabad-east", 17.4, 17.8, 78.3, 78.7);
-        var zones = reverseZoneOrder ? new[] { overlapping, central } : new[] { central, overlapping };
+        var zones = CreateAmbiguousDispatchZones(reverseZoneOrder, sharedBoundary);
+        var pickupLatitude = sharedBoundary ? 17.6 : 17.493;
+        var pickupLongitude = sharedBoundary ? 78.4 : 78.399;
         using var factory = new TurnOvaApiFactory(dispatchZones: zones);
         using var driver = factory.CreateClient("Driver", "driver-ambiguous-zone");
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         profiles["driver-ambiguous-zone"] = profiles["driver-ambiguous-zone"] with
         {
             AvailabilityStatus = "Online",
-            CurrentLatitude = 17.493,
-            CurrentLongitude = 78.399,
+            CurrentLatitude = pickupLatitude,
+            CurrentLongitude = pickupLongitude,
             LocationUpdatedAtUtc = DateTimeOffset.UtcNow
         };
 
         using var response = await driver.PostAsJsonAsync(
-            "/api/v1/driver/location", new { latitude = 17.493, longitude = 78.399 });
+            "/api/v1/driver/location", new { latitude = pickupLatitude, longitude = pickupLongitude });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Contains("left your assigned service zone",
@@ -3086,15 +3093,25 @@ public sealed class RideApiIntegrationTests
         };
     }
 
+    private static DispatchZoneConfig[] CreateAmbiguousDispatchZones(bool reverseZoneOrder, bool sharedBoundary)
+    {
+        var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
+        var overlapping = sharedBoundary
+            ? new DispatchZoneConfig("hyderabad-east", 17.6, 17.8, 78.2, 78.6)
+            : new DispatchZoneConfig("hyderabad-east", 17.4, 17.8, 78.3, 78.7);
+        return reverseZoneOrder ? new[] { overlapping, central } : new[] { central, overlapping };
+    }
+
     private static HttpRequestMessage CreateSelectedBookingRequest(
-        string key, string driverId, string unionId, string pickup, string dropoff, string[] stops)
+        string key, string driverId, string unionId, string pickup, string dropoff, string[] stops,
+        double pickupLatitude = 17.493, double pickupLongitude = 78.399)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/rider/bookings")
         {
             Content = JsonContent.Create(new
             {
                 selectedDriverId = driverId, unionId, pickup, dropoff, stops,
-                passengers = 1, pickupLatitude = 17.493, pickupLongitude = 78.399
+                passengers = 1, pickupLatitude, pickupLongitude
             })
         };
         request.Headers.Add("Idempotency-Key", key);
