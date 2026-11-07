@@ -757,6 +757,17 @@ RIDER-02 backend tests are now executed evidence: PR #64 final-head CI run [4227
 RIDER-03 backend tests are now executed evidence: PR #64 final-head CI run [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) ran 189/189 tests successfully, including booking/reservation and Union-transfer coverage. Native non-container API publish, Rider/Driver Expo config/typechecks and shared mobile tests also passed. Live Cosmos ETag/multi-instance/restart and Android/iOS acceptance remain external gates. Automated reviews remain recorded in PR comments [6689967817](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6689967817) and [6690099440](https://github.com/rajeevp727/turnova-platform/pull/57#issuecomment-6690099440).
 
 
+### DISPATCH-03 — selected-driver expiry and reservation reconciliation evidence
+
+- `ExpiredSelectedNegotiationBecomesTerminalAndReleasesDriverReservation` verifies an expired Negotiating ride becomes terminal and releases only its selected Driver lease.
+- `DiscoveryExpiresAnExpiredNegotiationBeforeReleasingItsDriverReservation` verifies discovery reconciles the ride lifecycle before returning the Driver to eligible results.
+- `DiscoveryReleasesPermanentReservationWhenRideIsAlreadyTerminal` verifies a terminal ride's stale reservation is reconciled before another booking.
+- `SelectedBookingReservationPreventsConcurrentBookingsAndRiderCancelReleasesIt` and `DriverDecliningSelectedBookingCancelsRideAndReleasesReservation` verify cancellation/decline cleanup; `ExpiredTemporaryReservationRemainsHeldUntilRideLifecycleReconciliation` and `ReleaseOnlyRemovesMatchingRide` verify expiry retention and matching-ride-only release.
+- The API's selected-booking expiry is lazy: ride reads/history, Rider discovery and Driver availability/reservation checks trigger the authoritative conditional transition. Cosmos ride replacement uses an IfMatch ETag after snapshot comparison; the reservation store returns expired leases to the API rather than deleting them independently. The selected-booking path does not call the legacy FIFO offer advancer; the legacy offer-expiry worker processes a separate offer/queue aggregate.
+- PR #80 final-head CI [42317693913](https://github.com/rajeevp727/turnova-platform/actions/runs/42317693913) passed all four jobs and executed 235/235 backend tests, 27/27 shared mobile tests, both app typechecks, four Android/iOS production JavaScript bundle exports and native non-container API publish/artifact verification.
+- Live Cosmos multi-instance/restart/ETag recovery and Android/iOS booking-expiry, cancellation and reconnect acceptance remain external gates. `Dispatch:SelectedDriverNegotiationLifetimeMinutes` remains unset until the Product Owner approves the expiry lifetime; no default is inferred.
+
+
 ## CI execution integrity
 
 - Release solution builds must include all five backend projects, including `TurnOva.Tests`.
