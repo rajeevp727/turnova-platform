@@ -849,8 +849,8 @@ These CI steps validate production JavaScript bundling for both apps and platfor
 |---|---|---|---|
 | RELEASE-NATIVE-005 | Rider Android native build | Expo prebuild succeeds and Gradle produces a non-empty debug APK | `native-android` CI matrix (`rider-app`) | P0 |
 | RELEASE-NATIVE-006 | Driver Android native build | Expo prebuild succeeds and Gradle produces a non-empty debug APK | `native-android` CI matrix (`driver-app`) | P0 |
-| RELEASE-NATIVE-007 | Rider iOS native build | CocoaPods resolves; CI selects the root Rider app project rather than the Pods aggregate project; Xcode compiles an unsigned Release configuration for iOS Simulator | `native-ios` CI matrix (`rider-app`) | P0 |
-| RELEASE-NATIVE-008 | Driver iOS native build | CocoaPods resolves; CI selects the root Driver app project rather than the Pods aggregate project; Xcode compiles an unsigned Release configuration for iOS Simulator | `native-ios` CI matrix (`driver-app`) | P0 |
+| RELEASE-NATIVE-007 | Rider iOS native build | CocoaPods resolves; CI selects the root Rider `.xcworkspace` matching the root app `.xcodeproj` (not the nested project workspace); Xcode compiles an unsigned Release configuration for iOS Simulator | `native-ios` CI matrix (`rider-app`) | P0 |
+| RELEASE-NATIVE-008 | Driver iOS native build | CocoaPods resolves; CI selects the root Driver `.xcworkspace` matching the root app `.xcodeproj` (not the nested project workspace); Xcode compiles an unsigned Release configuration for iOS Simulator | `native-ios` CI matrix (`driver-app`) | P0 |
 
 The CI-only iOS bundle identifier overrides (`com.turnova.rider` / `com.turnova.driver`) are build settings and are not committed as production store identifiers. The Android output is a debug APK; the iOS output is a simulator `.app`. Neither is a signed production AAB/IPA, and neither replaces physical-device, signing, store-submission or pilot acceptance.
 
