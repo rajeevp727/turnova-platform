@@ -3,7 +3,7 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-07  
+**Last verified:** 2026-11-08  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
 **Last audited main HEAD:** `7222c5e4dccc2ca0f804eae92105455df89d3fb9` after PR #103 merged. PR #103 exact-head CI [42382259118](https://github.com/rajeevp727/turnova-platform/actions/runs/42382259118) passed all eight jobs: 254/254 backend, 53/53 shared mobile, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. The final gap audit is complete; #19 RELEASE-01 remains Blocked by signing and physical-device gates.
@@ -645,3 +645,12 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - 19-area progress: 39.5% = (0 Verified + 15 × 0.5 + 0 Not started + 4 Blocked) / 19; strict fully verified 0/19. Supplemental AI-01 and CAB requirements remain outside the denominator and are not fully verified.
 - Current sequential #19 RELEASE-01 is Blocked: signed Android AAB/iOS IPA, final iOS store identifiers/certificates/profiles, physical-device install/runtime and pilot acceptance remain. Other blockers include approved pickup radius/zone, Driver location-freshness age, selected-negotiation lifetime, Driver/Rider support categories/process/owner, live Cosmos/TriSend/maps/Call/Chat/push/telemetry, document storage/retention, legal partnership/T&C, production API hosting and load tests.
 - **Next:** between runs. Re-read main on the next scheduled run and resume the first item whose external blocker has cleared, or implement a concrete newly evidenced code/test gap. Do not invent product policy or request infrastructure credentials before the coding milestone.
+
+
+## Latest execution handoff (2026-11-08)
+- Current sequential item: #3 RIDER-01. PR #106 is the only active feature PR; do not start another feature PR until it is merged or formally blocked.
+- PR #106 automated review comment: [6711746199](https://github.com/rajeevp727/turnova-platform/pull/106#issuecomment-6711746199); no critical/high-risk findings.
+- PR #106 adds 14 invalid booking-input cases and one positive maximum-boundary test. It asserts invalid requests do not create a driver reservation or idempotency record.
+- After the documentation commit, rerun and inspect all required checks on the exact latest PR head before squash merge.
+- Next sequential task (#4 RIDER-02): fix agreement-proposal idempotency payload mismatch. Current API lookup replays an existing agreement for the same actor-scoped Idempotency-Key without comparing the new amount/currency; the ETag-conflict retry path also replays without comparing. Add an optional backward-compatible RequestHash to RideAgreementVersion, compare the amount/currency fingerprint on both paths, return 409 for changed payloads, and add same-key retry plus concurrent changed-payload regression tests.
+- Do not change approved Cab-only discovery, direct negotiation, no-payment-gateway model, FIFO guard or no-container policy. Live Cosmos and physical-device checks remain external gates.
