@@ -37,7 +37,7 @@ function getCompletedIndiaMonths(now = new Date(), count = MAX_COMPLETED_MONTHS)
 }
 
 function formatIndiaMonthLabel(year, month, locale) {
-  if (!Number.isInteger(year) || year < 1 || year > 9999 || !Number.isInteger(month) || month < 1 || month > 12) {
+  if (!Number.isInteger(year) || year < 2020 || year > 9999 || !Number.isInteger(month) || month < 1 || month > 12) {
     throw new RangeError("A valid year and month are required.");
   }
 
