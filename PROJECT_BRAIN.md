@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `1863586eebe210eaae78b041f8567f6e9bf85be0` (PR #99 completed #13 TRIP-01; exact-head CI [42362228646](https://github.com/rajeevp727/turnova-platform/actions/runs/42362228646) passed all eight jobs and 251/251 backend tests, including Android debug APKs, unsigned iOS Simulator apps and native non-container API publish. Current sequential item is #14 DRIVER-03.)
+**Last audited main HEAD:** `fd4e008b63da50be5c26602403850105e9fc1b4b` (PR #100 completed the #14 DRIVER-03 payslip audit-recovery increment; exact-head CI [42368222460](https://github.com/rajeevp727/turnova-platform/actions/runs/42368222460) passed all eight jobs and 252/252 backend tests, including Rider/Driver typechecks and bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish. #15 DRIVER-04 remains Blocked by unapproved support categories/owner/process; current sequential item is #16 RIDER-04.)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -605,3 +605,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - DRIVER-03 remains In progress: live Cosmos cross-container restart/ETag recovery and physical Android/iOS PDF save/share/accessibility are not represented by the in-memory integration test or simulator compilation.
 - Next sequential row #15 DRIVER-04 remains Blocked until Product approves Driver support categories, escalation owner and operating process. If unresolved, proceed to #16 RIDER-04 and continue independent acceptance work.
 - Weighted score remains 42.1% = (0 Verified + 16 × 0.5 + 0 Not started + 3 Blocked) / 19; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
+
+
+## Current sequential handoff — #16 RIDER-04 (2026-11-07)
+
+- #14 DRIVER-03 PR #100 merged at `fd4e008b63da50be5c26602403850105e9fc1b4b`; final-head CI [42368222460](https://github.com/rajeevp727/turnova-platform/actions/runs/42368222460) passed all eight jobs and 252/252 backend tests. Live Cosmos cross-container recovery and physical Android/iOS payslip save/share/accessibility remain.
+- #15 DRIVER-04 is Blocked pending Product approval of Driver-support categories, escalation owner and operating process. Do not invent these.
+- #16 RIDER-04 audit found the completed-ride Driver report input hard-coded INR although the agreement/report model carries its currency. PR #101 adds only current agreement version/amount/currency to authenticated Driver history, uses that currency in the report form, and tests that Rider history remains unchanged. Final-head CI [42373100229](https://github.com/rajeevp727/turnova-platform/actions/runs/42373100229) passed all eight jobs, including 252/252 backend tests and 53/53 shared mobile tests.
+- Existing report immutability, signed delta, idempotency, ride audit and signed-unionId UnionManager privacy are preserved. Customer dispute, non-zero-delta next-ride gating and cross-Union preceding-ride disclosure remain unresolved product decisions.
+- After #16, #17 SUPPORT-01 remains Blocked pending approved Rider-support categories, escalation owner and process; continue to actionable #18 PLATFORM-01.
+- 19-area progress remains 42.1% (0 Verified, 16 In Progress, 0 Not Started, 3 Blocked; strict 0/19). AI-01 and CAB-RECON-01 remain supplemental outside the denominator.

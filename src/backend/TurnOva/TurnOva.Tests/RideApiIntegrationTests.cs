@@ -3188,6 +3188,20 @@ public sealed class RideApiIntegrationTests
         var rideId = await CreateCompletedSelectedRideAsync(
             factory, rider, driver, driverId, "payment-currency-union", "payment-currency", 500m, "USD");
 
+        var driverHistory = await driver.GetFromJsonAsync<List<JsonElement>>("/api/v1/driver/rides/mine");
+        var driverHistoryItem = Assert.Single(driverHistory!);
+        var currentAgreement = driverHistoryItem.GetProperty("currentAgreement");
+        Assert.Equal(1, currentAgreement.GetProperty("version").GetInt32());
+        Assert.Equal(500m, currentAgreement.GetProperty("amount").GetDecimal());
+        Assert.Equal("USD", currentAgreement.GetProperty("currency").GetString());
+        if (driverHistoryItem.TryGetProperty("paymentReconciliation", out var existingReport))
+            Assert.Equal(JsonValueKind.Null, existingReport.ValueKind);
+
+        var riderHistory = await rider.GetFromJsonAsync<List<JsonElement>>("/api/v1/rides/mine");
+        var riderHistoryItem = Assert.Single(riderHistory!);
+        Assert.False(riderHistoryItem.TryGetProperty("currentAgreement", out _));
+        Assert.False(riderHistoryItem.TryGetProperty("paymentReconciliation", out _));
+
         using var request = CreatePaymentReportRequest(rideId, "payment-currency-key", 450m);
         using var response = await driver.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

@@ -15,6 +15,7 @@ import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
+import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
@@ -45,7 +46,8 @@ type User = { id: string; email: string; name?: string; role: string };
 type QueueEntry = { driverId: string; position: number; joinedAt: string };
 type QueueMembership = { isQueued: boolean; position: number | null };
 type PaymentReconciliation = { rideId: string; agreementVersion: number; unionId: string; agreedAmount: number; amountReceived: number; delta: number; currency: string; reportedAtUtc: string; reportedByDriverId: string; status: string };
-type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean; stops?: string[]; negotiationExpiresAtUtc?: string | null; paymentReconciliation?: PaymentReconciliation | null };
+type CurrentAgreement = { version: number; amount: number; currency: string };
+type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; locationSharingActive: boolean; stops?: string[]; negotiationExpiresAtUtc?: string | null; paymentReconciliation?: PaymentReconciliation | null; currentAgreement?: CurrentAgreement | null };
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
 
@@ -926,6 +928,7 @@ export default function App() {
           <Text style={styles.cardTitle}>Trip history</Text>
           {driverRideHistory.filter(item=>item.rideId!==activeRide?.rideId).map(item=>{
             const report = item.paymentReconciliation;
+            const paymentPresentation = paymentReportPresentation(item.currentAgreement);
             return <View key={item.rideId} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}>
               <Text style={styles.label}>{item.status.toUpperCase()}</Text>
               <Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text>
@@ -937,9 +940,10 @@ export default function App() {
                 <Text style={styles.muted}>Agreed {report.currency} {report.agreedAmount.toFixed(2)} · Received {report.currency} {report.amountReceived.toFixed(2)}</Text>
                 <Text style={styles.muted}>Delta {report.delta > 0 ? "+" : ""}{report.delta.toFixed(2)} {report.currency} · {report.delta > 0 ? "Reported shortfall" : report.delta < 0 ? "Reported excess" : "Exact reported match"}</Text>
                 <Text style={styles.muted}>Reported {new Date(report.reportedAtUtc).toLocaleString()}</Text>
-              </View> : item.status === "Completed" ? <View style={{marginTop:10}}>
+              </View> : item.status === "Completed" && paymentPresentation.agreedAmountLabel ? <View style={{marginTop:10}}>
+                <Text style={styles.muted}>{paymentPresentation.agreedAmountLabel}</Text>
                 <Text style={styles.muted}>Report the amount received directly from the Rider. This report is not independently verified.</Text>
-                <TextInput value={paymentReportAmounts[item.rideId] ?? ""} onChangeText={value=>setPaymentReportAmounts(current=>({...current,[item.rideId]:value}))} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder="Amount received (INR)"/>
+                <TextInput value={paymentReportAmounts[item.rideId] ?? ""} onChangeText={value=>setPaymentReportAmounts(current=>({...current,[item.rideId]:value}))} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder={paymentPresentation.amountReceivedPlaceholder}/>
                 <Pressable style={styles.secondary} disabled={loading || !(paymentReportAmounts[item.rideId] ?? "").trim()} onPress={()=>void reportPaymentReceived(item.rideId)}><Text style={styles.secondaryText}>Record amount received</Text></Pressable>
               </View> : null}
             </View>;
