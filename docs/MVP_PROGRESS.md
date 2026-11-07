@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current sequential item #18 PLATFORM-01: persist append-only audit facts for selected ride creation, agreement proposals and party confirmations, lifecycle transitions and Driver-reported payment reconciliation. Keep the events in the existing Rides aggregate so each event is atomic with the mutation under the existing ETag guard; do not add a container or admin surface.
+**Current sequential item #18 PLATFORM-01: persist append-only audit facts for selected ride creation, agreement proposals and party confirmations, lifecycle transitions and Driver-reported payment reconciliation. Creation events are written with the initial ride document; subsequent events share the existing ETag-protected ride update. Keep the events in the existing Rides aggregate; do not add a container or admin surface.
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -229,7 +229,7 @@
 
 - Current sequential item: #18 PLATFORM-01. #17 SUPPORT-01 remains Blocked because Rider support categories, escalation owner and operating process are not approved; no speculative support workflow is added.
 - The API now stores privacy-minimised `RideAuditEvent` records in the existing `DemoRide` aggregate. The event list is optional for backward compatibility with existing ride documents and is not a new Cosmos container.
-- Events are appended in the same ETag-protected ride replacement as ride state, agreement version/confirmation or payment reconciliation. The snapshot comparison includes the audit list, and an append-only prefix guard rejects removal, reordering or mutation of prior events.
+- Creation events are written with the initial ride document; subsequent events are appended in the same ETag-protected ride replacement as ride state, agreement version/confirmation or payment reconciliation. The snapshot comparison includes the audit list, and an append-only prefix guard rejects removal, reordering or mutation of prior events.
 - Event types cover RideCreated/RideRequested, AgreementProposed, AgreementPartyConfirmed, RideStatusChanged and PaymentReportedUnverified. Events contain ride/Union linkage, actor ID/role, UTC time and relevant state/version/amount/currency/delta; they omit route/stops, exact coordinates, contact data, document references, tokens and private chat.
 - Same-key agreement/payment retries and repeated terminal-state calls do not append duplicate events. Deterministic tests cover the full selected-Cab lifecycle, cancellation, Driver decline, System expiry, agreement-confirmation retry, payment-report retry and preservation across a non-audit location update.
 - No new container, cross-partition transaction, general-purpose admin audit endpoint or cross-Union visibility policy is added. Live Cosmos multi-instance ETag/restart/retention, production telemetry/alerts/origin configuration and load tests remain external gates.
