@@ -231,3 +231,12 @@ This approved Rider/Driver MVP requirement is tracked separately from the existi
 - AI must not set or recommend fares, make payment/reconciliation decisions, approve KYC/selfies, determine Driver eligibility, rank or override Rider discovery, influence any FIFO policy, accept/reject a ride, make safety/legal decisions or change server-owned ride state.
 - Initial delivery covers Rider trip-intent drafting and approved-content help for Rider/Driver. A Driver trip/offer explanation is optional and is not required by this increment.
 - Live provider sandbox validation remains an infrastructure gate; mock-provider and deterministic-fallback tests are the coding/CI evidence until that gate is supplied.
+
+
+### PLATFORM-01 ride audit implementation evidence note (2026-11-07)
+
+- The selected Cab ride audit trail is an optional append-only `AuditEvents` list inside the existing `DemoRide` aggregate in the existing Rides container. Events are appended in the same ETag-protected ride replacement as the state, agreement or payment-report mutation; no new Cosmos container, cross-partition transaction or admin endpoint is introduced.
+- Events cover selected ride creation, agreement proposals, each party confirmation, lifecycle state transitions and Driver-reported/unverified payment reports. They retain ride/Union linkage, actor ID/role, UTC time, previous/new status, agreement version and amount/currency/delta only when relevant.
+- The append-only guard rejects removal, reordering or mutation of prior events; snapshot comparison includes the event list so concurrent ETag updates cannot silently drop audit history. Same-key agreement/payment retries and already-completed state retries do not append duplicate events.
+- Audit events deliberately omit route/stops, precise coordinates, phone/email, KYC/document references, tokens and private chat. The existing Driver history and signed-unionId-scoped UnionManager reconciliation views remain least-privilege; no cross-Union preceding-ride disclosure policy is inferred.
+- Automated evidence is deterministic in-memory integration coverage. Live Cosmos multi-instance ETag/restart/retention validation, production telemetry/alerts, origin configuration and load testing remain separate PLATFORM-01 gates.
