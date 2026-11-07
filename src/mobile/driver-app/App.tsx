@@ -188,9 +188,9 @@ export default function App() {
         const restored = await restoreStoredSession(SecureStore, jsonRequest);
         if (active && restored) {
           sessionEpoch.current += 1;
-          const restoredUser = requireAppRole(restored.user, "Driver");
+          const restoredUser = requireAppRole<User>(restored.user, "Driver");
           setTokens(restored.tokens);
-          setUser(restoredUser as User);
+          setUser(restoredUser);
         }
       } catch {
         if (active) setError("Unable to restore your session. Check your connection or secure storage and retry.");
