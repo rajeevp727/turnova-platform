@@ -2365,6 +2365,58 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task SelectedCabLifecycleRetriesAreIdempotentAndKeepTerminalState()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "trip-lifecycle-idempotent-driver";
+        using var rider = factory.CreateClient("Rider", "trip-lifecycle-idempotent-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, driverId, "trip-lifecycle-idempotent-union",
+            "trip-lifecycle-idempotent-booking", 500m);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
+
+        using var started = await driver.PostAsync($"/api/v1/rides/{rideId}/start", null);
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        Assert.Equal("InProgress", (await ReadRideAsync(started)).Status);
+        using var startRetry = await driver.PostAsync($"/api/v1/rides/{rideId}/start", null);
+        Assert.Equal(HttpStatusCode.OK, startRetry.StatusCode);
+        Assert.Equal("InProgress", (await ReadRideAsync(startRetry)).Status);
+
+        using var completed = await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null);
+        Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+        Assert.Equal("Completed", (await ReadRideAsync(completed)).Status);
+        using var completionRetry = await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null);
+        Assert.Equal(HttpStatusCode.OK, completionRetry.StatusCode);
+        var terminalRide = await ReadRideAsync(completionRetry);
+        Assert.Equal("Completed", terminalRide.Status);
+        Assert.False(terminalRide.LocationSharingActive);
+
+        var workActivities = factory.Services
+            .GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        Assert.Single(workActivities.Values, item =>
+            item.RideId == rideId && item.ActivityType == "Completed");
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync(driverId));
+
+        var riderHistory = await rider.GetFromJsonAsync<List<RiderRideHistoryItemTest>>("/api/v1/rides/mine");
+        Assert.NotNull(riderHistory);
+        Assert.Equal("Completed", Assert.Single(riderHistory, item => item.RideId == rideId).Status);
+
+        using var locationAfterRetry = await driver.PostAsJsonAsync(
+            $"/api/v1/rides/{rideId}/location", new { latitude = 17.496, longitude = 78.402 });
+        Assert.Equal(HttpStatusCode.NotFound, locationAfterRetry.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/start", null)).StatusCode);
+    }
+
+    [Fact]
     public async Task SelectedBookingRejectsMoreThanTenIntermediateStops()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
