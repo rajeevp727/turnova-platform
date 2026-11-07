@@ -2681,6 +2681,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "invalid-stop-rider-" + invalidStop.Length);
+        using var driver = factory.CreateClient("Driver", "invalid-stop-driver");
         SeedBookableDriver(factory, "invalid-stop-driver", "invalid-stop-union");
 
         var stop = invalidStop.Length == 1 ? new string('x', 251) : invalidStop;
