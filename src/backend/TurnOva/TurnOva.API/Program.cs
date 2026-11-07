@@ -2528,15 +2528,22 @@ app.MapGet("/api/v1/rides/{rideId}/agreements", async (ClaimsPrincipal user, str
 
     var versions = ride.AgreementVersions ?? [];
     var confirmations = ride.AgreementConfirmations ?? [];
-    return Results.Ok(versions.OrderBy(item => item.Version).Select(version => new
+    return Results.Ok(versions.OrderBy(item => item.Version).Select(version =>
     {
-        version.RideId, version.Version, version.RiderId, version.DriverId, version.UnionId,
-        version.Amount, version.Currency, version.Pickup, version.Dropoff, version.Stops,
-        version.ProposedBy, version.CreatedAtUtc,
-        RiderConfirmed = confirmations.Any(item => item.Version == version.Version &&
-            item.Party == "Rider" && item.ActorId == version.RiderId),
-        DriverConfirmed = confirmations.Any(item => item.Version == version.Version &&
-            item.Party == "Driver" && item.ActorId == version.DriverId)
+        var riderConfirmation = confirmations.FirstOrDefault(item => item.Version == version.Version &&
+            item.Party == "Rider" && item.ActorId == version.RiderId);
+        var driverConfirmation = confirmations.FirstOrDefault(item => item.Version == version.Version &&
+            item.Party == "Driver" && item.ActorId == version.DriverId);
+        return new
+        {
+            version.RideId, version.Version, version.RiderId, version.DriverId, version.UnionId,
+            version.Amount, version.Currency, version.Pickup, version.Dropoff, version.Stops,
+            version.ProposedBy, version.CreatedAtUtc,
+            RiderConfirmed = riderConfirmation is not null,
+            RiderConfirmedAtUtc = riderConfirmation?.ConfirmedAtUtc,
+            DriverConfirmed = driverConfirmation is not null,
+            DriverConfirmedAtUtc = driverConfirmation?.ConfirmedAtUtc
+        };
     }));
 }).RequireAuthorization();
 
