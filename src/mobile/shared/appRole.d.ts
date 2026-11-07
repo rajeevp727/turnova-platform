@@ -4,7 +4,7 @@ export interface AppUserWithRole {
   role: string;
 }
 
-export function requireAppRole<T extends AppUserWithRole>(
-  user: T | null | undefined,
+export function requireAppRole<T extends AppUserWithRole = AppUserWithRole>(
+  user: unknown,
   expectedRole: TurnOvaAppRole
 ): T;
