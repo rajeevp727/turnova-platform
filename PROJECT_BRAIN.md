@@ -596,3 +596,12 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - The current #14 increment replays missing selected-ride Driver events from the ride audit before first snapshot creation, using deterministic create-if-absent activity IDs. Selected-ride detection uses non-null Union linkage rather than requiring an agreement version, because a Driver may decline during initial Negotiating state before any proposal. Completed rides also retry the exact completion activity and reservation release. No snapshot is rewritten after creation; no compensation or monetary policy is added.
 - Live Cosmos cross-container query/create-conflict/restart/ETag and physical Android/iOS PDF save/share/accessibility remain external verification gates.
 - Next sequential item: #15 DRIVER-04 (blocked pending Product Owner approval of Driver support categories, escalation owner and process); next actionable row is #16 RIDER-04 if the blocker remains.
+
+
+## DRIVER-03 selected-ride payslip read-repair verification (2026-11-07)
+
+- PR #100 final head `d4e4f9c79f305034027340b4d211984180e1dcf4` passed exact-head CI [42368222460](https://github.com/rajeevp727/turnova-platform/actions/runs/42368222460): all eight jobs, 252/252 backend tests, Rider/Driver typechecks and bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish.
+- Automated review follow-up [6706246591](https://github.com/rajeevp727/turnova-platform/pull/100#issuecomment-6706246591) found no unresolved critical/high-risk issue in the reviewed head. The correction explicitly covers a selected Driver decline before any agreement version exists.
+- DRIVER-03 remains In progress: live Cosmos cross-container restart/ETag recovery and physical Android/iOS PDF save/share/accessibility are not represented by the in-memory integration test or simulator compilation.
+- Next sequential row #15 DRIVER-04 remains Blocked until Product approves Driver support categories, escalation owner and operating process. If unresolved, proceed to #16 RIDER-04 and continue independent acceptance work.
+- Weighted score remains 42.1% = (0 Verified + 16 × 0.5 + 0 Not started + 3 Blocked) / 19; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
