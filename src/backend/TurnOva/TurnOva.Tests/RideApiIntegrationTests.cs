@@ -3252,6 +3252,70 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RideAgreementIdempotencyNormalizesEquivalentDecimalScale()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-scale-idempotency-rider");
+        const string rideId = "RIDE-AGREEMENT-SCALE-IDEMPOTENCY";
+        const string key = "agreement-scale-idempotency-key";
+        SeedAgreementRide(factory, rideId, "agreement-scale-idempotency-rider", "agreement-scale-idempotency-driver");
+
+        HttpRequestMessage Proposal(decimal amount)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var first = Proposal(450.0m);
+        using var firstResponse = await rider.SendAsync(first);
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+
+        using var equivalentRetry = Proposal(450.00m);
+        using var retryResponse = await rider.SendAsync(equivalentRetry);
+        Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
+        Assert.Single(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+            .GetValueOrDefault(rideId)!.AgreementVersions!);
+    }
+
+    [Fact]
+    public async Task ConcurrentSameKeyAgreementProposalsWithSamePayloadReturnOneVersion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var riderOne = factory.CreateClient("Rider", "agreement-same-payload-race-rider");
+        using var riderTwo = factory.CreateClient("Rider", "agreement-same-payload-race-rider");
+        const string rideId = "RIDE-AGREEMENT-SAME-PAYLOAD-RACE";
+        const string key = "agreement-same-payload-race-key";
+        SeedAgreementRide(factory, rideId, "agreement-same-payload-race-rider", "agreement-same-payload-race-driver");
+
+        HttpRequestMessage Proposal()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount = 450m, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var first = Proposal();
+        using var second = Proposal();
+        var responses = await Task.WhenAll(riderOne.SendAsync(first), riderTwo.SendAsync(second));
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+        foreach (var response in responses) response.Dispose();
+
+        var stored = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
+            .GetValueOrDefault(rideId)!.AgreementVersions!;
+        Assert.Single(stored);
+        Assert.Equal(450m, stored[0].Amount);
+        Assert.Equal("INR", stored[0].Currency);
+    }
+
+    [Fact]
     public async Task ConcurrentAgreementProposalsCannotCreateTheSameCurrentVersion()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
