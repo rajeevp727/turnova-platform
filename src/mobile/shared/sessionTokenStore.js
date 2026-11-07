@@ -95,7 +95,11 @@ async function restoreStoredSession(storage, request) {
       refreshToken: result.refreshToken
     };
     await saveSessionTokens(storage, nextTokens);
-    return { tokens: nextTokens, user: result.user };
+
+    // Refresh providers may return only the rotated token pair. Always reload the
+    // authoritative profile with the new access token before restoring app state.
+    const user = await request("/api/v1/auth/me", {}, nextTokens.accessToken);
+    return { tokens: nextTokens, user };
   } catch (error) {
     if (error?.status === 400 || error?.status === 401) {
       await clearSessionTokens(storage);
