@@ -565,3 +565,14 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - #7 DISPATCH-02 was audited on main commit `1b2a881f574cbfac0c8f1be6db3ac3116a114982`. The API already groups eligible approved Cab drivers by union, caps at three, orders by unrounded pickup proximity with deterministic DriverId tie-break, enforces current-union selfie approval and response privacy; Rider UI renders those groups/order without FIFO ranking. Existing API tests cover the deterministic acceptance cases. No additional code change was justified; live Cosmos/device gates and the internal FIFO role decision remain.
 - Current sequential item is #8 DISPATCH-03. Re-audit the existing lazy expiry, exact lease release, history/discovery/availability reconciliation and isolation from the legacy FIFO offer-expiry worker. Only implement a concrete independent gap; production negotiation lifetime remains unset until product approval.
 - Weighted progress remains 42.1%: 0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
+
+
+## DISPATCH-03 — selected-negotiation expiry is isolated from legacy FIFO advancement (2026-11-07)
+
+- Main before the increment is `fce4e58c4f9c21b6270328d82771a3eeb5c87d63`; documentation handoff PR #96 is merged at `fce4e58c4f9c21b6270328d82771a3eeb5c87d63` with all eight exact-head CI jobs passing.
+- `FindRideAsync` owns expiry for customer-selected Negotiating/AgreementConfirmed rides: it conditionally transitions the ride to Expired, releases only the matching Driver/ride reservation, and emits the ride status update. It does not invoke `IRideOfferAdvancer`.
+- The legacy `RideOfferExpiryWorker` processes the distinct offer/queue aggregate. `RideOfferExpiryProcessorTests.ProcessBatchAsync_AdvancesAfterOfferIsMarkedExpired` is the positive control that legacy offer expiry may advance the queue; it is not part of customer-selected negotiation expiry.
+- PR #97 adds `SelectedNegotiationExpiryDoesNotInvokeLegacyFifoAdvancer`, injecting a recording advancer into the API integration test host and asserting selected-negotiation expiry releases the matching reservation without any advancer call. No production code or FIFO policy changes.
+- Production `Dispatch:SelectedDriverNegotiationLifetimeMinutes` remains intentionally unset pending Product Owner approval. Live Cosmos ETag/multi-instance/restart and Android/iOS expiry/cancel/reconnect acceptance remain external gates.
+- Current sequential item #8 DISPATCH-03 remains In progress. Next: #9 DISPATCH-04 — audit the existing per-Driver reservation across selected booking, availability and Union transfer, then add only a missing deterministic regression.
+- The 19-area weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19). AI-01 and CAB-RECON-01 remain supplemental outside the denominator.

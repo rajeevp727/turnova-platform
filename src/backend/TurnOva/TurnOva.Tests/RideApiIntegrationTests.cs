@@ -2236,6 +2236,40 @@ public sealed class RideApiIntegrationTests
             .HasActiveAsync("expired-booking-driver"));
     }
 
+
+    [Fact]
+    public async Task SelectedNegotiationExpiryDoesNotInvokeLegacyFifoAdvancer()
+    {
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            rideOfferAdvancer: advancer);
+        const string driverId = "no-fifo-expiry-driver";
+        using var rider = factory.CreateClient("Rider", "no-fifo-expiry-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, "no-fifo-expiry-union");
+
+        using var request = CreateSelectedBookingRequest(
+            "no-fifo-expiry-key", driverId, "no-fifo-expiry-union", "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[rideId] = rides[rideId] with
+        {
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1)
+        };
+
+        using var expiredResponse = await rider.GetAsync($"/api/v1/rides/{rideId}");
+        Assert.Equal(HttpStatusCode.OK, expiredResponse.StatusCode);
+        using var expiredJson = JsonDocument.Parse(await expiredResponse.Content.ReadAsStringAsync());
+        Assert.Equal("Expired", expiredJson.RootElement.GetProperty("status").GetString());
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync(driverId));
+        Assert.Empty(advancer.AdvancedRideIds);
+    }
+
     [Fact]
     public async Task RiderAndDriverHistoryReconcileExpiredSelectedNegotiationsAndReleaseOnlyTheirReservations()
     {
@@ -3545,6 +3579,17 @@ public sealed class RideApiIntegrationTests
     private sealed record TestRide(string RideId, string Status, bool LocationSharingActive, int Passengers);
     private sealed record QueueEntryTest(string DriverId, int Position, DateTimeOffset JoinedAt);
 
+    private sealed class RecordingRideOfferAdvancer : IRideOfferAdvancer
+    {
+        public List<string> AdvancedRideIds { get; } = [];
+
+        public Task<bool> AdvanceAsync(string rideId, CancellationToken cancellationToken = default)
+        {
+            AdvancedRideIds.Add(rideId);
+            return Task.FromResult(true);
+        }
+    }
+
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
@@ -3553,16 +3598,18 @@ public sealed class RideApiIntegrationTests
         private readonly int? _nearbyLocationMaxAgeSeconds;
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
         private readonly bool _storageReadinessUnavailable;
+        private readonly IRideOfferAdvancer? _rideOfferAdvancer;
 
         public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double? nearbyRadiusKm = 10,
             int? selectedDriverNegotiationLifetimeMinutes = 15, bool storageReadinessUnavailable = false,
-            int? nearbyLocationMaxAgeSeconds = 120)
+            int? nearbyLocationMaxAgeSeconds = 120, IRideOfferAdvancer? rideOfferAdvancer = null)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
             _nearbyLocationMaxAgeSeconds = nearbyLocationMaxAgeSeconds;
             _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
             _storageReadinessUnavailable = storageReadinessUnavailable;
+            _rideOfferAdvancer = rideOfferAdvancer;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -3584,14 +3631,23 @@ public sealed class RideApiIntegrationTests
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
                 }));
 
-            if (_storageReadinessUnavailable)
+            if (_storageReadinessUnavailable || _rideOfferAdvancer is not null)
             {
                 builder.ConfigureTestServices(services =>
                 {
-                    services.RemoveAll<StorageReadinessProbe>();
-                    services.AddSingleton(new StorageReadinessProbe(
-                        _ => Task.FromException(new HttpRequestException("test-only-storage-failure")),
-                        TimeSpan.FromSeconds(3)));
+                    if (_storageReadinessUnavailable)
+                    {
+                        services.RemoveAll<StorageReadinessProbe>();
+                        services.AddSingleton(new StorageReadinessProbe(
+                            _ => Task.FromException(new HttpRequestException("test-only-storage-failure")),
+                            TimeSpan.FromSeconds(3)));
+                    }
+
+                    if (_rideOfferAdvancer is not null)
+                    {
+                        services.RemoveAll<IRideOfferAdvancer>();
+                        services.AddSingleton<IRideOfferAdvancer>(_rideOfferAdvancer);
+                    }
                 });
             }
         }

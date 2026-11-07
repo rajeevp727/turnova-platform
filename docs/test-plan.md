@@ -782,6 +782,7 @@ RIDER-03 backend tests are now executed evidence: PR #64 final-head CI run [4227
 - PR #80 final-head CI [42317693913](https://github.com/rajeevp727/turnova-platform/actions/runs/42317693913) passed all four jobs and executed 235/235 backend tests, 27/27 shared mobile tests, both app typechecks, four Android/iOS production JavaScript bundle exports and native non-container API publish/artifact verification.
 - Live Cosmos multi-instance/restart/ETag recovery and Android/iOS booking-expiry, cancellation and reconnect acceptance remain external gates. `Dispatch:SelectedDriverNegotiationLifetimeMinutes` remains unset until the Product Owner approves the expiry lifetime; no default is inferred.
 
+- `SelectedNegotiationExpiryDoesNotInvokeLegacyFifoAdvancer` injects a recording `IRideOfferAdvancer` into the API integration host, expires a Rider-selected negotiation, reads the ride and asserts the ride becomes terminal, only its matching Driver reservation is released, and the legacy FIFO advancer receives no calls. The existing `RideOfferExpiryProcessorTests.ProcessBatchAsync_AdvancesAfterOfferIsMarkedExpired` remains the positive control for legacy offer/queue expiry; the two expiry paths must stay separate (PR #97; final-head CI pending).
 
 ## CI execution integrity
 
