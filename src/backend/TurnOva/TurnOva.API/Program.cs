@@ -640,7 +640,8 @@ async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
 
         if (auditEvent is not null)
         {
-            TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, created);
+            TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, created ? "success" : "conflict");
+            activity?.SetTag("turnova.audit.outcome", created ? "success" : "conflict");
             activity?.SetStatus(created ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
         }
 
@@ -650,7 +651,8 @@ async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
     {
         if (auditEvent is not null)
         {
-            TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, false);
+            TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, "failure");
+            activity?.SetTag("turnova.audit.outcome", "failure");
             activity?.SetStatus(ActivityStatusCode.Error);
         }
         throw;
@@ -3081,7 +3083,8 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
         }
 
         foreach (var item in appendedAuditEvents)
-            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, replaced);
+            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, replaced ? "success" : "conflict");
+        activity?.SetTag("turnova.audit.outcome", replaced ? "success" : "conflict");
         activity?.SetStatus(replaced ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
         return replaced;
     }
@@ -3089,14 +3092,16 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
         ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
     {
         foreach (var item in appendedAuditEvents)
-            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, false);
+            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, "conflict");
+        activity?.SetTag("turnova.audit.outcome", "conflict");
         activity?.SetStatus(ActivityStatusCode.Error);
         return false;
     }
     catch
     {
         foreach (var item in appendedAuditEvents)
-            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, false);
+            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, "failure");
+        activity?.SetTag("turnova.audit.outcome", "failure");
         activity?.SetStatus(ActivityStatusCode.Error);
         throw;
     }

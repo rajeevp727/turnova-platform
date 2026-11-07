@@ -380,7 +380,7 @@ The legacy Rider GET /api/v1/rides/nearby endpoint returns 410 Gone so the app c
 ## PLATFORM-01 — provider-neutral API diagnostics
 
 - The API exposes a .NET Meter named TurnOva.API and an ActivitySource with the same name. They emit ride-audit write-attempt counters/spans and storage-readiness check counters/duration/spans.
-- Metric dimensions are bounded to allow-listed audit event types and outcomes (success, conflict, unavailable, timeout, cancelled). Activities carry only the normalized event type or readiness outcome. Ride IDs, actor IDs, Union IDs, route/location, contact data, document references, tokens and exception messages are excluded.
+- Metric dimensions are bounded to allow-listed audit event types and outcomes (success, conflict, failure, unavailable, timeout, cancelled). Activities carry only the normalized event type plus bounded write outcome, or the readiness outcome. Ride IDs, actor IDs, Union IDs, route/location, contact data, document references, tokens and exception messages are excluded.
 - The diagnostics use framework APIs only. There is no exporter, telemetry vendor, credentials or public metrics endpoint in the MVP code. A hosting environment may attach a compatible listener/exporter without changing ride-domain behavior.
 - Structured exception logging and /health/live plus /health/ready remain the existing operational surfaces. Alert rules, production telemetry routing, live Cosmos multi-instance ETag/restart/retention validation, production origin configuration and load tests remain infrastructure gates.
 

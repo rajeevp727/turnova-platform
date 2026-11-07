@@ -3068,7 +3068,7 @@ public sealed class RideApiIntegrationTests
     public async Task CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment()
     {
 
-        var auditMeasurements = new ConcurrentBag<(string EventType, string Outcome)>();
+        var auditMeasurements = new ConcurrentBag<(string EventType, string Outcome, string[] TagKeys)>();
         var auditActivities = new ConcurrentBag<Activity>();
         using var meterListener = new MeterListener();
         meterListener.InstrumentPublished = (instrument, listener) =>
@@ -3082,7 +3082,7 @@ public sealed class RideApiIntegrationTests
             var values = tags.ToArray();
             var eventType = values.FirstOrDefault(tag => tag.Key == "event_type").Value?.ToString() ?? "";
             var outcome = values.FirstOrDefault(tag => tag.Key == "outcome").Value?.ToString() ?? "";
-            auditMeasurements.Add((eventType, outcome));
+            auditMeasurements.Add((eventType, outcome, values.Select(tag => tag.Key).OrderBy(key => key, StringComparer.Ordinal).ToArray()));
         });
         meterListener.Start();
         using var activityListener = new ActivityListener
@@ -3181,13 +3181,18 @@ public sealed class RideApiIntegrationTests
         Assert.Contains(auditMeasurements, item => item.EventType == "agreement_party_confirmed" && item.Outcome == "success");
         Assert.Contains(auditMeasurements, item => item.EventType == "ride_status_changed" && item.Outcome == "success");
         Assert.Contains(auditMeasurements, item => item.EventType == "payment_reported_unverified" && item.Outcome == "success");
+        Assert.All(auditMeasurements, item =>
+            Assert.Equal(new[] { "event_type", "outcome" }, item.TagKeys));
         Assert.Contains(auditActivities, item =>
             item.OperationName == "ride.audit.write" &&
-            Equals(item.GetTagItem("turnova.audit.event_type"), "payment_reported_unverified"));
+            Equals(item.GetTagItem("turnova.audit.event_type"), "payment_reported_unverified") &&
+            Equals(item.GetTagItem("turnova.audit.outcome"), "success"));
         var rideAuditActivities = auditActivities.Where(item => item.OperationName == "ride.audit.write").ToArray();
         Assert.NotEmpty(rideAuditActivities);
         Assert.All(rideAuditActivities, item =>
-            Assert.Equal(new[] { "turnova.audit.event_type" }, item.Tags.Select(tag => tag.Key).ToArray()));
+            Assert.Equal(
+                new[] { "turnova.audit.event_type", "turnova.audit.outcome" },
+                item.Tags.Select(tag => tag.Key).ToArray()));
 
         var eventCount = afterReport.AuditEvents!.Count;
         using var retryRequest = CreatePaymentReportRequest(rideId, "ride-audit-payment-key", 450m);

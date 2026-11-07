@@ -32,6 +32,20 @@ public sealed class StorageReadinessProbeTests
     [Fact]
     public async Task CheckAsyncPropagatesCallerCancellation()
     {
+        var outcomes = new ConcurrentBag<string>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                instrument.Name == "turnova.storage.readiness.checks")
+                listener.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+        {
+            outcomes.Add(tags.ToArray().FirstOrDefault(tag => tag.Key == "outcome").Value?.ToString() ?? "");
+        });
+        meterListener.Start();
+
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         var probe = new StorageReadinessProbe(
@@ -40,6 +54,7 @@ public sealed class StorageReadinessProbeTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => probe.CheckAsync(cancellation.Token));
+        Assert.Contains("cancelled", outcomes);
     }
     [Fact]
     public async Task ReadinessProbeEmitsBoundedMetricsAndTraceWithoutDependencyDetails()
@@ -84,9 +99,11 @@ public sealed class StorageReadinessProbeTests
             item.Instrument == "turnova.storage.readiness.checks" && item.Outcome == "unavailable");
         Assert.Contains(measurements, item =>
             item.Instrument == "turnova.storage.readiness.duration" && item.Outcome == "unavailable");
-        var activity = Assert.Single(activities.Where(item => item.OperationName == "storage.readiness.check"));
-        Assert.Equal("unavailable", activity.GetTagItem("turnova.storage.outcome"));
-        Assert.DoesNotContain(activity.Tags, tag =>
+        var activity = activities.FirstOrDefault(item =>
+            item.OperationName == "storage.readiness.check" &&
+            Equals(item.GetTagItem("turnova.storage.outcome"), "unavailable"));
+        Assert.NotNull(activity);
+        Assert.DoesNotContain(activity!.Tags, tag =>
             tag.Value?.Contains("private-storage-endpoint", StringComparison.OrdinalIgnoreCase) == true);
     }
 

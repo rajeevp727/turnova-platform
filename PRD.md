@@ -247,6 +247,6 @@ This approved Rider/Driver MVP requirement is tracked separately from the existi
 
 ### PLATFORM-01 provider-neutral telemetry implementation evidence note (2026-11-07)
 
-- The API emits low-cardinality .NET Meter metrics for ride-audit write attempts and storage-readiness outcomes/duration, plus ActivitySource spans for those operations. Event types are allow-listed and outcomes are bounded; ride, user, Union, route, contact and credential identifiers are not tags.
+- The API emits low-cardinality .NET Meter metrics for ride-audit write attempts and storage-readiness outcomes/duration, plus ActivitySource spans for those operations. Event types are allow-listed and outcomes are bounded to success/conflict/failure; ride, user, Union, route, contact and credential identifiers are not tags.
 - Instrumentation uses only the .NET diagnostics APIs already in the target framework. No exporter, telemetry vendor, credentials, public metrics endpoint or new package is selected; a host-provided listener/exporter can consume the signals after infrastructure is chosen.
 - CI tests observe the real selected-Cab audit write path and the storage readiness probe. Live Cosmos multi-instance ETag/restart/retention, telemetry export, alert rules, production CORS origins and load testing remain external PLATFORM-01 gates.

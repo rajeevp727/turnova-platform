@@ -34,12 +34,18 @@ public static class TurnOvaDiagnostics
     public static Activity? StartStorageReadinessCheck() =>
         ActivitySource.StartActivity("storage.readiness.check");
 
-    public static void RecordRideAuditWrite(string? eventType, bool succeeded)
+    public static void RecordRideAuditWrite(string? eventType, string outcome)
     {
+        var safeOutcome = outcome switch
+        {
+            "success" => "success",
+            "conflict" => "conflict",
+            _ => "failure"
+        };
         RideAuditWriteAttempts.Add(
             1,
             new KeyValuePair<string, object?>("event_type", NormalizeEventType(eventType)),
-            new KeyValuePair<string, object?>("outcome", succeeded ? "success" : "conflict"));
+            new KeyValuePair<string, object?>("outcome", safeOutcome));
     }
 
     public static void RecordStorageReadiness(string outcome, TimeSpan elapsed)

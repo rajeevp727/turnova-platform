@@ -847,7 +847,7 @@ Ride audit events are embedded in the existing Rides aggregate and use the same 
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
 |---|---|---|---|---|
-| PLATFORM-OBS-001 | A selected Cab ride creates, negotiates, confirms, transitions and records an unverified payment report | Audit write metrics and spans are emitted for each persisted audit event with allow-listed event type and success/conflict outcome; no ride/actor/Union identifiers or PII appear as tags | CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment | P0 |
+| PLATFORM-OBS-001 | A selected Cab ride creates, negotiates, confirms, transitions and records an unverified payment report | Audit write metrics and spans are emitted for each persisted audit event with allow-listed event type and success/conflict/failure outcome; no ride/actor/Union identifiers or PII appear as tags | CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment | P0 |
 | PLATFORM-OBS-002 | Storage readiness succeeds or its dependency fails | A bounded outcome counter and duration histogram plus one readiness activity are emitted; failure details and endpoint values are not included | ReadinessProbeEmitsBoundedMetricsAndTraceWithoutDependencyDetails | P0 |
 | PLATFORM-OBS-003 | A caller cancels readiness | Cancellation propagates and is recorded as the bounded cancelled outcome, not as a dependency timeout | CheckAsyncPropagatesCallerCancellation | P1 |
 
