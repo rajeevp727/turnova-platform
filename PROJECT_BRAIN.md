@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-07  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `fd4e008b63da50be5c26602403850105e9fc1b4b` (PR #100 completed the #14 DRIVER-03 payslip audit-recovery increment; exact-head CI [42368222460](https://github.com/rajeevp727/turnova-platform/actions/runs/42368222460) passed all eight jobs and 252/252 backend tests, including Rider/Driver typechecks and bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish. #15 DRIVER-04 remains Blocked by unapproved support categories/owner/process; current sequential item is #16 RIDER-04.)
+**Last audited main HEAD:** 66f217a599ef694847b2490a656120f198a970f6 (PR #101 completed the #16 RIDER-04 currency-aware Driver report-entry increment; exact-head CI [42373804446](https://github.com/rajeevp727/turnova-platform/actions/runs/42373804446) passed all eight jobs, including 252/252 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish. #17 SUPPORT-01 remains Blocked pending Product approval; current sequential item is #18 PLATFORM-01.)
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -615,3 +615,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Existing report immutability, signed delta, idempotency, ride audit and signed-unionId UnionManager privacy are preserved. Customer dispute, non-zero-delta next-ride gating and cross-Union preceding-ride disclosure remain unresolved product decisions.
 - After #16, #17 SUPPORT-01 remains Blocked pending approved Rider-support categories, escalation owner and process; continue to actionable #18 PLATFORM-01.
 - 19-area progress remains 42.1% (0 Verified, 16 In Progress, 0 Not Started, 3 Blocked; strict 0/19). AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
+
+
+## Latest sequential handoff — #18 PLATFORM-01 (2026-11-07)
+
+- PR #101 merged at 66f217a599ef694847b2490a656120f198a970f6; exact-head CI [42373804446](https://github.com/rajeevp727/turnova-platform/actions/runs/42373804446) passed all eight jobs (252/252 backend and 53/53 shared mobile tests plus Rider/Driver typechecks/bundles, Android debug APKs, unsigned iOS Simulator apps and non-container API publish).
+- #17 SUPPORT-01 is Blocked pending Product-approved Rider support categories, escalation owner and operating process. Do not invent these.
+- #18 PLATFORM-01 adds .NET Meter/ActivitySource instrumentation for ride-audit write attempts and storage readiness. Tags are low-cardinality and contain no ride/user/Union identifiers or PII. Exporter, dashboards and alert routing remain infrastructure gates.
+- New evidence: CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment observes metrics/spans from the actual API audit path; ReadinessProbeEmitsBoundedMetricsAndTraceWithoutDependencyDetails verifies readiness metrics/activity without exposing dependency details. PR #102 CI and automated review are pending.
+- Next: #19 RELEASE-01 — audit native release/signing/device evidence without confusing debug APKs or unsigned simulator apps with production-signed artifacts.
+- Progress remains 42.1% = (0 Verified + 16 × 0.5 + 0 Not Started + 3 Blocked) / 19; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental.

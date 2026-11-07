@@ -1,4 +1,7 @@
 using TurnOva.API;
+using TurnOva.API.Observability;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -3064,6 +3067,31 @@ public sealed class RideApiIntegrationTests
     [Fact]
     public async Task CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment()
     {
+
+        var auditMeasurements = new ConcurrentBag<(string EventType, string Outcome)>();
+        var auditActivities = new ConcurrentBag<Activity>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                instrument.Name == "turnova.ride.audit.write_attempts")
+                listener.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+        {
+            var values = tags.ToArray();
+            var eventType = values.FirstOrDefault(tag => tag.Key == "event_type").Value?.ToString() ?? "";
+            var outcome = values.FirstOrDefault(tag => tag.Key == "outcome").Value?.ToString() ?? "";
+            auditMeasurements.Add((eventType, outcome));
+        });
+        meterListener.Start();
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity => auditActivities.Add(activity)
+        };
+        ActivitySource.AddActivityListener(activityListener);
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string riderId = "ride-audit-rider";
         const string driverId = "ride-audit-driver";
@@ -3147,6 +3175,19 @@ public sealed class RideApiIntegrationTests
         Assert.False(auditJson.Contains("token", StringComparison.OrdinalIgnoreCase));
         Assert.False(auditJson.Contains("kyc", StringComparison.OrdinalIgnoreCase));
         Assert.False(auditJson.Contains("chat", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Contains(auditMeasurements, item => item.EventType == "ride_created" && item.Outcome == "success");
+        Assert.Contains(auditMeasurements, item => item.EventType == "agreement_proposed" && item.Outcome == "success");
+        Assert.Contains(auditMeasurements, item => item.EventType == "agreement_party_confirmed" && item.Outcome == "success");
+        Assert.Contains(auditMeasurements, item => item.EventType == "ride_status_changed" && item.Outcome == "success");
+        Assert.Contains(auditMeasurements, item => item.EventType == "payment_reported_unverified" && item.Outcome == "success");
+        Assert.Contains(auditActivities, item =>
+            item.OperationName == "ride.audit.write" &&
+            Equals(item.GetTagItem("turnova.audit.event_type"), "payment_reported_unverified"));
+        var rideAuditActivities = auditActivities.Where(item => item.OperationName == "ride.audit.write").ToArray();
+        Assert.NotEmpty(rideAuditActivities);
+        Assert.All(rideAuditActivities, item =>
+            Assert.Equal(new[] { "turnova.audit.event_type" }, item.Tags.Select(tag => tag.Key).ToArray()));
 
         var eventCount = afterReport.AuditEvents!.Count;
         using var retryRequest = CreatePaymentReportRequest(rideId, "ride-audit-payment-key", 450m);

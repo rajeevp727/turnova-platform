@@ -1,4 +1,6 @@
 using Microsoft.Azure.Cosmos;
+using System.Diagnostics;
+using TurnOva.API.Observability;
 
 namespace TurnOva.API;
 
@@ -23,6 +25,9 @@ public sealed class StorageReadinessProbe
 
     public async Task CheckAsync(CancellationToken requestCancellationToken)
     {
+        var startedAt = Stopwatch.GetTimestamp();
+        var outcome = "success";
+        using var activity = TurnOvaDiagnostics.StartStorageReadinessCheck();
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(requestCancellationToken);
         timeoutSource.CancelAfter(_timeout);
 
@@ -32,19 +37,40 @@ public sealed class StorageReadinessProbe
         }
         catch (CosmosException ex)
         {
+            outcome = "unavailable";
             throw new StorageReadinessException("unavailable", ex);
         }
         catch (HttpRequestException ex)
         {
+            outcome = "unavailable";
             throw new StorageReadinessException("unavailable", ex);
         }
         catch (TimeoutException ex)
         {
+            outcome = "timeout";
             throw new StorageReadinessException("timeout", ex);
         }
         catch (OperationCanceledException ex) when (!requestCancellationToken.IsCancellationRequested)
         {
+            outcome = "timeout";
             throw new StorageReadinessException("timeout", ex);
+        }
+        catch (OperationCanceledException) when (requestCancellationToken.IsCancellationRequested)
+        {
+            outcome = "cancelled";
+            throw;
+        }
+        catch
+        {
+            outcome = "unavailable";
+            throw;
+        }
+        finally
+        {
+            activity?.SetTag("turnova.storage.outcome", outcome);
+            if (outcome is "unavailable" or "timeout")
+                activity?.SetStatus(ActivityStatusCode.Error);
+            TurnOvaDiagnostics.RecordStorageReadiness(outcome, Stopwatch.GetElapsedTime(startedAt));
         }
     }
 }

@@ -1,8 +1,10 @@
 using TurnOva.API;
 using TurnOva.API.Assistance;
+using TurnOva.API.Observability;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -614,20 +616,46 @@ async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
 
 async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
 {
-    if (rideContainer is null)
-        return rides.TryAdd(ride.RideId, ride);
-
+    var auditEvent = (ride.AuditEvents ?? []).LastOrDefault();
+    using var activity = auditEvent is null ? null : TurnOvaDiagnostics.StartRideAuditWrite(auditEvent.EventType);
     try
     {
-        await rideContainer.CreateItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
-        return true;
+        bool created;
+        if (rideContainer is null)
+        {
+            created = rides.TryAdd(ride.RideId, ride);
+        }
+        else
+        {
+            try
+            {
+                await rideContainer.CreateItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
+                created = true;
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                created = false;
+            }
+        }
+
+        if (auditEvent is not null)
+        {
+            TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, created);
+            activity?.SetStatus(created ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
+        }
+
+        return created;
     }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+    catch
     {
-        return false;
+        if (auditEvent is not null)
+        {
+            TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, false);
+            activity?.SetStatus(ActivityStatusCode.Error);
+        }
+        throw;
     }
 }
-
 async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
 {
     if (rideContainer is null) return rides.TryGetValue(rideId, out var item) ? item : null;
@@ -3022,21 +3050,57 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
 {
     if (!IsRideAuditAppendOnly(current.AuditEvents, updated.AuditEvents))
         return false;
-    if (rideContainer is null)
-        return rides.TryUpdate(current.RideId, updated, current);
+
+    var previousAuditCount = (current.AuditEvents ?? []).Count;
+    var appendedAuditEvents = (updated.AuditEvents ?? []).Skip(previousAuditCount).ToArray();
+    var auditEvent = appendedAuditEvents.LastOrDefault();
+    using var activity = auditEvent is null ? null : TurnOvaDiagnostics.StartRideAuditWrite(auditEvent.EventType);
+
     try
     {
-        var response = await rideContainer.ReadItemAsync<DemoRide>(current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
-        if (!IsSameRideSnapshot(response.Resource, current))
-            return false;
-        await rideContainer.ReplaceItemAsync(updated, current.RideId, new PartitionKey(current.RideId),
-            new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
-        return true;
-    }
-    catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
-    { return false; }
-}
+        bool replaced;
+        if (rideContainer is null)
+        {
+            replaced = rides.TryUpdate(current.RideId, updated, current);
+        }
+        else
+        {
+            var response = await rideContainer.ReadItemAsync<DemoRide>(
+                current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
+            if (!IsSameRideSnapshot(response.Resource, current))
+            {
+                replaced = false;
+            }
+            else
+            {
+                await rideContainer.ReplaceItemAsync(
+                    updated, current.RideId, new PartitionKey(current.RideId),
+                    new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+                replaced = true;
+            }
+        }
 
+        foreach (var item in appendedAuditEvents)
+            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, replaced);
+        activity?.SetStatus(replaced ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
+        return replaced;
+    }
+    catch (CosmosException ex) when (
+        ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+    {
+        foreach (var item in appendedAuditEvents)
+            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, false);
+        activity?.SetStatus(ActivityStatusCode.Error);
+        return false;
+    }
+    catch
+    {
+        foreach (var item in appendedAuditEvents)
+            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, false);
+        activity?.SetStatus(ActivityStatusCode.Error);
+        throw;
+    }
+}
 app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
