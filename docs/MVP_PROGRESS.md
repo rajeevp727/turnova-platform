@@ -119,9 +119,9 @@
 
 ## 7. Next steps
 
-1. **Current sequential #1 AUTH-01:** PR #91 adds a shared Rider/Driver app-role guard and symmetric Rider registration/login role tests; final-head CI and automated review are pending. Re-audit mobile auth/profile lifecycle without inventing an upstream profile-update contract.
-2. **Next:** #2 AUTH-02 — inspect refresh rotation/reuse, app restart, expiry, logout and SecureStore failure tests; implement the next missing token-lifecycle vertical slice.
-3. **#17 SUPPORT-01 and #15 DRIVER-04 remain Blocked:** support categories, escalation owner and operating process are not approved. Do not invent a support workflow.
+1. **Current sequential #2 AUTH-02:** PR #92 fixes startup restoration after a 401 refresh when the provider returns only a rotated token pair. The shared auth-test job has passed; the remaining seven CI jobs are running on head `9fd37ef0f6cd126f99d963c8a48645602b24b64a`. Recheck all eight jobs and merge only after final-head CI and automated review are green.
+2. **Next after AUTH-02:** #3 RIDER-01 — re-audit pickup/drop-off, foreground location permission, union-grouped Cab discovery and the distinction between driver-to-pickup proximity and journey distance; implement only an independent in-scope code/test gap.
+3. **#15 SUPPORT-01 and #17 SUPPORT-01 remain Blocked:** Driver/Rider support categories, escalation owner and operating process are not approved. Do not invent a support workflow.
 4. **#19 RELEASE-01 remains In progress:** PR #90 native Android/iOS compilation passed on final head; production signing and physical-device acceptance remain.
 5. Revisit #6 DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
 
@@ -257,3 +257,11 @@
 - Refresh responses that rotate tokens without returning a profile no longer overwrite the current in-memory profile; full startup restore behavior for token-only refresh responses remains part of the next AUTH-02 audit.
 - Editable profile fields remain blocked pending an approved upstream TriSend profile-update endpoint/field contract. Physical-device registration/login/profile-read validation remains external.
 - PR #91 final-head CI and automated review are pending. Weighted progress remains **42.1%** (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict **0/19**); AI-01 and CAB-RECON-01 remain supplemental.
+
+## AUTH-02 authoritative profile restore after token rotation (2026-11-07)
+
+- PR #91 merged AUTH-01 at `2e5aa128794378c30819d347c40f6e4239cb2815`; final-head CI [42335030964](https://github.com/rajeevp727/turnova-platform/actions/runs/42335030964) passed all eight jobs: 248/248 backend tests, 38/38 shared mobile tests, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish.
+- Current sequential item: #2 AUTH-02. The shared startup restore helper now persists a rotated pair, then fetches the authoritative `/api/v1/auth/me` profile with the new access token instead of depending on optional profile data in the refresh response.
+- Regression coverage includes token-only refresh, transient 503 after rotation (retain the new pair and show recoverable failure), and 401 from the refreshed profile lookup (clear both keys and restore no session).
+- PR [#92](https://github.com/rajeevp727/turnova-platform/pull/92) head `9fd37ef0f6cd126f99d963c8a48645602b24b64a`; shared mobile auth test job passed in CI [42341397901](https://github.com/rajeevp727/turnova-platform/actions/runs/42341397901). The other seven jobs are still running; no overall CI pass or merge is claimed.
+- Live TriSend refresh-token rotation/reuse and Android/iOS SecureStore runtime/restart/expiry/logout acceptance remain external gates. Weighted progress remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19). Next sequential item after this increment is #3 RIDER-01.
