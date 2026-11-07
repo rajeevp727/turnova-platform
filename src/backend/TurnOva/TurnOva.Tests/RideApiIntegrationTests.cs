@@ -1796,6 +1796,81 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RiderDiscoveryFailsClosedWhenPickupMatchesOverlappingConfiguredZones(bool reverseZoneOrder)
+    {
+        var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
+        var overlapping = new DispatchZoneConfig("hyderabad-east", 17.4, 17.8, 78.3, 78.7);
+        var zones = reverseZoneOrder ? new[] { overlapping, central } : new[] { central, overlapping };
+        using var factory = new TurnOvaApiFactory(dispatchZones: zones);
+        using var rider = factory.CreateClient("Rider", "rider-ambiguous-zone");
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("not available in this pickup zone", await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SelectedBookingFailsClosedWhenPickupMatchesOverlappingConfiguredZonesBeforeReservation(
+        bool reverseZoneOrder)
+    {
+        var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
+        var overlapping = new DispatchZoneConfig("hyderabad-east", 17.4, 17.8, 78.3, 78.7);
+        var zones = reverseZoneOrder ? new[] { overlapping, central } : new[] { central, overlapping };
+        using var factory = new TurnOvaApiFactory(dispatchZones: zones);
+        using var rider = factory.CreateClient("Rider", "rider-ambiguous-booking-zone");
+        using var request = CreateSelectedBookingRequest(
+            "ambiguous-booking-key", "ambiguous-booking-driver", "ambiguous-booking-union",
+            "KPHB", "HITEC City", []);
+
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync("ambiguous-booking-driver"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DriverLocationTakesDriverOfflineWhenPickupMatchesOverlappingConfiguredZones(
+        bool reverseZoneOrder)
+    {
+        var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
+        var overlapping = new DispatchZoneConfig("hyderabad-east", 17.4, 17.8, 78.3, 78.7);
+        var zones = reverseZoneOrder ? new[] { overlapping, central } : new[] { central, overlapping };
+        using var factory = new TurnOvaApiFactory(dispatchZones: zones);
+        using var driver = factory.CreateClient("Driver", "driver-ambiguous-zone");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles["driver-ambiguous-zone"] = profiles["driver-ambiguous-zone"] with
+        {
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        using var response = await driver.PostAsJsonAsync(
+            "/api/v1/driver/location", new { latitude = 17.493, longitude = 78.399 });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("left your assigned service zone",
+            (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
+        var updated = profiles["driver-ambiguous-zone"];
+        Assert.Equal("Offline", updated.AvailabilityStatus);
+        Assert.Null(updated.CurrentLatitude);
+        Assert.Null(updated.CurrentLongitude);
+        Assert.Null(updated.LocationUpdatedAtUtc);
+    }
+
     [Fact]
     public async Task CustomerFacingFifoRideCreationIsDisabledOutsideTestCompatibilityMode()
     {
@@ -4158,10 +4233,12 @@ public sealed class RideApiIntegrationTests
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
         private readonly bool _storageReadinessUnavailable;
         private readonly IRideOfferAdvancer? _rideOfferAdvancer;
+        private readonly IReadOnlyList<DispatchZoneConfig>? _dispatchZones;
 
         public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double? nearbyRadiusKm = 10,
             int? selectedDriverNegotiationLifetimeMinutes = 15, bool storageReadinessUnavailable = false,
-            int? nearbyLocationMaxAgeSeconds = 120, IRideOfferAdvancer? rideOfferAdvancer = null)
+            int? nearbyLocationMaxAgeSeconds = 120, IRideOfferAdvancer? rideOfferAdvancer = null,
+            IReadOnlyList<DispatchZoneConfig>? dispatchZones = null)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
@@ -4169,13 +4246,15 @@ public sealed class RideApiIntegrationTests
             _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
             _storageReadinessUnavailable = storageReadinessUnavailable;
             _rideOfferAdvancer = rideOfferAdvancer;
+            _dispatchZones = dispatchZones;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
             builder.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                var settings = new Dictionary<string, string?>
                 {
                     ["Auth:Jwt:Issuer"] = Issuer,
                     ["Auth:Jwt:Audience"] = Audience,
@@ -4188,7 +4267,27 @@ public sealed class RideApiIntegrationTests
                     ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] =
                         _selectedDriverNegotiationLifetimeMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = _legacyFifoRiderRequestsEnabled ? "true" : "false"
-                }));
+                };
+
+                if (_dispatchZones is not null)
+                {
+                    for (var index = 0; index < _dispatchZones.Count; index++)
+                    {
+                        var zone = _dispatchZones[index];
+                        settings[$"Dispatch:Zones:{index}:ZoneId"] = zone.ZoneId;
+                        settings[$"Dispatch:Zones:{index}:MinLatitude"] =
+                            zone.MinLatitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        settings[$"Dispatch:Zones:{index}:MaxLatitude"] =
+                            zone.MaxLatitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        settings[$"Dispatch:Zones:{index}:MinLongitude"] =
+                            zone.MinLongitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        settings[$"Dispatch:Zones:{index}:MaxLongitude"] =
+                            zone.MaxLongitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    }
+                }
+
+                configuration.AddInMemoryCollection(settings);
+            });
 
             var rideOfferAdvancer = _rideOfferAdvancer;
             if (_storageReadinessUnavailable || rideOfferAdvancer is not null)
