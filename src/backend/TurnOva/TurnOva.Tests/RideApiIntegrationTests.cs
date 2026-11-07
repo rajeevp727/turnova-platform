@@ -315,6 +315,7 @@ public sealed class RideApiIntegrationTests
         const string driverId = "union-transfer-race-driver";
         const string originalUnionId = "union-transfer-race-original";
         const string targetUnionId = "union-transfer-race-target";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, originalUnionId);
         var now = DateTimeOffset.UtcNow;
         factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[targetUnionId] =
