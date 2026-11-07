@@ -118,7 +118,7 @@ export default function App() {
   };
 
   const acceptSession = useCallback(async (result: any, newSession = false) => {
-    const acceptedUser = result?.user ? requireAppRole(result.user, "Driver") : null;
+    const acceptedUser = result?.user ? requireAppRole<User>(result.user, "Driver") : null;
     if (newSession && !acceptedUser)
       throw new Error("Authentication response did not include a Driver profile.");
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
