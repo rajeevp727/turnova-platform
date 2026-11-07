@@ -2694,9 +2694,13 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
 
     var versions = ride.AgreementVersions ?? [];
     var scopedIdempotencyKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{actorId}:{idempotencyKey}")));
+    var requestHash = CreateAgreementRequestHash(request.Amount, request.Currency);
     var retry = versions.FirstOrDefault(item => item.IdempotencyKey == scopedIdempotencyKey);
     if (retry is not null)
     {
+        if (!AgreementRequestMatches(retry, requestHash))
+            return Results.Conflict(new { message = "This Idempotency-Key was already used for a different agreement proposal." });
+
         var confirmations = ride.AgreementConfirmations ?? [];
         return Results.Ok(new
         {
@@ -2709,7 +2713,7 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
     var version = new RideAgreementVersion(
         rideId, (versions.LastOrDefault()?.Version ?? 0) + 1,
         ride.RiderId, ride.DriverId!, ride.UnionId ?? assignment.UnionId, request.Amount, request.Currency,
-        ride.Pickup, ride.Dropoff, ride.Stops ?? [], isRider ? "Rider" : "Driver", scopedIdempotencyKey, DateTimeOffset.UtcNow);
+        ride.Pickup, ride.Dropoff, ride.Stops ?? [], isRider ? "Rider" : "Driver", scopedIdempotencyKey, DateTimeOffset.UtcNow, requestHash);
     var nextStatus = ride.Status == "AgreementConfirmed" ? "Negotiating" : ride.Status;
     var updated = ride with
     {
@@ -2726,6 +2730,9 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
         var concurrentRetry = latest?.AgreementVersions?.FirstOrDefault(item => item.IdempotencyKey == scopedIdempotencyKey);
         if (concurrentRetry is not null)
         {
+            if (!AgreementRequestMatches(concurrentRetry, requestHash))
+                return Results.Conflict(new { message = "This Idempotency-Key was already used for a different agreement proposal." });
+
             var latestConfirmations = latest!.AgreementConfirmations ?? [];
             return Results.Ok(new
             {
@@ -2981,6 +2988,22 @@ async Task<DemoRide?> TryTransitionAsync(
             current.Status, next, occurredAtUtc: occurredAtUtc)
     };
     return await TryReplaceRideAsync(current, updated, ct) ? updated : null;
+}
+
+string CreateAgreementRequestHash(decimal amount, string currency)
+{
+    // Amounts are already validated to two decimal places. Formatting invariantly makes
+    // 450, 450.0 and 450.00 the same monetary request across retries and host cultures.
+    var normalizedAmount = amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{normalizedAmount}:{currency}")));
+}
+
+bool AgreementRequestMatches(RideAgreementVersion version, string requestHash)
+{
+    // Older persisted agreement versions have no RequestHash. Reconstruct their
+    // fingerprint from the immutable stored terms without requiring a migration.
+    var storedHash = version.RequestHash ?? CreateAgreementRequestHash(version.Amount, version.Currency);
+    return string.Equals(storedHash, requestHash, StringComparison.Ordinal);
 }
 
 IReadOnlyList<RideAuditEvent> AppendRideAuditEvent(
