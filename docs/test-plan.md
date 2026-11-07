@@ -330,8 +330,9 @@ These APIs currently use the temporary server-side admin API key and are not a s
 | PAY-016 | Driver supplies another driver's ID in a query string | API derives the driver ID from the authenticated Driver claim and never returns another driver's PDF |
 | PAY-017 | Driver has no union assignment or transfers unions within the month | Conflict; no PDF is generated until the period has one unambiguous employer union |
 | PAY-018 | Inspect generated PDF content | Work metrics only; no ride/customer identifiers, route details, fare, currency, received-payment or net-payable values |
+| PAY-019 | Driver app lists recent completed payslip months at IST month boundaries, regardless of device timezone | Current India-local month is excluded; previous month appears at IST midnight and year rollover is correct | Shared helper + mobile | P1 |
 
-Payslip output is PDF only. Monetary calculations are intentionally absent until the compensation model is approved. Automated tests cover completed-month validation, missing/changed Union assignment, authenticated Driver isolation and exclusion of customer/ride/payment details. Physical Android/iOS month-list, download/save/share and accessibility checks remain device gates. Cosmos persistence, migration and crash-window reconciliation require validation with a development Cosmos account.
+Payslip output is PDF only. Monetary calculations are intentionally absent until the compensation model is approved. Automated tests cover completed-month validation, missing/changed Union assignment, authenticated Driver isolation, exclusion of customer/ride/payment details, and the shared `completedIndiaMonths.test.cjs` boundary/year-rollover cases. The Driver app builds its recent-month list using `Asia/Kolkata`, matching the API's completed-month rule rather than the device's local time zone. Physical Android/iOS month-list, download/save/share and accessibility checks remain device gates. Cosmos persistence, migration and crash-window reconciliation require validation with a development Cosmos account.
 
 ## Light and dark application themes
 
