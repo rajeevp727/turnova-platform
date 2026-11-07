@@ -2414,6 +2414,8 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.NotFound, locationAfterRetry.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await driver.PostAsync($"/api/v1/rides/{rideId}/start", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
     }
 
     [Fact]
