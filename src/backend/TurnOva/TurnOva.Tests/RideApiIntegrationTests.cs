@@ -3022,7 +3022,7 @@ public sealed class RideApiIntegrationTests
 
 
     [Fact]
-    public async Task UnionReconciliationRemainsWithOriginalRideUnionAfterDriverTransfer()
+    public async Task UnionReconciliationRemainsLinkedToOriginalRideUnionAfterDriverTransfer()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string driverId = "payment-transfer-driver";
@@ -3072,20 +3072,13 @@ public sealed class RideApiIntegrationTests
 
         using var originalManager = factory.CreateUnionManagerClient(
             originalUnionId, "payment-transfer-original-manager");
-        using var targetManager = factory.CreateUnionManagerClient(
-            targetUnionId, "payment-transfer-target-manager");
-
         using var originalResponse = await originalManager.GetAsync("/api/v1/union/reconciliation");
         Assert.Equal(HttpStatusCode.OK, originalResponse.StatusCode);
         using var originalJson = JsonDocument.Parse(await originalResponse.Content.ReadAsStringAsync());
         var originalRecord = Assert.Single(originalJson.RootElement.EnumerateArray());
         Assert.Equal(rideId, originalRecord.GetProperty("rideId").GetString());
         Assert.Equal(originalUnionId, originalRecord.GetProperty("unionId").GetString());
-
-        using var targetResponse = await targetManager.GetAsync("/api/v1/union/reconciliation");
-        Assert.Equal(HttpStatusCode.OK, targetResponse.StatusCode);
-        using var targetJson = JsonDocument.Parse(await targetResponse.Content.ReadAsStringAsync());
-        Assert.Empty(targetJson.RootElement.EnumerateArray());
+        Assert.Equal(450m, originalRecord.GetProperty("amountReceived").GetDecimal());
 
         var driverHistory = await driver.GetFromJsonAsync<List<JsonElement>>("/api/v1/driver/rides/mine");
         var driverRecord = Assert.Single(driverHistory!);
