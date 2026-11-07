@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-08  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `f0e60ca7e1aa986b994d1a6d1240911402afee62` after PR #108 merged. Exact-head CI [42414571838](https://github.com/rajeevp727/turnova-platform/actions/runs/42414571838) passed all eight jobs and 278/278 backend tests, Rider/Driver typechecks and production bundles, Android debug APKs, unsigned iOS Simulator apps, shared mobile-auth tests and native non-container API publish. Current sequential engineering increment is #6 DISPATCH-01 on `fix/dispatch-01-reject-ambiguous-zones`; exact-one pickup-zone matching and overlap regressions are in PR #109.
+**Last audited main HEAD:** `203b8843741248d8648345f462609d3102fd6715` after PR #109 merged. Exact-head CI [42418661118](https://github.com/rajeevp727/turnova-platform/actions/runs/42418661118) passed all eight jobs and 290/290 backend tests, Rider/Driver typechecks and production bundles, Android debug APKs, unsigned iOS Simulator apps, shared mobile-auth tests and native non-container API publish. Current sequential engineering increment is #7 DISPATCH-02 on `fix/dispatch-02-refresh-selected-booking-location`; selected booking now captures fresh foreground GPS and binds it to the idempotency attempt.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -688,3 +688,13 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); weighted index 42.1% = (0 + 16 × 0.5 + 3 × 0) / 19, not engineering implementation completion.
 - Next sequential item after PR #109 merges: #7 DISPATCH-02 — audit per-Union driver cap/order, explicit Rider selection, privacy, and no FIFO/automatic assignment.
 
+
+
+## Latest sequential execution — #7 DISPATCH-02 (2026-11-08)
+
+- #6 DISPATCH-01 PR #109 merged at `203b8843741248d8648345f462609d3102fd6715`; exact-head CI [42418661118](https://github.com/rajeevp727/turnova-platform/actions/runs/42418661118) passed 8/8 jobs, including 290/290 backend tests and both native mobile app builds.
+- Existing #7 API and UI evidence covers the per-Union three-driver cap, Haversine pickup-proximity ordering and deterministic DriverId tie-break, current-Union selfie approval, response privacy, reservation exclusion, explicit Rider selection and no FIFO dependency/automatic assignment.
+- Concrete gap: the Rider app reused discovery-time GPS when submitting selected booking. PR [#110](https://github.com/rajeevp727/turnova-platform/pull/110), branch `fix/dispatch-02-refresh-selected-booking-location`, code head `798ab44b9abc222a6c6b74ae914fa33e24500730`, obtains a fresh foreground fix for the first booking attempt and reuses that exact coordinate pair with the same Idempotency-Key on retries. Route/passenger/stop/Driver changes reset the attempt; concurrent GPS reads are shared and stale in-flight results are fenced.
+- New tests in `src/mobile/shared/selectedBookingLocation.test.cjs` cover fresh capture/stable retries, concurrent read sharing, permission-denial retry and stale-result fencing. Exact-head CI and automated review are pending; no production/device/Cosmos validation is claimed.
+- Next sequential item after #7: #8 DISPATCH-03 — re-audit selected negotiation expiry, exact reservation release, history/discovery/availability-triggered recovery and isolation from the legacy FIFO offer-expiry worker.
+- Acceptance accounting: 0 Verified, 15 In Progress, 4 Blocked; strict fully verified 0/19. Weighted status index 39.5% = `(0 + 15 × 0.5 + 4 × 0) / 19`. AI-01 and Cab supplemental acceptance remain outside the 19-row denominator.
