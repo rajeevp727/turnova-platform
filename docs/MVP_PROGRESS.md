@@ -75,6 +75,8 @@
 
 ## 4. Current item evidence and review
 
+- PR #91 merged AUTH-01 at `2e5aa128794378c30819d347c40f6e4239cb2815`; final-head CI [42335030964](https://github.com/rajeevp727/turnova-platform/actions/runs/42335030964) passed all eight jobs: 248/248 backend, 38/38 shared mobile, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish.
+- PR [#92](https://github.com/rajeevp727/turnova-platform/pull/92) is the current AUTH-02 increment. Automated review [6702627233](https://github.com/rajeevp727/turnova-platform/pull/92#issuecomment-6702627233) found no unresolved critical/high-risk issue in the code diff; all required checks must pass on the latest PR head before merge.
 - PR #70 merged at `17c489eac64dc0f99e881a1474147b2f79fe2aac`; final head `55cbe53a044f5f1abed9096973cbc0aad06b83a6` passed CI [42295994210](https://github.com/rajeevp727/turnova-platform/actions/runs/42295994210), all four jobs including 210/210 backend tests, non-container API publish, Rider/Driver typechecks and nine shared tests. Automated review [6695955311](https://github.com/rajeevp727/turnova-platform/pull/70#issuecomment-6695955311) found no unresolved critical/high-risk issue.
 - PR #87 merged at `76057ee852e5726c6fd412d3fafca027069387c9`; final PR head `b0cce388daabb9c0e5dd2a3f42f6752048273ca0` passed CI [42323626642](https://github.com/rajeevp727/turnova-platform/actions/runs/42323626642), all four jobs including 243/243 backend tests, 34/34 shared mobile tests, both app typechecks, four Android/iOS bundle exports and native non-container API publish.
 - PR #71 merged at `e75ed523fec4c4fd706f9b5f1024abd7598b8ed6`; final head `cebb545c9aa5268e8cf6d71d999fcad7b381375f` passed CI [42301719963](https://github.com/rajeevp727/turnova-platform/actions/runs/42301719963), all four jobs including 214/214 backend tests, non-container API publish, Rider/Driver config/typechecks and shared mobile tests. Automated review [6697024986](https://github.com/rajeevp727/turnova-platform/pull/71#issuecomment-6697024986) found no unresolved critical/high-risk issue.
@@ -121,7 +123,7 @@
 
 1. **Current sequential #2 AUTH-02:** PR #92 fixes startup restoration after a 401 refresh when the provider returns only a rotated token pair. Recheck all eight CI jobs on the latest PR head and merge only after final-head CI and automated review are green.
 2. **Next after AUTH-02:** #3 RIDER-01 — re-audit pickup/drop-off, foreground location permission, union-grouped Cab discovery and the distinction between driver-to-pickup proximity and journey distance; implement only an independent in-scope code/test gap.
-3. **#15 SUPPORT-01 and #17 SUPPORT-01 remain Blocked:** Driver/Rider support categories, escalation owner and operating process are not approved. Do not invent a support workflow.
+3. **#15 DRIVER-04 and #17 SUPPORT-01 remain Blocked:** Driver/Rider support categories, escalation owner and operating process are not approved. Do not invent a support workflow.
 4. **#19 RELEASE-01 remains In progress:** PR #90 native Android/iOS compilation passed on final head; production signing and physical-device acceptance remain.
 5. Revisit #6 DISPATCH-01 only after production pickup radius/zone approval, live Cosmos query/index validation and Android/iOS pickup-zone acceptance.
 
