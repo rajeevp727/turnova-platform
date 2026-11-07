@@ -586,7 +586,7 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
         ride.NegotiationExpiresAtUtc is null || ride.NegotiationExpiresAtUtc > DateTimeOffset.UtcNow)
         return ride;
 
-    var expired = await TryTransitionAsync(ride, "Expired", ct);
+    var expired = await TryTransitionAsync(ride, "Expired", "system", "System", ct);
     if (expired is null) return await ReadRideRawAsync(rideId, ct);
     if (!string.IsNullOrWhiteSpace(expired.DriverId))
         await driverRideReservations.TryReleaseAsync(expired.DriverId, rideId, ct);
@@ -2067,6 +2067,11 @@ app.MapPost("/api/v1/rider/bookings", async (
         DriverDisplayName: latestProfile.FullName, DriverVehicleMake: latestProfile.VehicleMake,
         DriverVehicleModel: latestProfile.VehicleModel, DriverDistanceToPickupKm: latestDistanceKm,
         UnionName: latestUnion.Name);
+    ride = ride with
+    {
+        AuditEvents = AppendRideAuditEvent(ride, "RideCreated", riderId, "Rider",
+            newStatus: ride.Status, occurredAtUtc: now)
+    };
     bool MatchesSelectedBooking(DemoRide existing) =>
         existing.RiderId == riderId &&
         existing.DriverId == selectedDriverId &&
@@ -2189,9 +2194,15 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         }
     }
 
+    var requestedAtUtc = DateTimeOffset.UtcNow;
     var ride = new DemoRide(rideId, request.Pickup.Trim(), request.Dropoff.Trim(), request.Passengers,
-        "Requested", DateTimeOffset.UtcNow, null, riderId, null, request.PickupLatitude, request.PickupLongitude,
+        "Requested", requestedAtUtc, null, riderId, null, request.PickupLatitude, request.PickupLongitude,
         null, null, null, null, ServiceClass: serviceClass, DispatchZoneId: dispatchZoneId);
+    ride = ride with
+    {
+        AuditEvents = AppendRideAuditEvent(ride, "RideRequested", riderId, "Rider",
+            newStatus: ride.Status, occurredAtUtc: requestedAtUtc)
+    };
     try { await SaveRideAsync(ride, ct); }
     catch
     {
@@ -2307,7 +2318,7 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
 
         if (!await driverRideReservations.TryMakePermanentAsync(driverId, rideId, ct))
             return Results.Conflict(new { message = "The selected-driver reservation expired or is no longer held. Refresh Rider discovery." });
-        var acceptedSelectedRide = await TryTransitionAsync(selectedRide, "Accepted", ct);
+        var acceptedSelectedRide = await TryTransitionAsync(selectedRide, "Accepted", driverId, "Driver", ct);
         if (acceptedSelectedRide is null)
         {
             if (selectedRide.NegotiationExpiresAtUtc is { } expiry)
@@ -2337,7 +2348,13 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
         if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct))
             return Results.Conflict(new { message = "You already have an active ride. Complete or cancel it before accepting another ride." });
-        var acceptedInMemory = current with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
+        var acceptedAtUtc = DateTimeOffset.UtcNow;
+        var acceptedInMemory = current with
+        {
+            Status = "Accepted", DriverId = driverId, AcceptedAt = acceptedAtUtc, LocationSharingActive = true,
+            AuditEvents = AppendRideAuditEvent(current, "RideStatusChanged", driverId, "Driver",
+                current.Status, "Accepted", occurredAtUtc: acceptedAtUtc)
+        };
         if (!rides.TryUpdate(rideId, acceptedInMemory, current))
         {
             await driverRideReservations.TryReleaseAsync(driverId, rideId, ct);
@@ -2368,7 +2385,13 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
         if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct))
             return Results.Conflict(new { message = "You already have an active ride. Complete or cancel it before accepting another ride." });
-        var accepted = response.Resource with { Status = "Accepted", DriverId = driverId, AcceptedAt = DateTimeOffset.UtcNow, LocationSharingActive = true };
+        var acceptedAtUtc = DateTimeOffset.UtcNow;
+        var accepted = response.Resource with
+        {
+            Status = "Accepted", DriverId = driverId, AcceptedAt = acceptedAtUtc, LocationSharingActive = true,
+            AuditEvents = AppendRideAuditEvent(response.Resource, "RideStatusChanged", driverId, "Driver",
+                response.Resource.Status, "Accepted", occurredAtUtc: acceptedAtUtc)
+        };
         await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
             new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
         if (pendingOffer is not null && !string.IsNullOrWhiteSpace(pendingOffer.ETag))
@@ -2405,7 +2428,7 @@ app.MapPost("/api/v1/rides/{rideId}/reject", async (ClaimsPrincipal user, string
     if (ride is not null && ride.DriverId == driverId &&
         (ride.Status is "Negotiating" or "AgreementConfirmed"))
     {
-        var cancelledSelection = await TryTransitionAsync(ride, "Cancelled", ct);
+        var cancelledSelection = await TryTransitionAsync(ride, "Cancelled", driverId, "Driver", ct);
         if (cancelledSelection is null)
             return Results.Conflict(new { message = "The selected booking changed concurrently. Refresh and retry." });
         await driverRideReservations.TryReleaseAsync(driverId, rideId, ct);
@@ -2600,11 +2623,15 @@ app.MapPost("/api/v1/rides/{rideId}/agreements", async (
         rideId, (versions.LastOrDefault()?.Version ?? 0) + 1,
         ride.RiderId, ride.DriverId!, ride.UnionId ?? assignment.UnionId, request.Amount, request.Currency,
         ride.Pickup, ride.Dropoff, ride.Stops ?? [], isRider ? "Rider" : "Driver", scopedIdempotencyKey, DateTimeOffset.UtcNow);
+    var nextStatus = ride.Status == "AgreementConfirmed" ? "Negotiating" : ride.Status;
     var updated = ride with
     {
         AgreementVersions = [.. versions, version],
         AgreementStateRevision = ride.AgreementStateRevision + 1,
-        Status = ride.Status == "AgreementConfirmed" ? "Negotiating" : ride.Status
+        Status = nextStatus,
+        AuditEvents = AppendRideAuditEvent(ride, "AgreementProposed", actorId, isRider ? "Rider" : "Driver",
+            ride.Status, nextStatus, version.Version, version.Amount, currency: version.Currency,
+            occurredAtUtc: version.CreatedAtUtc)
     };
     if (!await TryReplaceRideAsync(ride, updated, ct))
     {
@@ -2657,20 +2684,25 @@ app.MapPost("/api/v1/rides/{rideId}/agreements/{version:int}/confirm", async (
     if (existing is not null && existing.ActorId != actorId)
         return Results.Conflict(new { message = "This agreement party has already been confirmed by a different account." });
 
+    var confirmationAtUtc = DateTimeOffset.UtcNow;
     var nextConfirmations = existing is null
-        ? confirmations.Append(new RideAgreementConfirmation(rideId, version, party, actorId, DateTimeOffset.UtcNow)).ToArray()
+        ? confirmations.Append(new RideAgreementConfirmation(rideId, version, party, actorId, confirmationAtUtc)).ToArray()
         : confirmations.ToArray();
     var riderConfirmed = nextConfirmations.Any(item => item.Version == version && item.Party == "Rider" && item.ActorId == current.RiderId);
     var driverConfirmed = nextConfirmations.Any(item => item.Version == version && item.Party == "Driver" && item.ActorId == current.DriverId);
     var statusAfterConfirmation = ride.Status;
     if (existing is null)
     {
+        var nextStatus = ride.Status == "Negotiating" && riderConfirmed && driverConfirmed
+            ? "AgreementConfirmed" : ride.Status;
         var updated = ride with
         {
             AgreementConfirmations = nextConfirmations,
             AgreementStateRevision = ride.AgreementStateRevision + 1,
-            Status = ride.Status == "Negotiating" && riderConfirmed && driverConfirmed
-                ? "AgreementConfirmed" : ride.Status
+            Status = nextStatus,
+            AuditEvents = AppendRideAuditEvent(ride, "AgreementPartyConfirmed", actorId, party,
+                ride.Status, nextStatus, version, current.Amount, currency: current.Currency,
+                occurredAtUtc: confirmationAtUtc)
         };
         if (!await TryReplaceRideAsync(ride, updated, ct))
             return Results.Conflict(new { message = "Agreement changed concurrently. Refresh and confirm the current version." });
@@ -2698,7 +2730,7 @@ app.MapPost("/api/v1/rides/{rideId}/start", async (
         return Results.Conflict(new { message = "Both Rider and Driver must confirm the current agreement version before the ride can start." });
     if (ride.Status != "Arrived")
         return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to InProgress." });
-    var started = await TryTransitionAsync(ride, "InProgress", ct);
+    var started = await TryTransitionAsync(ride, "InProgress", driverId!, "Driver", ct);
     if (started is null) return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh and retry." });
     await hub.Clients.Group(rideId).SendAsync("RideStatusChanged", new { rideId, status = started.Status }, ct);
     return Results.Ok(started);
@@ -2719,7 +2751,7 @@ app.MapPost("/api/v1/rides/{rideId}/complete", async (
         return Results.Conflict(new { message = "Both parties must confirm the current agreement version before completing the ride." });
     if (ride.Status != "InProgress")
         return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to Completed." });
-    var completed = await TryTransitionAsync(ride, "Completed", ct);
+    var completed = await TryTransitionAsync(ride, "Completed", driverId!, "Driver", ct);
     if (completed is null) return Results.Conflict(new { message = "Ride or agreement changed concurrently. Refresh and retry." });
     await RecordWorkActivityAsync(driverId!, rideId, "Completed", DateTimeOffset.UtcNow, ct);
     await driverRideReservations.TryReleaseAsync(driverId!, rideId, ct);
@@ -2773,7 +2805,13 @@ app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
         current.Amount, amountReceived,
         decimal.Round(current.Amount - amountReceived, 2, MidpointRounding.AwayFromZero),
         current.Currency, DateTimeOffset.UtcNow, driverId!, "DriverReportedUnverified", idempotencyKeyHash);
-    var updated = ride with { PaymentReconciliation = report };
+    var updated = ride with
+    {
+        PaymentReconciliation = report,
+        AuditEvents = AppendRideAuditEvent(ride, "PaymentReportedUnverified", driverId!, "Driver",
+            ride.Status, ride.Status, current.Version, current.Amount, amountReceived, report.Delta,
+            current.Currency, report.ReportedAtUtc)
+    };
     if (!await TryReplaceRideAsync(ride, updated, ct))
     {
         var latest = await ReadRideRawAsync(rideId, ct);
@@ -2795,7 +2833,7 @@ app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string
     if (ride.Status == "Cancelled") return Results.Ok(ride);
     if (ride.Status is not ("Requested" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived"))
         return Results.Conflict(new { message = "A ride can only be cancelled before it starts." });
-    var updated = await TryTransitionAsync(ride, "Cancelled", ct);
+    var updated = await TryTransitionAsync(ride, "Cancelled", riderId!, "Rider", ct);
     if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
     if (!string.IsNullOrWhiteSpace(updated.DriverId))
         await driverRideReservations.TryReleaseAsync(updated.DriverId, rideId, ct);
@@ -2810,7 +2848,7 @@ async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, str
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
     if (ride.Status == next) return Results.Ok(ride);
     if (ride.Status != expected) return Results.Conflict(new { message = $"Cannot move ride from {ride.Status} to {next}." });
-    var updated = await TryTransitionAsync(ride, next, ct);
+    var updated = await TryTransitionAsync(ride, next, driverId!, "Driver", ct);
     if (updated is null) return Results.Conflict(new { message = "Ride state changed. Refresh and try again." });
     if (next == "Completed")
     {
@@ -2822,17 +2860,43 @@ async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, str
     return Results.Ok(updated);
 }
 
-async Task<DemoRide?> TryTransitionAsync(DemoRide current, string next, CancellationToken ct)
+async Task<DemoRide?> TryTransitionAsync(
+    DemoRide current, string next, string actorId, string actorRole, CancellationToken ct)
 {
     if (!RideLifecycle.CanTransition(current.Status, next)) return null;
+    var occurredAtUtc = DateTimeOffset.UtcNow;
     var updated = current with
     {
         Status = next,
         LocationSharingActive = RideLifecycle.IsLocationSharingActive(next),
         NegotiationExpiresAtUtc = next is "Accepted" or "Cancelled" or "Expired" or "Completed"
-            ? null : current.NegotiationExpiresAtUtc
+            ? null : current.NegotiationExpiresAtUtc,
+        AuditEvents = AppendRideAuditEvent(current, "RideStatusChanged", actorId, actorRole,
+            current.Status, next, occurredAtUtc: occurredAtUtc)
     };
     return await TryReplaceRideAsync(current, updated, ct) ? updated : null;
+}
+
+IReadOnlyList<RideAuditEvent> AppendRideAuditEvent(
+    DemoRide ride, string eventType, string actorId, string actorRole,
+    string? previousStatus = null, string? newStatus = null, int? agreementVersion = null,
+    decimal? amount = null, decimal? amountReceived = null, decimal? delta = null,
+    string? currency = null, DateTimeOffset? occurredAtUtc = null)
+{
+    var auditEvent = new RideAuditEvent(
+        Guid.NewGuid().ToString("N"), ride.RideId, ride.UnionId, eventType, actorId, actorRole,
+        previousStatus, newStatus, agreementVersion, amount, amountReceived, delta, currency,
+        occurredAtUtc ?? DateTimeOffset.UtcNow);
+    return (ride.AuditEvents ?? []).Append(auditEvent).ToArray();
+}
+
+bool IsRideAuditAppendOnly(IReadOnlyList<RideAuditEvent>? current, IReadOnlyList<RideAuditEvent>? updated)
+{
+    var previous = current ?? [];
+    var next = updated ?? [];
+    return next.Count >= previous.Count &&
+        previous.SequenceEqual(next.Take(previous.Count)) &&
+        next.Select(item => item.EventId).Distinct(StringComparer.Ordinal).Count() == next.Count;
 }
 
 bool IsSameRideSnapshot(DemoRide left, DemoRide right)
@@ -2849,6 +2913,7 @@ bool IsSameRideSnapshot(DemoRide left, DemoRide right)
         left.DriverDisplayName != right.DriverDisplayName || left.DriverVehicleMake != right.DriverVehicleMake ||
         left.DriverVehicleModel != right.DriverVehicleModel || left.DriverDistanceToPickupKm != right.DriverDistanceToPickupKm ||
         left.UnionName != right.UnionName || left.PaymentReconciliation != right.PaymentReconciliation ||
+        !(left.AuditEvents ?? []).SequenceEqual(right.AuditEvents ?? []) ||
         !(left.Stops ?? []).SequenceEqual(right.Stops ?? [], StringComparer.Ordinal))
         return false;
 
@@ -2879,6 +2944,8 @@ RidePaymentReconciliationResponse? ToPaymentReconciliationResponse(RidePaymentRe
 
 async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, CancellationToken ct)
 {
+    if (!IsRideAuditAppendOnly(current.AuditEvents, updated.AuditEvents))
+        return false;
     if (rideContainer is null)
         return rides.TryUpdate(current.RideId, updated, current);
     try
@@ -3026,7 +3093,8 @@ public sealed record DemoRide(
     int AgreementStateRevision = 0, string? UnionId = null, IReadOnlyList<string>? Stops = null, DateTimeOffset? NegotiationExpiresAtUtc = null,
     string? DriverDisplayName = null, string? DriverVehicleMake = null, string? DriverVehicleModel = null,
     double? DriverDistanceToPickupKm = null, string? UnionName = null,
-    RidePaymentReconciliation? PaymentReconciliation = null);
+    RidePaymentReconciliation? PaymentReconciliation = null,
+    IReadOnlyList<RideAuditEvent>? AuditEvents = null);
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 

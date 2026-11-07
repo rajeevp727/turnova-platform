@@ -818,6 +818,19 @@ DRIVER-01 code/test audit (2026-11-07): `DriverOnboardingRequest` accepts Cab on
 The automated failure-path test uses a deterministic fake probe. It does not claim live Cosmos availability or Cosmos SDK timeout validation; those remain infrastructure gates.
 
 
+## PLATFORM-01 — ride/agreement/reconciliation audit trail
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| PLATFORM-RIDE-AUDIT-001 | Selected Cab ride completes with an agreed fare and a Driver-reported amount | Ordered append-only events cover ride creation, agreement proposal, both party confirmations, Accepted/Arrived/InProgress/Completed transitions and unverified payment reporting; each event retains ride/Union linkage, actor ID/role and UTC time, plus version/amount/currency/delta where applicable | `CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment` | P0 |
+| PLATFORM-RIDE-AUDIT-002 | Agreement confirmation or payment report is retried with the same idempotency identity/payload | The existing confirmation/report is returned and no duplicate audit event is appended | `AgreementConfirmationRetryDoesNotDuplicateAuditEvents`; `CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment` | P0 |
+| PLATFORM-RIDE-AUDIT-003 | Rider cancellation, Driver decline and negotiation expiry | A status-change event records the correct actor ID/role and previous/new state; system expiry is attributed to System | `SelectedBookingReservationPreventsConcurrentBookingsAndRiderCancelReleasesIt`; `DriverDecliningSelectedBookingCancelsRideAndReleasesReservation`; `ExpiredSelectedNegotiationBecomesTerminalAndReleasesDriverReservation` | P0 |
+| PLATFORM-RIDE-AUDIT-004 | Non-audit Driver location update follows Arrived | The location update preserves the existing event prefix and does not rewrite or drop audit history | `SelectedCabLifecycleRetriesAreIdempotentAndKeepTerminalState` | P0 |
+| PLATFORM-RIDE-AUDIT-005 | Audit payload is serialized | No pickup/drop-off/stops, exact coordinates, contact data, document references, tokens or private chat are present | `CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment` | P0 |
+
+Ride audit events are embedded in the existing Rides aggregate and use the same ride partition/ETag replacement as the mutation they describe. These deterministic tests do not replace live Cosmos multi-instance, ETag conflict, restart and retention validation; those remain infrastructure gates. No new audit container or general-purpose admin audit endpoint is added.
+
+
 ## RELEASE-01 — production mobile bundle validation
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
