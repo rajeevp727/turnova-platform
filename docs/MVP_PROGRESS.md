@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current sequential item #18 PLATFORM-01:** PR #101 completed #16 RIDER-04 and merged at 66f217a599ef694847b2490a656120f198a970f6; exact-head CI [42373804446](https://github.com/rajeevp727/turnova-platform/actions/runs/42373804446) passed all eight jobs: 252/252 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and production bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. #17 SUPPORT-01 remains Blocked pending approved Rider support categories, escalation owner and operating process. The current #18 audit found the API had structured exception logging, health endpoints and append-only ride audit, but no explicit business metrics/traces. PR #102 adds provider-neutral .NET Meter/ActivitySource instrumentation for audit writes and storage readiness with low-cardinality tags and no identifiers. Exact-head CI [42375960785](https://github.com/rajeevp727/turnova-platform/actions/runs/42375960785) passed all eight jobs on `1cb1a5f2cb8af18d932990f0269d1f3d63f5164f`: 254/254 backend tests, 53/53 shared mobile tests, both app typechecks/bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Automated review [6707392983](https://github.com/rajeevp727/turnova-platform/pull/102#issuecomment-6707392983) found no unresolved critical/high-risk issue. After #18, proceed to #19 RELEASE-01 for the final native release/device gate audit.**
+**Current sequential item #19 RELEASE-01 — Blocked:** main is `0bedcf5f7ec6c85ba7dff25a8fc09a66a43733ee` after PR #102 merged. The latest-main exact-head CI [42380032068](https://github.com/rajeevp727/turnova-platform/actions/runs/42380032068) passed all eight jobs on `7b4320bfdad460511280251963e1b6c4ffc51c80`: 254/254 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and production bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. The run produced all seven expected artifacts (API publish, two Android APKs, two iOS simulator apps and two production JS bundle archives). The audit found no remaining safe code-only release change; production signing, final iOS store identifiers/profiles and physical-device functional/security/pilot acceptance require external inputs. Next: final end-to-end gap audit across all 19 rows and approved supplemental requirements.** PR #101 completed #16 RIDER-04 and merged at 66f217a599ef694847b2490a656120f198a970f6; exact-head CI [42373804446](https://github.com/rajeevp727/turnova-platform/actions/runs/42373804446) passed all eight jobs: 252/252 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and production bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. #17 SUPPORT-01 remains Blocked pending approved Rider support categories, escalation owner and operating process. The current #18 audit found the API had structured exception logging, health endpoints and append-only ride audit, but no explicit business metrics/traces. PR #102 adds provider-neutral .NET Meter/ActivitySource instrumentation for audit writes and storage readiness with low-cardinality tags and no identifiers. Exact-head CI [42375960785](https://github.com/rajeevp727/turnova-platform/actions/runs/42375960785) passed all eight jobs on `1cb1a5f2cb8af18d932990f0269d1f3d63f5164f`: 254/254 backend tests, 53/53 shared mobile tests, both app typechecks/bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Automated review [6707392983](https://github.com/rajeevp727/turnova-platform/pull/102#issuecomment-6707392983) found no unresolved critical/high-risk issue. After #18, proceed to #19 RELEASE-01 for the final native release/device gate audit.**
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -42,11 +42,11 @@
 
 ## 2. Overall MVP completion
 
-- **Weighted progress: 42.1%** under the revised Cab-only acceptance mapping.
+- **Weighted progress: 39.5%** under the revised Cab-only acceptance mapping.
 - Formula: `(Verified × 1 + In progress × 0.5 + Not started × 0 + Blocked × 0) ÷ 19 × 100`.
-- Counts: **0 Verified, 16 In progress, 0 Not started, 3 Blocked**.
-- Calculation: `(0 + 16 × 0.5 + 0 × 0 + 3 × 0) ÷ 19 × 100 = 42.1%`.
-- **Strict fully verified: 0/19.** DISPATCH-01 is blocked after independent code/test work because the production pickup radius and zone boundaries require explicit product approval; live Cosmos/device evidence also remains.
+- Counts: **0 Verified, 15 In progress, 0 Not started, 4 Blocked**.
+- Calculation: `(0 + 15 × 0.5 + 0 + 0) ÷ 19 × 100 = 39.5%`.
+- **Strict fully verified: 0/19.** DISPATCH-01, DRIVER-04 and SUPPORT-01 remain blocked by product decisions; RELEASE-01 is now Blocked because only debug/unsigned native compilation is evidenced and production signing plus physical-device acceptance require external inputs.
 - This is a conservative status reclassification from current merged code evidence, not production acceptance. Each row remains unverified until all evidence in the matrix passes.
 
 ## 3. Ordered acceptance checklist (1–19)
@@ -350,3 +350,16 @@
 - **Next step after #18:** #19 RELEASE-01 — audit native build artifacts, signing requirements and physical-device acceptance; retain the distinction between unsigned simulator/debug artifacts and production-signed releases.
 - **Blockers:** live Cosmos multi-instance ETag/restart/retention; telemetry exporter, dashboards and alert rules; production CORS origins; load testing; legal Union terms; provider sandbox and physical Android/iOS acceptance. No credentials or infrastructure choices are requested before the coding milestone.
 - **Overall:** (0 Verified + 16 In Progress × 0.5 + 0 Not Started + 3 Blocked) / 19 × 100 = 42.1%; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental outside the denominator. PR #102 exact-head CI [42375960785](https://github.com/rajeevp727/turnova-platform/actions/runs/42375960785) passed all eight jobs on `1cb1a5f2cb8af18d932990f0269d1f3d63f5164f`: 254/254 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Automated review [6707392983](https://github.com/rajeevp727/turnova-platform/pull/102#issuecomment-6707392983) found no unresolved critical/high-risk issue.
+
+
+## 5. Next step
+
+The 1–19 sequential pass has reached #19. The next planned action is a final end-to-end gap audit across every acceptance row and the approved supplemental requirements (AI-01, CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, CAB-RECON-01 and CAB-UNION-01). Reconcile statuses only when the linked implementation and evidence justify it; do not create another feature PR unless the audit finds a concrete, independently verifiable code/test gap.
+
+## 6. Current blockers
+
+- RELEASE-01: production Android AAB signing keystore/configuration; final iOS store bundle identifier, distribution certificate and provisioning profile; physical Android/iOS installation and functional/security/pilot acceptance.
+- DISPATCH-01: Product-approved production pickup radius and zone boundaries, plus live Cosmos query/index and device validation.
+- DRIVER-04 and SUPPORT-01: Product-approved Driver/Rider support categories, escalation owner and operating process.
+- Cross-cutting launch gates: live Cosmos multi-instance/restart/retention; TriSend auth contract/sandbox; maps/routing; Call/Chat and push providers; telemetry exporter/collector/alerts; production CORS origins; load tests; private document storage/consent/retention; Union partnership terms and legal/T&C review; API hosting and store submission.
+- No credentials or provider choices are requested during this coding milestone. Keep placeholders and do not claim production readiness.
