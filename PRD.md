@@ -208,6 +208,7 @@ RIDER-02 stores immutable agreement term versions and append-only party confirma
 - The Driver sees the report in owned trip history. The authenticated UnionManager reconciliation list is filtered by signed unionId claims and exposes only ride/driver identifiers, amounts, delta, currency, report timestamp, actor and unverified status; it omits Rider identity, route, contact data, exact location and chat.
 - Reports are immutable; a same-key/same-payload retry returns the existing record, while a different payload conflicts. No customer confirmation/dispute or non-zero-delta next-ride policy is inferred. Completion continues to release the ride reservation under the existing lifecycle; the unresolved next-ride policy is not implemented.
 - A later Union transfer does not relabel historical reconciliation: the report remains linked to the Union recorded on the completed ride and remains visible to that Union's authorised managers. Whether a new Union may receive a minimum preceding-ride reconciliation summary for next-ride eligibility is unresolved; no cross-Union disclosure policy is inferred.
+- The authenticated Driver history projection also exposes only the latest agreement version, agreed amount and currency needed to complete the report form; Rider history does not gain Driver-only reconciliation fields. The mobile report prompt derives its currency from that agreement rather than assuming INR.
 
 
 
