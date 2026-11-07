@@ -747,6 +747,10 @@ Mobile acceptance still requires Android/iOS device checks for union grouping, s
 | CAB-AGR-007 | Rider proposes and Driver counters with a different amount | Two immutable versions are retained; earlier terms remain unchanged | RideAgreementRequiresBothPartiesToConfirmCurrentImmutableVersionBeforeStart | P0 |
 | CAB-AGR-008 | A party confirms an older version after a counterproposal | API rejects stale-version confirmation | Same integration test | P0 |
 | CAB-AGR-009 | Proposal is retried with the same Idempotency-Key | Existing version is returned; no duplicate version is created | Same integration test | P0 |
+| CAB-AGR-016 | Same actor reuses an agreement key with a different amount | HTTP 409; the original immutable version and audit state remain unchanged | RideAgreementIdempotencyRejectsChangedAmountOrCurrency | P0 |
+| CAB-AGR-017 | Same actor reuses an agreement key with a different currency | HTTP 409; the original immutable version and currency remain unchanged | RideAgreementIdempotencyRejectsChangedAmountOrCurrency | P0 |
+| CAB-AGR-018 | A persisted agreement version predates the optional request fingerprint | Matching amount/currency retries replay; changed terms conflict without migration | LegacyAgreementWithoutRequestHashReplaysOnlyMatchingStoredTerms | P0 |
+| CAB-AGR-019 | Concurrent same-actor requests reuse one key with different terms | Exactly one proposal version is persisted; the matching key with different payload receives HTTP 409, including the ETag-conflict retry path | ConcurrentSameKeyAgreementProposalsRejectDifferentPayloads | P0 |
 | CAB-AGR-010 | Only one party confirms the current version | Driver start is rejected; after both confirm the current version, start succeeds | Same integration test | P0 |
 | CAB-AGR-011 | Fare is renegotiated during an active trip | New version invalidates prior confirmations; completion is blocked until both reconfirm | Same integration test | P0 |
 | CAB-AGR-012 | Amount is zero/negative, has more than two decimals, or currency is malformed/lowercase | API rejects the proposal | RideAgreementRejectsInvalidAmountOrCurrency | P0 |
@@ -756,6 +760,9 @@ Mobile acceptance still requires Android/iOS device checks for union grouping, s
 
 RIDER-03 now connects Rider-selected discovery to durable booking, optional-stop persistence, Driver notification, agreement negotiation, reservation expiry/cancellation and the existing mutual-confirmation start gate. The negotiation lifetime remains a product decision: production appsettings is null and the API returns 503 until the approved value is configured; the 15-minute integration-test value is not a product default. The tests below are CI evidence only when the final PR head has passed its required workflow. Live Cosmos ETag/multi-instance contention, Android/iOS device acceptance and production data recovery remain open.
 
+
+
+Agreement proposal idempotency additionally fingerprints the canonical two-decimal amount and uppercase currency. Replaying the same actor-scoped key with different terms must return HTTP 409 both when the existing version is found before a write and when a conditional ride replacement loses an ETag race. Older stored versions without the optional fingerprint reconstruct it from their immutable amount/currency; no data migration is required. Tests cover changed amount, changed currency, legacy records, and concurrent same-key/different-payload requests.
 
 RIDER-02 backend tests are now executed evidence: PR #64 final-head CI run [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) ran 189/189 tests successfully, including the agreement integration suite. Live Cosmos ETag/multi-instance and Android/iOS device acceptance remain separate gates.
 
