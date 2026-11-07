@@ -42,7 +42,7 @@
 | AUTH-LOGIN-012 | Expired access token | Call protected API with expired access token | 401; app attempts refresh once and retries original request once | API + mobile | P0 |
 | AUTH-LOGIN-013 | Expired access and refresh tokens | Expire both tokens | Session cleared and sign-in screen displayed | Mobile | P0 |
 | AUTH-LOGIN-014 | App restart with valid tokens | Kill and relaunch app with a complete stored pair | Session restored using SecureStore and `/me`; no login prompt | Mobile unit + device | P0 |
-| AUTH-LOGIN-015 | App restart with invalid access but valid refresh | Store expired access token and valid refresh token, relaunch | `/me` 401 triggers one refresh; rotated access/refresh pair is stored before the session is restored | Mobile unit + device | P0 |
+| AUTH-LOGIN-015 | App restart with invalid access but valid refresh | Store expired access token and valid refresh token, relaunch | `/me` 401 triggers one refresh; rotated pair is stored, then `/me` is fetched with the new access token and only that authoritative profile is restored | Mobile unit + device | P0 |
 | AUTH-LOGIN-016 | Concurrent refresh attempts | Trigger multiple 401 responses together | No stale refresh token overwrites newer token; one refresh flow is serialized or safely coordinated | Mobile | P0 |
 | AUTH-LOGIN-017 | Logout succeeds | Sign out while online | TriSend session revocation is attempted; both local token keys are deleted; sign-in screen shown | API + mobile | P0 |
 | AUTH-LOGIN-018 | Logout while offline | Sign out with network unavailable | Local token deletion proceeds even when server revocation fails; app signs out; server session may remain until expiry | Mobile unit + device | P1 |
@@ -55,6 +55,9 @@
 | AUTH-LOGIN-025 | Secure token-pair write failure | Allow access-key write but fail refresh-key write | Best-effort rollback attempts deletion of both keys; no authenticated app state is accepted | Mobile unit | P1 |
 | AUTH-LOGIN-026 | Secure token deletion failure | Fail deletion of one key during logout | Attempt both deletions; surface a recoverable error and do not claim logout succeeded | Mobile unit | P1 |
 | AUTH-LOGIN-027 | Logout races an in-flight token rotation write | Pause the access-token write, begin local logout, then release the write | Storage mutations are serialized; logout clears both keys after the pending pair write and no credentials remain | Mobile unit | P0 |
+| AUTH-LOGIN-028 | Refresh response omits profile | Expire the stored access token; return only access/refresh tokens from refresh | Persist the rotated pair, call `/me` with the new access token and restore the returned profile | Mobile unit | P0 |
+| AUTH-LOGIN-029 | Profile lookup fails after token rotation | Return a new token pair, then make `/me` return a transient 503 | Preserve the newly rotated pair and surface a recoverable restore error; do not revert to the consumed refresh token or clear the session | Mobile unit | P0 |
+| AUTH-LOGIN-030 | Refreshed access token is rejected | Return a new token pair, then make `/me` return 401 | Clear both stored token keys and return to sign-in; no authenticated profile is restored | Mobile unit | P0 |
 | AUTH-MOBILE-028 | App-specific profile role guard | Return a Rider profile to the Driver app or a Driver profile to the Rider app during login/register or /me restoration | The client rejects the mismatched profile before saving a new token pair or setting authenticated app state | Shared mobile unit + Rider/Driver typecheck | P0 |
 
 ## 2A. Authentication API integration contracts
