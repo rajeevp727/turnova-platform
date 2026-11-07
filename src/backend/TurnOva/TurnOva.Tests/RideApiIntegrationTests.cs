@@ -267,6 +267,156 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task ConcurrentSelectedBookingAndDriverOfflineTransitionCannotBothSucceed()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "availability-race-rider");
+        using var driver = factory.CreateClient("Driver", "availability-race-driver");
+        SeedBookableDriver(factory, "availability-race-driver", "availability-race-union");
+
+        using var bookingRequest = CreateSelectedBookingRequest(
+            "availability-race-booking", "availability-race-driver", "availability-race-union",
+            "KPHB", "HITEC City", []);
+        var responses = await Task.WhenAll(
+            rider.SendAsync(bookingRequest),
+            driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = false }));
+        using var booking = responses[0];
+        using var offline = responses[1];
+
+        var bookingSucceeded = booking.StatusCode == HttpStatusCode.Created;
+        var offlineSucceeded = offline.StatusCode == HttpStatusCode.OK;
+        Assert.NotEqual(bookingSucceeded, offlineSucceeded);
+
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["availability-race-driver"];
+        var reservation = await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync("availability-race-driver");
+        if (bookingSucceeded)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, offline.StatusCode);
+            Assert.Equal("Online", profile.AvailabilityStatus);
+            Assert.NotNull(reservation);
+            Assert.StartsWith("RIDE-SEL-", reservation.RideId, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.Conflict, booking.StatusCode);
+            Assert.Equal("Offline", profile.AvailabilityStatus);
+            Assert.Null(reservation);
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentSelectedBookingAndUnionTransferCannotBothSucceed()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "union-transfer-race-rider");
+        using var ops = factory.CreateClient("Rider", "union-transfer-race-ops");
+        const string driverId = "union-transfer-race-driver";
+        const string originalUnionId = "union-transfer-race-original";
+        const string targetUnionId = "union-transfer-race-target";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, originalUnionId);
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[targetUnionId] =
+            new DriverUnion(targetUnionId, "Transfer Target Union", "TRANSFER-RACE", "Hyderabad",
+                null, null, ["hyderabad-central"], ["cab"], "Active", now, now);
+
+        using var bookingRequest = CreateSelectedBookingRequest(
+            "union-transfer-race-booking", driverId, originalUnionId, "KPHB", "HITEC City", []);
+        using var transferRequest = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/v1/ops/drivers/{driverId}/union-assignment")
+        {
+            Content = JsonContent.Create(new
+            {
+                unionId = targetUnionId,
+                reason = "Concurrency regression test"
+            })
+        };
+        transferRequest.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        var responses = await Task.WhenAll(
+            rider.SendAsync(bookingRequest),
+            ops.SendAsync(transferRequest));
+        using var booking = responses[0];
+        using var transfer = responses[1];
+
+        var bookingSucceeded = booking.StatusCode == HttpStatusCode.Created;
+        var transferSucceeded = transfer.StatusCode == HttpStatusCode.OK;
+        Assert.NotEqual(bookingSucceeded, transferSucceeded);
+
+        var assignment = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()
+            [driverId];
+        var reservation = await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync(driverId);
+        if (bookingSucceeded)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, transfer.StatusCode);
+            Assert.Equal(originalUnionId, assignment.UnionId);
+            Assert.NotNull(reservation);
+            Assert.StartsWith("RIDE-SEL-", reservation.RideId, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.Conflict, booking.StatusCode);
+            Assert.Equal(targetUnionId, assignment.UnionId);
+            Assert.Null(reservation);
+            var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+                [driverId];
+            Assert.Equal("Pending", profile.ProfilePhotoApprovalStatus);
+        }
+    }
+
+    [Fact]
+    public async Task AcceptedSelectedRideBlocksAnotherBookingAndDriverAvailabilityChange()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var riderA = factory.CreateClient("Rider", "active-reservation-rider-a");
+        using var riderB = factory.CreateClient("Rider", "active-reservation-rider-b");
+        using var driver = factory.CreateClient("Driver", "active-reservation-driver");
+        SeedBookableDriver(factory, "active-reservation-driver", "active-reservation-union");
+
+        using var firstRequest = CreateSelectedBookingRequest(
+            "active-reservation-booking-a", "active-reservation-driver", "active-reservation-union",
+            "KPHB", "HITEC City", []);
+        using var firstBooking = await riderA.SendAsync(firstRequest);
+        Assert.Equal(HttpStatusCode.Created, firstBooking.StatusCode);
+        using var firstJson = JsonDocument.Parse(await firstBooking.Content.ReadAsStringAsync());
+        var rideId = firstJson.RootElement.GetProperty("rideId").GetString()!;
+
+        using var proposal = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 420m, currency = "INR" })
+        };
+        proposal.Headers.Add("Idempotency-Key", "active-reservation-agreement");
+        Assert.Equal(HttpStatusCode.Created, (await riderA.SendAsync(proposal)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await riderA.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null)).StatusCode);
+        using var accepted = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+
+        using var secondRequest = CreateSelectedBookingRequest(
+            "active-reservation-booking-b", "active-reservation-driver", "active-reservation-union",
+            "KPHB", "Madhapur", []);
+        using var secondBooking = await riderB.SendAsync(secondRequest);
+        Assert.Equal(HttpStatusCode.Conflict, secondBooking.StatusCode);
+        using var offline = await driver.PostAsJsonAsync(
+            "/api/v1/driver/availability", new { isOnline = false });
+        Assert.Equal(HttpStatusCode.Conflict, offline.StatusCode);
+
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
+            ["active-reservation-driver"];
+        Assert.Equal("Online", profile.AvailabilityStatus);
+        var reservation = await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync("active-reservation-driver");
+        Assert.NotNull(reservation);
+        Assert.Equal(rideId, reservation.RideId);
+        Assert.Null(reservation.ExpiresAtUtc);
+    }
+
+    [Fact]
     public async Task InvalidOnboardingMetadataIsRejectedAndSuspendedDriverCannotAcceptRide()
     {
         using var factory = new TurnOvaApiFactory();
