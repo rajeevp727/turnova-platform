@@ -2916,6 +2916,9 @@ public sealed class RideApiIntegrationTests
             recoveredJson.RootElement.GetProperty("requestedAt").GetDateTimeOffset());
         Assert.Equal(originalNegotiationExpiryUtc,
             recoveredJson.RootElement.GetProperty("negotiationExpiresAtUtc").GetDateTimeOffset());
+        var rideCreatedEvent = Assert.Single(rides[rideId].AuditEvents!,
+            item => item.EventType == "RideCreated");
+        Assert.Equal(originalBookingCreatedAtUtc, rideCreatedEvent.OccurredAtUtc);
         var recoveredReservation = await reservations.GetActiveAsync("recovery-booking-driver");
         Assert.NotNull(recoveredReservation);
         Assert.Equal(rideId, recoveredReservation.RideId);
