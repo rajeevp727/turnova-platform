@@ -120,7 +120,7 @@ test("restores a valid access token without refreshing", async () => {
   assert.equal(calls[0].token, "access-1");
 });
 
-test("refreshes and persists a rotated pair when the restored access token is expired", async () => {
+test("refreshes and reloads the profile with the rotated access token when the restored access token is expired", async () => {
   const storage = createStorage({
     [ACCESS_TOKEN_KEY]: "expired-access",
     [REFRESH_TOKEN_KEY]: "refresh-1"
@@ -128,8 +128,13 @@ test("refreshes and persists a rotated pair when the restored access token is ex
   const calls = [];
   const restored = await restoreStoredSession(storage, async (path, init, token) => {
     calls.push({ path, init, token });
-    if (path === "/api/v1/auth/me") throw httpError(401);
-    return { accessToken: "access-2", refreshToken: "refresh-2", user: { userId: "driver-1" } };
+    if (path === "/api/v1/auth/me" && token === "expired-access") throw httpError(401);
+    if (path === "/api/v1/auth/refresh") {
+      return { accessToken: "access-2", refreshToken: "refresh-2" };
+    }
+    assert.equal(path, "/api/v1/auth/me");
+    assert.equal(token, "access-2");
+    return { userId: "driver-1" };
   });
 
   assert.deepEqual(restored, {
@@ -138,8 +143,56 @@ test("refreshes and persists a rotated pair when the restored access token is ex
   });
   assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-2");
   assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-2");
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls[1].path, "/api/v1/auth/refresh");
+  assert.equal(calls[2].path, "/api/v1/auth/me");
+  assert.equal(calls[2].token, "access-2");
+});
+
+test("preserves the rotated token pair when profile lookup fails temporarily after refresh", async () => {
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "expired-access",
+    [REFRESH_TOKEN_KEY]: "refresh-1"
+  });
+  const calls = [];
+
+  await assert.rejects(
+    restoreStoredSession(storage, async (path, init, token) => {
+      calls.push({ path, token });
+      if (path === "/api/v1/auth/me" && token === "expired-access") throw httpError(401);
+      if (path === "/api/v1/auth/refresh") {
+        return { accessToken: "access-2", refreshToken: "refresh-2" };
+      }
+      throw httpError(503);
+    }),
+    /HTTP 503/
+  );
+
+  assert.deepEqual(calls.map(call => [call.path, call.token]), [
+    ["/api/v1/auth/me", "expired-access"],
+    ["/api/v1/auth/refresh", undefined],
+    ["/api/v1/auth/me", "access-2"]
+  ]);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-2");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-2");
+});
+
+test("clears the rotated token pair when the refreshed access token is rejected by profile lookup", async () => {
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "expired-access",
+    [REFRESH_TOKEN_KEY]: "refresh-1"
+  });
+
+  const restored = await restoreStoredSession(storage, async (path, init, token) => {
+    if (path === "/api/v1/auth/me" && token === "expired-access") throw httpError(401);
+    if (path === "/api/v1/auth/refresh") {
+      return { accessToken: "access-2", refreshToken: "refresh-2" };
+    }
+    throw httpError(401);
+  });
+
+  assert.equal(restored, null);
+  assert.equal(storage.values.size, 0);
 });
 
 test("clears both tokens when the access and refresh tokens are rejected", async () => {
