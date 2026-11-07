@@ -14,6 +14,7 @@ import TurnOvaLogo from "./TurnOvaLogo";
 import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
+import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
@@ -905,7 +906,7 @@ export default function App() {
               <Text style={styles.cardTitle}>Direct fare negotiation · INR</Text>
               {agreementHistory.map(item=><View key={item.version} style={{paddingVertical:7}}>
                 <Text style={styles.muted}>Version {item.version} · ₹{item.amount.toFixed(2)} · proposed by {item.proposedBy}</Text>
-                <Text style={styles.muted}>Rider: {item.riderConfirmed?(item.riderConfirmedAtUtc?"Confirmed at "+new Date(item.riderConfirmedAtUtc).toLocaleString():"Confirmed"):"Pending"}</Text><Text style={styles.muted}>Driver: {item.driverConfirmed?(item.driverConfirmedAtUtc?"Confirmed at "+new Date(item.driverConfirmedAtUtc).toLocaleString():"Confirmed"):"Pending"}</Text>
+                <Text style={styles.muted}>{agreementConfirmationLabel("Rider", item.riderConfirmed, item.riderConfirmedAtUtc)}</Text><Text style={styles.muted}>{agreementConfirmationLabel("Driver", item.driverConfirmed, item.driverConfirmedAtUtc)}</Text>
               </View>)}
               <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>
               {["Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
