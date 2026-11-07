@@ -11,9 +11,45 @@ public sealed class StorageReadinessProbeTests
     [Fact]
     public async Task CheckAsyncCompletesWhenStorageProbeSucceeds()
     {
+        var measurements = new ConcurrentBag<(string Instrument, string Outcome)>();
+        var activities = new ConcurrentBag<Activity>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                instrument.Name.StartsWith("turnova.storage.readiness.", StringComparison.Ordinal))
+                listener.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+        {
+            var outcome = tags.ToArray().FirstOrDefault(tag => tag.Key == "outcome").Value?.ToString() ?? "";
+            measurements.Add((instrument.Name, outcome));
+        });
+        meterListener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
+        {
+            var outcome = tags.ToArray().FirstOrDefault(tag => tag.Key == "outcome").Value?.ToString() ?? "";
+            measurements.Add((instrument.Name, outcome));
+        });
+        meterListener.Start();
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity => activities.Add(activity)
+        };
+        ActivitySource.AddActivityListener(activityListener);
+
         var probe = new StorageReadinessProbe(_ => Task.CompletedTask, TimeSpan.FromSeconds(1));
 
         await probe.CheckAsync(CancellationToken.None);
+
+        Assert.Contains(measurements, item =>
+            item.Instrument == "turnova.storage.readiness.checks" && item.Outcome == "success");
+        Assert.Contains(measurements, item =>
+            item.Instrument == "turnova.storage.readiness.duration" && item.Outcome == "success");
+        Assert.Contains(activities, item =>
+            item.OperationName == "storage.readiness.check" &&
+            Equals(item.GetTagItem("turnova.storage.outcome"), "success"));
     }
 
     [Fact]
