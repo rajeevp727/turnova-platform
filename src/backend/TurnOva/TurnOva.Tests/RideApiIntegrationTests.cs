@@ -2039,6 +2039,13 @@ public sealed class RideApiIntegrationTests
             (await ownerClient.PostAsync($"/api/v1/rides/{rideId}/cancel", null)).StatusCode);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("selected-shared-driver"));
+        var cancelledRide = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId];
+        var cancellationEvent = Assert.Single(cancelledRide.AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Cancelled");
+        Assert.Equal(owner, cancellationEvent.ActorId);
+        Assert.Equal("Rider", cancellationEvent.ActorRole);
+        Assert.Equal("Negotiating", cancellationEvent.PreviousStatus);
+        Assert.Equal("Cancelled", cancellationEvent.NewStatus);
         Assert.Equal(HttpStatusCode.OK,
             (await driver.PostAsync("/api/v1/driver/availability", JsonContent.Create(new { isOnline = false }))).StatusCode);
     }
@@ -2067,6 +2074,11 @@ public sealed class RideApiIntegrationTests
         using var rideResponse = await rider.GetAsync($"/api/v1/rides/{rideId}");
         using var rideJson = JsonDocument.Parse(await rideResponse.Content.ReadAsStringAsync());
         Assert.Equal("Cancelled", rideJson.RootElement.GetProperty("status").GetString());
+        var cancelledRide = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId];
+        var cancellationEvent = Assert.Single(cancelledRide.AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Cancelled");
+        Assert.Equal("decline-booking-driver", cancellationEvent.ActorId);
+        Assert.Equal("Driver", cancellationEvent.ActorRole);
     }
 
     [Fact]
@@ -2215,6 +2227,11 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, expired.StatusCode);
         using var expiredJson = JsonDocument.Parse(await expired.Content.ReadAsStringAsync());
         Assert.Equal("Expired", expiredJson.RootElement.GetProperty("status").GetString());
+        var expiryEvent = Assert.Single(rides[rideId].AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Expired");
+        Assert.Equal("system", expiryEvent.ActorId);
+        Assert.Equal("System", expiryEvent.ActorRole);
+        Assert.Equal("Negotiating", expiryEvent.PreviousStatus);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("expired-booking-driver"));
     }
@@ -2416,6 +2433,13 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync($"/api/v1/rides/{rideId}/start", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
+
+        var auditEvents = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId]
+            .AuditEvents!;
+        Assert.Equal(new[] { "Accepted", "Arrived", "InProgress", "Completed" },
+            auditEvents.Where(item => item.EventType == "RideStatusChanged")
+                .Select(item => item.NewStatus).ToArray());
+        Assert.Equal(4, auditEvents.Count(item => item.EventType == "RideStatusChanged"));
     }
 
     [Fact]
@@ -2807,6 +2831,115 @@ public sealed class RideApiIntegrationTests
         var historyItem = history!.Single(item => item.GetProperty("rideId").GetString() == rideId);
         Assert.Equal(expectedDelta,
             historyItem.GetProperty("paymentReconciliation").GetProperty("delta").GetDecimal());
+    }
+
+    [Fact]
+    public async Task CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string riderId = "ride-audit-rider";
+        const string driverId = "ride-audit-driver";
+        const string unionId = "ride-audit-union";
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "ride-audit-booking", 500m);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var beforeReport = rides[rideId];
+        var beforeEvents = beforeReport.AuditEvents!;
+        Assert.Equal(new[]
+        {
+            "RideCreated",
+            "AgreementProposed",
+            "AgreementPartyConfirmed",
+            "AgreementPartyConfirmed",
+            "RideStatusChanged",
+            "RideStatusChanged",
+            "RideStatusChanged",
+            "RideStatusChanged"
+        }, beforeEvents.Select(item => item.EventType).ToArray());
+        Assert.All(beforeEvents, item =>
+        {
+            Assert.Equal(rideId, item.RideId);
+            Assert.Equal(unionId, item.UnionId);
+            Assert.NotEqual(default, item.OccurredAtUtc);
+            Assert.Equal(TimeSpan.Zero, item.OccurredAtUtc.Offset);
+        });
+        Assert.Equal(riderId, beforeEvents[0].ActorId);
+        Assert.Equal("Rider", beforeEvents[0].ActorRole);
+        Assert.Equal("Negotiating", beforeEvents[0].NewStatus);
+        Assert.Equal("Rider", beforeEvents[1].ActorRole);
+        Assert.Equal(1, beforeEvents[1].AgreementVersion);
+        Assert.Equal(500m, beforeEvents[1].Amount);
+        Assert.Equal("INR", beforeEvents[1].Currency);
+        Assert.Contains(beforeEvents, item =>
+            item.EventType == "AgreementPartyConfirmed" && item.ActorId == riderId && item.ActorRole == "Rider");
+        Assert.Contains(beforeEvents, item =>
+            item.EventType == "AgreementPartyConfirmed" && item.ActorId == driverId && item.ActorRole == "Driver");
+        var statusEvents = beforeEvents.Where(item => item.EventType == "RideStatusChanged").ToArray();
+        Assert.Equal(new[] { "Accepted", "Arrived", "InProgress", "Completed" },
+            statusEvents.Select(item => item.NewStatus).ToArray());
+        Assert.All(statusEvents, item =>
+        {
+            Assert.Equal(driverId, item.ActorId);
+            Assert.Equal("Driver", item.ActorRole);
+        });
+        Assert.Equal(beforeEvents.Count, beforeEvents.Select(item => item.EventId).Distinct().Count());
+
+        using var reportRequest = CreatePaymentReportRequest(rideId, "ride-audit-payment-key", 450m);
+        using var reportResponse = await driver.SendAsync(reportRequest);
+        Assert.Equal(HttpStatusCode.OK, reportResponse.StatusCode);
+        var afterReport = rides[rideId];
+        var paymentEvent = Assert.Single(afterReport.AuditEvents!,
+            item => item.EventType == "PaymentReportedUnverified");
+        Assert.Equal(driverId, paymentEvent.ActorId);
+        Assert.Equal("Driver", paymentEvent.ActorRole);
+        Assert.Equal("Completed", paymentEvent.PreviousStatus);
+        Assert.Equal("Completed", paymentEvent.NewStatus);
+        Assert.Equal(1, paymentEvent.AgreementVersion);
+        Assert.Equal(500m, paymentEvent.Amount);
+        Assert.Equal(450m, paymentEvent.AmountReceived);
+        Assert.Equal(50m, paymentEvent.Delta);
+        Assert.Equal("INR", paymentEvent.Currency);
+        Assert.Equal(afterReport.PaymentReconciliation!.ReportedAtUtc, paymentEvent.OccurredAtUtc);
+
+        var auditJson = JsonSerializer.Serialize(afterReport.AuditEvents);
+        Assert.DoesNotContain("KPHB", auditJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("HITEC City", auditJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("17.493", auditJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("phone", auditJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("email", auditJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("chat", auditJson, StringComparison.OrdinalIgnoreCase);
+
+        var eventCount = afterReport.AuditEvents!.Count;
+        using var retryRequest = CreatePaymentReportRequest(rideId, "ride-audit-payment-key", 450m);
+        using var retryResponse = await driver.SendAsync(retryRequest);
+        Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
+        Assert.Equal(eventCount, rides[rideId].AuditEvents!.Count);
+        Assert.Single(rides[rideId].AuditEvents!,
+            item => item.EventType == "PaymentReportedUnverified");
+    }
+
+    [Fact]
+    public async Task AgreementConfirmationRetryDoesNotDuplicateAuditEvents()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string riderId = "ride-audit-confirm-rider";
+        const string driverId = "ride-audit-confirm-driver";
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, driverId, "ride-audit-confirm-union", "ride-audit-confirm", 500m);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var beforeCount = rides[rideId].AuditEvents!.Count;
+        Assert.Equal(2, rides[rideId].AuditEvents!.Count(item => item.EventType == "AgreementPartyConfirmed"));
+
+        using var retry = await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/1/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal(beforeCount, rides[rideId].AuditEvents!.Count);
+        Assert.Equal(2, rides[rideId].AuditEvents!.Count(item => item.EventType == "AgreementPartyConfirmed"));
     }
 
     [Fact]
