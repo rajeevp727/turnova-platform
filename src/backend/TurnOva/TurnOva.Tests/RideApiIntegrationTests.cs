@@ -250,7 +250,13 @@ public sealed class RideApiIntegrationTests
         Assert.NotNull(reservation);
         Assert.Equal(rideId, reservation.RideId);
         Assert.Null(reservation.ExpiresAtUtc);
-        Assert.Empty(await queueStore.GetAuditEventsAsync("hyderabad-central", "cab", CancellationToken.None));
+        var recoveredAudit = Assert.Single(await queueStore.GetAuditEventsAsync(
+            "hyderabad-central", "cab", CancellationToken.None));
+        Assert.Equal(QueueAuditEventTypes.DispatchException, recoveredAudit.EventType);
+        Assert.Equal(driverId, recoveredAudit.DriverId);
+        Assert.Equal(QueueAuditReasonCategories.DriverReservationPromotionRecovered, recoveredAudit.ReasonCategory);
+        Assert.False(string.IsNullOrWhiteSpace(recoveredAudit.TraceId));
+        Assert.Equal(TimeSpan.Zero, recoveredAudit.OccurredAtUtc.Offset);
     }
 
     [Fact]
