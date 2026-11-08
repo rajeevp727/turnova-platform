@@ -3488,19 +3488,6 @@ public sealed record NearbyDriverDiscoveryResponse(string DriverId, string FullN
 public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, IReadOnlyList<string> Stops);
 public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive, IReadOnlyList<string> Stops, DateTimeOffset? NegotiationExpiresAtUtc = null, RidePaymentReconciliationResponse? PaymentReconciliation = null, RideAgreementSummary? CurrentAgreement = null);
 public sealed record RideAgreementSummary(int Version, decimal Amount, string Currency);
-public sealed record UnionReconciliationQueryProjection(
-    string? ServiceClass,
-    string? UnionId,
-    string RideId,
-    int AgreementVersion,
-    string ReportUnionId,
-    decimal AgreedAmount,
-    decimal AmountReceived,
-    decimal Delta,
-    string Currency,
-    DateTimeOffset ReportedAtUtc,
-    string ReportedByDriverId,
-    string Status);
 public sealed record RidePaymentReconciliationResponse(string RideId, int AgreementVersion, string UnionId, decimal AgreedAmount, decimal AmountReceived, decimal Delta, string Currency, DateTimeOffset ReportedAtUtc, string ReportedByDriverId, string Status);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null, DateTimeOffset? CreatedAtUtc = null);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
