@@ -816,7 +816,7 @@ public sealed class RideApiIntegrationTests
         await Task.Delay(TimeSpan.FromMilliseconds(500));
         var expiredReservation = await reservations.GetActiveAsync(driverId, CancellationToken.None);
         Assert.NotNull(expiredReservation);
-        Assert.True(expiredReservation!.ExpiresAtUtc <= DateTimeOffset.UtcNow);
+        Assert.True(expiredReservation!.ExpiresAtUtc is { } expiredAtUtc && expiredAtUtc <= DateTimeOffset.UtcNow);
 
         using var review = await manager.PutAsJsonAsync(
             $"/api/v1/union/drivers/{driverId}/selfie-review",
