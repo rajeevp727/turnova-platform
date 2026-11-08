@@ -791,7 +791,9 @@ export default function App() {
       const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join("");
       const base64 = btoa(binary);
       const filename = "TurnOva-Payslip-" + year + "-" + String(month).padStart(2, "0") + ".pdf";
-      const uri = String(FileSystem.cacheDirectory) + filename;
+      const cacheDirectory = FileSystem.cacheDirectory;
+      if (!cacheDirectory) throw new Error("Device cache is unavailable for the payslip PDF.");
+      const uri = cacheDirectory + filename;
       const written = await writeCachedDriverPayslipIfCurrent(
         FileSystem, uri, base64, isSessionCurrent
       );
@@ -819,7 +821,8 @@ export default function App() {
         setNotice("PDF saved to the app cache: " + filename);
       }
     } catch (e) {
-      if (isSessionCurrent())
+      if (isSessionCurrent() ||
+          (e instanceof Error && e.message.includes("cached file cleanup failed")))
         setError(e instanceof Error ? e.message : "Unable to download payslip.");
     } finally {
       setLoading(false);
