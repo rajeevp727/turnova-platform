@@ -35,18 +35,25 @@ public sealed class AiAssistanceServiceTests
             Assert.DoesNotContain("HITEC City", prompt.IntentSummary);
             Assert.DoesNotContain("raja@example.com", prompt.IntentSummary);
             Assert.DoesNotContain("+91", prompt.IntentSummary);
+            Assert.DoesNotContain("family", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("child", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("wheelchair", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("accessible", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("passenger", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("4", prompt.IntentSummary, StringComparison.Ordinal);
+            Assert.DoesNotContain(typeof(SafeTripIntentPrompt).GetProperties(), property => property.Name == "PassengerCount");
             return Task.FromResult<TripIntentProviderResult?>(
-                new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab", 2));
+                new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab"));
         };
         var service = CreateService(provider, enabled: true);
 
         var result = await service.DraftTripIntentAsync(
-            "Please book a Cab for raja@example.com, call +91 9876543210, from 12 Main Road to HITEC City for 2 passengers",
+            "Please book a Cab for my family of 4 with a child and wheelchair accessible service, raja@example.com +91 9876543210, from 12 Main Road to HITEC City",
             CancellationToken.None);
 
         Assert.Equal("12 Main Road", result.Pickup);
         Assert.Equal("HITEC City", result.Dropoff);
-        Assert.Equal(2, result.PassengerCount);
+        Assert.Equal(4, result.PassengerCount);
         Assert.Equal("provider", result.Source);
     }
 
@@ -56,7 +63,7 @@ public sealed class AiAssistanceServiceTests
         var provider = new FakeProvider
         {
             TripHandler = (_, _) => Task.FromResult<TripIntentProviderResult?>(
-                new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Auto", 4))
+                new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Auto"))
         };
         var service = CreateService(provider, enabled: true);
 
@@ -76,8 +83,13 @@ public sealed class AiAssistanceServiceTests
     {
         var provider = new FakeProvider
         {
-            TripHandler = (_, _) => Task.FromResult<TripIntentProviderResult?>(
-                new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab", 4))
+            TripHandler = (prompt, _) =>
+            {
+                Assert.DoesNotContain("passenger", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("1", prompt.IntentSummary, StringComparison.Ordinal);
+                return Task.FromResult<TripIntentProviderResult?>(
+                    new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab"));
+            }
         };
         var service = CreateService(provider, enabled: true);
 
@@ -85,8 +97,28 @@ public sealed class AiAssistanceServiceTests
             "Please book a Cab from Nizampet to HITEC City",
             CancellationToken.None);
 
-        Assert.Equal(1, result.PassengerCount);
-        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.Null(result.PassengerCount);
+        Assert.True(result.NeedsClarification);
+        Assert.Contains("passengerCount", result.MissingFields);
+        Assert.True(result.RequiresUserConfirmation);
+        Assert.Equal("provider", result.Source);
+    }
+
+    [Fact]
+    public async Task UnspecifiedPassengerCountIsReturnedForManualCompletionWhenProviderIsUnavailable()
+    {
+        var service = CreateService(new UnavailableAiAssistantProvider());
+
+        var result = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City",
+            CancellationToken.None);
+
+        Assert.Equal("Nizampet", result.Pickup);
+        Assert.Equal("HITEC City", result.Dropoff);
+        Assert.Null(result.PassengerCount);
+        Assert.True(result.NeedsClarification);
+        Assert.Contains("passengerCount", result.MissingFields);
+        Assert.True(result.RequiresUserConfirmation);
     }
 
     [Fact]
@@ -97,7 +129,7 @@ public sealed class AiAssistanceServiceTests
             TripHandler = async (_, cancellationToken) =>
             {
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-                return new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab", 2);
+                return new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab");
             }
         };
         var service = CreateService(provider, enabled: true, timeoutSeconds: 1);
