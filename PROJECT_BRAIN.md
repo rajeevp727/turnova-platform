@@ -843,3 +843,8 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - #17 DRIVER-04 remains blocked by Product/Operations support-policy decisions; no support workflow or SLA is invented.
 - Next after PR #121 merges: #19 RELEASE-01 — audit signed Android/iOS artifacts, device acceptance and release gates. Simulator compilation is not store signing or pilot readiness.
 - Strict acceptance remains 0/19 Verified (15 In progress, 4 Blocked); this is not an implementation-completion score. Production readiness is not established.
+
+
+### PLATFORM-01 selected-driver exception coverage
+
+PR #121 also records unexpected non-cancellation failures from the active Cab selected-driver reservation-store promotion (`TryMakePermanentAsync`) as `DispatchException` in the existing zone/service audit partition. The record contains only server trace ID, claim-derived Driver actor reference, allow-listed `DriverReservationFailed` category and UTC timestamp. A failure is rethrown through the generic 500 handler; the `AgreementConfirmed` ride and temporary reservation remain unchanged. Deterministic failure injection covers the selected booking path as well as the legacy queue-read compatibility path. No Rider FIFO ranking/assignment is introduced.
