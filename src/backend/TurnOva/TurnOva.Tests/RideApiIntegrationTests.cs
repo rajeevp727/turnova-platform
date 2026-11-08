@@ -2275,6 +2275,66 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task DriverCannotGoOnlineWithGpsCaptureTimestampMoreThanOneMinuteInFuture()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-online-future-capture";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedActiveCabUnion(factory, driverId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var futureCapture = DateTimeOffset.UtcNow.AddMinutes(2);
+        using var response = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
+        {
+            isOnline = true,
+            latitude = 17.493,
+            longitude = 78.399,
+            capturedAtUtc = futureCapture
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("Offline", profiles[driverId].AvailabilityStatus);
+        Assert.Null(profiles[driverId].CurrentLatitude);
+        var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
+            "/api/v1/zones/hyderabad-central/queues/cab");
+        Assert.DoesNotContain(queue!, entry => entry.DriverId == driverId);
+    }
+
+    [Fact]
+    public async Task DriverLocationRejectsGpsCaptureTimestampMoreThanOneMinuteInFutureWithoutChangingAcceptedFix()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-location-future-capture";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, "union-location-future-capture");
+
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
+        {
+            isOnline = true,
+            latitude = 17.493,
+            longitude = 78.399
+        });
+        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var before = profiles[driverId];
+        using var response = await driver.PostAsJsonAsync("/api/v1/driver/location", new
+        {
+            latitude = 17.494,
+            longitude = 78.400,
+            capturedAtUtc = DateTimeOffset.UtcNow.AddMinutes(2)
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var after = profiles[driverId];
+        Assert.Equal("Online", after.AvailabilityStatus);
+        Assert.Equal(before.CurrentLatitude, after.CurrentLatitude);
+        Assert.Equal(before.CurrentLongitude, after.CurrentLongitude);
+        Assert.Equal(before.LocationUpdatedAtUtc, after.LocationUpdatedAtUtc);
+        Assert.Equal(before.LocationCapturedAtUtc, after.LocationCapturedAtUtc);
+    }
+
+    [Fact]
     public async Task DriverAvailabilityLocationRequiresBothCoordinatesAndKeepsOnlineStateOnBadPayload()
     {
         using var factory = new TurnOvaApiFactory();
