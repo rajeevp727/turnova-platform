@@ -9,6 +9,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using UglyToad.PdfPig;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -1463,26 +1464,28 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
         Assert.Contains("TurnOva-Payslip-2026-10.pdf", response.Content.Headers.ContentDisposition?.FileName ?? "");
 
-        var pdf = Encoding.ASCII.GetString(await response.Content.ReadAsByteArrayAsync());
-        Assert.StartsWith("%PDF-1.4", pdf);
-        Assert.Contains("Total days worked: 2", pdf);
-        Assert.Contains("Rides accepted: 2", pdf);
-        Assert.Contains("Rides completed: 2", pdf);
-        Assert.Contains("Rides rejected: 1", pdf);
-        Assert.DoesNotContain("ride-1", pdf);
-        Assert.DoesNotContain("ride-2", pdf);
-        Assert.DoesNotContain("Customer:", pdf);
-        Assert.DoesNotContain("Fare:", pdf);
-        Assert.DoesNotContain("₹", pdf);
-        Assert.DoesNotContain("INR", pdf);
-        Assert.DoesNotContain("Net payable:", pdf);
+        var pdfBytes = await response.Content.ReadAsByteArrayAsync();
+        var pdfHeader = Encoding.ASCII.GetString(pdfBytes);
+        var pdfText = ExtractPdfText(pdfBytes);
+        Assert.StartsWith("%PDF-1.4", pdfHeader);
+        Assert.Contains("Total days worked: 2", pdfText);
+        Assert.Contains("Rides accepted: 2", pdfText);
+        Assert.Contains("Rides completed: 2", pdfText);
+        Assert.Contains("Rides rejected: 1", pdfText);
+        Assert.DoesNotContain("ride-1", pdfText);
+        Assert.DoesNotContain("ride-2", pdfText);
+        Assert.DoesNotContain("Customer:", pdfText);
+        Assert.DoesNotContain("Fare:", pdfText);
+        Assert.DoesNotContain("₹", pdfText);
+        Assert.DoesNotContain("INR", pdfText);
+        Assert.DoesNotContain("Net payable:", pdfText);
 
         ledger["driver-payslip-pdf|ride-4:Completed"] = new DriverWorkActivity(
             "ride-4:Completed", "driver-payslip-pdf", "ride-4", "Completed",
             new DateTimeOffset(2026, 10, 6, 5, 0, 0, TimeSpan.Zero));
         using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
-        Assert.Equal(pdf, Encoding.ASCII.GetString(await repeated.Content.ReadAsByteArrayAsync()));
+        Assert.Equal(pdfBytes, await repeated.Content.ReadAsByteArrayAsync());
 
         using var otherDriverResponse = await otherDriver.GetAsync(
             "/api/v1/driver/payslips/2026/10.pdf?driverId=driver-payslip-pdf");
@@ -1558,19 +1561,21 @@ public sealed class RideApiIntegrationTests
 
         using var response = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var pdf = Encoding.ASCII.GetString(await response.Content.ReadAsByteArrayAsync());
-        Assert.StartsWith("%PDF-1.4", pdf);
-        Assert.Contains("Total days worked: 1", pdf);
-        Assert.Contains("Rides accepted: 1", pdf);
-        Assert.Contains("Rides completed: 1", pdf);
-        Assert.Contains("Rides rejected: 1", pdf);
+        var pdfBytes = await response.Content.ReadAsByteArrayAsync();
+        var pdfHeader = Encoding.ASCII.GetString(pdfBytes);
+        var pdfText = ExtractPdfText(pdfBytes);
+        Assert.StartsWith("%PDF-1.4", pdfHeader);
+        Assert.Contains("Total days worked: 1", pdfText);
+        Assert.Contains("Rides accepted: 1", pdfText);
+        Assert.Contains("Rides completed: 1", pdfText);
+        Assert.Contains("Rides rejected: 1", pdfText);
         Assert.Single(ledger.Values, item => item.RideId == completedRideId && item.ActivityType == "Accepted");
         Assert.Single(ledger.Values, item => item.RideId == completedRideId && item.ActivityType == "Completed");
         Assert.Single(ledger.Values, item => item.RideId == rejectedRideId && item.ActivityType == "Rejected");
 
         using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
-        Assert.Equal(pdf, Encoding.ASCII.GetString(await repeated.Content.ReadAsByteArrayAsync()));
+        Assert.Equal(pdfBytes, await repeated.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -1621,15 +1626,16 @@ public sealed class RideApiIntegrationTests
             12, 18, 15, 2, DateTimeOffset.UtcNow);
 
         var pdf = DriverPayslipPdf.Generate(payslip);
-        var text = Encoding.ASCII.GetString(pdf);
+        var pdfHeader = Encoding.ASCII.GetString(pdf);
+        var text = ExtractPdfText(pdf);
 
-        Assert.StartsWith("%PDF-1.4", text);
+        Assert.StartsWith("%PDF-1.4", pdfHeader);
         Assert.Contains("MONTHLY DRIVER PAYSLIP", text);
         Assert.Contains("Total days worked: 12", text);
         Assert.Contains("Rides accepted: 18", text);
         Assert.Contains("Rides completed: 15", text);
         Assert.Contains("Rides rejected: 2", text);
-        Assert.EndsWith("%%EOF", text);
+        Assert.EndsWith("%%EOF", pdfHeader.TrimEnd());
     }
 
     [Fact]
@@ -5342,4 +5348,12 @@ public sealed class RideApiIntegrationTests
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
+    private static string ExtractPdfText(byte[] pdf)
+    {
+        using var stream = new MemoryStream(pdf);
+        using var document = PdfDocument.Open(stream);
+        return string.Join("\n", document.GetPages().Select(page => page.Text));
+    }
+
+
 }
