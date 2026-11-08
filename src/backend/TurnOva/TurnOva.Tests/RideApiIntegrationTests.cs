@@ -2191,12 +2191,15 @@ public sealed class RideApiIntegrationTests
         SeedBookableDriver(factory, "driver-location-out-of-order", "driver-location-out-of-order-union");
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
-        var latestCapture = DateTimeOffset.UtcNow;
-        var current = profiles["driver-location-out-of-order"] with
+        using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
         {
-            LocationUpdatedAtUtc = latestCapture,
-            LocationCapturedAtUtc = latestCapture
-        };
+            isOnline = true,
+            latitude = 17.493,
+            longitude = 78.399
+        });
+        Assert.Equal(HttpStatusCode.OK, online.StatusCode);
+        var latestCapture = profiles["driver-location-out-of-order"].LocationCapturedAtUtc!.Value;
+        var current = profiles["driver-location-out-of-order"];
         profiles["driver-location-out-of-order"] = current;
 
         foreach (var coordinates in new[] { (Latitude: 17.5d, Longitude: 78.4d), (Latitude: 0d, Longitude: 0d) })
