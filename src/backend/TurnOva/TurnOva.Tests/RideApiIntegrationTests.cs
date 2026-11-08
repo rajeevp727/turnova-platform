@@ -223,6 +223,37 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task SelectedDriverAcceptRecoversWhenReservationPromotionCommitsBeforeTransientFailure()
+    {
+        const string driverId = "dispatch-ambiguous-reservation-driver";
+        const string unionId = "dispatch-ambiguous-reservation-union";
+        var queueStore = new InMemoryQueueStore();
+        var reservationStore = new ReservationMakePermanentFailureStore(
+            new InMemoryDriverRideReservationStore());
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            queueStore: queueStore,
+            reservationStore: reservationStore);
+        using var rider = factory.CreateClient("Rider", "dispatch-ambiguous-reservation-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        var rideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, driverId, unionId, "dispatch-ambiguous-reservation-booking", 420m);
+        reservationStore.FailAfterNextMakePermanent();
+
+        using var response = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var accepted = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId];
+        Assert.Equal("Accepted", accepted.Status);
+
+        var reservation = await reservationStore.GetActiveAsync(driverId);
+        Assert.NotNull(reservation);
+        Assert.Equal(rideId, reservation.RideId);
+        Assert.Null(reservation.ExpiresAtUtc);
+        Assert.Empty(await queueStore.GetAuditEventsAsync("hyderabad-central", "cab", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task DriverMustSubmitOnboardingAndBeApprovedBeforeJoiningQueue()
     {
         using var factory = new TurnOvaApiFactory();
@@ -5104,8 +5135,10 @@ public sealed class RideApiIntegrationTests
         : IDriverRideReservationStore
     {
         private int _failNextMakePermanent;
+        private int _failAfterMakePermanent;
 
         public void FailNextMakePermanent() => Interlocked.Exchange(ref _failNextMakePermanent, 1);
+        public void FailAfterNextMakePermanent() => Interlocked.Exchange(ref _failAfterMakePermanent, 1);
 
         public Task<bool> TryAcquireAsync(string driverId, string rideId, CancellationToken cancellationToken = default) =>
             inner.TryAcquireAsync(driverId, rideId, cancellationToken);
@@ -5114,12 +5147,15 @@ public sealed class RideApiIntegrationTests
             string driverId, string rideId, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken = default) =>
             inner.TryAcquireTemporaryAsync(driverId, rideId, expiresAtUtc, cancellationToken);
 
-        public Task<bool> TryMakePermanentAsync(
+        public async Task<bool> TryMakePermanentAsync(
             string driverId, string rideId, CancellationToken cancellationToken = default)
         {
             if (Interlocked.Exchange(ref _failNextMakePermanent, 0) == 1)
                 throw new InvalidOperationException("sensitive-reservation-store-failure");
-            return inner.TryMakePermanentAsync(driverId, rideId, cancellationToken);
+            var result = await inner.TryMakePermanentAsync(driverId, rideId, cancellationToken);
+            if (result && Interlocked.Exchange(ref _failAfterMakePermanent, 0) == 1)
+                throw new InvalidOperationException("sensitive-reservation-post-commit-timeout");
+            return result;
         }
 
         public Task<bool> TrySetExpiryAsync(
