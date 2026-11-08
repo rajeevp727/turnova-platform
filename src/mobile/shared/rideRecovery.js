@@ -23,7 +23,11 @@ function applyRideStatusUpdate(ride, update) {
       typeof update.status !== "string" || !update.status || ride.rideId !== update.rideId) {
     return ride;
   }
-  return { ...ride, status: update.status };
+  const updated = { ...ride, status: update.status };
+  if ("locationSharingActive" in ride) {
+    updated.locationSharingActive = ["Accepted", "Arrived", "InProgress"].includes(update.status);
+  }
+  return updated;
 }
 
 function findActiveRide(history, role) {
