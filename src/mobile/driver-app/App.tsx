@@ -222,6 +222,15 @@ export default function App() {
   }, [apiFetch]);
   useEffect(() => { if (user) void loadAvailability(); }, [user, loadAvailability]);
 
+  const reconcileServerAvailability = useCallback((isActive: () => boolean = () => true) => reconcileDriverAvailability({
+    fetchAvailability: () => apiFetch("/api/v1/driver/availability"),
+    fetchRideHistory: () => apiFetch("/api/v1/driver/rides/mine"),
+    isActive,
+    setAvailabilityStatus,
+    setDriverRideHistory,
+    setActiveRide
+  }), [apiFetch]);
+
   const toggleAvailability = async () => {
     setLoading(true); setError(""); setNotice("");
     try {
@@ -248,7 +257,20 @@ export default function App() {
       setAvailabilityStatus(result.availabilityStatus);
       setNotice(nextOnline ? "You are online and have joined the back of the FIFO queue. Your location is shared only while online." : "You are offline and have left the FIFO queue.");
       await loadQueue();
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to change availability."); }
+    } catch (e) {
+      if (isDriverAvailabilityConflict(e)) {
+        try {
+          const state = await reconcileServerAvailability();
+          if (state.activeRide) setNotice("A selected Cab trip is active. Availability changes are paused.");
+          else if (!state.isOnline) setNotice("The server reports Offline. Refresh your location before going Online again.");
+          else setNotice("The server still reports Online. Retry the availability action after the current conflict resolves.");
+        } catch (recoveryError) {
+          setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
+        }
+      } else {
+        setError(e instanceof Error ? e.message : "Unable to change availability.");
+      }
+    }
     finally { setLoading(false); }
   };
 
@@ -267,15 +289,6 @@ export default function App() {
       if (retryTimer) clearTimeout(retryTimer);
       retryTimer = undefined;
     };
-
-    const reconcileServerState = () => reconcileDriverAvailability({
-      fetchAvailability: () => apiFetch("/api/v1/driver/availability"),
-      fetchRideHistory: () => apiFetch("/api/v1/driver/rides/mine"),
-      isActive: () => mounted,
-      setAvailabilityStatus,
-      setDriverRideHistory,
-      setActiveRide
-    });
 
     const scheduleRefresh = () => {
       if (!mounted || retryTimer) return;
@@ -302,7 +315,7 @@ export default function App() {
         } else if (isDriverAvailabilityConflict(e)) {
           stopWatching();
           try {
-            const state = await reconcileServerState();
+            const state = await reconcileServerAvailability(() => mounted);
             if (state.shouldRetryLocation) scheduleRefresh();
           } catch (recoveryError) {
             if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
@@ -351,7 +364,7 @@ export default function App() {
         if (isDriverAvailabilityConflict(e)) {
           stopWatching();
           try {
-            const state = await reconcileServerState();
+            const state = await reconcileServerAvailability(() => mounted);
             if (state.shouldRetryLocation) scheduleRefresh();
           } catch (recoveryError) {
             if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
@@ -376,7 +389,7 @@ export default function App() {
       stopWatching();
       appStateSubscription.remove();
     };
-  }, [user?.id, availabilityStatus, legacyServiceClass, activeRide?.status, apiFetch]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, activeRide?.status, apiFetch, reconcileServerAvailability]);
 
   const loadQueue = useCallback(async () => {
     if (legacyServiceClass) {
