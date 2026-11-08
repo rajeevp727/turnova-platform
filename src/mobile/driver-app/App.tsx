@@ -539,7 +539,7 @@ export default function App() {
         refreshAgreement();
       }
     });
-    return () => { mounted = false; connection.off("RideStatusChanged"); connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
+    return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
   }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
