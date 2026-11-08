@@ -950,3 +950,16 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-020 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
 
 The CI provider is a deterministic fake. Live provider sandbox behavior, managed-secret wiring and data-processing terms are not claimed until infrastructure is configured. AI assistance must never invoke booking, fare agreement, payment, eligibility, discovery ordering or ride-state mutation endpoints.
+
+
+## DISPATCH-03 — terminal selected-ride reservation read-repair
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| DISPATCH-03-READ-001 | Direct read repairs an already-terminal selected ride | Create a Union-linked selected Cab booking, retain its Driver reservation, simulate an interrupted terminal write as Expired, Cancelled or Completed, then GET the ride as its Rider | Read returns the terminal ride and releases only the reservation whose DriverId and RideId both match | API integration | P0 |
+| DISPATCH-03-READ-002 | Rider history repairs an already-terminal ride | Simulate terminal state persistence before reservation release, then read `/api/v1/rides/mine` as the owning Rider | History returns the terminal status and retries exact-pair reservation release | API integration | P0 |
+| DISPATCH-03-READ-003 | Driver history repairs an already-terminal ride | Simulate terminal state persistence before reservation release, then read `/api/v1/driver/rides/mine` as the assigned Driver | History returns the terminal status and retries exact-pair reservation release | API integration | P0 |
+| DISPATCH-03-READ-004 | Old terminal history cannot release a newer Driver reservation | Release the old ride's lease, create a newer selected booking for the same Driver, then read the old terminal ride | Newer reservation remains bound to its own RideId; old read has no effect on it | API integration + concurrency safety | P0 |
+| DISPATCH-03-READ-005 | Concurrent expiry reads are idempotent | Read the same expired selected ride concurrently from two Rider requests | Both reads return Expired, exactly one terminal audit transition exists, and the matching reservation is absent | API integration + concurrency | P0 |
+| DISPATCH-03-READ-006 | ETag-race reread repairs only a terminal lease | Two API instances race to expire the same selected ride; the losing instance re-reads the latest ride after the conditional transition fails | If the latest ride is terminal, release only its matching Driver/Ride lease; if still active or missing, fail closed and do not release another lease | Cosmos integration / deterministic store simulation | P0 |
+| DISPATCH-03-READ-007 | Selected expiry never advances legacy FIFO | Expire a Union-linked selected booking while a legacy offer exists | No `IRideOfferAdvancer` call occurs; the existing legacy offer expiry positive control remains intact | API integration | P0 |

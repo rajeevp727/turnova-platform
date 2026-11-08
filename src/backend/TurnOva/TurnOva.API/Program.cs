@@ -665,15 +665,40 @@ async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
+async Task<DemoRide?> ReleaseTerminalSelectedRideReservationAsync(
+    DemoRide? ride, string rideId, CancellationToken ct)
+{
+    // Only Union-linked selected Cab rides use the exclusive reservation lease.
+    // Match both DriverId and RideId so a stale history item cannot release a newer ride.
+    if (ride is null || ride.UnionId is null || string.IsNullOrWhiteSpace(ride.DriverId) ||
+        ride.Status is not ("Completed" or "Cancelled" or "Expired"))
+        return ride;
+
+    await driverRideReservations.TryReleaseAsync(ride.DriverId, rideId, ct);
+    return ride;
+}
+
 async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
 {
     var ride = await ReadRideRawAsync(rideId, ct);
-    if (ride is null || ride.Status is not ("Negotiating" or "AgreementConfirmed") ||
+    if (ride is null) return null;
+
+    if (ride.Status is "Completed" or "Cancelled" or "Expired")
+        return await ReleaseTerminalSelectedRideReservationAsync(ride, rideId, ct);
+
+    if (ride.Status is not ("Negotiating" or "AgreementConfirmed") ||
         ride.NegotiationExpiresAtUtc is null || ride.NegotiationExpiresAtUtc > DateTimeOffset.UtcNow)
         return ride;
 
     var expired = await TryTransitionAsync(ride, "Expired", "system", "System", ct);
-    if (expired is null) return await ReadRideRawAsync(rideId, ct);
+    if (expired is null)
+    {
+        // Another API instance may have won the terminal ETag transition and stopped
+        // before its reservation-release side effect. Re-read and repair only that lease.
+        var latest = await ReadRideRawAsync(rideId, ct);
+        return await ReleaseTerminalSelectedRideReservationAsync(latest, rideId, ct);
+    }
+
     if (!string.IsNullOrWhiteSpace(expired.DriverId))
         await driverRideReservations.TryReleaseAsync(expired.DriverId, rideId, ct);
     await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
