@@ -2201,7 +2201,7 @@ public sealed class RideApiIntegrationTests
     {
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-location-out-of-order");
-        SeedBookableDriver(factory, "driver-location-out-of-order", "driver-location-out-of-order-union");
+        SeedActiveCabUnion(factory, "driver-location-out-of-order");
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
@@ -2306,7 +2306,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         const string driverId = "driver-location-future-capture";
         using var driver = factory.CreateClient("Driver", driverId);
-        SeedBookableDriver(factory, driverId, "union-location-future-capture");
+        SeedActiveCabUnion(factory, driverId);
 
         using var online = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
         {
