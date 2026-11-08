@@ -107,8 +107,8 @@ public static class DriverPayslipPdf
     private static void DrawCabMark(SKCanvas canvas, float x, float y, float scale, SKColor bodyColor, SKColor accentColor)
     {
         using var body = new SKPaint { Color = bodyColor, IsAntialias = true, Style = SKPaintStyle.Fill };
-        using var glass = new SKPaint { Color = SKColors.White.WithAlpha(220), IsAntialias = true, Style = SKPaintStyle.Fill };
-        using var wheel = new SKPaint { Color = Navy.WithAlpha(220), IsAntialias = true, Style = SKPaintStyle.Fill };
+        using var glass = new SKPaint { Color = new SKColor(255, 255, 255, 220), IsAntialias = true, Style = SKPaintStyle.Fill };
+        using var wheel = new SKPaint { Color = new SKColor(20, 42, 68, 220), IsAntialias = true, Style = SKPaintStyle.Fill };
         using var accent = new SKPaint { Color = accentColor, IsAntialias = true, Style = SKPaintStyle.Fill };
 
         canvas.DrawRoundRect(
