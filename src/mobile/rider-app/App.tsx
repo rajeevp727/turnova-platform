@@ -8,7 +8,7 @@ import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
-import { findActiveRide } from "../shared/rideRecovery";
+import { findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
@@ -164,7 +164,8 @@ export default function App() {
       if(active)setRide(current=>current?.rideId===update.rideId?{...current,driverLatitude:update.latitude,driverLongitude:update.longitude,locationUpdatedAt:update.locationUpdatedAt}:current);
     });
     connection.on("RideStatusChanged",(update:{rideId:string;status:string})=>{
-      if(active)setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
+      if(shouldApplyRideStatusUpdate(ride.rideId,update.rideId,active))
+        setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
       if(active&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>setError(e instanceof Error?e.message:"Unable to refresh fare agreement."));

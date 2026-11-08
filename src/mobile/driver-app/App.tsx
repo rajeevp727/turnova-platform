@@ -16,7 +16,7 @@ import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStored
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
-import { findActiveRide } from "../shared/rideRecovery";
+import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
 
@@ -555,9 +555,14 @@ export default function App() {
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
-    connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
-      if (update.rideId === activeRide.rideId) setActiveRide((current: any) => current ? { ...current, status: update.status, locationSharingActive: ["Accepted", "Arrived", "InProgress"].includes(update.status) } : current);
-    });
+    const handleRideStatusChanged = (update: { rideId: string; status: string }) => {
+      if (!shouldApplyRideStatusUpdate(activeRide.rideId, update.rideId, mounted)) return;
+      setActiveRide((current: any) => current?.rideId === update.rideId
+        ? applyRideStatusUpdate(current, update)
+        : current);
+      setDriverRideHistory(current => current.map(ride => applyRideStatusUpdate(ride, update)));
+    };
+    connection.on("RideStatusChanged", handleRideStatusChanged);
     connection.onreconnected(() => {
       if (mounted) void loadDriverRideHistory(() => mounted).catch(e => {
         if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
@@ -573,7 +578,7 @@ export default function App() {
         });
       }
     });
-    return () => { mounted = false; void connection.stop(); };
+    return () => { mounted = false; connection.off("RideStatusChanged", handleRideStatusChanged); void connection.stop(); };
   }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory]);
 
   useEffect(() => {

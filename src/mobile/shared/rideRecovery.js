@@ -24,4 +24,25 @@ function findActiveRide(history, role) {
   return history.find(ride => ride && allowedStatuses.has(ride.status)) ?? null;
 }
 
-module.exports = { findActiveRide };
+function applyRideStatusUpdate(ride, update) {
+  if (!ride || !update ||
+      typeof update.rideId !== "string" || update.rideId.trim().length === 0 ||
+      typeof update.status !== "string" || update.status.trim().length === 0 ||
+      ride.rideId !== update.rideId) {
+    return ride;
+  }
+
+  const updated = { ...ride, status: update.status };
+  if ("locationSharingActive" in ride) {
+    updated.locationSharingActive = ["Accepted", "Arrived", "InProgress"].includes(update.status);
+  }
+  return updated;
+}
+
+function shouldApplyRideStatusUpdate(currentRideId, updateRideId, isActive) {
+  return isActive === true &&
+    typeof currentRideId === "string" && currentRideId.trim().length > 0 &&
+    typeof updateRideId === "string" && updateRideId === currentRideId;
+}
+
+module.exports = { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate };
