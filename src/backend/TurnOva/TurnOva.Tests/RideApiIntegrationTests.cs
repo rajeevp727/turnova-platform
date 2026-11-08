@@ -2172,28 +2172,36 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
-    public async Task DriverCannotGoOnlineUsingGpsFixOlderThanLatestAcceptedCapture()
+    public async Task DriverCannotReusePreOfflineGpsFixWhenGoingOnlineAgain()
     {
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-online-stale-fix");
         SeedActiveCabUnion(factory, "driver-online-stale-fix");
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
-        var latestCapture = DateTimeOffset.UtcNow;
-        profiles["driver-online-stale-fix"] = profiles["driver-online-stale-fix"] with
-        {
-            LocationCapturedAtUtc = latestCapture
-        };
-
-        using var response = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
+        var acceptedCapture = DateTimeOffset.UtcNow;
+        using var firstOnline = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
         {
             isOnline = true,
             latitude = 17.493,
             longitude = 78.399,
-            capturedAtUtc = latestCapture.AddSeconds(-1)
+            capturedAtUtc = acceptedCapture
+        });
+        Assert.Equal(HttpStatusCode.OK, firstOnline.StatusCode);
+
+        using var offline = await driver.PostAsJsonAsync("/api/v1/driver/availability", new { isOnline = false });
+        Assert.Equal(HttpStatusCode.OK, offline.StatusCode);
+        Assert.Equal(acceptedCapture, profiles["driver-online-stale-fix"].LocationCapturedAtUtc);
+
+        using var staleOnline = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
+        {
+            isOnline = true,
+            latitude = 17.493,
+            longitude = 78.399,
+            capturedAtUtc = acceptedCapture.AddSeconds(-1)
         });
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, staleOnline.StatusCode);
         Assert.Equal("Offline", profiles["driver-online-stale-fix"].AvailabilityStatus);
         Assert.Null(profiles["driver-online-stale-fix"].CurrentLatitude);
         var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
