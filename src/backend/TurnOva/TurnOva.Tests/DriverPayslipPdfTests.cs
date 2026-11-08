@@ -1,6 +1,7 @@
 using System.Text;
 using TurnOva.API;
 using TurnOva.Domain.Dispatch;
+using UglyToad.PdfPig;
 
 namespace TurnOva.Tests;
 
@@ -19,6 +20,36 @@ public sealed class DriverPayslipPdfTests
         Assert.StartsWith("%PDF-1.4", pdfText, StringComparison.Ordinal);
         Assert.EndsWith("%%EOF", pdfText.TrimEnd(), StringComparison.Ordinal);
         Assert.True(pdf.Length > 5_000, "The PDF should contain shaped vector glyphs for all bundled scripts.");
+    }
+
+    [Fact]
+    public void GeneratedPdfEmbedsFontsAndPreservesSearchableTextForAllBundledScripts()
+    {
+        var payslip = CreatePayslip(
+            "Raja राजेश বাংলা ਪੰਜਾਬੀ ગુજરાતી ଓଡ଼ିଆ தமிழ் తెలుగు ಕನ್ನಡ മലയാളം",
+            "TurnOva తెలుగు தமிழ்");
+
+        var pdf = DriverPayslipPdf.Generate(payslip);
+        var pdfStructure = Encoding.Latin1.GetString(pdf);
+
+        Assert.Contains("/ToUnicode", pdfStructure, StringComparison.Ordinal);
+        Assert.Contains("/FontFile2", pdfStructure, StringComparison.Ordinal);
+
+        using var stream = new MemoryStream(pdf);
+        using var document = PdfDocument.Open(stream);
+        Assert.Equal(1, document.NumberOfPages);
+
+        var extracted = document.GetPage(1).Text;
+        Assert.Contains("Raja", extracted, StringComparison.Ordinal);
+        Assert.Contains("राजेश", extracted, StringComparison.Ordinal);
+        Assert.Contains("বাংলা", extracted, StringComparison.Ordinal);
+        Assert.Contains("ਪੰਜਾਬੀ", extracted, StringComparison.Ordinal);
+        Assert.Contains("ગુજરાતી", extracted, StringComparison.Ordinal);
+        Assert.Contains("ଓଡ଼ିଆ", extracted, StringComparison.Ordinal);
+        Assert.Contains("தமிழ்", extracted, StringComparison.Ordinal);
+        Assert.Contains("తెలుగు", extracted, StringComparison.Ordinal);
+        Assert.Contains("ಕನ್ನಡ", extracted, StringComparison.Ordinal);
+        Assert.Contains("മലയാളം", extracted, StringComparison.Ordinal);
     }
 
     [Fact]
