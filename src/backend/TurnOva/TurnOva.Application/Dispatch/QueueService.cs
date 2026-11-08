@@ -47,7 +47,8 @@ public sealed class QueueService(IQueueStore store)
     {
         if (string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(zoneId) ||
             string.IsNullOrWhiteSpace(serviceClass) || string.IsNullOrWhiteSpace(traceId) ||
-            traceId.Length > 128 || traceId.Any(char.IsControl))
+            traceId.Length > 128 ||
+            traceId.Any(character => !char.IsLetterOrDigit(character) && character is not ':' and not '-' and not '_'))
             throw new ArgumentException("A valid actor, queue scope and server trace identifier are required.");
 
         if (!string.Equals(serviceClass, "cab", StringComparison.OrdinalIgnoreCase))
