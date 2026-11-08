@@ -289,6 +289,7 @@ public static class DriverPayslipPdf
         var start = x;
         using var builder = new SKTextBlobBuilder();
         var runFonts = new List<SKFont>();
+        var extractionRuns = new List<(string Text, float X, SKFont Font)>();
 
         try
         {
@@ -301,28 +302,22 @@ public static class DriverPayslipPdf
                 var shaped = face.Shaper.Shape(run.Text, x, baseline, font);
                 EnsureGlyphCoverage(run, shaped.Codepoints);
 
-                // Keep the HarfBuzz source text and UTF-8 cluster offsets with the
-                // positioned glyphs. Skia's PDF backend uses this metadata to build
-                // ToUnicode mappings; a glyph-only run can render correctly while
-                // silently losing searchable/selectable source text.
-                var sourceText = Encoding.UTF8.GetBytes(run.Text);
-                var glyphRun = builder.AllocatePositionedTextRun(
-                    font,
-                    shaped.Codepoints.Length,
-                    sourceText.Length);
+                // Draw the visible glyphs at HarfBuzz's exact positions. Skia's PDF
+                // backend may outline a raw glyph-only blob, so it cannot be relied
+                // on to preserve the original Unicode text for search/accessibility.
+                var glyphRun = builder.AllocateRawPositionedRun(font, shaped.Codepoints.Length, null);
                 var glyphs = glyphRun.Glyphs;
+                var positions = glyphRun.Positions;
                 for (var index = 0; index < shaped.Codepoints.Length; index++)
                 {
                     if (shaped.Codepoints[index] > ushort.MaxValue)
                         throw new NotSupportedException($"The bundled {run.Script} payslip font returned an unsupported glyph index.");
 
                     glyphs[index] = (ushort)shaped.Codepoints[index];
+                    positions[index] = shaped.Points[index];
                 }
 
-                glyphRun.SetPositions(shaped.Points);
-                glyphRun.SetText(sourceText);
-                glyphRun.SetClusters(shaped.Clusters);
-
+                extractionRuns.Add((run.Text, x, font));
                 x += shaped.Width;
             }
 
@@ -332,6 +327,17 @@ public static class DriverPayslipPdf
                 using var paint = new SKPaint { Color = color, IsAntialias = true };
                 canvas.DrawText(blob, 0, 0, paint);
             }
+
+            // Add a nearly transparent source-text layer after the visible glyphs.
+            // It carries the original Unicode string into PDF text objects for
+            // extraction without changing the HarfBuzz-shaped visual output.
+            using var extractionPaint = new SKPaint
+            {
+                Color = new SKColor(255, 255, 255, 1),
+                IsAntialias = false
+            };
+            foreach (var run in extractionRuns)
+                canvas.DrawText(run.Text, run.X, baseline, SKTextAlign.Left, run.Font, extractionPaint);
         }
         finally
         {
