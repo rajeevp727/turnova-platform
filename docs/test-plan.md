@@ -1028,3 +1028,10 @@ The active-trip capture watermark is optional on existing ride documents and is 
 | TRIP-LOC-008 | Rider reconnects with a ride snapshot returned by the API, then receives an older SignalR event | The Rider compares the event capture time with the API's serialized `driverLocationCapturedAtUtc` watermark and ignores the older event; a newer event is accepted | `restored ride API capture watermark rejects an older SignalR capture` in `src/mobile/shared/tripLocationSharing.test.cjs` | P0 |
 
 | TRIP-LOC-009 | A delayed ride-history/reconnect API response returns after a newer SignalR location event | Merge status/agreement/other non-location fields from the response but preserve the newer Driver coordinates and capture watermark; a genuinely newer API snapshot may replace them | `stale history refresh cannot overwrite a newer SignalR location snapshot` in `src/mobile/shared/tripLocationSharing.test.cjs` | P0 |
+
+
+### TRIP-01 exact-head CI execution evidence (2026-11-08)
+
+- PR #118 exact head `a13a8b706ddd0ee46eb635cbc6cd6ad6a48390a2` passed [GitHub Actions run #746 / 42491279009](https://github.com/rajeevp727/turnova-platform/actions/runs/42491279009), 8/8 jobs.
+- Backend Release suite executed **317/317 tests** with zero failures. Rider/Driver typechecks and production JS exports, shared mobile tests, Android debug APK builds, unsigned iOS Simulator builds and native non-container API publish all passed.
+- Both npm audits reported 0 critical, 0 high, 11 moderate and 1 low; the JSON reports and generated lockfiles are CI artifacts. No live Cosmos, physical-device, device-to-device SignalR or production validation is implied.
