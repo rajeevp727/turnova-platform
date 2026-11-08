@@ -110,10 +110,18 @@ function getRideMapFitCoordinates(ride) {
   return coordinates;
 }
 
+function shouldFitRideMap({ tab, rideId, readyRideId, followDriverLocation }) {
+  return tab === "Activity" &&
+    typeof rideId === "string" && rideId.length > 0 &&
+    readyRideId === rideId &&
+    followDriverLocation === true;
+}
+
 module.exports = {
   canShareTripLocation,
   findAuthoritativeActiveTrip,
   shouldApplyTripLocationUpdate,
   mergeTripLocationSnapshot,
-  getRideMapFitCoordinates
+  getRideMapFitCoordinates,
+  shouldFitRideMap
 };

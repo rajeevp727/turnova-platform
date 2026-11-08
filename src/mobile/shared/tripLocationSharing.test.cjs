@@ -5,7 +5,8 @@ const {
   findAuthoritativeActiveTrip,
   shouldApplyTripLocationUpdate,
   mergeTripLocationSnapshot,
-  getRideMapFitCoordinates
+  getRideMapFitCoordinates,
+  shouldFitRideMap
 } = require("./tripLocationSharing.js");
 
 const base = {
@@ -183,6 +184,15 @@ test("stale history refresh cannot overwrite a newer SignalR location snapshot",
   assert.equal(mergedNewer.driverLatitude, 17.5);
   assert.equal(mergedNewer.driverLongitude, 78.5);
   assert.equal(mergedNewer.locationCapturedAtUtc, "2026-11-08T12:00:35.000Z");
+});
+
+test("Rider camera follows only after the matching map is ready and follow is enabled", () => {
+  const state = { tab: "Activity", rideId: "ride-map", readyRideId: null, followDriverLocation: true };
+  assert.equal(shouldFitRideMap(state), false);
+  assert.equal(shouldFitRideMap({ ...state, readyRideId: "ride-map" }), true);
+  assert.equal(shouldFitRideMap({ ...state, readyRideId: "ride-map", followDriverLocation: false }), false);
+  assert.equal(shouldFitRideMap({ ...state, readyRideId: "another-ride" }), false);
+  assert.equal(shouldFitRideMap({ ...state, tab: "Book", readyRideId: "ride-map" }), false);
 });
 
 test("map viewport includes valid Driver and pickup coordinates only", () => {

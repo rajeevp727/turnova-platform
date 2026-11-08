@@ -48,3 +48,10 @@ export function mergeTripLocationSnapshot<T extends TripLocationSnapshot & { dri
 export function getRideMapFitCoordinates(
   ride: TripLocationSnapshot & { pickupLatitude?: number | null; pickupLongitude?: number | null }
 ): Array<{ latitude: number; longitude: number }>;
+
+export function shouldFitRideMap(options: {
+  tab: string;
+  rideId?: string | null;
+  readyRideId?: string | null;
+  followDriverLocation: boolean;
+}): boolean;
