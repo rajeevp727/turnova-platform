@@ -17,6 +17,7 @@ import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
+import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
 
@@ -257,10 +258,31 @@ export default function App() {
     let mounted = true;
     let refreshing = false;
     let subscription: Location.LocationSubscription | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshForegroundLocation: () => Promise<void> = async () => {};
 
     const stopWatching = () => {
       subscription?.remove();
       subscription = undefined;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = undefined;
+    };
+
+    const reconcileServerState = () => reconcileDriverAvailability({
+      fetchAvailability: () => apiFetch("/api/v1/driver/availability"),
+      fetchRideHistory: () => apiFetch("/api/v1/driver/rides/mine"),
+      isActive: () => mounted,
+      setAvailabilityStatus,
+      setDriverRideHistory,
+      setActiveRide
+    });
+
+    const scheduleRefresh = () => {
+      if (!mounted || retryTimer) return;
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        if (mounted) void refreshForegroundLocation();
+      }, 15000);
     };
 
     const publishLocation = async (latitude: number, longitude: number): Promise<boolean> => {
@@ -274,8 +296,18 @@ export default function App() {
       } catch (e) {
         if (!mounted) return false;
         if (e instanceof Error && e.message.includes("left your assigned service zone")) {
+          stopWatching();
           setAvailabilityStatus("Offline");
           setNotice("You were taken offline because your current location left your assigned service zone.");
+        } else if (isDriverAvailabilityConflict(e)) {
+          stopWatching();
+          try {
+            const state = await reconcileServerState();
+            if (state.shouldRetryLocation) scheduleRefresh();
+          } catch (recoveryError) {
+            if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
+            scheduleRefresh();
+          }
         } else {
           setError(e instanceof Error ? e.message : "Unable to update availability location.");
         }
@@ -293,7 +325,7 @@ export default function App() {
       else subscription = nextSubscription;
     };
 
-    const refreshForegroundLocation = async () => {
+    refreshForegroundLocation = async () => {
       if (!mounted || refreshing) return;
       refreshing = true;
       try {
@@ -316,7 +348,18 @@ export default function App() {
             !await publishLocation(current.coords.latitude, current.coords.longitude)) return;
         await startWatching();
       } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
+        if (isDriverAvailabilityConflict(e)) {
+          stopWatching();
+          try {
+            const state = await reconcileServerState();
+            if (state.shouldRetryLocation) scheduleRefresh();
+          } catch (recoveryError) {
+            if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
+            scheduleRefresh();
+          }
+        } else if (mounted) {
+          setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
+        }
       } finally {
         refreshing = false;
       }
