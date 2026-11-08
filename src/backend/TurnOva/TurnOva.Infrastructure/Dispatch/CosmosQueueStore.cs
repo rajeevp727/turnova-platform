@@ -158,6 +158,8 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                 new PartitionKey(key),
                 cancellationToken: cancellationToken);
             if (existing.Resource.EventType == QueueAuditEventTypes.DispatchException &&
+                existing.Resource.DocumentType == "queue-audit" &&
+                existing.Resource.ZoneServiceKey == key &&
                 existing.Resource.DriverId == actorId &&
                 existing.Resource.TraceId == traceId &&
                 existing.Resource.ReasonCategory == reasonCategory)
