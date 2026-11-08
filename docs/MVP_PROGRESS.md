@@ -1,13 +1,13 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-09 00:30 IST  
+**Last updated:** 2026-11-09 02:31 IST  
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded.
 
 ## 1. Current step
 
-**Current sequential item #19 RELEASE-01 — sole active feature PR [#122](https://github.com/rajeevp727/turnova-platform/pull/122), branch `feat/release-01-preflight-report`, head `c3d58d3d9ce0ae18cb21626f070e4f5ddfca5be0`.** Main HEAD is `90f12c6ed87984e9574bc0337dbc71d2a7125dea` after PLATFORM-01 PR #121 merged. PR #121 exact-head CI [run #799 / 42511781621](https://github.com/rajeevp727/turnova-platform/actions/runs/42511781621) passed 8/8 jobs. Main post-merge CI [run #800 / 42513077058](https://github.com/rajeevp727/turnova-platform/actions/runs/42513077058) is still running; it is not production or live-Cosmos validation.
+**Current engineering follow-up: AI-01 supplemental passenger-count/privacy correction (outside the 19-row denominator)** on branch `fix/ai-01-no-inferred-passenger-count`. Main HEAD is `c080e7770977feef07de46e9b67de6e70ecc627e` after RELEASE-01 PR #122 merged. PR #122 exact-head CI [run #810 / 42519436774](https://github.com/rajeevp727/turnova-platform/actions/runs/42519436774) passed 8/8 jobs. Main post-merge CI [run #811 / 42523135354](https://github.com/rajeevp727/turnova-platform/actions/runs/42523135354) is in progress; it is not production, live-Cosmos or physical-device validation.
 
-Sequential #15 DRIVER-04 and #17 SUPPORT-01 remain Blocked pending Product/Operations approval of support categories, required intake fields, priority/severity, escalation owner/contact channel, support hours/response targets, attachment handling, privacy/retention and operational handoff. No support workflow, contact or SLA is invented. #6 DISPATCH-01 remains Blocked pending a positive production radius and approved non-overlapping zones. Engineering proceeds to #19 RELEASE-01.
+Sequential #19 RELEASE-01 engineering implementation is merged; strict acceptance remains In Progress because signed Android/iOS builds, final production identifiers/EAS linkage, production API/DNS/TLS, physical-device/pilot acceptance and store evidence remain external. #15 DRIVER-04 and #17 SUPPORT-01 remain Blocked pending Product/Operations approval of support categories, required intake fields, priority/severity, escalation owner/contact channel, support hours/response targets, attachment handling, privacy/retention and operational handoff. #6 DISPATCH-01 remains Blocked pending positive production radius and approved non-overlapping zones. Engineering continues with approved supplemental AI-01 rather than treating external gates as a stop signal.
 
 ### #18 PLATFORM-01 — merged engineering evidence
 
@@ -19,11 +19,25 @@ Deterministic tests cover legacy queue-read failure, pre-commit selected-reserva
 
 PLATFORM-01 remains In Progress until live Cosmos create/query/partition, multi-instance/ETag/restart/retention, telemetry export/alerts, production CORS origins, load testing and physical-device acceptance are evidenced.
 
-### #19 RELEASE-01 — active engineering increment
+### #19 RELEASE-01 — merged engineering evidence; external release acceptance remains blocked
 
-PR [#122](https://github.com/rajeevp727/turnova-platform/pull/122) adds a dependency-free Node release preflight for both Expo apps. After `npm install` generates icons, each mobile CI job validates app identity/version, established Android package IDs, iOS device-family setting, generated icon paths, EAS CLI minimum and development/preview/production profile shape. It emits a machine-readable per-app `release-readiness.json` artifact.
+PR [#122](https://github.com/rajeevp727/turnova-platform/pull/122) merged at `c080e7770977feef07de46e9b67de6e70ecc627e`. Its dependency-free Node release preflight validates both Expo apps after icon generation: app identity/version, established Android package IDs, iOS device-family setting, generated icon paths, EAS CLI minimum and development/preview/production profile shape. It emits a schema-v2 per-app `release-readiness.json` artifact. Structural configuration errors fail CI; external release gates are reported without pretending they passed.
 
-The report separates repository-controlled configuration errors (which fail CI) from external gates. Current `.env.example` API URLs are placeholders; GitHub CI cannot inspect EAS's remote environment, so the approved HTTPS production endpoint remains unverified. Final iOS bundle identifiers, EAS project IDs and production auto-increment policy are also unconfigured in the repository. Signing credentials, physical-device/pilot acceptance and store submission are also unverified. No identifiers, secrets or credentials are invented. Android debug APK and unsigned iOS Simulator outputs remain compilation evidence only; no signed AAB/IPA is claimed. PR #122 exact-head CI is pending.
+Exact-head CI [run #810 / 42519436774](https://github.com/rajeevp727/turnova-platform/actions/runs/42519436774) passed 8/8 jobs: backend, Rider/Driver typechecks and production JS bundle exports, shared auth tests, Android debug APKs and unsigned iOS Simulator builds. Main post-merge run #811 [42523135354](https://github.com/rajeevp727/turnova-platform/actions/runs/42523135354) is still running at this handoff.
+
+The report distinguishes CI-visible syntax/configuration from remote approval. GitHub CI cannot inspect EAS remote environment variables or prove DNS/TLS from EAS. The approved HTTPS production API endpoint, final iOS bundle registration, EAS project linkage, build-number policy approval, Android/Apple signing credentials, physical-device/pilot acceptance and store submission remain external. Android debug APK and unsigned iOS Simulator outputs are not signed AAB/IPA evidence. No identifiers, secrets or credentials are invented.
+
+
+
+### AI-01 supplemental — passenger-count and provider-privacy correction (outside 19-row denominator)
+
+The current implementation had a PRD conflict: an omitted passenger count silently became 1, and the provider prompt contract carried passenger count plus generic tokens that could reveal family/child/accessibility context. The correction:
+- Keeps passenger count local; provider prompt/result contracts have no passenger-count field.
+- Returns null and `MissingFields: passengerCount` when the Rider does not explicitly provide a valid 1–6 count.
+- Restricts provider intent tokens to generic action words; family/child, accessibility/health, luggage, location-type and arbitrary free-text details remain local.
+- Clears the Rider's pre-existing default passenger value when an AI draft omits/invalidates it.
+- Blocks discovery and selected-driver booking until the Rider manually enters a valid count.
+- Adds deterministic .NET service tests and shared mobile helper tests; exact-head CI remains pending.
 
 **Current acceptance snapshot:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is a strict evidence count, not a statement that features are unimplemented. Engineering implementation and automated evidence are recorded row by row; external/device/live-Cosmos evidence remains outstanding.
 
@@ -135,7 +149,7 @@ The report separates repository-controlled configuration errors (which fail CI) 
 | CAB-AGREEMENT-01 | Direct Rider/Driver negotiation; persist immutable agreement versions; both parties confirm the current version; ride cannot start before mutual confirmation. | In progress — PR #56 merged; RIDER-03 connects selected booking and persists optional stops in agreement snapshots; device/Cosmos/expiry-policy validation remain. |
 | CAB-RECON-01 | Driver reports amount received as unverified; persist agreed-minus-reported signed delta; expose only to authorised union roles. No platform payment gateway/escrow/collection. | In progress — PR #70 code head `d73dc0c76528ca95fff39a5d38a5512b1720b941` passed CI [42295719183](https://github.com/rajeevp727/turnova-platform/actions/runs/42295719183) with 210/210 backend tests, both mobile typechecks, nine shared tests and non-container API publish; live Cosmos/device gates remain. Not counted in 19-area percentage. |
 | CAB-UNION-01 | Cab membership, Cab vehicle verification, union approval and approved selfie visibility. | Partially evidenced; Cab-only validation and full union workflow remain |
-| AI-01 | Separately approved provider-agnostic, bounded Rider/Driver AI assistance. Keep outside the 19-area denominator and do not let AI book, set fares, approve KYC or alter dispatch/ride state. | In progress — PR #73 merged; code and CI verified, live provider sandbox and managed-secret validation remain external gates. |
+| AI-01 | Separately approved provider-agnostic, bounded Rider/Driver AI assistance. Keep outside the 19-area denominator and do not let AI book, set fares, approve KYC or alter dispatch/ride state. | In progress — PR #73 baseline merged; supplemental hardening branch `fix/ai-01-no-inferred-passenger-count` removes the invented one-passenger fallback, keeps passenger count out of provider contracts/prompts, excludes family/child/accessibility intent from provider tokens, and requires manual Rider completion before discovery/booking. New deterministic API/shared mobile tests and Rider build validation are pending. Live provider sandbox, managed-secret wiring and data-processing review remain external gates. |
 
 ## 6. Unresolved decisions and blockers
 
