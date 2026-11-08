@@ -96,6 +96,25 @@ public sealed class InMemoryQueueStore : IQueueStore
         }
     }
 
+    public Task RecordDispatchExceptionAsync(
+        string actorId,
+        string zoneId,
+        string serviceClass,
+        string traceId,
+        string reasonCategory,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = Key(zoneId, serviceClass);
+        RecordAudit(
+            key,
+            actorId,
+            QueueAuditEventTypes.DispatchException,
+            traceId: traceId,
+            reasonCategory: reasonCategory);
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<QueueAuditEvent>> GetAuditEventsAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
@@ -109,9 +128,22 @@ public sealed class InMemoryQueueStore : IQueueStore
         return Task.FromResult(events);
     }
 
-    private void RecordAudit(string zoneServiceKey, string driverId, string eventType, string? offerId = null) =>
+    private void RecordAudit(
+        string zoneServiceKey,
+        string driverId,
+        string eventType,
+        string? offerId = null,
+        string? traceId = null,
+        string? reasonCategory = null) =>
         _auditEvents.Enqueue(new QueueAuditEvent(
-            Guid.NewGuid().ToString("N"), zoneServiceKey, driverId, eventType, DateTimeOffset.UtcNow, offerId));
+            Guid.NewGuid().ToString("N"),
+            zoneServiceKey,
+            driverId,
+            eventType,
+            DateTimeOffset.UtcNow,
+            offerId,
+            traceId,
+            reasonCategory));
 
     private static string Key(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
