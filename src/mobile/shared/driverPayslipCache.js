@@ -55,7 +55,11 @@ async function writeCachedDriverPayslipIfCurrent(fileSystem, uri, base64, isSess
   // Logout or expiry can race an in-flight download. If the write finishes after
   // the session changes, remove that exact generated file before returning.
   if (!isSessionCurrent()) {
-    await deleteManagedDriverPayslip(fileSystem, uri);
+    try {
+      await deleteManagedDriverPayslip(fileSystem, uri);
+    } catch {
+      throw new Error("Session changed during payslip download and cached file cleanup failed.");
+    }
     return false;
   }
 
