@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
 
@@ -192,7 +193,63 @@ public sealed class QueueStoreTests
         Assert.Equal("offer-1", Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.RotatedToBack)).OfferId);
         Assert.All(events, item => Assert.Equal("zone-a|auto", item.ZoneServiceKey));
         Assert.DoesNotContain(events, item => item.DriverId == "driver-c");
+        Assert.DoesNotContain(events, item => item.EventType == QueueAuditEventTypes.DispatchException);
         var zoneBEvents = await store.GetAuditEventsAsync("zone-b", "auto", CancellationToken.None);
         Assert.Equal("driver-c", Assert.Single(zoneBEvents).DriverId);
+    }
+
+    [Fact]
+    public async Task RecordDispatchExceptionAsyncStoresOnlySafeMetadataInItsCabQueuePartition()
+    {
+        var store = new InMemoryQueueStore();
+
+        await store.RecordDispatchExceptionAsync(
+            "driver-actor-1",
+            "zone-a",
+            "cab",
+            "trace-123",
+            QueueAuditReasonCategories.QueueReadFailed,
+            CancellationToken.None);
+
+        var events = await store.GetAuditEventsAsync("zone-a", "cab", CancellationToken.None);
+        var audit = Assert.Single(events);
+        Assert.Equal("zone-a|cab", audit.ZoneServiceKey);
+        Assert.Equal("driver-actor-1", audit.DriverId);
+        Assert.Equal(QueueAuditEventTypes.DispatchException, audit.EventType);
+        Assert.Equal("trace-123", audit.TraceId);
+        Assert.Equal(QueueAuditReasonCategories.QueueReadFailed, audit.ReasonCategory);
+        Assert.Equal(TimeSpan.Zero, audit.OccurredAtUtc.Offset);
+        Assert.Null(audit.OfferId);
+
+        var json = JsonSerializer.Serialize(audit, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Contains("traceId", json, StringComparison.Ordinal);
+        Assert.Contains("reasonCategory", json, StringComparison.Ordinal);
+        foreach (var forbiddenField in new[]
+        {
+            "exceptionMessage", "requestBody", "token", "phone", "email",
+            "latitude", "longitude", "pickup", "dropoff", "fare"
+        })
+            Assert.DoesNotContain(forbiddenField, json, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Empty(await store.GetAuditEventsAsync("zone-b", "cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RecordDispatchExceptionAsyncDoesNotWriteAfterCancellation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.RecordDispatchExceptionAsync(
+                "driver-actor-1",
+                "zone-a",
+                "cab",
+                "trace-cancelled",
+                QueueAuditReasonCategories.QueueReadFailed,
+                cancellation.Token));
+
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "cab", CancellationToken.None));
     }
 }
