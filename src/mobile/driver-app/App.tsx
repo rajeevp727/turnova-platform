@@ -241,7 +241,8 @@ export default function App() {
         body: JSON.stringify({
           isOnline: nextOnline,
           latitude: position?.coords.latitude,
-          longitude: position?.coords.longitude
+          longitude: position?.coords.longitude,
+          capturedAtUtc: position ? new Date(position.timestamp).toISOString() : undefined
         })
       });
       setAvailabilityStatus(result.availabilityStatus);
@@ -263,12 +264,12 @@ export default function App() {
       subscription = undefined;
     };
 
-    const publishLocation = async (latitude: number, longitude: number): Promise<boolean> => {
+    const publishLocation = async (latitude: number, longitude: number, timestamp: number): Promise<boolean> => {
       if (!mounted || AppState.currentState !== "active") return false;
       try {
         await apiFetch("/api/v1/driver/location", {
           method: "POST",
-          body: JSON.stringify({ latitude, longitude })
+          body: JSON.stringify({ latitude, longitude, capturedAtUtc: new Date(timestamp).toISOString() })
         });
         return true;
       } catch (e) {
@@ -287,7 +288,7 @@ export default function App() {
       if (!mounted || subscription || AppState.currentState !== "active") return;
       const nextSubscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 50 },
-        location => { void publishLocation(location.coords.latitude, location.coords.longitude); }
+        location => { void publishLocation(location.coords.latitude, location.coords.longitude, location.timestamp); }
       );
       if (!mounted || AppState.currentState !== "active") nextSubscription.remove();
       else subscription = nextSubscription;
@@ -313,7 +314,7 @@ export default function App() {
         if (!mounted || AppState.currentState !== "active") return;
         const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         if (!mounted || AppState.currentState !== "active" ||
-            !await publishLocation(current.coords.latitude, current.coords.longitude)) return;
+            !await publishLocation(current.coords.latitude, current.coords.longitude, current.timestamp)) return;
         await startWatching();
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
