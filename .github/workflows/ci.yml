@@ -81,6 +81,15 @@ jobs:
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
 
       - run: npm install --prefer-offline --no-fund --audit=false
+      - name: Trace audited dependency resolution
+        run: npm ls image-size postcss sharp --all || true
+      - name: Upload generated npm lockfile for review
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-generated-lockfile
+          path: src/mobile/${{ matrix.app }}/package-lock.json
+          if-no-files-found: error
       - name: Audit mobile dependency tree
         shell: bash
         run: |

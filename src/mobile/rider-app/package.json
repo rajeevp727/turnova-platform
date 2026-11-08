@@ -25,10 +25,14 @@
     "react-native-maps": "1.20.1",
     "@microsoft/signalr": "10.0.0",
     "react-native-svg": "~15.12.1",
-    "sharp": "^0.34.2"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
     "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "image-size": "2.1.0",
+    "postcss": "8.5.32"
   }
 }
