@@ -21,6 +21,7 @@ using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
 using TurnOva.Application.Assistance;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Dispatch;
 
 namespace TurnOva.Tests;
 
@@ -155,6 +156,64 @@ public sealed class RideApiIntegrationTests
 
         var auditJson = JsonSerializer.Serialize(audit, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.DoesNotContain("sensitive-queue-read-failure", auditJson);
+        foreach (var forbiddenField in new[]
+        {
+            "exceptionMessage", "requestBody", "token", "phone", "email",
+            "latitude", "longitude", "pickup", "dropoff", "fare"
+        })
+            Assert.DoesNotContain(forbiddenField, auditJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AuthenticatedSelectedDriverReservationFailurePersistsSafeExceptionAuditAndPreservesLease()
+    {
+        const string driverId = "dispatch-selected-audit-driver";
+        const string unionId = "dispatch-selected-audit-union";
+        var queueStore = new InMemoryQueueStore();
+        var reservationStore = new ReservationMakePermanentFailureStore(
+            new InMemoryDriverRideReservationStore());
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            queueStore: queueStore,
+            reservationStore: reservationStore);
+        using var rider = factory.CreateClient("Rider", "dispatch-selected-audit-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        var rideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, driverId, unionId, "dispatch-selected-audit-booking", 420m);
+        var reservationBefore = await reservationStore.GetActiveAsync(driverId);
+        Assert.NotNull(reservationBefore);
+        Assert.Equal(rideId, reservationBefore.RideId);
+        Assert.NotNull(reservationBefore.ExpiresAtUtc);
+
+        reservationStore.FailNextMakePermanent();
+        using var response = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Contains("An unexpected error occurred.", body);
+        Assert.DoesNotContain("sensitive-reservation-store-failure", body);
+        using var problem = JsonDocument.Parse(body);
+        var traceId = problem.RootElement.GetProperty("traceId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(traceId));
+
+        var auditEvents = await queueStore.GetAuditEventsAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        var audit = Assert.Single(auditEvents);
+        Assert.Equal("hyderabad-central|cab", audit.ZoneServiceKey);
+        Assert.Equal(driverId, audit.DriverId);
+        Assert.Equal(QueueAuditEventTypes.DispatchException, audit.EventType);
+        Assert.Equal(traceId, audit.TraceId);
+        Assert.Equal(QueueAuditReasonCategories.DriverReservationFailed, audit.ReasonCategory);
+        Assert.Equal(TimeSpan.Zero, audit.OccurredAtUtc.Offset);
+        Assert.Null(audit.OfferId);
+
+        var unchangedRide = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId];
+        Assert.Equal("AgreementConfirmed", unchangedRide.Status);
+        Assert.Equal(reservationBefore, await reservationStore.GetActiveAsync(driverId));
+
+        var auditJson = JsonSerializer.Serialize(audit, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("sensitive-reservation-store-failure", auditJson);
         foreach (var forbiddenField in new[]
         {
             "exceptionMessage", "requestBody", "token", "phone", "email",
@@ -5041,6 +5100,44 @@ public sealed class RideApiIntegrationTests
             inner.GetAuditEventsAsync(zoneId, serviceClass, cancellationToken);
     }
 
+    private sealed class ReservationMakePermanentFailureStore(IDriverRideReservationStore inner)
+        : IDriverRideReservationStore
+    {
+        private int _failNextMakePermanent;
+
+        public void FailNextMakePermanent() => Interlocked.Exchange(ref _failNextMakePermanent, 1);
+
+        public Task<bool> TryAcquireAsync(string driverId, string rideId, CancellationToken cancellationToken = default) =>
+            inner.TryAcquireAsync(driverId, rideId, cancellationToken);
+
+        public Task<bool> TryAcquireTemporaryAsync(
+            string driverId, string rideId, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken = default) =>
+            inner.TryAcquireTemporaryAsync(driverId, rideId, expiresAtUtc, cancellationToken);
+
+        public Task<bool> TryMakePermanentAsync(
+            string driverId, string rideId, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref _failNextMakePermanent, 0) == 1)
+                throw new InvalidOperationException("sensitive-reservation-store-failure");
+            return inner.TryMakePermanentAsync(driverId, rideId, cancellationToken);
+        }
+
+        public Task<bool> TrySetExpiryAsync(
+            string driverId, string rideId, DateTimeOffset? expiresAtUtc, CancellationToken cancellationToken = default) =>
+            inner.TrySetExpiryAsync(driverId, rideId, expiresAtUtc, cancellationToken);
+
+        public Task<DriverRideReservation?> GetActiveAsync(
+            string driverId, CancellationToken cancellationToken = default) =>
+            inner.GetActiveAsync(driverId, cancellationToken);
+
+        public Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
+            inner.HasActiveAsync(driverId, cancellationToken);
+
+        public Task<bool> TryReleaseAsync(
+            string driverId, string rideId, CancellationToken cancellationToken = default) =>
+            inner.TryReleaseAsync(driverId, rideId, cancellationToken);
+    }
+
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
@@ -5052,12 +5149,14 @@ public sealed class RideApiIntegrationTests
         private readonly IRideOfferAdvancer? _rideOfferAdvancer;
         private readonly IReadOnlyList<DispatchZoneConfig>? _dispatchZones;
         private readonly IQueueStore? _queueStore;
+        private readonly IDriverRideReservationStore? _reservationStore;
 
         public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double? nearbyRadiusKm = 10,
             int? selectedDriverNegotiationLifetimeMinutes = 15, bool storageReadinessUnavailable = false,
             int? nearbyLocationMaxAgeSeconds = 120, IRideOfferAdvancer? rideOfferAdvancer = null,
             IReadOnlyList<DispatchZoneConfig>? dispatchZones = null,
-            IQueueStore? queueStore = null)
+            IQueueStore? queueStore = null,
+            IDriverRideReservationStore? reservationStore = null)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
@@ -5067,6 +5166,7 @@ public sealed class RideApiIntegrationTests
             _rideOfferAdvancer = rideOfferAdvancer;
             _dispatchZones = dispatchZones;
             _queueStore = queueStore;
+            _reservationStore = reservationStore;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -5111,7 +5211,9 @@ public sealed class RideApiIntegrationTests
 
             var rideOfferAdvancer = _rideOfferAdvancer;
             var queueStore = _queueStore;
-            if (_storageReadinessUnavailable || rideOfferAdvancer is not null || queueStore is not null)
+            var reservationStore = _reservationStore;
+            if (_storageReadinessUnavailable || rideOfferAdvancer is not null ||
+                queueStore is not null || reservationStore is not null)
             {
                 builder.ConfigureTestServices(services =>
                 {
@@ -5119,6 +5221,12 @@ public sealed class RideApiIntegrationTests
                     {
                         services.RemoveAll<IQueueStore>();
                         services.AddSingleton<IQueueStore>(queueStore);
+                    }
+
+                    if (reservationStore is not null)
+                    {
+                        services.RemoveAll<IDriverRideReservationStore>();
+                        services.AddSingleton<IDriverRideReservationStore>(reservationStore);
                     }
 
                     if (_storageReadinessUnavailable)
