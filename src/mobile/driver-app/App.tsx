@@ -17,6 +17,7 @@ import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
+import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
 
@@ -221,6 +222,15 @@ export default function App() {
   }, [apiFetch]);
   useEffect(() => { if (user) void loadAvailability(); }, [user, loadAvailability]);
 
+  const reconcileServerAvailability = useCallback((isActive: () => boolean = () => true) => reconcileDriverAvailability({
+    fetchAvailability: () => apiFetch("/api/v1/driver/availability"),
+    fetchRideHistory: () => apiFetch("/api/v1/driver/rides/mine"),
+    isActive,
+    setAvailabilityStatus,
+    setDriverRideHistory,
+    setActiveRide
+  }), [apiFetch]);
+
   const toggleAvailability = async () => {
     setLoading(true); setError(""); setNotice("");
     try {
@@ -248,7 +258,20 @@ export default function App() {
       setAvailabilityStatus(result.availabilityStatus);
       setNotice(nextOnline ? "You are online and have joined the back of the FIFO queue. Your location is shared only while online." : "You are offline and have left the FIFO queue.");
       await loadQueue();
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to change availability."); }
+    } catch (e) {
+      if (isDriverAvailabilityConflict(e)) {
+        try {
+          const state = await reconcileServerAvailability();
+          if (state.activeRide) setNotice("A selected Cab trip is active. Availability changes are paused.");
+          else if (!state.isOnline) setNotice("The server reports Offline. Review your onboarding, Union eligibility and location before going Online again.");
+          else setNotice("The server still reports Online. Retry the availability action after the current conflict resolves.");
+        } catch (recoveryError) {
+          setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
+        }
+      } else {
+        setError(e instanceof Error ? e.message : "Unable to change availability.");
+      }
+    }
     finally { setLoading(false); }
   };
 
@@ -258,10 +281,22 @@ export default function App() {
     let mounted = true;
     let refreshing = false;
     let subscription: Location.LocationSubscription | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshForegroundLocation: () => Promise<void> = async () => {};
 
     const stopWatching = () => {
       subscription?.remove();
       subscription = undefined;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = undefined;
+    };
+
+    const scheduleRefresh = () => {
+      if (!mounted || retryTimer) return;
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        if (mounted) void refreshForegroundLocation();
+      }, 15000);
     };
 
     const publishLocation = async (latitude: number, longitude: number, timestamp: number): Promise<boolean> => {
@@ -275,8 +310,18 @@ export default function App() {
       } catch (e) {
         if (!mounted) return false;
         if (e instanceof Error && e.message.includes("left your assigned service zone")) {
+          stopWatching();
           setAvailabilityStatus("Offline");
           setNotice("You were taken offline because your current location left your assigned service zone.");
+        } else if (isDriverAvailabilityConflict(e)) {
+          stopWatching();
+          try {
+            const state = await reconcileServerAvailability(() => mounted);
+            if (state.shouldRetryLocation) scheduleRefresh();
+          } catch (recoveryError) {
+            // Fail closed: do not publish another GPS fix until both authoritative reads succeed.
+            if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
+          }
         } else {
           setError(e instanceof Error ? e.message : "Unable to update availability location.");
         }
@@ -294,7 +339,7 @@ export default function App() {
       else subscription = nextSubscription;
     };
 
-    const refreshForegroundLocation = async () => {
+    refreshForegroundLocation = async () => {
       if (!mounted || refreshing) return;
       refreshing = true;
       try {
@@ -317,7 +362,18 @@ export default function App() {
             !await publishLocation(current.coords.latitude, current.coords.longitude, current.timestamp)) return;
         await startWatching();
       } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
+        if (isDriverAvailabilityConflict(e)) {
+          stopWatching();
+          try {
+            const state = await reconcileServerAvailability(() => mounted);
+            if (state.shouldRetryLocation) scheduleRefresh();
+          } catch (recoveryError) {
+            // Fail closed: do not publish another GPS fix until both authoritative reads succeed.
+            if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
+          }
+        } else if (mounted) {
+          setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
+        }
       } finally {
         refreshing = false;
       }
@@ -334,7 +390,7 @@ export default function App() {
       stopWatching();
       appStateSubscription.remove();
     };
-  }, [user?.id, availabilityStatus, legacyServiceClass, activeRide?.status, apiFetch]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, activeRide?.status, apiFetch, reconcileServerAvailability]);
 
   const loadQueue = useCallback(async () => {
     if (legacyServiceClass) {
