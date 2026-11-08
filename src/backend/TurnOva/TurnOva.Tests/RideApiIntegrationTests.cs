@@ -167,6 +167,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-onboarding-create-race");
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove("driver-onboarding-create-race", out _);
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 8)
             .Select(_ => driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())));
@@ -192,6 +193,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-onboarding-preserve-latest");
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove("driver-onboarding-preserve-latest", out _);
 
         Assert.Equal(HttpStatusCode.Accepted,
             (await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())).StatusCode);
@@ -243,6 +245,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var driver = factory.CreateClient("Driver", "driver-selfie-preserve-latest");
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove("driver-selfie-preserve-latest", out _);
 
         Assert.Equal(HttpStatusCode.Accepted,
             (await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())).StatusCode);
