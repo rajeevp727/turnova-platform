@@ -31,4 +31,6 @@ public sealed record DriverOnboardingProfile(
     string AvailabilityStatus = "Offline",
     double? CurrentLatitude = null,
     double? CurrentLongitude = null,
-    DateTimeOffset? LocationUpdatedAtUtc = null);
+    DateTimeOffset? LocationUpdatedAtUtc = null,
+    // Monotonic GPS capture watermark; retained while Offline to reject delayed fixes.
+    DateTimeOffset? LocationCapturedAtUtc = null);

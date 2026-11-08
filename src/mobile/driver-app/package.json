@@ -26,12 +26,16 @@
     "expo-file-system": "~19.0.21",
     "expo-sharing": "~14.0.7",
     "react-native-svg": "~15.12.1",
-    "sharp": "^0.34.2",
+    "sharp": "0.35.5",
     "expo-image-picker": "~17.0.8",
     "expo-image-manipulator": "~14.0.7"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
     "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "image-size": "2.1.0",
+    "postcss": "8.5.32"
   }
 }

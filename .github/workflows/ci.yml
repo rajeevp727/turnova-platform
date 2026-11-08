@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest CI run for each PR; stale queued matrices waste runner capacity.
+concurrency:
+  group: turnova-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-24.04
@@ -17,6 +22,13 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('src/backend/TurnOva/**/*.csproj', 'src/backend/TurnOva/**/*.props', 'src/backend/TurnOva/**/*.targets') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
       - run: dotnet restore src/backend/TurnOva/TurnOva.sln
       - run: dotnet build src/backend/TurnOva/TurnOva.sln --configuration Release --no-restore
       - name: Run backend test project
@@ -67,7 +79,68 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
-      - run: npm install
+
+      - run: npm install --prefer-offline --no-fund --audit=false
+      - name: Trace audited dependency resolution
+        run: npm ls image-size postcss sharp --all || true
+      - name: Upload generated npm lockfile for review
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-generated-lockfile
+          path: src/mobile/${{ matrix.app }}/package-lock.json
+          if-no-files-found: error
+      - name: Audit mobile dependency tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/npm-audit-${{ matrix.app }}.json"
+          set +e
+          npm audit --json > "$report"
+          audit_status=$?
+          set -e
+          python3 - "$report" "$audit_status" <<'PY'
+          import json
+          import sys
+
+          path, audit_status = sys.argv[1], int(sys.argv[2])
+          with open(path, encoding="utf-8") as stream:
+              report = json.load(stream)
+          metadata = report.get("metadata", {}).get("vulnerabilities", {})
+          critical = int(metadata.get("critical", 0))
+          high = int(metadata.get("high", 0))
+          print(
+              "npm audit: "
+              f"{metadata.get('total', 0)} total; "
+              f"{critical} critical; {high} high; "
+              f"{metadata.get('moderate', 0)} moderate; "
+              f"{metadata.get('low', 0)} low."
+          )
+          for name, item in sorted(report.get("vulnerabilities", {}).items()):
+              if item.get("severity") in {"critical", "high"}:
+                  via = item.get("via", [])
+                  titles = [
+                      entry.get("title", entry.get("name", "unknown"))
+                      if isinstance(entry, dict) else entry
+                      for entry in via
+                  ]
+                  print(
+                      f"- {name}: {item.get('severity')}; "
+                      f"direct={item.get('isDirect')}; "
+                      f"range={item.get('range')}; "
+                      f"fixAvailable={item.get('fixAvailable')}; "
+                      f"advisories={titles}"
+                  )
+          if critical or high or audit_status not in (0, 1):
+              raise SystemExit("Dependency audit failed: resolve high/critical findings or audit execution errors.")
+          PY
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-npm-audit
+          path: ${{ runner.temp }}/npm-audit-${{ matrix.app }}.json
+          if-no-files-found: warn
       - run: npx expo config --type public
       - run: npm run typecheck
       - name: Verify Metro can see shared mobile modules
@@ -90,6 +163,7 @@ jobs:
 
   native-android:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -108,12 +182,89 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - run: npm install
+
+      - run: npm install --prefer-offline --no-fund --audit=false
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
-      - name: Compile Android debug APK
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-${{ runner.arch }}-gradle-deps-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app), format('src/mobile/{0}/android/**/*.gradle*', matrix.app), format('src/mobile/{0}/android/gradle/wrapper/gradle-wrapper.properties', matrix.app)) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-gradle-deps-${{ matrix.app }}-
+      - name: Cache Gradle 8.14.3 distribution
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/turnova-distributions/gradle-8.14.3
+          key: ${{ runner.os }}-gradle-8.14.3-bin-bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+      - name: Install checksum-verified Gradle distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=8.14.3
+          checksum=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+          dist_root="$HOME/.gradle/turnova-distributions"
+          gradle_home="$dist_root/gradle-$version"
+          if [[ ! -x "$gradle_home/bin/gradle" ]]; then
+            mkdir -p "$dist_root"
+            archive="$RUNNER_TEMP/gradle-$version-bin.zip"
+            rm -f "$archive"
+            urls=(
+              "https://downloads.gradle.org/distributions/gradle-$version-bin.zip"
+              "https://repo.huaweicloud.com/gradle/gradle-$version-bin.zip"
+            )
+            downloaded=false
+            for url in "${urls[@]}"; do
+              echo "Downloading Gradle $version from $url"
+              if curl --fail --location --silent --show-error \
+                --retry 5 --retry-all-errors --retry-delay 10 \
+                --connect-timeout 30 --max-time 600 \
+                "$url" --output "$archive"; then
+                downloaded=true
+                break
+              fi
+              rm -f "$archive"
+            done
+            if [[ "$downloaded" != true ]]; then
+              echo "Unable to download Gradle $version from official or fallback distribution hosts." >&2
+              exit 1
+            fi
+            echo "$checksum  $archive" | sha256sum --check --status || {
+              echo "Gradle distribution SHA-256 verification failed." >&2
+              exit 1
+            }
+            unzip -q "$archive" -d "$dist_root"
+            rm -f "$archive"
+          fi
+          "$gradle_home/bin/gradle" --version
+      - name: Compile Android debug APK with transient dependency retry
         working-directory: src/mobile/${{ matrix.app }}/android
-        run: ./gradlew --no-daemon assembleDebug
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle="$HOME/.gradle/turnova-distributions/gradle-8.14.3/bin/gradle"
+          for attempt in 1 2 3 4 5; do
+            log="$RUNNER_TEMP/gradle-build-${{ matrix.app }}-$attempt.log"
+            set +e
+            "$gradle" --no-daemon assembleDebug 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            set -e
+            if [[ "$status" -eq 0 ]]; then
+              exit 0
+            fi
+            if ! grep -Eqi 'HTTP (response code: )?5[0-9]{2}|status code 5[0-9]{2}|Gateway Time-out|SocketTimeoutException|Read timed out|Could not GET .*timed out' "$log"; then
+              echo "Gradle compilation failed for a non-transient reason; not retrying."
+              exit "$status"
+            fi
+            if [[ "$attempt" -lt 5 ]]; then
+              delay=$((attempt * 20))
+              echo "Dependency repository returned a transient 5xx/timeout; retrying Gradle build in ${delay}s (attempt $((attempt + 1))/5)."
+              sleep "$delay"
+            fi
+          done
+          echo "Gradle build exhausted five attempts due to transient dependency repository failures."
+          exit 1
       - name: Verify Android APK artifact
         run: test -s android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v6
@@ -123,7 +274,8 @@ jobs:
           if-no-files-found: error
 
   native-ios:
-    runs-on: macos-15
+    runs-on: macos-15-intel
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -138,9 +290,17 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
-      - run: npm install
+
+      - run: npm install --prefer-offline --no-fund --audit=false
       - name: Generate iOS native project
         run: npx expo prebuild --platform ios --no-install --clean
+      - name: Cache CocoaPods dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-${{ runner.arch }}-pods-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app), format('src/mobile/{0}/ios/Podfile', matrix.app)) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-pods-${{ matrix.app }}-
       - name: Install CocoaPods dependencies
         run: pod install --project-directory=ios
       - name: Compile unsigned iOS Simulator app
@@ -191,6 +351,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            ARCHS="$(uname -m)" \
+            ONLY_ACTIVE_ARCH=YES \
             build
           APP_BUNDLE="$(find "$DERIVED_DATA/Build/Products/Release-iphonesimulator" -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_BUNDLE"
