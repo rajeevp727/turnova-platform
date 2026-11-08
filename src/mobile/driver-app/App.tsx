@@ -318,8 +318,8 @@ export default function App() {
             const state = await reconcileServerAvailability(() => mounted);
             if (state.shouldRetryLocation) scheduleRefresh();
           } catch (recoveryError) {
+            // Fail closed: do not publish another GPS fix until both authoritative reads succeed.
             if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
-            scheduleRefresh();
           }
         } else {
           setError(e instanceof Error ? e.message : "Unable to update availability location.");
@@ -367,8 +367,8 @@ export default function App() {
             const state = await reconcileServerAvailability(() => mounted);
             if (state.shouldRetryLocation) scheduleRefresh();
           } catch (recoveryError) {
+            // Fail closed: do not publish another GPS fix until both authoritative reads succeed.
             if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
-            scheduleRefresh();
           }
         } else if (mounted) {
           setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
