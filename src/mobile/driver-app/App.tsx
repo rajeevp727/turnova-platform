@@ -16,7 +16,7 @@ import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStored
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
-import { findActiveRide } from "../shared/rideRecovery";
+import { applyRideStatusUpdate, findActiveRide } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
 
@@ -529,6 +529,11 @@ export default function App() {
           if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh fare agreement.");
         });
     };
+    connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
+      if (!mounted || update.rideId !== activeRide.rideId) return;
+      setActiveRide(current => applyRideStatusUpdate(current, update));
+      setDriverRideHistory(current => current.map(ride => applyRideStatusUpdate(ride, update)));
+    });
     connection.on("RideAgreementChanged", refreshAgreement);
     connection.onreconnected(() => refreshAgreement());
     void startSignalRConnection(connection, () => mounted, () => {
@@ -539,7 +544,7 @@ export default function App() {
         refreshAgreement();
       }
     });
-    return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
+    return () => { mounted = false; connection.off("RideStatusChanged"); connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
   }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
