@@ -974,9 +974,9 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-009 | Rider requests a known ride-state explanation | Exact approved in-repository state explanation is returned; no ride state is changed | Unit + API | P0 |
 | AI-010 | Rider/Driver asks approved product help | Provider may select only an approved source ID; API returns the exact in-repository answer | Unit + API | P0 |
 | AI-011 | Question is unsupported or provider source ID is unknown | Safe escalation response is returned; no policy, fare, ETA or support SLA is fabricated | Unit + API | P0 |
-| AI-012 | Driver calls Rider trip-intent endpoint | HTTP 403; only Rider role may request a trip draft | API security | P0 |
-| AI-013 | Rider or Driver calls help endpoint | Authenticated Rider and Driver succeed; unauthenticated callers receive 401 | API security | P0 |
-| AI-014 | Caller exceeds assistance request limit | Further requests receive HTTP 429 within that caller's rate-limit partition | API abuse control | P1 |
+| AI-012 | Driver calls Rider trip-intent endpoint | HTTP 403; Rider succeeds, Driver is forbidden and anonymous caller receives 401. Covered by `TripIntentRequiresRiderAndReturnsMissingPassengerCountForManualCompletion` | API integration security | P0 |
+| AI-013 | Rider or Driver calls help endpoint | Authenticated Rider and Driver succeed; unauthenticated callers receive 401. Covered by `ApprovedHelpEndpointAllowsRiderAndDriverButRejectsAnonymousCaller` | API integration security | P0 |
+| AI-014 | Caller exceeds assistance request limit | Further requests receive HTTP 429 within that authenticated subject's rate-limit partition; another subject retains its independent quota. Covered by `AssistantRateLimitIsPartitionedByAuthenticatedSubject` | API integration abuse control | P1 |
 | AI-015 | Prompt/log privacy review | Precise route, identity/KYC, phone/email, payment details, tokens and private chat are not sent to provider or written to logs | Security review | P0 |
 | AI-016 | AI output attempts to set fare, approve KYC, rank drivers or change ride state | Contract exposes none of these operations; only a human-reviewed draft or approved help source can be returned | Architecture + tests | P0 |
 | AI-017 | Rider/Driver asks what queue status means | Approved answer states Rider discovery is not FIFO-ranked or auto-assigned and leaves the internal FIFO role unresolved | Unit | P0 |
