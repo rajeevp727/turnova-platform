@@ -1789,6 +1789,55 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderDiscoveryExcludesLocationWithStaleCaptureEvenWhenServerReceiptIsFresh()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-stale-capture-discovery");
+        const string driverId = "driver-stale-capture-discovery";
+        SeedBookableDriver(factory, driverId, "union-stale-capture-discovery");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var receivedAt = DateTimeOffset.UtcNow;
+        profiles[driverId] = profiles[driverId] with
+        {
+            LocationUpdatedAtUtc = receivedAt,
+            LocationCapturedAtUtc = receivedAt.AddMinutes(-3)
+        };
+
+        using var response = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Empty(json.RootElement.GetProperty("unions").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task SelectedBookingRejectsStaleCaptureEvenWhenServerReceiptIsFresh()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "rider-stale-capture-booking");
+        const string driverId = "driver-stale-capture-booking";
+        const string unionId = "union-stale-capture-booking";
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var receivedAt = DateTimeOffset.UtcNow;
+        profiles[driverId] = profiles[driverId] with
+        {
+            LocationUpdatedAtUtc = receivedAt,
+            LocationCapturedAtUtc = receivedAt.AddMinutes(-3)
+        };
+
+        using var request = CreateSelectedBookingRequest(
+            "stale-capture-booking-key", driverId, unionId, "KPHB", "HITEC City", []);
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>().GetActiveAsync(driverId));
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+    }
+
+    [Fact]
     public async Task RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency()
     {
         using var factory = new TurnOvaApiFactory();
