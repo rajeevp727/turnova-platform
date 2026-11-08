@@ -15,7 +15,7 @@
 - Explicit production build-number auto-increment configuration.
 - A configured HTTPS production API base URL; the URL itself is not copied into the report.
 
-The mobile CI jobs upload one machine-readable `release-readiness.json` report per app. Structural configuration errors fail CI. Missing product/release credentials and physical/store acceptance are reported as external gates; they are not silently treated as passed or used to block ordinary engineering CI.
+The mobile CI jobs upload one machine-readable `release-readiness.json` report per app. The API check reads only `EXPO_PUBLIC_API_BASE_URL` available to that GitHub job; it does not query EAS's remote environment store. A missing value therefore means the production URL is not verified by this CI run, not proof that an EAS remote value is absent. Structural configuration errors fail CI. Missing product/release credentials and physical/store acceptance are reported as external gates; they are not silently treated as passed or used to block ordinary engineering CI.
 
 ## Current checked-in configuration
 
@@ -25,7 +25,7 @@ The mobile CI jobs upload one machine-readable `release-readiness.json` report p
 | Android package | `com.turnova.rider` | `com.turnova.driver` |
 | iOS bundle identifier | Not configured | Not configured |
 | EAS project ID | Not configured | Not configured |
-| Production API base URL | `.env.example` placeholder only; no EAS production value | `.env.example` placeholder only; no EAS production value |
+| Production API base URL | `.env.example` placeholder; EAS remote value not verifiable from GitHub CI | `.env.example` placeholder; EAS remote value not verifiable from GitHub CI |
 | Production Android profile | App Bundle | App Bundle |
 | Production iOS profile | Store distribution | Store distribution |
 | Production auto-increment | Not configured | Not configured |
@@ -37,7 +37,7 @@ The current CI artifacts are Android debug APKs and unsigned iOS Simulator `.app
 | Gate | Owner | Required input/evidence |
 |---|---|---|
 | Final iOS bundle identifiers | Product / App Owner | Approved reverse-DNS identifiers registered with Apple for Rider and Driver |
-| Production API base URL | Platform / Infrastructure | Approved HTTPS API endpoint configured as an EAS production environment variable; TLS, production CORS origins and health/readiness verified |
+| Production API base URL | Platform / Infrastructure | Approved HTTPS API endpoint configured as an EAS production environment variable; verify via a production-profile build, TLS, production CORS origins and health/readiness |
 | EAS project linkage | Release Engineering | Approved EAS project IDs linked to both apps |
 | Build-number strategy | Release Engineering | Approved local/remote version source and automatic increment policy |
 | Android signing | Release Owner | Upload keystore and signing configuration stored in EAS secure credentials, never in Git |

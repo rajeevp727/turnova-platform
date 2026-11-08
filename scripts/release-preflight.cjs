@@ -67,9 +67,19 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
     if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0) return false;
     try {
       const parsed = new URL(apiBaseUrl);
-      return parsed.protocol === "https:" && parsed.hostname.length > 0 &&
-        !parsed.hostname.includes("<") && !parsed.hostname.includes(">") &&
-        parsed.username.length === 0 && parsed.password.length === 0;
+      const host = parsed.hostname.toLowerCase();
+      const ipv4 = host.split(".").map(part => /^\d+$/.test(part) ? Number(part) : NaN);
+      const privateIpv4 = ipv4.length === 4 && ipv4.every(part => Number.isInteger(part) && part >= 0 && part <= 255) &&
+        (ipv4[0] === 10 || ipv4[0] === 127 ||
+          (ipv4[0] === 192 && ipv4[1] === 168) ||
+          (ipv4[0] === 172 && ipv4[1] >= 16 && ipv4[1] <= 31) ||
+          (ipv4[0] === 169 && ipv4[1] === 254));
+      const localHost = host === "localhost" || host.endsWith(".localhost") ||
+        host === "10.0.2.2" || host === "0.0.0.0" || host === "[::1]" || privateIpv4;
+      return parsed.protocol === "https:" && host.length > 0 && !localHost &&
+        !host.includes("<") && !host.includes(">") &&
+        parsed.username.length === 0 && parsed.password.length === 0 &&
+        parsed.search.length === 0 && parsed.hash.length === 0;
     } catch {
       return false;
     }

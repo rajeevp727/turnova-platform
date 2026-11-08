@@ -132,10 +132,27 @@ test("missing or non-HTTPS production API endpoints remain explicit release gate
   const missing = validateReleaseConfig(fixture());
   const emulator = validateReleaseConfig(fixture({ apiBaseUrl: "http://10.0.2.2:5000" }));
   const placeholder = validateReleaseConfig(fixture({ apiBaseUrl: "https://<TURNOVA_API_HOST>" }));
+  const loopback = validateReleaseConfig(fixture({ apiBaseUrl: "https://localhost:5000" }));
+  const queryCredential = validateReleaseConfig(fixture({ apiBaseUrl: "https://api.turnova.example.com?token=unsafe" }));
 
-  for (const report of [missing, emulator, placeholder]) {
+  for (const report of [missing, emulator, placeholder, loopback, queryCredential]) {
     assert.equal(report.app.productionApiBaseUrlConfigured, false);
     assert.ok(report.externalGates.some(item => item.id === "production-api-base-url"));
     assert.equal(report.productionBuildConfigurationComplete, false);
   }
+});
+
+test("Driver app identity and established Android package pass the same preflight contract", () => {
+  const input = fixture();
+  input.appDirectory = path.resolve("/fixture/turnova-driver");
+  input.appJson.expo.slug = "turnova-driver";
+  input.appJson.expo.name = "TurnOva Driver";
+  input.appJson.expo.android.package = "com.turnova.driver";
+  input.available.clear();
+  input.available.add(path.resolve(input.appDirectory, "assets/icon.png"));
+  input.available.add(path.resolve(input.appDirectory, "assets/adaptive-icon.png"));
+  const report = validateReleaseConfig(input);
+  assert.equal(report.app.slug, "turnova-driver");
+  assert.equal(report.app.androidPackage, "com.turnova.driver");
+  assert.equal(report.engineeringChecks.status, "passed");
 });
