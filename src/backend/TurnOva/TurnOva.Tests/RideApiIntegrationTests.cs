@@ -3053,8 +3053,10 @@ public sealed class RideApiIntegrationTests
         using var riderRideResponse = await rider.GetAsync($"/api/v1/rides/{rideId}");
         Assert.Equal(HttpStatusCode.OK, riderRideResponse.StatusCode);
         using var riderRideJson = JsonDocument.Parse(await riderRideResponse.Content.ReadAsStringAsync());
-        Assert.Equal(17.495, riderRideJson.RootElement.GetProperty("driverLatitude").GetDouble(), 6);
-        Assert.Equal(78.401, riderRideJson.RootElement.GetProperty("driverLongitude").GetDouble(), 6);
+        Assert.Equal(17.496, riderRideJson.RootElement.GetProperty("driverLatitude").GetDouble(), 6);
+        Assert.Equal(78.402, riderRideJson.RootElement.GetProperty("driverLongitude").GetDouble(), 6);
+        Assert.Equal(newerCapture,
+            riderRideJson.RootElement.GetProperty("driverLocationCapturedAtUtc").GetDateTimeOffset());
 
         Assert.Equal(HttpStatusCode.OK,
             (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);
