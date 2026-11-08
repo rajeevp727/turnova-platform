@@ -35,14 +35,12 @@ public sealed record HelpResponse(string Answer, string SourceId, bool Escalatio
 public sealed record SafeTripIntentPrompt(
     string IntentSummary,
     string PickupToken,
-    string DropoffToken,
-    int? PassengerCount);
+    string DropoffToken);
 
 public sealed record TripIntentProviderResult(
     string? PickupToken,
     string? DropoffToken,
-    string? ServiceClass,
-    int? PassengerCount);
+    string? ServiceClass);
 
 public sealed record SafeHelpPrompt(
     IReadOnlyList<string> AllowedKeywords,
@@ -96,13 +94,11 @@ public sealed class AiAssistanceService
         @"[a-z]+|\d+",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    // Only generic trip-action words may leave the API. Passenger counts, family/child
+    // context, accessibility/health details, luggage and location-type hints stay local.
     private static readonly HashSet<string> SafeIntentWords = new(StringComparer.OrdinalIgnoreCase)
     {
-        "a", "are", "airport", "bags", "book", "cab", "child", "family", "for",
-        "from", "get", "help", "luggage", "need", "now", "of", "one", "passenger",
-        "passengers", "people", "person", "please", "ride", "seat", "station",
-        "taxi", "to", "today", "tomorrow", "train", "trip", "two", "three",
-        "four", "five", "six", "we", "wheelchair", "with", "accessible"
+        "book", "cab", "get", "help", "need", "please", "ride", "taxi", "trip"
     };
 
     private static readonly HashSet<string> SafeHelpWords = new(StringComparer.OrdinalIgnoreCase)
@@ -201,24 +197,22 @@ public sealed class AiAssistanceService
         var missingFields = new List<string>();
         if (pickup is null) missingFields.Add("pickup");
         if (dropoff is null) missingFields.Add("dropoff");
-        if (invalidPassengerCount) missingFields.Add("passengerCount");
+        if (explicitPassengerCount is null || invalidPassengerCount)
+            missingFields.Add("passengerCount");
 
         var source = "deterministic-fallback";
-        int? passengerCount = invalidPassengerCount ? null : explicitPassengerCount ?? 1;
+        int? passengerCount = invalidPassengerCount ? null : explicitPassengerCount;
 
         if (pickup is not null && dropoff is not null && !invalidPassengerCount &&
             _options.Enabled && _provider.IsAvailable)
         {
-            var prompt = BuildSafeTripPrompt(normalized, routeMatch, explicitPassengerCount);
+            var prompt = BuildSafeTripPrompt(normalized, routeMatch);
             var providerResult = await InvokeProviderAsync(
                 ct => _provider.DraftTripIntentAsync(prompt, ct),
                 cancellationToken);
 
-            if (IsValidProviderTripResult(providerResult, explicitPassengerCount))
-            {
-                passengerCount = explicitPassengerCount ?? 1;
+            if (IsValidProviderTripResult(providerResult))
                 source = "provider";
-            }
         }
 
         return new TripIntentDraftResponse(
@@ -320,32 +314,26 @@ public sealed class AiAssistanceService
             : (null, true);
     }
 
-    private static SafeTripIntentPrompt BuildSafeTripPrompt(
-        string text,
-        Match routeMatch,
-        int? explicitPassengerCount)
+    private static SafeTripIntentPrompt BuildSafeTripPrompt(string text, Match routeMatch)
     {
         // Remove the complete pickup-to-drop-off span before building the provider prompt.
-        // Only an allow-list of generic intent words is retained; addresses, names, phone
-        // numbers, email addresses, tokens and all other free text are never forwarded.
+        // Only generic action words are retained. Passenger counts and family, child,
+        // accessibility/health, luggage, location-type and arbitrary free-text details stay local.
         var remainder = text.Remove(routeMatch.Index, routeMatch.Length);
         var safeWords = SafeTokenPattern.Matches(remainder)
             .Select(match => match.Value)
             .Where(SafeIntentWords.Contains)
-            .Take(20);
-        var countText = explicitPassengerCount?.ToString() ?? "unspecified";
-        var summary = $"Cab trip; pickup {PickupToken}; destination {DropoffToken}; {string.Join(' ', safeWords)}; passenger count {countText}.";
+            .Take(12);
+        var summary = $"Cab trip; pickup {PickupToken}; destination {DropoffToken}; {string.Join(' ', safeWords)}.";
 
-        return new SafeTripIntentPrompt(summary, PickupToken, DropoffToken, explicitPassengerCount);
+        return new SafeTripIntentPrompt(summary, PickupToken, DropoffToken);
     }
 
-    private static bool IsValidProviderTripResult(TripIntentProviderResult? result, int? explicitPassengerCount) =>
+    private static bool IsValidProviderTripResult(TripIntentProviderResult? result) =>
         result is not null &&
         string.Equals(result.PickupToken, PickupToken, StringComparison.Ordinal) &&
         string.Equals(result.DropoffToken, DropoffToken, StringComparison.Ordinal) &&
-        string.Equals(result.ServiceClass, "Cab", StringComparison.OrdinalIgnoreCase) &&
-        (result.PassengerCount is null or >= 1 and <= 6) &&
-        (result.PassengerCount is null || (explicitPassengerCount.HasValue && result.PassengerCount == explicitPassengerCount));
+        string.Equals(result.ServiceClass, "Cab", StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlyList<string> ExtractSafeHelpKeywords(string question) =>
         SafeTokenPattern.Matches(question.ToLowerInvariant())

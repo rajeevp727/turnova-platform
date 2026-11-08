@@ -3,10 +3,10 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-09  
+**Last verified:** 2026-11-09 02:31 IST  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `90f12c6ed87984e9574bc0337dbc71d2a7125dea` after PLATFORM-01 PR #121 merged. PR #121 exact-head CI [42511781621](https://github.com/rajeevp727/turnova-platform/actions/runs/42511781621) passed 8/8 jobs; main post-merge CI [42513077058](https://github.com/rajeevp727/turnova-platform/actions/runs/42513077058) is still running. Current sequential item #19 RELEASE-01 is on sole active PR [#122](https://github.com/rajeevp727/turnova-platform/pull/122), branch `feat/release-01-preflight-report`, head `c3d58d3d9ce0ae18cb21626f070e4f5ddfca5be0`. Strict acceptance remains 0/19; 15 In Progress and 4 Blocked. No live Cosmos, physical-device or production-signing validation is claimed.
+**Last audited main HEAD:** `c080e7770977feef07de46e9b67de6e70ecc627e` after RELEASE-01 PR #122 merged. PR #122 exact-head CI [42519436774](https://github.com/rajeevp727/turnova-platform/actions/runs/42519436774) passed 8/8 jobs; main post-merge CI [42523135354](https://github.com/rajeevp727/turnova-platform/actions/runs/42523135354) remains in progress at last poll. Current engineering follow-up is AI-01 supplemental passenger-count/privacy hardening on PR [#123](https://github.com/rajeevp727/turnova-platform/pull/123), branch `fix/ai-01-no-inferred-passenger-count` (outside the 19-row denominator). It includes deterministic backend service tests, endpoint role/rate-limit integration tests and shared Rider passenger-input tests. COMMENT-only review [5819672810](https://github.com/rajeevp727/turnova-platform/pull/123) found no unresolved critical/high-risk issue; exact-head CI pending. Strict acceptance remains 0/19; 15 In Progress and 4 Blocked. No live Cosmos, physical-device or signed-production validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -860,3 +860,8 @@ Dispatch exception event IDs are deterministic from the server-generated trace I
 - Release-preflight schema-v2 tests assert that CI-visible configuration remains distinct from external approval gates and reserved example domains are rejected.
 
 - A CI failure in RELEASE-01 exposed a placeholder bundle-ID validation escape caused by an over-escaped regex; the check now uses explicit normalized string comparisons and has exact/subdomain placeholder fixtures.
+
+
+### AI-01 passenger-count and provider-privacy correction
+
+The baseline AI-01 implementation silently defaulted an omitted passenger count to one and included passenger count in the provider prompt contract. The current follow-up keeps passenger count local, returns it as missing for manual completion, removes family/child/accessibility and other sensitive intent tokens from the provider allow-list, and clears the Rider form's stale default so discovery/booking are blocked until explicit 1–6 entry. Branch: `fix/ai-01-no-inferred-passenger-count`. New `AiAssistanceApiIntegrationTests` role/rate-limit integration tests, shared mobile helper tests and Rider typecheck/build are pending exact-head CI. AI-01 remains supplemental and outside the 19-area denominator.
