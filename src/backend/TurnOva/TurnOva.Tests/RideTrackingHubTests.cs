@@ -64,6 +64,25 @@ public sealed class RideTrackingHubTests
         Assert.Equal("connection-1", riderGroup.ConnectionId);
         Assert.Equal("ride-1", riderGroup.GroupName);
 
+        var assignedDriverContext = CreateHubContext(CreatePrincipal("driver-1", "Driver"), "?rideId=ride-1");
+        var assignedDriverGroups = new RecordingGroupManager();
+        var assignedDriverHub = CreateHub(rides, assignedDriverContext, assignedDriverGroups);
+
+        await assignedDriverHub.OnConnectedAsync();
+
+        Assert.False(assignedDriverContext.IsAborted);
+        var assignedDriverGroup = Assert.Single(assignedDriverGroups.Added);
+        Assert.Equal("ride-1", assignedDriverGroup.GroupName);
+
+        var otherDriverContext = CreateHubContext(CreatePrincipal("other-driver", "Driver"), "?rideId=ride-1");
+        var otherDriverGroups = new RecordingGroupManager();
+        var otherDriverHub = CreateHub(rides, otherDriverContext, otherDriverGroups);
+
+        await otherDriverHub.OnConnectedAsync();
+
+        Assert.True(otherDriverContext.IsAborted);
+        Assert.Empty(otherDriverGroups.Added);
+
         var otherContext = CreateHubContext(CreatePrincipal("other-rider", "Rider"), "?rideId=ride-1");
         var otherGroups = new RecordingGroupManager();
         var otherHub = CreateHub(rides, otherContext, otherGroups);
