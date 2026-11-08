@@ -1,6 +1,7 @@
 using PdfSharpCore.Drawing;
 using PdfSharpCore.Fonts;
 using PdfSharpCore.Pdf.IO;
+using PdfSharpCore.Pdf.IO.enums;
 
 namespace TurnOva.API;
 
