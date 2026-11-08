@@ -24,6 +24,24 @@ public sealed class DriverPayslipPdfTests
     }
 
     [Fact]
+    public async Task GenerateUsesRequestIsolatedShapersWhenMultiplePayslipsRenderConcurrently()
+    {
+        var payslip = CreatePayslip("Raja రాజా தமிழ் ಕನ್ನಡ മലയാളം", "Union हिंदी বাংলা");
+        var renders = Enumerable.Range(0, 4)
+            .Select(_ => Task.Run(() => DriverPayslipPdf.Generate(payslip)))
+            .ToArray();
+
+        var documents = await Task.WhenAll(renders);
+
+        Assert.All(documents, pdf =>
+        {
+            var content = Encoding.Latin1.GetString(pdf);
+            Assert.StartsWith("%PDF-", content, StringComparison.Ordinal);
+            Assert.Contains("/ToUnicode", content, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
     public void GenerateFailsClosedForAnUnbundledScriptInsteadOfReplacingCharacters()
     {
         var payslip = CreatePayslip("Driver محمد", "Union One");
