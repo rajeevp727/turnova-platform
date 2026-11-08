@@ -103,6 +103,61 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task AuthenticatedDriverAcceptQueueReadFailurePersistsSafeExceptionAuditAndReturnsGeneric500()
+    {
+        const string driverId = "dispatch-audit-driver";
+        var queueStore = new QueueReadFailureStore(new InMemoryQueueStore());
+        using var factory = new TurnOvaApiFactory(queueStore: queueStore);
+        using var rider = factory.CreateClient("Rider", "dispatch-audit-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        await EnqueueLegacyDriverAsync(factory, driverId);
+        using var createRide = await rider.SendAsync(CreateRideRequest("dispatch-audit-ride"));
+        Assert.Equal(HttpStatusCode.Created, createRide.StatusCode);
+        var ride = await ReadRideAsync(createRide);
+
+        using var unauthorizedAttempt = await rider.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
+        Assert.Equal(HttpStatusCode.Forbidden, unauthorizedAttempt.StatusCode);
+        Assert.Empty((await queueStore.GetAuditEventsAsync(
+            "hyderabad-central", "cab", CancellationToken.None))
+            .Where(item => item.EventType == QueueAuditEventTypes.DispatchException));
+
+        queueStore.FailNextRead();
+        using var response = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Contains("An unexpected error occurred.", body);
+        Assert.DoesNotContain("sensitive-queue-read-failure", body);
+        using var problem = JsonDocument.Parse(body);
+        var traceId = problem.RootElement.GetProperty("traceId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(traceId));
+
+        var auditEvents = await queueStore.GetAuditEventsAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        var audit = Assert.Single(auditEvents.Where(item =>
+            item.EventType == QueueAuditEventTypes.DispatchException));
+        Assert.Equal("hyderabad-central|cab", audit.ZoneServiceKey);
+        Assert.Equal(driverId, audit.DriverId);
+        Assert.Equal(traceId, audit.TraceId);
+        Assert.Equal(QueueAuditReasonCategories.QueueReadFailed, audit.ReasonCategory);
+        Assert.Equal(TimeSpan.Zero, audit.OccurredAtUtc.Offset);
+        Assert.Null(audit.OfferId);
+
+        var unchangedRide = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[ride.RideId];
+        Assert.Equal("Requested", unchangedRide.Status);
+
+        var auditJson = JsonSerializer.Serialize(audit, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("sensitive-queue-read-failure", auditJson);
+        foreach (var forbiddenField in new[]
+        {
+            "exceptionMessage", "requestBody", "token", "phone", "email",
+            "latitude", "longitude", "pickup", "dropoff", "fare"
+        })
+            Assert.DoesNotContain(forbiddenField, auditJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task DriverMustSubmitOnboardingAndBeApprovedBeforeJoiningQueue()
     {
         using var factory = new TurnOvaApiFactory();
@@ -4940,6 +4995,46 @@ public sealed class RideApiIntegrationTests
         }
     }
 
+    private sealed class QueueReadFailureStore(IQueueStore inner) : IQueueStore
+    {
+        private int _failNextRead;
+
+        public void FailNextRead() => Interlocked.Exchange(ref _failNextRead, 1);
+
+        public Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
+            string zoneId, string serviceClass, CancellationToken cancellationToken)
+        {
+            if (Interlocked.Exchange(ref _failNextRead, 0) == 1)
+                throw new InvalidOperationException("sensitive-queue-read-failure");
+            return inner.GetEligibleAsync(zoneId, serviceClass, cancellationToken);
+        }
+
+        public Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken) =>
+            inner.AddAsync(entry, cancellationToken);
+
+        public Task<bool> RemoveAsync(
+            string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken) =>
+            inner.RemoveAsync(driverId, zoneId, serviceClass, cancellationToken);
+
+        public Task<bool> MoveToBackAsync(
+            string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken) =>
+            inner.MoveToBackAsync(driverId, zoneId, serviceClass, cancellationToken);
+
+        public Task<bool> MoveToBackOnceAsync(
+            string driverId, string zoneId, string serviceClass, string offerId, CancellationToken cancellationToken) =>
+            inner.MoveToBackOnceAsync(driverId, zoneId, serviceClass, offerId, cancellationToken);
+
+        public Task RecordDispatchExceptionAsync(
+            string actorId, string zoneId, string serviceClass, string traceId, string reasonCategory,
+            CancellationToken cancellationToken) =>
+            inner.RecordDispatchExceptionAsync(
+                actorId, zoneId, serviceClass, traceId, reasonCategory, cancellationToken);
+
+        public Task<IReadOnlyList<QueueAuditEvent>> GetAuditEventsAsync(
+            string zoneId, string serviceClass, CancellationToken cancellationToken) =>
+            inner.GetAuditEventsAsync(zoneId, serviceClass, cancellationToken);
+    }
+
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
@@ -4950,11 +5045,13 @@ public sealed class RideApiIntegrationTests
         private readonly bool _storageReadinessUnavailable;
         private readonly IRideOfferAdvancer? _rideOfferAdvancer;
         private readonly IReadOnlyList<DispatchZoneConfig>? _dispatchZones;
+        private readonly IQueueStore? _queueStore;
 
         public TurnOvaApiFactory(bool legacyFifoRiderRequestsEnabled = true, double? nearbyRadiusKm = 10,
             int? selectedDriverNegotiationLifetimeMinutes = 15, bool storageReadinessUnavailable = false,
             int? nearbyLocationMaxAgeSeconds = 120, IRideOfferAdvancer? rideOfferAdvancer = null,
-            IReadOnlyList<DispatchZoneConfig>? dispatchZones = null)
+            IReadOnlyList<DispatchZoneConfig>? dispatchZones = null,
+            IQueueStore? queueStore = null)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
@@ -4963,6 +5060,7 @@ public sealed class RideApiIntegrationTests
             _storageReadinessUnavailable = storageReadinessUnavailable;
             _rideOfferAdvancer = rideOfferAdvancer;
             _dispatchZones = dispatchZones;
+            _queueStore = queueStore;
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -5006,10 +5104,17 @@ public sealed class RideApiIntegrationTests
             });
 
             var rideOfferAdvancer = _rideOfferAdvancer;
-            if (_storageReadinessUnavailable || rideOfferAdvancer is not null)
+            var queueStore = _queueStore;
+            if (_storageReadinessUnavailable || rideOfferAdvancer is not null || queueStore is not null)
             {
                 builder.ConfigureTestServices(services =>
                 {
+                    if (queueStore is not null)
+                    {
+                        services.RemoveAll<IQueueStore>();
+                        services.AddSingleton<IQueueStore>(queueStore);
+                    }
+
                     if (_storageReadinessUnavailable)
                     {
                         services.RemoveAll<StorageReadinessProbe>();
