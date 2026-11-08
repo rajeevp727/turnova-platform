@@ -379,23 +379,15 @@ public static class DriverPayslipPdf
 
         private readonly Dictionary<FontScript, FontFace> _faces = new();
 
-        public FontCatalog()
+        public FontFace Get(FontScript script)
         {
-            try
-            {
-                foreach (var pair in SharedTypefaces.Value)
-                    _faces.Add(pair.Key, new FontFace(pair.Value));
-            }
-            catch
-            {
-                foreach (var face in _faces.Values)
-                    face.Dispose();
-                _faces.Clear();
-                throw;
-            }
-        }
+            if (_faces.TryGetValue(script, out var face))
+                return face;
 
-        public FontFace Get(FontScript script) => _faces[script];
+            face = new FontFace(SharedTypefaces.Value[script]);
+            _faces.Add(script, face);
+            return face;
+        }
 
         public IEnumerable<ScriptRun> SplitRuns(string text)
         {
