@@ -1,4 +1,4 @@
-const DRIVER_PAYSLIP_FILENAME = /^TurnOva-Payslip-\\d{4}-(?:0[1-9]|1[0-2])\\.pdf$/;
+const DRIVER_PAYSLIP_FILENAME = /^TurnOva-Payslip-\d{4}-(?:0[1-9]|1[0-2])\.pdf$/;
 
 function isManagedDriverPayslipUri(fileSystem, uri) {
   const directory = fileSystem?.cacheDirectory;
@@ -9,7 +9,7 @@ function isManagedDriverPayslipUri(fileSystem, uri) {
   const filename = uri.slice(directory.length);
   return filename.length > 0 &&
     !filename.includes("/") &&
-    !filename.includes("\\\\") &&
+    !filename.includes("\\") &&
     DRIVER_PAYSLIP_FILENAME.test(filename);
 }
 
@@ -34,7 +34,7 @@ async function clearCachedDriverPayslips(fileSystem) {
 
   const managed = entries.filter(name => DRIVER_PAYSLIP_FILENAME.test(name));
   const results = await Promise.allSettled(
-    managed.map(name => fileSystem.deleteAsync(`${directory}${name}`, { idempotent: true }))
+    managed.map(name => fileSystem.deleteAsync(directory + name, { idempotent: true }))
   );
   return {
     removed: results.filter(result => result.status === "fulfilled").length,
