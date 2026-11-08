@@ -9,6 +9,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using UglyToad.PdfPig;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -1496,6 +1497,23 @@ public sealed class RideApiIntegrationTests
         Assert.StartsWith("%PDF-1.4", pdfHeader);
         Assert.EndsWith("%%EOF", pdfHeader.TrimEnd());
         Assert.True(pdfBytes.Length > 5_000);
+        using (var pdfStream = new MemoryStream(pdfBytes))
+        using (var document = PdfDocument.Open(pdfStream))
+        {
+            var extracted = string.Join("\\n", document.GetPages().Select(page => page.Text));
+            Assert.Contains("Central Drivers Union", extracted, StringComparison.Ordinal);
+            Assert.Contains("Total days worked: 2", extracted, StringComparison.Ordinal);
+            Assert.Contains("Rides accepted: 2", extracted, StringComparison.Ordinal);
+            Assert.Contains("Rides completed: 2", extracted, StringComparison.Ordinal);
+            Assert.Contains("Rides rejected: 1", extracted, StringComparison.Ordinal);
+            Assert.DoesNotContain("ride-1", extracted, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("ride-2", extracted, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Customer:", extracted, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Fare:", extracted, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Net payable:", extracted, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("₹", extracted, StringComparison.Ordinal);
+            Assert.DoesNotContain("INR", extracted, StringComparison.Ordinal);
+        }
         var snapshots = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
         var snapshot = Assert.Single(snapshots.Values, item =>
             item.DriverId == "driver-payslip-pdf" && item.Year == 2026 && item.Month == 10);
