@@ -37,14 +37,20 @@ function shouldApplyTripLocationUpdate(current, update) {
       update.rideId !== current.rideId ||
       !areValidCoordinates(update.latitude, update.longitude)) return false;
 
-  const incomingCapture = parseUtcTimestamp(update.locationCapturedAtUtc);
+  const hasCaptureValue = update.locationCapturedAtUtc !== undefined &&
+    update.locationCapturedAtUtc !== null;
   const currentCapture = parseUtcTimestamp(current.locationCapturedAtUtc);
-  if (incomingCapture !== null) {
+  if (hasCaptureValue) {
+    const incomingCapture = parseUtcTimestamp(update.locationCapturedAtUtc);
+    if (incomingCapture === null) return false;
     // Never compare a GPS capture timestamp with a legacy server-receipt timestamp.
     // The first capture watermark is accepted when upgrading a legacy ride snapshot.
     return currentCapture === null || incomingCapture > currentCapture;
   }
 
+  // Once a capture watermark exists, do not let an event from an older API instance
+  // (which cannot emit capture time) downgrade the current snapshot to receipt ordering.
+  if (currentCapture !== null) return false;
   const incomingReceipt = parseUtcTimestamp(update.locationUpdatedAt);
   const currentReceipt = parseUtcTimestamp(current.locationUpdatedAt);
   return incomingReceipt !== null &&
