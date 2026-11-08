@@ -79,14 +79,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
-      - name: Cache installed npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: src/mobile/${{ matrix.app }}/node_modules
-          key: ${{ runner.os }}-${{ runner.arch }}-node-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app)) }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node-${{ matrix.app }}-
-      - run: npm install --prefer-offline --no-audit --no-fund
+
+      - run: npm install --prefer-offline --no-fund
       - run: npx expo config --type public
       - run: npm run typecheck
       - name: Verify Metro can see shared mobile modules
@@ -128,14 +122,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Cache installed npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: src/mobile/${{ matrix.app }}/node_modules
-          key: ${{ runner.os }}-${{ runner.arch }}-node-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app)) }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node-${{ matrix.app }}-
-      - run: npm install --prefer-offline --no-audit --no-fund
+
+      - run: npm install --prefer-offline --no-fund
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
       - name: Cache Gradle dependencies
@@ -242,22 +230,14 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
-      - name: Cache installed npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: src/mobile/${{ matrix.app }}/node_modules
-          key: ${{ runner.os }}-${{ runner.arch }}-node-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app)) }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node-${{ matrix.app }}-
-      - run: npm install --prefer-offline --no-audit --no-fund
+
+      - run: npm install --prefer-offline --no-fund
       - name: Generate iOS native project
         run: npx expo prebuild --platform ios --no-install --clean
       - name: Cache CocoaPods dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/Library/Caches/CocoaPods
-            src/mobile/${{ matrix.app }}/ios/Pods
+          path: ~/Library/Caches/CocoaPods
           key: ${{ runner.os }}-${{ runner.arch }}-pods-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app), format('src/mobile/{0}/ios/Podfile', matrix.app)) }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-pods-${{ matrix.app }}-
