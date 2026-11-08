@@ -302,9 +302,11 @@ public static class DriverPayslipPdf
                 var shaped = face.Shaper.Shape(run.Text, x, baseline, font);
                 EnsureGlyphCoverage(run, shaped.Codepoints);
 
-                // Keep an invisible-on-white Unicode text layer for PDF extraction/search.
-                // The visible run below uses HarfBuzz-positioned glyphs for correct Indic shaping.
-                canvas.DrawText(run.Text, x, baseline, font, searchablePaint);
+                // Keep Latin labels and metrics searchable. Indic runs are rendered as
+                // HarfBuzz-positioned vector glyphs; the Skia PDF backend does not currently
+                // preserve Indic source clusters in its text extraction map.
+                if (run.Script == FontScript.Latin)
+                    canvas.DrawText(run.Text, x, baseline, font, searchablePaint);
 
                 var glyphRun = builder.AllocateRawPositionedRun(font, shaped.Codepoints.Length, null);
                 var glyphs = glyphRun.Glyphs;
