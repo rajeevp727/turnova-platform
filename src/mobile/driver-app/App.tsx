@@ -20,6 +20,7 @@ import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } fr
 import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
+import { clearCachedDriverPayslips, deleteManagedDriverPayslip, writeCachedDriverPayslipIfCurrent } from "../shared/driverPayslipCache";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -163,7 +164,9 @@ export default function App() {
       } catch {
         if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
         sessionEpoch.current += 1;
-        await clearTokens();
+        let tokenCleanupFailed = false;
+        try { await clearTokens(); } catch { tokenCleanupFailed = true; }
+        const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
         setTokens(null);
         setUser(null);
         setActiveRide(null);
@@ -171,7 +174,12 @@ export default function App() {
         setUnionAssignment(null);
         setPaymentReportAmounts({});
         setAvailableRides([]);
-        throw new Error("Session expired. Please sign in again.");
+        const expiryMessage = tokenCleanupFailed
+          ? "Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
+          : cacheCleanup.failed > 0
+            ? "Session expired. Cached payslip cleanup was incomplete; clear app cache before another account signs in."
+            : "Session expired. Please sign in again.";
+        throw new Error(expiryMessage);
       }
       if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
       response = await fetch(`${API}${path}`, {
@@ -195,6 +203,10 @@ export default function App() {
           const restoredUser = requireAppRole<User>(restored.user, "Driver");
           setTokens(restored.tokens);
           setUser(restoredUser);
+        } else if (active) {
+          const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
+          if (active && cacheCleanup.failed > 0)
+            setError("No active session was restored, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");
         }
       } catch {
         if (active) setError("Unable to restore your session. Check your connection or secure storage and retry.");
@@ -206,6 +218,10 @@ export default function App() {
   const authenticate = async (replaceOldest = false) => {
     setLoading(true); setError(""); setNotice("");
     try {
+      const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
+      if (cacheCleanup.failed > 0)
+        throw new Error("Unable to clear payslips from a previous account. Clear the app cache before signing in.");
+      await clearTokens();
       const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
       const result = await jsonRequest(path, {
         method: "POST",
@@ -736,12 +752,13 @@ export default function App() {
   const downloadPayslip = async (year: number, month: number) => {
     if (!tokens) return;
     const requestEpoch = sessionEpoch.current;
+    const isSessionCurrent = () => sessionEpoch.current === requestEpoch;
     setLoading(true); setError(""); setNotice("");
     try {
-      let response = await fetch(`${API}/api/v1/driver/payslips/${year}/${month}.pdf`, {
-        headers: { Authorization: `Bearer ${tokens.accessToken}` }
+      let response = await fetch(API + "/api/v1/driver/payslips/" + year + "/" + month + ".pdf", {
+        headers: { Authorization: "Bearer " + tokens.accessToken }
       });
-      if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
+      if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
       if (response.status === 401) {
         let accessToken: string;
         try {
@@ -752,37 +769,69 @@ export default function App() {
             (refreshToken: string) => refreshSession(refreshToken, requestEpoch)
           );
         } catch {
-          if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
+          if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
           sessionEpoch.current += 1;
-          await clearTokens();
+          let tokenCleanupFailed = false;
+          try { await clearTokens(); } catch { tokenCleanupFailed = true; }
+          const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
           setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
           setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
-          throw new Error("Session expired. Please sign in again.");
+          const expiryMessage = tokenCleanupFailed
+            ? "Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
+            : cacheCleanup.failed > 0
+              ? "Session expired. Cached payslip cleanup was incomplete; clear app cache before another account signs in."
+              : "Session expired. Please sign in again.";
+          setError(expiryMessage);
+          throw new Error(expiryMessage);
         }
-        if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
-        response = await fetch(`${API}/api/v1/driver/payslips/${year}/${month}.pdf`, {
-          headers: { Authorization: `Bearer ${accessToken}` }
+        if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
+        response = await fetch(API + "/api/v1/driver/payslips/" + year + "/" + month + ".pdf", {
+          headers: { Authorization: "Bearer " + accessToken }
         });
-        if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
+        if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
       }
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.message ?? body.title ?? "Payslip is not available yet.");
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
+      if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
       const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join("");
       const base64 = btoa(binary);
-      const filename = `TurnOva-Payslip-${year}-${String(month).padStart(2, "0")}.pdf`;
-      const uri = `${FileSystem.cacheDirectory}${filename}`;
-      await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      const filename = "TurnOva-Payslip-" + year + "-" + String(month).padStart(2, "0") + ".pdf";
+      const cacheDirectory = FileSystem.cacheDirectory;
+      if (!cacheDirectory) throw new Error("Device cache is unavailable for the payslip PDF.");
+      const uri = (cacheDirectory.endsWith("/") ? cacheDirectory : cacheDirectory + "/") + filename;
+      const written = await writeCachedDriverPayslipIfCurrent(
+        FileSystem, uri, base64, isSessionCurrent
+      );
+      if (!written) return;
+      if (!isSessionCurrent()) {
+        await deleteManagedDriverPayslip(FileSystem, uri).catch(() => undefined);
+        return;
+      }
       if (await Sharing.isAvailableAsync()) {
+        if (!isSessionCurrent()) {
+          await deleteManagedDriverPayslip(FileSystem, uri).catch(() => undefined);
+          return;
+        }
         await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: filename });
-        setNotice(`PDF payslip for ${month}/${year} is ready to save or share.`);
+        if (!isSessionCurrent()) {
+          await deleteManagedDriverPayslip(FileSystem, uri).catch(() => undefined);
+          return;
+        }
+        setNotice("PDF payslip for " + month + "/" + year + " is ready to save or share.");
       } else {
-        setNotice(`PDF saved to the app cache: ${filename}`);
+        if (!isSessionCurrent()) {
+          await deleteManagedDriverPayslip(FileSystem, uri).catch(() => undefined);
+          return;
+        }
+        setNotice("PDF saved to the app cache: " + filename);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to download payslip.");
+      if (isSessionCurrent() ||
+          (e instanceof Error && e.message.includes("cached file cleanup failed")))
+        setError(e instanceof Error ? e.message : "Unable to download payslip.");
     } finally {
       setLoading(false);
     }
@@ -903,7 +952,10 @@ export default function App() {
         if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken);
       });
     } catch { setError("Unable to clear secure session storage. Please retry sign-out."); return; }
+    const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
     setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
+    if (cacheCleanup.failed > 0)
+      setError("Signed out, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");
   };
 
   const askHelp = async () => {
