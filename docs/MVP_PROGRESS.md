@@ -455,3 +455,21 @@
 - REALTIME-01 remains In Progress, not Verified: live WebSocket/device-to-device delivery, long-outage reconnect, Android/iOS background/resume and actual device acceptance remain external gates. No live SignalR/device validation is claimed.
 - Next sequential item #11 DRIVER-01: re-audit Driver onboarding, selfie update and Operations document review for stale blind profile upserts. The prior audit found `SaveDriverProfileAsync` calls in selfie update, onboarding submit and document review; existing `TryUpdateDriverProfileAsync` supplies in-memory compare-and-swap and Cosmos ETag retries. Implement safe conditional updates that preserve unrelated latest profile fields and reject changed review-document snapshots; add deterministic race/retry tests. Private document storage/scanning/consent/retention, signed UnionManager/unionId claim issuance, physical Android/iOS camera/document-permission tests, live Cosmos multi-instance/restart and legal partnership approval remain external gates.
 - Completion accounting: engineering implementation/evidence is partial across the matrix and is not represented by a weighted percentage; strict acceptance is 0/19 Verified (15 In Progress, 4 Blocked); production readiness is not established. AI-01 and Cab supplemental criteria remain outside the 19-row denominator.
+
+
+## Latest sequential execution — #11 DRIVER-01 (2026-11-08)
+
+- PR [#115](https://github.com/rajeevp727/turnova-platform/pull/115) merged at `435a62e8dba1c93b630efc7a8e5f02bd93734a94`.
+- Exact final-head CI [42455925931](https://github.com/rajeevp727/turnova-platform/actions/runs/42455925931) passed all 8/8 jobs: 311/311 backend tests, Rider/Driver mobile typechecks and bundles, shared mobile-auth tests, both Android debug APKs and both unsigned iOS Simulator builds.
+- DRIVER-01 removes blind profile writes from onboarding creation/resubmission, selfie replacement and Operations document review. It uses create-if-absent and bounded in-memory/Cosmos ETag conditional updates, preserves unrelated latest profile fields and rejects stale review snapshots.
+- Live Cosmos multi-instance/restart/ETag, private document storage/scanning/consent/retention, signed UnionManager identity claims, legal partnership approval and physical Android/iOS onboarding/camera/document-permission tests remain external gates. DRIVER-01 remains In Progress, not Verified.
+
+## Current sequential execution — #12 DRIVER-02 (2026-11-08)
+
+- Main base: `435a62e8dba1c93b630efc7a8e5f02bd93734a94`. Branch: `fix/driver-02-fence-out-of-order-location`.
+- Audit found that concurrent foreground GPS callbacks could complete out of capture order. The API previously stamped each accepted update with server receipt time, so a delayed older coordinate could overwrite a newer coordinate and appear fresh to Rider discovery.
+- The increment adds optional `LocationCapturedAtUtc` to the Driver profile and `capturedAtUtc` to availability/location requests. The Driver app sends Expo GPS capture timestamps for Online, foreground refresh and watcher updates. The API rejects future timestamps beyond one minute and rejects capture timestamps that do not advance the stored watermark, including both in-zone and zone-exit CAS paths. Server receipt time remains separate for freshness.
+- Rider discovery and selected booking (including the post-reservation eligibility reread) now evaluate freshness using capture time, falling back to receipt time for legacy profiles. No product freshness threshold is invented; the configured positive `Dispatch:NearbyLocationMaxAgeSeconds` remains required and missing configuration still fails closed.
+- Added API regressions for stale in-zone/out-of-zone GPS updates preserving coordinates, Online state, receipt timestamp and queue membership, plus stale GPS on the Online transition. Exact-head CI is pending; no live Cosmos or physical-device validation is claimed.
+- **Next:** finish review and exact-head CI for DRIVER-02; merge only with all checks green, resolved threads and repository policy permitting without bypass/self-approval. Then reread main and proceed to DRIVER-03.
+- Strict acceptance remains 0/19 Verified, 15 In Progress, 4 Blocked; production readiness is not established.
