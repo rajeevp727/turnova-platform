@@ -5,4 +5,8 @@ export function findActiveRide<T extends { status: string }>(
   role: RideRecoveryRole
 ): T | null;
 
-export function isTerminalRideStatus(status: string): boolean;
+export function shouldApplyRideStatusUpdate(
+  currentRideId: string | null | undefined,
+  updateRideId: string | null | undefined,
+  isActive: boolean
+): boolean;
