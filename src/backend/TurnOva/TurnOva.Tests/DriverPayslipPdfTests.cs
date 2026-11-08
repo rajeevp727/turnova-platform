@@ -1,4 +1,5 @@
 using System.Text;
+using UglyToad.PdfPig;
 using TurnOva.API;
 using TurnOva.Domain.Dispatch;
 
@@ -15,11 +16,21 @@ public sealed class DriverPayslipPdfTests
 
         var pdf = DriverPayslipPdf.Generate(payslip);
         var pdfText = Encoding.Latin1.GetString(pdf);
+        var extractedText = ExtractText(pdf);
 
         Assert.StartsWith("%PDF-", pdfText, StringComparison.Ordinal);
         Assert.Contains("/ToUnicode", pdfText, StringComparison.Ordinal);
         Assert.Contains("/FontFile2", pdfText, StringComparison.Ordinal);
-        Assert.Contains("NotoSans", pdfText, StringComparison.Ordinal);
+        Assert.Contains("Raja", extractedText, StringComparison.Ordinal);
+        Assert.Contains("రాజా", extractedText, StringComparison.Ordinal);
+        Assert.Contains("ராசா", extractedText, StringComparison.Ordinal);
+        Assert.Contains("ಕನ್ನಡ", extractedText, StringComparison.Ordinal);
+        Assert.Contains("മലയാളം", extractedText, StringComparison.Ordinal);
+        Assert.Contains("राजेश", extractedText, StringComparison.Ordinal);
+        Assert.Contains("বাংলা", extractedText, StringComparison.Ordinal);
+        Assert.Contains("ગુજરાતી", extractedText, StringComparison.Ordinal);
+        Assert.Contains("ਪੰਜਾਬੀ", extractedText, StringComparison.Ordinal);
+        Assert.Contains("ଓଡ଼ିଆ", extractedText, StringComparison.Ordinal);
         Assert.True(pdf.Length > 100_000, "The PDF should contain embedded/subsetted font programs.");
     }
 
@@ -38,6 +49,7 @@ public sealed class DriverPayslipPdfTests
             var content = Encoding.Latin1.GetString(pdf);
             Assert.StartsWith("%PDF-", content, StringComparison.Ordinal);
             Assert.Contains("/ToUnicode", content, StringComparison.Ordinal);
+            Assert.Contains("Raja", ExtractText(pdf), StringComparison.Ordinal);
         });
     }
 
@@ -60,8 +72,17 @@ public sealed class DriverPayslipPdfTests
         var pdf = DriverPayslipPdf.Generate(payslip);
 
         Assert.StartsWith("%PDF-", Encoding.Latin1.GetString(pdf), StringComparison.Ordinal);
+        Assert.Contains("Raja", ExtractText(pdf), StringComparison.Ordinal);
+        Assert.Contains("ರಾಜಾ", ExtractText(pdf), StringComparison.Ordinal);
         Assert.True(pdf.Length > 100_000);
         Assert.Equal(driverName, payslip.DriverName);
+    }
+
+    private static string ExtractText(byte[] pdf)
+    {
+        using var stream = new MemoryStream(pdf);
+        using var document = PdfDocument.Open(stream);
+        return string.Join("\n", document.GetPages().Select(page => page.Text));
     }
 
     private static DriverMonthlyPayslip CreatePayslip(string driverName, string unionName) =>
