@@ -205,3 +205,48 @@ test("cache URI validation enforces a directory separator when the cache path ha
     false
   );
 });
+
+
+test("failed native PDF write removes a partial generated cache file", async () => {
+  const fileSystem = createFileSystem([], {
+    write: async uri => {
+      fileSystem.files.add(uri.slice(CACHE.length));
+      throw new Error("native write failed");
+    }
+  });
+
+  await assert.rejects(
+    writeCachedDriverPayslipIfCurrent(
+      fileSystem,
+      CACHE + "TurnOva-Payslip-2026-10.pdf",
+      "JVBERi0=",
+      () => true
+    ),
+    /native write failed/
+  );
+  assert.equal(fileSystem.files.has("TurnOva-Payslip-2026-10.pdf"), false);
+  assert.deepEqual(fileSystem.deleted.map(item => item.uri), [
+    CACHE + "TurnOva-Payslip-2026-10.pdf"
+  ]);
+});
+
+test("failed native PDF write surfaces a cleanup failure when partial-file deletion also fails", async () => {
+  const fileSystem = createFileSystem([], {
+    write: async uri => {
+      fileSystem.files.add(uri.slice(CACHE.length));
+      throw new Error("native write failed");
+    },
+    delete: async () => { throw new Error("delete denied"); }
+  });
+
+  await assert.rejects(
+    writeCachedDriverPayslipIfCurrent(
+      fileSystem,
+      CACHE + "TurnOva-Payslip-2026-10.pdf",
+      "JVBERi0=",
+      () => true
+    ),
+    /cached file cleanup failed/
+  );
+  assert.equal(fileSystem.files.has("TurnOva-Payslip-2026-10.pdf"), true);
+});
