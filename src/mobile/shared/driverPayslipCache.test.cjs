@@ -172,3 +172,19 @@ test("missing cache directory is a safe no-op", async () => {
   assert.deepEqual(await clearCachedDriverPayslips(fileSystem), { removed: 0, failed: 0 });
   assert.equal(await deleteManagedDriverPayslip(fileSystem, CACHE + "TurnOva-Payslip-2026-10.pdf"), false);
 });
+
+
+test("stale in-flight write reports when its exact generated file cannot be removed", async () => {
+  const fileSystem = createFileSystem([], {
+    delete: async () => { throw new Error("delete denied"); }
+  });
+  await assert.rejects(
+    writeCachedDriverPayslipIfCurrent(
+      fileSystem,
+      CACHE + "TurnOva-Payslip-2026-10.pdf",
+      "JVBERi0=",
+      () => false
+    ),
+    /cached file cleanup failed/
+  );
+});
