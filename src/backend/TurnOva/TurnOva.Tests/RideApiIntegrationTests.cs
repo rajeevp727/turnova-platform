@@ -162,6 +162,31 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task ConcurrentInitialOnboardingSubmissionsLeaveOneCompleteProfile()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-onboarding-create-race");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())));
+
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.Accepted);
+        Assert.All(responses, response =>
+            Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.Conflict }));
+
+        var profile = profiles["driver-onboarding-create-race"];
+        Assert.Equal("Pending", profile.Status);
+        Assert.Equal("cab", profile.ServiceClass);
+        Assert.Equal("Test Driver", profile.FullName);
+        Assert.Contains(profile.Documents, document => document.DocumentType == "DrivingLicence");
+        Assert.Contains(profile.Documents, document => document.DocumentType == "VehicleRegistration");
+
+        foreach (var response in responses)
+            response.Dispose();
+    }
+
+    [Fact]
     public async Task OnboardingResubmissionPreservesLatestAvailabilityAndLocationFields()
     {
         using var factory = new TurnOvaApiFactory();
