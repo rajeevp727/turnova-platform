@@ -351,8 +351,18 @@ public static class DriverPayslipPdf
 
         public FontCatalog()
         {
-            foreach (var pair in SharedTypefaces.Value)
-                _faces.Add(pair.Key, new FontFace(pair.Value));
+            try
+            {
+                foreach (var pair in SharedTypefaces.Value)
+                    _faces.Add(pair.Key, new FontFace(pair.Value));
+            }
+            catch
+            {
+                foreach (var face in _faces.Values)
+                    face.Dispose();
+                _faces.Clear();
+                throw;
+            }
         }
 
         public FontFace Get(FontScript script) => _faces[script];
@@ -475,15 +485,7 @@ public static class DriverPayslipPdf
         public FontFace(SKTypeface typeface)
         {
             Typeface = typeface;
-            try
-            {
-                Shaper = new SKShaper(typeface);
-            }
-            catch
-            {
-                typeface.Dispose();
-                throw;
-            }
+            Shaper = new SKShaper(typeface);
         }
 
         public void Dispose()
