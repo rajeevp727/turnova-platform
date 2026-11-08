@@ -23,6 +23,7 @@ export interface TripLocationSnapshot {
   driverLatitude?: number | null;
   driverLongitude?: number | null;
   locationCapturedAtUtc?: string | null;
+  driverLocationCapturedAtUtc?: string | null;
   locationUpdatedAt?: string | null;
 }
 
