@@ -558,7 +558,7 @@ export default function App() {
     connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
       if (!mounted || update.rideId !== activeRide.rideId) return;
       setActiveRide((current: any) => applyRideStatusUpdate(current, update));
-      setDriverRideHistory(current => current.map(ride => applyRideStatusUpdate(ride, update)));
+      setDriverRideHistory(current => current.map(ride => applyRideStatusUpdate(ride, update) ?? ride));
     });
     connection.onreconnected(() => {
       if (mounted) void loadDriverRideHistory(() => mounted).catch(e => {
