@@ -81,6 +81,14 @@ jobs:
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
 
       - run: npm install --prefer-offline --no-fund --audit=false
+      - name: Validate release configuration and report external gates
+        run: node ../../../scripts/release-preflight.cjs --app-dir "$PWD" --output "$RUNNER_TEMP/${{ matrix.app }}-release-readiness.json"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ matrix.app }}-release-readiness
+          path: ${{ runner.temp }}/${{ matrix.app }}-release-readiness.json
+          if-no-files-found: warn
       - name: Trace audited dependency resolution
         run: npm ls image-size postcss sharp --all || true
       - name: Upload generated npm lockfile for review
