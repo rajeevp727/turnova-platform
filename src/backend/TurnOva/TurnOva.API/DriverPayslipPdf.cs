@@ -301,17 +301,27 @@ public static class DriverPayslipPdf
                 var shaped = face.Shaper.Shape(run.Text, x, baseline, font);
                 EnsureGlyphCoverage(run, shaped.Codepoints);
 
-                var glyphRun = builder.AllocateRawPositionedRun(font, shaped.Codepoints.Length, null);
+                // Keep the HarfBuzz source text and UTF-8 cluster offsets with the
+                // positioned glyphs. Skia's PDF backend uses this metadata to build
+                // ToUnicode mappings; a glyph-only run can render correctly while
+                // silently losing searchable/selectable source text.
+                var sourceText = Encoding.UTF8.GetBytes(run.Text);
+                var glyphRun = builder.AllocatePositionedTextRun(
+                    font,
+                    shaped.Codepoints.Length,
+                    sourceText.Length);
                 var glyphs = glyphRun.Glyphs;
-                var positions = glyphRun.Positions;
                 for (var index = 0; index < shaped.Codepoints.Length; index++)
                 {
                     if (shaped.Codepoints[index] > ushort.MaxValue)
                         throw new NotSupportedException($"The bundled {run.Script} payslip font returned an unsupported glyph index.");
 
                     glyphs[index] = (ushort)shaped.Codepoints[index];
-                    positions[index] = shaped.Points[index];
                 }
+
+                glyphRun.SetPositions(shaped.Points);
+                glyphRun.SetText(sourceText);
+                glyphRun.SetClusters(shaped.Clusters);
 
                 x += shaped.Width;
             }
