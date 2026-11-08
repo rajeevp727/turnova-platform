@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
 
@@ -232,6 +233,34 @@ public sealed class QueueStoreTests
             Assert.DoesNotContain(forbiddenField, json, StringComparison.OrdinalIgnoreCase);
 
         Assert.Empty(await store.GetAuditEventsAsync("zone-b", "cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task QueueServiceRejectsNonCabAndUnapprovedDispatchExceptionCategories()
+    {
+        var store = new InMemoryQueueStore();
+        var service = new QueueService(store);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.RecordDispatchExceptionAsync(
+                "driver-actor-1",
+                "zone-a",
+                "auto",
+                "trace-123",
+                QueueAuditReasonCategories.QueueReadFailed,
+                CancellationToken.None));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.RecordDispatchExceptionAsync(
+                "driver-actor-1",
+                "zone-a",
+                "cab",
+                "trace-123",
+                "sensitive-exception-message",
+                CancellationToken.None));
+
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "auto", CancellationToken.None));
     }
 
     [Fact]
