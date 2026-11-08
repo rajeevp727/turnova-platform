@@ -15,7 +15,7 @@ import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/si
 import { getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
 import { discoverNearbyCabDrivers } from "../shared/foregroundPickupLocation";
 import { createSelectedBookingLocation } from "../shared/selectedBookingLocation";
-import { getRideMapFitCoordinates, shouldApplyTripLocationUpdate } from "../shared/tripLocationSharing";
+import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate } from "../shared/tripLocationSharing";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -159,7 +159,7 @@ export default function App() {
     }
     const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh]);
-  const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current?.rideId===details.rideId?{...current,...details}:details);}else if(isActive()){setRide(null);}},[apiFetch]);
+  const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current?.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);}else if(isActive()){setRide(null);}},[apiFetch]);
   useEffect(()=>{let active=true;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request);if(active&&restored){sessionEpoch.current+=1;const restoredUser=requireAppRole<User>(restored.user,"Rider");setTokens(restored.tokens);setUser(restoredUser);}}catch{if(active)setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{
     if(!ride||tab!=="Activity"||!tokens)return;
