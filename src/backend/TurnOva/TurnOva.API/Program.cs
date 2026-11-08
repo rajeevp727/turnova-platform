@@ -2641,6 +2641,17 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
 
             if (currentReservation?.RideId == rideId && currentReservation.ExpiresAtUtc is null)
             {
+                await queueService.RecordDispatchExceptionAsync(
+                    driverId,
+                    string.IsNullOrWhiteSpace(selectedRide.DispatchZoneId)
+                        ? approvedProfile.ZoneId
+                        : selectedRide.DispatchZoneId,
+                    string.IsNullOrWhiteSpace(selectedRide.ServiceClass)
+                        ? approvedProfile.ServiceClass
+                        : selectedRide.ServiceClass,
+                    context.TraceIdentifier,
+                    QueueAuditReasonCategories.DriverReservationPromotionRecovered,
+                    CancellationToken.None);
                 reservationMade = true;
             }
             else
