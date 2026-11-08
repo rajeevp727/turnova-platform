@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-09  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `3e20aee9d244b6e90988669b5658824f01926e3a` after RIDER-04 PR #120 merged. Current sequential item #18 is PLATFORM-01 on sole active PR [#121](https://github.com/rajeevp727/turnova-platform/pull/121), branch `feat/platform-01-dispatch-exception-audit`. PR #120 final-head CI [42508275522](https://github.com/rajeevp727/turnova-platform/actions/runs/42508275522) passed 8/8 jobs and 324/324 backend tests, both Android debug APKs, both unsigned iOS Simulator builds, mobile typechecks/bundles, shared auth tests and native non-container API publish. Main post-merge CI [42510603256](https://github.com/rajeevp727/turnova-platform/actions/runs/42510603256) is still running. No live Cosmos or physical-device validation is claimed.
+**Last audited main HEAD:** `90f12c6ed87984e9574bc0337dbc71d2a7125dea` after PLATFORM-01 PR #121 merged. PR #121 exact-head CI [42511781621](https://github.com/rajeevp727/turnova-platform/actions/runs/42511781621) passed 8/8 jobs; main post-merge CI [42513077058](https://github.com/rajeevp727/turnova-platform/actions/runs/42513077058) is still running. Current sequential item #19 RELEASE-01 is on sole active PR [#122](https://github.com/rajeevp727/turnova-platform/pull/122), branch `feat/release-01-preflight-report`. Strict acceptance remains 0/19; 15 In Progress and 4 Blocked. No live Cosmos, physical-device or production-signing validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -836,3 +836,13 @@ Selected-driver reservation promotion now handles an ambiguous storage outcome i
 
 
 Dispatch exception event IDs are deterministic from the server-generated trace ID. Repeated writes for the same trace are idempotent in the in-memory adapter and Cosmos store; Cosmos 409 is accepted only after reading back an event with matching actor, trace and reason category. Trace IDs are constrained to a bounded Cosmos-safe character set.
+
+
+## RELEASE-01 release configuration preflight (2026-11-09)
+
+- PR #122 adds `scripts/release-preflight.cjs` and deterministic fixtures in `src/mobile/shared/releasePreflight.test.cjs`.
+- Each Rider/Driver mobile CI job runs the preflight after npm postinstall icon generation and uploads a per-app `release-readiness.json` artifact.
+- Structural errors fail CI: app identity/version, established Android package, icon path containment/existence, iOS device-family setting, EAS CLI minimum and development/preview/production profile shape.
+- Missing final iOS bundle ID, EAS project ID and build-number increment policy are explicit configuration gates. Signing credentials, physical-device/pilot acceptance and store submission remain external gates.
+- Current native CI artifacts remain Android debug APKs and unsigned iOS Simulator apps; no signed AAB/IPA or production readiness is claimed.
+- #15 DRIVER-04 and #17 SUPPORT-01 remain blocked by Product/Operations support-policy decisions. #6 DISPATCH-01 remains blocked by production zone/radius approval.

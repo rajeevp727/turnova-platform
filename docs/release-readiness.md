@@ -5,7 +5,7 @@
 
 ## Engineering preflight
 
-\`scripts/release-preflight.cjs\` validates each app's checked-in \`app.json\` and \`eas.json\` after \`npm install\` has run the icon-generation postinstall hook. It checks:
+`scripts/release-preflight.cjs` validates each app's checked-in `app.json` and `eas.json` after `npm install` has run the icon-generation postinstall hook. It checks:
 
 - Rider/Driver app identity, semantic version and established Android package ID.
 - iOS device-family setting and Android adaptive-icon background.
@@ -14,21 +14,21 @@
 - iOS bundle identifier and EAS project ID syntax when supplied.
 - Explicit production build-number auto-increment configuration.
 
-The mobile CI jobs upload one machine-readable \`release-readiness.json\` report per app. Structural configuration errors fail CI. Missing product/release credentials and physical/store acceptance are reported as external gates; they are not silently treated as passed or used to block ordinary engineering CI.
+The mobile CI jobs upload one machine-readable `release-readiness.json` report per app. Structural configuration errors fail CI. Missing product/release credentials and physical/store acceptance are reported as external gates; they are not silently treated as passed or used to block ordinary engineering CI.
 
 ## Current checked-in configuration
 
 | Item | Rider | Driver |
 |---|---|---|
-| App version | \`0.1.0\` | \`0.1.0\` |
-| Android package | \`com.turnova.rider\` | \`com.turnova.driver\` |
+| App version | `0.1.0` | `0.1.0` |
+| Android package | `com.turnova.rider` | `com.turnova.driver` |
 | iOS bundle identifier | Not configured | Not configured |
 | EAS project ID | Not configured | Not configured |
 | Production Android profile | App Bundle | App Bundle |
 | Production iOS profile | Store distribution | Store distribution |
 | Production auto-increment | Not configured | Not configured |
 
-The current CI artifacts are Android debug APKs and unsigned iOS Simulator \`.app\` bundles. They prove native compilation only. They are not signed production AAB/IPA files and do not prove install/runtime behaviour on physical devices.
+The current CI artifacts are Android debug APKs and unsigned iOS Simulator `.app` bundles. They prove native compilation only. They are not signed production AAB/IPA files and do not prove install/runtime behaviour on physical devices.
 
 ## External gates and owners
 
@@ -44,6 +44,6 @@ The current CI artifacts are Android debug APKs and unsigned iOS Simulator \`.ap
 
 ## Current decision
 
-\`RELEASE-01\` remains **Blocked**. The preflight is engineering evidence and a guard against configuration drift; it does not replace signed production artifacts, physical-device testing, pilot acceptance or store approval.
+`RELEASE-01` remains **Blocked**. The preflight is engineering evidence and a guard against configuration drift; it does not replace signed production artifacts, physical-device testing, pilot acceptance or store approval.
 
 No signing secret, bundle identifier, EAS project ID, provider credential or deployment target is invented or committed. No Docker/container build or deployment is used.

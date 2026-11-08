@@ -122,7 +122,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, exists = fs.exi
       version: typeof expo.version === "string" ? expo.version : null,
       androidPackage: typeof expo.android?.package === "string" ? expo.android.package : null,
       iosBundleIdentifier: typeof bundleIdentifier === "string" ? bundleIdentifier : null,
-      easProjectLinked: typeof projectId === "string" && projectId.length > 0
+      easProjectLinked: typeof projectId === "string" && UUID_PATTERN.test(projectId)
     },
     engineeringChecks: { status: engineeringPassed ? "passed" : "failed", errors },
     productionBuildConfigurationComplete,
