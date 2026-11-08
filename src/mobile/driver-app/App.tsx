@@ -370,11 +370,10 @@ export default function App() {
 
   const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
-    if (!isActive()) return null;
+    if (!isActive()) return;
     setDriverRideHistory(history);
     const active = findActiveRide(history, "driver");
     setActiveRide(active ?? null);
-    return active ?? null;
   }, [apiFetch]);
 
   const loadAgreementHistory = useCallback(async (rideId: string) => {
@@ -524,39 +523,24 @@ export default function App() {
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
-    const refreshTripState = async () => {
-      try {
-        const latestActiveRide = await loadDriverRideHistory(() => mounted);
-        if (!mounted) return;
-        if (latestActiveRide) await loadAgreementHistory(latestActiveRide.rideId);
-        else setAgreementHistory([]);
-      } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "Unable to recover the latest Driver trip state.");
-      }
-    };
     const refreshAgreement = (update?: { rideId?: string }) => {
       if (mounted && (!update?.rideId || update.rideId === activeRide.rideId))
         void loadAgreementHistory(activeRide.rideId).catch(e => {
           if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh fare agreement.");
         });
     };
-    connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
-      if (!mounted || update.rideId !== activeRide.rideId) return;
-      setActiveRide(current => applyRideStatusUpdate(current, update));
-      setDriverRideHistory(current => current.map(ride => applyRideStatusUpdate(ride, update)));
-    });
     connection.on("RideAgreementChanged", refreshAgreement);
-    connection.onreconnected(() => { void refreshTripState(); });
+    connection.onreconnected(() => refreshAgreement());
     void startSignalRConnection(connection, () => mounted, () => {
       if (mounted) setError("Live fare agreement updates are temporarily unavailable. Retrying connection…");
     }).then(connected => {
       if (connected && mounted) {
         setError(current => current === "Live fare agreement updates are temporarily unavailable. Retrying connection…" ? "" : current);
-        void refreshTripState();
+        refreshAgreement();
       }
     });
     return () => { mounted = false; connection.off("RideStatusChanged"); connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
-  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory, loadDriverRideHistory]);
+  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Selected Rider request declined. No automatic reassignment was made."); if (activeRide?.rideId === rideId) { setActiveRide(null); setAgreementHistory([]); } } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
@@ -572,7 +556,9 @@ export default function App() {
       .configureLogging(LogLevel.Warning)
       .build();
     connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
-      if (update.rideId === activeRide.rideId) setActiveRide((current: any) => current ? { ...current, status: update.status, locationSharingActive: ["Accepted", "Arrived", "InProgress"].includes(update.status) } : current);
+      if (!mounted || update.rideId !== activeRide.rideId) return;
+      setActiveRide((current: any) => applyRideStatusUpdate(current, update));
+      setDriverRideHistory(current => current.map(ride => applyRideStatusUpdate(ride, update)));
     });
     connection.onreconnected(() => {
       if (mounted) void loadDriverRideHistory(() => mounted).catch(e => {
@@ -589,7 +575,7 @@ export default function App() {
         });
       }
     });
-    return () => { mounted = false; void connection.stop(); };
+    return () => { mounted = false; connection.off("RideStatusChanged"); void connection.stop(); };
   }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory]);
 
   useEffect(() => {
