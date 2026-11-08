@@ -1,5 +1,6 @@
 "use strict";
 const fs = require("node:fs");
+const net = require("node:net");
 const path = require("node:path");
 
 const APP_CONTRACTS = Object.freeze({
@@ -10,6 +11,65 @@ const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$
 const ANDROID_PACKAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/;
 const IOS_BUNDLE_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isNonPublicIpv4(host) {
+  if (net.isIP(host) !== 4) return false;
+  const [a, b, c] = host.split(".").map(Number);
+  return a === 0 || a === 10 || a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 192 && b === 88 && c === 99) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224;
+}
+
+function expandIpv6Hextets(address) {
+  let normalized = address.toLowerCase();
+  if (normalized.includes(".")) {
+    const lastColon = normalized.lastIndexOf(":");
+    const octets = normalized.slice(lastColon + 1).split(".").map(Number);
+    if (octets.length !== 4 || octets.some(value => !Number.isInteger(value) || value < 0 || value > 255)) return null;
+    const high = ((octets[0] << 8) | octets[1]).toString(16);
+    const low = ((octets[2] << 8) | octets[3]).toString(16);
+    normalized = normalized.slice(0, lastColon + 1) + high + ":" + low;
+  }
+  const halves = normalized.split("::");
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const zeroCount = 8 - left.length - right.length;
+  if (zeroCount < 0 || (halves.length === 1 && zeroCount !== 0)) return null;
+  const parts = [...left, ...Array(zeroCount).fill("0"), ...right];
+  if (parts.length !== 8) return null;
+  const values = parts.map(part => Number.parseInt(part || "0", 16));
+  return values.every(value => Number.isInteger(value) && value >= 0 && value <= 0xffff) ? values : null;
+}
+
+function isNonPublicIpv6(host) {
+  const address = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  if (net.isIP(address) !== 6) return false;
+  const parts = expandIpv6Hextets(address);
+  if (!parts) return true;
+  const [first, second] = parts;
+  const globalUnicast = (first & 0xe000) === 0x2000;
+  const documentation = first === 0x2001 && second === 0x0db8;
+  return !globalUnicast || documentation;
+}
+
+function isInternalHostname(host) {
+  const normalized = host.toLowerCase().endsWith(".") ? host.slice(0, -1).toLowerCase() : host.toLowerCase();
+  const internalSuffixes = [
+    ".localhost", ".local", ".localdomain", ".internal", ".lan",
+    ".home", ".home.arpa", ".test", ".invalid", ".intranet", ".private", ".example", ".onion"
+  ];
+  return normalized === "localhost" || !normalized.includes(".") ||
+    internalSuffixes.some(suffix => normalized.endsWith(suffix));
+}
 
 function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL, exists = fs.existsSync }) {
   const errors = [];
@@ -61,51 +121,47 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   }
 
   checkAsset("app-icon", expo.icon);
+  checkAsset("ios-icon", expo.ios?.icon || expo.icon);
   checkAsset("android-adaptive-icon", expo.android?.adaptiveIcon?.foregroundImage);
 
-  const productionApiBaseUrlConfigured = (() => {
+  const productionApiBaseUrlConfiguredInCi = (() => {
     if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0) return false;
     try {
       const parsed = new URL(apiBaseUrl);
       const host = parsed.hostname.toLowerCase();
-      const ipv4 = host.split(".").map(part => /^\d+$/.test(part) ? Number(part) : NaN);
-      const privateIpv4 = ipv4.length === 4 && ipv4.every(part => Number.isInteger(part) && part >= 0 && part <= 255) &&
-        (ipv4[0] === 10 || ipv4[0] === 127 ||
-          (ipv4[0] === 192 && ipv4[1] === 168) ||
-          (ipv4[0] === 172 && ipv4[1] >= 16 && ipv4[1] <= 31) ||
-          (ipv4[0] === 169 && ipv4[1] === 254));
-      const localHost = host === "localhost" || host.endsWith(".localhost") ||
-        host === "10.0.2.2" || host === "0.0.0.0" || host === "[::1]" || privateIpv4;
-      return parsed.protocol === "https:" && host.length > 0 && !localHost &&
-        !host.includes("<") && !host.includes(">") &&
-        parsed.username.length === 0 && parsed.password.length === 0 &&
+      const unbracketedHost = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+      const ipVersion = net.isIP(unbracketedHost);
+      const nonPublicIp = ipVersion === 4 ? isNonPublicIpv4(unbracketedHost) : ipVersion === 6 ? isNonPublicIpv6(host) : false;
+      const internalHost = ipVersion === 0 && isInternalHostname(unbracketedHost);
+      return parsed.protocol === "https:" && host.length > 0 && !nonPublicIp && !internalHost &&
+        !host.includes("<") && !host.includes(">") && parsed.username.length === 0 && parsed.password.length === 0 &&
         parsed.search.length === 0 && parsed.hash.length === 0;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   })();
-  if (!productionApiBaseUrlConfigured) {
-    blocker("production-api-base-url", "Platform / Infrastructure",
-      "Provide the approved HTTPS production API base URL as an EAS production environment variable; verify TLS, production CORS origins and health/readiness.");
-  }
 
   const bundleIdentifier = expo.ios?.bundleIdentifier;
+  let iosBundleIdentifierSyntaxValid = false;
   if (typeof bundleIdentifier !== "string" || bundleIdentifier.trim().length === 0) {
-    blocker("ios-bundle-identifier", "Product / App Owner",
-      "Confirm the final reverse-DNS iOS bundle identifier for this app and register it with Apple.");
-  } else if (!IOS_BUNDLE_PATTERN.test(bundleIdentifier) || /^com\.example(?:\.|$)/i.test(bundleIdentifier)) {
+    blocker("ios-bundle-registration", "Product / App Owner", "Provide the approved reverse-DNS iOS bundle identifier for this app and register it with Apple.");
+  } else if (!IOS_BUNDLE_PATTERN.test(bundleIdentifier) || /^com\\.example(?:\\.|$)/i.test(bundleIdentifier)) {
     error("ios-bundle-identifier", "The configured iOS bundle identifier is malformed or a placeholder.");
+  } else {
+    iosBundleIdentifierSyntaxValid = true;
+    blocker("ios-bundle-registration", "Product / App Owner", "Verify that the configured iOS bundle identifier is approved and registered with Apple; syntax validation does not prove registration.");
   }
 
   const projectId = expo.extra?.eas?.projectId;
+  let easProjectIdSyntaxValid = false;
   if (typeof projectId !== "string" || projectId.trim().length === 0) {
-    blocker("eas-project-id", "Release Engineering",
-      "Link this app to the approved EAS project and add its project ID to the app configuration.");
+    blocker("eas-project-linkage", "Release Engineering", "Add the approved EAS project ID to this app and verify the app is linked to that project.");
   } else if (!UUID_PATTERN.test(projectId)) {
     error("eas-project-id", "expo.extra.eas.projectId must be a valid UUID.");
+  } else {
+    easProjectIdSyntaxValid = true;
+    blocker("eas-project-linkage", "Release Engineering", "Verify that the configured UUID resolves to the approved EAS project and this app is linked; UUID syntax alone is not linkage evidence.");
   }
 
-  const cliVersion = easJson?.cli?.version;
+    const cliVersion = easJson?.cli?.version;
   if (typeof cliVersion !== "string" || !/^>=\s*16(?:\.|$)/.test(cliVersion)) {
     error("eas-cli-version", "eas.json must require EAS CLI 16 or newer.");
   }
@@ -114,6 +170,11 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   const development = profiles.development;
   const preview = profiles.preview;
   const production = profiles.production;
+  const appVersionSource = easJson?.cli?.appVersionSource;
+  const appVersionSourceValid = appVersionSource === "local" || appVersionSource === "remote";
+  if (appVersionSource !== undefined && !appVersionSourceValid) {
+    error("build-number-source", "eas.json cli.appVersionSource must be local or remote.");
+  }
   if (development?.developmentClient !== true || development?.distribution !== "internal") {
     error("development-profile", "The development profile must be an internal development-client build.");
   }
@@ -123,22 +184,22 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   if (production?.android?.buildType !== "app-bundle" || production?.ios?.distribution !== "store") {
     error("production-profile", "The production profile must target an Android app bundle and iOS store distribution.");
   }
-  if (production && production.autoIncrement !== true) {
-    blocker("build-number-increment", "Release Engineering",
-      "Approve and configure the EAS production build-number source and automatic increment policy before repeated store uploads.");
-  }
+  const productionAutoIncrementEnabled = production?.autoIncrement === true;
+  const buildNumberPolicyConfigured = appVersionSourceValid && productionAutoIncrementEnabled;
+  blocker("build-number-policy", "Release Engineering", buildNumberPolicyConfigured
+    ? "Approve the configured local/remote version source and automatic increment policy, then verify actual EAS build metadata."
+    : "Approve local or remote version ownership, set cli.appVersionSource and production.autoIncrement=true, then verify actual EAS build metadata.");
 
-  blocker("signing-credentials", "Release Owner",
-    "Verify Android upload signing and Apple distribution certificate/provisioning credentials through EAS secure credentials; never commit them.");
-  blocker("physical-device-acceptance", "QA / Product Owner",
-    "Install signed Rider and Driver builds on the agreed Android/iOS device matrix and record functional, security and pilot acceptance.");
-  blocker("store-submission", "Release Owner",
-    "Complete store metadata, privacy disclosures, review submission and approval for both apps.");
+  blocker("production-api-base-url", "Platform / Infrastructure", productionApiBaseUrlConfiguredInCi
+    ? "Verify the same approved HTTPS URL is present in the EAS production environment, resolves publicly and passes TLS, CORS and health/readiness checks. GitHub CI cannot inspect EAS remote variables or resolve DNS from that environment."
+    : "Set the approved HTTPS URL in the EAS production environment and verify public DNS, TLS, CORS and health/readiness. GitHub CI cannot inspect EAS remote variables or verify DNS from EAS.");
+  blocker("signing-credentials", "Release Owner", "Verify Android upload signing and Apple distribution certificate/provisioning credentials through EAS secure credentials; never commit them.");
+  blocker("physical-device-acceptance", "QA / Product Owner", "Install signed Rider and Driver builds on the agreed Android/iOS device matrix and record functional, security and pilot acceptance.");
+  blocker("store-submission", "Release Owner / Legal", "Complete store metadata, privacy disclosures, review submission and approval for both apps.");
 
   const engineeringPassed = errors.length === 0;
-  const configurationBlockerIds = new Set(["production-api-base-url", "ios-bundle-identifier", "eas-project-id", "build-number-increment"]);
-  const productionBuildConfigurationComplete =
-    engineeringPassed && !externalGates.some(item => configurationBlockerIds.has(item.id));
+  const ciVisibleReleaseConfigurationComplete = engineeringPassed && productionApiBaseUrlConfiguredInCi &&
+    iosBundleIdentifierSyntaxValid && easProjectIdSyntaxValid && buildNumberPolicyConfigured;
 
   return {
     schemaVersion: 1,
@@ -148,11 +209,15 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
       version: typeof expo.version === "string" ? expo.version : null,
       androidPackage: typeof expo.android?.package === "string" ? expo.android.package : null,
       iosBundleIdentifier: typeof bundleIdentifier === "string" ? bundleIdentifier : null,
-      easProjectLinked: typeof projectId === "string" && UUID_PATTERN.test(projectId),
-      productionApiBaseUrlConfigured
+      iosBundleIdentifierSyntaxValid,
+      easProjectIdConfigured: typeof projectId === "string" && projectId.trim().length > 0,
+      easProjectIdSyntaxValid,
+      appVersionSource: appVersionSourceValid ? appVersionSource : null,
+      productionAutoIncrementEnabled,
+      productionApiBaseUrlConfiguredInCi
     },
     engineeringChecks: { status: engineeringPassed ? "passed" : "failed", errors },
-    productionBuildConfigurationComplete,
+    ciVisibleReleaseConfigurationComplete,
     productionReadiness: externalGates.length === 0 && engineeringPassed ? "not_verified" : "blocked",
     externalGates,
     currentCiArtifactEvidence: {

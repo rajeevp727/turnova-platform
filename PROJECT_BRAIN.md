@@ -846,3 +846,11 @@ Dispatch exception event IDs are deterministic from the server-generated trace I
 - The `.env.example` API URL remains a placeholder and GitHub CI cannot inspect EAS's remote environment; the approved HTTPS production endpoint is therefore unverified. Final iOS bundle ID, EAS project ID and build-number increment policy are also explicit configuration gates. Signing credentials, physical-device/pilot acceptance and store submission remain external gates.
 - Current native CI artifacts remain Android debug APKs and unsigned iOS Simulator apps; no signed AAB/IPA or production readiness is claimed.
 - #15 DRIVER-04 and #17 SUPPORT-01 remain blocked by Product/Operations support-policy decisions. #6 DISPATCH-01 remains blocked by production zone/radius approval.
+
+
+### RELEASE-01 preflight trust-boundary refinement (2026-11-09)
+
+- The release preflight rejects private/reserved IPv4 and non-global/documentation IPv6 literals, plus known internal hostname suffixes and single-label hosts. It accepts syntactically public HTTPS hosts but does not perform DNS resolution or prove EAS remote environment configuration.
+- A syntactically valid iOS bundle identifier remains gated until Product/App Owner verifies Apple registration. A UUID-shaped EAS project ID remains gated until Release Engineering verifies the approved remote project linkage.
+- CI-visible build-number configuration requires explicit `cli.appVersionSource` (`local` or `remote`) and production `autoIncrement=true`; Release Engineering must still approve the policy and verify an actual EAS build.
+- The preflight checks the configured iOS icon path independently from the general Expo icon. Structural mistakes fail CI; remote ownership, DNS/TLS, signing, device/pilot and store evidence remain external.

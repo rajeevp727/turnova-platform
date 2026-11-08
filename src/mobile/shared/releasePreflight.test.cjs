@@ -12,7 +12,7 @@ function fixture(overrides = {}) {
       slug: "turnova-rider",
       version: "0.1.0",
       icon: "./assets/icon.png",
-      ios: { supportsTablet: true },
+      ios: { supportsTablet: true, icon: "./assets/icon.png" },
       android: {
         package: "com.turnova.rider",
         adaptiveIcon: { foregroundImage: "./assets/adaptive-icon.png", backgroundColor: "#061D3D" }
@@ -49,12 +49,12 @@ function fixture(overrides = {}) {
 test("current Rider config passes structural checks but reports unprovided release inputs", () => {
   const report = validateReleaseConfig(fixture());
   assert.equal(report.app.slug, "turnova-rider");
-  assert.equal(report.app.productionApiBaseUrlConfigured, false);
+  assert.equal(report.app.productionApiBaseUrlConfiguredInCi, false);
   assert.equal(report.engineeringChecks.status, "passed");
-  assert.equal(report.productionBuildConfigurationComplete, false);
+  assert.equal(report.ciVisibleReleaseConfigurationComplete, false);
   assert.equal(report.productionReadiness, "blocked");
   assert.deepEqual(report.externalGates.map(item => item.id).sort(), [
-    "build-number-increment", "eas-project-id", "ios-bundle-identifier", "production-api-base-url",
+    "build-number-policy", "eas-project-linkage", "ios-bundle-registration", "production-api-base-url",
     "physical-device-acceptance", "signing-credentials", "store-submission"
   ].sort());
   assert.equal(report.currentCiArtifactEvidence.android, "debug-apk-only");
@@ -65,12 +65,13 @@ test("current Rider config passes structural checks but reports unprovided relea
 
 test("valid release identifiers and increment policy clear only configuration gates", () => {
   const input = fixture({
-    apiBaseUrl: "https://api.turnova.example.com",
+    apiBaseUrl: "https://api.turnova.com",
     appJson: {
       ios: { supportsTablet: true, bundleIdentifier: "com.turnova.rider.ios" },
       extra: { eas: { projectId: "123e4567-e89b-12d3-a456-426614174000" } }
     },
     easJson: {
+      cli: { appVersionSource: "remote" },
       build: {
         production: {
           android: { buildType: "app-bundle" },
@@ -82,9 +83,12 @@ test("valid release identifiers and increment policy clear only configuration ga
   });
   const report = validateReleaseConfig(input);
   assert.equal(report.engineeringChecks.status, "passed");
-  assert.equal(report.productionBuildConfigurationComplete, true);
-  assert.equal(report.app.productionApiBaseUrlConfigured, true);
+  assert.equal(report.ciVisibleReleaseConfigurationComplete, true);
+  assert.equal(report.app.productionApiBaseUrlConfiguredInCi, true);
+  assert.equal(report.app.iosBundleIdentifierSyntaxValid, true);
+  assert.equal(report.app.easProjectIdSyntaxValid, true);
   assert.deepEqual(report.externalGates.map(item => item.id).sort(), [
+    "build-number-policy", "eas-project-linkage", "ios-bundle-registration", "production-api-base-url",
     "physical-device-acceptance", "signing-credentials", "store-submission"
   ].sort());
   assert.equal(report.productionReadiness, "blocked");
@@ -124,8 +128,8 @@ test("malformed iOS bundle identifier and EAS project ID fail instead of becomin
   const ids = report.engineeringChecks.errors.map(item => item.id);
   assert.ok(ids.includes("ios-bundle-identifier"));
   assert.ok(ids.includes("eas-project-id"));
-  assert.ok(!report.externalGates.some(item => item.id === "ios-bundle-identifier"));
-  assert.ok(!report.externalGates.some(item => item.id === "eas-project-id"));
+  assert.ok(!report.externalGates.some(item => item.id === "ios-bundle-registration"));
+  assert.ok(!report.externalGates.some(item => item.id === "eas-project-linkage"));
 });
 
 test("missing or non-HTTPS production API endpoints remain explicit release gates", () => {
@@ -136,9 +140,9 @@ test("missing or non-HTTPS production API endpoints remain explicit release gate
   const queryCredential = validateReleaseConfig(fixture({ apiBaseUrl: "https://api.turnova.example.com?token=unsafe" }));
 
   for (const report of [missing, emulator, placeholder, loopback, queryCredential]) {
-    assert.equal(report.app.productionApiBaseUrlConfigured, false);
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, false);
     assert.ok(report.externalGates.some(item => item.id === "production-api-base-url"));
-    assert.equal(report.productionBuildConfigurationComplete, false);
+    assert.equal(report.ciVisibleReleaseConfigurationComplete, false);
   }
 });
 
@@ -155,4 +159,42 @@ test("Driver app identity and established Android package pass the same prefligh
   assert.equal(report.app.slug, "turnova-driver");
   assert.equal(report.app.androidPackage, "com.turnova.driver");
   assert.equal(report.engineeringChecks.status, "passed");
+});
+
+test("private, reserved and internal API hosts fail while public IPv4 and IPv6 pass syntax validation", () => {
+  const rejectedHosts = [
+    "https://100.64.0.1", "https://192.0.2.1", "https://198.18.0.1", "https://203.0.113.10",
+    "https://[fc00::1]", "https://[fe80::1]", "https://[2001:db8::1]", "https://[::ffff:192.168.1.10]",
+    "https://api.local", "https://api.internal", "https://api", "https://localhost"
+  ];
+  for (const apiBaseUrl of rejectedHosts) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, false, apiBaseUrl);
+  }
+  for (const apiBaseUrl of ["https://8.8.8.8", "https://[2606:4700:4700::1111]", "https://api.turnova.com"]) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, true, apiBaseUrl);
+    assert.ok(report.externalGates.some(item => item.id === "production-api-base-url"));
+  }
+});
+
+test("build number policy requires an explicit local or remote source and production auto increment", () => {
+  const autoIncrementWithoutSource = validateReleaseConfig(fixture({
+    easJson: { build: { production: { autoIncrement: true } } }
+  }));
+  assert.equal(autoIncrementWithoutSource.ciVisibleReleaseConfigurationComplete, false);
+  assert.ok(autoIncrementWithoutSource.externalGates.some(item => item.id === "build-number-policy"));
+  const invalidSource = validateReleaseConfig(fixture({
+    easJson: { cli: { appVersionSource: "automatic" } }
+  }));
+  assert.equal(invalidSource.engineeringChecks.status, "failed");
+  assert.ok(invalidSource.engineeringChecks.errors.some(item => item.id === "build-number-source"));
+});
+
+test("configured iOS icon path is checked independently from the general Expo icon", () => {
+  const report = validateReleaseConfig(fixture({
+    appJson: { ios: { supportsTablet: true, icon: "./assets/missing-ios-icon.png" } }
+  }));
+  assert.equal(report.engineeringChecks.status, "failed");
+  assert.ok(report.engineeringChecks.errors.some(item => item.id === "ios-icon"));
 });

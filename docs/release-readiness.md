@@ -13,9 +13,9 @@
 - EAS CLI minimum and development, preview and production profile shapes.
 - iOS bundle identifier and EAS project ID syntax when supplied.
 - Explicit production build-number auto-increment configuration.
-- A configured HTTPS production API base URL; the URL itself is not copied into the report.
+- A CI-visible HTTPS API URL syntax check that rejects private/reserved IP literals and known internal hostnames; the URL itself is not copied into the report. DNS resolution and EAS remote environment values are not inspected.
 
-The mobile CI jobs upload one machine-readable `release-readiness.json` report per app. The API check reads only `EXPO_PUBLIC_API_BASE_URL` available to that GitHub job; it does not query EAS's remote environment store. A missing value therefore means the production URL is not verified by this CI run, not proof that an EAS remote value is absent. Structural configuration errors fail CI. Missing product/release credentials and physical/store acceptance are reported as external gates; they are not silently treated as passed or used to block ordinary engineering CI.
+The mobile CI jobs upload one machine-readable `release-readiness.json` report per app. The API check reads only `EXPO_PUBLIC_API_BASE_URL` available to that GitHub job; it does not query EAS's remote environment store or resolve DNS from EAS. A missing value therefore means the production URL is not verified by this CI run, not proof that an EAS remote value is absent. A syntactically valid URL passes only the CI-visible check; EAS remote configuration, public DNS, TLS, production CORS and health/readiness remain external. A valid iOS bundle-ID string is not proof of Apple registration, and a UUID-shaped EAS project ID is not proof that the app is linked to the approved remote project. Those gates remain in every report until their owners verify them. Structural configuration errors fail CI. Missing product/release credentials and physical/store acceptance are reported as external gates; they are not silently treated as passed or used to block ordinary engineering CI.
 
 ## Current checked-in configuration
 
@@ -50,3 +50,8 @@ The current CI artifacts are Android debug APKs and unsigned iOS Simulator `.app
 `RELEASE-01` remains **Blocked**. The preflight is engineering evidence and a guard against configuration drift; it does not replace signed production artifacts, physical-device testing, pilot acceptance or store approval.
 
 No signing secret, bundle identifier, EAS project ID, provider credential or deployment target is invented or committed. No Docker/container build or deployment is used.
+
+
+## Preflight trust boundary
+
+The report always retains external gates for Apple bundle-ID registration, approved EAS project linkage, the EAS production API environment and DNS/TLS verification, build-number policy approval, signing credentials, physical-device/pilot acceptance and store submission. Local syntax/configuration checks are not evidence that remote ownership, DNS reachability, signing or release approval has been completed.
