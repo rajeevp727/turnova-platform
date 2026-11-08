@@ -56,7 +56,7 @@ public sealed class DriverPayslipPdfTests
     }
 
     [Fact]
-    public async Task GenerateSerializesNativePdfRenderingWithoutCrossRequestTextMixing()
+    public async Task GenerateUsesRequestIsolatedShapersWhenMultiplePayslipsRenderConcurrently()
     {
         var payslips = Enumerable.Range(0, 4)
             .Select(index => CreatePayslip(
@@ -79,7 +79,8 @@ public sealed class DriverPayslipPdfTests
 
             var extracted = ExtractText(pdf);
             Assert.Contains($"Driver-{index}", extracted, StringComparison.Ordinal);
-            Assert.Contains("ராஜா", extracted, StringComparison.Ordinal);
+            Assert.Contains("রাজা", extracted, StringComparison.Ordinal);
+            Assert.Contains("தமிழ்", extracted, StringComparison.Ordinal);
             for (var other = 0; other < documents.Length; other++)
             {
                 if (other == index)
