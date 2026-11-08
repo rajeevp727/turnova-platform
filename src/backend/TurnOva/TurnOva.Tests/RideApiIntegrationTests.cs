@@ -162,6 +162,117 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task ConcurrentInitialOnboardingSubmissionsLeaveOneCompleteProfile()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-onboarding-create-race");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove("driver-onboarding-create-race", out _);
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())));
+
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.Accepted);
+        Assert.All(responses, response =>
+            Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.Conflict }));
+
+        var profile = profiles["driver-onboarding-create-race"];
+        Assert.Equal("Pending", profile.Status);
+        Assert.Equal("cab", profile.ServiceClass);
+        Assert.Equal("Test Driver", profile.FullName);
+        Assert.Contains(profile.Documents, document => document.DocumentType == "DrivingLicence");
+        Assert.Contains(profile.Documents, document => document.DocumentType == "VehicleRegistration");
+
+        foreach (var response in responses)
+            response.Dispose();
+    }
+
+    [Fact]
+    public async Task OnboardingResubmissionPreservesLatestAvailabilityAndLocationFields()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-onboarding-preserve-latest");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove("driver-onboarding-preserve-latest", out _);
+
+        Assert.Equal(HttpStatusCode.Accepted,
+            (await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())).StatusCode);
+        var submitted = profiles["driver-onboarding-preserve-latest"];
+        var submittedAtUtc = submitted.SubmittedAtUtc;
+        var locationUpdatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2);
+        profiles["driver-onboarding-preserve-latest"] = submitted with
+        {
+            AvailabilityStatus = "Offline",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = locationUpdatedAtUtc
+        };
+
+        var resubmission = await driver.PostAsJsonAsync("/api/v1/driver/onboarding",
+            new
+            {
+                profilePhotoBase64 = "/9j/2Q==",
+                zoneId = "hyderabad-central",
+                fullName = "Updated Driver",
+                phoneNumber = "+919876543211",
+                vehicleMake = "Maruti",
+                vehicleModel = "Dzire",
+                vehicleRegistration = "TS09AB5678",
+                serviceClass = "cab",
+                passengerCapacity = 4,
+                documents = new[]
+                {
+                    new { documentType = "DrivingLicence", storageReference = "drivers/test/licence-v2" },
+                    new { documentType = "VehicleRegistration", storageReference = "drivers/test/rc-v2" }
+                }
+            });
+
+        Assert.Equal(HttpStatusCode.Accepted, resubmission.StatusCode);
+        var updated = profiles["driver-onboarding-preserve-latest"];
+        Assert.Equal("Updated Driver", updated.FullName);
+        Assert.Equal("Pending", updated.Status);
+        Assert.Equal(submittedAtUtc, updated.SubmittedAtUtc);
+        Assert.Equal("Offline", updated.AvailabilityStatus);
+        Assert.Equal(17.493, updated.CurrentLatitude);
+        Assert.Equal(78.399, updated.CurrentLongitude);
+        Assert.Equal(locationUpdatedAtUtc, updated.LocationUpdatedAtUtc);
+        Assert.Contains(updated.Documents, document => document.StorageReference == "drivers/test/licence-v2");
+    }
+
+    [Fact]
+    public async Task DriverSelfieReplacementPreservesLatestAvailabilityAndLocationFields()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-selfie-preserve-latest");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove("driver-selfie-preserve-latest", out _);
+
+        Assert.Equal(HttpStatusCode.Accepted,
+            (await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())).StatusCode);
+        var submitted = profiles["driver-selfie-preserve-latest"];
+        var locationUpdatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2);
+        profiles["driver-selfie-preserve-latest"] = submitted with
+        {
+            AvailabilityStatus = "Offline",
+            CurrentLatitude = 17.401,
+            CurrentLongitude = 78.402,
+            LocationUpdatedAtUtc = locationUpdatedAtUtc
+        };
+
+        var response = await driver.PutAsJsonAsync("/api/v1/driver/onboarding/selfie",
+            new { profilePhotoBase64 = "/9j/4AAQSkZJRg==" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = profiles["driver-selfie-preserve-latest"];
+        Assert.Equal("/9j/4AAQSkZJRg==", updated.ProfilePhotoBase64);
+        Assert.Equal("Pending", updated.ProfilePhotoApprovalStatus);
+        Assert.Equal("Offline", updated.AvailabilityStatus);
+        Assert.Equal(17.401, updated.CurrentLatitude);
+        Assert.Equal(78.402, updated.CurrentLongitude);
+        Assert.Equal(locationUpdatedAtUtc, updated.LocationUpdatedAtUtc);
+    }
+
+    [Fact]
     public async Task DriverAvailabilityControlsQueueEligibilityAndRejoinsAtBack()
     {
         using var factory = new TurnOvaApiFactory();
