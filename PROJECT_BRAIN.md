@@ -843,6 +843,6 @@ Dispatch exception event IDs are deterministic from the server-generated trace I
 - PR #122 adds `scripts/release-preflight.cjs` and deterministic fixtures in `src/mobile/shared/releasePreflight.test.cjs`.
 - Each Rider/Driver mobile CI job runs the preflight after npm postinstall icon generation and uploads a per-app `release-readiness.json` artifact.
 - Structural errors fail CI: app identity/version, established Android package, icon path containment/existence, iOS device-family setting, EAS CLI minimum and development/preview/production profile shape.
-- Missing final iOS bundle ID, EAS project ID and build-number increment policy are explicit configuration gates. Signing credentials, physical-device/pilot acceptance and store submission remain external gates.
+- Missing approved HTTPS production API base URL/EAS environment, final iOS bundle ID, EAS project ID and build-number increment policy are explicit configuration gates. Signing credentials, physical-device/pilot acceptance and store submission remain external gates.
 - Current native CI artifacts remain Android debug APKs and unsigned iOS Simulator apps; no signed AAB/IPA or production readiness is claimed.
 - #15 DRIVER-04 and #17 SUPPORT-01 remain blocked by Product/Operations support-policy decisions. #6 DISPATCH-01 remains blocked by production zone/radius approval.

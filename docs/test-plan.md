@@ -941,6 +941,8 @@ The CI-only iOS bundle identifier overrides (`com.turnova.rider` / `com.turnova.
 | RELEASE-CONFIG-006 | Native CI artifacts are reported | Android debug APK and unsigned iOS Simulator app are distinguished from signed production AAB/IPA artifacts | `release-readiness` CI artifact | P0 |
 
 The preflight separates repository-controlled configuration errors from release-owner inputs. A passing structural check is not production acceptance; signing credentials, physical-device/pilot tests and store approval remain external gates.
+| RELEASE-CONFIG-007 | Production API base URL is missing, a local emulator URL or a placeholder | Report the production HTTPS API endpoint as an external gate without exposing its value; a valid configured HTTPS endpoint clears only this configuration gate | Shared fixture tests and per-app CI report | P0 |
+
 
 
 The two Expo apps share modules from `src/mobile/shared`; each app's Metro configuration adds only that shared directory to `watchFolders` and leaves Metro's default hierarchical dependency resolution intact. This is required for production bundling and does not introduce a new runtime integration.

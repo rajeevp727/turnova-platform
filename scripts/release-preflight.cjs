@@ -11,7 +11,7 @@ const ANDROID_PACKAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]
 const IOS_BUNDLE_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function validateReleaseConfig({ appJson, easJson, appDirectory, exists = fs.existsSync }) {
+function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL, exists = fs.existsSync }) {
   const errors = [];
   const externalGates = [];
   const expo = appJson && appJson.expo ? appJson.expo : {};
@@ -63,6 +63,22 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, exists = fs.exi
   checkAsset("app-icon", expo.icon);
   checkAsset("android-adaptive-icon", expo.android?.adaptiveIcon?.foregroundImage);
 
+  const productionApiBaseUrlConfigured = (() => {
+    if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0) return false;
+    try {
+      const parsed = new URL(apiBaseUrl);
+      return parsed.protocol === "https:" && parsed.hostname.length > 0 &&
+        !parsed.hostname.includes("<") && !parsed.hostname.includes(">") &&
+        parsed.username.length === 0 && parsed.password.length === 0;
+    } catch {
+      return false;
+    }
+  })();
+  if (!productionApiBaseUrlConfigured) {
+    blocker("production-api-base-url", "Platform / Infrastructure",
+      "Provide the approved HTTPS production API base URL as an EAS production environment variable; verify TLS, production CORS origins and health/readiness.");
+  }
+
   const bundleIdentifier = expo.ios?.bundleIdentifier;
   if (typeof bundleIdentifier !== "string" || bundleIdentifier.trim().length === 0) {
     blocker("ios-bundle-identifier", "Product / App Owner",
@@ -110,7 +126,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, exists = fs.exi
     "Complete store metadata, privacy disclosures, review submission and approval for both apps.");
 
   const engineeringPassed = errors.length === 0;
-  const configurationBlockerIds = new Set(["ios-bundle-identifier", "eas-project-id", "build-number-increment"]);
+  const configurationBlockerIds = new Set(["production-api-base-url", "ios-bundle-identifier", "eas-project-id", "build-number-increment"]);
   const productionBuildConfigurationComplete =
     engineeringPassed && !externalGates.some(item => configurationBlockerIds.has(item.id));
 
@@ -122,7 +138,8 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, exists = fs.exi
       version: typeof expo.version === "string" ? expo.version : null,
       androidPackage: typeof expo.android?.package === "string" ? expo.android.package : null,
       iosBundleIdentifier: typeof bundleIdentifier === "string" ? bundleIdentifier : null,
-      easProjectLinked: typeof projectId === "string" && UUID_PATTERN.test(projectId)
+      easProjectLinked: typeof projectId === "string" && UUID_PATTERN.test(projectId),
+      productionApiBaseUrlConfigured
     },
     engineeringChecks: { status: engineeringPassed ? "passed" : "failed", errors },
     productionBuildConfigurationComplete,

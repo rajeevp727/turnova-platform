@@ -40,6 +40,7 @@ function fixture(overrides = {}) {
     appJson,
     easJson,
     appDirectory,
+    apiBaseUrl: Object.prototype.hasOwnProperty.call(overrides, "apiBaseUrl") ? overrides.apiBaseUrl : null,
     exists: candidate => available.has(candidate),
     available
   };
@@ -48,11 +49,12 @@ function fixture(overrides = {}) {
 test("current Rider config passes structural checks but reports unprovided release inputs", () => {
   const report = validateReleaseConfig(fixture());
   assert.equal(report.app.slug, "turnova-rider");
+  assert.equal(report.app.productionApiBaseUrlConfigured, false);
   assert.equal(report.engineeringChecks.status, "passed");
   assert.equal(report.productionBuildConfigurationComplete, false);
   assert.equal(report.productionReadiness, "blocked");
   assert.deepEqual(report.externalGates.map(item => item.id).sort(), [
-    "build-number-increment", "eas-project-id", "ios-bundle-identifier",
+    "build-number-increment", "eas-project-id", "ios-bundle-identifier", "production-api-base-url",
     "physical-device-acceptance", "signing-credentials", "store-submission"
   ].sort());
   assert.equal(report.currentCiArtifactEvidence.android, "debug-apk-only");
@@ -63,6 +65,7 @@ test("current Rider config passes structural checks but reports unprovided relea
 
 test("valid release identifiers and increment policy clear only configuration gates", () => {
   const input = fixture({
+    apiBaseUrl: "https://api.turnova.example.com",
     appJson: {
       ios: { supportsTablet: true, bundleIdentifier: "com.turnova.rider.ios" },
       extra: { eas: { projectId: "123e4567-e89b-12d3-a456-426614174000" } }
@@ -80,6 +83,7 @@ test("valid release identifiers and increment policy clear only configuration ga
   const report = validateReleaseConfig(input);
   assert.equal(report.engineeringChecks.status, "passed");
   assert.equal(report.productionBuildConfigurationComplete, true);
+  assert.equal(report.app.productionApiBaseUrlConfigured, true);
   assert.deepEqual(report.externalGates.map(item => item.id).sort(), [
     "physical-device-acceptance", "signing-credentials", "store-submission"
   ].sort());
@@ -122,4 +126,16 @@ test("malformed iOS bundle identifier and EAS project ID fail instead of becomin
   assert.ok(ids.includes("eas-project-id"));
   assert.ok(!report.externalGates.some(item => item.id === "ios-bundle-identifier"));
   assert.ok(!report.externalGates.some(item => item.id === "eas-project-id"));
+});
+
+test("missing or non-HTTPS production API endpoints remain explicit release gates", () => {
+  const missing = validateReleaseConfig(fixture());
+  const emulator = validateReleaseConfig(fixture({ apiBaseUrl: "http://10.0.2.2:5000" }));
+  const placeholder = validateReleaseConfig(fixture({ apiBaseUrl: "https://<TURNOVA_API_HOST>" }));
+
+  for (const report of [missing, emulator, placeholder]) {
+    assert.equal(report.app.productionApiBaseUrlConfigured, false);
+    assert.ok(report.externalGates.some(item => item.id === "production-api-base-url"));
+    assert.equal(report.productionBuildConfigurationComplete, false);
+  }
 });
