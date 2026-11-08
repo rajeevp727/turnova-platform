@@ -2614,10 +2614,10 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
             !confirmations.Any(item => item.Version == currentAgreement.Version && item.Party == "Driver" && item.ActorId == driverId))
             return Results.Conflict(new { message = "The selected booking or current agreement is no longer eligible." });
 
+        bool reservationMade;
         try
         {
-            if (!await driverRideReservations.TryMakePermanentAsync(driverId, rideId, ct))
-                return Results.Conflict(new { message = "The selected-driver reservation expired or is no longer held. Refresh Rider discovery." });
+            reservationMade = await driverRideReservations.TryMakePermanentAsync(driverId, rideId, ct);
         }
         catch (OperationCanceledException)
         {
@@ -2625,22 +2625,43 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
-            // Selected-driver dispatch is the active Rider flow. Persist only the server trace,
-            // claim-derived actor, allow-listed category and Cab queue scope; do not mutate the
-            // ride or reservation when the reservation store itself fails.
-            await queueService.RecordDispatchExceptionAsync(
-                driverId,
-                string.IsNullOrWhiteSpace(selectedRide.DispatchZoneId)
-                    ? approvedProfile.ZoneId
-                    : selectedRide.DispatchZoneId,
-                string.IsNullOrWhiteSpace(selectedRide.ServiceClass)
-                    ? approvedProfile.ServiceClass
-                    : selectedRide.ServiceClass,
-                context.TraceIdentifier,
-                QueueAuditReasonCategories.DriverReservationFailed,
-                CancellationToken.None);
-            throw;
+            // A timeout can occur after Cosmos committed the permanent lease. Re-read before
+            // failing so an ambiguous successful write is recovered idempotently.
+            DriverRideReservation? currentReservation = null;
+            try
+            {
+                currentReservation = await driverRideReservations.GetActiveAsync(
+                    driverId, CancellationToken.None);
+            }
+            catch
+            {
+                // Preserve the original promotion exception; the safe audit below records only
+                // its allow-listed category and server trace, never either exception message.
+            }
+
+            if (currentReservation?.RideId == rideId && currentReservation.ExpiresAtUtc is null)
+            {
+                reservationMade = true;
+            }
+            else
+            {
+                await queueService.RecordDispatchExceptionAsync(
+                    driverId,
+                    string.IsNullOrWhiteSpace(selectedRide.DispatchZoneId)
+                        ? approvedProfile.ZoneId
+                        : selectedRide.DispatchZoneId,
+                    string.IsNullOrWhiteSpace(selectedRide.ServiceClass)
+                        ? approvedProfile.ServiceClass
+                        : selectedRide.ServiceClass,
+                    context.TraceIdentifier,
+                    QueueAuditReasonCategories.DriverReservationFailed,
+                    CancellationToken.None);
+                throw;
+            }
         }
+
+        if (!reservationMade)
+            return Results.Conflict(new { message = "The selected-driver reservation expired or is no longer held. Refresh Rider discovery." });
         var acceptedSelectedRide = await TryTransitionAsync(selectedRide, "Accepted", driverId, "Driver", ct);
         if (acceptedSelectedRide is null)
         {
