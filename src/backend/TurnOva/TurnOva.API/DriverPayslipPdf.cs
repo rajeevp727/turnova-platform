@@ -288,7 +288,6 @@ public static class DriverPayslipPdf
     {
         var start = x;
         using var builder = new SKTextBlobBuilder();
-        using var searchablePaint = new SKPaint { Color = SKColors.White, IsAntialias = true };
         var runFonts = new List<SKFont>();
 
         try
@@ -301,12 +300,6 @@ public static class DriverPayslipPdf
 
                 var shaped = face.Shaper.Shape(run.Text, x, baseline, font);
                 EnsureGlyphCoverage(run, shaped.Codepoints);
-
-                // Keep Latin labels and metrics searchable. Indic runs are rendered as
-                // HarfBuzz-positioned vector glyphs; the Skia PDF backend does not currently
-                // preserve Indic source clusters in its text extraction map.
-                if (run.Script == FontScript.Latin)
-                    canvas.DrawText(run.Text, x, baseline, font, searchablePaint);
 
                 var glyphRun = builder.AllocateRawPositionedRun(font, shaped.Codepoints.Length, null);
                 var glyphs = glyphRun.Glyphs;
