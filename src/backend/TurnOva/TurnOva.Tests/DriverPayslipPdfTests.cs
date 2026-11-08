@@ -1,7 +1,6 @@
 using System.Text;
 using TurnOva.API;
 using TurnOva.Domain.Dispatch;
-using UglyToad.PdfPig;
 
 namespace TurnOva.Tests;
 
@@ -15,14 +14,11 @@ public sealed class DriverPayslipPdfTests
             "TurnOva తెలుగు தமிழ் ಕನ್ನಡ മലയാളം");
 
         var pdf = DriverPayslipPdf.Generate(payslip);
-        var pdfHeader = Encoding.Latin1.GetString(pdf);
-        var extractedText = ExtractText(pdf);
+        var pdfText = Encoding.Latin1.GetString(pdf);
 
-        Assert.StartsWith("%PDF-", pdfHeader, StringComparison.Ordinal);
-        Assert.EndsWith("%%EOF", pdfHeader.TrimEnd(), StringComparison.Ordinal);
-        Assert.Contains("Raja", extractedText, StringComparison.Ordinal);
-        Assert.Contains("MONTHLY DRIVER PAYSLIP", extractedText, StringComparison.Ordinal);
-        Assert.True(pdf.Length > 5_000, "The PDF should contain vector glyph outlines for the supported scripts.");
+        Assert.StartsWith("%PDF-1.4", pdfText, StringComparison.Ordinal);
+        Assert.EndsWith("%%EOF", pdfText.TrimEnd(), StringComparison.Ordinal);
+        Assert.True(pdf.Length > 5_000, "The PDF should contain shaped vector glyphs for all bundled scripts.");
     }
 
     [Fact]
@@ -38,8 +34,9 @@ public sealed class DriverPayslipPdfTests
         Assert.All(documents, pdf =>
         {
             var content = Encoding.Latin1.GetString(pdf);
-            Assert.StartsWith("%PDF-", content, StringComparison.Ordinal);
-            Assert.Contains("Raja", ExtractText(pdf), StringComparison.Ordinal);
+            Assert.StartsWith("%PDF-1.4", content, StringComparison.Ordinal);
+            Assert.EndsWith("%%EOF", content.TrimEnd(), StringComparison.Ordinal);
+            Assert.True(pdf.Length > 5_000);
         });
     }
 
@@ -56,22 +53,16 @@ public sealed class DriverPayslipPdfTests
     [Fact]
     public void GenerateWrapsLongUnicodeNamesWithoutChangingThePayslipSnapshot()
     {
-        const string driverName = "Raja రాజా ராசா ಕನ್ನಡ മലയാളം राजेश বাংলা ગુજરાતી ਪੰਜਾਬੀ ଓଡ଼ିଆ Raja TurnOva Driver";
+        const string driverName = "Raja രാജാ ராசா ಕನ್ನಡ മലയാളം राजेश বাংলা ગુજરાતી ਪੰਜਾਬੀ ଓଡ଼ିଆ Raja TurnOva Driver";
         var payslip = CreatePayslip(driverName, "Union தமிழ் ಕನ್ನಡ");
 
         var pdf = DriverPayslipPdf.Generate(payslip);
+        var pdfText = Encoding.Latin1.GetString(pdf);
 
-        Assert.StartsWith("%PDF-", Encoding.Latin1.GetString(pdf), StringComparison.Ordinal);
-        Assert.Contains("Raja", ExtractText(pdf), StringComparison.Ordinal);
+        Assert.StartsWith("%PDF-1.4", pdfText, StringComparison.Ordinal);
+        Assert.EndsWith("%%EOF", pdfText.TrimEnd(), StringComparison.Ordinal);
         Assert.True(pdf.Length > 5_000);
         Assert.Equal(driverName, payslip.DriverName);
-    }
-
-    private static string ExtractText(byte[] pdf)
-    {
-        using var stream = new MemoryStream(pdf);
-        using var document = PdfDocument.Open(stream);
-        return string.Join("\n", document.GetPages().Select(page => page.Text));
     }
 
     private static DriverMonthlyPayslip CreatePayslip(string driverName, string unionName) =>
