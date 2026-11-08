@@ -4,6 +4,7 @@ const {
   canShareTripLocation,
   findAuthoritativeActiveTrip,
   shouldApplyTripLocationUpdate,
+  mergeTripLocationSnapshot,
   getRideMapFitCoordinates
 } = require("./tripLocationSharing.js");
 
@@ -146,6 +147,42 @@ test("legacy SignalR events without capture time remain ordered by server receip
     rideId: "ride-legacy", latitude: 17.4, longitude: 78.4,
     locationUpdatedAt: "2026-11-08T12:00:23.000Z"
   }), false);
+});
+
+test("stale history refresh cannot overwrite a newer SignalR location snapshot", () => {
+  const current = {
+    rideId: "ride-refresh",
+    status: "Accepted",
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    locationCapturedAtUtc: "2026-11-08T12:00:30.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:31.000Z"
+  };
+  const staleSnapshot = {
+    rideId: "ride-refresh",
+    status: "InProgress",
+    driverLatitude: 17.3,
+    driverLongitude: 78.3,
+    driverLocationCapturedAtUtc: "2026-11-08T12:00:29.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:32.000Z"
+  };
+  const mergedStale = mergeTripLocationSnapshot(current, staleSnapshot);
+  assert.equal(mergedStale.status, "InProgress");
+  assert.equal(mergedStale.driverLatitude, 17.4);
+  assert.equal(mergedStale.driverLongitude, 78.4);
+  assert.equal(mergedStale.locationCapturedAtUtc, "2026-11-08T12:00:30.000Z");
+
+  const newerSnapshot = {
+    ...staleSnapshot,
+    driverLatitude: 17.5,
+    driverLongitude: 78.5,
+    driverLocationCapturedAtUtc: "2026-11-08T12:00:35.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:36.000Z"
+  };
+  const mergedNewer = mergeTripLocationSnapshot(current, newerSnapshot);
+  assert.equal(mergedNewer.driverLatitude, 17.5);
+  assert.equal(mergedNewer.driverLongitude, 78.5);
+  assert.equal(mergedNewer.locationCapturedAtUtc, "2026-11-08T12:00:35.000Z");
 });
 
 test("map viewport includes valid Driver and pickup coordinates only", () => {
