@@ -350,7 +350,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #71 completed the bounded readiness sub-increment; current sequential #18 work is the append-only ride audit trail described below. #17 SUPPORT-01 remains blocked by unapproved Rider support categories, escalation owner and process.
 - PR [#71](https://github.com/rajeevp727/turnova-platform/pull/71) adds a three-second bounded storage readiness probe. Liveness stays independent; dependency failure/probe timeout returns generic 503; caller cancellation is propagated; diagnostics are not exposed in response/logs. Final-head CI [42301719963](https://github.com/rajeevp727/turnova-platform/actions/runs/42301719963) passed 214/214 backend tests, 9/9 shared mobile tests, Rider/Driver typechecks and the native non-container API publish artifact. Native signed builds and physical-device acceptance remain blocked.
 - Tests use a deterministic failing probe and a cancellable delayed probe. They do not claim live Cosmos validation.
-- Next sequential area after #18 is #19 RELEASE-01. Keep the 19-area. Weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
+- Historical weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
 
 
 ## RELEASE-01 production bundle validation (2026-11-07)
@@ -528,7 +528,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - The fix always calls `/api/v1/auth/me` with the newly rotated access token after securely persisting the new pair. The refreshed profile is authoritative; an optional profile in the refresh payload is not trusted as a substitute.
 - A transient post-rotation `/me` failure preserves the newly rotated pair and surfaces a recoverable error. If the new access token is rejected with 401, both stored keys are cleared and no authenticated session is restored.
 - Regression tests cover token-only refresh, new-token profile lookup, transient profile failure with rotated-pair retention, and rejection/clearing after refresh. The PR conversation records automated review and the final-head CI merge gate; no local test/build result is claimed.
-- Live TriSend refresh-token rotation/reuse behavior and Android/iOS SecureStore/runtime restart/expiry/logout acceptance remain external gates. The 19-area denominator and. Weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
+- Live TriSend refresh-token rotation/reuse behavior and Android/iOS SecureStore/runtime restart/expiry/logout acceptance remain external gates. The 19-area denominator and.
 
 
 ## RIDER-01 — foreground pickup permission and coordinate guard (2026-11-07)
@@ -548,7 +548,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #93 completed the RIDER-01 foreground pickup permission/coordinate test increment and merged at `17cb46017b215b0e29f26b5a68be6399ec7885f9`; final-head CI [42350780382](https://github.com/rajeevp727/turnova-platform/actions/runs/42350780382) passed all eight jobs.
 - The agreement API and both app screens already support per-party UTC confirmation timestamps. The remaining deterministic mobile-test gap is shared label formatting for Pending, Confirmed with timestamp, and older/malformed timestamp values.
 - Current focused increment extracts the existing formatting into `agreementConfirmationLabel`, used by Rider Activity and Driver Trips, with shared Node tests. It does not alter agreement state or timestamps.
-- Live Cosmos ETag/multi-instance and Android/iOS physical-device negotiation, confirmation, reconnect and in-trip renegotiation remain external gates. Weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
+- Live Cosmos ETag/multi-instance and Android/iOS physical-device negotiation, confirmation, reconnect and in-trip renegotiation remain external gates.
 - Next sequential item after this increment: #5 RIDER-03 — audit selected-driver booking idempotency, cancellation/expiry and reservation release.
 
 ## RIDER-03 history-triggered expiry reconciliation (2026-11-07)
@@ -685,7 +685,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Twelve deterministic API integration cases exercise overlapping interiors and shared inclusive boundaries in both zone configuration orders across Rider discovery, selected booking with zero ride/idempotency/reservation side effects, and Driver offline reconciliation. PR #109 merged at `203b8843741248d8648345f462609d3102fd6715`; exact-head CI [42418661118](https://github.com/rajeevp727/turnova-platform/actions/runs/42418661118) passed all 8/8 jobs and 290/290 backend tests. Automated engineering review was a COMMENT, not an approval, and found no unresolved critical/high-risk issue.
 - Rider app audit: `discoverNearbyCabDrivers` requests foreground GPS and calls the server discovery endpoint; the UI renders server union grouping, approved photo, Cab details and pickup proximity, keeping journey distance separate. Driver app audit: availability and foreground location are server-validated; the app handles the zone-exit conflict by setting Offline. No client-side zone selection is added.
 - DISPATCH-01 remains Blocked for strict acceptance until Product approves a positive radius and non-overlapping zone boundaries, and live Cosmos query/index and Android/iOS pickup-zone evidence is recorded. No default is inferred.
-- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). Weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
+- Historical weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
 - Next sequential item after PR #109 merged: #7 DISPATCH-02 — audit per-Union driver cap/order, explicit Rider selection, privacy, and no FIFO/automatic assignment.
 
 
@@ -699,7 +699,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Automated engineering review is a COMMENT, not approval; it found no unresolved critical/high-risk security, privacy, authorization, concurrency, idempotency or data-loss issue. PR #110 is the only feature PR. The documentation evidence sync is a follow-up commit and its new final head must pass CI before merge.
 - Precise coordinates and the Idempotency-Key are not persisted across app-process restart. Live Cosmos and physical Android/iOS acceptance are not claimed.
 - **Next sequential item:** #8 DISPATCH-03 — re-audit terminal ride/reservation recovery. Specifically, if a prior instance persisted a terminal ride status but stopped before releasing its Driver reservation, a later direct ride/history read should retry release of only that exact Driver/ride pair, including the ETag-race reread path. Add deterministic tests for already-terminal Expired, Cancelled and Completed rides; never release a newer reservation or advance legacy FIFO.
-- Acceptance accounting: 0 Verified, 15 In Progress, 4 Blocked; strict fully verified count 0/19. Weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
+- Acceptance accounting: 0 Verified, 15 In Progress, 4 Blocked; strict fully verified count 0/19.
 
 
 ## Latest sequential handoff — #8 DISPATCH-03 (2026-11-08)
@@ -719,7 +719,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR [#112](https://github.com/rajeevp727/turnova-platform/pull/112) adds `HasActiveDriverRideAsync` after current UnionManager assignment/claim authorization and before the selfie-review lease. It repairs only expired orphan or terminal reservations by exact DriverId+RideId; an expired lease tied to an active negotiation/ride remains held. The subsequent create-if-absent lease and finally exact-release preserve concurrency with booking, availability, transfer and another review.
 - Tests `UnionManagerSelfieReviewReconcilesExpiredOrphanReservationBeforeAcquiringReviewLease` and `UnionManagerSelfieReviewKeepsExpiredReservationForActiveNegotiation` cover both branches. Initial CI found missing Driver fixture initialization; corrected fixtures passed final code-head CI [42444975803](https://github.com/rajeevp727/turnova-platform/actions/runs/42444975803), 8/8 jobs and 303/303 backend tests, 57/57 shared mobile tests, both app typechecks/bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish.
 - Engineering review is COMMENT-only, not approval; no unresolved review threads or critical/high-risk finding remains. Docs evidence sync is in the PR and needs final-head CI before merge.
-- External gates remain live Cosmos multi-instance ETag/create-if-absent/restart/crash recovery, physical Android/iOS concurrency/availability/transfer acceptance and Product-approved selected-negotiation lifetime. Strict acceptance remains 0/19 Verified, 15 In progress, 4 Blocked. Weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
+- External gates remain live Cosmos multi-instance ETag/create-if-absent/restart/crash recovery, physical Android/iOS concurrency/availability/transfer acceptance and Product-approved selected-negotiation lifetime. Strict acceptance remains 0/19 Verified, 15 In progress, 4 Blocked.
 - **Next:** verify PR #112 final docs-sync head CI and merge only if GitHub permits with all checks green; then re-read main and start #10 REALTIME-01 audit.
 
  
@@ -852,4 +852,4 @@ PR #121 also records unexpected non-cancellation failures from the active Cab se
 
 ### PLATFORM-01 ambiguous reservation promotion
 
-Selected-driver reservation promotion now handles an ambiguous storage outcome idempotently: after a non-cancellation exception from `TryMakePermanentAsync`, the API point-reads the reservation. If the same ride already holds a permanent lease, the accept flow continues; otherwise a safe `DriverReservationFailed` event is appended and the exception is rethrown before ride transition. Deterministic tests cover both pre-commit failure (ride and temporary lease unchanged) and post-commit timeout (re-read recovers success without a duplicate exception event).
+Selected-driver reservation promotion now handles an ambiguous storage outcome idempotently: after a non-cancellation exception from `TryMakePermanentAsync`, the API point-reads the reservation. If the same ride already holds a permanent lease, the accept flow appends `DriverReservationPromotionRecovered` and continues; otherwise a safe `DriverReservationFailed` event is appended and the exception is rethrown before ride transition. Deterministic tests cover both pre-commit failure (ride and temporary lease unchanged) and post-commit timeout (re-read recovers success without a duplicate exception event).
