@@ -3066,6 +3066,7 @@ public sealed class RideApiIntegrationTests
         const string driverId = "selected-booking-driver";
         const string unionId = "direct-terminal-read-union";
         using var rider = factory.CreateClient("Rider", "direct-terminal-read-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         using var request = CreateSelectedBookingRequest("direct-terminal-read-key", driverId, unionId,
@@ -3153,6 +3154,7 @@ public sealed class RideApiIntegrationTests
         const string unionId = "newer-reservation-read-union";
         using var rider = factory.CreateClient("Rider", "newer-reservation-read-rider");
         using var secondRider = factory.CreateClient("Rider", "newer-reservation-read-second-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
         var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
         var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
@@ -3193,6 +3195,7 @@ public sealed class RideApiIntegrationTests
         const string driverId = "selected-booking-driver";
         const string unionId = "concurrent-terminal-read-union";
         using var rider = factory.CreateClient("Rider", "concurrent-terminal-read-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         using var request = CreateSelectedBookingRequest("concurrent-terminal-read-key", driverId, unionId,
@@ -3234,6 +3237,7 @@ public sealed class RideApiIntegrationTests
         const string unionId = "terminal-read-owner-union";
         using var owner = factory.CreateClient("Rider", "terminal-read-owner");
         using var unrelatedRider = factory.CreateClient("Rider", "terminal-read-unrelated");
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         using var request = CreateSelectedBookingRequest("terminal-read-owner-key", driverId, unionId,
@@ -3262,6 +3266,7 @@ public sealed class RideApiIntegrationTests
         const string driverId = "selected-booking-driver";
         const string unionId = "terminal-legacy-noncab-union";
         using var rider = factory.CreateClient("Rider", "terminal-legacy-noncab-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         using var request = CreateSelectedBookingRequest("terminal-legacy-noncab-key", driverId, unionId,
