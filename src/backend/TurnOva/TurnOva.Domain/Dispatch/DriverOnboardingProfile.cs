@@ -31,4 +31,5 @@ public sealed record DriverOnboardingProfile(
     string AvailabilityStatus = "Offline",
     double? CurrentLatitude = null,
     double? CurrentLongitude = null,
-    DateTimeOffset? LocationUpdatedAtUtc = null);
+    DateTimeOffset? LocationUpdatedAtUtc = null,
+    DateTimeOffset? LocationCapturedAtUtc = null);
