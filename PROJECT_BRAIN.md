@@ -3,11 +3,10 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-09 03:31 IST  
+**Last verified:** 2026-11-09 03:59 IST  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** 4e65b147a01230b4a303d72c1270d448071c8bd6 after supplemental AI-01 PR #123 merged. PR #123 exact-head CI [42523956938](https://github.com/rajeevp727/turnova-platform/actions/runs/42523956938) passed 8/8 jobs (330/330 backend tests; 99/99 mobile auth tests). Main post-merge run [42528216521](https://github.com/rajeevp727/turnova-platform/actions/runs/42528216521) is in progress at last poll. Current engineering work is #14 DRIVER-03 Unicode payslip rendering on PR [#124](https://github.com/rajeevp727/turnova-platform/pull/124), branch fix/driver-03-unicode-payslip-rendering; exact-head CI is pending after docs synchronization.  
-**Acceptance:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is the full-evidence count, not an implementation-completion proxy. No live Cosmos, physical-device or signed-production validation is claimed.
+**Last audited main HEAD:** `4e65b147a01230b4a303d72c1270d448071c8bd6` after supplemental AI-01 PR #123 merged. PR #123 exact-head CI [42523956938](https://github.com/rajeevp727/turnova-platform/actions/runs/42523956938) passed 8/8 jobs (330/330 backend tests; 99/99 mobile auth tests); main post-merge run [42528216521](https://github.com/rajeevp727/turnova-platform/actions/runs/42528216521) passed. Current engineering item is #14 DRIVER-03 Unicode payslip rendering on PR [#124](https://github.com/rajeevp727/turnova-platform/pull/124), branch `fix/driver-03-unicode-payslip-rendering`, latest head `f363c8401676ecce25840128fc8fa05ef39d5557`. The renderer uses SkiaSharp/HarfBuzz positioned text runs with original UTF-8 source bytes and HarfBuzz cluster offsets; test-only PdfPig 0.1.16 asserts embedded `/FontFile2` and `/ToUnicode` and extracts Latin plus nine Indic scripts. Latest exact-head CI [run #838 / 42530738331](https://github.com/rajeevp727/turnova-platform/actions/runs/42530738331) is pending. Do not merge until it passes. Strict acceptance remains 0/19; 15 In Progress and 4 Blocked. No live Cosmos, physical-device or signed-production validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
