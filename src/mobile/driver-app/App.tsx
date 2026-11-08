@@ -793,7 +793,7 @@ export default function App() {
       const filename = "TurnOva-Payslip-" + year + "-" + String(month).padStart(2, "0") + ".pdf";
       const cacheDirectory = FileSystem.cacheDirectory;
       if (!cacheDirectory) throw new Error("Device cache is unavailable for the payslip PDF.");
-      const uri = cacheDirectory + filename;
+      const uri = (cacheDirectory.endsWith("/") ? cacheDirectory : cacheDirectory + "/") + filename;
       const written = await writeCachedDriverPayslipIfCurrent(
         FileSystem, uri, base64, isSessionCurrent
       );
