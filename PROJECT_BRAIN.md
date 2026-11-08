@@ -735,7 +735,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Completion accounting: engineering implementation/evidence remains partial across rows; strict acceptance 0/19 Verified (15 In Progress, 4 Blocked); production readiness not established. AI-01 and Cab supplemental work are outside the 19-row denominator.
 
 
-## DRIVER-01 profile concurrency increment (in progress)
+## DRIVER-01 profile concurrency increment (merged 2026-11-08)
 
 - Current branch: `fix/driver-01-profile-cas-onboarding-review`; base is main after REALTIME-01 PR #113 merge `120c00dba0deed0d3357f822fe8ca8143ea16888`.
 - Removed the blind Driver profile Upsert path from selfie replacement, onboarding resubmission and Operations document review.
@@ -743,6 +743,16 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - First onboarding uses create-if-absent (in-memory TryAdd / Cosmos CreateItemAsync). A create collision re-reads and retries conditionally. Resubmission uses the latest CAS/ETag snapshot, refuses legacy non-Cab and Approved/Suspended profiles, updates submitted identity/vehicle/doc/selfie fields and preserves unrelated latest availability/location fields and the original SubmittedAtUtc.
 - Operations document review uses CAS/ETag replacement and `DriverProfileReviewGuard` to reject a stale snapshot when submitted document references/status, vehicle identity, service class, profile status or prior review state changed. Rejection/suspension queue cleanup uses the successfully persisted latest profile.
 - Added integration tests for onboarding/selfie profile-field preservation and unit tests for stale document/vehicle review snapshots plus unrelated availability/location changes.
-- Bounded retries fail closed with HTTP 409 rather than blindly overwriting newer state. CI is pending; no live Cosmos concurrency/restart evidence is claimed.
+- Bounded retries fail closed with HTTP 409 rather than blindly overwriting newer state. PR #115 merged at `435a62e8dba1c93b630efc7a8e5f02bd93734a94`; exact final-head CI [42455925931](https://github.com/rajeevp727/turnova-platform/actions/runs/42455925931) passed 8/8 jobs, including 311/311 backend tests and 62/62 shared mobile tests. Native Android/iOS CI builds passed; no live Cosmos concurrency/restart or physical-device evidence is claimed.
 - External gates remain private document upload/storage/scanning/consent/retention, signed UnionManager/unionId claims, Android/iOS camera/document permissions and physical onboarding, live Cosmos multi-instance/restart/ETag, and legal partnership approval.
 - Next sequential item after DRIVER-01: DRIVER-02.
+
+## Latest sequential handoff — #12 DRIVER-02 (2026-11-08)
+
+- Main after #11 DRIVER-01: `435a62e8dba1c93b630efc7a8e5f02bd93734a94`; PR #115 merged. Exact-head CI [42455925931](https://github.com/rajeevp727/turnova-platform/actions/runs/42455925931) passed 8/8 jobs, 311/311 backend tests and 62/62 shared mobile tests, both app typechecks/bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish.
+- DRIVER-01 profile concurrency safeguards are merged: create-if-absent onboarding, CAS/ETag conditional selfie/resubmission/review writes, unrelated latest-field preservation and stale document/vehicle review rejection. Strict row remains In Progress because external storage, identity, device, live Cosmos and legal gates remain.
+- Current sequential branch: `fix/driver-02-reconcile-server-availability` (base main `435a62e8dba1c93b630efc7a8e5f02bd93734a94`). It adds `driverAvailabilityRecovery.js` and deterministic tests. The Driver app now reconciles authoritative availability and active Driver ride history after location-publish HTTP 409, stops stale watcher state, and schedules a 15-second foreground retry only if still Online with no active selected ride. Zone-exit remains immediate Offline.
+- New tests: 409 classification; server Offline state; selected Negotiating ride recovery; Online/no-active retry eligibility; stale effect fencing; failed-read atomicity. PR creation and exact-head CI are pending.
+- DRIVER-02 external gates: Product Owner—approved `Dispatch:NearbyLocationMaxAgeSeconds`, non-overlapping zone/radius and internal FIFO fairness/availability decision; Platform/Cloud—development Cosmos for multi-instance lease/ETag/restart; Mobile QA/Release—physical Android/iOS permission, background/resume and foreground-location acceptance. No production/device/Cosmos validation is claimed.
+- Strict acceptance: 0/19 Verified (15 In Progress, 4 Blocked); production readiness not established. Weighted 39.5% is a status index only, not engineering completion. AI-01 and Cab supplemental scope are outside the denominator.
+- Next row after DRIVER-02 is #13 TRIP-01, only after this PR is merged and main is re-read.
