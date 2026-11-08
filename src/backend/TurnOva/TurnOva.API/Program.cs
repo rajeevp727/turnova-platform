@@ -2587,7 +2587,7 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueS
         string.Equals(ride.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)));
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, QueueService queueService, IHubContext<RideTrackingHub> hub, IRideOfferStore offerStore, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsPrincipal user, string rideId, QueueService queueService, IHubContext<RideTrackingHub> hub, IRideOfferStore offerStore, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
@@ -2632,7 +2632,31 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         (!pendingOffer.IsPending || pendingOffer.DriverId != driverId ||
          pendingOffer.IsExpiredAt(TimeProvider.System.GetUtcNow())))
         return Results.Conflict(new { message = "This ride offer is no longer assigned to you or has expired." });
-    var queue = await queueService.GetPositionedQueueAsync(approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
+    IReadOnlyList<DriverQueueEntry> queue;
+    try
+    {
+        queue = await queueService.GetPositionedQueueAsync(
+            approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
+    }
+    catch (OperationCanceledException)
+    {
+        throw;
+    }
+    catch (Exception) when (!ct.IsCancellationRequested)
+    {
+        // The request trace and actor are server/claim-derived. Never persist the exception
+        // message, request body, token, contact details or location in the audit event.
+        // The exception record is separate from queue mutation audit and does not alter state.
+        await queueService.RecordDispatchExceptionAsync(
+            driverId,
+            approvedProfile.ZoneId,
+            approvedProfile.ServiceClass,
+            context.TraceIdentifier,
+            QueueAuditReasonCategories.QueueReadFailed,
+            CancellationToken.None);
+        throw;
+    }
+
     if (queue.FirstOrDefault()?.DriverId != driverId)
         return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can accept a ride." });
     if (rideContainer is null)
