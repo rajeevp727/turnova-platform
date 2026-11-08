@@ -556,7 +556,7 @@ export default function App() {
       }
     });
     return () => { mounted = false; connection.off("RideStatusChanged"); connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
-  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
+  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory, loadDriverRideHistory]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Selected Rider request declined. No automatic reassignment was made."); if (activeRide?.rideId === rideId) { setActiveRide(null); setAgreementHistory([]); } } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
