@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest CI run for each PR; stale queued matrices waste runner capacity.
+concurrency:
+  group: turnova-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-24.04
