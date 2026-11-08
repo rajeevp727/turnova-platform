@@ -80,7 +80,7 @@ public static class DriverPayslipPdf
 
         document.EndPage();
         document.Close();
-        return output.ToArray();
+        return DriverPayslipPdfTextLayer.Append(output.ToArray(), fonts.TextPlacements);
     }
 
     private static readonly SKColor Navy = new(20, 42, 68);
@@ -101,7 +101,7 @@ public static class DriverPayslipPdf
     private static void DrawWatermark(SKCanvas canvas, FontCatalog fonts)
     {
         DrawCabMark(canvas, 247, 374, 2.6f, new SKColor(235, 242, 249), new SKColor(235, 248, 245));
-        DrawText(canvas, fonts, "TurnOva", 174, 474, 58, new SKColor(239, 244, 249, 185), bold: true);
+        DrawText(canvas, fonts, "TurnOva", 174, 474, 58, new SKColor(239, 244, 249, 185), bold: true, includeInSearchableLayer: false);
     }
 
     private static void DrawCabMark(SKCanvas canvas, float x, float y, float scale, SKColor bodyColor, SKColor accentColor)
@@ -284,12 +284,12 @@ public static class DriverPayslipPdf
         float baseline,
         float fontSize,
         SKColor color,
-        bool bold = false)
+        bool bold = false,
+        bool includeInSearchableLayer = true)
     {
         var start = x;
         using var builder = new SKTextBlobBuilder();
         var runFonts = new List<SKFont>();
-        var extractionRuns = new List<(string Text, float X, SKFont Font)>();
 
         try
         {
@@ -317,7 +317,8 @@ public static class DriverPayslipPdf
                     positions[index] = shaped.Points[index];
                 }
 
-                extractionRuns.Add((run.Text, x, font));
+                if (includeInSearchableLayer)
+                    fonts.RecordText(run.Script, run.Text, x, baseline, fontSize);
                 x += shaped.Width;
             }
 
@@ -328,16 +329,6 @@ public static class DriverPayslipPdf
                 canvas.DrawText(blob, 0, 0, paint);
             }
 
-            // Add a nearly transparent source-text layer after the visible glyphs.
-            // It carries the original Unicode string into PDF text objects for
-            // extraction without changing the HarfBuzz-shaped visual output.
-            using var extractionPaint = new SKPaint
-            {
-                Color = new SKColor(255, 255, 255, 1),
-                IsAntialias = false
-            };
-            foreach (var run in extractionRuns)
-                canvas.DrawText(run.Text, run.X, baseline, SKTextAlign.Left, run.Font, extractionPaint);
         }
         finally
         {
@@ -388,6 +379,32 @@ public static class DriverPayslipPdf
             new(LoadSharedTypefaces, LazyThreadSafetyMode.ExecutionAndPublication);
 
         private readonly Dictionary<FontScript, FontFace> _faces = new();
+
+        public List<PayslipTextPlacement> TextPlacements { get; } = new();
+
+        public void RecordText(FontScript script, string text, float x, float baseline, float fontSize)
+        {
+            TextPlacements.Add(new PayslipTextPlacement(
+                text,
+                x,
+                baseline,
+                fontSize,
+                FontFamilyFor(script)));
+        }
+
+        private static string FontFamilyFor(FontScript script) => script switch
+        {
+            FontScript.Latin or FontScript.Telugu => "Noto Sans Telugu",
+            FontScript.Devanagari => "Noto Sans Devanagari",
+            FontScript.Bengali => "Noto Sans Bengali",
+            FontScript.Gurmukhi => "Noto Sans Gurmukhi",
+            FontScript.Gujarati => "Noto Sans Gujarati",
+            FontScript.Oriya => "Noto Sans Oriya",
+            FontScript.Tamil => "Noto Sans Tamil",
+            FontScript.Kannada => "Noto Sans Kannada",
+            FontScript.Malayalam => "Noto Sans Malayalam",
+            _ => throw new ArgumentOutOfRangeException(nameof(script))
+        };
 
         public FontFace Get(FontScript script)
         {
