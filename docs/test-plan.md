@@ -708,9 +708,13 @@ These supplement and supersede legacy fare-estimate, payment-gateway and automat
 | CAB-REC-009 | UnionManager lists reconciliation records | Only records matching signed unionId claims are returned; no Rider identity, route/stops, contact data, exact location or chat is exposed | API/privacy | P0 |
 | CAB-REC-010 | Driver transfers to another Union after a completed ride has a report | Report remains linked to the original ride Union, remains visible to that Union's authorised manager, and stays in Driver history; cross-Union sharing is not assumed without an approved next-ride eligibility/visibility policy | API/privacy/data-retention | P0 |
 | CAB-REC-011 | Driver opens a completed ride before submitting the report | Driver-owned history exposes only the current agreement version, amount and currency needed for the report form; the mobile prompt uses that currency and does not assume INR; Rider history does not gain Driver-only reconciliation fields | API integration + shared mobile unit | P0 |
+| CAB-REC-012 | UnionManager reconciliation records are queried from Cosmos | Query projects only service class, ride/Union linkage, agreement version, agreed/received amounts, signed delta, currency, report timestamp, reporting Driver and status; it never selects the full Rides aggregate or Rider identity, route, stops, location or contact fields | `UnionReconciliationCosmosQueryNeverSelectsTheFullRideAggregate`; `UnionReconciliationQueryProjectionContainsOnlyMinimumOversightFields`; existing `UnionManagerSeesOnlyItsMinimalPaymentReconciliationRecords` | API/privacy + unit; live Cosmos query validation remains external | P0 |
 | CAB-UNION-001 | Driver transferred unions | Prior selfie approval invalidated until new union approval | API/privacy | P0 |
 
 Do not test or implement platform fare estimates, in-app payment collection, gateway/escrow or customer-facing FIFO ranking/automatic assignment as MVP behaviour. Dispute and non-zero-delta next-ride outcomes remain pending product decisions.
+
+The UnionManager reconciliation Cosmos read uses an explicit scalar projection rather than `SELECT *` over the Rides aggregate. The query and DTO allow-list tests prevent reintroducing Rider identity, route/stops, exact location, contact or chat fields into this read. The in-memory API integration test still verifies signed-union filtering and minimum response fields; live Cosmos SQL projection/partition/index behaviour remains an external development-Cosmos validation gate.
+
 
 
 ### CAB-SCOPE-01 — Cab-only new workflows and legacy retention
