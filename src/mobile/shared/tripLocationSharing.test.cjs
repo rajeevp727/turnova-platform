@@ -1,6 +1,11 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { canShareTripLocation, findAuthoritativeActiveTrip } = require("./tripLocationSharing.js");
+const {
+  canShareTripLocation,
+  findAuthoritativeActiveTrip,
+  shouldApplyTripLocationUpdate,
+  getRideMapFitCoordinates
+} = require("./tripLocationSharing.js");
 
 const base = {
   appState: "active",
@@ -36,4 +41,96 @@ test("trip location is paused during negotiation and after terminal states", () 
   for (const status of ["Negotiating", "AgreementConfirmed", "Completed", "Cancelled", "Expired"]) {
     assert.equal(canShareTripLocation({ ...base, status }), false);
   }
+});
+
+test("Rider accepts only a strictly newer capture timestamp for the same ride", () => {
+  const current = {
+    rideId: "ride-1",
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    locationCapturedAtUtc: "2026-11-08T12:00:10.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:11.000Z"
+  };
+  const newer = {
+    rideId: "ride-1",
+    latitude: 17.401,
+    longitude: 78.401,
+    locationCapturedAtUtc: "2026-11-08T12:00:15.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:16.000Z"
+  };
+
+  assert.equal(shouldApplyTripLocationUpdate(current, newer), true);
+  assert.equal(shouldApplyTripLocationUpdate(current, {
+    ...newer,
+    locationCapturedAtUtc: "2026-11-08T12:00:10.000Z"
+  }), false);
+  assert.equal(shouldApplyTripLocationUpdate(current, {
+    ...newer,
+    locationCapturedAtUtc: "2026-11-08T12:00:09.000Z"
+  }), false);
+});
+
+test("Rider rejects mismatched ride, invalid coordinates and invalid timestamps", () => {
+  const current = {
+    rideId: "ride-2",
+    locationCapturedAtUtc: "2026-11-08T12:00:10.000Z"
+  };
+  const update = {
+    rideId: "ride-2",
+    latitude: 17.4,
+    longitude: 78.4,
+    locationCapturedAtUtc: "2026-11-08T12:00:11.000Z"
+  };
+
+  assert.equal(shouldApplyTripLocationUpdate(current, { ...update, rideId: "ride-other" }), false);
+  assert.equal(shouldApplyTripLocationUpdate(current, { ...update, latitude: 91 }), false);
+  assert.equal(shouldApplyTripLocationUpdate(current, { ...update, longitude: 181 }), false);
+  assert.equal(shouldApplyTripLocationUpdate(current, { ...update, locationCapturedAtUtc: "not-a-date" }), false);
+});
+
+test("first capture watermark upgrades a legacy receipt-only snapshot without mixing clock semantics", () => {
+  const legacy = {
+    rideId: "ride-legacy",
+    locationUpdatedAt: "2026-11-08T12:00:30.000Z"
+  };
+  const captured = {
+    rideId: "ride-legacy",
+    latitude: 17.4,
+    longitude: 78.4,
+    locationCapturedAtUtc: "2026-11-08T12:00:20.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:31.000Z"
+  };
+  assert.equal(shouldApplyTripLocationUpdate(legacy, captured), true);
+});
+
+test("legacy SignalR events without capture time remain ordered by server receipt time", () => {
+  const current = { rideId: "ride-legacy", locationUpdatedAt: "2026-11-08T12:00:20.000Z" };
+  assert.equal(shouldApplyTripLocationUpdate(current, {
+    rideId: "ride-legacy", latitude: 17.4, longitude: 78.4,
+    locationUpdatedAt: "2026-11-08T12:00:21.000Z"
+  }), true);
+  assert.equal(shouldApplyTripLocationUpdate(current, {
+    rideId: "ride-legacy", latitude: 17.4, longitude: 78.4,
+    locationUpdatedAt: "2026-11-08T12:00:19.000Z"
+  }), false);
+});
+
+test("map viewport includes valid Driver and pickup coordinates only", () => {
+  assert.deepEqual(getRideMapFitCoordinates({
+    rideId: "ride-map",
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    pickupLatitude: 17.5,
+    pickupLongitude: 78.5
+  }), [
+    { latitude: 17.4, longitude: 78.4 },
+    { latitude: 17.5, longitude: 78.5 }
+  ]);
+  assert.deepEqual(getRideMapFitCoordinates({
+    rideId: "ride-map",
+    driverLatitude: 91,
+    driverLongitude: 78.4,
+    pickupLatitude: null,
+    pickupLongitude: null
+  }), []);
 });
