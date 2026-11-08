@@ -12,6 +12,7 @@ public static class QueueAuditEventTypes
 public static class QueueAuditReasonCategories
 {
     public const string QueueReadFailed = "QueueReadFailed";
+    public const string DriverReservationFailed = "DriverReservationFailed";
 }
 
 public sealed record QueueAuditEvent(
