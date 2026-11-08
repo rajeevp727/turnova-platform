@@ -11,6 +11,7 @@ public sealed class InMemoryQueueStore : IQueueStore
     private long _sequence;
     private readonly ConcurrentDictionary<string, string> _rotations = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<QueueAuditEvent> _auditEvents = new();
+    private readonly ConcurrentDictionary<string, QueueAuditEvent> _exceptionAuditEvents = new(StringComparer.Ordinal);
 
     public Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
@@ -106,12 +107,27 @@ public sealed class InMemoryQueueStore : IQueueStore
     {
         cancellationToken.ThrowIfCancellationRequested();
         var key = Key(zoneId, serviceClass);
-        RecordAudit(
+        var eventId = $"dispatch-exception-{traceId}";
+        var deduplicationKey = $"{key}|{traceId}";
+        var audit = new QueueAuditEvent(
+            eventId,
             key,
             actorId,
             QueueAuditEventTypes.DispatchException,
-            traceId: traceId,
-            reasonCategory: reasonCategory);
+            DateTimeOffset.UtcNow,
+            TraceId: traceId,
+            ReasonCategory: reasonCategory);
+
+        if (_exceptionAuditEvents.TryAdd(deduplicationKey, audit))
+        {
+            _auditEvents.Enqueue(audit);
+        }
+        else if (_exceptionAuditEvents.TryGetValue(deduplicationKey, out var existing) &&
+                 (existing.DriverId != actorId || existing.ReasonCategory != reasonCategory))
+        {
+            throw new InvalidOperationException("A dispatch exception trace ID was reused with different audit metadata.");
+        }
+
         return Task.CompletedTask;
     }
 
