@@ -7,6 +7,37 @@ namespace TurnOva.Tests;
 public sealed class UnionReconciliationProjectionTests
 {
     [Fact]
+    public void UnionReconciliationCosmosQueryNeverSelectsTheFullRideAggregate()
+    {
+        var sql = UnionReconciliationQuery.Sql;
+
+        Assert.Contains("SELECT c.serviceClass, c.unionId", sql, StringComparison.Ordinal);
+        Assert.Contains("c.paymentReconciliation.rideId AS rideId", sql, StringComparison.Ordinal);
+        Assert.Contains("c.paymentReconciliation.reportedByDriverId AS reportedByDriverId", sql, StringComparison.Ordinal);
+        Assert.Contains("c.unionId = @unionId", sql, StringComparison.Ordinal);
+        Assert.Contains("c.paymentReconciliation.unionId = @unionId", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT *", sql, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var privateField in new[]
+        {
+            "c.riderId",
+            "c.pickup",
+            "c.dropoff",
+            "c.stops",
+            "c.pickupLatitude",
+            "c.pickupLongitude",
+            "c.driverLatitude",
+            "c.driverLongitude",
+            "c.phoneNumber",
+            "c.email",
+            "c.privateChat"
+        })
+        {
+            Assert.DoesNotContain(privateField, sql, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
     public void UnionReconciliationQueryProjectionContainsOnlyMinimumOversightFields()
     {
         var projection = new UnionReconciliationQueryProjection(
