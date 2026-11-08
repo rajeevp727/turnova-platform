@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { findActiveRide } = require("./rideRecovery.js");
+const { findActiveRide, isTerminalRideStatus } = require("./rideRecovery.js");
 
 test("Rider recovery includes selected negotiation and active trip states", () => {
   const history = [
@@ -32,6 +32,19 @@ test("terminal-only or empty history clears stale active ride state", () => {
   assert.equal(findActiveRide(terminalHistory, "rider"), null);
   assert.equal(findActiveRide(terminalHistory, "driver"), null);
   assert.equal(findActiveRide([], "rider"), null);
+});
+
+test("terminal realtime statuses trigger authoritative history refresh", () => {
+  for (const status of ["Completed", "Cancelled", "Expired"]) {
+    assert.equal(isTerminalRideStatus(status), true);
+  }
+
+  for (const status of ["Requested", "Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"]) {
+    assert.equal(isTerminalRideStatus(status), false);
+  }
+
+  assert.equal(isTerminalRideStatus(""), false);
+  assert.equal(isTerminalRideStatus(null), false);
 });
 
 test("unknown recovery roles fail explicitly", () => {
