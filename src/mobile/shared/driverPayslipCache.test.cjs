@@ -190,3 +190,18 @@ test("stale in-flight write reports when its exact generated file cannot be remo
   );
   assert.equal(fileSystem.files.has("TurnOva-Payslip-2026-10.pdf"), true);
 });
+
+
+test("cache URI validation enforces a directory separator when the cache path has no trailing slash", () => {
+  const fileSystem = createFileSystem();
+  fileSystem.cacheDirectory = "file:///cache";
+
+  assert.equal(
+    isManagedDriverPayslipUri(fileSystem, "file:///cache/TurnOva-Payslip-2026-10.pdf"),
+    true
+  );
+  assert.equal(
+    isManagedDriverPayslipUri(fileSystem, "file:///cacheTurnOva-Payslip-2026-10.pdf"),
+    false
+  );
+});
