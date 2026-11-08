@@ -111,10 +111,15 @@ jobs:
       - run: npm install
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
-      - name: Configure Gradle wrapper download timeout
+      - name: Use official direct Gradle distribution host and configure timeout
         working-directory: src/mobile/${{ matrix.app }}/android
         run: |
           wrapper_file=gradle/wrapper/gradle-wrapper.properties
+          sed -i 's#services\\.gradle\\.org/distributions/#downloads.gradle.org/distributions/#' "$wrapper_file"
+          if ! grep -q 'downloads.gradle.org/distributions/gradle-8.14.3-bin.zip' "$wrapper_file"; then
+            echo "Expected Gradle 8.14.3 distribution URL was not configured."
+            exit 1
+          fi
           if grep -q '^networkTimeout=' "$wrapper_file"; then
             sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper_file"
           else
