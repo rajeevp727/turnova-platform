@@ -534,14 +534,20 @@ async Task<DriverOnboardingProfile?> FindDriverProfileAsync(string driverId, Can
     }
 }
 
-async Task SaveDriverProfileAsync(DriverOnboardingProfile profile, CancellationToken ct)
+async Task<bool> TryCreateDriverProfileAsync(DriverOnboardingProfile profile, CancellationToken ct)
 {
     if (driverContainer is null)
+        return driverProfiles.TryAdd(profile.DriverId, profile);
+
+    try
     {
-        driverProfiles[profile.DriverId] = profile;
-        return;
+        await driverContainer.CreateItemAsync(profile, new PartitionKey(profile.DriverId), cancellationToken: ct);
+        return true;
     }
-    await driverContainer.UpsertItemAsync(profile, new PartitionKey(profile.DriverId), cancellationToken: ct);
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+    {
+        return false;
+    }
 }
 
 async Task<bool> TryUpdateDriverProfileAsync(
@@ -928,18 +934,30 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
     if (profile is null) return Results.NotFound(new { message = "Complete driver onboarding before adding a profile selfie." });
     if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
         return Results.Conflict(new { message = "Legacy non-Cab profiles cannot update a selfie for new MVP eligibility." });
-    var updated = profile with
+    var capturedAtUtc = DateTimeOffset.UtcNow;
+    var saved = await TryUpdateDriverProfileAsync(driverId, current =>
     {
-        ProfilePhotoBase64 = request.ProfilePhotoBase64,
-        ProfilePhotoContentType = "image/jpeg",
-        ProfilePhotoCapturedAtUtc = DateTimeOffset.UtcNow,
-        ProfilePhotoApprovalStatus = "Pending",
-        ProfilePhotoApprovedByUnionId = null,
-        ProfilePhotoReviewedAtUtc = null,
-        ProfilePhotoReviewReason = null
-    };
-    await SaveDriverProfileAsync(updated, ct);
-    return Results.Ok(updated);
+        if (!string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return current with
+        {
+            ProfilePhotoBase64 = request.ProfilePhotoBase64,
+            ProfilePhotoContentType = "image/jpeg",
+            ProfilePhotoCapturedAtUtc = capturedAtUtc,
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null
+        };
+    }, ct);
+    if (!saved)
+        return Results.Conflict(new { message = "Driver profile changed during selfie update. Refresh the profile and retry." });
+
+    var updated = await FindDriverProfileAsync(driverId, ct);
+    return updated is null
+        ? Results.NotFound(new { message = "Driver profile no longer exists." })
+        : Results.Ok(updated);
 });
 
 onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest request, CancellationToken ct) =>
@@ -965,24 +983,89 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
             Uri.TryCreate(document.StorageReference, UriKind.Absolute, out _)))
         return Results.BadRequest(new { message = "Provide valid driver, vehicle and document metadata. Upload files to private object storage and submit opaque storage references only." });
 
-    var existing = await FindDriverProfileAsync(driverId, ct);
-    if (existing is not null && !string.Equals(existing.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
-        return Results.Conflict(new { message = "This legacy non-Cab profile is retained for historical records and cannot be converted through onboarding. Cab vehicle verification must be completed through the union workflow." });
-    if (existing?.Status is "Approved" or "Suspended")
-        return Results.Conflict(new { message = "An approved or suspended driver profile cannot be replaced through onboarding." });
-
+    var submittedAtUtc = DateTimeOffset.UtcNow;
+    var profilePhotoCapturedAtUtc = submittedAtUtc;
+    var documents = request.Documents
+        .Select(document => new DriverDocumentReference(document.DocumentType, document.StorageReference))
+        .ToArray();
     var profile = new DriverOnboardingProfile(
         driverId, driverId, request.ZoneId.Trim(), request.FullName.Trim(), request.PhoneNumber.Trim(),
         request.VehicleMake.Trim(), request.VehicleModel.Trim(), request.VehicleRegistration.Trim().ToUpperInvariant(),
-        "cab", request.PassengerCapacity,
-        request.Documents.Select(document => new DriverDocumentReference(document.DocumentType, document.StorageReference)).ToArray(),
-        "Pending", existing?.SubmittedAtUtc ?? DateTimeOffset.UtcNow,
+        "cab", request.PassengerCapacity, documents, "Pending", submittedAtUtc,
         ProfilePhotoBase64: request.ProfilePhotoBase64,
         ProfilePhotoContentType: "image/jpeg",
-        ProfilePhotoCapturedAtUtc: DateTimeOffset.UtcNow,
+        ProfilePhotoCapturedAtUtc: profilePhotoCapturedAtUtc,
         ProfilePhotoApprovalStatus: "Pending");
-    await SaveDriverProfileAsync(profile, ct);
-    return Results.Accepted("/api/v1/driver/onboarding/me", profile);
+
+    // Create-if-absent handles the first submission. If another request creates the
+    // profile first, retry as a conditional update against that authoritative snapshot.
+    for (var attempt = 0; attempt < 3; attempt++)
+    {
+        var existing = await FindDriverProfileAsync(driverId, ct);
+        if (existing is null)
+        {
+            if (await TryCreateDriverProfileAsync(profile, ct))
+                return Results.Accepted("/api/v1/driver/onboarding/me", profile);
+            continue;
+        }
+
+        if (!string.Equals(existing.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "This legacy non-Cab profile is retained for historical records and cannot be converted through onboarding. Cab vehicle verification must be completed through the union workflow." });
+        if (existing.Status is "Approved" or "Suspended")
+            return Results.Conflict(new { message = "An approved or suspended driver profile cannot be replaced through onboarding." });
+
+        var saved = await TryUpdateDriverProfileAsync(driverId, current =>
+        {
+            if (!string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+                current.Status is "Approved" or "Suspended")
+                return null;
+
+            // Replace submitted identity/vehicle/document data while preserving the latest
+            // unrelated availability and location fields from the ETag/CAS snapshot.
+            return current with
+            {
+                ZoneId = profile.ZoneId,
+                FullName = profile.FullName,
+                PhoneNumber = profile.PhoneNumber,
+                VehicleMake = profile.VehicleMake,
+                VehicleModel = profile.VehicleModel,
+                VehicleRegistration = profile.VehicleRegistration,
+                ServiceClass = profile.ServiceClass,
+                PassengerCapacity = profile.PassengerCapacity,
+                Documents = profile.Documents,
+                Status = "Pending",
+                SubmittedAtUtc = current.SubmittedAtUtc,
+                ReviewedAtUtc = null,
+                ReviewReason = null,
+                ProfilePhotoBase64 = profile.ProfilePhotoBase64,
+                ProfilePhotoContentType = profile.ProfilePhotoContentType,
+                ProfilePhotoCapturedAtUtc = profile.ProfilePhotoCapturedAtUtc,
+                ProfilePhotoApprovalStatus = "Pending",
+                ProfilePhotoApprovedByUnionId = null,
+                ProfilePhotoReviewedAtUtc = null,
+                ProfilePhotoReviewReason = null
+            };
+        }, ct);
+
+        if (saved)
+        {
+            var updated = await FindDriverProfileAsync(driverId, ct);
+            return updated is null
+                ? Results.Conflict(new { message = "Driver profile changed during onboarding. Refresh the profile and retry." })
+                : Results.Accepted("/api/v1/driver/onboarding/me", updated);
+        }
+
+        var latest = await FindDriverProfileAsync(driverId, ct);
+        if (latest is null)
+            continue;
+        if (!string.Equals(latest.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "This legacy non-Cab profile is retained for historical records and cannot be converted through onboarding. Cab vehicle verification must be completed through the union workflow." });
+        if (latest.Status is "Approved" or "Suspended")
+            return Results.Conflict(new { message = "An approved or suspended driver profile cannot be replaced through onboarding." });
+        return Results.Conflict(new { message = "Driver profile changed during onboarding. Refresh the profile and retry." });
+    }
+
+    return Results.Conflict(new { message = "Driver profile could not be created because another onboarding update is in progress. Refresh the profile and retry." });
 });
 
 app.MapGet("/api/v1/ops/drivers/{driverId}", async (HttpContext context, string driverId, CancellationToken ct) =>
@@ -1014,20 +1097,40 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
         return Results.Conflict(new { message = "A suspended driver cannot be re-approved through this endpoint." });
     if (request.Status == "Approved" && !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
         return Results.Conflict(new { message = "Legacy non-Cab profiles cannot be approved for new MVP workflows." });
+    if (profile.Documents is null)
+        return Results.Conflict(new { message = "Driver document references are unavailable. Refresh the profile before review." });
     if (request.Status == "Approved" &&
         (!profile.Documents.Any(document => document.DocumentType == "DrivingLicence") ||
          !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration")))
         return Results.Conflict(new { message = "A driving licence and vehicle registration reference are required before approval." });
-    var reviewed = profile with
+
+    var reviewedAtUtc = DateTimeOffset.UtcNow;
+    var saved = await TryUpdateDriverProfileAsync(driverId, current =>
     {
-        Status = request.Status,
-        Documents = profile.Documents.Select(document => document with { Status = request.Status }).ToArray(),
-        ReviewedAtUtc = DateTimeOffset.UtcNow,
-        ReviewReason = request.Reason?.Trim()
-    };
-    await SaveDriverProfileAsync(reviewed, ct);
+        if (!DriverProfileReviewGuard.Matches(current, profile))
+            return null;
+        if (request.Status == "Approved" &&
+            (!string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+             current.Documents is null ||
+             !current.Documents.Any(document => document.DocumentType == "DrivingLicence") ||
+             !current.Documents.Any(document => document.DocumentType == "VehicleRegistration")))
+            return null;
+
+        return current with
+        {
+            Status = request.Status,
+            Documents = current.Documents!.Select(document => document with { Status = request.Status }).ToArray(),
+            ReviewedAtUtc = reviewedAtUtc,
+            ReviewReason = request.Reason?.Trim()
+        };
+    }, ct);
+    if (!saved)
+        return Results.Conflict(new { message = "Driver onboarding or document references changed during review. Refresh the profile and retry." });
+
+    var reviewed = await FindDriverProfileAsync(driverId, ct)
+        ?? throw new InvalidOperationException("The reviewed driver profile could not be reloaded.");
     if (request.Status is "Rejected" or "Suspended")
-        await queueService.LeaveAsync(driverId, profile.ZoneId, profile.ServiceClass, ct);
+        await queueService.LeaveAsync(driverId, reviewed.ZoneId, reviewed.ServiceClass, ct);
     return Results.Ok(reviewed);
 });
 
