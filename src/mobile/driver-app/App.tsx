@@ -770,9 +770,11 @@ export default function App() {
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
           setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
           setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
-          throw new Error(cacheCleanup.failed === 0
+          const expiryMessage = cacheCleanup.failed === 0
             ? "Session expired. Please sign in again."
-            : "Session expired. Cached payslip cleanup was incomplete; close and reopen the app before another account signs in.");
+            : "Session expired. Cached payslip cleanup was incomplete; close and reopen the app before another account signs in.";
+          setError(expiryMessage);
+          throw new Error(expiryMessage);
         }
         if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
         response = await fetch(API + "/api/v1/driver/payslips/" + year + "/" + month + ".pdf", {
