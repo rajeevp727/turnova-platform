@@ -1768,7 +1768,6 @@ app.MapPost("/api/v1/driver/availability", async (
                             CurrentLatitude = null,
                             CurrentLongitude = null,
                             LocationUpdatedAtUtc = null,
-                            LocationCapturedAtUtc = null
                         }
                         : null, ct);
                 throw;
@@ -1789,7 +1788,6 @@ app.MapPost("/api/v1/driver/availability", async (
                     CurrentLatitude = null,
                     CurrentLongitude = null,
                     LocationUpdatedAtUtc = null,
-                    LocationCapturedAtUtc = null
                 }
                 : null, ct);
         if (!savedOffline)
@@ -1881,7 +1879,6 @@ app.MapPost("/api/v1/driver/location", async (
                         CurrentLatitude = null,
                         CurrentLongitude = null,
                         LocationUpdatedAtUtc = null,
-                        LocationCapturedAtUtc = null
                     }
                     : null, ct);
             if (!takenOffline)
