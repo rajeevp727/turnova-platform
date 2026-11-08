@@ -51,9 +51,19 @@ async function writeCachedDriverPayslipIfCurrent(fileSystem, uri, base64, isSess
   }
   if (!isSessionCurrent()) return false;
 
-  await fileSystem.writeAsStringAsync(uri, base64, {
-    encoding: fileSystem.EncodingType.Base64
-  });
+  try {
+    await fileSystem.writeAsStringAsync(uri, base64, {
+      encoding: fileSystem.EncodingType.Base64
+    });
+  } catch (writeError) {
+    // A failed native write may have left a partial PDF in the cache.
+    try {
+      await deleteManagedDriverPayslip(fileSystem, uri);
+    } catch {
+      throw new Error("Payslip write failed and cached file cleanup failed.");
+    }
+    throw writeError;
+  }
 
   // Logout or expiry can race an in-flight download. If the write finishes after
   // the session changes, remove that exact generated file before returning.
