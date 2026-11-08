@@ -19,9 +19,22 @@ public static class DriverPayslipPdf
     private const float Right = 545;
     private const float ContentWidth = Right - Left;
 
+    // SkiaSharp/HarfBuzz and PdfSharpCore use native/process-wide font state. Until
+    // repeatable concurrent rendering is proven on all supported hosts, serialize
+    // the low-volume monthly payslip operation to prevent cross-request corruption.
+    private static readonly object RenderGate = new();
+
     public static byte[] Generate(DriverMonthlyPayslip payslip)
     {
         ArgumentNullException.ThrowIfNull(payslip);
+        lock (RenderGate)
+        {
+            return GenerateCore(payslip);
+        }
+    }
+
+    private static byte[] GenerateCore(DriverMonthlyPayslip payslip)
+    {
         if (payslip.Month is < 1 or > 12)
             throw new ArgumentOutOfRangeException(nameof(payslip), "Payslip month must be between 1 and 12.");
 
