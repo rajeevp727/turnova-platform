@@ -111,45 +111,55 @@ jobs:
       - run: npm install
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
-      - name: Use official direct Gradle distribution host and configure timeout
-        working-directory: src/mobile/${{ matrix.app }}/android
-        run: |
-          wrapper_file=gradle/wrapper/gradle-wrapper.properties
-          sed -i 's#services\.gradle\.org/distributions/#downloads.gradle.org/distributions/#' "$wrapper_file"
-          if ! grep -q 'downloads.gradle.org/distributions/gradle-8.14.3-bin.zip' "$wrapper_file"; then
-            echo "Expected Gradle 8.14.3 distribution URL was not configured."
-            exit 1
-          fi
-          if grep -q '^networkTimeout=' "$wrapper_file"; then
-            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper_file"
-          else
-            printf '\nnetworkTimeout=120000\n' >> "$wrapper_file"
-          fi
-      - name: Compile Android debug APK with transient distribution-download retry
-        working-directory: src/mobile/${{ matrix.app }}/android
+      - name: Cache Gradle 8.14.3 distribution
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/turnova-distributions/gradle-8.14.3
+          key: ${{ runner.os }}-gradle-8.14.3-bin-bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+      - name: Install checksum-verified Gradle distribution
         shell: bash
         run: |
-          for attempt in 1 2 3; do
-            log="$RUNNER_TEMP/gradle-${{ matrix.app }}-$attempt.log"
-            set +e
-            ./gradlew --no-daemon assembleDebug 2>&1 | tee "$log"
-            status=${PIPESTATUS[0]}
-            set -e
-            if [[ "$status" -eq 0 ]]; then
-              exit 0
+          set -euo pipefail
+          version=8.14.3
+          checksum=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+          dist_root="$HOME/.gradle/turnova-distributions"
+          gradle_home="$dist_root/gradle-$version"
+          if [[ ! -x "$gradle_home/bin/gradle" ]]; then
+            mkdir -p "$dist_root"
+            archive="$RUNNER_TEMP/gradle-$version-bin.zip"
+            rm -f "$archive"
+            urls=(
+              "https://downloads.gradle.org/distributions/gradle-$version-bin.zip"
+              "https://repo.huaweicloud.com/gradle/gradle-$version-bin.zip"
+            )
+            downloaded=false
+            for url in "${urls[@]}"; do
+              echo "Downloading Gradle $version from $url"
+              if curl --fail --location --silent --show-error \
+                --retry 5 --retry-all-errors --retry-delay 10 \
+                --connect-timeout 30 --max-time 600 \
+                "$url" --output "$archive"; then
+                downloaded=true
+                break
+              fi
+              rm -f "$archive"
+            done
+            if [[ "$downloaded" != true ]]; then
+              echo "Unable to download Gradle $version from official or fallback distribution hosts." >&2
+              exit 1
             fi
-            if ! grep -Eq 'Server returned HTTP response code: 5[0-9]{2}|SocketTimeoutException|Downloading from .* failed: timeout' "$log"; then
-              echo "Gradle failed for a non-retryable reason; not retrying."
-              exit "$status"
-            fi
-            if [[ "$attempt" -lt 3 ]]; then
-              delay=$((attempt * 15))
-              echo "Gradle distribution download failed transiently; retrying in ${delay}s."
-              sleep "$delay"
-            fi
-          done
-          echo "Gradle distribution download failed after three attempts."
-          exit 1
+            echo "$checksum  $archive" | sha256sum --check --status || {
+              echo "Gradle distribution SHA-256 verification failed." >&2
+              exit 1
+            }
+            unzip -q "$archive" -d "$dist_root"
+            rm -f "$archive"
+          fi
+          "$gradle_home/bin/gradle" --version
+      - name: Compile Android debug APK
+        working-directory: src/mobile/${{ matrix.app }}/android
+        run: |
+          "$HOME/.gradle/turnova-distributions/gradle-8.14.3/bin/gradle" --no-daemon assembleDebug
       - name: Verify Android APK artifact
         run: test -s android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v6
