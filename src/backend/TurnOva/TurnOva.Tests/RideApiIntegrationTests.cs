@@ -146,6 +146,12 @@ public sealed class RideApiIntegrationTests
 
         var unchangedRide = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[ride.RideId];
         Assert.Equal("Requested", unchangedRide.Status);
+        var unchangedQueue = await queueStore.GetEligibleAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(driverId, Assert.Single(unchangedQueue).DriverId);
+        Assert.DoesNotContain(auditEvents, item =>
+            item.EventType is QueueAuditEventTypes.Left or
+                QueueAuditEventTypes.MovedToBack or QueueAuditEventTypes.RotatedToBack);
 
         var auditJson = JsonSerializer.Serialize(audit, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.DoesNotContain("sensitive-queue-read-failure", auditJson);
