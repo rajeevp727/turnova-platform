@@ -2037,9 +2037,10 @@ app.MapGet("/api/v1/rider/discovery", async (
 
     foreach (var profile in await ListOnlineCabProfilesForDiscoveryAsync(zoneId, ct))
     {
+        var locationCapturedAtUtc = profile.LocationCapturedAtUtc ?? profile.LocationUpdatedAtUtc;
         if (profile.Status != "Approved" || profile.AvailabilityStatus != "Online" ||
             profile.PassengerCapacity < passengers ||
-            profile.LocationUpdatedAtUtc is null || profile.LocationUpdatedAtUtc.Value < freshAfter ||
+            locationCapturedAtUtc is null || locationCapturedAtUtc.Value < freshAfter ||
             profile.CurrentLatitude is null || profile.CurrentLongitude is null ||
             !double.IsFinite(profile.CurrentLatitude.Value) || !double.IsFinite(profile.CurrentLongitude.Value) ||
             profile.CurrentLatitude is < -90 or > 90 || profile.CurrentLongitude is < -180 or > 180 ||
@@ -2213,11 +2214,12 @@ app.MapPost("/api/v1/rider/bookings", async (
     if (maxAgeSeconds is null || maxAgeSeconds <= 0)
         return Results.Problem("The approved maximum Driver location age is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
     var freshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds.Value);
+    var locationCapturedAtUtc = profile?.LocationCapturedAtUtc ?? profile?.LocationUpdatedAtUtc;
     if (profile is null || profile.AvailabilityStatus != "Online" ||
         !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
         profile.PassengerCapacity < request.Passengers ||
-        profile.LocationUpdatedAtUtc is null || profile.LocationUpdatedAtUtc < freshAfter ||
+        locationCapturedAtUtc is null || locationCapturedAtUtc.Value < freshAfter ||
         profile.CurrentLatitude is null or < -90 or > 90 || !double.IsFinite(profile.CurrentLatitude.Value) ||
         profile.CurrentLongitude is null or < -180 or > 180 || !double.IsFinite(profile.CurrentLongitude.Value) ||
         profile.Documents is null ||
@@ -2290,6 +2292,7 @@ app.MapPost("/api/v1/rider/bookings", async (
     var latestUnion = await FindUnionAsync(unionId, ct);
     var latestProfile = await GetApprovedDriverProfileAsync(selectedDriverId, ct);
     var latestFreshAfter = DateTimeOffset.UtcNow.AddSeconds(-maxAgeSeconds.Value);
+    var latestLocationCapturedAtUtc = latestProfile?.LocationCapturedAtUtc ?? latestProfile?.LocationUpdatedAtUtc;
     if (latestAssignment is null || latestAssignment.Status != "Active" || latestAssignment.UnionId != unionId ||
         latestUnion is null || latestUnion.Status != "Active" ||
         !latestUnion.ZoneIds.Contains(zoneId, StringComparer.OrdinalIgnoreCase) ||
@@ -2298,7 +2301,7 @@ app.MapPost("/api/v1/rider/bookings", async (
         !string.Equals(latestProfile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(latestProfile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
         latestProfile.PassengerCapacity < request.Passengers ||
-        latestProfile.LocationUpdatedAtUtc is null || latestProfile.LocationUpdatedAtUtc < latestFreshAfter ||
+        latestLocationCapturedAtUtc is null || latestLocationCapturedAtUtc.Value < latestFreshAfter ||
         latestProfile.CurrentLatitude is null or < -90 or > 90 || !double.IsFinite(latestProfile.CurrentLatitude.Value) ||
         latestProfile.CurrentLongitude is null or < -180 or > 180 || !double.IsFinite(latestProfile.CurrentLongitude.Value) ||
         latestProfile.Documents is null ||
