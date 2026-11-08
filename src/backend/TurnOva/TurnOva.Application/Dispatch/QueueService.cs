@@ -54,7 +54,8 @@ public sealed class QueueService(IQueueStore store)
             throw new ArgumentException("Dispatch exception auditing is limited to the Cab MVP.");
 
         if (reasonCategory is not QueueAuditReasonCategories.QueueReadFailed and
-            not QueueAuditReasonCategories.DriverReservationFailed)
+            not QueueAuditReasonCategories.DriverReservationFailed and
+            not QueueAuditReasonCategories.DriverReservationPromotionRecovered)
             throw new ArgumentException("The dispatch exception category is not allow-listed.");
 
         return store.RecordDispatchExceptionAsync(
