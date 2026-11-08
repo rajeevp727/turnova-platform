@@ -4,6 +4,7 @@
     <PackageReference Include="SkiaSharp.HarfBuzz" Version="4.154.0" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.154.0" />
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.2.1.400" />
+    <PackageReference Include="PdfSharpCore" Version="1.3.67" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Fonts\*.ttf" />
