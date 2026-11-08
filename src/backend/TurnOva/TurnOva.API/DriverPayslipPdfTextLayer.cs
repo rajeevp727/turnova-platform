@@ -41,6 +41,10 @@ internal static class DriverPayslipPdfTextLayer
             ["Noto Sans Malayalam"] = "NotoSansMalayalam.ttf"
         };
 
+    // PdfSharpCore keeps process-wide font resolver and font caches. Serialize only
+    // the append phase; Skia/HarfBuzz shaping remains request-local and concurrent.
+    private static readonly object AppendGate = new();
+
     public static byte[] Append(byte[] sourcePdf, IReadOnlyList<PayslipTextPlacement> placements)
     {
         ArgumentNullException.ThrowIfNull(sourcePdf);
@@ -48,48 +52,52 @@ internal static class DriverPayslipPdfTextLayer
         if (placements.Count == 0)
             return sourcePdf;
 
-        _ = ResolverRegistration.Value;
-
-        using var input = new MemoryStream(sourcePdf, writable: false);
-        using var document = PdfReader.Open(input, PdfDocumentOpenMode.Modify);
-        if (document.Pages.Count != 1)
-            throw new InvalidOperationException("A driver payslip must contain exactly one page.");
-
-        var page = document.Pages[0];
-        using (var graphics = XGraphics.FromPdfPage(
-            page,
-            XGraphicsPdfPageOptions.Append,
-            XPageDirection.Downwards))
+        lock (AppendGate)
         {
-            // One alpha unit makes the white text effectively invisible on the
-            // white page while preserving actual Unicode PDF text operators.
-            var brush = new XSolidBrush(XColor.FromArgb(1, 255, 255, 255));
-            var fonts = new Dictionary<string, XFont>(StringComparer.OrdinalIgnoreCase);
+            _ = ResolverRegistration.Value;
 
-            foreach (var placement in placements)
+            using var input = new MemoryStream(sourcePdf, writable: false);
+            using var document = PdfReader.Open(input, PdfDocumentOpenMode.Modify);
+            if (document.Pages.Count != 1)
+                throw new InvalidOperationException("A driver payslip must contain exactly one page.");
+
+            var page = document.Pages[0];
+            using (var graphics = XGraphics.FromPdfPage(
+                page,
+                XGraphicsPdfPageOptions.Append,
+                XPageDirection.Downwards))
             {
-                if (!fonts.TryGetValue(placement.FontFamily, out var font))
+                // One alpha unit makes the white text effectively invisible on the
+                // white page while preserving actual Unicode PDF text operators.
+                var brush = new XSolidBrush(XColor.FromArgb(1, 255, 255, 255));
+                var fonts = new Dictionary<(string Family, float Size), XFont>();
+
+                foreach (var placement in placements)
                 {
-                    font = new XFont(
-                        placement.FontFamily,
-                        placement.FontSize,
-                        XFontStyle.Regular,
-                        XPdfFontOptions.UnicodeDefault);
-                    fonts.Add(placement.FontFamily, font);
+                    var key = (placement.FontFamily, placement.FontSize);
+                    if (!fonts.TryGetValue(key, out var font))
+                    {
+                        font = new XFont(
+                            placement.FontFamily,
+                            placement.FontSize,
+                            XFontStyle.Regular,
+                            XPdfFontOptions.UnicodeDefault);
+                        fonts.Add(key, font);
+                    }
+
+                    graphics.DrawString(
+                        placement.Text,
+                        font,
+                        brush,
+                        new XPoint(placement.X, placement.Baseline),
+                        XStringFormats.BaseLineLeft);
                 }
-
-                graphics.DrawString(
-                    placement.Text,
-                    font,
-                    brush,
-                    new XPoint(placement.X, placement.Baseline),
-                    XStringFormats.BaseLineLeft);
             }
-        }
 
-        using var output = new MemoryStream();
-        document.Save(output);
-        return output.ToArray();
+            using var output = new MemoryStream();
+            document.Save(output);
+            return output.ToArray();
+        }
     }
 
     private static bool RegisterFontResolver()
