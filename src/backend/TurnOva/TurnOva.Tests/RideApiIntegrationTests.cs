@@ -1428,6 +1428,34 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task PayslipEndpointReturns422ForUnsupportedScriptWithoutLeakingDriverName()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-payslip-unsupported-script";
+        const string unionId = "union-payslip-unsupported-script";
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        SeedBookableDriver(factory, driverId, unionId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with { FullName = "Driver محمد" };
+
+        var assignmentEvent = new DriverUnionAuditEvent(
+            "assignment-unsupported-script", driverId, null, null,
+            unionId, "Selected Booking Union", "Assigned", "Initial assignment", "Operations",
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            [$"{driverId}|{assignmentEvent.EventId}"] = assignmentEvent;
+
+        using var response = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.NotEqual("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("not supported", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("محمد", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DriverCanDownloadPersistedMonthlyPayslipAsPdfWithMetrics()
     {
         using var factory = new TurnOvaApiFactory();
