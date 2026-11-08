@@ -3014,11 +3014,49 @@ public sealed class RideApiIntegrationTests
             $"/api/v1/rides/{rideId}/location", new { latitude = 17.495, longitude = 78.401 });
         Assert.Equal(HttpStatusCode.NoContent, locationUpdate.StatusCode);
 
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var legacyAccepted = rides[rideId];
+        Assert.NotNull(legacyAccepted.DriverLocationCapturedAtUtc);
+        Assert.Equal(17.495, legacyAccepted.DriverLatitude);
+        Assert.Equal(78.401, legacyAccepted.DriverLongitude);
+
+        // A current client may send a GPS capture time slightly ahead of server time
+        // within the same one-minute skew tolerance used by availability GPS.
+        var newerCapture = DateTimeOffset.UtcNow.AddSeconds(10);
+        using var newerLocation = await driver.PostAsJsonAsync(
+            $"/api/v1/rides/{rideId}/location",
+            new { latitude = 17.496, longitude = 78.402, capturedAtUtc = newerCapture });
+        Assert.Equal(HttpStatusCode.NoContent, newerLocation.StatusCode);
+        var acceptedNewer = rides[rideId];
+        Assert.Equal(newerCapture, acceptedNewer.DriverLocationCapturedAtUtc);
+
+        using var outOfOrder = await driver.PostAsJsonAsync(
+            $"/api/v1/rides/{rideId}/location",
+            new { latitude = 17.497, longitude = 78.403, capturedAtUtc = newerCapture.AddSeconds(-1) });
+        Assert.Equal(HttpStatusCode.Conflict, outOfOrder.StatusCode);
+        var afterOutOfOrder = rides[rideId];
+        Assert.Equal(acceptedNewer.DriverLatitude, afterOutOfOrder.DriverLatitude);
+        Assert.Equal(acceptedNewer.DriverLongitude, afterOutOfOrder.DriverLongitude);
+        Assert.Equal(acceptedNewer.LocationUpdatedAt, afterOutOfOrder.LocationUpdatedAt);
+        Assert.Equal(acceptedNewer.DriverLocationCapturedAtUtc, afterOutOfOrder.DriverLocationCapturedAtUtc);
+
+        using var futureLocation = await driver.PostAsJsonAsync(
+            $"/api/v1/rides/{rideId}/location",
+            new { latitude = 17.498, longitude = 78.404, capturedAtUtc = DateTimeOffset.UtcNow.AddMinutes(2) });
+        Assert.Equal(HttpStatusCode.BadRequest, futureLocation.StatusCode);
+        var afterFuture = rides[rideId];
+        Assert.Equal(acceptedNewer.DriverLatitude, afterFuture.DriverLatitude);
+        Assert.Equal(acceptedNewer.DriverLongitude, afterFuture.DriverLongitude);
+        Assert.Equal(acceptedNewer.LocationUpdatedAt, afterFuture.LocationUpdatedAt);
+        Assert.Equal(acceptedNewer.DriverLocationCapturedAtUtc, afterFuture.DriverLocationCapturedAtUtc);
+
         using var riderRideResponse = await rider.GetAsync($"/api/v1/rides/{rideId}");
         Assert.Equal(HttpStatusCode.OK, riderRideResponse.StatusCode);
         using var riderRideJson = JsonDocument.Parse(await riderRideResponse.Content.ReadAsStringAsync());
-        Assert.Equal(17.495, riderRideJson.RootElement.GetProperty("driverLatitude").GetDouble(), 6);
-        Assert.Equal(78.401, riderRideJson.RootElement.GetProperty("driverLongitude").GetDouble(), 6);
+        Assert.Equal(17.496, riderRideJson.RootElement.GetProperty("driverLatitude").GetDouble(), 6);
+        Assert.Equal(78.402, riderRideJson.RootElement.GetProperty("driverLongitude").GetDouble(), 6);
+        Assert.Equal(newerCapture,
+            riderRideJson.RootElement.GetProperty("driverLocationCapturedAtUtc").GetDateTimeOffset());
 
         Assert.Equal(HttpStatusCode.OK,
             (await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null)).StatusCode);

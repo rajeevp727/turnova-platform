@@ -2786,15 +2786,29 @@ app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, stri
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId || !ride.LocationSharingActive || !RideLifecycle.IsLocationSharingActive(ride.Status))
         return Results.NotFound(new { message = "Active ride not found." });
-    var updated = ride with { DriverLatitude = location.Latitude, DriverLongitude = location.Longitude, LocationUpdatedAt = DateTimeOffset.UtcNow };
+    var capturedAtUtc = location.CapturedAtUtc ?? DateTimeOffset.UtcNow;
+    if (capturedAtUtc > DateTimeOffset.UtcNow.AddMinutes(1))
+        return Results.BadRequest(new { message = "GPS capture time cannot be in the future." });
+    if (ride.DriverLocationCapturedAtUtc is not null &&
+        capturedAtUtc <= ride.DriverLocationCapturedAtUtc.Value)
+        return Results.Conflict(new { message = "This GPS fix is older than the latest accepted trip location." });
+
+    var updated = ride with
+    {
+        DriverLatitude = location.Latitude,
+        DriverLongitude = location.Longitude,
+        LocationUpdatedAt = DateTimeOffset.UtcNow,
+        DriverLocationCapturedAtUtc = capturedAtUtc
+    };
     if (!await TryReplaceRideAsync(ride, updated, ct))
-        return Results.Conflict(new { message = "Ride state changed. Refresh before sending another location update." });
+        return Results.Conflict(new { message = "Ride state or location changed. Refresh before sending another location update." });
     await hub.Clients.Group(rideId).SendAsync("DriverLocationUpdated", new
     {
         rideId,
         latitude = updated.DriverLatitude,
         longitude = updated.DriverLongitude,
-        updated.LocationUpdatedAt
+        updated.LocationUpdatedAt,
+        locationCapturedAtUtc = updated.DriverLocationCapturedAtUtc
     }, ct);
     return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
@@ -3209,6 +3223,7 @@ bool IsSameRideSnapshot(DemoRide left, DemoRide right)
         left.PickupLatitude != right.PickupLatitude || left.PickupLongitude != right.PickupLongitude ||
         left.DriverLatitude != right.DriverLatitude || left.DriverLongitude != right.DriverLongitude ||
         left.AcceptedAt != right.AcceptedAt || left.LocationUpdatedAt != right.LocationUpdatedAt ||
+        left.DriverLocationCapturedAtUtc != right.DriverLocationCapturedAtUtc ||
         left.LocationSharingActive != right.LocationSharingActive || left.ServiceClass != right.ServiceClass ||
         left.DispatchZoneId != right.DispatchZoneId || left.AgreementStateRevision != right.AgreementStateRevision ||
         left.UnionId != right.UnionId || left.NegotiationExpiresAtUtc != right.NegotiationExpiresAtUtc ||
@@ -3427,7 +3442,7 @@ public sealed record ProposeRideAgreementRequest(decimal Amount, string Currency
 public sealed record ReportRidePaymentRequest(decimal? AmountReceived);
 public sealed record RiderSelectedBookingRequest(string SelectedDriverId, string UnionId, string Pickup, string Dropoff,
     IReadOnlyList<string>? Stops, int Passengers, double PickupLatitude, double PickupLongitude);
-public sealed record DriverLocationRequest(double Latitude, double Longitude);
+public sealed record DriverLocationRequest(double Latitude, double Longitude, DateTimeOffset? CapturedAtUtc = null);
 public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude, DateTimeOffset? CapturedAtUtc = null);
 public sealed record RiderDiscoveryResponse(string PickupZoneId, double? JourneyDistanceKm, IReadOnlyList<NearbyUnionDiscoveryGroup> Unions);
 public sealed record NearbyUnionDiscoveryGroup(string UnionId, string UnionName, IReadOnlyList<NearbyDriverDiscoveryResponse> Drivers);
@@ -3448,7 +3463,8 @@ public sealed record DemoRide(
     string? DriverDisplayName = null, string? DriverVehicleMake = null, string? DriverVehicleModel = null,
     double? DriverDistanceToPickupKm = null, string? UnionName = null,
     RidePaymentReconciliation? PaymentReconciliation = null,
-    IReadOnlyList<RideAuditEvent>? AuditEvents = null);
+    IReadOnlyList<RideAuditEvent>? AuditEvents = null,
+    DateTimeOffset? DriverLocationCapturedAtUtc = null);
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 

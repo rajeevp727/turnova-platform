@@ -690,7 +690,11 @@ export default function App() {
             if (!canShare()) return;
             void apiFetch(`/api/v1/rides/${activeRide.rideId}/location`, {
               method: "POST",
-              body: JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude })
+              body: JSON.stringify({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                capturedAtUtc: new Date(location.timestamp).toISOString()
+              })
             }).catch(e => {
               if (mounted) setError(e instanceof Error ? e.message : "Unable to update location.");
             });

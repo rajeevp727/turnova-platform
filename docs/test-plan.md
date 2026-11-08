@@ -1004,3 +1004,34 @@ The Driver app sends Expo GPS `LocationObject.timestamp` for Online, foreground 
 
 The profile writer uses ConcurrentDictionary.TryAdd/TryUpdate in the in-memory adapter and Cosmos CreateItemAsync plus ETag-conditional ReplaceItemAsync in production. Compare-and-swap retries are bounded; a changed or repeatedly contended profile returns a conflict rather than overwriting newer state. Operations document review validates the complete review-relevant identity/vehicle/document snapshot before applying status changes. This does not implement private file upload, scanning, consent or retention policy; those remain external product/legal/storage gates.
 
+
+
+### TRIP-01 — active-trip capture ordering, SignalR freshness and Rider map follow
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| TRIP-LOC-001 | An older Driver client posts an active-trip location without `capturedAtUtc` | API remains backward compatible and stamps a server-time capture watermark while preserving a separate server receipt timestamp | Existing selected-trip API integration test legacy request path | P0 |
+| TRIP-LOC-002 | Driver posts a strictly newer active-trip GPS capture | Ride stores coordinates, server receipt time and capture watermark; owning Rider receives both timestamps in `DriverLocationUpdated` | `SelectedCabBookingUsesOnlyAssignedDriverLocationAndLifecycleGuards` | P0 |
+| TRIP-LOC-003 | Duplicate or out-of-order active-trip GPS capture arrives after a newer fix | HTTP 409; no coordinates, receipt timestamp or capture watermark changes; no stale location event is broadcast | `SelectedCabBookingUsesOnlyAssignedDriverLocationAndLifecycleGuards`; existing ride ETag/CAS writer | P0 |
+| TRIP-LOC-004 | Active-trip GPS capture is more than one minute in the future | HTTP 400; ride state and location watermark remain unchanged | `SelectedCabBookingUsesOnlyAssignedDriverLocationAndLifecycleGuards` | P0 |
+| TRIP-LOC-005 | Two active-trip location requests race from the same ride snapshot | At most one conditional replacement succeeds; a losing writer receives HTTP 409 and cannot overwrite the winner's capture watermark | Existing in-memory snapshot guard and Cosmos ETag conditional replacement; live multi-instance contention remains external | P0 |
+| TRIP-LOC-006 | Rider receives a stale, duplicate, malformed-coordinate or different-ride SignalR location event | Event is ignored; only a strictly newer capture for the current ride updates the marker; legacy events without capture time compare server receipt timestamps | Five deterministic tests in `src/mobile/shared/tripLocationSharing.test.cjs` | P0 |
+| TRIP-LOC-007 | Rider receives first capture-timestamp event while its restored ride snapshot has only legacy receipt time | First capture watermark is accepted without comparing client capture time against server receipt time; subsequent events use strict capture ordering | `first capture watermark upgrades a legacy receipt-only snapshot without mixing clock semantics` | P0 |
+| TRIP-MAP-001 | Driver coordinates update while Rider Activity map is following | After the matching native map reports ready, camera fits the Driver and pickup coordinates; if pickup is unavailable it follows the valid Driver coordinate | `map viewport includes valid Driver and pickup coordinates only`; map-ready gating test and Rider map effect use shared helpers | P1 |
+| TRIP-MAP-002 | Rider manually pans the Activity map | Automatic camera movement pauses so the Rider's manual map position is respected | Physical-device manual-pan acceptance required | P0 |
+| TRIP-MAP-003 | Rider selects Follow driver after manual pan | Camera fits the current Driver and pickup coordinates again and resumes following subsequent accepted SignalR updates | Shared viewport helper and Rider state/effect; physical-device acceptance required | P0 |
+| TRIP-MAP-004 | Rider switches to another ride or Activity unmounts | Follow state resets for the new ride; stale events for the prior ride are ignored and map refs are not used after unmount | Ride-ID guard and effect cleanup; physical-device navigation acceptance required | P0 |
+| TRIP-MAP-005 | Driver coordinates are available before the native map finishes mounting, or Activity is reopened | Camera fitting waits for onMapReady on the matching ride map, then fits current Driver+pickup; it never calls fit for an unready or different ride map | Rider camera follows only after the matching map is ready and follow is enabled; ride-keyed MapView and onMapReady guard | P1 |
+
+The active-trip capture watermark is optional on existing ride documents and is appended to the existing ride aggregate; no new Cosmos container or cross-partition transaction is introduced. The one-minute future tolerance is only a client-clock skew bound, not a product location-freshness policy. Capture timestamps are untrusted client data; server receipt time remains separate for diagnostics. The endpoint remains restricted to the assigned Driver and active location-sharing lifecycle. No background tracking is added. Live Cosmos multi-instance ETag/restart, SignalR delivery/reconnect, Android/iOS foreground GPS, manual map pan and follow/recenter behavior remain physical/infrastructure gates; simulator compilation and deterministic helper tests do not replace them.
+
+| TRIP-LOC-008 | Rider reconnects with a ride snapshot returned by the API, then receives an older SignalR event | The Rider compares the event capture time with the API's serialized `driverLocationCapturedAtUtc` watermark and ignores the older event; a newer event is accepted | `restored ride API capture watermark rejects an older SignalR capture` in `src/mobile/shared/tripLocationSharing.test.cjs` | P0 |
+
+| TRIP-LOC-009 | A delayed ride-history/reconnect API response returns after a newer SignalR location event | Merge status/agreement/other non-location fields from the response but preserve the newer Driver coordinates and capture watermark; a genuinely newer API snapshot may replace them | `stale history refresh cannot overwrite a newer SignalR location snapshot` in `src/mobile/shared/tripLocationSharing.test.cjs` | P0 |
+
+
+### TRIP-01 exact-head CI execution evidence (2026-11-08)
+
+- PR #118 exact head `a13a8b706ddd0ee46eb635cbc6cd6ad6a48390a2` passed [GitHub Actions run #746 / 42491279009](https://github.com/rajeevp727/turnova-platform/actions/runs/42491279009), 8/8 jobs.
+- Backend Release suite executed **317/317 tests** with zero failures. Rider/Driver typechecks and production JS exports, shared mobile tests, Android debug APK builds, unsigned iOS Simulator builds and native non-container API publish all passed.
+- Both npm audits reported 0 critical, 0 high, 11 moderate and 1 low; the JSON reports and generated lockfiles are CI artifacts. No live Cosmos, physical-device, device-to-device SignalR or production validation is implied.
