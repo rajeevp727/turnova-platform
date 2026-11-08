@@ -197,7 +197,7 @@ jobs:
           if-no-files-found: error
 
   native-ios:
-    runs-on: macos-26-intel
+    runs-on: macos-15-intel
     strategy:
       fail-fast: false
       matrix:
