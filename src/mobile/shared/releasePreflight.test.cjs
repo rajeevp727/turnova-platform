@@ -49,7 +49,7 @@ test("current Rider config passes structural checks but reports unprovided relea
   const report = validateReleaseConfig(fixture());
   assert.equal(report.app.slug, "turnova-rider");
   assert.equal(report.engineeringChecks.status, "passed");
-  assert.equal(report.readyForEasProductionBuild, false);
+  assert.equal(report.productionBuildConfigurationComplete, false);
   assert.equal(report.productionReadiness, "blocked");
   assert.deepEqual(report.externalGates.map(item => item.id).sort(), [
     "build-number-increment", "eas-project-id", "ios-bundle-identifier",
@@ -79,7 +79,7 @@ test("valid release identifiers and increment policy clear only configuration ga
   });
   const report = validateReleaseConfig(input);
   assert.equal(report.engineeringChecks.status, "passed");
-  assert.equal(report.readyForEasProductionBuild, true);
+  assert.equal(report.productionBuildConfigurationComplete, true);
   assert.deepEqual(report.externalGates.map(item => item.id).sort(), [
     "physical-device-acceptance", "signing-credentials", "store-submission"
   ].sort());

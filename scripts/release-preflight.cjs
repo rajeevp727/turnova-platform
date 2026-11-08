@@ -111,7 +111,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, exists = fs.exi
 
   const engineeringPassed = errors.length === 0;
   const configurationBlockerIds = new Set(["ios-bundle-identifier", "eas-project-id", "build-number-increment"]);
-  const readyForEasProductionBuild =
+  const productionBuildConfigurationComplete =
     engineeringPassed && !externalGates.some(item => configurationBlockerIds.has(item.id));
 
   return {
@@ -125,7 +125,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, exists = fs.exi
       easProjectLinked: typeof projectId === "string" && projectId.length > 0
     },
     engineeringChecks: { status: engineeringPassed ? "passed" : "failed", errors },
-    readyForEasProductionBuild,
+    productionBuildConfigurationComplete,
     productionReadiness: externalGates.length === 0 && engineeringPassed ? "not_verified" : "blocked",
     externalGates,
     currentCiArtifactEvidence: {
