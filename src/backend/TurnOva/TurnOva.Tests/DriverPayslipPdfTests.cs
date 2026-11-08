@@ -55,20 +55,36 @@ public sealed class DriverPayslipPdfTests
     [Fact]
     public async Task GenerateUsesRequestIsolatedShapersWhenMultiplePayslipsRenderConcurrently()
     {
-        var payslip = CreatePayslip("Raja রাজা தமிழ் ಕನ್ನಡ മലയാളം", "Union हिंदी বাংলা");
-        var renders = Enumerable.Range(0, 4)
-            .Select(_ => Task.Run(() => DriverPayslipPdf.Generate(payslip)))
+        var payslips = Enumerable.Range(0, 4)
+            .Select(index => CreatePayslip(
+                $"Driver-{index} রাজা தமிழ் ಕನ್ನಡ മലയാളം",
+                $"Union-{index} हिंदी বাংলা"))
+            .ToArray();
+        var renders = payslips
+            .Select(payslip => Task.Run(() => DriverPayslipPdf.Generate(payslip)))
             .ToArray();
 
         var documents = await Task.WhenAll(renders);
 
-        Assert.All(documents, pdf =>
+        for (var index = 0; index < documents.Length; index++)
         {
-            var content = Encoding.Latin1.GetString(pdf);
-            Assert.StartsWith("%PDF-1.4", content, StringComparison.Ordinal);
-            Assert.EndsWith("%%EOF", content.TrimEnd(), StringComparison.Ordinal);
-            Assert.True(pdf.Length > 5_000);
-        });
+            var pdf = documents[index];
+            var pdfHeader = Encoding.Latin1.GetString(pdf);
+            Assert.StartsWith("%PDF-1.4", pdfHeader, StringComparison.Ordinal);
+            Assert.EndsWith("%%EOF", pdfHeader.TrimEnd(), StringComparison.Ordinal);
+            Assert.Contains("/ToUnicode", pdfHeader, StringComparison.Ordinal);
+
+            var extracted = ExtractText(pdf);
+            Assert.Contains($"Driver-{index}", extracted, StringComparison.Ordinal);
+            Assert.Contains("ராஜா", extracted, StringComparison.Ordinal);
+            for (var other = 0; other < documents.Length; other++)
+            {
+                if (other == index)
+                    continue;
+
+                Assert.DoesNotContain($"Driver-{other}", extracted, StringComparison.Ordinal);
+            }
+        }
     }
 
     [Fact]
@@ -93,7 +109,19 @@ public sealed class DriverPayslipPdfTests
         Assert.StartsWith("%PDF-1.4", pdfText, StringComparison.Ordinal);
         Assert.EndsWith("%%EOF", pdfText.TrimEnd(), StringComparison.Ordinal);
         Assert.True(pdf.Length > 5_000);
+
+        var extracted = ExtractText(pdf);
+        var normalizedExtracted = string.Concat(extracted.Where(character => !char.IsWhiteSpace(character)));
+        var normalizedExpected = string.Concat(driverName.Where(character => !char.IsWhiteSpace(character)));
+        Assert.Contains(normalizedExpected, normalizedExtracted, StringComparison.Ordinal);
         Assert.Equal(driverName, payslip.DriverName);
+    }
+
+    private static string ExtractText(byte[] pdf)
+    {
+        using var stream = new MemoryStream(pdf);
+        using var document = PdfDocument.Open(stream);
+        return string.Join("\n", document.GetPages().Select(page => page.Text));
     }
 
     private static DriverMonthlyPayslip CreatePayslip(string driverName, string unionName) =>
