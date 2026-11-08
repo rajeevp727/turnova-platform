@@ -670,7 +670,9 @@ async Task<DemoRide?> ReleaseTerminalSelectedRideReservationAsync(
 {
     // Only Union-linked selected Cab rides use the exclusive reservation lease.
     // Match both DriverId and RideId so a stale history item cannot release a newer ride.
-    if (ride is null || ride.UnionId is null || string.IsNullOrWhiteSpace(ride.DriverId) ||
+    if (ride is null || ride.UnionId is null ||
+        !string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+        string.IsNullOrWhiteSpace(ride.DriverId) ||
         ride.Status is not ("Completed" or "Cancelled" or "Expired"))
         return ride;
 
@@ -3264,8 +3266,13 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
 
 app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
 {
-    var ride = await FindRideAsync(rideId, ct);
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    var ownedRide = await ReadRideRawAsync(rideId, ct);
+    if (ownedRide is null || ownedRide.RiderId != riderId)
+        return Results.NotFound(new { message = "Ride not found." });
+
+    // Verify ownership before FindRideAsync can reconcile expiry or release a reservation.
+    var ride = await FindRideAsync(rideId, ct);
     return ride is not null && ride.RiderId == riderId
         ? Results.Ok(ride)
         : Results.NotFound(new { message = "Ride not found." });
