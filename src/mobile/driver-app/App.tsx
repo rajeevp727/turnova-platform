@@ -16,7 +16,7 @@ import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStored
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
-import { findActiveRide, isTerminalRideStatus } from "../shared/rideRecovery";
+import { findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
 
@@ -556,16 +556,7 @@ export default function App() {
       .configureLogging(LogLevel.Warning)
       .build();
     connection.on("RideStatusChanged", (update: { rideId: string; status: string }) => {
-      if (!mounted || update.rideId !== activeRide.rideId) return;
-      if (isTerminalRideStatus(update.status)) {
-        setActiveRide((current: any) => current?.rideId === update.rideId
-          ? { ...current, status: update.status, locationSharingActive: false }
-          : current);
-        void loadDriverRideHistory(() => mounted).catch(e => {
-          if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh completed trip history.");
-        });
-        return;
-      }
+      if (!shouldApplyRideStatusUpdate(activeRide.rideId, update.rideId, mounted)) return;
       setActiveRide((current: any) => current?.rideId === update.rideId
         ? { ...current, status: update.status, locationSharingActive: ["Accepted", "Arrived", "InProgress"].includes(update.status) }
         : current);
@@ -676,7 +667,7 @@ export default function App() {
     };
   }, [user?.id, tab, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
 
-  const advanceRide = async (action: "arrive" | "start" | "complete") => { if (!activeRide) return; try { const updated = await apiFetch(`/api/v1/rides/${activeRide.rideId}/${action}`, { method: "POST" }); setActiveRide(updated); if (isTerminalRideStatus(updated.status)) await loadDriverRideHistory(() => true); setNotice(action === "arrive" ? "Arrival confirmed." : action === "start" ? "Trip started." : "Trip completed. Location sharing stopped."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to update ride status or refresh history."); } };
+  const advanceRide = async (action: "arrive" | "start" | "complete") => { if (!activeRide) return; try { const updated = await apiFetch(`/api/v1/rides/${activeRide.rideId}/${action}`, { method: "POST" }); setActiveRide(updated); setNotice(action === "arrive" ? "Arrival confirmed." : action === "start" ? "Trip started." : "Trip completed. Location sharing stopped."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to update ride status."); } };
 
 
   const downloadPayslip = async (year: number, month: number) => {
