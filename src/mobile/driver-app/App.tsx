@@ -262,7 +262,7 @@ export default function App() {
         try {
           const state = await reconcileServerAvailability();
           if (state.activeRide) setNotice("A selected Cab trip is active. Availability changes are paused.");
-          else if (!state.isOnline) setNotice("The server reports Offline. Refresh your location before going Online again.");
+          else if (!state.isOnline) setNotice("The server reports Offline. Review your onboarding, Union eligibility and location before going Online again.");
           else setNotice("The server still reports Online. Retry the availability action after the current conflict resolves.");
         } catch (recoveryError) {
           setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
