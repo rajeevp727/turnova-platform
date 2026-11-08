@@ -178,13 +178,15 @@ test("stale in-flight write reports when its exact generated file cannot be remo
   const fileSystem = createFileSystem([], {
     delete: async () => { throw new Error("delete denied"); }
   });
+  let sessionChecks = 0;
   await assert.rejects(
     writeCachedDriverPayslipIfCurrent(
       fileSystem,
       CACHE + "TurnOva-Payslip-2026-10.pdf",
       "JVBERi0=",
-      () => false
+      () => ++sessionChecks === 1
     ),
     /cached file cleanup failed/
   );
+  assert.equal(fileSystem.files.has("TurnOva-Payslip-2026-10.pdf"), true);
 });
