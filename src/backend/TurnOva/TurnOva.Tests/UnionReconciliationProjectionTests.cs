@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TurnOva.API;
 using Xunit;
 
 namespace TurnOva.Tests;
@@ -28,7 +29,7 @@ public sealed class UnionReconciliationProjectionTests
         using var document = JsonDocument.Parse(json);
         var propertyNames = document.RootElement.EnumerateObject()
             .Select(property => property.Name)
-            .Order(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
         Assert.Equal(
