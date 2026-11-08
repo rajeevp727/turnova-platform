@@ -68,9 +68,11 @@ function isInternalHostname(host) {
   const normalized = host.toLowerCase().endsWith(".") ? host.slice(0, -1).toLowerCase() : host.toLowerCase();
   const internalSuffixes = [
     ".localhost", ".local", ".localdomain", ".internal", ".lan",
-    ".home", ".home.arpa", ".test", ".invalid", ".intranet", ".private", ".example", ".example.com", ".example.net", ".example.org", ".onion"
+    ".home", ".home.arpa", ".test", ".invalid", ".intranet", ".private", ".example",
+    ".example.com", ".example.net", ".example.org", ".onion"
   ];
-  return normalized === "localhost" || !normalized.includes(".") ||
+  const reservedExampleHosts = new Set(["example.com", "example.net", "example.org"]);
+  return normalized === "localhost" || reservedExampleHosts.has(normalized) || !normalized.includes(".") ||
     internalSuffixes.some(suffix => normalized.endsWith(suffix));
 }
 

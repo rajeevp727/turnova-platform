@@ -48,6 +48,7 @@ function fixture(overrides = {}) {
 
 test("current Rider config passes structural checks but reports unprovided release inputs", () => {
   const report = validateReleaseConfig(fixture());
+  assert.equal(report.schemaVersion, 2);
   assert.equal(report.app.slug, "turnova-rider");
   assert.equal(report.app.productionApiBaseUrlConfiguredInCi, false);
   assert.equal(report.engineeringChecks.status, "passed");
@@ -166,7 +167,7 @@ test("private, reserved and internal API hosts fail while public IPv4 and IPv6 p
     "https://100.64.0.1", "https://192.0.2.1", "https://198.18.0.1", "https://203.0.113.10",
     "https://[fc00::1]", "https://[fe80::1]", "https://[2001:db8::1]", "https://[2001:20::1]",
     "https://[3fff::1]", "https://[2002:7f00:1::]", "https://[::ffff:192.168.1.10]",
-    "https://api.local", "https://api.internal", "https://api.turnova.example.com", "https://api", "https://localhost"
+    "https://api.local", "https://api.internal", "https://api.turnova.example.com", "https://example.com", "https://api.example.net", "https://api", "https://localhost"
   ];
   for (const apiBaseUrl of rejectedHosts) {
     const report = validateReleaseConfig(fixture({ apiBaseUrl }));

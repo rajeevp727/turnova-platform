@@ -856,3 +856,5 @@ Dispatch exception event IDs are deterministic from the server-generated trace I
 - The preflight checks the configured iOS icon path independently from the general Expo icon. Structural mistakes fail CI; remote ownership, DNS/TLS, signing, device/pilot and store evidence remain external.
 
 - Release-preflight report schema is version 2; CI-visible configuration fields are distinct from the external approval/remote-verification gates.
+
+- Release-preflight schema-v2 tests assert that CI-visible configuration remains distinct from external approval gates and reserved example domains are rejected.
