@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Connections.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -155,7 +156,8 @@ public sealed class RideTrackingHubTests
         public override string ConnectionId => "connection-1";
         public override string? UserIdentifier => User?.FindFirstValue(ClaimTypes.NameIdentifier);
         public override ClaimsPrincipal? User { get; }
-        public override IDictionary<object, object?> Items { get; set; } = new Dictionary<object, object?>();
+        private readonly IDictionary<object, object?> _items = new Dictionary<object, object?>();
+        public override IDictionary<object, object?> Items => _items;
         public override IFeatureCollection Features { get; }
         public override CancellationToken ConnectionAborted => CancellationToken.None;
         public override void Abort() => IsAborted = true;
