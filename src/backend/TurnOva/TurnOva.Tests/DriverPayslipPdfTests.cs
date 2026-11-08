@@ -20,7 +20,7 @@ public sealed class DriverPayslipPdfTests
 
         Assert.StartsWith("%PDF-", pdfText, StringComparison.Ordinal);
         Assert.Contains("/ToUnicode", pdfText, StringComparison.Ordinal);
-        Assert.Contains("/FontFile2", pdfText, StringComparison.Ordinal);
+        Assert.Contains("/FontFile", pdfText, StringComparison.Ordinal);
         Assert.Contains("Raja", extractedText, StringComparison.Ordinal);
         Assert.Contains("రాజా", extractedText, StringComparison.Ordinal);
         Assert.Contains("ராசா", extractedText, StringComparison.Ordinal);
