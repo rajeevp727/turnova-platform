@@ -795,6 +795,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string unionId = "union-review-orphan-union";
         const string driverId = "union-review-orphan-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -834,6 +835,7 @@ public sealed class RideApiIntegrationTests
         const string unionId = "union-review-active-union";
         const string driverId = "union-review-active-driver";
         const string rideId = "union-review-active-ride";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
