@@ -3063,7 +3063,7 @@ public sealed class RideApiIntegrationTests
     public async Task DirectRideReadReleasesReservationForAlreadyTerminalSelectedRide(string terminalStatus)
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
-        const string driverId = "direct-terminal-read-driver";
+        const string driverId = "selected-booking-driver";
         const string unionId = "direct-terminal-read-union";
         using var rider = factory.CreateClient("Rider", "direct-terminal-read-rider");
         SeedBookableDriver(factory, driverId, unionId);
@@ -3095,7 +3095,7 @@ public sealed class RideApiIntegrationTests
     public async Task RiderAndDriverHistoryReadsRepairAlreadyTerminalSelectedRideReservations()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
-        const string driverId = "terminal-history-read-driver";
+        const string driverId = "selected-booking-driver";
         const string unionId = "terminal-history-read-union";
         using var rider = factory.CreateClient("Rider", "terminal-history-read-rider");
         using var secondRider = factory.CreateClient("Rider", "terminal-history-read-second-rider");
@@ -3149,7 +3149,7 @@ public sealed class RideApiIntegrationTests
     public async Task TerminalRideReadDoesNotReleaseNewerReservationForSameDriver()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
-        const string driverId = "newer-reservation-read-driver";
+        const string driverId = "selected-booking-driver";
         const string unionId = "newer-reservation-read-union";
         using var rider = factory.CreateClient("Rider", "newer-reservation-read-rider");
         using var secondRider = factory.CreateClient("Rider", "newer-reservation-read-second-rider");
@@ -3190,7 +3190,7 @@ public sealed class RideApiIntegrationTests
     public async Task ConcurrentExpiredRideReadsKeepTerminalReservationCleanupIdempotent()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
-        const string driverId = "concurrent-terminal-read-driver";
+        const string driverId = "selected-booking-driver";
         const string unionId = "concurrent-terminal-read-union";
         using var rider = factory.CreateClient("Rider", "concurrent-terminal-read-rider");
         SeedBookableDriver(factory, driverId, unionId);
@@ -3230,7 +3230,7 @@ public sealed class RideApiIntegrationTests
     public async Task UnrelatedRiderCannotTriggerTerminalReservationRepairForAnotherRidersRide()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
-        const string driverId = "terminal-read-owner-driver";
+        const string driverId = "selected-booking-driver";
         const string unionId = "terminal-read-owner-union";
         using var owner = factory.CreateClient("Rider", "terminal-read-owner");
         using var unrelatedRider = factory.CreateClient("Rider", "terminal-read-unrelated");
@@ -3259,7 +3259,7 @@ public sealed class RideApiIntegrationTests
     public async Task TerminalNonCabHistoricalRideReadDoesNotReleaseItsReservation()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
-        const string driverId = "terminal-legacy-noncab-driver";
+        const string driverId = "selected-booking-driver";
         const string unionId = "terminal-legacy-noncab-union";
         using var rider = factory.CreateClient("Rider", "terminal-legacy-noncab-rider");
         SeedBookableDriver(factory, driverId, unionId);
