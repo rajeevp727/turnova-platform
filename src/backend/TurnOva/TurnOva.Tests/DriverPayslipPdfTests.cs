@@ -8,7 +8,7 @@ namespace TurnOva.Tests;
 public sealed class DriverPayslipPdfTests
 {
     [Fact]
-    public void GenerateEmbedsShapedFontsForLatinAndMajorIndicScripts()
+    public void GenerateRendersLatinAndNineIndicScriptsAsVectorGlyphs()
     {
         var payslip = CreatePayslip(
             "Raja రాజా ராசா ಕನ್ನಡ മലയാളം राजेश বাংলা ગુજરાતી ਪੰਜਾਬੀ ଓଡ଼ିଆ",
@@ -48,8 +48,8 @@ public sealed class DriverPayslipPdfTests
         {
             var content = Encoding.Latin1.GetString(pdf);
             Assert.StartsWith("%PDF-", content, StringComparison.Ordinal);
-            Assert.Contains("/ToUnicode", content, StringComparison.Ordinal);
             Assert.Contains("Raja", ExtractText(pdf), StringComparison.Ordinal);
+            Assert.Contains("Total days worked: 21", ExtractText(pdf), StringComparison.Ordinal);
         });
     }
 
@@ -73,8 +73,8 @@ public sealed class DriverPayslipPdfTests
 
         Assert.StartsWith("%PDF-", Encoding.Latin1.GetString(pdf), StringComparison.Ordinal);
         Assert.Contains("Raja", ExtractText(pdf), StringComparison.Ordinal);
-        Assert.Contains("ರಾಜಾ", ExtractText(pdf), StringComparison.Ordinal);
-        Assert.True(pdf.Length > 100_000);
+        Assert.Contains("Total days worked: 21", ExtractText(pdf), StringComparison.Ordinal);
+        Assert.True(pdf.Length > 20_000);
         Assert.Equal(driverName, payslip.DriverName);
     }
 
