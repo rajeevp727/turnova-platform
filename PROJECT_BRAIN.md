@@ -833,3 +833,6 @@ PR #121 also records unexpected non-cancellation failures from the active Cab se
 ### PLATFORM-01 ambiguous reservation promotion
 
 Selected-driver reservation promotion now handles an ambiguous storage outcome idempotently: after a non-cancellation exception from `TryMakePermanentAsync`, the API point-reads the reservation. If the same ride already holds a permanent lease, the accept flow appends `DriverReservationPromotionRecovered` and continues; otherwise a safe `DriverReservationFailed` event is appended and the exception is rethrown before ride transition. Deterministic tests cover both pre-commit failure (ride and temporary lease unchanged) and post-commit timeout (re-read recovers success without a duplicate exception event).
+
+
+Dispatch exception event IDs are deterministic from the server-generated trace ID. Repeated writes for the same trace are idempotent in the in-memory adapter and Cosmos store; Cosmos 409 is accepted only after reading back an event with matching actor, trace and reason category. Trace IDs are constrained to a bounded Cosmos-safe character set.
