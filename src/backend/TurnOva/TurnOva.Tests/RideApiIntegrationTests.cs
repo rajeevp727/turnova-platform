@@ -2134,6 +2134,74 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task DriverLocationRejectsOutOfOrderFixWithoutRefreshingOrTakingDriverOffline()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-location-out-of-order");
+        SeedBookableDriver(factory, "driver-location-out-of-order", "driver-location-out-of-order-union");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var latestCapture = DateTimeOffset.UtcNow;
+        var current = profiles["driver-location-out-of-order"] with
+        {
+            LocationUpdatedAtUtc = latestCapture,
+            LocationCapturedAtUtc = latestCapture
+        };
+        profiles["driver-location-out-of-order"] = current;
+
+        foreach (var coordinates in new[] { (Latitude: 17.5d, Longitude: 78.4d), (Latitude: 0d, Longitude: 0d) })
+        {
+            using var stale = await driver.PostAsJsonAsync("/api/v1/driver/location", new
+            {
+                latitude = coordinates.Latitude,
+                longitude = coordinates.Longitude,
+                capturedAtUtc = latestCapture.AddSeconds(-1)
+            });
+            Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        }
+
+        var after = profiles["driver-location-out-of-order"];
+        Assert.Equal("Online", after.AvailabilityStatus);
+        Assert.Equal(current.CurrentLatitude, after.CurrentLatitude);
+        Assert.Equal(current.CurrentLongitude, after.CurrentLongitude);
+        Assert.Equal(latestCapture, after.LocationUpdatedAtUtc);
+        Assert.Equal(latestCapture, after.LocationCapturedAtUtc);
+        var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
+            "/api/v1/zones/hyderabad-central/queues/cab");
+        Assert.Contains(queue!, entry => entry.DriverId == "driver-location-out-of-order");
+    }
+
+    [Fact]
+    public async Task DriverCannotGoOnlineUsingGpsFixOlderThanLatestAcceptedCapture()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "driver-online-stale-fix");
+        SeedActiveCabUnion(factory, "driver-online-stale-fix");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var latestCapture = DateTimeOffset.UtcNow;
+        profiles["driver-online-stale-fix"] = profiles["driver-online-stale-fix"] with
+        {
+            LocationCapturedAtUtc = latestCapture
+        };
+
+        using var response = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
+        {
+            isOnline = true,
+            latitude = 17.493,
+            longitude = 78.399,
+            capturedAtUtc = latestCapture.AddSeconds(-1)
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Offline", profiles["driver-online-stale-fix"].AvailabilityStatus);
+        Assert.Null(profiles["driver-online-stale-fix"].CurrentLatitude);
+        var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
+            "/api/v1/zones/hyderabad-central/queues/cab");
+        Assert.DoesNotContain(queue!, entry => entry.DriverId == "driver-online-stale-fix");
+    }
+
+    [Fact]
     public async Task DriverAvailabilityLocationRequiresBothCoordinatesAndKeepsOnlineStateOnBadPayload()
     {
         using var factory = new TurnOvaApiFactory();
