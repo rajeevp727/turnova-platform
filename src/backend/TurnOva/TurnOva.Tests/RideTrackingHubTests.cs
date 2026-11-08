@@ -60,7 +60,9 @@ public sealed class RideTrackingHubTests
         await ownerHub.OnConnectedAsync();
 
         Assert.False(ownerContext.IsAborted);
-        Assert.Equal([("connection-1", "ride-1")], ownerGroups.Added);
+        var riderGroup = Assert.Single(ownerGroups.Added);
+        Assert.Equal("connection-1", riderGroup.ConnectionId);
+        Assert.Equal("ride-1", riderGroup.GroupName);
 
         var otherContext = CreateHubContext(CreatePrincipal("other-rider", "Rider"), "?rideId=ride-1");
         var otherGroups = new RecordingGroupManager();
@@ -83,7 +85,9 @@ public sealed class RideTrackingHubTests
         await ownerHub.OnConnectedAsync();
 
         Assert.False(ownerContext.IsAborted);
-        Assert.Equal([("connection-1", "driver:driver-1")], ownerGroups.Added);
+        var driverGroup = Assert.Single(ownerGroups.Added);
+        Assert.Equal("connection-1", driverGroup.ConnectionId);
+        Assert.Equal("driver:driver-1", driverGroup.GroupName);
 
         var otherContext = CreateHubContext(CreatePrincipal("driver-1", "Driver"), "?driverId=driver-2");
         var otherGroups = new RecordingGroupManager();
