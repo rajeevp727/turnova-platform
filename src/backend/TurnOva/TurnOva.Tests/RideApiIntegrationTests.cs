@@ -2126,6 +2126,7 @@ public sealed class RideApiIntegrationTests
         Assert.Null(profile.CurrentLatitude);
         Assert.Null(profile.CurrentLongitude);
         Assert.Null(profile.LocationUpdatedAtUtc);
+        Assert.NotNull(profile.LocationCapturedAtUtc);
 
         var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
             "/api/v1/zones/hyderabad-central/queues/cab");
