@@ -2167,17 +2167,28 @@ public sealed class RideApiIntegrationTests
             new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.OK, online.StatusCode);
 
+        var zoneExitCapture = DateTimeOffset.UtcNow.AddSeconds(1);
         using var location = await driver.PostAsJsonAsync("/api/v1/driver/location",
-            new { latitude = 0d, longitude = 0d });
+            new { latitude = 0d, longitude = 0d, capturedAtUtc = zoneExitCapture });
         Assert.Equal(HttpStatusCode.Conflict, location.StatusCode);
 
-        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()
-            ["driver-location-zone-exit"];
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var profile = profiles["driver-location-zone-exit"];
         Assert.Equal("Offline", profile.AvailabilityStatus);
         Assert.Null(profile.CurrentLatitude);
         Assert.Null(profile.CurrentLongitude);
         Assert.Null(profile.LocationUpdatedAtUtc);
-        Assert.NotNull(profile.LocationCapturedAtUtc);
+        Assert.Equal(zoneExitCapture, profile.LocationCapturedAtUtc);
+
+        using var staleOnline = await driver.PostAsJsonAsync("/api/v1/driver/availability", new
+        {
+            isOnline = true,
+            latitude = 17.493,
+            longitude = 78.399,
+            capturedAtUtc = zoneExitCapture.AddSeconds(-1)
+        });
+        Assert.Equal(HttpStatusCode.Conflict, staleOnline.StatusCode);
+        Assert.Equal("Offline", profiles["driver-location-zone-exit"].AvailabilityStatus);
 
         var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
             "/api/v1/zones/hyderabad-central/queues/cab");
@@ -2202,7 +2213,6 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, online.StatusCode);
         var latestCapture = profiles["driver-location-out-of-order"].LocationCapturedAtUtc!.Value;
         var current = profiles["driver-location-out-of-order"];
-        profiles["driver-location-out-of-order"] = current;
 
         foreach (var coordinates in new[] { (Latitude: 17.5d, Longitude: 78.4d), (Latitude: 0d, Longitude: 0d) })
         {
