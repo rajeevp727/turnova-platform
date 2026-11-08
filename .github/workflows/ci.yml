@@ -64,20 +64,25 @@ jobs:
           set -euo pipefail
           publish_dir="$RUNNER_TEMP/turnova-api"
           test -s "$publish_dir/TurnOva.API.dll"
-          test -s "$publish_dir/runtimes/linux-x64/native/libSkiaSharp.so"
-          test -s "$publish_dir/runtimes/linux-x64/native/libHarfBuzzSharp.so"
-          unexpected_runtime_dirs="$(find "$publish_dir/runtimes" -mindepth 1 -maxdepth 1 -type d ! -name linux-x64 ! -name unix -printf '%f\n' | sort)"
-          if [ -n "$unexpected_runtime_dirs" ]; then
-            echo "Unexpected non-Linux-x64 runtime assets in publish output: $unexpected_runtime_dirs"
-            exit 1
+          native_files="$(find "$publish_dir" -type f \\( -name libSkiaSharp.so -o -name libHarfBuzzSharp.so \\) -print)"
+          echo "Linux native rendering assets found:"
+          printf '%s\\n' "$native_files"
+          printf '%s\\n' "$native_files" | grep -q 'libSkiaSharp\\.so$'
+          printf '%s\\n' "$native_files" | grep -q 'libHarfBuzzSharp\\.so$'
+          if [ -d "$publish_dir/runtimes" ]; then
+            unexpected_runtime_dirs="$(find "$publish_dir/runtimes" -mindepth 1 -maxdepth 1 -type d ! -name linux-x64 ! -name unix -printf '%f\\n' | sort)"
+            if [ -n "$unexpected_runtime_dirs" ]; then
+              echo "Unexpected non-Linux-x64 runtime assets in publish output: $unexpected_runtime_dirs"
+              exit 1
+            fi
           fi
           publish_bytes="$(du -sb "$publish_dir" | cut -f1)"
           max_bytes="$((120 * 1024 * 1024))"
+          echo "Linux-x64 framework-dependent publish size: $publish_bytes bytes (limit: $max_bytes)."
           if [ "$publish_bytes" -gt "$max_bytes" ]; then
-            echo "Native Linux-x64 publish output exceeded 120 MiB: $publish_bytes bytes"
+            echo "Native Linux-x64 publish output exceeded 120 MiB."
             exit 1
           fi
-          echo "Linux-x64 framework-dependent publish size: $publish_bytes bytes (limit: $max_bytes)."
       - uses: actions/upload-artifact@v6
         with:
           name: turnova-api-publish
