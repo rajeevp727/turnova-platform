@@ -56,7 +56,7 @@ public sealed class DriverPayslipPdfTests
     }
 
     [Fact]
-    public async Task GenerateUsesRequestIsolatedShapersWhenMultiplePayslipsRenderConcurrently()
+    public async Task GenerateSerializesNativePdfRenderingWithoutCrossRequestTextMixing()
     {
         var payslips = Enumerable.Range(0, 4)
             .Select(index => CreatePayslip(
