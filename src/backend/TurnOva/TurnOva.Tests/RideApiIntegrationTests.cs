@@ -790,6 +790,86 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionManagerSelfieReviewReconcilesExpiredOrphanReservationBeforeAcquiringReviewLease()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "union-review-orphan-union";
+        const string driverId = "union-review-orphan-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null
+        };
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-orphan-review");
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.True(await reservations.TryAcquireTemporaryAsync(
+            driverId, "union-review-expired-orphan", DateTimeOffset.UtcNow.AddMilliseconds(100), CancellationToken.None));
+
+        // The in-memory store deliberately keeps expired leases visible until the API
+        // reconciles the linked ride (or confirms that this lease is an expired orphan).
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        var expiredReservation = await reservations.GetActiveAsync(driverId, CancellationToken.None);
+        Assert.NotNull(expiredReservation);
+        Assert.True(expiredReservation!.ExpiresAtUtc is { } expiredAtUtc && expiredAtUtc <= DateTimeOffset.UtcNow);
+
+        using var review = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+
+        Assert.Equal(HttpStatusCode.OK, review.StatusCode);
+        Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
+        Assert.Null(await reservations.GetActiveAsync(driverId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UnionManagerSelfieReviewKeepsExpiredReservationForActiveNegotiation()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "union-review-active-union";
+        const string driverId = "union-review-active-driver";
+        const string rideId = "union-review-active-ride";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null
+        };
+
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId] =
+            new DemoRide(rideId, "KPHB", "HITEC City", 1, "Negotiating", now, null,
+                "union-review-active-rider", driverId, 17.493, 78.399, null, null, null, null,
+                false, "cab", "hyderabad-central", UnionId: unionId,
+                NegotiationExpiresAtUtc: now.AddMinutes(10));
+
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.True(await reservations.TryAcquireTemporaryAsync(
+            driverId, rideId, DateTimeOffset.UtcNow.AddMilliseconds(100), CancellationToken.None));
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-active-review");
+        using var review = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+
+        Assert.Equal(HttpStatusCode.Conflict, review.StatusCode);
+        Assert.Equal(rideId, (await reservations.GetActiveAsync(driverId, CancellationToken.None))?.RideId);
+        Assert.Equal("Pending", profiles[driverId].ProfilePhotoApprovalStatus);
+    }
+
+    [Fact]
     public async Task UnionTransferResetsSelfieApprovalUntilTheNewUnionApprovesIt()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
