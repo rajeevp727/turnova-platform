@@ -1726,10 +1726,15 @@ app.MapPost("/api/v1/driver/availability", async (
             if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
                 return Results.Conflict(new { message = "Your current location is outside your assigned service zone." });
 
+            var capturedAtUtc = request.CapturedAtUtc ?? DateTimeOffset.UtcNow;
+            if (capturedAtUtc > DateTimeOffset.UtcNow.AddMinutes(1))
+                return Results.BadRequest(new { message = "GPS capture time cannot be in the future." });
+
             var savedOnline = await TryUpdateDriverProfileAsync(driverId, current =>
                 current.Status == "Approved" &&
                 string.Equals(current.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase) &&
+                (current.LocationCapturedAtUtc is null || capturedAtUtc > current.LocationCapturedAtUtc) &&
                 current.Documents is not null &&
                 current.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") &&
                 current.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved")
@@ -1738,7 +1743,8 @@ app.MapPost("/api/v1/driver/availability", async (
                         AvailabilityStatus = "Online",
                         CurrentLatitude = request.Latitude,
                         CurrentLongitude = request.Longitude,
-                        LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+                        LocationUpdatedAtUtc = DateTimeOffset.UtcNow,
+                        LocationCapturedAtUtc = capturedAtUtc
                     }
                     : null, ct);
             if (!savedOnline)
@@ -1761,7 +1767,8 @@ app.MapPost("/api/v1/driver/availability", async (
                             AvailabilityStatus = "Offline",
                             CurrentLatitude = null,
                             CurrentLongitude = null,
-                            LocationUpdatedAtUtc = null
+                            LocationUpdatedAtUtc = null,
+                            LocationCapturedAtUtc = null
                         }
                         : null, ct);
                 throw;
@@ -1781,7 +1788,8 @@ app.MapPost("/api/v1/driver/availability", async (
                     AvailabilityStatus = "Offline",
                     CurrentLatitude = null,
                     CurrentLongitude = null,
-                    LocationUpdatedAtUtc = null
+                    LocationUpdatedAtUtc = null,
+                    LocationCapturedAtUtc = null
                 }
                 : null, ct);
         if (!savedOffline)
@@ -1808,6 +1816,10 @@ app.MapPost("/api/v1/driver/location", async (
 
     var latitude = request.Latitude.Value;
     var longitude = request.Longitude.Value;
+    var capturedAtUtc = request.CapturedAtUtc ?? DateTimeOffset.UtcNow;
+    if (capturedAtUtc > DateTimeOffset.UtcNow.AddMinutes(1))
+        return Results.BadRequest(new { message = "GPS capture time cannot be in the future." });
+
     var profile = await GetApprovedDriverProfileAsync(driverId, ct);
     if (profile is null || profile.AvailabilityStatus != "Online")
         return Results.Conflict(new { message = "Only an approved online driver can share availability location." });
@@ -1815,6 +1827,8 @@ app.MapPost("/api/v1/driver/location", async (
         return Results.Conflict(new { message = "Legacy non-Cab profiles cannot share location for new MVP workflows." });
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "Availability location is paused while you have an active ride." });
+    if (profile.LocationCapturedAtUtc is not null && capturedAtUtc <= profile.LocationCapturedAtUtc)
+        return Results.Conflict(new { message = "This GPS fix is older than the latest accepted Driver location." });
 
     var currentZoneId = ResolveDispatchZone(latitude, longitude);
     if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
@@ -1832,6 +1846,8 @@ app.MapPost("/api/v1/driver/location", async (
             if (latestProfile is null || latestProfile.AvailabilityStatus != "Online" ||
                 !string.Equals(latestProfile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
                 return Results.Conflict(new { message = "Driver availability changed. Refresh before sharing location." });
+            if (latestProfile.LocationCapturedAtUtc is not null && capturedAtUtc <= latestProfile.LocationCapturedAtUtc)
+                return Results.Conflict(new { message = "This GPS fix is older than the latest accepted Driver location." });
 
             var latestZoneId = ResolveDispatchZone(latitude, longitude);
             if (string.Equals(latestZoneId, latestProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
@@ -1839,12 +1855,14 @@ app.MapPost("/api/v1/driver/location", async (
                 var savedInside = await TryUpdateDriverProfileAsync(driverId, current =>
                     current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
                     string.Equals(current.ZoneId, latestProfile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(current.ServiceClass, latestProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)
+                    string.Equals(current.ServiceClass, latestProfile.ServiceClass, StringComparison.OrdinalIgnoreCase) &&
+                    (current.LocationCapturedAtUtc is null || capturedAtUtc > current.LocationCapturedAtUtc)
                         ? current with
                         {
                             CurrentLatitude = latitude,
                             CurrentLongitude = longitude,
-                            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+                            LocationUpdatedAtUtc = DateTimeOffset.UtcNow,
+                            LocationCapturedAtUtc = capturedAtUtc
                         }
                         : null, ct);
                 return savedInside
@@ -1855,13 +1873,15 @@ app.MapPost("/api/v1/driver/location", async (
             var takenOffline = await TryUpdateDriverProfileAsync(driverId, current =>
                 current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
                 string.Equals(current.ZoneId, latestProfile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(current.ServiceClass, latestProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)
+                string.Equals(current.ServiceClass, latestProfile.ServiceClass, StringComparison.OrdinalIgnoreCase) &&
+                (current.LocationCapturedAtUtc is null || capturedAtUtc > current.LocationCapturedAtUtc)
                     ? current with
                     {
                         AvailabilityStatus = "Offline",
                         CurrentLatitude = null,
                         CurrentLongitude = null,
-                        LocationUpdatedAtUtc = null
+                        LocationUpdatedAtUtc = null,
+                        LocationCapturedAtUtc = null
                     }
                     : null, ct);
             if (!takenOffline)
@@ -1879,12 +1899,14 @@ app.MapPost("/api/v1/driver/location", async (
     var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
         string.Equals(current.ZoneId, currentZoneId, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase)
+        string.Equals(current.ServiceClass, profile.ServiceClass, StringComparison.OrdinalIgnoreCase) &&
+        (current.LocationCapturedAtUtc is null || capturedAtUtc > current.LocationCapturedAtUtc)
             ? current with
             {
                 CurrentLatitude = latitude,
                 CurrentLongitude = longitude,
-                LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+                LocationUpdatedAtUtc = DateTimeOffset.UtcNow,
+                LocationCapturedAtUtc = capturedAtUtc
             }
             : null, ct);
     return saved
@@ -3390,7 +3412,7 @@ app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId,
 app.Run();
 
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
-public sealed record DriverAvailabilityRequest(bool IsOnline, double? Latitude = null, double? Longitude = null);
+public sealed record DriverAvailabilityRequest(bool IsOnline, double? Latitude = null, double? Longitude = null, DateTimeOffset? CapturedAtUtc = null);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
 public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);
 public sealed record DriverSelfieRequest(string ProfilePhotoBase64);
@@ -3405,7 +3427,7 @@ public sealed record ReportRidePaymentRequest(decimal? AmountReceived);
 public sealed record RiderSelectedBookingRequest(string SelectedDriverId, string UnionId, string Pickup, string Dropoff,
     IReadOnlyList<string>? Stops, int Passengers, double PickupLatitude, double PickupLongitude);
 public sealed record DriverLocationRequest(double Latitude, double Longitude);
-public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude);
+public sealed record DriverAvailabilityLocationRequest(double? Latitude, double? Longitude, DateTimeOffset? CapturedAtUtc = null);
 public sealed record RiderDiscoveryResponse(string PickupZoneId, double? JourneyDistanceKm, IReadOnlyList<NearbyUnionDiscoveryGroup> Unions);
 public sealed record NearbyUnionDiscoveryGroup(string UnionId, string UnionName, IReadOnlyList<NearbyDriverDiscoveryResponse> Drivers);
 public sealed record NearbyDriverDiscoveryResponse(string DriverId, string FullName, string VehicleMake, string VehicleModel, string ServiceClass, int PassengerCapacity, double DistanceToPickupKm, string? ProfilePhotoBase64, string? ProfilePhotoContentType);
