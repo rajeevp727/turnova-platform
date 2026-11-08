@@ -108,6 +108,28 @@ test("first capture watermark upgrades a legacy receipt-only snapshot without mi
   assert.equal(shouldApplyTripLocationUpdate(legacy, captured), true);
 });
 
+test("restored ride API capture watermark rejects an older SignalR capture", () => {
+  const current = {
+    rideId: "ride-restored",
+    driverLocationCapturedAtUtc: "2026-11-08T12:00:30.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:31.000Z"
+  };
+  assert.equal(shouldApplyTripLocationUpdate(current, {
+    rideId: "ride-restored",
+    latitude: 17.4,
+    longitude: 78.4,
+    locationCapturedAtUtc: "2026-11-08T12:00:29.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:32.000Z"
+  }), false);
+  assert.equal(shouldApplyTripLocationUpdate(current, {
+    rideId: "ride-restored",
+    latitude: 17.4,
+    longitude: 78.4,
+    locationCapturedAtUtc: "2026-11-08T12:00:32.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:33.000Z"
+  }), true);
+});
+
 test("legacy SignalR events without capture time remain ordered by server receipt time", () => {
   const current = { rideId: "ride-legacy", locationUpdatedAt: "2026-11-08T12:00:20.000Z" };
   assert.equal(shouldApplyTripLocationUpdate(current, {
