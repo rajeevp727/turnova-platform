@@ -86,6 +86,11 @@ test("Rider rejects mismatched ride, invalid coordinates and invalid timestamps"
   assert.equal(shouldApplyTripLocationUpdate(current, { ...update, latitude: 91 }), false);
   assert.equal(shouldApplyTripLocationUpdate(current, { ...update, longitude: 181 }), false);
   assert.equal(shouldApplyTripLocationUpdate(current, { ...update, locationCapturedAtUtc: "not-a-date" }), false);
+  assert.equal(shouldApplyTripLocationUpdate(current, {
+    ...update,
+    locationCapturedAtUtc: "not-a-date",
+    locationUpdatedAt: "2026-11-08T12:00:12.000Z"
+  }), false);
 });
 
 test("first capture watermark upgrades a legacy receipt-only snapshot without mixing clock semantics", () => {
@@ -112,6 +117,12 @@ test("legacy SignalR events without capture time remain ordered by server receip
   assert.equal(shouldApplyTripLocationUpdate(current, {
     rideId: "ride-legacy", latitude: 17.4, longitude: 78.4,
     locationUpdatedAt: "2026-11-08T12:00:19.000Z"
+  }), false);
+
+  const upgraded = { ...current, locationCapturedAtUtc: "2026-11-08T12:00:22.000Z" };
+  assert.equal(shouldApplyTripLocationUpdate(upgraded, {
+    rideId: "ride-legacy", latitude: 17.4, longitude: 78.4,
+    locationUpdatedAt: "2026-11-08T12:00:23.000Z"
   }), false);
 });
 
