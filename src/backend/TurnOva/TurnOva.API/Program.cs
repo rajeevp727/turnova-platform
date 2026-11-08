@@ -1418,21 +1418,7 @@ unionManagerApi.MapGet("/reconciliation", async (ClaimsPrincipal user, Cancellat
     {
         foreach (var unionId in unionIds)
         {
-            var query = new QueryDefinition(
-                    "SELECT c.serviceClass, c.unionId, " +
-                    "c.paymentReconciliation.rideId AS rideId, " +
-                    "c.paymentReconciliation.agreementVersion AS agreementVersion, " +
-                    "c.paymentReconciliation.unionId AS reportUnionId, " +
-                    "c.paymentReconciliation.agreedAmount AS agreedAmount, " +
-                    "c.paymentReconciliation.amountReceived AS amountReceived, " +
-                    "c.paymentReconciliation.delta AS delta, " +
-                    "c.paymentReconciliation.currency AS currency, " +
-                    "c.paymentReconciliation.reportedAtUtc AS reportedAtUtc, " +
-                    "c.paymentReconciliation.reportedByDriverId AS reportedByDriverId, " +
-                    "c.paymentReconciliation.status AS status " +
-                    "FROM c WHERE c.unionId = @unionId " +
-                    "AND IS_DEFINED(c.paymentReconciliation) " +
-                    "AND c.paymentReconciliation.unionId = @unionId")
+            var query = new QueryDefinition(TurnOva.API.UnionReconciliationQuery.Sql)
                 .WithParameter("@unionId", unionId);
             using var iterator = rideContainer.GetItemQueryIterator<UnionReconciliationQueryProjection>(query);
             while (iterator.HasMoreResults)
