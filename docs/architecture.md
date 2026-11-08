@@ -68,12 +68,12 @@ Keep domain and application logic independent of Cosmos DB and transport concern
 - RideRequest: rider, pickup/drop-off, service type and passenger count.
 - DispatchOffer: request, candidate, expiry and response.
 - Trip: accepted assignment and trip lifecycle.
-- QueueAuditEvent: append-only queue join/leave/rotation record in the queue partition; RideOfferState.Attempts retain ride-offer decisions; DriverUnionAuditEvent retains union transfers.
+- QueueAuditEvent: append-only queue join/leave/rotation records and separately typed dispatch-exception records in the queue partition; RideOfferState.Attempts retain ride-offer decisions; DriverUnionAuditEvent retains union transfers.
 
 ## 6. FIFO dispatch architecture
 
 ### Queue partitioning
-Create logical queues by service zone and compatible service/vehicle class. Avoid a single citywide queue that routinely creates distant pickups. Zone boundaries and cross-zone fallback are explicit policy. The `QueueEntries` container is partitioned by `/zoneServiceKey`; successful queue joins, leaves and rotations append `QueueAuditEvent` documents in the same partition and are committed with the queue-state mutation in one Cosmos transactional batch. In-memory queue storage records equivalent events for tests.
+Create logical queues by service zone and compatible service/vehicle class. Avoid a single citywide queue that routinely creates distant pickups. Zone boundaries and cross-zone fallback are explicit policy. The `QueueEntries` container is partitioned by `/zoneServiceKey`; successful queue joins, leaves and rotations append `QueueAuditEvent` documents in the same partition and are committed with the queue-state mutation in one Cosmos transactional batch. In-memory queue storage records equivalent events for tests. Unexpected non-cancellation queue-read exceptions during an authenticated legacy Driver acceptance append a separately typed `DispatchException` record in the same partition, with the server trace ID, claim-derived Driver actor reference, allow-listed `QueueReadFailed` category and UTC timestamp. This exception-only record is a single-item append, not a queue mutation event; it never stores raw exception messages, request bodies, tokens, contact details, exact location or fare. Ordinary conflicts/no-op outcomes and cancellation do not create exception records. Rider discovery and selected-driver assignment remain queue-independent.
 
 ### Ordering and eligibility
 The server assigns queue-entry order. A deterministic sequence and stable tie-breaker establish ordering. Clients cannot submit or modify queue rank.
