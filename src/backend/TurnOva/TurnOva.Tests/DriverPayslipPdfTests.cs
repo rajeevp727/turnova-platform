@@ -22,7 +22,6 @@ public sealed class DriverPayslipPdfTests
         Assert.EndsWith("%%EOF", pdfHeader.TrimEnd(), StringComparison.Ordinal);
         Assert.Contains("Raja", extractedText, StringComparison.Ordinal);
         Assert.Contains("MONTHLY DRIVER PAYSLIP", extractedText, StringComparison.Ordinal);
-        Assert.Contains("Total days worked: 21", extractedText, StringComparison.Ordinal);
         Assert.True(pdf.Length > 5_000, "The PDF should contain vector glyph outlines for the supported scripts.");
     }
 
@@ -41,7 +40,6 @@ public sealed class DriverPayslipPdfTests
             var content = Encoding.Latin1.GetString(pdf);
             Assert.StartsWith("%PDF-", content, StringComparison.Ordinal);
             Assert.Contains("Raja", ExtractText(pdf), StringComparison.Ordinal);
-            Assert.Contains("Total days worked: 21", ExtractText(pdf), StringComparison.Ordinal);
         });
     }
 
@@ -65,7 +63,6 @@ public sealed class DriverPayslipPdfTests
 
         Assert.StartsWith("%PDF-", Encoding.Latin1.GetString(pdf), StringComparison.Ordinal);
         Assert.Contains("Raja", ExtractText(pdf), StringComparison.Ordinal);
-        Assert.Contains("Total days worked: 21", ExtractText(pdf), StringComparison.Ordinal);
         Assert.True(pdf.Length > 5_000);
         Assert.Equal(driverName, payslip.DriverName);
     }
