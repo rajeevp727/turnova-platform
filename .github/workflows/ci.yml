@@ -111,9 +111,40 @@ jobs:
       - run: npm install
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
-      - name: Compile Android debug APK
+      - name: Configure Gradle wrapper download timeout
         working-directory: src/mobile/${{ matrix.app }}/android
-        run: ./gradlew --no-daemon assembleDebug
+        run: |
+          wrapper_file=gradle/wrapper/gradle-wrapper.properties
+          if grep -q '^networkTimeout=' "$wrapper_file"; then
+            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper_file"
+          else
+            printf '\\nnetworkTimeout=120000\\n' >> "$wrapper_file"
+          fi
+      - name: Compile Android debug APK with transient distribution-download retry
+        working-directory: src/mobile/${{ matrix.app }}/android
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            log="$RUNNER_TEMP/gradle-${{ matrix.app }}-$attempt.log"
+            set +e
+            ./gradlew --no-daemon assembleDebug 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            set -e
+            if [[ "$status" -eq 0 ]]; then
+              exit 0
+            fi
+            if ! grep -Eq 'Server returned HTTP response code: 5[0-9]{2}|SocketTimeoutException|Downloading from .* failed: timeout' "$log"; then
+              echo "Gradle failed for a non-retryable reason; not retrying."
+              exit "$status"
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              delay=$((attempt * 15))
+              echo "Gradle distribution download failed transiently; retrying in ${delay}s."
+              sleep "$delay"
+            fi
+          done
+          echo "Gradle distribution download failed after three attempts."
+          exit 1
       - name: Verify Android APK artifact
         run: test -s android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v6
