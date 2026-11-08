@@ -370,10 +370,11 @@ export default function App() {
 
   const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
-    if (!isActive()) return;
+    if (!isActive()) return null;
     setDriverRideHistory(history);
     const active = findActiveRide(history, "driver");
     setActiveRide(active ?? null);
+    return active ?? null;
   }, [apiFetch]);
 
   const loadAgreementHistory = useCallback(async (rideId: string) => {
@@ -523,6 +524,16 @@ export default function App() {
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
+    const refreshTripState = async () => {
+      try {
+        const latestActiveRide = await loadDriverRideHistory(() => mounted);
+        if (!mounted) return;
+        if (latestActiveRide) await loadAgreementHistory(latestActiveRide.rideId);
+        else setAgreementHistory([]);
+      } catch (e) {
+        if (mounted) setError(e instanceof Error ? e.message : "Unable to recover the latest Driver trip state.");
+      }
+    };
     const refreshAgreement = (update?: { rideId?: string }) => {
       if (mounted && (!update?.rideId || update.rideId === activeRide.rideId))
         void loadAgreementHistory(activeRide.rideId).catch(e => {
@@ -535,13 +546,13 @@ export default function App() {
       setDriverRideHistory(current => current.map(ride => applyRideStatusUpdate(ride, update)));
     });
     connection.on("RideAgreementChanged", refreshAgreement);
-    connection.onreconnected(() => refreshAgreement());
+    connection.onreconnected(() => { void refreshTripState(); });
     void startSignalRConnection(connection, () => mounted, () => {
       if (mounted) setError("Live fare agreement updates are temporarily unavailable. Retrying connection…");
     }).then(connected => {
       if (connected && mounted) {
         setError(current => current === "Live fare agreement updates are temporarily unavailable. Retrying connection…" ? "" : current);
-        refreshAgreement();
+        void refreshTripState();
       }
     });
     return () => { mounted = false; connection.off("RideStatusChanged"); connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
