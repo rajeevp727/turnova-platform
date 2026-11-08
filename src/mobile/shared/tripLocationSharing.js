@@ -59,6 +59,45 @@ function shouldApplyTripLocationUpdate(current, update) {
     (currentReceipt === null || incomingReceipt > currentReceipt);
 }
 
+function mergeTripLocationSnapshot(current, snapshot) {
+  if (!snapshot) return current;
+  if (!current || current.rideId !== snapshot.rideId) return snapshot;
+
+  const captureTimestamp = snapshot.driverLocationCapturedAtUtc ??
+    snapshot.locationCapturedAtUtc;
+  const incomingLocation = {
+    rideId: snapshot.rideId,
+    latitude: snapshot.driverLatitude,
+    longitude: snapshot.driverLongitude,
+    locationCapturedAtUtc: captureTimestamp,
+    locationUpdatedAt: snapshot.locationUpdatedAt
+  };
+
+  if (shouldApplyTripLocationUpdate(current, incomingLocation)) {
+    return {
+      ...current,
+      ...snapshot,
+      locationCapturedAtUtc: captureTimestamp ?? current.locationCapturedAtUtc
+    };
+  }
+
+  // A reconnect/history response can have been read before a newer SignalR event.
+  // Merge non-location state, but never replace a newer client-side location snapshot.
+  return {
+    ...current,
+    ...snapshot,
+    driverLatitude: current.driverLatitude ?? snapshot.driverLatitude,
+    driverLongitude: current.driverLongitude ?? snapshot.driverLongitude,
+    locationCapturedAtUtc: current.locationCapturedAtUtc ??
+      current.driverLocationCapturedAtUtc ??
+      snapshot.driverLocationCapturedAtUtc ??
+      snapshot.locationCapturedAtUtc,
+    driverLocationCapturedAtUtc: current.driverLocationCapturedAtUtc ??
+      snapshot.driverLocationCapturedAtUtc,
+    locationUpdatedAt: current.locationUpdatedAt ?? snapshot.locationUpdatedAt
+  };
+}
+
 function getRideMapFitCoordinates(ride) {
   if (!ride) return [];
   const coordinates = [];
@@ -75,5 +114,6 @@ module.exports = {
   canShareTripLocation,
   findAuthoritativeActiveTrip,
   shouldApplyTripLocationUpdate,
+  mergeTripLocationSnapshot,
   getRideMapFitCoordinates
 };
