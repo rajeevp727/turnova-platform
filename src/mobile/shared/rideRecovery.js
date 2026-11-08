@@ -18,10 +18,18 @@ const ACTIVE_RIDE_STATUSES = {
   ])
 };
 
+function applyRideStatusUpdate(ride, update) {
+  if (!ride || !update || typeof update.rideId !== "string" || !update.rideId ||
+      typeof update.status !== "string" || !update.status || ride.rideId !== update.rideId) {
+    return ride;
+  }
+  return { ...ride, status: update.status };
+}
+
 function findActiveRide(history, role) {
   const allowedStatuses = ACTIVE_RIDE_STATUSES[role];
   if (!allowedStatuses) throw new TypeError("Unsupported ride recovery role.");
   return history.find(ride => ride && allowedStatuses.has(ride.status)) ?? null;
 }
 
-module.exports = { findActiveRide };
+module.exports = { applyRideStatusUpdate, findActiveRide };
