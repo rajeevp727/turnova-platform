@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current engineering follow-up: AI-01 supplemental passenger-count/privacy correction (outside the 19-row denominator)** on branch `fix/ai-01-no-inferred-passenger-count`. Main HEAD is `c080e7770977feef07de46e9b67de6e70ecc627e` after RELEASE-01 PR #122 merged. PR #122 exact-head CI [run #810 / 42519436774](https://github.com/rajeevp727/turnova-platform/actions/runs/42519436774) passed 8/8 jobs. Main post-merge CI [run #811 / 42523135354](https://github.com/rajeevp727/turnova-platform/actions/runs/42523135354) is in progress; it is not production, live-Cosmos or physical-device validation.
+**Current engineering follow-up: AI-01 supplemental passenger-count/privacy correction (outside the 19-row denominator)** on sole active PR [#123](https://github.com/rajeevp727/turnova-platform/pull/123), branch `fix/ai-01-no-inferred-passenger-count`, head `b132c29709ffc74d1fc8dd664b38df028b704cb8`. COMMENT-only security review [5819672810](https://github.com/rajeevp727/turnova-platform/pull/123) found no unresolved critical/high-risk issue. PR exact-head CI is pending. Main HEAD is `c080e7770977feef07de46e9b67de6e70ecc627e` after RELEASE-01 PR #122 merged. PR #122 exact-head CI [run #810 / 42519436774](https://github.com/rajeevp727/turnova-platform/actions/runs/42519436774) passed 8/8 jobs. Main post-merge CI [run #811 / 42523135354](https://github.com/rajeevp727/turnova-platform/actions/runs/42523135354) remains in progress at last poll; it is not production, live-Cosmos or physical-device validation.
 
 Sequential #19 RELEASE-01 engineering implementation is merged; strict acceptance remains In Progress because signed Android/iOS builds, final production identifiers/EAS linkage, production API/DNS/TLS, physical-device/pilot acceptance and store evidence remain external. #15 DRIVER-04 and #17 SUPPORT-01 remain Blocked pending Product/Operations approval of support categories, required intake fields, priority/severity, escalation owner/contact channel, support hours/response targets, attachment handling, privacy/retention and operational handoff. #6 DISPATCH-01 remains Blocked pending positive production radius and approved non-overlapping zones. Engineering continues with approved supplemental AI-01 rather than treating external gates as a stop signal.
 
@@ -37,7 +37,7 @@ The current implementation had a PRD conflict: an omitted passenger count silent
 - Restricts provider intent tokens to generic action words; family/child, accessibility/health, luggage, location-type and arbitrary free-text details remain local.
 - Clears the Rider's pre-existing default passenger value when an AI draft omits/invalidates it.
 - Blocks discovery and selected-driver booking until the Rider manually enters a valid count.
-- Adds deterministic .NET service tests and shared mobile helper tests; exact-head CI remains pending.
+- Adds deterministic .NET service tests, API integration tests for Rider-only trip-intent access, Rider/Driver help access, anonymous 401s and per-subject 429 isolation, plus shared mobile helper tests. COMMENT-only review [5819672810](https://github.com/rajeevp727/turnova-platform/pull/123) found no unresolved critical/high-risk issue; exact-head CI remains pending.
 
 **Current acceptance snapshot:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is a strict evidence count, not a statement that features are unimplemented. Engineering implementation and automated evidence are recorded row by row; external/device/live-Cosmos evidence remains outstanding.
 
