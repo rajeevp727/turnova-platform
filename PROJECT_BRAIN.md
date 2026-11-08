@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-09  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** `main`  
-**Last audited main HEAD:** `90f12c6ed87984e9574bc0337dbc71d2a7125dea` after PLATFORM-01 PR #121 merged. PR #121 exact-head CI [42511781621](https://github.com/rajeevp727/turnova-platform/actions/runs/42511781621) passed 8/8 jobs; main post-merge CI [42513077058](https://github.com/rajeevp727/turnova-platform/actions/runs/42513077058) is still running. Current sequential item #19 RELEASE-01 is on sole active PR [#122](https://github.com/rajeevp727/turnova-platform/pull/122), branch `feat/release-01-preflight-report`. Strict acceptance remains 0/19; 15 In Progress and 4 Blocked. No live Cosmos, physical-device or production-signing validation is claimed.
+**Last audited main HEAD:** `90f12c6ed87984e9574bc0337dbc71d2a7125dea` after PLATFORM-01 PR #121 merged. PR #121 exact-head CI [42511781621](https://github.com/rajeevp727/turnova-platform/actions/runs/42511781621) passed 8/8 jobs; main post-merge CI [42513077058](https://github.com/rajeevp727/turnova-platform/actions/runs/42513077058) is still running. Current sequential item #19 RELEASE-01 is on sole active PR [#122](https://github.com/rajeevp727/turnova-platform/pull/122), branch `feat/release-01-preflight-report`, head `8d0901fe94a21b54a6078fe78b421e375f48df2e`. Strict acceptance remains 0/19; 15 In Progress and 4 Blocked. No live Cosmos, physical-device or production-signing validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
