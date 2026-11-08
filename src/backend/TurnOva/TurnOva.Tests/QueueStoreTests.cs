@@ -222,6 +222,7 @@ public sealed class QueueStoreTests
         var events = await store.GetAuditEventsAsync("zone-a", "cab", CancellationToken.None);
         var audit = Assert.Single(events);
         Assert.Equal("zone-a|cab", audit.ZoneServiceKey);
+        Assert.Equal("dispatch-exception-trace-123", audit.EventId);
         Assert.Equal("driver-actor-1", audit.DriverId);
         Assert.Equal(QueueAuditEventTypes.DispatchException, audit.EventType);
         Assert.Equal("trace-123", audit.TraceId);
@@ -272,6 +273,15 @@ public sealed class QueueStoreTests
                 "zone-a",
                 "cab",
                 "trace/unsafe",
+                QueueAuditReasonCategories.QueueReadFailed,
+                CancellationToken.None));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.RecordDispatchExceptionAsync(
+                "driver-actor-1",
+                "zone-a",
+                "cab",
+                "tracé-123",
                 QueueAuditReasonCategories.QueueReadFailed,
                 CancellationToken.None));
 
