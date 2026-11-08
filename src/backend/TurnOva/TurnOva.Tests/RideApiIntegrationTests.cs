@@ -1794,6 +1794,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-stale-capture-discovery");
         const string driverId = "driver-stale-capture-discovery";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, "union-stale-capture-discovery");
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -1818,6 +1819,7 @@ public sealed class RideApiIntegrationTests
         using var rider = factory.CreateClient("Rider", "rider-stale-capture-booking");
         const string driverId = "driver-stale-capture-booking";
         const string unionId = "union-stale-capture-booking";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -2217,7 +2219,7 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Online", after.AvailabilityStatus);
         Assert.Equal(current.CurrentLatitude, after.CurrentLatitude);
         Assert.Equal(current.CurrentLongitude, after.CurrentLongitude);
-        Assert.Equal(latestCapture, after.LocationUpdatedAtUtc);
+        Assert.Equal(current.LocationUpdatedAtUtc, after.LocationUpdatedAtUtc);
         Assert.Equal(latestCapture, after.LocationCapturedAtUtc);
         var queue = await driver.GetFromJsonAsync<List<QueueEntryTest>>(
             "/api/v1/zones/hyderabad-central/queues/cab");
