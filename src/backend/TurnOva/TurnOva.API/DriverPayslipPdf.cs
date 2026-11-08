@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 using TurnOva.Domain.Dispatch;
 using SkiaSharp;
@@ -345,20 +344,15 @@ public static class DriverPayslipPdf
 
     private sealed class FontCatalog : IDisposable
     {
+        private static readonly Lazy<IReadOnlyDictionary<FontScript, SKTypeface>> SharedTypefaces =
+            new(LoadSharedTypefaces, LazyThreadSafetyMode.ExecutionAndPublication);
+
         private readonly Dictionary<FontScript, FontFace> _faces = new();
 
         public FontCatalog()
         {
-            Load(FontScript.Latin, "NotoSansTelugu.ttf");
-            Load(FontScript.Devanagari, "NotoSansDevanagari.ttf");
-            Load(FontScript.Bengali, "NotoSansBengali.ttf");
-            Load(FontScript.Gurmukhi, "NotoSansGurmukhi.ttf");
-            Load(FontScript.Gujarati, "NotoSansGujarati.ttf");
-            Load(FontScript.Oriya, "NotoSansOriya.ttf");
-            Load(FontScript.Tamil, "NotoSansTamil.ttf");
-            Load(FontScript.Telugu, "NotoSansTelugu.ttf");
-            Load(FontScript.Kannada, "NotoSansKannada.ttf");
-            Load(FontScript.Malayalam, "NotoSansMalayalam.ttf");
+            foreach (var pair in SharedTypefaces.Value)
+                _faces.Add(pair.Key, new FontFace(pair.Value));
         }
 
         public FontFace Get(FontScript script) => _faces[script];
@@ -388,26 +382,47 @@ public static class DriverPayslipPdf
                 yield return new ScriptRun(current, value.ToString());
         }
 
-        private void Load(FontScript script, string fileName)
+        private static IReadOnlyDictionary<FontScript, SKTypeface> LoadSharedTypefaces()
         {
-            var resourceName = $"{typeof(DriverPayslipPdf).Namespace}.Fonts.{fileName}";
-            var stream = typeof(DriverPayslipPdf).Assembly.GetManifestResourceStream(resourceName)
-                ?? throw new InvalidOperationException($"Bundled payslip font resource '{resourceName}' is missing.");
-
-            var typeface = SKTypeface.FromStream(stream);
-            if (typeface is null)
+            var files = new Dictionary<FontScript, string>
             {
-                stream.Dispose();
-                throw new InvalidOperationException($"Bundled payslip font resource '{resourceName}' is not a valid font.");
-            }
+                [FontScript.Latin] = "NotoSansTelugu.ttf",
+                [FontScript.Devanagari] = "NotoSansDevanagari.ttf",
+                [FontScript.Bengali] = "NotoSansBengali.ttf",
+                [FontScript.Gurmukhi] = "NotoSansGurmukhi.ttf",
+                [FontScript.Gujarati] = "NotoSansGujarati.ttf",
+                [FontScript.Oriya] = "NotoSansOriya.ttf",
+                [FontScript.Tamil] = "NotoSansTamil.ttf",
+                [FontScript.Telugu] = "NotoSansTelugu.ttf",
+                [FontScript.Kannada] = "NotoSansKannada.ttf",
+                [FontScript.Malayalam] = "NotoSansMalayalam.ttf"
+            };
+            var loaded = new Dictionary<FontScript, SKTypeface>();
 
             try
             {
-                _faces.Add(script, new FontFace(typeface));
+                foreach (var pair in files)
+                {
+                    var resourceName = $"{typeof(DriverPayslipPdf).Namespace}.Fonts.{pair.Value}";
+                    var stream = typeof(DriverPayslipPdf).Assembly.GetManifestResourceStream(resourceName)
+                        ?? throw new InvalidOperationException($"Bundled payslip font resource '{resourceName}' is missing.");
+
+                    var typeface = SKTypeface.FromStream(stream);
+                    if (typeface is null)
+                    {
+                        stream.Dispose();
+                        throw new InvalidOperationException($"Bundled payslip font resource '{resourceName}' is not a valid font.");
+                    }
+
+                    loaded.Add(pair.Key, typeface);
+                }
+
+                return loaded;
             }
             catch
             {
-                typeface.Dispose();
+                foreach (var typeface in loaded.Values)
+                    typeface.Dispose();
                 throw;
             }
         }
@@ -473,8 +488,9 @@ public static class DriverPayslipPdf
 
         public void Dispose()
         {
+            // Shared typefaces are immutable and process-cached; only this request's
+            // mutable HarfBuzz shaper is disposed here.
             Shaper.Dispose();
-            Typeface.Dispose();
         }
     }
 }
