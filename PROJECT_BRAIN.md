@@ -3,10 +3,11 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-09 02:31 IST  
+**Last verified:** 2026-11-09 03:31 IST  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Default branch:** `main`  
-**Last audited main HEAD:** `c080e7770977feef07de46e9b67de6e70ecc627e` after RELEASE-01 PR #122 merged. PR #122 exact-head CI [42519436774](https://github.com/rajeevp727/turnova-platform/actions/runs/42519436774) passed 8/8 jobs; main post-merge CI [42523135354](https://github.com/rajeevp727/turnova-platform/actions/runs/42523135354) remains in progress at last poll. Current engineering follow-up is AI-01 supplemental passenger-count/privacy hardening on PR [#123](https://github.com/rajeevp727/turnova-platform/pull/123), branch `fix/ai-01-no-inferred-passenger-count` (outside the 19-row denominator). It includes deterministic backend service tests, endpoint role/rate-limit integration tests and shared Rider passenger-input tests. COMMENT-only review [5819672810](https://github.com/rajeevp727/turnova-platform/pull/123) found no unresolved critical/high-risk issue; exact-head CI pending. Strict acceptance remains 0/19; 15 In Progress and 4 Blocked. No live Cosmos, physical-device or signed-production validation is claimed.
+**Default branch:** main  
+**Last audited main HEAD:** 4e65b147a01230b4a303d72c1270d448071c8bd6 after supplemental AI-01 PR #123 merged. PR #123 exact-head CI [42523956938](https://github.com/rajeevp727/turnova-platform/actions/runs/42523956938) passed 8/8 jobs (330/330 backend tests; 99/99 mobile auth tests). Main post-merge run [42528216521](https://github.com/rajeevp727/turnova-platform/actions/runs/42528216521) is in progress at last poll. Current engineering work is #14 DRIVER-03 Unicode payslip rendering on PR [#124](https://github.com/rajeevp727/turnova-platform/pull/124), branch fix/driver-03-unicode-payslip-rendering; exact-head CI is pending after docs synchronization.  
+**Acceptance:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is the full-evidence count, not an implementation-completion proxy. No live Cosmos, physical-device or signed-production validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -865,3 +866,12 @@ Dispatch exception event IDs are deterministic from the server-generated trace I
 ### AI-01 passenger-count and provider-privacy correction
 
 The baseline AI-01 implementation silently defaulted an omitted passenger count to one and included passenger count in the provider prompt contract. The current follow-up keeps passenger count local, returns it as missing for manual completion, removes family/child/accessibility and other sensitive intent tokens from the provider allow-list, and clears the Rider form's stale default so discovery/booking are blocked until explicit 1–6 entry. Branch: `fix/ai-01-no-inferred-passenger-count`. New `AiAssistanceApiIntegrationTests` role/rate-limit integration tests, shared mobile helper tests and Rider typecheck/build are pending exact-head CI. AI-01 remains supplemental and outside the 19-area denominator.
+
+
+### DRIVER-03 Unicode payslip PDF rendering (active PR #124)
+
+- Replaced ASCII-only Type1 Helvetica rendering with SkiaSharp + HarfBuzz shaping and embedded Noto Sans variable fonts for Latin, Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada and Malayalam. Fonts are SIL OFL 1.1; Fonts/OFL.txt and Fonts/THIRD_PARTY_NOTICES.md are included.
+- Positioned text blobs preserve original UTF-8 bytes and HarfBuzz cluster offsets so generated PDFs retain ToUnicode/searchable text. PdfPig tests extract every bundled script from generated PDFs.
+- Immutable typefaces are cached process-wide; HarfBuzz shapers are per-request. Unsupported scripts return a safe HTTP 422 rather than question marks. Snapshot IDs, metrics, amounts and compensation policy are unchanged.
+- Tests: DriverPayslipPdfTests covers script extraction, embedded fonts, unsupported scripts, concurrent generation and long-name wrapping. Final-head CI pending.
+- External gates: live Cosmos snapshot create-conflict visibility/restart/multi-instance; physical Android/iOS PDF render/save/share/logout/cache acceptance. Additional scripts beyond the bundled set require licensed font assets and shaping/extraction tests.

@@ -1061,3 +1061,15 @@ The active-trip capture watermark is optional on existing ride documents and is 
 - PR #118 exact head `a13a8b706ddd0ee46eb635cbc6cd6ad6a48390a2` passed [GitHub Actions run #746 / 42491279009](https://github.com/rajeevp727/turnova-platform/actions/runs/42491279009), 8/8 jobs.
 - Backend Release suite executed **317/317 tests** with zero failures. Rider/Driver typechecks and production JS exports, shared mobile tests, Android debug APK builds, unsigned iOS Simulator builds and native non-container API publish all passed.
 - Both npm audits reported 0 critical, 0 high, 11 moderate and 1 low; the JSON reports and generated lockfiles are CI artifacts. No live Cosmos, physical-device, device-to-device SignalR or production validation is implied.
+
+
+### DRIVER-03 Unicode payslip PDF rendering (2026-11-09)
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| DRIVER-PDF-001 | Latin and nine Indic scripts render and remain searchable | Generate a monthly payslip with Driver/Union names containing Latin, Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada and Malayalam text; open the PDF with PdfPig | Embedded Noto fonts and HarfBuzz shaping produce valid PDF text with ToUnicode mappings; extracted text retains every supplied script without question-mark substitution | API unit + PDF extraction | P0 |
+| DRIVER-PDF-002 | Unsupported script fails closed | Generate a payslip containing Arabic, Sinhala, emoji or another script outside the bundled font set | PDF generation stops with a safe unsupported-script result; API returns HTTP 422 with a generic message and does not emit a partial PDF or expose the name in the response | API unit | P1 |
+| DRIVER-PDF-003 | Concurrent payslip generation is isolated | Generate four PDFs concurrently using the shared immutable typeface cache | Each request owns its HarfBuzz shapers, every PDF has valid ToUnicode extraction, and no cross-request text is mixed | API unit + PDF extraction | P1 |
+| DRIVER-PDF-004 | Long Unicode names wrap without changing snapshot data | Generate a PDF with a long mixed-script Driver name and compare the original immutable snapshot | PDF text wraps at safe grapheme boundaries; the persisted/in-memory payslip snapshot remains byte-for-byte unchanged | API unit + PDF extraction | P1 |
+
+The tests are implemented in DriverPayslipPdfTests; final-head CI and physical Android/iOS save/share/rendering acceptance remain pending.
