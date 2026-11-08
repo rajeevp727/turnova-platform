@@ -287,22 +287,52 @@ public static class DriverPayslipPdf
         bool bold = false)
     {
         var start = x;
-        foreach (var run in fonts.SplitRuns(text))
+        using var builder = new SKTextBlobBuilder();
+        var runFonts = new List<SKFont>();
+
+        try
         {
-            var face = fonts.Get(run.Script);
-            using var font = CreateFont(face, fontSize, bold);
-            using var paint = new SKPaint { Color = color, IsAntialias = true };
-            var shaped = face.Shaper.Shape(run.Text, font);
-            EnsureGlyphCoverage(run, shaped.Codepoints);
-            canvas.DrawShapedText(
-                face.Shaper,
-                run.Text,
-                x,
-                baseline,
-                SKTextAlign.Left,
-                font,
-                paint);
-            x += shaped.Width;
+            foreach (var run in fonts.SplitRuns(text))
+            {
+                var face = fonts.Get(run.Script);
+                var font = CreateFont(face, fontSize, bold);
+                runFonts.Add(font);
+
+                // HarfBuzz supplies positioned glyph IDs and UTF-8 cluster offsets.
+                // Store the original UTF-8 text and clusters in the text blob as well:
+                // the PDF backend can then emit a ToUnicode map for copy/search/accessibility.
+                var shaped = face.Shaper.Shape(run.Text, x, baseline, font);
+                EnsureGlyphCoverage(run, shaped.Codepoints);
+
+                var glyphs = new ushort[shaped.Codepoints.Length];
+                for (var index = 0; index < shaped.Codepoints.Length; index++)
+                {
+                    if (shaped.Codepoints[index] > ushort.MaxValue)
+                        throw new NotSupportedException($"The bundled {run.Script} payslip font returned an unsupported glyph index.");
+                    glyphs[index] = (ushort)shaped.Codepoints[index];
+                }
+
+                var utf8Text = Encoding.UTF8.GetBytes(run.Text);
+                var textRun = builder.AllocatePositionedTextRun(font, glyphs.Length, utf8Text.Length);
+                textRun.SetGlyphs(glyphs);
+                textRun.SetPositions(shaped.Points);
+                textRun.SetText(utf8Text);
+                textRun.SetClusters(shaped.Clusters);
+
+                x += shaped.Width;
+            }
+
+            using var blob = builder.Build();
+            if (blob is not null)
+            {
+                using var paint = new SKPaint { Color = color, IsAntialias = true };
+                canvas.DrawText(blob, 0, 0, paint);
+            }
+        }
+        finally
+        {
+            foreach (var font in runFonts)
+                font.Dispose();
         }
 
         return x - start;
