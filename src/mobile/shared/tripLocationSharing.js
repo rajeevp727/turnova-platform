@@ -20,4 +20,52 @@ function findAuthoritativeActiveTrip(history, rideId) {
   ) ?? null;
 }
 
-module.exports = { canShareTripLocation, findAuthoritativeActiveTrip };
+function parseUtcTimestamp(value) {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function areValidCoordinates(latitude, longitude) {
+  return Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
+    Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+}
+
+function shouldApplyTripLocationUpdate(current, update) {
+  if (!current || !update ||
+      typeof current.rideId !== "string" || !current.rideId ||
+      update.rideId !== current.rideId ||
+      !areValidCoordinates(update.latitude, update.longitude)) return false;
+
+  const incomingCapture = parseUtcTimestamp(update.locationCapturedAtUtc);
+  const currentCapture = parseUtcTimestamp(current.locationCapturedAtUtc);
+  if (incomingCapture !== null) {
+    // Never compare a GPS capture timestamp with a legacy server-receipt timestamp.
+    // The first capture watermark is accepted when upgrading a legacy ride snapshot.
+    return currentCapture === null || incomingCapture > currentCapture;
+  }
+
+  const incomingReceipt = parseUtcTimestamp(update.locationUpdatedAt);
+  const currentReceipt = parseUtcTimestamp(current.locationUpdatedAt);
+  return incomingReceipt !== null &&
+    (currentReceipt === null || incomingReceipt > currentReceipt);
+}
+
+function getRideMapFitCoordinates(ride) {
+  if (!ride) return [];
+  const coordinates = [];
+  if (areValidCoordinates(ride.driverLatitude, ride.driverLongitude)) {
+    coordinates.push({ latitude: ride.driverLatitude, longitude: ride.driverLongitude });
+  }
+  if (areValidCoordinates(ride.pickupLatitude, ride.pickupLongitude)) {
+    coordinates.push({ latitude: ride.pickupLatitude, longitude: ride.pickupLongitude });
+  }
+  return coordinates;
+}
+
+module.exports = {
+  canShareTripLocation,
+  findAuthoritativeActiveTrip,
+  shouldApplyTripLocationUpdate,
+  getRideMapFitCoordinates
+};
