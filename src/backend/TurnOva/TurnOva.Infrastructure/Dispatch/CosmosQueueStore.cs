@@ -123,6 +123,30 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         { return false; }
     }
 
+    public async Task RecordDispatchExceptionAsync(
+        string actorId,
+        string zoneId,
+        string serviceClass,
+        string traceId,
+        string reasonCategory,
+        CancellationToken cancellationToken)
+    {
+        var key = QueueKey(zoneId, serviceClass);
+        var audit = CreateAuditEvent(
+            key,
+            actorId,
+            QueueAuditEventTypes.DispatchException,
+            traceId: traceId,
+            reasonCategory: reasonCategory);
+
+        // This is a separate append-only exception record, not a failed queue mutation event.
+        // It uses the existing zone/service partition and never stores the raw exception.
+        await queueContainer.CreateItemAsync(
+            audit,
+            new PartitionKey(key),
+            cancellationToken: cancellationToken);
+    }
+
     public async Task<IReadOnlyList<QueueAuditEvent>> GetAuditEventsAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
@@ -140,8 +164,14 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     }
 
     private static QueueAuditEvent CreateAuditEvent(
-        string zoneServiceKey, string driverId, string eventType, string? offerId = null) =>
-        new(Guid.NewGuid().ToString("N"), zoneServiceKey, driverId, eventType, DateTimeOffset.UtcNow, offerId);
+        string zoneServiceKey,
+        string driverId,
+        string eventType,
+        string? offerId = null,
+        string? traceId = null,
+        string? reasonCategory = null) =>
+        new(Guid.NewGuid().ToString("N"), zoneServiceKey, driverId, eventType,
+            DateTimeOffset.UtcNow, offerId, traceId, reasonCategory);
 
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
