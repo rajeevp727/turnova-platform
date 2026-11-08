@@ -33,7 +33,10 @@ public sealed class DriverPayslipPdfTests
         var pdfStructure = Encoding.Latin1.GetString(pdf);
 
         Assert.Contains("/ToUnicode", pdfStructure, StringComparison.Ordinal);
-        Assert.Contains("/FontFile2", pdfStructure, StringComparison.Ordinal);
+        Assert.True(
+            pdfStructure.Contains("/FontFile2", StringComparison.Ordinal) ||
+            pdfStructure.Contains("/FontFile3", StringComparison.Ordinal),
+            "The PDF must embed its Unicode font program.");
 
         using var stream = new MemoryStream(pdf);
         using var document = PdfDocument.Open(stream);
