@@ -20,3 +20,17 @@ public static class UnionReconciliationQuery
         "AND IS_DEFINED(c.paymentReconciliation) " +
         "AND c.paymentReconciliation.unionId = @unionId";
 }
+
+public sealed record UnionReconciliationQueryProjection(
+    string? ServiceClass,
+    string? UnionId,
+    string RideId,
+    int AgreementVersion,
+    string ReportUnionId,
+    decimal AgreedAmount,
+    decimal AmountReceived,
+    decimal Delta,
+    string Currency,
+    DateTimeOffset ReportedAtUtc,
+    string ReportedByDriverId,
+    string Status);
