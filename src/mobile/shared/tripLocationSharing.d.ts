@@ -40,6 +40,11 @@ export function shouldApplyTripLocationUpdate(
   update: TripLocationUpdate
 ): boolean;
 
+export function mergeTripLocationSnapshot<T extends TripLocationSnapshot & { driverLocationCapturedAtUtc?: string | null }>(
+  current: TripLocationSnapshot,
+  snapshot: T
+): T & TripLocationSnapshot;
+
 export function getRideMapFitCoordinates(
   ride: TripLocationSnapshot & { pickupLatitude?: number | null; pickupLongitude?: number | null }
 ): Array<{ latitude: number; longitude: number }>;
