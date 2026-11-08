@@ -24,10 +24,10 @@ function findActiveRide(history, role) {
   return history.find(ride => ride && allowedStatuses.has(ride.status)) ?? null;
 }
 
-const TERMINAL_RIDE_STATUSES = new Set(["Completed", "Cancelled", "Expired"]);
-
-function isTerminalRideStatus(status) {
-  return typeof status === "string" && TERMINAL_RIDE_STATUSES.has(status);
+function shouldApplyRideStatusUpdate(currentRideId, updateRideId, isActive) {
+  return isActive === true &&
+    typeof currentRideId === "string" && currentRideId.trim().length > 0 &&
+    typeof updateRideId === "string" && updateRideId === currentRideId;
 }
 
-module.exports = { findActiveRide, isTerminalRideStatus };
+module.exports = { findActiveRide, shouldApplyRideStatusUpdate };
