@@ -6,6 +6,11 @@ export function findActiveRide<T extends { status: string }>(
 ): T | null;
 
 export function applyRideStatusUpdate<T extends { rideId: string; status: string }>(
+  ride: T,
+  update: { rideId: string; status: string }
+): T;
+
+export function applyRideStatusUpdate<T extends { rideId: string; status: string }>(
   ride: T | null | undefined,
   update: { rideId: string; status: string }
 ): T | null | undefined;
