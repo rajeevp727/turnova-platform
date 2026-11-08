@@ -2587,7 +2587,7 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueS
         string.Equals(ride.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase)));
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
-app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string rideId, QueueService queueService, IHubContext<RideTrackingHub> hub, IRideOfferStore offerStore, CancellationToken ct) =>
+app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsPrincipal user, string rideId, QueueService queueService, IHubContext<RideTrackingHub> hub, IRideOfferStore offerStore, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
@@ -2614,7 +2614,64 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
             !confirmations.Any(item => item.Version == currentAgreement.Version && item.Party == "Driver" && item.ActorId == driverId))
             return Results.Conflict(new { message = "The selected booking or current agreement is no longer eligible." });
 
-        if (!await driverRideReservations.TryMakePermanentAsync(driverId, rideId, ct))
+        bool reservationMade;
+        try
+        {
+            reservationMade = await driverRideReservations.TryMakePermanentAsync(driverId, rideId, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // A timeout can occur after Cosmos committed the permanent lease. Re-read before
+            // failing so an ambiguous successful write is recovered idempotently.
+            DriverRideReservation? currentReservation = null;
+            try
+            {
+                currentReservation = await driverRideReservations.GetActiveAsync(
+                    driverId, CancellationToken.None);
+            }
+            catch
+            {
+                // Preserve the original promotion exception; the safe audit below records only
+                // its allow-listed category and server trace, never either exception message.
+            }
+
+            if (currentReservation?.RideId == rideId && currentReservation.ExpiresAtUtc is null)
+            {
+                await queueService.RecordDispatchExceptionAsync(
+                    driverId,
+                    string.IsNullOrWhiteSpace(selectedRide.DispatchZoneId)
+                        ? approvedProfile.ZoneId
+                        : selectedRide.DispatchZoneId,
+                    string.IsNullOrWhiteSpace(selectedRide.ServiceClass)
+                        ? approvedProfile.ServiceClass
+                        : selectedRide.ServiceClass,
+                    context.TraceIdentifier,
+                    QueueAuditReasonCategories.DriverReservationPromotionRecovered,
+                    CancellationToken.None);
+                reservationMade = true;
+            }
+            else
+            {
+                await queueService.RecordDispatchExceptionAsync(
+                    driverId,
+                    string.IsNullOrWhiteSpace(selectedRide.DispatchZoneId)
+                        ? approvedProfile.ZoneId
+                        : selectedRide.DispatchZoneId,
+                    string.IsNullOrWhiteSpace(selectedRide.ServiceClass)
+                        ? approvedProfile.ServiceClass
+                        : selectedRide.ServiceClass,
+                    context.TraceIdentifier,
+                    QueueAuditReasonCategories.DriverReservationFailed,
+                    CancellationToken.None);
+                throw;
+            }
+        }
+
+        if (!reservationMade)
             return Results.Conflict(new { message = "The selected-driver reservation expired or is no longer held. Refresh Rider discovery." });
         var acceptedSelectedRide = await TryTransitionAsync(selectedRide, "Accepted", driverId, "Driver", ct);
         if (acceptedSelectedRide is null)
@@ -2632,7 +2689,31 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (ClaimsPrincipal user, string
         (!pendingOffer.IsPending || pendingOffer.DriverId != driverId ||
          pendingOffer.IsExpiredAt(TimeProvider.System.GetUtcNow())))
         return Results.Conflict(new { message = "This ride offer is no longer assigned to you or has expired." });
-    var queue = await queueService.GetPositionedQueueAsync(approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
+    IReadOnlyList<DriverQueueEntry> queue;
+    try
+    {
+        queue = await queueService.GetPositionedQueueAsync(
+            approvedProfile.ZoneId, approvedProfile.ServiceClass, ct);
+    }
+    catch (OperationCanceledException)
+    {
+        throw;
+    }
+    catch (Exception) when (!ct.IsCancellationRequested)
+    {
+        // The request trace and actor are server/claim-derived. Never persist the exception
+        // message, request body, token, contact details or location in the audit event.
+        // The exception record is separate from queue mutation audit and does not alter state.
+        await queueService.RecordDispatchExceptionAsync(
+            driverId,
+            approvedProfile.ZoneId,
+            approvedProfile.ServiceClass,
+            context.TraceIdentifier,
+            QueueAuditReasonCategories.QueueReadFailed,
+            CancellationToken.None);
+        throw;
+    }
+
     if (queue.FirstOrDefault()?.DriverId != driverId)
         return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can accept a ride." });
     if (rideContainer is null)

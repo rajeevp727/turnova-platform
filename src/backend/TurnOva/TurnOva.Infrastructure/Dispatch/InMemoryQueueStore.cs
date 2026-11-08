@@ -11,6 +11,7 @@ public sealed class InMemoryQueueStore : IQueueStore
     private long _sequence;
     private readonly ConcurrentDictionary<string, string> _rotations = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<QueueAuditEvent> _auditEvents = new();
+    private readonly ConcurrentDictionary<string, QueueAuditEvent> _exceptionAuditEvents = new(StringComparer.Ordinal);
 
     public Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
@@ -96,6 +97,40 @@ public sealed class InMemoryQueueStore : IQueueStore
         }
     }
 
+    public Task RecordDispatchExceptionAsync(
+        string actorId,
+        string zoneId,
+        string serviceClass,
+        string traceId,
+        string reasonCategory,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = Key(zoneId, serviceClass);
+        var eventId = $"dispatch-exception-{traceId}";
+        var deduplicationKey = $"{key}|{traceId}";
+        var audit = new QueueAuditEvent(
+            eventId,
+            key,
+            actorId,
+            QueueAuditEventTypes.DispatchException,
+            DateTimeOffset.UtcNow,
+            TraceId: traceId,
+            ReasonCategory: reasonCategory);
+
+        if (_exceptionAuditEvents.TryAdd(deduplicationKey, audit))
+        {
+            _auditEvents.Enqueue(audit);
+        }
+        else if (_exceptionAuditEvents.TryGetValue(deduplicationKey, out var existing) &&
+                 (existing.DriverId != actorId || existing.ReasonCategory != reasonCategory))
+        {
+            throw new InvalidOperationException("A dispatch exception trace ID was reused with different audit metadata.");
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<QueueAuditEvent>> GetAuditEventsAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
@@ -109,9 +144,22 @@ public sealed class InMemoryQueueStore : IQueueStore
         return Task.FromResult(events);
     }
 
-    private void RecordAudit(string zoneServiceKey, string driverId, string eventType, string? offerId = null) =>
+    private void RecordAudit(
+        string zoneServiceKey,
+        string driverId,
+        string eventType,
+        string? offerId = null,
+        string? traceId = null,
+        string? reasonCategory = null) =>
         _auditEvents.Enqueue(new QueueAuditEvent(
-            Guid.NewGuid().ToString("N"), zoneServiceKey, driverId, eventType, DateTimeOffset.UtcNow, offerId));
+            Guid.NewGuid().ToString("N"),
+            zoneServiceKey,
+            driverId,
+            eventType,
+            DateTimeOffset.UtcNow,
+            offerId,
+            traceId,
+            reasonCategory));
 
     private static string Key(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";

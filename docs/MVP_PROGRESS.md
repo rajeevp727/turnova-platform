@@ -1,17 +1,23 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-08 23:33 IST
+**Last updated:** 2026-11-09 00:01 IST
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded.
 
 ## 1. Current step
 
-**Current sequential item #16 RIDER-04 — sole active feature PR [#120](https://github.com/rajeevp727/turnova-platform/pull/120), branch `fix/rider-04-minimize-union-reconciliation-projection`.** Main HEAD is `5c7902e7e5ebbfd67f477f8fd9dc936d607ffb64` after DRIVER-03 PR #119 merged. PR #119 exact-head CI [run #763 / 42495908059](https://github.com/rajeevp727/turnova-platform/actions/runs/42495908059) passed 8/8 jobs and 322/322 backend tests. Main post-merge CI [run #764 / 42497520855](https://github.com/rajeevp727/turnova-platform/actions/runs/42497520855) subsequently passed 8/8 jobs. RIDER-04 implementation head `26e458a416c708880293eaad3a585a4c3598c160` passed exact-head CI [run #766 / 42502454708](https://github.com/rajeevp727/turnova-platform/actions/runs/42502454708), all 8/8 jobs including 324/324 backend tests, both Android debug APKs, both unsigned iOS Simulator builds, both mobile typecheck/bundle jobs, shared mobile auth tests and native non-container API publish. No live Cosmos or physical-device validation is claimed.
+**Current sequential item #18 PLATFORM-01 — sole active feature PR [#121](https://github.com/rajeevp727/turnova-platform/pull/121), branch `feat/platform-01-dispatch-exception-audit`.** Main HEAD is `3e20aee9d244b6e90988669b5658824f01926e3a` after RIDER-04 PR #120 merged. PR #120 final-head CI [run #767 / 42508275522](https://github.com/rajeevp727/turnova-platform/actions/runs/42508275522) passed 8/8 jobs and 324/324 backend tests, both Android debug APKs, both unsigned iOS Simulator builds, Rider/Driver typechecks and bundles, shared auth tests and native non-container API publish. Main post-merge CI [run #768 / 42510603256](https://github.com/rajeevp727/turnova-platform/actions/runs/42510603256) is still running; it is not a production validation.
 
-Sequential #15 DRIVER-04 was audited and remains Blocked because the PRD leaves support categories and escalation ownership unapproved. Product/Operations must define issue categories, required intake fields, priority/severity, escalation owner/contact channel, support hours/response targets, attachment handling, privacy/retention rules and the operational handoff. No support category, SLA, contact detail or API contract is invented. With no safe independent implementation possible before those decisions, execution continues to #16 RIDER-04.
+Sequential #17 DRIVER-04 remains Blocked pending Product/Operations approval of issue categories, required intake fields, priority/severity, escalation owner/contact channel, support hours/response targets, attachment handling, privacy/retention and operational handoff. No support workflow, contact or SLA is invented. Execution proceeds to #18 PLATFORM-01.
 
-RIDER-04 already has immutable Driver-reported/unverified reconciliation, signed agreed-minus-received delta, same-key idempotency, CAS protection against competing reports, Driver-only history, signed-unionId-scoped UnionManager results and original-Union historical ownership. The current increment narrows the Cosmos UnionManager reconciliation query to a flat allow-listed projection (service class, ride/Union linkage, agreement version, agreed/received amounts, signed delta, currency, report timestamp, reporting Driver and status) instead of materializing full `DemoRide` documents. It adds deterministic tests that the query does not select the full aggregate and the projection DTO contains no Rider identity, route, stops, location or contact fields.
+PLATFORM-01 PR #121 adds a distinct `DispatchException` record to the existing `QueueEntries` container partitioned by `zoneServiceKey`. Legacy Driver queue-read exceptions are audited as `QueueReadFailed` and rethrown through the generic 500 handler. In the active selected-Cab flow, a reservation-promotion exception triggers a point-read: if the same ride already has a permanent lease, the API appends `DriverReservationPromotionRecovered` and continues the normal accept transition; otherwise it appends `DriverReservationFailed` and rethrows before the ride transition. Each event contains only server trace ID, claim-derived Driver actor reference, allow-listed reason category and UTC timestamp. The event is separate from queue mutation audit; an unrecovered failure leaves the ride and reservation unchanged, while a confirmed ambiguous success proceeds only after the permanent lease is observed. Raw exception messages, request bodies, tokens, contact details, exact location and fare are not persisted. Rider discovery and selected-driver assignment remain queue-independent.
 
-No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-app payment, escrow or cross-Union disclosure is introduced. Live Cosmos query/partition validation and physical Android/iOS report-entry/history acceptance remain external gates. Strict acceptance remains 0/19 until all row evidence, including external gates, passes.
+Deterministic tests added: `AuthenticatedSelectedDriverReservationFailurePersistsSafeExceptionAuditAndPreservesLease` covers a pre-commit failure in the active selected-Cab flow and unchanged AgreementConfirmed ride/temporary reservation; `SelectedDriverAcceptRecoversWhenReservationPromotionCommitsBeforeTransientFailure` proves an ambiguous post-commit result is re-read, audited as `DriverReservationPromotionRecovered`, and treated as success; `AuthenticatedDriverAcceptQueueReadFailurePersistsSafeExceptionAuditAndReturnsGeneric500` covers the legacy compatibility path; `RecordDispatchExceptionAsyncStoresOnlySafeMetadataInItsCabQueuePartition`, `QueueServiceRejectsNonCabAndUnapprovedDispatchExceptionCategories`, and `RecordDispatchExceptionAsyncDoesNotWriteAfterCancellation` cover privacy, Cab-only reason allow-list, cancellation and deterministic per-trace idempotency. Existing queue mutation tests continue to prove failed/no-op mutations do not create mutation audit events. Exact-head CI for PR #121 is pending.
+
+**Current acceptance snapshot:** 0/19 strictly Verified; 15 In progress; 4 Blocked. This is a strict evidence count, not a statement that features are unimplemented. Engineering implementation and automated evidence are documented row by row; production/device/live-Cosmos evidence remains outstanding.
+
+External PLATFORM-01 gates: live Cosmos create/query/partition and multi-instance/restart/retention validation; telemetry export and alert configuration; production CORS origins; load testing; physical-device acceptance. No live Cosmos or production observability validation is claimed.
+
+**Next:** complete PR #121 exact-head CI, inspect security/privacy/concurrency diff, submit COMMENT-only review, merge only if all required checks pass and GitHub policy permits, then re-read main and continue to #19 RELEASE-01.
 
 - PR #52 merged Cab-only foundations at `6ba7b1968c1b5b2de61843cab04e85f7631e50fc`.
 - PR #53 merged legacy non-Cab endpoint and mobile action guards at `7642168f42e277e04b76d7fba4c28ba90d3faa22`; final-head CI run [42232390997](https://github.com/rajeevp727/turnova-platform/actions/runs/42232390997) passed all four jobs.
@@ -48,7 +54,7 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 
 ## 2. Overall MVP completion
 
-- **Weighted progress: 39.5%** under the revised Cab-only acceptance mapping.
+- Historical weighted-status scoring is retired and is not used as an engineering-completion or acceptance measure.
 - Formula: `(Verified × 1 + In progress × 0.5 + Not started × 0 + Blocked × 0) ÷ 19 × 100`.
 - Counts: **0 Verified, 15 In progress, 0 Not started, 4 Blocked**.
 - Calculation: `(0 + 15 × 0.5 + 0 + 0) ÷ 19 × 100 = 39.5%`.
@@ -187,7 +193,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Driver mobile location tracking is foreground-only, pauses during Negotiating/AgreementConfirmed/active ride, stops in background and refreshes/restarts on resume.
 - Added API regression tests for missing Union/documents and unchanged availability/location during a selected negotiation. PR #67 final-head CI [42286508190](https://github.com/rajeevp727/turnova-platform/actions/runs/42286508190) passed all four jobs and executed 193/193 backend tests; Expo typechecks and shared mobile tests also passed.
 - Remaining gates: live Cosmos multi-instance/ETag/restart concurrency, Android/iOS physical permission/background/resume tests, and unresolved internal FIFO role.
-- Weighted progress remains **42.1%** (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict **0/19**).
 
 
 ## RIDER-04 direct-payment reconciliation increment (2026-11-07)
@@ -197,7 +202,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - The report is embedded in the existing Rides aggregate and protected by the existing ETag/snapshot comparison. Same-key/same-payload retry is idempotent; conflicting reports cannot overwrite the first report.
 - Driver history shows the unverified report. The UnionManager endpoint is filtered by signed unionId claims and returns only ride/Driver references and reconciliation values; it omits Rider identity, route/stops, contacts, exact coordinates and private chat.
 - No payment gateway, escrow, customer verification/dispute workflow or delta-based next-ride gate is introduced. The latter two product decisions remain open. Physical Android/iOS entry/history acceptance and live Cosmos ETag/restart validation remain external gates.
-- Weighted progress remains **42.1%**: 0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. The 19-area denominator is unchanged.
 
 - Approved supplemental **CAB-RECON-01 is In progress in PR #70** and remains outside the 19-area denominator; AI-01 is now In progress in the focused sequential branch and remains outside the 19-area denominator.
 
@@ -217,7 +221,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Focused PR [#72](https://github.com/rajeevp727/turnova-platform/pull/72) completed sequential item #19 and merged at `43cb52f4652990d1ddc88efb765f8fef72ec0753`. Final-head CI [42303396400](https://github.com/rajeevp727/turnova-platform/actions/runs/42303396400) passed all four jobs, including 214/214 backend tests, native non-container API publish, all four Rider/Driver Android/iOS production JavaScript bundle exports and three artifacts.
 - This is stronger than Expo config/typecheck alone but is not a native APK/AAB/IPA build and does not prove signing or app-store readiness.
 - Current app configs contain Android package IDs but no iOS bundle identifiers. Final iOS store identifiers, signing credentials/profiles, Android release keystore and physical-device functional/security/pilot evidence remain external gates; no values are invented.
-- The 19-area weighted score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19) until the release row's full evidence passes.
 
 
 - First PR #72 CI attempt [42302220373](https://github.com/rajeevp727/turnova-platform/actions/runs/42302220373) failed at Driver Android bundling because Metro could not resolve `../shared/refreshCoordinator` outside the app root. Both apps now add only `src/mobile/shared` to Metro `watchFolders` and preserve default hierarchical dependency resolution; later final-head CI passed all four bundle exports.
@@ -237,8 +240,7 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Rider UI exposes draft-only trip intent in Book and approved help in Profile; Driver Profile exposes approved ride/queue help. Draft output only pre-fills editable fields and does not invoke booking, fare, agreement or payment operations.
 - API integration tests cover Rider-only draft authorization, Rider/Driver help, unsupported escalation and per-caller rate limiting. Service unit tests cover route redaction, provider output validation, timeout/cancellation, fallback and approved source selection.
 - Automated review [6697690613](https://github.com/rajeevp727/turnova-platform/pull/73#issuecomment-6697690613) found no unresolved critical/high-risk issue. Live provider sandbox, managed-secret wiring and provider data-processing validation remain external gates.
-- The 19-area weighted score remains **42.1%** = `(0 Verified + 16 × 0.5 + 0 Not started + 3 × 0) / 19 × 100`; counts **0 Verified, 16 In progress, 0 Not started, 3 Blocked**; strict fully verified count **0/19**. AI-01 is supplemental and is not counted.
-- **Current step:** #1 AUTH-01 — enforce Rider/Driver role separation in both mobile apps and verify symmetric TriSend registration/login contracts. PR #90 completed #19 at merge commit `4608c4c05dd5d359afc8fc6ae1bead6d7e3aa3ba`; final-head CI [42332828805](https://github.com/rajeevp727/turnova-platform/actions/runs/42332828805) passed all eight jobs, including 246/246 backend tests, 34/34 shared mobile tests, Rider/Driver typechecks and bundles, both Android debug APK builds, both unsigned iOS Simulator builds and native non-container API publish. Seven artifacts were uploaded. PR #91 is the current focused AUTH-01 PR; its final-head CI is pending. #15 DRIVER-04 and #17 SUPPORT-01 remain Blocked by unapproved support categories/process/owner. Editable profile updates remain unimplemented because no upstream TriSend route/field contract is specified. **Next step after #1:** proceed to #2 AUTH-02 and inspect refresh rotation/reuse, app restart, expiry, logout and SecureStore failure gaps. Weighted progress remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19).
+- **Current step:** #1 AUTH-01 — enforce Rider/Driver role separation in both mobile apps and verify symmetric TriSend registration/login contracts. PR #90 completed #19 at merge commit `4608c4c05dd5d359afc8fc6ae1bead6d7e3aa3ba`; final-head CI [42332828805](https://github.com/rajeevp727/turnova-platform/actions/runs/42332828805) passed all eight jobs, including 246/246 backend tests, 34/34 shared mobile tests, Rider/Driver typechecks and bundles, both Android debug APK builds, both unsigned iOS Simulator builds and native non-container API publish. Seven artifacts were uploaded. PR #91 is the current focused AUTH-01 PR; its final-head CI is pending. #15 DRIVER-04 and #17 SUPPORT-01 remain Blocked by unapproved support categories/process/owner. Editable profile updates remain unimplemented because no upstream TriSend route/field contract is specified. **Next step after #1:** proceed to #2 AUTH-02 and inspect refresh rotation/reuse, app restart, expiry, logout and SecureStore failure gaps.
 
 
 ## PLATFORM-01 ride audit trail increment (2026-11-07)
@@ -249,7 +251,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Event types cover RideCreated/RideRequested, AgreementProposed, AgreementPartyConfirmed, RideStatusChanged and PaymentReportedUnverified. Events contain ride/Union linkage, actor ID/role, UTC time and relevant state/version/amount/currency/delta; they omit route/stops, exact coordinates, contact data, document references, tokens and private chat.
 - Same-key agreement/payment retries and repeated terminal-state calls do not append duplicate events. Deterministic tests cover the full selected-Cab lifecycle, cancellation, Driver decline, System expiry, agreement-confirmation retry, payment-report retry and preservation across a non-audit location update.
 - No new container, cross-partition transaction, general-purpose admin audit endpoint or cross-Union visibility policy is added. Live Cosmos multi-instance ETag/restart/retention, production telemetry/alerts/origin configuration and load tests remain external gates.
-- Weighted progress remains **42.1%** (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict **0/19**). #19 RELEASE-01 is next after this item; AI-01 and CAB-RECON-01 remain supplemental.
 
 
 ## RELEASE-01 native compilation increment (2026-11-07)
@@ -258,7 +259,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Seven artifacts were uploaded: Rider/Driver Android debug APKs, Rider/Driver unsigned iOS Simulator apps, both production JS bundle artifacts and the API publish artifact.
 - The iOS workflow selects the root CocoaPods-integrated workspace matching the root Expo app project. Android outputs are debug APKs; iOS outputs are unsigned Simulator `.app` bundles, not production-signed AAB/IPA artifacts.
 - Production signing, final iOS store identifiers/profiles and physical-device functional/security/pilot checks remain external gates; no production readiness is claimed.
-- The 19-area weighted score remains **42.1%**: 0 Verified, 16 In Progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. AI-01 and CAB-RECON-01 remain supplemental and outside the 19-area denominator.
 - Current sequential item is #1 AUTH-01; PR #91 is the focused role-isolation increment. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked pending approved support categories, escalation owner and operating process.
 
 ## AUTH-01 mobile role-isolation increment (2026-11-07)
@@ -267,7 +267,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Shared mobile tests cover matching Rider/Driver profiles, cross-app role rejection, missing profiles and unsupported expected roles. API integration tests add Rider registration server-owned role enforcement and Rider-login/Driver-account rejection with upstream session revocation.
 - Refresh responses that rotate tokens without returning a profile no longer overwrite the current in-memory profile; full startup restore behavior for token-only refresh responses remains part of the next AUTH-02 audit.
 - Editable profile fields remain blocked pending an approved upstream TriSend profile-update endpoint/field contract. Physical-device registration/login/profile-read validation remains external.
-- PR #91 final-head CI and automated review are pending. Weighted progress remains **42.1%** (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict **0/19**); AI-01 and CAB-RECON-01 remain supplemental.
 
 ## AUTH-02 authoritative profile restore after token rotation (2026-11-07)
 
@@ -275,7 +274,7 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Current sequential item: #2 AUTH-02. The shared startup restore helper now persists a rotated pair, then fetches the authoritative `/api/v1/auth/me` profile with the new access token instead of depending on optional profile data in the refresh response.
 - Regression coverage includes token-only refresh, transient 503 after rotation (retain the new pair and show recoverable failure), and 401 from the refreshed profile lookup (clear both keys and restore no session).
 - PR [#92](https://github.com/rajeevp727/turnova-platform/pull/92) contains the focused implementation and regression tests. The automated review is recorded in the PR conversation; all required checks must pass on the latest head before merge. No local test/build result is claimed.
-- Live TriSend refresh-token rotation/reuse and Android/iOS SecureStore runtime/restart/expiry/logout acceptance remain external gates. Weighted progress remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19). Next sequential item after this increment is #3 RIDER-01.
+- Live TriSend refresh-token rotation/reuse and Android/iOS SecureStore runtime/restart/expiry/logout acceptance remain external gates.
 
 
 ## RIDER-02 confirmation display consistency (2026-11-07)
@@ -286,7 +285,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - No fare, agreement version, confirmation, ride-state, authorization, persistence, provider or booking behavior changes. No production timestamp format or timezone policy is inferred; existing device-local display behavior is retained.
 - PR #93 merged at `17cb46017b215b0e29f26b5a68be6399ec7885f9`; final-head CI [42350780382](https://github.com/rajeevp727/turnova-platform/actions/runs/42350780382) passed all eight jobs. The new helper test and final PR head still require CI evidence.
 - Next sequential item after this RIDER-02 increment: #5 RIDER-03 — re-audit selected-driver booking idempotency, cancellation/expiry and reservation release, then implement the smallest remaining independent gap.
-- Weighted progress remains **42.1%**: 0 Verified, 16 In Progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
 
 ## RIDER-03 history-triggered expiry reconciliation (2026-11-07)
 
@@ -295,7 +293,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - No production API behavior or expiry policy changes. The integration test uses the existing deterministic 15-minute test fixture only; production `Dispatch:SelectedDriverNegotiationLifetimeMinutes` remains unset and booking fails closed with 503 until the Product Owner supplies the approved value.
 - PR #94 merged at `16e075730556ea9fdab77ddfc740c5c05ea872aa`; final-head CI [42352025790](https://github.com/rajeevp727/turnova-platform/actions/runs/42352025790) passed 248/248 backend, 51/51 shared mobile, both app typechecks/bundles, both Android debug APKs, both unsigned iOS Simulator builds and native non-container API publish. The new history regression and final PR head still require CI.
 - Next sequential item after this RIDER-03 increment: #6 DISPATCH-01 — re-audit configured pickup zone/radius resolution and boundary behavior, then add only the smallest missing deterministic regression if one exists.
-- Weighted progress remains **42.1%**: 0 Verified, 16 In Progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
 
 ## DISPATCH-02 audit and handoff (2026-11-07)
 
@@ -312,7 +309,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - The separate legacy offer-expiry processor's positive-control test remains unchanged, so this regression protects the selected-driver path without removing or altering legacy FIFO behavior.
 - PR #97 is open at [`f8774f4`](https://github.com/rajeevp727/turnova-platform/commit/f8774f40b53b8f6d389c260adbc8f60fef8b313b); exact-head CI and automated review are pending.
 - Next sequential item after #8: #9 DISPATCH-04 — audit reservation exclusivity across concurrent bookings, Online/Offline changes and Union transfer; continue only if a concrete deterministic gap remains.
-- Weighted progress remains **42.1%**: 0 Verified, 16 In Progress, 0 Not started, 3 Blocked; strict fully verified count **0/19**. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
 
 
 ## Latest execution handoff — 2026-11-07
@@ -333,7 +329,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - New API integration regression: `PayslipSnapshotRepairsMissingSelectedRideActivitiesFromAuditBeforeSnapshot` removes the separate activity rows after audit facts exist, including a selected Driver decline from `Negotiating` before any agreement version exists, then verifies the first PDF snapshot reconstructs accepted/completed/rejected counts and remains byte-identical on repeat.
 - The Driver app's existing native file/share path uses Expo FileSystem cache and Expo Sharing; Android/iOS physical save/share, accessibility and real PDF-viewer acceptance remain device gates. Live Cosmos cross-container query/create-conflict/restart/ETag validation remains external; this read-repair is not a transactional outbox and does not claim live Cosmos verification.
 - Next sequential item after #14: #15 DRIVER-04 — support-category/escalation process is blocked pending Product Owner approval. If still blocked, record the exact dependency and proceed to #16 RIDER-04 payment reconciliation UI/API audit.
-- Weighted progress remains 42.1%: 0 Verified, 16 In Progress, 0 Not started, 3 Blocked; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
 
 
 ## RIDER-04 currency-aware report entry (2026-11-07)
@@ -388,7 +383,7 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - **Current branch:** `fix/rider-02-agreement-idempotency-payload`. Implementation adds an optional backward-compatible `RideAgreementVersion.RequestHash`, SHA-256 over invariant canonical two-decimal amount plus currency, mismatch HTTP 409 on both ordinary and ETag-conflict replay paths, and legacy hash reconstruction from stored immutable terms.
 - **New API regressions:** `RideAgreementIdempotencyRejectsChangedAmountOrCurrency`, `LegacyAgreementWithoutRequestHashReplaysOnlyMatchingStoredTerms`, `ConcurrentSameKeyAgreementProposalsRejectDifferentPayloads`, `RideAgreementIdempotencyNormalizesEquivalentDecimalScale`, and `ConcurrentSameKeyAgreementProposalsWithSamePayloadReturnOneVersion`. Final CI and automated review are pending.
 - **CI feedback/fix:** initial backend run [42408861668](https://github.com/rajeevp727/turnova-platform/actions/runs/42408861668) exposed a test-fixture omission: new cases seeded the Union assignment but did not create the approved Driver onboarding profile, so the first proposal correctly failed eligibility with HTTP 409. The test setup now creates the Driver client/profile before seeding each ride (commit `20ba9c28fd4fda171d35394d0c2940d50ed27250`). This was a test setup issue, not a production-code failure; all checks must be rerun on the updated head.
-- **Acceptance accounting:** 19 rows remain 0 Verified, 16 In progress, 3 Blocked; strict fully verified count 0/19. Existing weighted status index is 42.1% = (0 + 16 × 0.5 + 0 + 0) / 19. This status index is not engineering implementation completion. AI-01 and approved Cab supplemental requirements remain outside the denominator.
+- **Acceptance accounting:** 19 rows remain 0 Verified, 16 In progress, 3 Blocked; strict fully verified count 0/19. Existing.
 - **Next sequential item after #4:** #5 RIDER-03 — re-audit booking idempotency, reservation lease lifecycle, expiry/cancel/decline/completion cleanup, history-triggered recovery and notification recovery for concrete missing deterministic coverage.
 - **External gates:** live Cosmos ETag/multi-instance/restart behavior, physical Android/iOS negotiation and recovery, production negotiation-lifetime approval. These do not block the independent API code/tests.
 
@@ -399,7 +394,7 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Finding: interrupted selected-booking recovery could reuse the original Driver reservation lease but calculate a new NegotiationExpiresAtUtc from retry time. The ride and lease deadlines could drift, leaving a still-negotiating ride whose Driver lease had already expired and could no longer be promoted.
 - Active PR: [#108](https://github.com/rajeevp727/turnova-platform/pull/108), branch fix/rider-03-preserve-negotiation-expiry-on-recovery, code head 18f09c83ee56911436d21acbdc8d715efe864496. Recovery now reuses the idempotency record original CreatedAtUtc for RequestedAt, RideCreated audit and negotiation expiry. The deterministic recovery test asserts exact equality between ride and reservation expiry.
 - PR #108 merged at `f0e60ca7e1aa986b994d1a6d1240911402afee62`; exact-head CI [42414571838](https://github.com/rajeevp727/turnova-platform/actions/runs/42414571838) passed all 8/8 jobs and 278/278 backend tests. Automated review found no unresolved critical/high-risk issue. Live Cosmos ETag/multi-instance/restart and physical Android/iOS booking/expiry/reconnect/notification validation remain external gates; the approved negotiation lifetime remains unset and booking fails closed until Product supplies it.
-- Acceptance accounting: 19 rows remain 0 Verified, 16 In Progress, 3 Blocked; strict fully verified count 0/19. The weighted status index remains 42.1% = (0 + 16 x 0.5 + 0 + 0) / 19; it is not engineering implementation completion.
+- Acceptance accounting: 19 rows remain 0 Verified, 16 In Progress, 3 Blocked; strict fully verified count 0/19. The.
 - Next sequential item after #5: #6 DISPATCH-01 — re-audit configured pickup zone/radius and active Cab-serving Union enforcement. Product-approved production radius and zone boundaries are external inputs; keep fail-closed behavior, finish any independent deterministic tests, then continue to #7 DISPATCH-02 rather than pausing.
 - External gates: Product-approved radius/zone boundaries; production negotiation lifetime and Driver location-freshness age; live Cosmos ETag/multi-instance/restart behavior; Android/iOS booking/cancel/expiry/reconnect/notification acceptance. No product defaults or credentials are inferred.
 
@@ -411,7 +406,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - PR [#109](https://github.com/rajeevp727/turnova-platform/pull/109), branch `fix/dispatch-01-reject-ambiguous-zones`, requires exactly one matching configured rectangle. Zero or multiple matches, including inclusive shared boundaries, fail closed. Twelve deterministic API integration cases cover overlapping interiors and shared inclusive boundaries in both configuration orders across Rider discovery, selected booking (no ride/idempotency/reservation writes) and Driver location going Offline.
 - PR #109 merged at `203b8843741248d8648345f462609d3102fd6715`; exact-head CI [42418661118](https://github.com/rajeevp727/turnova-platform/actions/runs/42418661118) passed all 8/8 jobs and 290/290 backend tests. Rider/Driver typechecks and production bundles, both Android debug APKs, unsigned iOS Simulator apps, shared mobile-auth tests and native non-container API publish passed. Automated engineering review was a COMMENT, not approval, and found no unresolved critical/high-risk issue. Rider and Driver app audit confirmed server-validated foreground location; no client-side zone precedence or product radius is introduced.
 - DISPATCH-01 remains Blocked for strict acceptance until Product approves a positive pickup radius and non-overlapping zone boundaries, and live Cosmos query/index plus Android/iOS pickup-zone evidence is recorded. Checked-in radius 0 remains fail-closed.
-- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). The weighted index remains 39.5% = (0 + 15 × 0.5 + 4 × 0) / 19; it is not engineering implementation completion.
 - Next sequential row after PR #109 merged: #7 DISPATCH-02 — re-audit the per-union 2–3 eligible Driver cap, pickup-proximity ordering, explicit Rider selection, photo/vehicle privacy and complete absence of Rider-facing FIFO/automatic assignment. Do not wait for external zone approval.
 
 
@@ -425,7 +419,7 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - The final docs-sync commit is a documentation-only follow-up; the [PR checks page](https://github.com/rajeevp727/turnova-platform/pull/110/checks) must remain green on its resulting latest head before merge. PR #110 is the only feature PR.
 - Precise coordinates and the Idempotency-Key are not persisted across app-process restart. Live Cosmos and physical Android/iOS discovery/selection/location-permission acceptance remain external gates.
 - **Next:** #8 DISPATCH-03 — re-audit terminal ride/reservation recovery. If a prior process persisted a terminal ride status but stopped before releasing its Driver reservation, a subsequent direct ride/history read should retry release of only the exact Driver/ride pair, including ETag-race reread. Add deterministic tests for already-terminal Expired, Cancelled and Completed rides; preserve newer reservations and never advance legacy FIFO.
-- Acceptance: 0 Verified, 15 In Progress, 4 Blocked; strict fully verified count 0/19. Weighted status index is 39.5% = `(0 + 15 × 0.5 + 4 × 0) / 19`, not implementation completion. AI-01 and Cab supplemental requirements are outside the denominator.
+- Acceptance: 0 Verified, 15 In Progress, 4 Blocked; strict fully verified count 0/19.
 
 
 ## Latest sequential execution — #8 DISPATCH-03 (2026-11-08)
@@ -435,7 +429,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - PR #111 on `fix/dispatch-03-repair-terminal-reservations-on-read` adds read-repair for already-terminal Union-linked selected Cab rides on direct read, Rider history and Driver history. If an expiry transition loses an ETag/snapshot race, the helper re-reads and applies the same exact-pair repair only when the latest record is terminal. Legacy non-Union rides and newer reservations remain untouched.
 - Deterministic regressions cover already-terminal Expired/Cancelled/Completed direct reads, Rider and Driver history repair, a newer active reservation for the same Driver, concurrent expiry reads with a single terminal audit event, unrelated-Rider isolation, and non-Cab/blank-UnionId legacy preservation. Existing `ExpiredSelectedNegotiationDoesNotAdvanceLegacyFifoOffer` remains the FIFO guard. A final review tightened the repair helper to require a non-whitespace UnionId; `TerminalCabHistoricalRideWithoutUnionDoesNotReleaseItsReservation` covers null, empty and whitespace values.
 - PR #111 final head `3ae3bc1daf1c3f8b40834722e23576ca6c6cd929` passed exact-head CI [42441104485](https://github.com/rajeevp727/turnova-platform/actions/runs/42441104485), 8/8 jobs and 301/301 backend tests. Reviews remain COMMENT-only, not approvals; no unresolved review threads or critical/high-risk findings remain. No live Cosmos multi-instance/ETag/restart or physical Android/iOS validation is claimed.
-- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); weighted status index remains 39.5% = `(0 + 15 × 0.5 + 4 × 0) / 19`, not engineering implementation completion. AI-01 and Cab supplemental criteria remain outside the 19-row denominator.
 - **Next:** recheck PR #111 head `3ae3bc1daf1c3f8b40834722e23576ca6c6cd929` against main and merge only if GitHub confirms all repository merge requirements are satisfied without bypass or self-approval. If an independent approval is required, leave the PR open for that approval. After merge, re-read main and proceed sequentially to #9 DISPATCH-04: add expired-orphan reconciliation before UnionManager selfie-review lease acquisition, with deterministic fake-store tests. Continue live Cosmos and device gates as external evidence, not stop signals.
 
 ## Latest sequential execution — #9 DISPATCH-04 (2026-11-08)
@@ -446,7 +439,6 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - New deterministic API tests: `UnionManagerSelfieReviewReconcilesExpiredOrphanReservationBeforeAcquiringReviewLease` and `UnionManagerSelfieReviewKeepsExpiredReservationForActiveNegotiation`. The first CI attempt exposed missing Driver fixture initialization in both tests; the fixtures were corrected before the passing final code-head run.
 - Code-bearing PR #112 head `8b806f76c6247ec0b2b9d51fb6698fc9b2bcc301` passed [CI 42444975803](https://github.com/rajeevp727/turnova-platform/actions/runs/42444975803): all 8/8 jobs, 303/303 backend tests, 57/57 shared mobile tests, Rider/Driver typechecks and production bundles, both Android debug APKs, both unsigned iOS Simulator apps and native non-container API publish. Automated review is COMMENT-only, not approval; no unresolved threads or critical/high-risk finding remains. Documentation evidence sync is on the same PR and must pass its own final-head CI before merge.
 - DISPATCH-04 remains In Progress, not Verified: live Cosmos multi-instance ETag/create-if-absent contention and restart/crash recovery, physical Android/iOS concurrency/transfer/availability acceptance, and Product-approved negotiation lifetime remain external gates. No live Cosmos or physical-device validation is claimed.
-- Strict acceptance remains 0/19 Verified (15 In progress, 4 Blocked); weighted index remains 39.5% = `(0 + 15 × 0.5 + 4 × 0) / 19`, not engineering implementation completion. AI-01 and Cab supplemental criteria remain outside the 19-row denominator.
 - **Next:** complete final-head CI and merge PR #112 only if all checks pass and GitHub permits it without bypass/self-approval. Re-read main, then proceed sequentially to #10 REALTIME-01; audit hub authorization, Rider/Driver event handling, reconnect state recovery and API/mobile test coverage before creating the next PR.
 
  
@@ -460,7 +452,7 @@ No customer dispute/confirmation workflow, non-zero-delta next-ride policy, in-a
 - Self-review must remain COMMENT-only; do not self-approve. Merge #113 only after integrated final-head CI is green, all review threads are resolved, GitHub reports mergeability, and repository policy permits it without bypass.
 - REALTIME-01 remains In Progress, not Verified: live WebSocket/device-to-device delivery, long-outage reconnect, Android/iOS background/resume and actual device acceptance remain external gates. No live SignalR/device validation is claimed.
 - Next sequential item #11 DRIVER-01: re-audit Driver onboarding, selfie update and Operations document review for stale blind profile upserts. The prior audit found `SaveDriverProfileAsync` calls in selfie update, onboarding submit and document review; existing `TryUpdateDriverProfileAsync` supplies in-memory compare-and-swap and Cosmos ETag retries. Implement safe conditional updates that preserve unrelated latest profile fields and reject changed review-document snapshots; add deterministic race/retry tests. Private document storage/scanning/consent/retention, signed UnionManager/unionId claim issuance, physical Android/iOS camera/document-permission tests, live Cosmos multi-instance/restart and legal partnership approval remain external gates.
-- Completion accounting: engineering implementation/evidence is partial across the matrix and is not represented by a weighted percentage; strict acceptance is 0/19 Verified (15 In Progress, 4 Blocked); production readiness is not established. AI-01 and Cab supplemental criteria remain outside the 19-row denominator.
+- Completion accounting: engineering implementation/evidence is partial across the matrix and is not represented by a.
 
 
 ## Latest sequential execution — #11 DRIVER-01 (2026-11-08)
