@@ -80,7 +80,58 @@ jobs:
           cache: npm
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
 
-      - run: npm install --prefer-offline --no-fund
+      - run: npm install --prefer-offline --no-fund --audit=false
+      - name: Audit mobile dependency tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/npm-audit-${{ matrix.app }}.json"
+          set +e
+          npm audit --json > "$report"
+          audit_status=$?
+          set -e
+          python3 - "$report" "$audit_status" <<'PY'
+          import json
+          import sys
+
+          path, audit_status = sys.argv[1], int(sys.argv[2])
+          with open(path, encoding="utf-8") as stream:
+              report = json.load(stream)
+          metadata = report.get("metadata", {}).get("vulnerabilities", {})
+          critical = int(metadata.get("critical", 0))
+          high = int(metadata.get("high", 0))
+          print(
+              "npm audit: "
+              f"{metadata.get('total', 0)} total; "
+              f"{critical} critical; {high} high; "
+              f"{metadata.get('moderate', 0)} moderate; "
+              f"{metadata.get('low', 0)} low."
+          )
+          for name, item in sorted(report.get("vulnerabilities", {}).items()):
+              if item.get("severity") in {"critical", "high"}:
+                  via = item.get("via", [])
+                  titles = [
+                      entry.get("title", entry.get("name", "unknown"))
+                      if isinstance(entry, dict) else entry
+                      for entry in via
+                  ]
+                  print(
+                      f"- {name}: {item.get('severity')}; "
+                      f"direct={item.get('isDirect')}; "
+                      f"range={item.get('range')}; "
+                      f"fixAvailable={item.get('fixAvailable')}; "
+                      f"advisories={titles}"
+                  )
+          if critical or high or audit_status not in (0, 1):
+              raise SystemExit("Dependency audit failed: resolve high/critical findings or audit execution errors.")
+          PY
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-npm-audit
+          path: ${{ runner.temp }}/npm-audit-${{ matrix.app }}.json
+          if-no-files-found: warn
       - run: npx expo config --type public
       - run: npm run typecheck
       - name: Verify Metro can see shared mobile modules
@@ -123,7 +174,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - run: npm install --prefer-offline --no-fund
+      - run: npm install --prefer-offline --no-fund --audit=false
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
       - name: Cache Gradle dependencies
@@ -231,7 +282,7 @@ jobs:
           cache: npm
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
 
-      - run: npm install --prefer-offline --no-fund
+      - run: npm install --prefer-offline --no-fund --audit=false
       - name: Generate iOS native project
         run: npx expo prebuild --platform ios --no-install --clean
       - name: Cache CocoaPods dependencies
@@ -291,6 +342,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            ARCHS="$(uname -m)" \
+            ONLY_ACTIVE_ARCH=YES \
             build
           APP_BUNDLE="$(find "$DERIVED_DATA/Build/Products/Release-iphonesimulator" -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_BUNDLE"
