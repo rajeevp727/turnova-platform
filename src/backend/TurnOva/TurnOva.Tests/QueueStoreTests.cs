@@ -211,6 +211,13 @@ public sealed class QueueStoreTests
             "trace-123",
             QueueAuditReasonCategories.QueueReadFailed,
             CancellationToken.None);
+        await store.RecordDispatchExceptionAsync(
+            "driver-actor-1",
+            "zone-a",
+            "cab",
+            "trace-123",
+            QueueAuditReasonCategories.QueueReadFailed,
+            CancellationToken.None);
 
         var events = await store.GetAuditEventsAsync("zone-a", "cab", CancellationToken.None);
         var audit = Assert.Single(events);
@@ -257,6 +264,15 @@ public sealed class QueueStoreTests
                 "cab",
                 "trace-123",
                 "sensitive-exception-message",
+                CancellationToken.None));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.RecordDispatchExceptionAsync(
+                "driver-actor-1",
+                "zone-a",
+                "cab",
+                "trace/unsafe",
+                QueueAuditReasonCategories.QueueReadFailed,
                 CancellationToken.None));
 
         Assert.Empty(await store.GetAuditEventsAsync("zone-a", "cab", CancellationToken.None));
