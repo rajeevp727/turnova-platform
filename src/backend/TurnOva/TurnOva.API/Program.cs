@@ -373,15 +373,24 @@ async Task<DriverMonthlyPayslip?> FindPayslipAsync(string driverId, string paysl
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
-async Task SavePayslipIfAbsentAsync(DriverMonthlyPayslip payslip, CancellationToken ct)
+async Task<DriverMonthlyPayslip> SavePayslipIfAbsentAsync(DriverMonthlyPayslip payslip, CancellationToken ct)
 {
     if (payslipContainer is null)
+        return monthlyPayslips.GetOrAdd($"{payslip.DriverId}|{payslip.PayslipId}", payslip);
+
+    try
     {
-        monthlyPayslips.TryAdd($"{payslip.DriverId}|{payslip.PayslipId}", payslip);
-        return;
+        await payslipContainer.CreateItemAsync(payslip, new PartitionKey(payslip.DriverId), cancellationToken: ct);
+        return payslip;
     }
-    try { await payslipContainer.CreateItemAsync(payslip, new PartitionKey(payslip.DriverId), cancellationToken: ct); }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict) { }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+    {
+        // A create conflict means another API instance won. Never fall back to this
+        // request's locally calculated metrics if the canonical point read is delayed.
+        return await DriverPayslipSnapshotRecovery.ReadCanonicalAfterCreateConflictAsync(
+            token => FindPayslipAsync(payslip.DriverId, payslip.PayslipId, token),
+            cancellationToken: ct);
+    }
 }
 
 async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditForPeriodAsync(string driverId, DateTimeOffset end, CancellationToken ct)
@@ -1659,8 +1668,7 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
             completedActivities.Length,
             activities.Count(item => item.ActivityType == "Rejected"),
             DateTimeOffset.UtcNow);
-        await SavePayslipIfAbsentAsync(payslip, ct);
-        payslip = await FindPayslipAsync(driverId, payslipId, ct) ?? payslip;
+        payslip = await SavePayslipIfAbsentAsync(payslip, ct);
     }
     var pdf = DriverPayslipPdf.Generate(payslip);
     return Results.File(pdf, "application/pdf", $"TurnOva-Payslip-{year:D4}-{month:D2}.pdf");
