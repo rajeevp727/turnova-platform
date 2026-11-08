@@ -5,6 +5,16 @@ export function findActiveRide<T extends { status: string }>(
   role: RideRecoveryRole
 ): T | null;
 
+export function applyRideStatusUpdate<T extends { rideId: string; status: string }>(
+  ride: T,
+  update: { rideId: string; status: string }
+): T;
+
+export function applyRideStatusUpdate<T extends { rideId: string; status: string }>(
+  ride: T | null | undefined,
+  update: { rideId: string; status: string }
+): T | null | undefined;
+
 export function shouldApplyRideStatusUpdate(
   currentRideId: string | null | undefined,
   updateRideId: string | null | undefined,
