@@ -1386,32 +1386,76 @@ unionManagerApi.MapGet("/reconciliation", async (ClaimsPrincipal user, Cancellat
         .ToHashSet(StringComparer.Ordinal);
     if (unionIds.Count == 0) return Results.Forbid();
 
-    var reconciliationRides = new List<DemoRide>();
+    // Keep Union oversight reads least-privilege at the storage boundary too.
+    // Do not materialize full DemoRide documents containing Rider identity, route,
+    // stops or coordinates when the reconciliation list needs only these fields.
+    var reconciliationRecords = new List<UnionReconciliationQueryProjection>();
     if (rideContainer is null)
     {
-        reconciliationRides.AddRange(rides.Values.Where(ride =>
-            ride.PaymentReconciliation is not null && unionIds.Contains(ride.UnionId ?? "")));
+        reconciliationRecords.AddRange(rides.Values
+            .Where(ride => ride.PaymentReconciliation is { } report &&
+                unionIds.Contains(ride.UnionId ?? "") &&
+                string.Equals(ride.UnionId, report.UnionId, StringComparison.Ordinal))
+            .Select(ride =>
+            {
+                var report = ride.PaymentReconciliation!;
+                return new UnionReconciliationQueryProjection(
+                    ride.ServiceClass,
+                    ride.UnionId,
+                    report.RideId,
+                    report.AgreementVersion,
+                    report.UnionId,
+                    report.AgreedAmount,
+                    report.AmountReceived,
+                    report.Delta,
+                    report.Currency,
+                    report.ReportedAtUtc,
+                    report.ReportedByDriverId,
+                    report.Status);
+            }));
     }
     else
     {
         foreach (var unionId in unionIds)
         {
             var query = new QueryDefinition(
-                    "SELECT * FROM c WHERE c.unionId = @unionId AND IS_DEFINED(c.paymentReconciliation)")
+                    "SELECT c.serviceClass, c.unionId, " +
+                    "c.paymentReconciliation.rideId AS rideId, " +
+                    "c.paymentReconciliation.agreementVersion AS agreementVersion, " +
+                    "c.paymentReconciliation.unionId AS reportUnionId, " +
+                    "c.paymentReconciliation.agreedAmount AS agreedAmount, " +
+                    "c.paymentReconciliation.amountReceived AS amountReceived, " +
+                    "c.paymentReconciliation.delta AS delta, " +
+                    "c.paymentReconciliation.currency AS currency, " +
+                    "c.paymentReconciliation.reportedAtUtc AS reportedAtUtc, " +
+                    "c.paymentReconciliation.reportedByDriverId AS reportedByDriverId, " +
+                    "c.paymentReconciliation.status AS status " +
+                    "FROM c WHERE c.unionId = @unionId " +
+                    "AND IS_DEFINED(c.paymentReconciliation) " +
+                    "AND c.paymentReconciliation.unionId = @unionId")
                 .WithParameter("@unionId", unionId);
-            using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
+            using var iterator = rideContainer.GetItemQueryIterator<UnionReconciliationQueryProjection>(query);
             while (iterator.HasMoreResults)
-                reconciliationRides.AddRange(await iterator.ReadNextAsync(ct));
+                reconciliationRecords.AddRange(await iterator.ReadNextAsync(ct));
         }
     }
 
-    return Results.Ok(reconciliationRides
-        .Where(ride => string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
-            ride.PaymentReconciliation is { } report &&
-            string.Equals(ride.UnionId, report.UnionId, StringComparison.Ordinal) &&
-            unionIds.Contains(report.UnionId))
-        .OrderByDescending(ride => ride.PaymentReconciliation!.ReportedAtUtc)
-        .Select(ride => ToPaymentReconciliationResponse(ride.PaymentReconciliation)!)
+    return Results.Ok(reconciliationRecords
+        .Where(record => string.Equals(record.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(record.UnionId, record.ReportUnionId, StringComparison.Ordinal) &&
+            unionIds.Contains(record.ReportUnionId))
+        .OrderByDescending(record => record.ReportedAtUtc)
+        .Select(record => new RidePaymentReconciliationResponse(
+            record.RideId,
+            record.AgreementVersion,
+            record.ReportUnionId,
+            record.AgreedAmount,
+            record.AmountReceived,
+            record.Delta,
+            record.Currency,
+            record.ReportedAtUtc,
+            record.ReportedByDriverId,
+            record.Status))
         .ToArray());
 });
 
@@ -3458,6 +3502,19 @@ public sealed record NearbyDriverDiscoveryResponse(string DriverId, string FullN
 public sealed record RiderRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, IReadOnlyList<string> Stops);
 public sealed record DriverRideHistoryItem(string RideId, string Pickup, string Dropoff, int Passengers, string ServiceClass, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AcceptedAt, bool LocationSharingActive, IReadOnlyList<string> Stops, DateTimeOffset? NegotiationExpiresAtUtc = null, RidePaymentReconciliationResponse? PaymentReconciliation = null, RideAgreementSummary? CurrentAgreement = null);
 public sealed record RideAgreementSummary(int Version, decimal Amount, string Currency);
+public sealed record UnionReconciliationQueryProjection(
+    string? ServiceClass,
+    string? UnionId,
+    string RideId,
+    int AgreementVersion,
+    string ReportUnionId,
+    decimal AgreedAmount,
+    decimal AmountReceived,
+    decimal Delta,
+    string Currency,
+    DateTimeOffset ReportedAtUtc,
+    string ReportedByDriverId,
+    string Status);
 public sealed record RidePaymentReconciliationResponse(string RideId, int AgreementVersion, string UnionId, decimal AgreedAmount, decimal AmountReceived, decimal Delta, string Currency, DateTimeOffset ReportedAtUtc, string ReportedByDriverId, string Status);
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null, DateTimeOffset? CreatedAtUtc = null);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
