@@ -39,7 +39,9 @@ function shouldApplyTripLocationUpdate(current, update) {
 
   const hasCaptureValue = update.locationCapturedAtUtc !== undefined &&
     update.locationCapturedAtUtc !== null;
-  const currentCapture = parseUtcTimestamp(current.locationCapturedAtUtc);
+  const currentCapture = parseUtcTimestamp(
+    current.locationCapturedAtUtc ?? current.driverLocationCapturedAtUtc
+  );
   if (hasCaptureValue) {
     const incomingCapture = parseUtcTimestamp(update.locationCapturedAtUtc);
     if (incomingCapture === null) return false;
