@@ -40,10 +40,11 @@ test("unknown recovery roles fail explicitly", () => {
 
 
 test("live ride status updates affect only the matching ride and preserve other fields", () => {
-  const current = { rideId: "ride-1", status: "Accepted", pickup: "KPHB" };
-  const updated = applyRideStatusUpdate(current, { rideId: "ride-1", status: "InProgress" });
-  assert.deepEqual(updated, { rideId: "ride-1", status: "InProgress", pickup: "KPHB" });
+  const current = { rideId: "ride-1", status: "Accepted", pickup: "KPHB", locationSharingActive: true };
+  const updated = applyRideStatusUpdate(current, { rideId: "ride-1", status: "Completed" });
+  assert.deepEqual(updated, { rideId: "ride-1", status: "Completed", pickup: "KPHB", locationSharingActive: false });
   assert.equal(current.status, "Accepted");
+  assert.equal(current.locationSharingActive, true);
   assert.equal(applyRideStatusUpdate(current, { rideId: "other", status: "Completed" }), current);
   assert.equal(applyRideStatusUpdate(null, { rideId: "ride-1", status: "Completed" }), null);
 });
