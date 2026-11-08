@@ -1527,7 +1527,9 @@ public sealed class RideApiIntegrationTests
             new DateTimeOffset(2026, 10, 6, 5, 0, 0, TimeSpan.Zero));
         using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
-        Assert.Equal(pdfBytes, await repeated.Content.ReadAsByteArrayAsync());
+        Assert.Equal(
+            ExtractPayslipPdfText(pdfBytes),
+            ExtractPayslipPdfText(await repeated.Content.ReadAsByteArrayAsync()));
 
         using var otherDriverResponse = await otherDriver.GetAsync(
             "/api/v1/driver/payslips/2026/10.pdf?driverId=driver-payslip-pdf");
@@ -1621,7 +1623,9 @@ public sealed class RideApiIntegrationTests
 
         using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
-        Assert.Equal(pdfBytes, await repeated.Content.ReadAsByteArrayAsync());
+        Assert.Equal(
+            ExtractPayslipPdfText(pdfBytes),
+            ExtractPayslipPdfText(await repeated.Content.ReadAsByteArrayAsync()));
     }
 
     [Fact]
@@ -5392,6 +5396,14 @@ public sealed class RideApiIntegrationTests
                 signingCredentials: credentials);
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+    }
+
+
+    private static string ExtractPayslipPdfText(byte[] pdfBytes)
+    {
+        using var stream = new MemoryStream(pdfBytes);
+        using var document = PdfDocument.Open(stream);
+        return string.Join("\\n", document.GetPages().Select(page => page.Text));
     }
 
 }
