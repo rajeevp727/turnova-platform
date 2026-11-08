@@ -22,7 +22,7 @@ public sealed class AiAssistanceApiIntegrationTests
         using var factory = new AiAssistanceApiFactory();
         using var rider = factory.CreateClient("Rider", "ai-rider");
         using var driver = factory.CreateClient("Driver", "ai-driver");
-        using var anonymous = factory.CreateClient();
+        using var anonymous = factory.CreateAnonymousClient();
 
         using var response = await rider.PostAsJsonAsync(
             "/api/v1/assistance/trip-intent",
@@ -56,7 +56,7 @@ public sealed class AiAssistanceApiIntegrationTests
         using var factory = new AiAssistanceApiFactory();
         using var rider = factory.CreateClient("Rider", "ai-help-rider");
         using var driver = factory.CreateClient("Driver", "ai-help-driver");
-        using var anonymous = factory.CreateClient();
+        using var anonymous = factory.CreateAnonymousClient();
 
         using var riderResponse = await rider.PostAsJsonAsync(
             "/api/v1/assistance/help",
@@ -129,7 +129,7 @@ public sealed class AiAssistanceApiIntegrationTests
 
         public HttpClient CreateClient(string role, string subject)
         {
-            var client = CreateClient(new WebApplicationFactoryClientOptions
+            var client = base.CreateClient(new WebApplicationFactoryClientOptions
             {
                 AllowAutoRedirect = false,
                 BaseAddress = new Uri("https://localhost")
@@ -138,6 +138,13 @@ public sealed class AiAssistanceApiIntegrationTests
                 new AuthenticationHeaderValue("Bearer", CreateToken(role, subject));
             return client;
         }
+
+        public HttpClient CreateAnonymousClient() =>
+            base.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = new Uri("https://localhost")
+            });
 
         private static string CreateToken(string role, string subject)
         {
