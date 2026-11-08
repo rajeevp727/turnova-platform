@@ -11,9 +11,20 @@ public sealed class UnionReconciliationProjectionTests
     {
         var sql = UnionReconciliationQuery.Sql;
 
-        Assert.Contains("SELECT c.serviceClass, c.unionId", sql, StringComparison.Ordinal);
-        Assert.Contains("c.paymentReconciliation.rideId AS rideId", sql, StringComparison.Ordinal);
-        Assert.Contains("c.paymentReconciliation.reportedByDriverId AS reportedByDriverId", sql, StringComparison.Ordinal);
+        var selectClause = sql.Split(" FROM c ", StringSplitOptions.None)[0];
+        Assert.Equal(
+            "SELECT c.serviceClass, c.unionId, " +
+            "c.paymentReconciliation.rideId AS rideId, " +
+            "c.paymentReconciliation.agreementVersion AS agreementVersion, " +
+            "c.paymentReconciliation.unionId AS reportUnionId, " +
+            "c.paymentReconciliation.agreedAmount AS agreedAmount, " +
+            "c.paymentReconciliation.amountReceived AS amountReceived, " +
+            "c.paymentReconciliation.delta AS delta, " +
+            "c.paymentReconciliation.currency AS currency, " +
+            "c.paymentReconciliation.reportedAtUtc AS reportedAtUtc, " +
+            "c.paymentReconciliation.reportedByDriverId AS reportedByDriverId, " +
+            "c.paymentReconciliation.status AS status",
+            selectClause);
         Assert.Contains("c.unionId = @unionId", sql, StringComparison.Ordinal);
         Assert.Contains("c.paymentReconciliation.unionId = @unionId", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("SELECT *", sql, StringComparison.OrdinalIgnoreCase);
@@ -66,8 +77,8 @@ public sealed class UnionReconciliationProjectionTests
         Assert.Equal(
             new[]
             {
-                "agreementVersion",
                 "agreedAmount",
+                "agreementVersion",
                 "amountReceived",
                 "currency",
                 "delta",
