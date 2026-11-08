@@ -1319,6 +1319,12 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
         !IsUnionManagerFor(user, assignment.UnionId))
         return Results.NotFound(new { message = "Driver is not an active member of a union managed by this account." });
 
+    // Reconcile only a terminal ride or expired orphan before acquiring the review lease.
+    // Authorization is already established above, so an unauthorized manager cannot trigger cleanup.
+    // Live negotiations/active rides remain exclusive; release is scoped to the exact Driver/Ride pair.
+    if (await HasActiveDriverRideAsync(driverId, ct))
+        return Results.Conflict(new { message = "The Driver is reserved by a selected booking, active ride or Union membership change. Retry after it is resolved." });
+
     // Serialize selfie review with membership transfer and selected-driver reservations.
     // The lease is technical only; no customer-facing queue or ride policy is introduced.
     var reviewLeaseId = $"UNION-SELFIE-REVIEW-{Guid.NewGuid():N}";
