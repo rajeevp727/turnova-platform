@@ -119,18 +119,20 @@ test("icon paths cannot escape the app directory", () => {
   assert.ok(report.engineeringChecks.errors.some(item => item.id === "app-icon"));
 });
 
-test("malformed iOS bundle identifier and EAS project ID fail instead of becoming external blockers", () => {
-  const report = validateReleaseConfig(fixture({
-    appJson: {
-      ios: { supportsTablet: true, bundleIdentifier: "com.example.placeholder" },
-      extra: { eas: { projectId: "not-a-uuid" } }
-    }
-  }));
-  const ids = report.engineeringChecks.errors.map(item => item.id);
-  assert.ok(ids.includes("ios-bundle-identifier"));
-  assert.ok(ids.includes("eas-project-id"));
-  assert.ok(!report.externalGates.some(item => item.id === "ios-bundle-registration"));
-  assert.ok(!report.externalGates.some(item => item.id === "eas-project-linkage"));
+test("placeholder iOS bundle identifiers and malformed EAS project IDs fail instead of becoming external blockers", () => {
+  for (const bundleIdentifier of ["com.example", "com.example.placeholder"]) {
+    const report = validateReleaseConfig(fixture({
+      appJson: {
+        ios: { supportsTablet: true, bundleIdentifier },
+        extra: { eas: { projectId: "not-a-uuid" } }
+      }
+    }));
+    const ids = report.engineeringChecks.errors.map(item => item.id);
+    assert.ok(ids.includes("ios-bundle-identifier"), bundleIdentifier);
+    assert.ok(ids.includes("eas-project-id"), bundleIdentifier);
+    assert.ok(!report.externalGates.some(item => item.id === "ios-bundle-registration"));
+    assert.ok(!report.externalGates.some(item => item.id === "eas-project-linkage"));
+  }
 });
 
 test("missing or non-HTTPS production API endpoints remain explicit release gates", () => {

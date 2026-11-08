@@ -858,3 +858,5 @@ Dispatch exception event IDs are deterministic from the server-generated trace I
 - Release-preflight report schema is version 2; CI-visible configuration fields are distinct from the external approval/remote-verification gates.
 
 - Release-preflight schema-v2 tests assert that CI-visible configuration remains distinct from external approval gates and reserved example domains are rejected.
+
+- A CI failure in RELEASE-01 exposed a placeholder bundle-ID validation escape caused by an over-escaped regex; the check now uses explicit normalized string comparisons and has exact/subdomain placeholder fixtures.

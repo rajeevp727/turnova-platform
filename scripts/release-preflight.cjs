@@ -148,7 +148,9 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   let iosBundleIdentifierSyntaxValid = false;
   if (typeof bundleIdentifier !== "string" || bundleIdentifier.trim().length === 0) {
     blocker("ios-bundle-registration", "Product / App Owner", "Provide the approved reverse-DNS iOS bundle identifier for this app and register it with Apple.");
-  } else if (!IOS_BUNDLE_PATTERN.test(bundleIdentifier) || /^com\\.example(?:\\.|$)/i.test(bundleIdentifier)) {
+  } else if (!IOS_BUNDLE_PATTERN.test(bundleIdentifier) ||
+      bundleIdentifier.toLowerCase() === "com.example" ||
+      bundleIdentifier.toLowerCase().startsWith("com.example.")) {
     error("ios-bundle-identifier", "The configured iOS bundle identifier is malformed or a placeholder.");
   } else {
     iosBundleIdentifierSyntaxValid = true;
