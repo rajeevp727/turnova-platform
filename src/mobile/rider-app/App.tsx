@@ -8,7 +8,7 @@ import { getFreshAccessToken } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
-import { findActiveRide } from "../shared/rideRecovery";
+import { findActiveRide, isTerminalRideStatus } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
@@ -164,7 +164,15 @@ export default function App() {
       if(active)setRide(current=>current?.rideId===update.rideId?{...current,driverLatitude:update.latitude,driverLongitude:update.longitude,locationUpdatedAt:update.locationUpdatedAt}:current);
     });
     connection.on("RideStatusChanged",(update:{rideId:string;status:string})=>{
-      if(active)setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
+      if(!active || update.rideId!==ride.rideId)return;
+      setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
+      if(isTerminalRideStatus(update.status)){
+        setAgreementHistory([]);
+        void loadRideHistory(()=>active).then(()=>{
+          // Keep the terminal event authoritative if a just-written history read is briefly stale.
+          if(active)setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
+        }).catch(e=>{if(active)setError(e instanceof Error?e.message:"Unable to refresh completed ride history.");});
+      }
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
       if(active&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>setError(e instanceof Error?e.message:"Unable to refresh fare agreement."));
@@ -191,7 +199,7 @@ export default function App() {
   const askHelp=async()=>{setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{setHelpBusy(false);}};
   const logout=async()=>{sessionEpoch.current+=1;try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{setError("Unable to clear secure session storage. Please retry sign-out.");return;}setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
   const findNearbyVehicles=async()=>{setLoading(true);setError("");setSelectedDriverId(null);resetSelectedBookingAttempt();try{const {discovery:result}=await discoverNearbyCabDrivers(Location,apiFetch,Number(passengers)||1);setDiscovery(result as DiscoveryResult);}catch(e){setDiscovery(null);setError(e instanceof Error?e.message:"Unable to discover nearby Cab drivers.");}finally{setLoading(false);}};
-  const cancelRide=async()=>{if(!ride)return;setLoading(true);setError("");try{const updated=await apiFetch(`/api/v1/rides/${ride.rideId}/cancel`,{method:"POST"});setRide(updated);}catch(e){setError(e instanceof Error?e.message:"Unable to cancel ride.");}finally{setLoading(false);}};
+  const cancelRide=async()=>{if(!ride)return;setLoading(true);setError("");try{const updated=await apiFetch(`/api/v1/rides/${ride.rideId}/cancel`,{method:"POST"});setRide(updated);if(isTerminalRideStatus(updated.status)){setAgreementHistory([]);await loadRideHistory(()=>true);setRide(current=>current?.rideId===updated.rideId?{...current,status:updated.status}:current);}}catch(e){setError(e instanceof Error?e.message:"Unable to cancel ride.");}finally{setLoading(false);}};
    const requestSelectedDriver=async()=>{if(!selectedDriver||!selectedUnion||bookingInFlight.current)return;const requestKey=bookingRequestKey;const selectedDriverIdForRequest=selectedDriver.driverId;const unionIdForRequest=selectedUnion.unionId;const pickupForRequest=pickup;const dropoffForRequest=dropoff;const stops=stopsText.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean);const passengerCount=Number(passengers)||1;bookingInFlight.current=true;setLoading(true);setError("");try{const coordinates=await selectedBookingLocation.current.capture();if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");const created=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});setRide(created as Ride);setRideHistory(current=>[created as RideHistoryItem,...current.filter(item=>item.rideId!==created.rideId)]);setAgreementHistory([]);setAgreementAmount("");setTab("Activity");setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}catch(e){setError(e instanceof Error?e.message:"Unable to request the selected driver.");}finally{bookingInFlight.current=false;setLoading(false);}};
   const loadAgreementHistory=useCallback(async(rideId:string)=>{const result=await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];setAgreementHistory(result);},[apiFetch]);
   useEffect(()=>{if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}if(tab!=="Activity")return;let active=true;void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(result=>{if(active)setAgreementHistory(result as AgreementVersion[]);}).catch(()=>{if(active)setAgreementHistory([]);});return()=>{active=false;};},[ride?.rideId,tab,apiFetch]);
