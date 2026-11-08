@@ -164,7 +164,8 @@ export default function App() {
       } catch {
         if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
         sessionEpoch.current += 1;
-        await clearTokens();
+        let tokenCleanupFailed = false;
+        try { await clearTokens(); } catch { tokenCleanupFailed = true; }
         const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
         setTokens(null);
         setUser(null);
@@ -173,9 +174,12 @@ export default function App() {
         setUnionAssignment(null);
         setPaymentReportAmounts({});
         setAvailableRides([]);
-        throw new Error(cacheCleanup.failed === 0
-          ? "Session expired. Please sign in again."
-          : "Session expired. Cached payslip cleanup was incomplete; close and reopen the app before another account signs in.");
+        const expiryMessage = tokenCleanupFailed
+          ? "Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
+          : cacheCleanup.failed > 0
+            ? "Session expired. Cached payslip cleanup was incomplete; clear app cache before another account signs in."
+            : "Session expired. Please sign in again.";
+        throw new Error(expiryMessage);
       }
       if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
       response = await fetch(`${API}${path}`, {
@@ -201,7 +205,7 @@ export default function App() {
           setUser(restoredUser);
         } else if (active) {
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
-          if (cacheCleanup.failed > 0)
+          if (active && cacheCleanup.failed > 0)
             setError("No active session was restored, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");
         }
       } catch {
@@ -217,6 +221,7 @@ export default function App() {
       const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
       if (cacheCleanup.failed > 0)
         throw new Error("Unable to clear payslips from a previous account. Clear the app cache before signing in.");
+      await clearTokens();
       const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
       const result = await jsonRequest(path, {
         method: "POST",
@@ -766,13 +771,16 @@ export default function App() {
         } catch {
           if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
           sessionEpoch.current += 1;
-          await clearTokens();
+          let tokenCleanupFailed = false;
+          try { await clearTokens(); } catch { tokenCleanupFailed = true; }
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
           setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
           setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
-          const expiryMessage = cacheCleanup.failed === 0
-            ? "Session expired. Please sign in again."
-            : "Session expired. Cached payslip cleanup was incomplete; close and reopen the app before another account signs in.";
+          const expiryMessage = tokenCleanupFailed
+            ? "Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
+            : cacheCleanup.failed > 0
+              ? "Session expired. Cached payslip cleanup was incomplete; clear app cache before another account signs in."
+              : "Session expired. Please sign in again.";
           setError(expiryMessage);
           throw new Error(expiryMessage);
         }
