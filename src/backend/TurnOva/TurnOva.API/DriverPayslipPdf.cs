@@ -288,6 +288,7 @@ public static class DriverPayslipPdf
     {
         var start = x;
         using var builder = new SKTextBlobBuilder();
+        using var searchablePaint = new SKPaint { Color = SKColors.White, IsAntialias = true };
         var runFonts = new List<SKFont>();
 
         try
@@ -298,26 +299,24 @@ public static class DriverPayslipPdf
                 var font = CreateFont(face, fontSize, bold);
                 runFonts.Add(font);
 
-                // HarfBuzz supplies positioned glyph IDs and UTF-8 cluster offsets.
-                // Store the original UTF-8 text and clusters in the text blob as well:
-                // the PDF backend can then emit a ToUnicode map for copy/search/accessibility.
                 var shaped = face.Shaper.Shape(run.Text, x, baseline, font);
                 EnsureGlyphCoverage(run, shaped.Codepoints);
 
-                var glyphs = new ushort[shaped.Codepoints.Length];
+                // Keep an invisible-on-white Unicode text layer for PDF extraction/search.
+                // The visible run below uses HarfBuzz-positioned glyphs for correct Indic shaping.
+                canvas.DrawText(run.Text, x, baseline, font, searchablePaint);
+
+                var glyphRun = builder.AllocateRawPositionedRun(font, shaped.Codepoints.Length, null);
+                var glyphs = glyphRun.Glyphs;
+                var positions = glyphRun.Positions;
                 for (var index = 0; index < shaped.Codepoints.Length; index++)
                 {
                     if (shaped.Codepoints[index] > ushort.MaxValue)
                         throw new NotSupportedException($"The bundled {run.Script} payslip font returned an unsupported glyph index.");
-                    glyphs[index] = (ushort)shaped.Codepoints[index];
-                }
 
-                var utf8Text = Encoding.UTF8.GetBytes(run.Text);
-                var textRun = builder.AllocatePositionedTextRun(font, glyphs.Length, utf8Text.Length);
-                textRun.SetGlyphs(glyphs);
-                textRun.SetPositions(shaped.Points);
-                textRun.SetText(utf8Text);
-                textRun.SetClusters(shaped.Clusters);
+                    glyphs[index] = (ushort)shaped.Codepoints[index];
+                    positions[index] = shaped.Points[index];
+                }
 
                 x += shaped.Width;
             }
