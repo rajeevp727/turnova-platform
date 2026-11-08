@@ -57,15 +57,18 @@ function isNonPublicIpv6(host) {
   if (!parts) return true;
   const [first, second] = parts;
   const globalUnicast = (first & 0xe000) === 0x2000;
-  const documentation = first === 0x2001 && second === 0x0db8;
-  return !globalUnicast || documentation;
+  const specialPurpose = first === 0x2001 && second <= 0x01ff;
+  const documentation = (first === 0x2001 && second === 0x0db8) ||
+    (first === 0x3fff && (second & 0xfff0) === 0) ||
+    first === 0x2002;
+  return !globalUnicast || specialPurpose || documentation;
 }
 
 function isInternalHostname(host) {
   const normalized = host.toLowerCase().endsWith(".") ? host.slice(0, -1).toLowerCase() : host.toLowerCase();
   const internalSuffixes = [
     ".localhost", ".local", ".localdomain", ".internal", ".lan",
-    ".home", ".home.arpa", ".test", ".invalid", ".intranet", ".private", ".example", ".onion"
+    ".home", ".home.arpa", ".test", ".invalid", ".intranet", ".private", ".example", ".example.com", ".example.net", ".example.org", ".onion"
   ];
   return normalized === "localhost" || !normalized.includes(".") ||
     internalSuffixes.some(suffix => normalized.endsWith(suffix));
@@ -202,7 +205,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
     iosBundleIdentifierSyntaxValid && easProjectIdSyntaxValid && buildNumberPolicyConfigured;
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     app: {
       slug: slug || null,
       name: typeof expo.name === "string" ? expo.name : null,

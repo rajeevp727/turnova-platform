@@ -854,3 +854,5 @@ Dispatch exception event IDs are deterministic from the server-generated trace I
 - A syntactically valid iOS bundle identifier remains gated until Product/App Owner verifies Apple registration. A UUID-shaped EAS project ID remains gated until Release Engineering verifies the approved remote project linkage.
 - CI-visible build-number configuration requires explicit `cli.appVersionSource` (`local` or `remote`) and production `autoIncrement=true`; Release Engineering must still approve the policy and verify an actual EAS build.
 - The preflight checks the configured iOS icon path independently from the general Expo icon. Structural mistakes fail CI; remote ownership, DNS/TLS, signing, device/pilot and store evidence remain external.
+
+- Release-preflight report schema is version 2; CI-visible configuration fields are distinct from the external approval/remote-verification gates.

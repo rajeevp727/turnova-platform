@@ -63,7 +63,7 @@ test("current Rider config passes structural checks but reports unprovided relea
   assert.equal(report.currentCiArtifactEvidence.signedIosIpaProduced, false);
 });
 
-test("valid release identifiers and increment policy clear only configuration gates", () => {
+test("valid local release configuration passes syntax while external verification gates remain", () => {
   const input = fixture({
     apiBaseUrl: "https://api.turnova.com",
     appJson: {
@@ -164,8 +164,9 @@ test("Driver app identity and established Android package pass the same prefligh
 test("private, reserved and internal API hosts fail while public IPv4 and IPv6 pass syntax validation", () => {
   const rejectedHosts = [
     "https://100.64.0.1", "https://192.0.2.1", "https://198.18.0.1", "https://203.0.113.10",
-    "https://[fc00::1]", "https://[fe80::1]", "https://[2001:db8::1]", "https://[::ffff:192.168.1.10]",
-    "https://api.local", "https://api.internal", "https://api", "https://localhost"
+    "https://[fc00::1]", "https://[fe80::1]", "https://[2001:db8::1]", "https://[2001:20::1]",
+    "https://[3fff::1]", "https://[2002:7f00:1::]", "https://[::ffff:192.168.1.10]",
+    "https://api.local", "https://api.internal", "https://api.turnova.example.com", "https://api", "https://localhost"
   ];
   for (const apiBaseUrl of rejectedHosts) {
     const report = validateReleaseConfig(fixture({ apiBaseUrl }));
