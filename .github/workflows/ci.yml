@@ -66,7 +66,7 @@ jobs:
           test -s "$publish_dir/TurnOva.API.dll"
           test -s "$publish_dir/runtimes/linux-x64/native/libSkiaSharp.so"
           test -s "$publish_dir/runtimes/linux-x64/native/libHarfBuzzSharp.so"
-          unexpected_runtime_dirs="$(find "$publish_dir/runtimes" -mindepth 1 -maxdepth 1 -type d ! -name linux-x64 ! -name unix -printf '%f\\n' | sort)"
+          unexpected_runtime_dirs="$(find "$publish_dir/runtimes" -mindepth 1 -maxdepth 1 -type d ! -name linux-x64 ! -name unix -printf '%f\n' | sort)"
           if [ -n "$unexpected_runtime_dirs" ]; then
             echo "Unexpected non-Linux-x64 runtime assets in publish output: $unexpected_runtime_dirs"
             exit 1
