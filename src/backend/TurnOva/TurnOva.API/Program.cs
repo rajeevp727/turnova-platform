@@ -1879,6 +1879,7 @@ app.MapPost("/api/v1/driver/location", async (
                         CurrentLatitude = null,
                         CurrentLongitude = null,
                         LocationUpdatedAtUtc = null,
+                        LocationCapturedAtUtc = capturedAtUtc
                     }
                     : null, ct);
             if (!takenOffline)
