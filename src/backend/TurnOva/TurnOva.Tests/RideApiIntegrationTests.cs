@@ -3289,6 +3289,42 @@ public sealed class RideApiIntegrationTests
             .HasActiveAsync(driverId));
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task TerminalCabHistoricalRideWithoutUnionDoesNotReleaseItsReservation(string? unionId)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "selected-booking-driver";
+        const string legacyUnionId = "terminal-legacy-nonunion-cab-union";
+        using var rider = factory.CreateClient("Rider", "terminal-legacy-nonunion-cab-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, legacyUnionId);
+
+        using var request = CreateSelectedBookingRequest(
+            "terminal-legacy-nonunion-cab-key-" + (unionId?.Length ?? -1), driverId, legacyUnionId,
+            "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[rideId] = rides[rideId] with
+        {
+            UnionId = unionId,
+            Status = "Completed",
+            NegotiationExpiresAtUtc = null
+        };
+
+        using var read = await rider.GetAsync($"/api/v1/rides/{rideId}");
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        var activeReservation = await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync(driverId);
+        Assert.NotNull(activeReservation);
+        Assert.Equal(rideId, activeReservation.RideId);
+    }
+
     private static void SeedActiveCabUnion(TurnOvaApiFactory factory, string driverId)
     {
         var now = DateTimeOffset.UtcNow;

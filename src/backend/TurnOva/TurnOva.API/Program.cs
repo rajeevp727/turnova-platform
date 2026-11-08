@@ -670,7 +670,7 @@ async Task<DemoRide?> ReleaseTerminalSelectedRideReservationAsync(
 {
     // Only Union-linked selected Cab rides use the exclusive reservation lease.
     // Match both DriverId and RideId so a stale history item cannot release a newer ride.
-    if (ride is null || ride.UnionId is null ||
+    if (ride is null || string.IsNullOrWhiteSpace(ride.UnionId) ||
         !string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
         string.IsNullOrWhiteSpace(ride.DriverId) ||
         ride.Status is not ("Completed" or "Cancelled" or "Expired"))
