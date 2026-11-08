@@ -76,11 +76,11 @@ public sealed class AiAssistanceApiIntegrationTests
     [Fact]
     public async Task AssistantRateLimitIsPartitionedByAuthenticatedSubject()
     {
-        using var factory = new AiAssistanceApiFactory(maxRequestsPerMinute: 2);
+        using var factory = new AiAssistanceApiFactory();
         using var firstCaller = factory.CreateClient("Rider", "ai-rate-limit-first");
         using var secondCaller = factory.CreateClient("Rider", "ai-rate-limit-second");
 
-        for (var attempt = 0; attempt < 2; attempt++)
+        for (var attempt = 0; attempt < 10; attempt++)
         {
             using var allowed = await firstCaller.PostAsJsonAsync(
                 "/api/v1/assistance/help",
@@ -99,7 +99,7 @@ public sealed class AiAssistanceApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, otherCaller.StatusCode);
     }
 
-    private sealed class AiAssistanceApiFactory(int maxRequestsPerMinute = 10) : WebApplicationFactory<Program>
+    private sealed class AiAssistanceApiFactory : WebApplicationFactory<Program>
     {
         private const string Issuer = "turnova-ai-assistance-tests";
         private const string Audience = "turnova-api";
@@ -122,8 +122,7 @@ public sealed class AiAssistanceApiIntegrationTests
                     ["Dispatch:NearbyLocationMaxAgeSeconds"] = "120",
                     ["Dispatch:SelectedDriverNegotiationLifetimeMinutes"] = "15",
                     ["Dispatch:LegacyFifoRiderRequestsEnabled"] = "true",
-                    ["AiAssistant:Enabled"] = "false",
-                    ["AiAssistant:MaxRequestsPerMinute"] = maxRequestsPerMinute.ToString()
+                    ["AiAssistant:Enabled"] = "false"
                 });
             });
         }
