@@ -929,6 +929,19 @@ These CI steps validate production JavaScript bundling for both apps and platfor
 
 The CI-only iOS bundle identifier overrides (`com.turnova.rider` / `com.turnova.driver`) are build settings and are not committed as production store identifiers. The Android output is a debug APK; the iOS output is a simulator `.app`. Neither is a signed production AAB/IPA, and neither replaces physical-device, signing, store-submission or pilot acceptance.
 
+### Release configuration preflight
+
+| Test ID | Scenario | Expected result | Evidence | Priority |
+|---|---|---|---|---|
+| RELEASE-CONFIG-001 | Rider/Driver app identity and Android package configuration | Each app slug/name/version and established Android package ID match the approved app identity | `scripts/release-preflight.cjs`; shared fixture tests | P0 |
+| RELEASE-CONFIG-002 | Generated app icons are resolved after npm postinstall | Configured iOS and Android icon files exist inside the app directory; unsafe paths fail | Per-app mobile CI preflight after `npm install` | P0 |
+| RELEASE-CONFIG-003 | EAS development, preview and production profiles are inspected | Development is internal, preview produces an internal APK, and production targets Android App Bundle plus iOS store distribution | Shared fixture tests and per-app CI report | P0 |
+| RELEASE-CONFIG-004 | iOS bundle ID, EAS project ID or build-number policy is not yet supplied | CI report records the exact missing external gate; it does not claim signed-build readiness or invent values | `release-readiness` CI artifact | P0 |
+| RELEASE-CONFIG-005 | Malformed package/bundle/project identifiers, missing icons or invalid EAS profiles are committed | Release preflight fails the engineering check and CI job | `releasePreflight.test.cjs` | P0 |
+| RELEASE-CONFIG-006 | Native CI artifacts are reported | Android debug APK and unsigned iOS Simulator app are distinguished from signed production AAB/IPA artifacts | `release-readiness` CI artifact | P0 |
+
+The preflight separates repository-controlled configuration errors from release-owner inputs. A passing structural check is not production acceptance; signing credentials, physical-device/pilot tests and store approval remain external gates.
+
 
 The two Expo apps share modules from `src/mobile/shared`; each app's Metro configuration adds only that shared directory to `watchFolders` and leaves Metro's default hierarchical dependency resolution intact. This is required for production bundling and does not introduce a new runtime integration.
 
