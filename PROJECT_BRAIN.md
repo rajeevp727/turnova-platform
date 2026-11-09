@@ -1083,3 +1083,8 @@ The iOS clean-state smoke continued to show `Unable to restore session` after `s
 - Next increment adds best-effort failure-only simulator unified logs, launchctl state, installed-app inventory, signature metadata and embedded entitlements, covered by a deterministic fake-SDK test. Inspect actual logs before changing entitlement/signing behaviour. Keep stale-session OCR fail-closed.
 - External gates remain: signed AAB/IPA, approved identifiers/EAS, production HTTPS API/DNS/TLS/CORS/readiness, physical Android/iOS testing, pilot and store acceptance; other product/infra gates remain recorded in the matrix/progress docs.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+### RELEASE-01 diagnostic harness correction (2026-11-09)
+
+Run [#1045 / 42644957570](https://github.com/rajeevp727/turnova-platform/actions/runs/42644957570) exposed a test-only assertion defect: the fake xcrun log records the full `spawn ... log show --last 5m --style compact --predicate ...` invocation, while the test expected an exact shorter string. The command executed and the diagnostic capture path ran; the test failed before checking the files. The assertion now matches the command prefix, and fake codesign emits deterministic signature/entitlement content which is asserted from the output files. All 102 shared JavaScript tests and 22/23 Python tests passed in that attempt; the remaining jobs were cancelled after a later branch update. Require fresh exact-head CI before counting this increment.
