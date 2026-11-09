@@ -121,10 +121,23 @@ case "$1" in
     shift
     case "$1" in
       getprop) echo "1" ;;
-      settings|input) exit 0 ;;
+      settings) exit 0 ;;
+      input)
+        if [[ "${2:-}" == "tap" ]]; then
+          printf '%s %s\n' "${3:-}" "${4:-}" >> "$FAKE_INPUT_LOG"
+        fi
+        ;;
       uiautomator) echo "UI hierarchy dumped to: /sdcard/turnova-ui-hierarchy.xml" ;;
       cat)
-        if [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
+        dump_count=0
+        if [[ -f "$FAKE_UI_DUMP_COUNT_FILE" ]]; then
+          read -r dump_count < "$FAKE_UI_DUMP_COUNT_FILE"
+        fi
+        dump_count=$((dump_count + 1))
+        printf '%s\n' "$dump_count" > "$FAKE_UI_DUMP_COUNT_FILE"
+        if [[ "${FAKE_PIXEL_LAUNCHER_ANR_ALWAYS:-0}" == "1" || ( "${FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP:-0}" == "1" && "$dump_count" == "1" ) ]]; then
+          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"Pixel Launcher isn't responding\"/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\"/></hierarchy>"
+        elif [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
           printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
         else
           printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/></hierarchy>\n'
@@ -173,6 +186,10 @@ exit 0
                     "RUNNER_TEMP": str(root / "runner-temp"),
                     "FAKE_TARGET_EXCEPTION": "0",
                     "FAKE_RESTORE_ERROR": "0",
+                    "FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP": "0",
+                    "FAKE_PIXEL_LAUNCHER_ANR_ALWAYS": "0",
+                    "FAKE_UI_DUMP_COUNT_FILE": str(output / "ui-dump-count"),
+                    "FAKE_INPUT_LOG": str(output / "input-taps.txt"),
                     "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",
                     "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS": "0",
                 }
@@ -222,7 +239,66 @@ exit 0
                 self.assertIn(expected_text, ui_hierarchy)
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
             self.assertTrue(report["staleSessionErrorAbsent"])
+            self.assertEqual(report["systemUiRecovery"]["pixelLauncherAnrWaitAttempts"], 0)
 
+            # A transient Pixel Launcher ANR is handled only through its explicit Wait
+            # control; the app must still render the login surface and produce evidence.
+            recovered_output = root / "anr-recovered-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(recovered_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(recovered_output / "input-taps.txt")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "1"
+            recovered_command = command[:-1] + [str(recovered_output)]
+            recovered_anr = subprocess.run(
+                recovered_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(
+                recovered_anr.returncode,
+                0,
+                msg=f"stdout:\n{recovered_anr.stdout}\nstderr:\n{recovered_anr.stderr}",
+            )
+            recovered_report = json.loads((recovered_output / "result.json").read_text(encoding="utf-8"))
+            self.assertEqual(recovered_report["systemUiRecovery"]["pixelLauncherAnrWaitAttempts"], 1)
+            self.assertTrue(recovered_report["systemUiRecovery"]["pixelLauncherAnrRecovered"])
+            self.assertIn("540 1087", (recovered_output / "input-taps.txt").read_text(encoding="utf-8"))
+            self.assertTrue((recovered_output / "pixel-launcher-anr-1.xml").is_file())
+            recovered_ui = (recovered_output / "ui-hierarchy.xml").read_text(encoding="utf-8")
+            for expected_text in ("Welcome back", "Email address", "Password", "Sign in"):
+                self.assertIn(expected_text, recovered_ui)
+
+            # A persistent launcher ANR fails closed after two Wait attempts and
+            # cannot leave a success result behind.
+            persistent_output = root / "anr-persistent-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(persistent_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(persistent_output / "input-taps.txt")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "1"
+            persistent_command = command[:-1] + [str(persistent_output)]
+            persistent_anr = subprocess.run(
+                persistent_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(persistent_anr.returncode, 1)
+            self.assertIn("persisted after two bounded Wait attempts", persistent_anr.stderr)
+            self.assertEqual(
+                (persistent_output / "input-taps.txt").read_text(encoding="utf-8").splitlines(),
+                ["540 1087", "540 1087"],
+            )
+            self.assertFalse((persistent_output / "result.json").exists())
+
+            environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(output / "input-taps.txt")
             environment["FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS"] = "0"
             environment["FAKE_RESTORE_ERROR"] = "1"
             stale_session_error = subprocess.run(
