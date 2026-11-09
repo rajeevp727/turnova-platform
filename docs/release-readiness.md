@@ -88,3 +88,6 @@ The fake-device harness verifies log scoping as well: it passes when the React N
 ## Fresh-install login UI smoke
 
 After the process-stability check, Android captures the UI hierarchy and asserts that the login title, email/password hints and sign-in action are present. iOS runs a local Apple Vision OCR check against the simulator screenshot for the same login-surface text. These assertions verify that the app renders its unauthenticated entry screen rather than merely keeping a process alive. They do not enter credentials or call production API/authentication providers; existing API/authentication functional tests and physical-device/pilot gates remain separate.
+
+
+The fresh-install UI smoke now checks the Android UI hierarchy for `Welcome back`, `Email address`, `Password` and `Sign in`; iOS uses the built-in Vision OCR framework against the simulator screenshot for the same strings. A failed fake-SDK test revealed that the mock ADB needed to implement `uiautomator dump` and `cat`; the fixture now returns deterministic hierarchy nodes and asserts them. Real emulator/Simulator jobs remain authoritative for actual platform UI output.

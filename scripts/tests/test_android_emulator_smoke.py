@@ -95,6 +95,8 @@ case "$1" in
     case "$1" in
       getprop) echo "1" ;;
       settings|input) exit 0 ;;
+      uiautomator) echo "UI hierarchy dumped to: /sdcard/turnova-ui-hierarchy.xml" ;;
+      cat) printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/></hierarchy>\n' ;;
       pm) echo "package:/data/app/turnova/base.apk" ;;
       cmd) echo "com.turnova.rider/.MainActivity" ;;
       am) printf 'Status: ok\nActivity: com.turnova.rider/.MainActivity\n' ;;
@@ -174,6 +176,10 @@ exit 0
             self.assertEqual(report["install"], "passed")
             self.assertEqual(report["launch"], "passed")
             self.assertTrue(report["processStableAfterStartup"])
+            self.assertTrue(report["loginScreenTextVerified"])
+            ui_hierarchy = (output / "ui-hierarchy.xml").read_text(encoding="utf-8")
+            for expected_text in ("Welcome back", "Email address", "Password", "Sign in"):
+                self.assertIn(expected_text, ui_hierarchy)
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
 
             environment["FAKE_TARGET_EXCEPTION"] = "1"

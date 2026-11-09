@@ -1018,3 +1018,9 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - Android emulator smoke now dumps the fresh-install UI hierarchy after launch and asserts the login title, email/password hints and sign-in action. The screenshot and hierarchy are retained as CI artifacts.
 - iOS Simulator smoke runs a local Swift/Vision OCR checker against the captured screenshot and asserts the same login-surface text. It does not enter credentials or call API/authentication services.
 - These UI checks complement process-stability, package/bundle identity and existing functional/security test evidence. They do not establish physical-device, pilot or store readiness.
+
+
+### RELEASE-01 UI hierarchy fake-device fixture correction
+
+- The first run after adding Android login UI assertions failed in the fake-SDK test because its mock ADB did not implement `uiautomator dump` or `cat`. The mock now returns deterministic XML nodes for the login title, email/password hints and sign-in action, and the harness asserts them.
+- The actual Android emulator job must still prove that the platform UI hierarchy command works and the app renders the login screen. The iOS job uses local Vision OCR against the captured simulator screenshot.

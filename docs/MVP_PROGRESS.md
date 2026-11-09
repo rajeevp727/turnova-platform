@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current engineering item: #19 RELEASE-01 — native install/launch and fresh-install login UI smoke for Rider and Driver** on branch `test/release-01-native-launch-smoke` (PR #140). Initial exact-head CI [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) exposed the missing explicit AVD home; the next fake-SDK run [#42610080183](https://github.com/rajeevp727/turnova-platform/actions/runs/42610080183) exposed an awk no-match success defect. Both are corrected: `ANDROID_AVD_HOME` is pinned/verified, emulator early-exit diagnostics are captured, and PID-scoped crash detection now returns correctly. The fake-SDK harness covers AVD creation, install/launch, unrelated-PID isolation and target-PID rejection. The current increment additionally asserts the Rider/Driver login surface in Android UI hierarchy and iOS screenshot OCR. Final exact-head 12-job CI is pending.
+**Current engineering item: #19 RELEASE-01 — native install/launch and fresh-install login UI smoke for Rider and Driver** on branch `test/release-01-native-launch-smoke` (PR #140). Initial exact-head CI [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) exposed the missing explicit AVD home; fake-SDK CI [#42610080183](https://github.com/rajeevp727/turnova-platform/actions/runs/42610080183) exposed an awk no-match success defect; CI [#42610948851](https://github.com/rajeevp727/turnova-platform/actions/runs/42610948851) then showed the fake ADB fixture lacked the newly exercised `uiautomator`/`cat` commands. The AVD-home and awk defects are fixed, and the fixture now returns deterministic login UI hierarchy text. Android asserts login title/email/password/sign-in nodes; iOS uses local Vision OCR for the same login surface. Final exact-head 12-job CI is pending.
 
 **Engineering evidence remains separate from acceptance and production readiness.** Android emulator and iOS Simulator install/launch smoke do not prove physical-device behaviour, GPS accuracy, push/SignalR provider integration, production API reachability, signing, Apple registration, EAS linkage, pilot acceptance or store readiness. The release row remains Blocked until its full external evidence is supplied.
 
@@ -723,3 +723,8 @@ The first fake-SDK run exposed a second smoke-script defect: awk returned succes
 ## RELEASE-01 login UI smoke increment
 
 The Android smoke now requires the fresh-install login title, email/password hints and sign-in action in the UI hierarchy after launch. The iOS Simulator smoke uses the local Apple Vision framework to recognize the same text in its captured screenshot. Neither test enters credentials or calls an API/authentication provider. These checks distinguish a rendered login surface from a merely surviving process; they remain simulator-only evidence.
+
+
+### RELEASE-01 fake ADB UI fixture correction
+
+The first run after adding Android UI hierarchy assertions failed only in the fake-SDK unit test because the mock ADB dispatcher did not implement the new `uiautomator dump` and `cat` calls. The fixture now returns a deterministic hierarchy containing the login title, email/password hints and sign-in action, and the test asserts those nodes and the report flag. The real emulator job remains required to verify the platform command and actual rendered UI.
