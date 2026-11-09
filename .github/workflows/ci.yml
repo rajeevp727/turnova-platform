@@ -478,7 +478,58 @@ jobs:
         with:
           name: ${{ matrix.app }}-ios-simulator-app
           path: ${{ runner.temp }}/turnova-${{ matrix.app }}-simulator-app
-      - name: Install and launch unsigned app in iOS Simulator
+      - name: Ad-hoc sign simulator app for SecureStore smoke
+        env:
+          APP_NAME: ${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          app_bundle="$(find "$RUNNER_TEMP/turnova-$APP_NAME-simulator-app" -type d -name '*.app' -print -quit)"
+          test -n "$app_bundle"
+          case "$APP_NAME" in
+            rider-app) bundle_id="com.turnova.rider" ;;
+            driver-app) bundle_id="com.turnova.driver" ;;
+            *) echo "Unknown app: $APP_NAME" >&2; exit 1 ;;
+          esac
+          entitlements="$RUNNER_TEMP/$APP_NAME-simulator-smoke.entitlements"
+          cat > "$entitlements" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>application-identifier</key>
+            <string>$bundle_id</string>
+            <key>keychain-access-groups</key>
+            <array><string>$bundle_id</string></array>
+            <key>get-task-allow</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+          # The native build artifact remains unsigned. Ad-hoc signing this ephemeral
+          # simulator copy supplies a test-only Keychain access group for SecureStore;
+          # it uses no Apple certificate, provisioning profile or production secret.
+          codesign --force --deep --sign - --entitlements "$entitlements" "$app_bundle"
+          codesign --verify --deep --strict "$app_bundle"
+          signature_info="$(codesign -dv --verbose=4 "$app_bundle" 2>&1 || true)"
+          if ! grep -Fq "Signature=adhoc" <<< "$signature_info"; then
+            echo "Simulator smoke app is not ad-hoc signed." >&2
+            exit 1
+          fi
+          codesign -d --entitlements :- "$app_bundle" > "$RUNNER_TEMP/$APP_NAME-embedded-entitlements.plist" 2>/dev/null
+          python3 - "$RUNNER_TEMP/$APP_NAME-embedded-entitlements.plist" "$bundle_id" <<'PY'
+          import plistlib
+          import sys
+
+          path, bundle_id = sys.argv[1:]
+          with open(path, "rb") as stream:
+              entitlements = plistlib.load(stream)
+          if entitlements.get("application-identifier") != bundle_id:
+              raise SystemExit("Ad-hoc simulator app has an unexpected application-identifier entitlement.")
+          if bundle_id not in entitlements.get("keychain-access-groups", []):
+              raise SystemExit("Ad-hoc simulator app is missing its bundle-scoped Keychain access group.")
+          print("Verified ad-hoc simulator signature and bundle-scoped Keychain entitlement.")
+          PY
+      - name: Install and launch ad-hoc signed app in iOS Simulator
         env:
           APP_NAME: ${{ matrix.app }}
         run: |
