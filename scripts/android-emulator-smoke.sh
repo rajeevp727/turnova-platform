@@ -77,10 +77,62 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Accept SDK licenses and install only the native emulator packages needed for this smoke.
+# Accept SDK licenses and install the stable platform/emulator packages first.
 yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null 2>&1 || true
 "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install \
-  "platform-tools" "emulator" "platforms;android-35" "$SYSTEM_IMAGE"
+  "platform-tools" "emulator" "platforms;android-35"
+
+# Google-hosted SDK package downloads occasionally arrive as a truncated/corrupt
+# archive ("ZipFile unknown archive"). Retry only the API 35 system image, verify
+# the extracted package before AVD creation, and fail closed after three attempts.
+SYSTEM_IMAGE_DIR="$SDK_ROOT/system-images/android-35/google_apis/x86_64"
+SYSTEM_IMAGE_RETRY_DELAY_SECONDS="${TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS:-2}"
+if [[ ! "$SYSTEM_IMAGE_RETRY_DELAY_SECONDS" =~ ^(0|[1-9]|[12][0-9]|30)$ ]]; then
+  echo "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS must be an integer from 0 to 30." >&2
+  exit 2
+fi
+
+install_system_image_with_retry() {
+  local attempt=1
+  local max_attempts=3
+  local status=1
+  local log_file
+
+  while (( attempt <= max_attempts )); do
+    log_file="$OUTPUT_DIR/sdkmanager-system-image-attempt-$attempt.log"
+    if "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "$SYSTEM_IMAGE" >"$log_file" 2>&1; then
+      if [[ -s "$SYSTEM_IMAGE_DIR/package.xml" && -s "$SYSTEM_IMAGE_DIR/system.img" ]]; then
+        cat "$log_file"
+        echo "Android API 35 system image installed and verified on attempt $attempt."
+        return 0
+      fi
+      status=1
+      echo "sdkmanager returned success but the system image package is incomplete." >>"$log_file"
+    else
+      status=$?
+    fi
+
+    echo "Android system image installation attempt $attempt/$max_attempts failed (exit $status):" >&2
+    tail -n 80 "$log_file" >&2 || true
+
+    if [[ -d "$SYSTEM_IMAGE_DIR" ]] && {
+      [[ ! -s "$SYSTEM_IMAGE_DIR/package.xml" ]] || [[ ! -s "$SYSTEM_IMAGE_DIR/system.img" ]]
+    }; then
+      rm -rf "$SYSTEM_IMAGE_DIR"
+    fi
+
+    if (( attempt < max_attempts )); then
+      echo "Retrying the Android API 35 system image download." >&2
+      sleep "$SYSTEM_IMAGE_RETRY_DELAY_SECONDS"
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  echo "Android API 35 system image installation failed after $max_attempts attempts." >&2
+  return "$status"
+}
+
+install_system_image_with_retry
 
 EMULATOR_BIN="$SDK_ROOT/emulator/emulator"
 ADB_BIN="$SDK_ROOT/platform-tools/adb"
