@@ -22,7 +22,16 @@ def write_executable(path: Path, content: str) -> None:
 
 
 class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
-    def run_smoke(self, restore_error: bool = False, adhoc_signature: bool = True, bootstatus_fail: bool = False, bootstatus_sleep: bool = False, boot_timeout_seconds: int = 300) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
+    def run_smoke(
+        self,
+        restore_error: bool = False,
+        adhoc_signature: bool = True,
+        bootstatus_fail: bool = False,
+        bootstatus_sleep: bool = False,
+        boot_timeout_seconds: int | None = None,
+        install_fail: bool = False,
+        launch_fail: bool = False,
+    ) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -49,7 +58,14 @@ case "$1" in
 {"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-18-0":[{"name":"iPhone 16","udid":"TEST-DEVICE","isAvailable":true,"state":"Booted"}]}}
 JSON
     ;;
-  shutdown|erase|boot|install)
+  shutdown|erase|boot)
+    exit 0
+    ;;
+  install)
+    [[ "${FAKE_INSTALL_FAIL:-0}" != "1" ]] || {
+      echo "simctl install fixture failure" >&2
+      exit 1
+    }
     exit 0
     ;;
   bootstatus)
@@ -64,6 +80,10 @@ JSON
     echo "$FAKE_APP_CONTAINER"
     ;;
   launch)
+    [[ "${FAKE_LAUNCH_FAIL:-0}" != "1" ]] || {
+      echo "simctl launch fixture failure" >&2
+      exit 1
+    }
     echo "$FAKE_BUNDLE_ID: 4242"
     ;;
   spawn)
@@ -127,10 +147,14 @@ fi
                 "FAKE_ADHOC_SIGNATURE": "1" if adhoc_signature else "0",
                 "FAKE_BOOTSTATUS_FAIL": "1" if bootstatus_fail else "0",
                 "FAKE_BOOTSTATUS_SLEEP": "1" if bootstatus_sleep else "0",
-                "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS": str(boot_timeout_seconds),
+                "FAKE_INSTALL_FAIL": "1" if install_fail else "0",
+                "FAKE_LAUNCH_FAIL": "1" if launch_fail else "0",
                 "RUNNER_TEMP": str(root / "runner-temp"),
             }
         )
+        if boot_timeout_seconds is not None:
+            environment["TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS"] = str(boot_timeout_seconds)
+
         command = [
             "bash",
             str(SMOKE_SCRIPT),
@@ -204,6 +228,32 @@ fi
         self.assertIn("did not finish first-boot migration within 1 seconds", result.stderr)
         self.assertIn("bootstatus TEST-DEVICE -b", commands)
         self.assertFalse(any(item.startswith("install ") for item in commands))
+        self.assertFalse((output / "result.json").exists())
+
+    def test_default_boot_timeout_is_600_seconds_and_allows_slow_first_boot(self) -> None:
+        self.assertIn('TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600', SMOKE_SCRIPT.read_text(encoding="utf-8"))
+        result, output, commands = self.run_smoke(bootstatus_sleep=True)
+
+        self.assertEqual(result.returncode, 0, msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+        self.assertIn("bootstatus TEST-DEVICE -b", commands)
+        self.assertTrue((output / "result.json").exists())
+
+    def test_install_failure_reports_captured_simctl_error(self) -> None:
+        result, output, commands = self.run_smoke(install_fail=True)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("simctl install fixture failure", result.stderr)
+        self.assertIn("installation failed", result.stderr)
+        self.assertFalse((output / "launch.txt").exists())
+        self.assertFalse((output / "result.json").exists())
+
+    def test_launch_failure_reports_captured_simctl_error(self) -> None:
+        result, output, commands = self.run_smoke(launch_fail=True)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("simctl launch fixture failure", result.stderr)
+        self.assertIn("app launch failed", result.stderr)
+        self.assertFalse((output / "launch.txt").exists())
         self.assertFalse((output / "result.json").exists())
 
     def test_rejects_non_adhoc_signed_app_before_simulator_access(self) -> None:
