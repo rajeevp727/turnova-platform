@@ -2,6 +2,7 @@
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SkiaSharp.HarfBuzz" Version="4.154.0" />
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.154.0" />
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.2.1.400" />
   </ItemGroup>
