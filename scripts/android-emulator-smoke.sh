@@ -59,20 +59,26 @@ fi
 
 export ANDROID_SDK_ROOT="$SDK_ROOT"
 export ANDROID_HOME="$SDK_ROOT"
-export ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
+export ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/turnova-android-avd}"
 export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
 
 SYSTEM_IMAGE="system-images;android-35;google_apis;x86_64"
-AVD_NAME="turnova-release-smoke"
+AVD_NAME="turnova-release-smoke-$"
 AVD_INI="$ANDROID_AVD_HOME/$AVD_NAME.ini"
 AVD_DIR="$ANDROID_AVD_HOME/$AVD_NAME.avd"
 EMULATOR_PID=""
+AVD_CREATED=false
 
 cleanup() {
   "$SDK_ROOT/platform-tools/adb" emu kill >/dev/null 2>&1 || true
   if [[ -n "$EMULATOR_PID" ]]; then
     kill "$EMULATOR_PID" >/dev/null 2>&1 || true
     wait "$EMULATOR_PID" 2>/dev/null || true
+  fi
+  # Remove only the uniquely named AVD created by this invocation. Never delete
+  # a pre-existing developer AVD from a shared ANDROID_AVD_HOME.
+  if [[ "$AVD_CREATED" == true ]]; then
+    rm -rf "$AVD_DIR" "$AVD_INI"
   fi
 }
 trap cleanup EXIT
@@ -142,7 +148,11 @@ if [[ ! -x "$EMULATOR_BIN" || ! -x "$ADB_BIN" ]]; then
 fi
 
 mkdir -p "$ANDROID_AVD_HOME"
-"$AVDMANAGER" delete avd -n "$AVD_NAME" >/dev/null 2>&1 || true
+if [[ -e "$AVD_INI" || -e "$AVD_DIR" ]]; then
+  echo "Refusing to replace an existing Android AVD at $AVD_INI or $AVD_DIR." >&2
+  exit 1
+fi
+AVD_CREATED=true
 printf 'no\n' | "$AVDMANAGER" create avd -f -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "pixel_2" 2>&1 | tee "$OUTPUT_DIR/avdmanager-create.log"
 
 if [[ ! -s "$AVD_INI" || ! -d "$AVD_DIR" ]]; then
