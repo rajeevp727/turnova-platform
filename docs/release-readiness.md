@@ -30,7 +30,7 @@ The mobile CI jobs upload one machine-readable `release-readiness.json` report p
 | Production iOS profile | Store distribution | Store distribution |
 | Production auto-increment | Not configured | Not configured |
 
-The current CI artifacts are Android debug APKs and unsigned iOS Simulator `.app` bundles. They prove native compilation only. They are not signed production AAB/IPA files and do not prove install/runtime behaviour on physical devices.
+The current CI artifacts include Android debug APKs, standalone Android release-variant APKs (assembleRelease), and unsigned iOS Simulator .app bundles. After native compilation, CI inspects the embedded Android APK manifest with Android aapt and verifies its package ID against expo.android.package; the iOS job reads the built .app/Info.plist and verifies CFBundleIdentifier against the CI-only simulator identifier passed to xcodebuild. These checks prove artifact identity only. They do not produce a production-signed Android AAB or iOS IPA, establish Apple registration, or prove install/runtime behaviour on physical devices.
 
 ## External gates and owners
 
@@ -55,3 +55,12 @@ No signing secret, bundle identifier, EAS project ID, provider credential or dep
 ## Preflight trust boundary
 
 The report always retains external gates for Apple bundle-ID registration, approved EAS project linkage, the EAS production API environment and DNS/TLS verification, build-number policy approval, signing credentials, physical-device/pilot acceptance and store submission. Local syntax/configuration checks are not evidence that remote ownership, DNS reachability, signing or release approval has been completed.
+
+
+## Compiled native artifact identity
+
+The native Android matrix verifies the standalone release-variant APK after \`assembleRelease\`: it requires a non-empty APK, confirms the embedded Metro bundle, runs Android SDK \`aapt dump badging\`, and compares the one parsed package ID with the checked-in \`expo.android.package\`. Missing/empty APKs, failed manifest inspection, absent/ambiguous package metadata, malformed IDs and mismatches fail the job.
+
+The native iOS Simulator matrix verifies the built app's actual \`Info.plist\` with Python's standard-library \`plistlib\`, comparing \`CFBundleIdentifier\` with the explicit CI-only \`PRODUCT_BUNDLE_IDENTIFIER\` supplied to \`xcodebuild\`. XML and binary plist encodings are supported. This CI-only identifier is not a Product-approved production bundle identifier and does not remove the Apple registration gate.
+
+The shared verifier is \`scripts/verify_native_app_identity.py\`; 11 deterministic standard-library unit tests live in \`scripts/tests/test_verify_native_app_identity.py\`. These tests validate parsing, exact identity matching, missing/ambiguous metadata, malformed/placeholder identifiers, tool failures and XML/binary plist handling. CI runs the tests and both platform artifact checks. No signing credential, final Apple identifier, EAS project, production API URL or store decision is invented.
