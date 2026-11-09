@@ -4838,6 +4838,7 @@ public sealed class RideApiIntegrationTests
             RideId = legacyRideId,
             ServiceClass = "Scooty"
         };
+        var legacyAuditCount = rides[legacyRideId].AuditEvents?.Count ?? 0;
 
         using var request = CreatePaymentReportRequest(
             legacyRideId, "payment-legacy-noncab-report", 450m);
@@ -4847,6 +4848,7 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("Scooty", rides[legacyRideId].ServiceClass);
         Assert.Equal("Completed", rides[legacyRideId].Status);
         Assert.Null(rides[legacyRideId].PaymentReconciliation);
+        Assert.Equal(legacyAuditCount, rides[legacyRideId].AuditEvents?.Count ?? 0);
         Assert.Equal("cab", rides[cabRideId].ServiceClass);
         Assert.Null(rides[cabRideId].PaymentReconciliation);
     }
