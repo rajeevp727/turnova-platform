@@ -3,10 +3,10 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-09  
+**Last verified:** 2026-11-09 10:57 IST  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `e9a86abfcff9d947f0fb26864d74fb20a57875fe` after DRIVER-03 PR #124 merged. Exact-head CI #902 / 42546820729 passed 8/8 on `87b7c96e175709b639c58f33c57b4b1185ad8209`: 341/341 backend tests, 102/102 shared mobile auth tests, Rider/Driver typechecks/JS exports, both Android debug APKs, both unsigned iOS Simulator apps, native Linux x64 API publish and deterministic publish-verifier fixtures. Current sequential engineering is #16 RIDER-04 on branch `fix/rider-04-cab-filter-reconciliation-query`; #15 DRIVER-04 is blocked by unapproved support workflow inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no physical-device, live Cosmos, signed-production or production-hosting validation is claimed.
+**Last audited main HEAD:** `5f6f9cf3d25ac0fb04739b197c65fa0260d05639` after PLATFORM-01 PR #134 merged; exact-head CI [42562772947](https://github.com/rajeevp727/turnova-platform/actions/runs/42562772947) passed 8/8. Current sequential item #19 RELEASE-01 is on sole active PR [#135](https://github.com/rajeevp727/turnova-platform/pull/135), branch `fix/release-01-native-artifact-identity-verification`, final head `1827b98fb64773f8ebdc75edbdda2f86ca90d4fb`; exact-head CI [42565547874](https://github.com/rajeevp727/turnova-platform/actions/runs/42565547874) passed 8/8, including 12 deterministic native identity tests and Rider/Driver Android/iOS artifact checks. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no physical-device, live Cosmos, signed-production or production-hosting validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
