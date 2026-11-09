@@ -281,12 +281,138 @@ jobs:
           done
           echo "Gradle build exhausted five attempts due to transient dependency repository failures."
           exit 1
-      - name: Verify Android APK artifact
+      - name: Verify Android debug APK artifact
         run: test -s android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.app }}-android-native-debug-apk
           path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Compile standalone Android release APK
+        working-directory: src/mobile/${{ matrix.app }}/android
+        run: "$HOME/.gradle/turnova-distributions/gradle-8.14.3/bin/gradle" --no-daemon assembleRelease
+      - name: Verify standalone APK contains embedded JavaScript bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          unzip -l "$apk" | grep -F 'assets/index.android.bundle' >/dev/null || { echo "Release APK is missing embedded JavaScript bundle." >&2; exit 1; }
+          echo "Standalone release APK verified: embedded JavaScript bundle is present."
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-android-standalone-release-apk
+          path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+  native-ios:
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [driver-app, rider-app]
+    defaults:
+      run:
+        working-directory: src/mobile/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
+
+      - run: npm install --prefer-offline --no-fund --audit=false
+      - name: Generate iOS native project
+        run: npx expo prebuild --platform ios --no-install --clean
+      - name: Cache CocoaPods dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-${{ runner.arch }}-pods-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app), format('src/mobile/{0}/ios/Podfile', matrix.app)) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-pods-${{ matrix.app }}-
+      - name: Install CocoaPods dependencies
+        run: pod install --project-directory=ios
+      - name: Compile unsigned iOS Simulator app
+        env:
+          APP_NAME: ${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          WORKSPACE="$(find ios -maxdepth 1 -type d -name '*.xcworkspace' -print -quit)"
+          PROJECT="$(find ios -maxdepth 1 -type d -name '*.xcodeproj' -print -quit)"
+          test -n "$WORKSPACE"
+          test -n "$PROJECT"
+          case "$PROJECT" in
+            */Pods/*) echo "Refusing to build CocoaPods aggregate project: $PROJECT" >&2; exit 1 ;;
+          esac
+          PROJECT_NAME="$(basename "$PROJECT" .xcodeproj)"
+          WORKSPACE_NAME="$(basename "$WORKSPACE" .xcworkspace)"
+          test "$WORKSPACE_NAME" = "$PROJECT_NAME"
+          xcodebuild -list -json -project "$PROJECT" > "$RUNNER_TEMP/xcode-project.json"
+          SCHEME="$(python3 - "$RUNNER_TEMP/xcode-project.json" "$PROJECT_NAME" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              project = json.load(stream).get("project", {})
+          schemes = project.get("schemes", [])
+          preferred = sys.argv[2]
+          if preferred in schemes:
+              print(preferred)
+          elif len(schemes) == 1:
+              print(schemes[0])
+          else:
+              raise SystemExit(f"Expected app scheme {preferred!r}; found {schemes!r}")
+          PY
+          )"
+          case "$APP_NAME" in
+            driver-app) BUNDLE_ID="com.turnova.driver" ;;
+            rider-app) BUNDLE_ID="com.turnova.rider" ;;
+            *) echo "Unknown app: $APP_NAME" >&2; exit 1 ;;
+          esac
+          DERIVED_DATA="$RUNNER_TEMP/turnova-$APP_NAME-ios"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Release \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            ARCHS="$(uname -m)" \
+            ONLY_ACTIVE_ARCH=YES \
+            build
+          APP_BUNDLE="$(find "$DERIVED_DATA/Build/Products/Release-iphonesimulator" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_BUNDLE"
+          test -d "$APP_BUNDLE"
+          echo "Unsigned simulator build produced: $APP_BUNDLE"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-ios-simulator-app
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-ios/Build/Products/Release-iphonesimulator/*.app
+          if-no-files-found: error
+
+  mobile-auth-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Test shared mobile state and refresh helpers
+        run: node --test src/mobile/shared/*.test.cjs
+; then
+            echo "Release APK is missing assets/index.android.bundle; refusing to publish a Metro-dependent APK." >&2
+            exit 1
+          fi
+          echo "Standalone release APK verified: embedded Android JavaScript bundle is present."
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-android-standalone-release-apk
+          path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
   native-ios:
