@@ -81,6 +81,7 @@ public sealed class AiAssistanceService
 {
     private const string PickupToken = "[PICKUP]";
     private const string DropoffToken = "[DROPOFF]";
+    private const string UnsupportedHelpAnswer = "This is outside approved help. Please use the support contact.";
 
     private static readonly Regex RoutePattern = new(
         @"\bfrom\s+(?<pickup>.+?)\s+to\s+(?<dropoff>.+?)(?:\s+(?:for|with)\s+(?<passengers>\d{1,2})\s+(?:passengers?|people|persons?)|\s+for\s+(?:a\s+)?(?:family|party)\s+of\s+(?<familyPassengers>\d{1,2}))?\s*[.!?]*$",
@@ -179,6 +180,9 @@ public sealed class AiAssistanceService
 
     public AiAssistanceService(IAiAssistantProvider provider, AiAssistantOptions options)
     {
+        if (options.MaxOutputCharacters < UnsupportedHelpAnswer.Length)
+            throw new ArgumentOutOfRangeException(nameof(options), $"MaxOutputCharacters must be at least {UnsupportedHelpAnswer.Length}.");
+
         _provider = provider;
         _options = options;
     }
@@ -242,7 +246,7 @@ public sealed class AiAssistanceService
                 return UnsupportedHelp("deterministic-fallback");
 
             var stateEntry = HelpEntries.First(entry => entry.Id == stateEntryId);
-            return new HelpResponse(stateEntry.Answer, stateEntry.Id, false, "approved-content");
+            return EnsureHelpOutputLimit(new HelpResponse(stateEntry.Answer, stateEntry.Id, false, "approved-content"));
         }
 
         var safeKeywords = ExtractSafeHelpKeywords(normalizedQuestion);
@@ -275,10 +279,7 @@ public sealed class AiAssistanceService
         if (selectedEntry is null)
             return UnsupportedHelp(source);
 
-        if (selectedEntry.Answer.Length > _options.MaxOutputCharacters)
-            return UnsupportedHelp("deterministic-fallback");
-
-        return new HelpResponse(selectedEntry.Answer, selectedEntry.Id, false, source);
+        return EnsureHelpOutputLimit(new HelpResponse(selectedEntry.Answer, selectedEntry.Id, false, source));
     }
 
     private string ValidateInput(string? value, string parameterName)
@@ -362,12 +363,13 @@ public sealed class AiAssistanceService
         return ranked[0].Entry;
     }
 
+    private HelpResponse EnsureHelpOutputLimit(HelpResponse response) =>
+        response.Answer.Length <= _options.MaxOutputCharacters
+            ? response
+            : UnsupportedHelp("deterministic-fallback");
+
     private static HelpResponse UnsupportedHelp(string source) =>
-        new(
-            "This question is outside the approved TurnOva help content. Please use the support contact made available to you or ask your Union manager to escalate it.",
-            "unsupported",
-            true,
-            source);
+        new(UnsupportedHelpAnswer, "unsupported", true, source);
 
     private async Task<T?> InvokeProviderAsync<T>(
         Func<CancellationToken, Task<T?>> operation,
