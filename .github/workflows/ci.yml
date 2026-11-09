@@ -4,14 +4,14 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [main, "fix/**", "feat/**", "chore/**"]
 
 permissions:
   contents: read
 
 # Keep only the newest CI run for each PR; stale queued matrices waste runner capacity.
 concurrency:
-  group: turnova-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: turnova-ci-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:

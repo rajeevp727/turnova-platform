@@ -14,6 +14,10 @@ using TurnOva.API;
 
 namespace TurnOva.Tests;
 
+[CollectionDefinition(nameof(AuthApiIntegrationCollection), DisableParallelization = true)]
+public sealed class AuthApiIntegrationCollection { }
+
+[Collection(nameof(AuthApiIntegrationCollection))]
 public sealed class AuthApiIntegrationTests
 {
     private const string Issuer = "turnova-auth-tests";
