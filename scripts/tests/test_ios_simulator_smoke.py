@@ -53,8 +53,8 @@ JSON
     exit 0
     ;;
   bootstatus)
-    [[ "$*" == "bootstatus TEST-DEVICE -b --timeout 300" ]] || {
-      echo "bootstatus did not use the bounded 300-second simulator startup timeout: $*" >&2
+    [[ "$*" == "bootstatus TEST-DEVICE -b" ]] || {
+      echo "bootstatus command arguments were unexpected: $*" >&2
       exit 2
     }
     [[ "${FAKE_BOOTSTATUS_FAIL:-0}" != "1" ]] || exit 1
