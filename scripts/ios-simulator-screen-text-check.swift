@@ -25,9 +25,14 @@ let recognizedLines = (request.results ?? []).compactMap {
     $0.topCandidates(1).first?.string
 }
 let recognizedText = recognizedLines.joined(separator: "\n")
+// Vision may return one visual banner as multiple OCR lines. Collapse all whitespace
+// before checking forbidden phrases so a line wrap cannot bypass the stale-session guard.
+let normalizedRecognizedText = recognizedText
+    .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    .trimmingCharacters(in: .whitespacesAndNewlines)
 let requiredText = ["Welcome back", "Email address", "Password", "Sign in"]
 let missingText = requiredText.filter {
-    !recognizedText.localizedCaseInsensitiveContains($0)
+    !normalizedRecognizedText.localizedCaseInsensitiveContains($0)
 }
 let forbiddenText = [
     "Unable to restore your session",
@@ -36,7 +41,7 @@ let forbiddenText = [
     "Unable to clear secure session storage"
 ]
 let unexpectedText = forbiddenText.filter {
-    recognizedText.localizedCaseInsensitiveContains($0)
+    normalizedRecognizedText.localizedCaseInsensitiveContains($0)
 }
 
 print(recognizedText)
