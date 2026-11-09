@@ -1114,3 +1114,17 @@ PR #134 merged at 5f6f9cf3d25ac0fb04739b197c65fa0260d05639. Its exact head 37fe0
 ### RIDER-04 Cab-only reconciliation query CI evidence (2026-11-09)
 
 PR #125 merged at 552dadea76215fa4a1f67c545e04a79070b6d44f and adds the case-insensitive Cab predicate before Cosmos materializes the allow-listed UnionManager reconciliation projection. The initial branch push CI run #42552962718 failed before job creation (zero jobs), so it is not counted as a passing exact-head run. After the workflow correction, main CI [run #42561935666](https://github.com/rajeevp727/turnova-platform/actions/runs/42561935666) passed all 8/8 jobs on 8368b0ef518bda956442e99f5e9cc343a332bba8 and included the merged query change. This is deterministic CI evidence only; live Cosmos SQL function/index/query-plan and partition validation remain external.
+
+
+### PLATFORM-01 dispatch exception audit concurrency and conflict recovery (2026-11-09)
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| PLAT-AUDIT-012 | Concurrent identical dispatch-exception writes | Execute two writes concurrently with the same actor, Cab partition, server trace and allow-listed reason against a barrier-controlled atomic fake store | Exactly one canonical event is created; the competing write reads and verifies that canonical event; both operations complete successfully and no duplicate event is appended | Deterministic .NET unit test | P1 |
+| PLAT-AUDIT-013 | Concurrent trace reuse with different actor | Execute two writes concurrently with the same partition/trace/reason but different claim-derived actors | One canonical event is created; the competing write fails closed after canonical actor mismatch; no second event is accepted | Deterministic .NET unit test | P1 |
+| PLAT-AUDIT-014 | Cancellation during canonical conflict read-back | Simulate a create conflict; cancel the same supplied CancellationTokenSource from inside the canonical point-read fake | The supplied token is observed as cancelled by the read operation, OperationCanceledException propagates, and the conflict is never treated as an idempotent success | Deterministic .NET unit test | P1 |
+
+Implementation is in `DispatchExceptionAuditWriterTests`. The barrier-controlled fake forces both create attempts to overlap and models an atomic create-if-absent store. PLAT-AUDIT-014 cancels the same supplied `CancellationTokenSource` from inside the fake canonical `ReadAsync`, then asserts that cancellation is observed and propagated; it does not substitute an unrelated synthetic exception. These tests do not claim live Cosmos 409/read-after-write validation.
+
+
+PR #139 code-bearing exact-head CI [run #42593042733](https://github.com/rajeevp727/turnova-platform/actions/runs/42593042733) passed all 8/8 jobs on `e2e6637fea7d64b49c5419f821dcdd0012c323db`, including 362/362 backend tests. Branch-sync exact-head CI [run #42597528464](https://github.com/rajeevp727/turnova-platform/actions/runs/42597528464) passed all 8/8 jobs on `72d0e16a81e918a5b54b0af01edc2bea79db1971`. The actual-token cancellation refinement and synchronized docs require their own final-head CI. Live Cosmos 409/read-after-write, transactional batch/ETag and multi-instance behaviour remain external.

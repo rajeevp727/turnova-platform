@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
 
@@ -112,6 +113,117 @@ public sealed class DispatchExceptionAuditWriterTests
         Assert.Equal(0, store.ReadCount);
     }
 
+    [Fact]
+    public async Task RecordAsync_ConcurrentMatchingRetriesCreateOneCanonicalEvent()
+    {
+        var store = new ConcurrentQueueAuditEventStore();
+        var writer = new DispatchExceptionAuditWriter(store);
+
+        await Task.WhenAll(
+            writer.RecordAsync(
+                "driver-actor-1", "zone-a", "cab", "trace-concurrent",
+                QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None),
+            writer.RecordAsync(
+                "driver-actor-1", "zone-a", "cab", "trace-concurrent",
+                QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None));
+
+        Assert.Equal(2, store.CreateAttempts);
+        Assert.Equal(1, store.ReadCount);
+        var canonical = Assert.Single(store.Events);
+        Assert.Equal("dispatch-exception-trace-concurrent", canonical.EventId);
+        Assert.Equal("driver-actor-1", canonical.DriverId);
+        Assert.Equal("trace-concurrent", canonical.TraceId);
+        Assert.Equal(QueueAuditReasonCategories.QueueReadFailed, canonical.ReasonCategory);
+    }
+
+    [Fact]
+    public async Task RecordAsync_ConcurrentTraceReuseWithDifferentActorFailsClosed()
+    {
+        var store = new ConcurrentQueueAuditEventStore();
+        var writer = new DispatchExceptionAuditWriter(store);
+
+        var outcomes = await Task.WhenAll(
+            CaptureAsync(() => writer.RecordAsync(
+                "driver-actor-1", "zone-a", "cab", "trace-reused",
+                QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None)),
+            CaptureAsync(() => writer.RecordAsync(
+                "driver-actor-2", "zone-a", "cab", "trace-reused",
+                QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None)));
+
+        Assert.Single(outcomes.Where(exception => exception is null));
+        Assert.IsType<InvalidOperationException>(Assert.Single(outcomes.Where(exception => exception is not null)));
+        Assert.Equal(2, store.CreateAttempts);
+        Assert.Equal(1, store.ReadCount);
+        var canonical = Assert.Single(store.Events);
+        Assert.Contains(canonical.DriverId, new[] { "driver-actor-1", "driver-actor-2" });
+    }
+
+    [Fact]
+    public async Task RecordAsync_PropagatesCancellationDuringCanonicalConflictReadBack()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var store = new FakeQueueAuditEventStore
+        {
+            CreateResult = false,
+            CancelDuringRead = cancellation
+        };
+        var writer = new DispatchExceptionAuditWriter(store);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => writer.RecordAsync(
+            "driver-actor-1", "zone-a", "cab", "trace-read-cancelled",
+            QueueAuditReasonCategories.QueueReadFailed, cancellation.Token));
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.Equal(1, store.ReadCount);
+    }
+
+    private static async Task<Exception?> CaptureAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+    }
+
+    private sealed class ConcurrentQueueAuditEventStore : IQueueAuditEventStore
+    {
+        private readonly ConcurrentDictionary<string, QueueAuditEvent> _events = new(StringComparer.Ordinal);
+        private readonly TaskCompletionSource _bothCreateAttempts =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _createAttempts;
+        private int _readCount;
+
+        public int CreateAttempts => Volatile.Read(ref _createAttempts);
+        public int ReadCount => Volatile.Read(ref _readCount);
+        public IReadOnlyCollection<QueueAuditEvent> Events => _events.Values.ToArray();
+
+        public async Task<bool> TryCreateAsync(
+            QueueAuditEvent auditEvent, string partitionKey, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Interlocked.Increment(ref _createAttempts) == 2)
+                _bothCreateAttempts.TrySetResult();
+
+            await _bothCreateAttempts.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return _events.TryAdd($"{partitionKey}|{auditEvent.EventId}", auditEvent);
+        }
+
+        public Task<QueueAuditEvent?> ReadAsync(
+            string eventId, string partitionKey, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _readCount);
+            _events.TryGetValue($"{partitionKey}|{eventId}", out var existing);
+            return Task.FromResult(existing);
+        }
+    }
+
     private static QueueAuditEvent ExpectedAudit() => new(
         "dispatch-exception-trace-123",
         "zone-a|cab",
@@ -131,6 +243,7 @@ public sealed class DispatchExceptionAuditWriterTests
         public string? ReadPartitionKey { get; private set; }
         public int ReadCount { get; private set; }
         public Exception? CreateException { get; init; }
+        public CancellationTokenSource? CancelDuringRead { get; init; }
 
         public Task<bool> TryCreateAsync(
             QueueAuditEvent auditEvent, string partitionKey, CancellationToken cancellationToken)
@@ -147,6 +260,8 @@ public sealed class DispatchExceptionAuditWriterTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             ReadCount++;
+            CancelDuringRead?.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
             ReadEventId = eventId;
             ReadPartitionKey = partitionKey;
             return Task.FromResult(Existing);
