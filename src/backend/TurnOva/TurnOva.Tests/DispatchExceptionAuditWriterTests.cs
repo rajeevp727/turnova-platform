@@ -113,7 +113,6 @@ public sealed class DispatchExceptionAuditWriterTests
         Assert.Equal(0, store.ReadCount);
     }
 
-
     [Fact]
     public async Task RecordAsync_ConcurrentMatchingRetriesCreateOneCanonicalEvent()
     {
@@ -208,7 +207,7 @@ public sealed class DispatchExceptionAuditWriterTests
             if (Interlocked.Increment(ref _createAttempts) == 2)
                 _bothCreateAttempts.TrySetResult();
 
-            await _bothCreateAttempts.Task.WaitAsync(cancellationToken);
+            await _bothCreateAttempts.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             return _events.TryAdd($"{partitionKey}|{auditEvent.EventId}", auditEvent);
         }
