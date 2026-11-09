@@ -39,6 +39,18 @@ if [[ "$actual_id" != "$EXPECTED_ID" ]]; then
   exit 1
 fi
 
+# SecureStore uses the simulator Keychain. The smoke must run an ad-hoc signed
+# simulator copy with a test-only keychain group, not the unsigned compile artifact.
+if ! codesign --verify --deep --strict "$APP_BUNDLE" >/dev/null 2>&1; then
+  echo "iOS Simulator smoke app is not validly code-signed." >&2
+  exit 1
+fi
+signature_info="$(codesign -dv --verbose=4 "$APP_BUNDLE" 2>&1 || true)"
+if ! grep -Fq "Signature=adhoc" <<< "$signature_info"; then
+  echo "iOS Simulator smoke requires an ad-hoc signature for SecureStore Keychain access." >&2
+  exit 1
+fi
+
 devices_json="$(xcrun simctl list devices available -j)"
 selection="$(python3 -c '
 import json
