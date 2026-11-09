@@ -1121,3 +1121,6 @@ PR #125 merged at 552dadea76215fa4a1f67c545e04a79070b6d44f and adds the case-ins
 | PLAT-AUDIT-014 | Cancellation during canonical conflict read-back | Simulate a create conflict followed by cancellation of the canonical point read | Cancellation propagates and the conflict is never treated as an idempotent success | Deterministic .NET unit test | P1 |
 
 Implementation is in `DispatchExceptionAuditWriterTests`. The barrier-controlled fake forces both create attempts to overlap and models an atomic create-if-absent store; it does not claim live Cosmos 409/read-after-write validation.
+
+
+PR #139 code-bearing exact-head CI [run #42593042733](https://github.com/rajeevp727/turnova-platform/actions/runs/42593042733) passed all 8/8 jobs on `e2e6637fea7d64b49c5419f821dcdd0012c323db`, including 362/362 backend tests. This validates the deterministic writer tests above; live Cosmos 409/read-after-write and multi-instance behaviour remain external. Final docs-only PR head must pass its own exact-head CI before merge.
