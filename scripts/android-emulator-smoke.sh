@@ -59,10 +59,13 @@ fi
 
 export ANDROID_SDK_ROOT="$SDK_ROOT"
 export ANDROID_HOME="$SDK_ROOT"
+export ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
 export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
 
 SYSTEM_IMAGE="system-images;android-35;google_apis;x86_64"
 AVD_NAME="turnova-release-smoke"
+AVD_INI="$ANDROID_AVD_HOME/$AVD_NAME.ini"
+AVD_DIR="$ANDROID_AVD_HOME/$AVD_NAME.avd"
 EMULATOR_PID=""
 
 cleanup() {
@@ -86,16 +89,39 @@ if [[ ! -x "$EMULATOR_BIN" || ! -x "$ADB_BIN" ]]; then
   exit 1
 fi
 
-mkdir -p "$HOME/.android/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 "$AVDMANAGER" delete avd -n "$AVD_NAME" >/dev/null 2>&1 || true
-printf 'no\n' | "$AVDMANAGER" create avd -f -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "pixel_2"
+printf 'no\\n' | "$AVDMANAGER" create avd -f -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "pixel_2" 2>&1 | tee "$OUTPUT_DIR/avdmanager-create.log"
 
-"$EMULATOR_BIN" -avd "$AVD_NAME" -no-window -no-audio -no-boot-anim \
-  -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics \
+if [[ ! -s "$AVD_INI" || ! -d "$AVD_DIR" ]]; then
+  echo "Android AVD was not created in ANDROID_AVD_HOME=$ANDROID_AVD_HOME." >&2
+  find "$HOME/.android" -maxdepth 3 -name "$AVD_NAME.ini" -o -name "$AVD_NAME.avd" >&2 || true
+  exit 1
+fi
+
+"$EMULATOR_BIN" -avd "$AVD_NAME" -no-window -no-audio -no-boot-anim \\
+  -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics \\
   -memory 2048 -cores 2 >"$OUTPUT_DIR/emulator.log" 2>&1 &
 EMULATOR_PID=$!
 
-timeout 180 "$ADB_BIN" wait-for-device
+device_ready=false
+for _ in $(seq 1 180); do
+  if "$ADB_BIN" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { found = 1 } END { exit !found }'; then
+    device_ready=true
+    break
+  fi
+  if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+    echo "Android emulator process exited before registering with ADB. Emulator diagnostics:" >&2
+    cat "$OUTPUT_DIR/emulator.log" >&2 || true
+    exit 1
+  fi
+  sleep 1
+done
+if [[ "$device_ready" != true ]]; then
+  echo "Android emulator did not register with ADB within three minutes. Emulator diagnostics:" >&2
+  cat "$OUTPUT_DIR/emulator.log" >&2 || true
+  exit 1
+fi
 booted=false
 for _ in $(seq 1 180); do
   if [[ "$("$ADB_BIN" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
