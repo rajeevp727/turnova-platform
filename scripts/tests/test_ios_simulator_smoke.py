@@ -84,7 +84,7 @@ echo "$FAKE_BUNDLE_ID"
 set -euo pipefail
 echo "Welcome back Email address Password Sign in"
 if [[ "$FAKE_RESTORE_ERROR" == "1" ]]; then
-  echo "Unable to restore your session. Check your connection or secure storage and retry."
+  printf "Unable to restore your\nsession. Check your connection or secure storage and retry.\n"
   exit 1
 fi
 """,
@@ -152,7 +152,7 @@ fi
         result, output, _ = self.run_smoke(restore_error=True)
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("Unable to restore your session", result.stdout)
+        self.assertIn("Unable to restore your\nsession", result.stdout)
         self.assertFalse((output / "result.json").exists())
 
     def test_invalid_bundle_identifier_is_rejected_before_simulator_access(self) -> None:
