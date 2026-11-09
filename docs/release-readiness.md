@@ -103,3 +103,12 @@ Simulator evidence remains limited to install, launch, process stability and the
 
 
 The iOS Simulator smoke consumes the unsigned native `.app` artifact for identity/compile evidence, then ad-hoc signs an ephemeral copy with `application-identifier` and `keychain-access-groups` set to the app's bundle ID. Nested frameworks are ad-hoc signed first; the app bundle receives the test-only Keychain entitlements. CI verifies the signature and embedded entitlement values before install. This is not Apple Developer signing, provisioning, production distribution or store-readiness evidence.
+
+
+## Cold iOS Simulator first-boot readiness bound (2026-11-09)
+
+A fresh simulator erase can trigger first-boot Data Migration/LaunchServicesMigrator work. PR #141 run [#42628714272](https://github.com/rajeevp727/turnova-platform/actions/runs/42628714272) showed the Driver iOS job waiting in this phase and exiting from `simctl bootstatus` before app install; the Rider iOS job remained in progress when superseded. This was a simulator readiness failure, not evidence of a SecureStore result or an app launch failure.
+
+The smoke script now bounds `xcrun simctl bootstatus <UDID> -b` externally with Python `subprocess.run(timeout=300)`. `TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS` defaults to 300 and is validated to 1–600 seconds. The deterministic fake-SDK harness covers a nonzero bootstatus exit and an actual timeout using a sleeping fake command with a one-second test budget; both must stop before install and leave no success report. The outer bound prevents a wedged simulator from hanging the job indefinitely while allowing a cold simulator more time than the observed earlier wait.
+
+Latest PR #141 head `091383e1e20d5d4a6130af7412b10c6ab59dc107` exact-head CI [#1035 / 42633532354](https://github.com/rajeevp727/turnova-platform/actions/runs/42633532354) is pending. Do not count a clean iOS login result until both Rider and Driver simulator jobs complete, their screenshots/OCR show the required login text and no stale-session/storage banner, and the final head passes all required checks. This remains simulator-only evidence, not physical-device, production signing, production authentication or store readiness.
