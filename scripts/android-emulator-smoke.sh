@@ -189,6 +189,12 @@ for expected_text in "Welcome back" "Email address" "Password" "Sign in"; do
     exit 1
   fi
 done
+for forbidden_text in "Unable to restore your session" "Unable to restore session" "Session expired" "Unable to clear secure session storage"; do
+  if grep -Fq "$forbidden_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+    echo "Android fresh-install login UI contains an unexpected session/storage error: $forbidden_text" >&2
+    exit 1
+  fi
+done
 
 "$ADB_BIN" logcat -d -v threadtime > "$OUTPUT_DIR/logcat.txt"
 if awk -v package="$EXPECTED_ID" '
@@ -237,6 +243,7 @@ with open(output, "w", encoding="utf-8") as stream:
         "launch": "passed",
         "processStableAfterStartup": True,
         "loginScreenTextVerified": True,
+        "staleSessionErrorAbsent": True,
         "screenshot": "launch.png",
         "productionApiOrAuthentication": "not exercised"
     }, stream, indent=2)
