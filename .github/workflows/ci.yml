@@ -508,7 +508,10 @@ jobs:
           # The native build artifact remains unsigned. Ad-hoc signing this ephemeral
           # simulator copy supplies a test-only Keychain access group for SecureStore;
           # it uses no Apple certificate, provisioning profile or production secret.
-          codesign --force --deep --sign - --entitlements "$entitlements" "$app_bundle"
+          # Sign nested frameworks first without app-only entitlements, then sign the app
+          # bundle with its isolated Keychain access group.
+          codesign --force --deep --sign - "$app_bundle"
+          codesign --force --sign - --entitlements "$entitlements" "$app_bundle"
           codesign --verify --deep --strict "$app_bundle"
           signature_info="$(codesign -dv --verbose=4 "$app_bundle" 2>&1 || true)"
           if ! grep -Fq "Signature=adhoc" <<< "$signature_info"; then
