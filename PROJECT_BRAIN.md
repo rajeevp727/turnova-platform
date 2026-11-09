@@ -977,3 +977,14 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - #18 external gates: live Cosmos transactional batch/ETag, 409 read-after-write, partition isolation, multi-instance/restart/retention, telemetry export/alerts, production CORS origins, load and physical-device acceptance.
 - #15 DRIVER-04 and #17 SUPPORT-01 remain blocked pending Product/Operations-approved support categories, required intake fields, severity, escalation owner/channel, hours/targets, attachment rules, consent/privacy/retention and handoff. No support schema/SLA is invented.
 - Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); implementation evidence is separate and production readiness is not established.
+
+
+## Latest sequential handoff — #19 RELEASE-01 native install/launch smoke (2026-11-09)
+
+- Main HEAD is `c9d7276c1af5b6b726add2f0d158dbba295282a7` after PLATFORM-01 PR #139 merged. Exact PR-head CI [#42601098085](https://github.com/rajeevp727/turnova-platform/actions/runs/42601098085) passed 8/8 on `77e7bbd7408e7e77464edb610b988da563d936e1`, including 364/364 backend tests.
+- Current #19 branch is `test/release-01-native-launch-smoke` (PR #140 in preparation). It adds native install/launch checks for both standalone Android release APKs in an API 35 emulator and both unsigned iOS Simulator .app artifacts in an iPhone Simulator. Checks cover expected package/bundle, install, launch activity/process survival, startup crash markers and screenshot/diagnostic artifacts.
+- The simulator tests consume the exact artifacts built earlier in the same CI run. They deliberately do not invoke production APIs, authentication providers, maps, SignalR, push or any credentialed external service.
+- Exact-head CI for PR #140 is pending. Do not merge until all 12 jobs pass on the exact final SHA and a COMMENT-only review finds no critical/high-risk issue; do not self-approve or bypass repository policy.
+- #19 remains Blocked pending signed AAB/IPA, approved and Apple-registered iOS bundle IDs, EAS project linkage, production HTTPS API environment/DNS/TLS/CORS/readiness, approved build-number strategy, signing credentials, physical-device functional/security/pilot acceptance and store submission. Emulator/Simulator smoke is not physical-device or production acceptance.
+- #18 PLATFORM-01 still needs live Cosmos transactional-batch/ETag/409 read-after-write/partition/multi-instance/restart/retention, telemetry export/alerts, production CORS, load and device evidence. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations support-policy inputs.
+- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). This is a strict external-evidence count, not an implementation-completion percentage; production readiness is not established.
