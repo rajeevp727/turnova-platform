@@ -105,9 +105,9 @@ case "$1" in
     ;;
   logcat)
     if [[ "$FAKE_TARGET_EXCEPTION" == "1" ]]; then
-      printf '2026-11-09 11:00:00.000 4242 4242 E ReactNativeJS: Unhandled JS Exception: target fixture\\n'
+      printf '2026-11-09 11:00:00.000 4242 4242 E ReactNativeJS: Unhandled JS Exception: target fixture\n'
     else
-      printf '2026-11-09 11:00:00.000 1111 1111 E ReactNativeJS: Unhandled JS Exception: unrelated fixture\\n'
+      printf '2026-11-09 11:00:00.000 1111 1111 E ReactNativeJS: Unhandled JS Exception: unrelated fixture\n'
     fi
     ;;
   exec-out)
@@ -163,7 +163,7 @@ exit 0
             self.assertEqual(
                 result.returncode,
                 0,
-                msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}",
+                msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
             )
             self.assertTrue((avd_home / "turnova-release-smoke.ini").is_file())
             self.assertTrue((avd_home / "turnova-release-smoke.avd").is_dir())
