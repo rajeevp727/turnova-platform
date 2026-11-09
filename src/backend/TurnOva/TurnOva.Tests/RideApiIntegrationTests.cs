@@ -4821,6 +4821,37 @@ public sealed class RideApiIntegrationTests
 
 
     [Fact]
+    public async Task DriverPaymentReportRejectsHistoricalNonCabRideWithoutMutation()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-legacy-noncab-driver";
+        const string unionId = "payment-legacy-noncab-union";
+        using var rider = factory.CreateClient("Rider", "payment-legacy-noncab-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        var cabRideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "payment-legacy-noncab", 500m);
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var legacyRideId = "legacy-scooty-payment-" + cabRideId;
+        rides[legacyRideId] = rides[cabRideId] with
+        {
+            RideId = legacyRideId,
+            ServiceClass = "Scooty"
+        };
+
+        using var request = CreatePaymentReportRequest(
+            legacyRideId, "payment-legacy-noncab-report", 450m);
+        using var response = await driver.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Scooty", rides[legacyRideId].ServiceClass);
+        Assert.Equal("Completed", rides[legacyRideId].Status);
+        Assert.Null(rides[legacyRideId].PaymentReconciliation);
+        Assert.Equal("cab", rides[cabRideId].ServiceClass);
+        Assert.Null(rides[cabRideId].PaymentReconciliation);
+    }
+
+    [Fact]
     public async Task UnionReconciliationExcludesLegacyNonCabRecordsAndKeepsMixedCaseCabRecords()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
