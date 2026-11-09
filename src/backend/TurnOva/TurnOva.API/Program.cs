@@ -1892,7 +1892,7 @@ app.MapPost("/api/v1/driver/location", async (
         var zoneExitLeaseId = $"DRIVER-ZONE-EXIT-{Guid.NewGuid():N}";
         if (!await driverRideReservations.TryAcquireTemporaryAsync(
             driverId, zoneExitLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct,
-        DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.DriverZoneExit)))
+            DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.DriverZoneExit)))
             return Results.Conflict(new { message = "Location cannot take the Driver offline while a selected negotiation or ride reservation is active." });
 
         try
@@ -2375,7 +2375,8 @@ app.MapPost("/api/v1/rider/bookings", async (
         latestProfile.CurrentLatitude.Value, latestProfile.CurrentLongitude.Value);
     if (latestDistanceKm > radiusKm.Value)
     {
-        await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct);
+        await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct,
+            new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.BookingEligibilityChanged));
         await RemoveIdempotencyRecordAsync();
         return Results.Conflict(new { message = "The selected Driver is no longer within the approved pickup radius." });
     }
@@ -2788,7 +2789,8 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
             return Results.Conflict(new { message = "This ride belongs to a different dispatch zone or vehicle queue." });
         if (response.Resource.Passengers > approvedProfile.PassengerCapacity)
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
-        if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct))
+        if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct,
+            new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.LegacyRideAccept)))
             return Results.Conflict(new { message = "You already have an active ride. Complete or cancel it before accepting another ride." });
         var acceptedAtUtc = DateTimeOffset.UtcNow;
         var accepted = response.Resource with

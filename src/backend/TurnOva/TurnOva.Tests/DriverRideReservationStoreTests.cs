@@ -32,7 +32,7 @@ public sealed class DriverRideReservationStoreTests
         Assert.True(await store.TryReleaseAsync("driver-1", "ride-1"));
         Assert.False(await store.HasActiveAsync("driver-1"));
 
-        var audit = Assert.Collection(
+        Assert.Collection(
             store.GetAuditEvents("driver-1"),
             item => Assert.Equal(DriverRideReservationAuditEventTypes.Acquired, item.EventType),
             item => Assert.Equal(DriverRideReservationAuditEventTypes.Released, item.EventType));
@@ -130,8 +130,8 @@ public sealed class DriverRideReservationStoreTests
         Assert.True(await store.TryReleaseAsync("driver-1", "ride-1"));
         Assert.True(await store.TryAcquireAsync("driver-1", "ride-2"));
         Assert.Equal(
-            [DriverRideReservationAuditEventTypes.Acquired, DriverRideReservationAuditEventTypes.Released,
-             DriverRideReservationAuditEventTypes.Acquired],
+            new[] { DriverRideReservationAuditEventTypes.Acquired, DriverRideReservationAuditEventTypes.Released,
+                DriverRideReservationAuditEventTypes.Acquired },
             store.GetAuditEvents("driver-1").Select(item => item.EventType));
     }
 
@@ -161,7 +161,7 @@ public sealed class DriverRideReservationStoreTests
         var events = store.GetAuditEvents("driver-1");
         Assert.Equal(3, events.Count);
         Assert.Equal(
-            [ "ride-1", "ride-1", "ride-2" ],
+            new[] { "ride-1", "ride-1", "ride-2" },
             events.Select(item => item.ReservationId));
     }
 
