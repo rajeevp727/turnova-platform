@@ -494,5 +494,5 @@ jobs:
         run: bash -n scripts/android-emulator-smoke.sh scripts/ios-simulator-smoke.sh
       - name: Test shared mobile state and refresh helpers
         run: node --test src/mobile/shared/*.test.cjs
-      - name: Test deterministic native artifact identity verifier
-        run: python3 -m unittest discover -s scripts/tests -p 'test_verify_native_app_identity.py' -v
+      - name: Test deterministic native artifact and Android smoke harnesses
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
