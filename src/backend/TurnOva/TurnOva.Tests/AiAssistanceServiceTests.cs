@@ -208,6 +208,15 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public void ServiceRejectsOutputLimitTooSmallForEscalationFallback()
+    {
+        var options = new AiAssistantOptions { MaxOutputCharacters = 10 };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new AiAssistanceService(new UnavailableAiAssistantProvider(), options));
+    }
+
+    [Fact]
     public async Task KnownRideStateExceedingConfiguredOutputLimitUsesBoundedEscalation()
     {
         var service = CreateService(new UnavailableAiAssistantProvider(), maxOutputCharacters: 100);
