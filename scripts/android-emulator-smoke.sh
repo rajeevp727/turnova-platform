@@ -227,13 +227,92 @@ if ! grep -Fq "$EXPECTED_ID/" "$OUTPUT_DIR/activities.txt"; then
   exit 1
 fi
 
-"$ADB_BIN" shell uiautomator dump /sdcard/turnova-ui-hierarchy.xml > "$OUTPUT_DIR/uiautomator-dump.txt" 2>&1
-"$ADB_BIN" shell cat /sdcard/turnova-ui-hierarchy.xml | tr -d '\r' > "$OUTPUT_DIR/ui-hierarchy.xml"
-if [[ ! -s "$OUTPUT_DIR/ui-hierarchy.xml" ]]; then
-  echo "Android UI hierarchy dump is missing or empty." >&2
-  cat "$OUTPUT_DIR/uiautomator-dump.txt" >&2 || true
+capture_ui_hierarchy() {
+  "$ADB_BIN" shell uiautomator dump /sdcard/turnova-ui-hierarchy.xml > "$OUTPUT_DIR/uiautomator-dump.txt" 2>&1
+  "$ADB_BIN" shell cat /sdcard/turnova-ui-hierarchy.xml | tr -d '\r' > "$OUTPUT_DIR/ui-hierarchy.xml"
+  if [[ ! -s "$OUTPUT_DIR/ui-hierarchy.xml" ]]; then
+    echo "Android UI hierarchy dump is missing or empty." >&2
+    cat "$OUTPUT_DIR/uiautomator-dump.txt" >&2 || true
+    exit 1
+  fi
+}
+
+capture_ui_hierarchy
+pixel_launcher_anr_wait_attempts=0
+while grep -Fq "Pixel Launcher isn't responding" "$OUTPUT_DIR/ui-hierarchy.xml"; do
+  if (( pixel_launcher_anr_wait_attempts >= 2 )); then
+    echo "Pixel Launcher ANR dialog persisted after two bounded Wait attempts." >&2
+    cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+    exit 1
+  fi
+
+  pixel_launcher_anr_wait_attempts=$((pixel_launcher_anr_wait_attempts + 1))
+  cp "$OUTPUT_DIR/ui-hierarchy.xml" "$OUTPUT_DIR/pixel-launcher-anr-$pixel_launcher_anr_wait_attempts.xml"
+
+  if ! wait_coordinates="$(python3 - "$OUTPUT_DIR/ui-hierarchy.xml" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except (OSError, ET.ParseError):
+    sys.exit(2)
+
+title = next(
+    (
+        node.attrib.get("text")
+        for node in root.iter("node")
+        if node.attrib.get("resource-id") == "android:id/alertTitle"
+    ),
+    None,
+)
+if title != "Pixel Launcher isn't responding":
+    sys.exit(3)
+
+wait_button = next(
+    (
+        node
+        for node in root.iter("node")
+        if node.attrib.get("resource-id") == "android:id/aerr_wait"
+        and node.attrib.get("text") == "Wait"
+    ),
+    None,
+)
+if wait_button is None:
+    sys.exit(4)
+
+match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", wait_button.attrib.get("bounds", ""))
+if match is None:
+    sys.exit(5)
+
+left, top, right, bottom = map(int, match.groups())
+print((left + right) // 2, (top + bottom) // 2)
+PY
+  )"; then
+    echo "Pixel Launcher ANR was detected but its safe Wait control could not be resolved." >&2
+    cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+    exit 1
+  fi
+
+  if [[ ! "$wait_coordinates" =~ ^[0-9]+[[:space:]][0-9]+$ ]]; then
+    echo "Pixel Launcher ANR Wait control returned invalid coordinates." >&2
+    exit 1
+  fi
+
+  read -r wait_x wait_y <<< "$wait_coordinates"
+  echo "Pixel Launcher ANR detected; selecting Wait at ($wait_x,$wait_y), attempt $pixel_launcher_anr_wait_attempts/2." | tee -a "$OUTPUT_DIR/system-ui-recovery.txt"
+  "$ADB_BIN" shell input tap "$wait_x" "$wait_y"
+  sleep 5
+  capture_ui_hierarchy
+done
+
+if grep -Fq "isn't responding" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+  echo "Unexpected Android app/system ANR dialog remains after Pixel Launcher recovery." >&2
+  cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
   exit 1
 fi
+
 for expected_text in "Welcome back" "Email address" "Password" "Sign in"; do
   if ! grep -Fq "$expected_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
     echo "Android login screen is missing expected visible/accessibility text: $expected_text" >&2
@@ -279,11 +358,11 @@ if [[ ! -s "$OUTPUT_DIR/launch.png" ]]; then
   exit 1
 fi
 
-python3 - "$EXPECTED_ID" "$activity" "$pid_after" "$SYSTEM_IMAGE" "$OUTPUT_DIR/result.json" <<'PY'
+python3 - "$EXPECTED_ID" "$activity" "$pid_after" "$SYSTEM_IMAGE" "$pixel_launcher_anr_wait_attempts" "$OUTPUT_DIR/result.json" <<'PY'
 import json
 import sys
 
-package_id, activity, pid, system_image, output = sys.argv[1:]
+package_id, activity, pid, system_image, anr_wait_attempts, output = sys.argv[1:]
 with open(output, "w", encoding="utf-8") as stream:
     json.dump({
         "platform": "android-emulator",
@@ -296,6 +375,10 @@ with open(output, "w", encoding="utf-8") as stream:
         "processStableAfterStartup": True,
         "loginScreenTextVerified": True,
         "staleSessionErrorAbsent": True,
+        "systemUiRecovery": {
+            "pixelLauncherAnrWaitAttempts": int(anr_wait_attempts),
+            "pixelLauncherAnrRecovered": int(anr_wait_attempts) > 0
+        },
         "screenshot": "launch.png",
         "productionApiOrAuthentication": "not exercised"
     }, stream, indent=2)
