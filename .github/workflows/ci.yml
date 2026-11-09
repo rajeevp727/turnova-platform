@@ -297,7 +297,13 @@ jobs:
           set -euo pipefail
           apk="android/app/build/outputs/apk/release/app-release.apk"
           test -s "$apk"
-          if ! unzip -l "$apk" | grep -Eq '[[:space:]]assets/index\\.android\\.bundle
+          unzip -l "$apk" | grep -F 'assets/index.android.bundle' >/dev/null || { echo "Release APK is missing embedded JavaScript bundle." >&2; exit 1; }
+          echo "Standalone release APK verified: embedded JavaScript bundle is present."
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-android-standalone-release-apk
+          path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
   native-ios:
     runs-on: macos-15-intel
     timeout-minutes: 90
