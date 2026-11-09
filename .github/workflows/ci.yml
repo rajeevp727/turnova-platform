@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - name: Enforce native-only hosting policy
+        run: bash scripts/test-native-only-hosting.sh
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
