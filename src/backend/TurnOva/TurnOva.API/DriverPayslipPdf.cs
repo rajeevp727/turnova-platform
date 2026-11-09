@@ -81,7 +81,7 @@ public static class DriverPayslipPdf
 
         document.EndPage();
         document.Close();
-        return DriverPayslipPdfTextLayer.Append(output.ToArray(), fonts.TextPlacements);
+        return output.ToArray();
     }
 
     private static readonly SKColor Navy = new(20, 42, 68);
@@ -102,7 +102,7 @@ public static class DriverPayslipPdf
     private static void DrawWatermark(SKCanvas canvas, FontCatalog fonts)
     {
         DrawCabMark(canvas, 247, 374, 2.6f, new SKColor(235, 242, 249), new SKColor(235, 248, 245));
-        DrawText(canvas, fonts, "TurnOva", 174, 474, 58, new SKColor(239, 244, 249, 185), bold: true, includeInSearchableLayer: false);
+        DrawText(canvas, fonts, "TurnOva", 174, 474, 58, new SKColor(239, 244, 249, 185), bold: true);
     }
 
     private static void DrawCabMark(SKCanvas canvas, float x, float y, float scale, SKColor bodyColor, SKColor accentColor)
@@ -285,8 +285,7 @@ public static class DriverPayslipPdf
         float baseline,
         float fontSize,
         SKColor color,
-        bool bold = false,
-        bool includeInSearchableLayer = true)
+        bool bold = false)
     {
         var start = x;
         using var builder = new SKTextBlobBuilder();
@@ -303,23 +302,27 @@ public static class DriverPayslipPdf
                 var shaped = face.Shaper.Shape(run.Text, x, baseline, font);
                 EnsureGlyphCoverage(run, shaped.Codepoints);
 
-                // Draw the visible glyphs at HarfBuzz's exact positions. Skia's PDF
-                // backend may outline a raw glyph-only blob, so it cannot be relied
-                // on to preserve the original Unicode text for search/accessibility.
-                var glyphRun = builder.AllocateRawPositionedRun(font, shaped.Codepoints.Length, null);
+                // Keep the UTF-8 source text and HarfBuzz cluster offsets in the
+                // positioned run. Skia's PDF backend can then emit searchable text
+                // and ToUnicode mappings without a second PDF library or image codec.
+                var sourceText = Encoding.UTF8.GetBytes(run.Text);
+                var glyphRun = builder.AllocatePositionedTextRun(
+                    font,
+                    shaped.Codepoints.Length,
+                    sourceText.Length);
                 var glyphs = glyphRun.Glyphs;
-                var positions = glyphRun.Positions;
                 for (var index = 0; index < shaped.Codepoints.Length; index++)
                 {
                     if (shaped.Codepoints[index] > ushort.MaxValue)
                         throw new NotSupportedException($"The bundled {run.Script} payslip font returned an unsupported glyph index.");
 
                     glyphs[index] = (ushort)shaped.Codepoints[index];
-                    positions[index] = shaped.Points[index];
                 }
 
-                if (includeInSearchableLayer)
-                    fonts.RecordText(run.Script, run.Text, x, baseline, fontSize);
+                glyphRun.SetPositions(shaped.Points);
+                glyphRun.SetText(sourceText);
+                glyphRun.SetClusters(shaped.Clusters);
+
                 x += shaped.Width;
             }
 
@@ -329,7 +332,6 @@ public static class DriverPayslipPdf
                 using var paint = new SKPaint { Color = color, IsAntialias = true };
                 canvas.DrawText(blob, 0, 0, paint);
             }
-
         }
         finally
         {
@@ -382,32 +384,6 @@ public static class DriverPayslipPdf
             new(LoadSharedTypefaces, LazyThreadSafetyMode.ExecutionAndPublication);
 
         private readonly Dictionary<FontScript, FontFace> _faces = new();
-
-        public List<PayslipTextPlacement> TextPlacements { get; } = new();
-
-        public void RecordText(FontScript script, string text, float x, float baseline, float fontSize)
-        {
-            TextPlacements.Add(new PayslipTextPlacement(
-                text,
-                x,
-                baseline,
-                fontSize,
-                FontFamilyFor(script)));
-        }
-
-        private static string FontFamilyFor(FontScript script) => script switch
-        {
-            FontScript.Latin or FontScript.Telugu => "Noto Sans Telugu",
-            FontScript.Devanagari => "Noto Sans Devanagari",
-            FontScript.Bengali => "Noto Sans Bengali",
-            FontScript.Gurmukhi => "Noto Sans Gurmukhi",
-            FontScript.Gujarati => "Noto Sans Gujarati",
-            FontScript.Oriya => "Noto Sans Oriya",
-            FontScript.Tamil => "Noto Sans Tamil",
-            FontScript.Kannada => "Noto Sans Kannada",
-            FontScript.Malayalam => "Noto Sans Malayalam",
-            _ => throw new ArgumentOutOfRangeException(nameof(script))
-        };
 
         public FontFace Get(FontScript script)
         {
