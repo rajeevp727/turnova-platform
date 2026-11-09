@@ -154,8 +154,13 @@ echo "Welcome back Email address Password Sign in"
 if [[ "$FAKE_RESTORE_ERROR" == "1" ]]; then
   printf "Unable to restore your\\nsession. Check your connection or secure storage and retry.\\n"
 fi
+if [[ "$FAKE_RESTORE_ERROR" != "1" ]]; then
+  echo "Expected unsigned-simulator SecureStore failure banner was not visible." >&2
+  exit 1
+fi
 if [[ "$FAKE_STALE_SESSION" == "1" ]]; then
   echo "Session expired. Please sign in again."
+  exit 1
 fi
 """,
         )
