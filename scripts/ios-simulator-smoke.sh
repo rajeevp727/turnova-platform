@@ -75,6 +75,34 @@ cleanup() {
 }
 trap cleanup EXIT
 
+capture_simulator_diagnostics() {
+  local predicate
+  predicate="eventMessage CONTAINS[c] \"$EXPECTED_ID\" OR process == \"SpringBoard\" OR process == \"amfid\" OR process == \"runningboardd\" OR process == \"installd\""
+
+  # Keep failure diagnostics inside the ephemeral CI artifact; never emit app data
+  # or credentials. The simulator has not been given production API/auth inputs.
+  codesign -dv --verbose=4 "$APP_BUNDLE" > "$OUTPUT_DIR/app-signature.txt" 2>&1 || true
+  codesign -d --entitlements :- "$APP_BUNDLE" > "$OUTPUT_DIR/app-entitlements.plist" 2>&1 || true
+  xcrun simctl spawn "$DEVICE_UDID" log show --last 5m --style compact --predicate "$predicate" \
+    > "$OUTPUT_DIR/simulator-system.log" 2>&1 || true
+  xcrun simctl spawn "$DEVICE_UDID" launchctl list \
+    > "$OUTPUT_DIR/launchctl-list-failure.txt" 2>&1 || true
+  xcrun simctl listapps "$DEVICE_UDID" > "$OUTPUT_DIR/installed-apps.txt" 2>&1 || true
+
+  echo "Captured iOS Simulator launch diagnostics in $OUTPUT_DIR." >&2
+  for diagnostic in \
+    "$OUTPUT_DIR/simulator-system.log" \
+    "$OUTPUT_DIR/launchctl-list-failure.txt" \
+    "$OUTPUT_DIR/installed-apps.txt" \
+    "$OUTPUT_DIR/app-signature.txt" \
+    "$OUTPUT_DIR/app-entitlements.plist"; do
+    if [[ -s "$diagnostic" ]]; then
+      echo "--- $(basename "$diagnostic") (last 120 lines) ---" >&2
+      tail -n 120 "$diagnostic" >&2
+    fi
+  done
+}
+
 # A fresh install must not inherit Keychain tokens or app data from a prior run.
 # iOS Keychain entries can outlive an app uninstall, so reset the simulator itself.
 xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
@@ -134,6 +162,7 @@ fi
 echo "Launching $EXPECTED_ID in the iOS Simulator."
 if ! launch_output="$(xcrun simctl launch "$DEVICE_UDID" "$EXPECTED_ID" 2>&1)"; then
   printf '%s\n' "$launch_output" >&2
+  capture_simulator_diagnostics
   echo "iOS Simulator app launch failed for $EXPECTED_ID." >&2
   exit 1
 fi
