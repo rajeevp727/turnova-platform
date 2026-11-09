@@ -23,6 +23,13 @@ public sealed class DriverPayslipPdfTests
     }
 
     [Fact]
+    public void PdfSharpBundledSegoeFontAssemblyIsNotRedistributed()
+    {
+        var bundledSegoeAssembly = Path.Combine(AppContext.BaseDirectory, "PdfSharp.WPFonts.dll");
+        Assert.False(File.Exists(bundledSegoeAssembly));
+    }
+
+    [Fact]
     public void GeneratedPdfEmbedsFontsAndPreservesSearchableTextForAllBundledScripts()
     {
         var payslip = CreatePayslip(
