@@ -903,3 +903,14 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - #18 PLATFORM-01 already has safe dispatch exception auditing and ambiguous reservation-promotion recovery. Next independent code gap after #16: deterministic Cosmos 409/create-conflict read-back/idempotency tests for matching versus mismatched actor/trace/reason; preserve the existing QueueEntries partition.
 - #19 RELEASE-01 preflight is merged; signed Android/iOS store artifacts, production API/EAS configuration, signing credentials, physical-device/pilot acceptance and store submission remain external.
 - Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). This is not an implementation-completion percentage. No live Cosmos, physical-device, signed-production or production-hosting validation is claimed.
+
+
+## Latest sequential handoff — #18 PLATFORM-01 dispatch-exception conflict recovery (2026-11-09)
+
+- Latest main base: `8368b0ef518bda956442e99f5e9cc343a332bba8`; PR #133 removed the prohibited container deployment files and duplicate Android workflow. Native non-container .NET publish remains the only CI hosting artifact; no API deployment is claimed.
+- #16 RIDER-04 Cab-only reconciliation query filtering merged in PR #125 at `552dadea76215fa4a1f67c545e04a79070b6d44f`. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked by explicit Product/Operations support policy inputs; continue with independent engineering work.
+- Current #18 branch: `feat/platform-01-idempotent-dispatch-exception-audit`. A narrow persistence interface and Cosmos adapter now isolate deterministic dispatch-exception writes. Conflict retries require same-partition canonical read-back matching event ID, document/event type, partition, actor, trace, reason and no offer ID; missing/mismatched items fail closed. No new Cosmos container or provider is introduced.
+- Eleven deterministic writer tests cover successful create, exact matching read-back despite retry timestamp drift, seven mismatch variants, missing read-back and cancellation. Exact-head CI/review pending; no local .NET run or live Cosmos validation is claimed.
+- External #18 gates: live Cosmos 409 visibility/read-after-write consistency, partition isolation, multi-instance/restart/retention, telemetry export/alerts, production CORS origins, load testing and device acceptance.
+- #19 RELEASE-01 remains next after #18: re-audit Android/iOS native artifact/signing readiness and physical-device/pilot evidence. Signed store artifacts, production API/EAS linkage, signing credentials, physical-device acceptance and store submission remain external.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is not a measure of implementation completion. Production readiness is not established.
