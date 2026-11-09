@@ -27,7 +27,7 @@ if [[ ! "$EXPECTED_ID" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$ ]]; 
   exit 2
 fi
 if [[ ! -d "$APP_BUNDLE" || ! -s "$APP_BUNDLE/Info.plist" ]]; then
-  echo "Unsigned iOS Simulator .app bundle or Info.plist is missing." >&2
+  echo "iOS Simulator .app bundle or Info.plist is missing." >&2
   exit 1
 fi
 
@@ -137,7 +137,8 @@ with open(output, "w", encoding="utf-8") as stream:
         "staleSessionErrorAbsent": True,
         "screenshot": "launch.png",
         "productionApiOrAuthentication": "not exercised",
-        "signing": "unsigned simulator build"
+        "signing": "ad-hoc simulator signature (test-only)",
+        "keychainAccessGroup": "bundle-scoped test entitlement"
     }, stream, indent=2)
     stream.write("\n")
 PY
