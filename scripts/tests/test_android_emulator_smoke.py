@@ -112,6 +112,7 @@ case "$1" in
     printf 'List of devices attached\nemulator-5554 device\n'
     ;;
   emu)
+    printf 'global adb emu kill\n' >> "$FAKE_ADB_EMU_KILL_LOG"
     exit 0
     ;;
   install)
@@ -199,6 +200,7 @@ exit 0
                     "FAKE_OTHER_ANR_ALWAYS": "0",
                     "FAKE_UI_DUMP_COUNT_FILE": str(output / "ui-dump-count"),
                     "FAKE_INPUT_LOG": str(output / "input-taps.txt"),
+                    "FAKE_ADB_EMU_KILL_LOG": str(output / "global-adb-emu-kill.txt"),
                     "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",
                     "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS": "0",
                 }
@@ -269,6 +271,7 @@ exit 0
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
             self.assertTrue(report["staleSessionErrorAbsent"])
             self.assertEqual(report["systemUiRecovery"]["pixelLauncherAnrWaitAttempts"], 0)
+            self.assertFalse((output / "global-adb-emu-kill.txt").exists())
             self.assertTrue(user_avd_ini.is_file())
             self.assertEqual(user_avd_sentinel.read_text(encoding="utf-8"), "preserve")
 
