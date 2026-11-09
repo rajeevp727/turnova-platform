@@ -84,3 +84,7 @@ The Android smoke explicitly sets `ANDROID_AVD_HOME` to the runner's `$HOME/.and
 The Android smoke runner also has a standard-library Python fake-SDK harness in `scripts/tests/test_android_emulator_smoke.py`. It exercises a custom `ANDROID_AVD_HOME`, AVD file creation, install/launch/process assertions and report/screenshot output without network access or a real emulator. CI runs it alongside the existing native artifact identity verifier tests. The real emulator jobs remain the evidence for actual simulator install/launch.
 
 The fake-device harness verifies log scoping as well: it passes when the React Native marker belongs to another PID and fails when the same marker is emitted by the target app PID. The Android smoke's PID filter must therefore explicitly return a nonzero awk status when no target-process marker is found.
+
+## Fresh-install login UI smoke
+
+After the process-stability check, Android captures the UI hierarchy and asserts that the login title, email/password hints and sign-in action are present. iOS runs a local Apple Vision OCR check against the simulator screenshot for the same login-surface text. These assertions verify that the app renders its unauthenticated entry screen rather than merely keeping a process alive. They do not enter credentials or call production API/authentication providers; existing API/authentication functional tests and physical-device/pilot gates remain separate.

@@ -101,6 +101,7 @@ if [[ ! -s "$OUTPUT_DIR/launch.png" ]]; then
   echo "iOS Simulator screenshot was not produced." >&2
   exit 1
 fi
+swift "$(dirname "$0")/ios-simulator-screen-text-check.swift" "$OUTPUT_DIR/launch.png" | tee "$OUTPUT_DIR/ui-text.txt"
 
 python3 - "$EXPECTED_ID" "$DEVICE_UDID" "$pid" "$OUTPUT_DIR/result.json" <<'PY'
 import json
@@ -116,6 +117,7 @@ with open(output, "w", encoding="utf-8") as stream:
         "install": "passed",
         "launch": "passed",
         "processStableAfterStartup": True,
+        "loginScreenTextVerified": True,
         "screenshot": "launch.png",
         "productionApiOrAuthentication": "not exercised",
         "signing": "unsigned simulator build"

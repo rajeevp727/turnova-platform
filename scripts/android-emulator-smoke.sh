@@ -175,6 +175,21 @@ if ! grep -Fq "$EXPECTED_ID/" "$OUTPUT_DIR/activities.txt"; then
   exit 1
 fi
 
+"$ADB_BIN" shell uiautomator dump /sdcard/turnova-ui-hierarchy.xml > "$OUTPUT_DIR/uiautomator-dump.txt" 2>&1
+"$ADB_BIN" shell cat /sdcard/turnova-ui-hierarchy.xml | tr -d '\r' > "$OUTPUT_DIR/ui-hierarchy.xml"
+if [[ ! -s "$OUTPUT_DIR/ui-hierarchy.xml" ]]; then
+  echo "Android UI hierarchy dump is missing or empty." >&2
+  cat "$OUTPUT_DIR/uiautomator-dump.txt" >&2 || true
+  exit 1
+fi
+for expected_text in "Welcome back" "Email address" "Password" "Sign in"; do
+  if ! grep -Fq "$expected_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+    echo "Android login screen is missing expected visible/accessibility text: $expected_text" >&2
+    cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+    exit 1
+  fi
+done
+
 "$ADB_BIN" logcat -d -v threadtime > "$OUTPUT_DIR/logcat.txt"
 if awk -v package="$EXPECTED_ID" '
   /FATAL EXCEPTION/ { in_fatal = 1; scanned = 0; next }
@@ -221,6 +236,7 @@ with open(output, "w", encoding="utf-8") as stream:
         "install": "passed",
         "launch": "passed",
         "processStableAfterStartup": True,
+        "loginScreenTextVerified": True,
         "screenshot": "launch.png",
         "productionApiOrAuthentication": "not exercised"
     }, stream, indent=2)

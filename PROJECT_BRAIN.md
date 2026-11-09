@@ -1012,3 +1012,9 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 
 - The first fake-SDK execution exposed that awk exits zero by default even when no React Native marker matches. The Android script now records a match and explicitly exits nonzero on no match, so the enclosing `if` fails only for a target-process startup marker.
 - The fake ADB emits an unhandled marker under unrelated PID 1111 for the passing case and under target PID 4242 for a negative case. The harness asserts that unrelated logs are ignored and target-app failures are rejected.
+
+## RELEASE-01 login UI assertion increment (2026-11-09)
+
+- Android emulator smoke now dumps the fresh-install UI hierarchy after launch and asserts the login title, email/password hints and sign-in action. The screenshot and hierarchy are retained as CI artifacts.
+- iOS Simulator smoke runs a local Swift/Vision OCR checker against the captured screenshot and asserts the same login-surface text. It does not enter credentials or call API/authentication services.
+- These UI checks complement process-stability, package/bundle identity and existing functional/security test evidence. They do not establish physical-device, pilot or store readiness.

@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current engineering item: #19 RELEASE-01 — native install/launch smoke for Rider and Driver** on branch `test/release-01-native-launch-smoke` (PR #140). Initial exact-head CI [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) passed the original eight backend/mobile/native-build/auth jobs; both Android smoke jobs failed before ADB registration because `emulator.log` reported `Unknown AVD name [turnova-release-smoke]`. The script now pins `ANDROID_AVD_HOME`, verifies AVD files, captures diagnostics, checks emulator process liveness and scopes crash checks to the app process. A deterministic Python fake-SDK harness now exercises AVD creation, install/launch and report generation without network or a real emulator. Corrected 12-job exact-head CI is pending.
+**Current engineering item: #19 RELEASE-01 — native install/launch and fresh-install login UI smoke for Rider and Driver** on branch `test/release-01-native-launch-smoke` (PR #140). Initial exact-head CI [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) exposed the missing explicit AVD home; the next fake-SDK run [#42610080183](https://github.com/rajeevp727/turnova-platform/actions/runs/42610080183) exposed an awk no-match success defect. Both are corrected: `ANDROID_AVD_HOME` is pinned/verified, emulator early-exit diagnostics are captured, and PID-scoped crash detection now returns correctly. The fake-SDK harness covers AVD creation, install/launch, unrelated-PID isolation and target-PID rejection. The current increment additionally asserts the Rider/Driver login surface in Android UI hierarchy and iOS screenshot OCR. Final exact-head 12-job CI is pending.
 
 **Engineering evidence remains separate from acceptance and production readiness.** Android emulator and iOS Simulator install/launch smoke do not prove physical-device behaviour, GPS accuracy, push/SignalR provider integration, production API reachability, signing, Apple registration, EAS linkage, pilot acceptance or store readiness. The release row remains Blocked until its full external evidence is supplied.
 
@@ -719,3 +719,7 @@ The Android emulator script now has standard-library tests with a fake SDK/AVD m
 ### RELEASE-01 PID-scoped crash-marker regression
 
 The first fake-SDK run exposed a second smoke-script defect: awk returned success for an empty/no-match logcat because the PID-scoped expression had no explicit END status. The script now sets a match flag and exits nonzero when no target-process marker is found. The fake ADB fixture emits an unrelated-process React Native marker in the passing path and a target-PID marker in a negative path; both outcomes are asserted. Fresh exact-head CI is required.
+
+## RELEASE-01 login UI smoke increment
+
+The Android smoke now requires the fresh-install login title, email/password hints and sign-in action in the UI hierarchy after launch. The iOS Simulator smoke uses the local Apple Vision framework to recognize the same text in its captured screenshot. Neither test enters credentials or calls an API/authentication provider. These checks distinguish a rendered login surface from a merely surviving process; they remain simulator-only evidence.
