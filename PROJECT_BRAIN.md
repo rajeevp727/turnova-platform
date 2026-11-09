@@ -3,10 +3,10 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-09  
+**Last verified:** 2026-11-09 10:57 IST  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `e9a86abfcff9d947f0fb26864d74fb20a57875fe` after DRIVER-03 PR #124 merged. Exact-head CI #902 / 42546820729 passed 8/8 on `87b7c96e175709b639c58f33c57b4b1185ad8209`: 341/341 backend tests, 102/102 shared mobile auth tests, Rider/Driver typechecks/JS exports, both Android debug APKs, both unsigned iOS Simulator apps, native Linux x64 API publish and deterministic publish-verifier fixtures. Current sequential engineering is #16 RIDER-04 on branch `fix/rider-04-cab-filter-reconciliation-query`; #15 DRIVER-04 is blocked by unapproved support workflow inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no physical-device, live Cosmos, signed-production or production-hosting validation is claimed.
+**Last audited main HEAD:** `5f6f9cf3d25ac0fb04739b197c65fa0260d05639` after PLATFORM-01 PR #134 merged; exact-head CI [42562772947](https://github.com/rajeevp727/turnova-platform/actions/runs/42562772947) passed 8/8. Current sequential item #19 RELEASE-01 is on sole active PR [#135](https://github.com/rajeevp727/turnova-platform/pull/135), branch `fix/release-01-native-artifact-identity-verification`, code-bearing head `1827b98fb64773f8ebdc75edbdda2f86ca90d4fb`; that head passed CI [42565547874](https://github.com/rajeevp727/turnova-platform/actions/runs/42565547874), 8/8. Latest documentation-sync head is available on PR #135; its exact-head checks are linked from the PR Checks tab. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no physical-device, live Cosmos, signed-production or production-hosting validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -914,3 +914,16 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - External #18 gates: live Cosmos 409 visibility/read-after-write consistency, partition isolation, multi-instance/restart/retention, telemetry export/alerts, production CORS origins, load testing and device acceptance.
 - #19 RELEASE-01 remains next after #18: re-audit Android/iOS native artifact/signing readiness and physical-device/pilot evidence. Signed store artifacts, production API/EAS linkage, signing credentials, physical-device acceptance and store submission remain external.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is not a measure of implementation completion. Production readiness is not established.
+
+## Latest TurnOva handoff — #19 RELEASE-01 native artifact identity (2026-11-09)
+
+- PLATFORM-01 PR #134 merged at 5f6f9cf3d25ac0fb04739b197c65fa0260d05639; exact head 37fe05de79ca8e5f97a49bfcf8ed48d7332164f0 passed CI run 42562772947, 8/8 jobs. No self-approval; main was unprotected and no rulesets were present. Live Cosmos 409/read-after-write validation remains external.
+- Main was re-read at 5f6f9cf3d25ac0fb04739b197c65fa0260d05639; no open PRs remained. Active branch is fix/release-01-native-artifact-identity-verification.
+- RELEASE-01 increment adds actual Android APK manifest package-ID verification using aapt, actual iOS Simulator Info.plist bundle-ID verification using plistlib, and 12 deterministic Python tests. The Android ID is checked against expo.android.package. The iOS ID is the CI-only value passed to xcodebuild and is not treated as Product approval or Apple registration.
+- CI runs the Python verifier tests and both native artifact checks. Code-bearing head `1827b98fb64773f8ebdc75edbdda2f86ca90d4fb` passed run [#42565547874](https://github.com/rajeevp727/turnova-platform/actions/runs/42565547874), 8/8, including 12 deterministic tests, both Android release-variant APK identity checks and both iOS Simulator Info.plist identity checks. Subsequent documentation-only sync is tracked on the current PR #135 head; its exact-head result is available in the PR Checks tab. Release docs and test plan keep signed AAB/IPA, EAS, API URL, signing, physical-device, pilot and store gates external.
+- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); implementation evidence and production readiness are reported separately.
+- Next: recheck the latest PR #135 head, its final-head CI and COMMENT-only review; merge only if all required checks are green and GitHub policy permits without self-approval. Then re-read main and continue sequential re-audit. No containers or production deployments.
+
+- RELEASE-01 implementation is tracked in [PR #135](https://github.com/rajeevp727/turnova-platform/pull/135), branch fix/release-01-native-artifact-identity-verification; initial code-bearing head was 9d855b870d4212e1240d6ab8073d87021ccb31e1. Later documentation-only commits do not change the native verifier implementation; use the live PR head for final CI.
+
+- #16 RIDER-04 Cab-only reconciliation query filter merged in PR #125 at 552dadea76215fa4a1f67c545e04a79070b6d44f. Its initial push run #42552962718 failed before job creation (zero jobs); later main CI [42561935666](https://github.com/rajeevp727/turnova-platform/actions/runs/42561935666) passed 8/8 on 8368b0ef518bda956442e99f5e9cc343a332bba8 and includes the merged query change. Live Cosmos SQL/index/partition validation remains external.

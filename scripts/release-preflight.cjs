@@ -228,7 +228,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
     productionReadiness: externalGates.length === 0 && engineeringPassed ? "not_verified" : "blocked",
     externalGates,
     currentCiArtifactEvidence: {
-      android: "debug-apk-only",
+      android: "debug-apk-and-standalone-release-apk-variant",
       ios: "unsigned-ios-simulator-app-only",
       signedAndroidAabProduced: false,
       signedIosIpaProduced: false
