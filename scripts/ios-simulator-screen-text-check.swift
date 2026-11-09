@@ -49,11 +49,6 @@ let secureStoreUnavailableVisible =
         normalizedRecognizedText.localizedCaseInsensitiveContains($0)
     } &&
     normalizedRecognizedText.localizedCaseInsensitiveContains(secureStoreUnavailableDetail)
-if expectsSecureStoreUnavailable && !secureStoreUnavailableVisible {
-    fputs("Expected unsigned-simulator SecureStore failure banner was not visible.\n", stderr)
-    exit(1)
-}
-
 var forbiddenText = [
     "Session expired",
     "Unable to clear secure session storage",
@@ -66,15 +61,25 @@ let unexpectedText = forbiddenText.filter {
     normalizedRecognizedText.localizedCaseInsensitiveContains($0)
 }
 
-print(recognizedText)
-if !missingText.isEmpty {
-    fputs("iOS login screen is missing expected text: \(missingText.joined(separator: ", "))\n", stderr)
-    exit(1)
-}
+// Distinguish a screen that is still loading from a real forbidden session state.
+// The shell harness may retry only exit code 3; forbidden states fail immediately.
 if !unexpectedText.isEmpty {
+    print(recognizedText)
     fputs("iOS fresh-install login screen contains an unexpected session/storage error: \(unexpectedText.joined(separator: ", "))\n", stderr)
-    exit(1)
+    exit(4)
 }
+if !missingText.isEmpty {
+    print(recognizedText)
+    fputs("iOS login screen is missing expected text: \(missingText.joined(separator: ", "))\n", stderr)
+    exit(3)
+}
+if expectsSecureStoreUnavailable && !secureStoreUnavailableVisible {
+    print(recognizedText)
+    fputs("Expected unsigned-simulator SecureStore failure banner was not visible.\n", stderr)
+    exit(3)
+}
+
+print(recognizedText)
 if expectsSecureStoreUnavailable {
     print("Unsigned simulator SecureStore-unavailable banner verified; Keychain success is not claimed.")
 }
