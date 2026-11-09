@@ -188,7 +188,7 @@ if awk -v package="$EXPECTED_ID" '
   echo "Android runtime recorded a fatal exception for $EXPECTED_ID." >&2
   exit 1
 fi
-if awk -v pid="$pid_before" '$3 == pid && /Unhandled JS Exception|Invariant Violation:|Unable to load script/' "$OUTPUT_DIR/logcat.txt"; then
+if awk -v pid="$pid_before" '$3 == pid && /Unhandled JS Exception|Invariant Violation:|Unable to load script/ { found = 1 } END { exit found ? 0 : 1 }' "$OUTPUT_DIR/logcat.txt"; then
   echo "React Native reported an unhandled startup exception in $EXPECTED_ID (PID $pid_before)." >&2
   exit 1
 fi

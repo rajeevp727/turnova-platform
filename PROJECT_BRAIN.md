@@ -1007,3 +1007,8 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - The Android script now exports `ANDROID_AVD_HOME` before both `avdmanager` and `emulator`, checks the named `.ini` and `.avd` files, records AVD-manager output, detects early process exit and scopes startup crash checks to the target package/process.
 - A new standard-library fake-SDK test exercises a non-default AVD home, AVD creation, fake install/activity launch/process stability, result JSON/screenshot and malformed package rejection without a real emulator or network. CI now discovers all `scripts/tests/test_*.py` tests.
 - The corrected exact-head 12-job CI run must pass before merge. This deterministic harness does not replace actual emulator smoke or physical-device acceptance.
+
+### RELEASE-01 fake-device test correction
+
+- The first fake-SDK execution exposed that awk exits zero by default even when no React Native marker matches. The Android script now records a match and explicitly exits nonzero on no match, so the enclosing `if` fails only for a target-process startup marker.
+- The fake ADB emits an unhandled marker under unrelated PID 1111 for the passing case and under target PID 4242 for a negative case. The harness asserts that unrelated logs are ignored and target-app failures are rejected.

@@ -715,3 +715,7 @@ The current implementation had a PRD conflict: an omitted passenger count silent
 ## RELEASE-01 deterministic emulator harness increment
 
 The Android emulator script now has standard-library tests with a fake SDK/AVD manager/emulator/ADB. The harness sets a non-default `ANDROID_AVD_HOME`, verifies the named AVD files are created in that exact directory, exercises install/activity launch/process-stability/report output, and rejects malformed package identifiers before SDK access. It does not replace the actual emulator smoke. CI runs all `scripts/tests/test_*.py` cases; exact-head results are pending.
+
+### RELEASE-01 PID-scoped crash-marker regression
+
+The first fake-SDK run exposed a second smoke-script defect: awk returned success for an empty/no-match logcat because the PID-scoped expression had no explicit END status. The script now sets a match flag and exits nonzero when no target-process marker is found. The fake ADB fixture emits an unrelated-process React Native marker in the passing path and a target-PID marker in a negative path; both outcomes are asserted. Fresh exact-head CI is required.

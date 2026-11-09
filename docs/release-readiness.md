@@ -82,3 +82,5 @@ The Android smoke explicitly sets `ANDROID_AVD_HOME` to the runner's `$HOME/.and
 
 
 The Android smoke runner also has a standard-library Python fake-SDK harness in `scripts/tests/test_android_emulator_smoke.py`. It exercises a custom `ANDROID_AVD_HOME`, AVD file creation, install/launch/process assertions and report/screenshot output without network access or a real emulator. CI runs it alongside the existing native artifact identity verifier tests. The real emulator jobs remain the evidence for actual simulator install/launch.
+
+The fake-device harness verifies log scoping as well: it passes when the React Native marker belongs to another PID and fails when the same marker is emitted by the target app PID. The Android smoke's PID filter must therefore explicitly return a nonzero awk status when no target-process marker is found.

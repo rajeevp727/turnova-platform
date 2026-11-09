@@ -104,7 +104,11 @@ case "$1" in
     esac
     ;;
   logcat)
-    exit 0
+    if [[ "$FAKE_TARGET_EXCEPTION" == "1" ]]; then
+      printf '2026-11-09 11:00:00.000 4242 4242 E ReactNativeJS: Unhandled JS Exception: target fixture\\n'
+    else
+      printf '2026-11-09 11:00:00.000 1111 1111 E ReactNativeJS: Unhandled JS Exception: unrelated fixture\\n'
+    fi
     ;;
   exec-out)
     printf '\211PNG\r\n\032\n'
@@ -132,20 +136,22 @@ exit 0
                     "ANDROID_HOME": str(sdk),
                     "ANDROID_AVD_HOME": str(avd_home),
                     "RUNNER_TEMP": str(root / "runner-temp"),
+                    "FAKE_TARGET_EXCEPTION": "0",
                 }
             )
 
+            command = [
+                "bash",
+                str(SMOKE_SCRIPT),
+                "--apk",
+                str(apk),
+                "--expected-id",
+                "com.turnova.rider",
+                "--output-dir",
+                str(output),
+            ]
             result = subprocess.run(
-                [
-                    "bash",
-                    str(SMOKE_SCRIPT),
-                    "--apk",
-                    str(apk),
-                    "--expected-id",
-                    "com.turnova.rider",
-                    "--output-dir",
-                    str(output),
-                ],
+                command,
                 cwd=REPO_ROOT,
                 env=environment,
                 capture_output=True,
@@ -157,7 +163,7 @@ exit 0
             self.assertEqual(
                 result.returncode,
                 0,
-                msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+                msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}",
             )
             self.assertTrue((avd_home / "turnova-release-smoke.ini").is_file())
             self.assertTrue((avd_home / "turnova-release-smoke.avd").is_dir())
@@ -169,6 +175,19 @@ exit 0
             self.assertEqual(report["launch"], "passed")
             self.assertTrue(report["processStableAfterStartup"])
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
+
+            environment["FAKE_TARGET_EXCEPTION"] = "1"
+            target_exception = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(target_exception.returncode, 1)
+            self.assertIn("React Native reported an unhandled startup exception", target_exception.stderr)
 
     def test_invalid_package_identifier_is_rejected_before_sdk_access(self) -> None:
         with tempfile.TemporaryDirectory(prefix="turnova-invalid-package-") as temporary:
