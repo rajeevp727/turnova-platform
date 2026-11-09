@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import tempfile
+import shutil
 import unittest
 from pathlib import Path
 
@@ -47,14 +48,14 @@ case "$*" in
       attempts=0
       [[ ! -f "$attempts_file" ]] || read -r attempts < "$attempts_file"
       attempts=$((attempts + 1))
-      printf '%s\\n' "$attempts" > "$attempts_file"
+      printf '%s\n' "$attempts" > "$attempts_file"
       if (( attempts <= ${FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS:-0} )); then
         echo "Warning: Google APIs system image download failed: ZipFile unknown archive" >&2
         exit 1
       fi
       package_dir="$ANDROID_SDK_ROOT/system-images/android-35/google_apis/x86_64"
       mkdir -p "$package_dir"
-      printf '<localPackage path="system-images;android-35;google_apis;x86_64"/>\\n' > "$package_dir/package.xml"
+      printf '<localPackage path="system-images;android-35;google_apis;x86_64"/>\n' > "$package_dir/package.xml"
       printf 'deterministic-system-image-fixture' > "$package_dir/system.img"
     fi
     exit 0
