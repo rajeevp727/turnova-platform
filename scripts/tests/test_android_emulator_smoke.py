@@ -135,7 +135,9 @@ case "$1" in
         fi
         dump_count=$((dump_count + 1))
         printf '%s\n' "$dump_count" > "$FAKE_UI_DUMP_COUNT_FILE"
-        if [[ "${FAKE_PIXEL_LAUNCHER_ANR_ALWAYS:-0}" == "1" || ( "${FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP:-0}" == "1" && "$dump_count" == "1" ) ]]; then
+        if [[ "${FAKE_OTHER_ANR_ALWAYS:-0}" == "1" ]]; then
+          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"TurnOva Rider isn't responding\"/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" clickable=\"true\" enabled=\"true\"/></hierarchy>"
+        elif [[ "${FAKE_PIXEL_LAUNCHER_ANR_ALWAYS:-0}" == "1" || ( "${FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP:-0}" == "1" && "$dump_count" == "1" ) ]]; then
           if [[ "${FAKE_PIXEL_LAUNCHER_WAIT_DISABLED:-0}" == "1" ]]; then
             wait_state='clickable="false" enabled="false"'
           else
@@ -194,6 +196,7 @@ exit 0
                     "FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP": "0",
                     "FAKE_PIXEL_LAUNCHER_ANR_ALWAYS": "0",
                     "FAKE_PIXEL_LAUNCHER_WAIT_DISABLED": "0",
+                    "FAKE_OTHER_ANR_ALWAYS": "0",
                     "FAKE_UI_DUMP_COUNT_FILE": str(output / "ui-dump-count"),
                     "FAKE_INPUT_LOG": str(output / "input-taps.txt"),
                     "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",
@@ -325,6 +328,29 @@ exit 0
             self.assertFalse((disabled_wait_output / "input-taps.txt").exists())
             self.assertFalse((disabled_wait_output / "result.json").exists())
 
+            # A different app/system ANR must never be dismissed as a launcher issue.
+            other_anr_output = root / "other-anr-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(other_anr_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(other_anr_output / "input-taps.txt")
+            environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
+            environment["FAKE_OTHER_ANR_ALWAYS"] = "1"
+            other_anr_command = command[:-1] + [str(other_anr_output)]
+            other_anr = subprocess.run(
+                other_anr_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(other_anr.returncode, 1)
+            self.assertIn("Unexpected Android app/system ANR dialog remains", other_anr.stderr)
+            self.assertFalse((other_anr_output / "input-taps.txt").exists())
+            self.assertFalse((other_anr_output / "result.json").exists())
+
+            environment["FAKE_OTHER_ANR_ALWAYS"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
