@@ -3,11 +3,6 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-09
-**Repository:** https://github.com/rajeevp727/turnova-platform  
-**Default branch:** main  
-**Last audited main HEAD:** `4521c7e9a1448f85208ca744cd4824fd2a02596f` after RELEASE-01 PR #140 merged. PR #141 is the sole active sequential PR on `test/release-01-clean-simulator-state`, last code head `657e663feeb370efee61111fcb344294f1036f3b` (documentation-only sync may advance the PR head). Prior CI [#1056 / 42656790721](https://github.com/rajeevp727/turnova-platform/actions/runs/42656790721) on `ecc1882...` passed 10/12 jobs: backend 364/364, native API publish, Rider/Driver validation/bundles, shared 102/102 and fake-SDK 24/24 tests, both Android and both iOS native builds, and both Android emulator install/launch smokes. The Android artifacts were inspected: both apps installed/launched, retained stable processes and showed their correct login screens; no production API/authentication was called. Both iOS Simulator smoke jobs were cancelled after branch advancement; no iOS launch/OCR result is claimed. Rider and Driver have different expected unsigned-Simulator SecureStore banner wording; PR #141 accepts both complete variants and keeps expired-session/token-cleanup errors forbidden. Android retry cleanup removes any partial corrupt package directory; iOS process-exit failures now capture system, launchctl, process, installed-app and signature diagnostics. Exact-head CI after the code/doc sync is required. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations support-policy inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
-
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
