@@ -6,6 +6,8 @@ namespace TurnOva.Infrastructure.Dispatch;
 
 public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
 {
+    private readonly DispatchExceptionAuditWriter _dispatchExceptionAuditWriter =
+        new(new CosmosQueueAuditEventStore(queueContainer));
     public async Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
@@ -123,50 +125,15 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         { return false; }
     }
 
-    public async Task RecordDispatchExceptionAsync(
+    public Task RecordDispatchExceptionAsync(
         string actorId,
         string zoneId,
         string serviceClass,
         string traceId,
         string reasonCategory,
-        CancellationToken cancellationToken)
-    {
-        var key = QueueKey(zoneId, serviceClass);
-        var audit = new QueueAuditEvent(
-            $"dispatch-exception-{traceId}",
-            key,
-            actorId,
-            QueueAuditEventTypes.DispatchException,
-            DateTimeOffset.UtcNow,
-            TraceId: traceId,
-            ReasonCategory: reasonCategory);
-
-        // This is a separate append-only exception record, not a failed queue mutation event.
-        // Its deterministic ID makes a repeated write for the same server trace idempotent.
-        // It uses the existing zone/service partition and never stores the raw exception.
-        try
-        {
-            await queueContainer.CreateItemAsync(
-                audit,
-                new PartitionKey(key),
-                cancellationToken: cancellationToken);
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-        {
-            var existing = await queueContainer.ReadItemAsync<QueueAuditEvent>(
-                audit.EventId,
-                new PartitionKey(key),
-                cancellationToken: cancellationToken);
-            if (existing.Resource.EventType == QueueAuditEventTypes.DispatchException &&
-                existing.Resource.DocumentType == "queue-audit" &&
-                existing.Resource.ZoneServiceKey == key &&
-                existing.Resource.DriverId == actorId &&
-                existing.Resource.TraceId == traceId &&
-                existing.Resource.ReasonCategory == reasonCategory)
-                return;
-            throw;
-        }
-    }
+        CancellationToken cancellationToken) =>
+        _dispatchExceptionAuditWriter.RecordAsync(
+            actorId, zoneId, serviceClass, traceId, reasonCategory, cancellationToken);
 
     public async Task<IReadOnlyList<QueueAuditEvent>> GetAuditEventsAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
