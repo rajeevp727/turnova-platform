@@ -1,11 +1,11 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-09 (PR #135 exact-head CI run #42565547874 passed 8/8)  
+**Last updated:** 2026-11-09 (implementation CI #42565547874 passed 8/8; final documentation-head CI pending)  
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded.
 
 ## 1. Current step
 
-**Current engineering item: #19 RELEASE-01 — compiled native artifact identity verification** on active PR [#135](https://github.com/rajeevp727/turnova-platform/pull/135), branch `fix/release-01-native-artifact-identity-verification`, final head `1827b98fb64773f8ebdc75edbdda2f86ca90d4fb`. Main base is `5f6f9cf3d25ac0fb04739b197c65fa0260d05639` after PLATFORM-01 PR #134 merged. Exact-head CI [run #42565547874](https://github.com/rajeevp727/turnova-platform/actions/runs/42565547874) passed **8/8 jobs**: backend build/tests/native publish, Rider/Driver mobile validation, 12 deterministic Python verifier tests, both Android standalone release-variant APK package-ID checks, and both unsigned iOS Simulator Info.plist identity checks. Android identity is compared with each checked-in `expo.android.package`; iOS identity is compared with the CI-only identifier passed to `xcodebuild`, not an approved production identifier. COMMENT-only review found no critical/high-risk issue; no self-approval was given. PR #135 remains open until final-head state and repository merge policy are rechecked.
+**Current engineering item: #19 RELEASE-01 — compiled native artifact identity verification** on active PR [#135](https://github.com/rajeevp727/turnova-platform/pull/135), branch `fix/release-01-native-artifact-identity-verification`, code-bearing head `1827b98fb64773f8ebdc75edbdda2f86ca90d4fb`; documentation-only final head `61d2aaefb3c2ba31bb6814272c40888c74257724`. Main base is `5f6f9cf3d25ac0fb04739b197c65fa0260d05639` after PLATFORM-01 PR #134 merged. Exact-head CI [run #42565547874](https://github.com/rajeevp727/turnova-platform/actions/runs/42565547874) passed **8/8 jobs**: backend build/tests/native publish, Rider/Driver mobile validation, 12 deterministic Python verifier tests, both Android standalone release-variant APK package-ID checks, and both unsigned iOS Simulator Info.plist identity checks. Android identity is compared with each checked-in `expo.android.package`; iOS identity is compared with the CI-only identifier passed to `xcodebuild`, not an approved production identifier. COMMENT-only review found no critical/high-risk issue; no self-approval was given. Three documentation-only commits refreshed the acceptance matrix, progress handoff and Project Brain; final-head CI [run #42567735910](https://github.com/rajeevp727/turnova-platform/actions/runs/42567735910) is pending. PR #135 remains open until that exact-head run and repository merge policy are rechecked.
 
 The implementation evidence is separate from release acceptance. It does not prove signing, Apple registration, EAS project linkage, production API configuration, physical-device behaviour, pilot acceptance or store readiness. Signed AAB/IPA, signing credentials, approved production bundle identifiers, EAS linkage, production HTTPS API configuration, build-number policy, physical-device/security/pilot acceptance and store submission remain external gates.
 
@@ -15,9 +15,6 @@ The implementation evidence is separate from release acceptance. It does not pro
 
 The prior supplemental AI-01 correction is merged in main at 4e65b147a01230b4a303d72c1270d448071c8bd6 through PR [#123](https://github.com/rajeevp727/turnova-platform/pull/123). Its exact-head CI [run #819 / 42523956938](https://github.com/rajeevp727/turnova-platform/actions/runs/42523956938) passed 8/8 jobs, including 330/330 backend tests and 99/99 mobile authentication tests. Main post-merge CI [run #820 / 42528216521](https://github.com/rajeevp727/turnova-platform/actions/runs/42528216521) passed; it is not live Cosmos, physical-device or production validation.
 
-**Acceptance accounting:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. The strict count requires all acceptance evidence, including external gates, and is not an implementation-completion percentage. Production readiness is not established.
-
-**Blocked product/operations inputs:** #6 DISPATCH-01 requires a positive Product-approved nearby radius and non-overlapping production zones. #15 DRIVER-04 and #17 SUPPORT-01 require Product/Operations-approved support categories, required intake fields, priority/severity, escalation owner/contact channel, operating hours/response targets, attachment handling, privacy/retention and operational handoff. No policy or SLA is invented. Previously merged rows #16 RIDER-04, #18 PLATFORM-01 and #19 RELEASE-01 retain their live infrastructure/device/store gates as documented in the matrix.
 
 ### #18 PLATFORM-01 — merged engineering evidence
 
@@ -29,7 +26,7 @@ Deterministic tests cover legacy queue-read failure, pre-commit selected-reserva
 
 PLATFORM-01 remains In Progress until live Cosmos create/query/partition, multi-instance/ETag/restart/retention, telemetry export/alerts, production CORS origins, load testing and physical-device acceptance are evidenced.
 
-### #19 RELEASE-01 — merged engineering evidence; external release acceptance remains blocked
+### #19 RELEASE-01 — baseline merged preflight evidence (PR #122); current artifact-identity increment tracked above
 
 PR [#122](https://github.com/rajeevp727/turnova-platform/pull/122) merged at `c080e7770977feef07de46e9b67de6e70ecc627e`. Its dependency-free Node release preflight validates both Expo apps after icon generation: app identity/version, established Android package IDs, iOS device-family setting, generated icon paths, EAS CLI minimum and development/preview/production profile shape. It emits a schema-v2 per-app `release-readiness.json` artifact. Structural configuration errors fail CI; external release gates are reported without pretending they passed.
 
@@ -635,6 +632,6 @@ The current implementation had a PRD conflict: an omitted passenger count silent
 - External RELEASE-01 gates remain: Product-approved and Apple-registered production bundle IDs; verified EAS project linkage; approved local/remote build-number strategy; production HTTPS API URL and EAS remote configuration; Android/Apple signing credentials; signed production AAB/IPA; physical-device functional/security/pilot acceptance; store metadata, privacy disclosures and submission approval.
 - #15 DRIVER-04 and #17 SUPPORT-01 remain blocked by Product/Operations approval of support categories, required intake fields, severity, escalation owner/channel, service hours/targets, attachment rules, privacy/retention and operational handoff. They are not used to stop independent engineering work.
 - Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). This is the count whose complete acceptance evidence including external gates has passed, not an implementation-completion percentage. Production readiness is not established.
-- Next exact action: re-read PR #135's live head, all eight checks and review state; merge only if the head remains `1827b98fb64773f8ebdc75edbdda2f86ca90d4fb`, all required checks remain green and GitHub permits the merge without self-approval. Then re-read main and begin a sequential re-audit for the next safe engineering gap.
+- Next exact action: re-read PR #135's live head, all eight checks and COMMENT-only review; merge only if final head `61d2aaefb3c2ba31bb6814272c40888c74257724` has all required checks green and GitHub permits the merge without self-approval. Then re-read main and begin a sequential re-audit for the next safe engineering gap.
 
 - RELEASE-01 implementation PR [#135](https://github.com/rajeevp727/turnova-platform/pull/135) is open from branch fix/release-01-native-artifact-identity-verification; initial code-bearing head was 9d855b870d4212e1240d6ab8073d87021ccb31e1. Later documentation-only commits keep the same implementation; always use the live PR head for exact-head CI and merge checks.
