@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
-import shutil
 import unittest
 from pathlib import Path
 
@@ -57,6 +57,7 @@ case "$*" in
       mkdir -p "$package_dir"
       printf '<localPackage path="system-images;android-35;google_apis;x86_64"/>\n' > "$package_dir/package.xml"
       printf 'deterministic-system-image-fixture' > "$package_dir/system.img"
+      echo "Installed system image package fixture."
     fi
     exit 0
     ;;
