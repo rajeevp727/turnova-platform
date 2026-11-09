@@ -96,7 +96,13 @@ case "$1" in
       getprop) echo "1" ;;
       settings|input) exit 0 ;;
       uiautomator) echo "UI hierarchy dumped to: /sdcard/turnova-ui-hierarchy.xml" ;;
-      cat) printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/></hierarchy>\n' ;;
+      cat)
+        if [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
+          printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
+        else
+          printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/></hierarchy>\n'
+        fi
+        ;;
       pm) echo "package:/data/app/turnova/base.apk" ;;
       cmd) echo "com.turnova.rider/.MainActivity" ;;
       am) printf 'Status: ok\nActivity: com.turnova.rider/.MainActivity\n' ;;
@@ -139,6 +145,7 @@ exit 0
                     "ANDROID_AVD_HOME": str(avd_home),
                     "RUNNER_TEMP": str(root / "runner-temp"),
                     "FAKE_TARGET_EXCEPTION": "0",
+                    "FAKE_RESTORE_ERROR": "0",
                 }
             )
 
@@ -181,7 +188,22 @@ exit 0
             for expected_text in ("Welcome back", "Email address", "Password", "Sign in"):
                 self.assertIn(expected_text, ui_hierarchy)
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
+            self.assertTrue(report["staleSessionErrorAbsent"])
 
+            environment["FAKE_RESTORE_ERROR"] = "1"
+            stale_session_error = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(stale_session_error.returncode, 1)
+            self.assertIn("unexpected session/storage error", stale_session_error.stderr)
+
+            environment["FAKE_RESTORE_ERROR"] = "0"
             environment["FAKE_TARGET_EXCEPTION"] = "1"
             target_exception = subprocess.run(
                 command,
