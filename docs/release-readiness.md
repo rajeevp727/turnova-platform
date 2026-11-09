@@ -91,3 +91,12 @@ After the process-stability check, Android captures the UI hierarchy and asserts
 
 
 The fresh-install UI smoke now checks the Android UI hierarchy for `Welcome back`, `Email address`, `Password` and `Sign in`; iOS uses the built-in Vision OCR framework against the simulator screenshot for the same strings. A failed fake-SDK test revealed that the mock ADB needed to implement `uiautomator dump` and `cat`; the fixture now returns deterministic hierarchy nodes and asserts them. Real emulator/Simulator jobs remain authoritative for actual platform UI output.
+
+
+## Fresh simulator state and session-restore banner guard
+
+The iOS install/launch smoke now erases the selected iPhone Simulator before installing the same-run app artifact. This is required because iOS Keychain entries may outlive app uninstall/reinstall; simply installing an app bundle is not sufficient to guarantee a fresh authentication state. The Vision OCR check rejects stale session-restore, session-expired and secure-storage error banners. Android continues to boot with `-wipe-data` and now applies the equivalent forbidden-banner check to its UI hierarchy. Neither platform enters credentials or calls production API/authentication providers.
+
+PR #140 exact-head CI [#42613834167](https://github.com/rajeevp727/turnova-platform/actions/runs/42613834167) passed 12/12 and successfully installed/launched all four artifacts. Post-run screenshot inspection found both iOS login screens displayed `Unable to restore your session. Check your connection or secure storage and retry.` despite the required login text. The prior simulator script did not erase the device before install. PR #141 addresses this test-isolation gap; its exact-head run must pass before the clean-state assertion is counted. If the banner remains after erase, investigate SecureStore restoration rather than suppressing the message.
+
+Simulator evidence remains limited to install, launch, process stability and the fresh-install login surface. It does not prove production authentication, physical-device compatibility, GPS, SignalR, notifications, signing, EAS linkage, pilot acceptance or store readiness. RELEASE-01 remains Blocked on the external gates above.
