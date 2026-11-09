@@ -294,14 +294,20 @@ jobs:
       - name: Compile standalone Android release APK
         working-directory: src/mobile/${{ matrix.app }}/android
         run: '"$HOME/.gradle/turnova-distributions/gradle-8.14.3/bin/gradle" --no-daemon --stacktrace assembleRelease'
-      - name: Verify standalone APK contains embedded JavaScript bundle
+      - name: Verify standalone APK bundle and embedded package identity
         shell: bash
         run: |
           set -euo pipefail
           apk="android/app/build/outputs/apk/release/app-release.apk"
           test -s "$apk"
           unzip -l "$apk" | grep -F 'assets/index.android.bundle' >/dev/null
-          echo "Standalone release APK verified with embedded JavaScript."
+          expected_package="$(node -e 'process.stdout.write(require("./app.json").expo.android.package)')"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$sdk_root"
+          aapt="$(find "$sdk_root/build-tools" -type f -name aapt -print | sort -V | tail -n 1)"
+          test -n "$aapt" && test -x "$aapt"
+          python3 ../../../scripts/verify_native_app_identity.py android --apk "$apk" --expected-id "$expected_package" --aapt "$aapt"
+          echo "Standalone release APK verified with embedded JavaScript and expected package identity."
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.app }}-android-standalone-release-apk
@@ -411,3 +417,5 @@ jobs:
           node-version: 22
       - name: Test shared mobile state and refresh helpers
         run: node --test src/mobile/shared/*.test.cjs
+      - name: Test deterministic native artifact identity verifier
+        run: python3 -m unittest discover -s scripts/tests -p 'test_verify_native_app_identity.py' -v
