@@ -59,7 +59,11 @@ jobs:
       - name: Publish API without containers
         run: dotnet publish src/backend/TurnOva/TurnOva.API/TurnOva.API.csproj --configuration Release --runtime linux-x64 --self-contained false --no-restore --output "$RUNNER_TEMP/turnova-api"
       - name: Verify publish script syntax
-        run: bash -n scripts/verify-api-publish.sh
+        run: |
+          bash -n scripts/verify-api-publish.sh
+          bash -n scripts/test-api-publish-verifier.sh
+      - name: Test native publish verifier
+        run: bash scripts/test-api-publish-verifier.sh
       - name: Verify publish artifact
         run: bash scripts/verify-api-publish.sh "$RUNNER_TEMP/turnova-api"
       - uses: actions/upload-artifact@v6
