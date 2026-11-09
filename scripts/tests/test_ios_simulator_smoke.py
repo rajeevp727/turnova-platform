@@ -133,6 +133,9 @@ case "$1" in
       echo "Signature=Apple Development"
     fi
     ;;
+  -d)
+    printf '<plist><dict><key>application-identifier</key><string>%s</string></dict></plist>\n' "$FAKE_BUNDLE_ID"
+    ;;
   *) echo "unexpected codesign arguments: $*" >&2; exit 2 ;;
 esac
 """,
@@ -267,7 +270,7 @@ fi
         self.assertEqual(result.returncode, 1)
         self.assertIn("simctl launch fixture failure", result.stderr)
         self.assertIn("app launch failed", result.stderr)
-        self.assertIn("spawn TEST-DEVICE log show", commands)
+        self.assertTrue(any(item.startswith("spawn TEST-DEVICE log show ") for item in commands))
         self.assertIn("spawn TEST-DEVICE launchctl list", commands)
         self.assertIn("listapps TEST-DEVICE", commands)
         self.assertIn(
@@ -282,8 +285,14 @@ fi
             "Installed app: com.turnova.rider",
             (output / "installed-apps.txt").read_text(encoding="utf-8"),
         )
-        self.assertTrue((output / "app-signature.txt").exists())
-        self.assertTrue((output / "app-entitlements.plist").exists())
+        self.assertIn(
+            "Signature=adhoc",
+            (output / "app-signature.txt").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "com.turnova.rider",
+            (output / "app-entitlements.plist").read_text(encoding="utf-8"),
+        )
         self.assertFalse((output / "launch.txt").exists())
         self.assertFalse((output / "result.json").exists())
 
