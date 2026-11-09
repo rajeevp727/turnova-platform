@@ -80,7 +80,25 @@ trap cleanup EXIT
 xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
 xcrun simctl erase "$DEVICE_UDID"
 xcrun simctl boot "$DEVICE_UDID"
-xcrun simctl bootstatus "$DEVICE_UDID" -b --timeout 300
+# simctl bootstatus has no portable caller-configurable timeout. Bound the process
+# externally so first-boot data migration can take up to five minutes without
+# allowing a wedged CoreSimulator process to hang the CI job indefinitely.
+python3 - "$DEVICE_UDID" <<'PY'
+import subprocess
+import sys
+
+device_udid = sys.argv[1]
+try:
+    result = subprocess.run(
+        ["xcrun", "simctl", "bootstatus", device_udid, "-b"],
+        check=False,
+        timeout=300,
+    )
+except subprocess.TimeoutExpired:
+    print("iOS Simulator did not finish first-boot migration within 300 seconds.", file=sys.stderr)
+    raise SystemExit(124)
+raise SystemExit(result.returncode)
+PY
 
 xcrun simctl install "$DEVICE_UDID" "$APP_BUNDLE"
 installed_container="$(xcrun simctl get_app_container "$DEVICE_UDID" "$EXPECTED_ID" app)"
