@@ -999,3 +999,11 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - #19 remains Blocked pending signed AAB/IPA, approved and Apple-registered iOS bundle IDs, EAS project linkage, production HTTPS API/DNS/TLS/CORS/readiness, approved build-number strategy, signing credentials, physical-device functional/security/pilot acceptance and store submission. Simulator smoke is engineering evidence only.
 - #18 PLATFORM-01 retains live Cosmos transactional-batch/ETag/409 read-after-write/partition/multi-instance/restart/retention, telemetry export/alerts, production CORS, load and device gates. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations-approved support-policy inputs.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is a strict external-evidence count, not an implementation-completion percentage; production readiness is not established.
+
+
+## RELEASE-01 deterministic Android emulator harness (2026-11-09)
+
+- The first PR #140 run [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) passed the original eight jobs but both Android smoke jobs failed before ADB registration because the emulator could not find the AVD. The log recorded `Unknown AVD name [turnova-release-smoke]`.
+- The Android script now exports `ANDROID_AVD_HOME` before both `avdmanager` and `emulator`, checks the named `.ini` and `.avd` files, records AVD-manager output, detects early process exit and scopes startup crash checks to the target package/process.
+- A new standard-library fake-SDK test exercises a non-default AVD home, AVD creation, fake install/activity launch/process stability, result JSON/screenshot and malformed package rejection without a real emulator or network. CI now discovers all `scripts/tests/test_*.py` tests.
+- The corrected exact-head 12-job CI run must pass before merge. This deterministic harness does not replace actual emulator smoke or physical-device acceptance.

@@ -5,7 +5,7 @@
 
 ## 1. Current step
 
-**Current engineering item: #19 RELEASE-01 — native install/launch smoke for Rider and Driver** on branch `test/release-01-native-launch-smoke` (PR #140). The initial exact-head CI [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) passed the original eight backend/mobile/native-build/auth jobs; both Android emulator smoke jobs failed before ADB registration because `emulator.log` reported `Unknown AVD name [turnova-release-smoke]`. The Android script now pins `ANDROID_AVD_HOME`, verifies AVD files before launch, captures emulator diagnostics and scopes crash checks to the app process. iOS Simulator jobs were still running at the last poll. The corrected branch requires a fresh 12-job exact-head CI run.
+**Current engineering item: #19 RELEASE-01 — native install/launch smoke for Rider and Driver** on branch `test/release-01-native-launch-smoke` (PR #140). Initial exact-head CI [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) passed the original eight backend/mobile/native-build/auth jobs; both Android smoke jobs failed before ADB registration because `emulator.log` reported `Unknown AVD name [turnova-release-smoke]`. The script now pins `ANDROID_AVD_HOME`, verifies AVD files, captures diagnostics, checks emulator process liveness and scopes crash checks to the app process. A deterministic Python fake-SDK harness now exercises AVD creation, install/launch and report generation without network or a real emulator. Corrected 12-job exact-head CI is pending.
 
 **Engineering evidence remains separate from acceptance and production readiness.** Android emulator and iOS Simulator install/launch smoke do not prove physical-device behaviour, GPS accuracy, push/SignalR provider integration, production API reachability, signing, Apple registration, EAS linkage, pilot acceptance or store readiness. The release row remains Blocked until its full external evidence is supplied.
 
@@ -710,3 +710,8 @@ The current implementation had a PRD conflict: an omitted passenger count silent
 - #19 remains Blocked pending signed AAB/IPA, approved and Apple-registered iOS bundle IDs, EAS project linkage, production HTTPS API/DNS/TLS/CORS/readiness, approved build-number strategy, signing credentials, physical-device functional/security/pilot acceptance and store submission. Simulator smoke is engineering evidence only.
 - #18 PLATFORM-01 retains live Cosmos transactional-batch/ETag/409 read-after-write/partition/multi-instance/restart/retention, telemetry export/alerts, production CORS, load and device gates. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations-approved support-policy inputs.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is a strict external-evidence count, not an implementation-completion percentage; production readiness is not established.
+
+
+## RELEASE-01 deterministic emulator harness increment
+
+The Android emulator script now has standard-library tests with a fake SDK/AVD manager/emulator/ADB. The harness sets a non-default `ANDROID_AVD_HOME`, verifies the named AVD files are created in that exact directory, exercises install/activity launch/process-stability/report output, and rejects malformed package identifiers before SDK access. It does not replace the actual emulator smoke. CI runs all `scripts/tests/test_*.py` cases; exact-head results are pending.
