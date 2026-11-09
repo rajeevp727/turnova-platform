@@ -167,7 +167,7 @@ fi
         bootstatus_index = next(i for i, item in enumerate(commands) if item.startswith("bootstatus "))
         self.assertLess(boot_index, bootstatus_index)
         self.assertLess(bootstatus_index, install_index)
-        self.assertEqual(commands[bootstatus_index], "bootstatus TEST-DEVICE -b --timeout 300")
+        self.assertEqual(commands[bootstatus_index], "bootstatus TEST-DEVICE -b")
 
         report = json.loads((output / "result.json").read_text(encoding="utf-8"))
         self.assertEqual(report["bundleId"], "com.turnova.rider")
@@ -193,7 +193,7 @@ fi
         result, output, commands = self.run_smoke(bootstatus_fail=True)
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("bootstatus TEST-DEVICE -b --timeout 300", commands)
+        self.assertIn("bootstatus TEST-DEVICE -b", commands)
         self.assertFalse(any(item.startswith("install ") for item in commands))
         self.assertFalse((output / "result.json").exists())
 
