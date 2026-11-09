@@ -4821,6 +4821,80 @@ public sealed class RideApiIntegrationTests
 
 
     [Fact]
+    public async Task DriverPaymentReportRejectsHistoricalNonCabRideWithoutMutation()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-legacy-noncab-driver";
+        const string unionId = "payment-legacy-noncab-union";
+        using var rider = factory.CreateClient("Rider", "payment-legacy-noncab-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        var cabRideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "payment-legacy-noncab", 500m);
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var legacyRideId = "legacy-scooty-payment-" + cabRideId;
+        rides[legacyRideId] = rides[cabRideId] with
+        {
+            RideId = legacyRideId,
+            ServiceClass = "Scooty"
+        };
+        var legacyAuditCount = rides[legacyRideId].AuditEvents?.Count ?? 0;
+
+        using var request = CreatePaymentReportRequest(
+            legacyRideId, "payment-legacy-noncab-report", 450m);
+        using var response = await driver.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Scooty", rides[legacyRideId].ServiceClass);
+        Assert.Equal("Completed", rides[legacyRideId].Status);
+        Assert.Null(rides[legacyRideId].PaymentReconciliation);
+        Assert.Equal(legacyAuditCount, rides[legacyRideId].AuditEvents?.Count ?? 0);
+        Assert.Equal("cab", rides[cabRideId].ServiceClass);
+        Assert.Null(rides[cabRideId].PaymentReconciliation);
+    }
+
+    [Fact]
+    public async Task UnionReconciliationExcludesLegacyNonCabRecordsAndKeepsMixedCaseCabRecords()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-legacy-cab-driver";
+        const string unionId = "payment-legacy-cab-union";
+        using var rider = factory.CreateClient("Rider", "payment-legacy-cab-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "payment-legacy-cab", 500m);
+        using var reportRequest = CreatePaymentReportRequest(
+            rideId, "payment-legacy-cab-report", 450m);
+        using var reportResponse = await driver.SendAsync(reportRequest);
+        Assert.Equal(HttpStatusCode.OK, reportResponse.StatusCode);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var cabRide = rides[rideId] with { ServiceClass = "CAB" };
+        rides[rideId] = cabRide;
+
+        // Simulate a retained historical non-Cab aggregate in the in-memory fallback.
+        // It carries the same legacy report so the endpoint must filter it, not migrate it.
+        var legacyRideId = "legacy-scooty-" + rideId;
+        rides[legacyRideId] = cabRide with
+        {
+            RideId = legacyRideId,
+            ServiceClass = "Scooty"
+        };
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "payment-legacy-cab-manager");
+        using var response = await manager.GetAsync("/api/v1/union/reconciliation");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var record = Assert.Single(json.RootElement.EnumerateArray());
+        Assert.Equal(rideId, record.GetProperty("rideId").GetString());
+        Assert.Equal(unionId, record.GetProperty("unionId").GetString());
+        Assert.Equal(450m, record.GetProperty("amountReceived").GetDecimal());
+        Assert.Equal("Scooty", rides[legacyRideId].ServiceClass);
+        Assert.Equal(450m, rides[legacyRideId].PaymentReconciliation!.AmountReceived);
+    }
+
+    [Fact]
     public async Task UnionReconciliationRemainsLinkedToOriginalRideUnionAfterDriverTransfer()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
