@@ -63,7 +63,7 @@ export ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/tur
 export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
 
 SYSTEM_IMAGE="system-images;android-35;google_apis;x86_64"
-AVD_NAME="turnova-release-smoke-$"
+AVD_NAME="turnova-release-smoke-${PPID}-${RANDOM}-${RANDOM}"
 AVD_INI="$ANDROID_AVD_HOME/$AVD_NAME.ini"
 AVD_DIR="$ANDROID_AVD_HOME/$AVD_NAME.avd"
 EMULATOR_PID=""
@@ -157,7 +157,7 @@ printf 'no\n' | "$AVDMANAGER" create avd -f -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d
 
 if [[ ! -s "$AVD_INI" || ! -d "$AVD_DIR" ]]; then
   echo "Android AVD was not created in ANDROID_AVD_HOME=$ANDROID_AVD_HOME." >&2
-  find "$HOME/.android" -maxdepth 3 -name "$AVD_NAME.ini" -o -name "$AVD_NAME.avd" >&2 || true
+  find "$ANDROID_AVD_HOME" -maxdepth 3 -name "$AVD_NAME.ini" -o -name "$AVD_NAME.avd" >&2 || true
   exit 1
 fi
 
