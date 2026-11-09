@@ -1,6 +1,6 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-09 06:40 IST  
+**Last updated:** 2026-11-09 06:52 IST  
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded.
 
 ## 1. Current step
