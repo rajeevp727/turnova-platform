@@ -81,9 +81,9 @@ xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
 xcrun simctl erase "$DEVICE_UDID"
 xcrun simctl boot "$DEVICE_UDID"
 # simctl bootstatus has no portable caller-configurable timeout. Bound the process
-# externally so first-boot data migration can take up to five minutes without
+# externally so first-boot data migration can take up to ten minutes without
 # allowing a wedged CoreSimulator process to hang the CI job indefinitely.
-SIMULATOR_BOOT_TIMEOUT_SECONDS="${TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS:-300}"
+SIMULATOR_BOOT_TIMEOUT_SECONDS="${TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600}"
 if [[ ! "$SIMULATOR_BOOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
    (( SIMULATOR_BOOT_TIMEOUT_SECONDS > 600 )); then
   echo "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS must be an integer from 1 to 600." >&2
@@ -110,14 +110,33 @@ except subprocess.TimeoutExpired:
 raise SystemExit(result.returncode)
 PY
 
-xcrun simctl install "$DEVICE_UDID" "$APP_BUNDLE"
-installed_container="$(xcrun simctl get_app_container "$DEVICE_UDID" "$EXPECTED_ID" app)"
+echo "Installing $EXPECTED_ID into the clean iOS Simulator."
+if ! install_output="$(xcrun simctl install "$DEVICE_UDID" "$APP_BUNDLE" 2>&1)"; then
+  printf '%s\n' "$install_output" >&2
+  echo "iOS Simulator installation failed for $EXPECTED_ID." >&2
+  exit 1
+fi
+if [[ -n "$install_output" ]]; then
+  printf '%s\n' "$install_output"
+fi
+
+echo "Verifying the installed iOS Simulator app container."
+if ! installed_container="$(xcrun simctl get_app_container "$DEVICE_UDID" "$EXPECTED_ID" app 2>&1)"; then
+  printf '%s\n' "$installed_container" >&2
+  echo "Unable to locate the installed iOS Simulator app container for $EXPECTED_ID." >&2
+  exit 1
+fi
 if [[ -z "$installed_container" || ! -d "$installed_container" ]]; then
   echo "Expected iOS Simulator app was not installed: $EXPECTED_ID" >&2
   exit 1
 fi
 
-launch_output="$(xcrun simctl launch "$DEVICE_UDID" "$EXPECTED_ID" 2>&1)"
+echo "Launching $EXPECTED_ID in the iOS Simulator."
+if ! launch_output="$(xcrun simctl launch "$DEVICE_UDID" "$EXPECTED_ID" 2>&1)"; then
+  printf '%s\n' "$launch_output" >&2
+  echo "iOS Simulator app launch failed for $EXPECTED_ID." >&2
+  exit 1
+fi
 printf '%s\n' "$launch_output" | tee "$OUTPUT_DIR/launch.txt"
 pid="$(printf '%s\n' "$launch_output" | sed -nE 's/.*: ([0-9]+)$/\1/p' | tail -n 1)"
 if [[ -z "$pid" ]]; then
@@ -136,10 +155,17 @@ else
 fi
 if [[ "$process_alive" != true ]]; then
   echo "iOS Simulator app process did not remain available after launch." >&2
+  echo "launchctl list output:" >&2
+  cat "$OUTPUT_DIR/launchctl-list.txt" >&2 || true
+  echo "process info output:" >&2
+  cat "$OUTPUT_DIR/process-info.txt" >&2 || true
   exit 1
 fi
 
-xcrun simctl io "$DEVICE_UDID" screenshot "$OUTPUT_DIR/launch.png"
+if ! xcrun simctl io "$DEVICE_UDID" screenshot "$OUTPUT_DIR/launch.png"; then
+  echo "Unable to capture the iOS Simulator launch screenshot for $EXPECTED_ID." >&2
+  exit 1
+fi
 if [[ ! -s "$OUTPUT_DIR/launch.png" ]]; then
   echo "iOS Simulator screenshot was not produced." >&2
   exit 1
