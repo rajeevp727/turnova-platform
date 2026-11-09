@@ -425,6 +425,23 @@ jobs:
         with:
           name: ${{ matrix.app }}-android-standalone-release-apk
           path: ${{ runner.temp }}/turnova-${{ matrix.app }}-release
+      - name: Grant runner access to hardware-accelerated Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -c /dev/kvm ]]; then
+            echo "This runner does not expose the KVM device required by the x86_64 Android emulator." >&2
+            exit 1
+          fi
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm
+          fi
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
+            echo "The CI runner still cannot read/write /dev/kvm after the ephemeral permission repair." >&2
+            ls -l /dev/kvm >&2
+            exit 1
+          fi
+          ls -l /dev/kvm
       - name: Install and launch standalone release APK in Android emulator
         env:
           APP_NAME: ${{ matrix.app }}
