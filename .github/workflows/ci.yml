@@ -417,6 +417,10 @@ jobs:
         app: [driver-app, rider-app]
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
       - uses: actions/download-artifact@v6
         with:
           name: ${{ matrix.app }}-android-standalone-release-apk
