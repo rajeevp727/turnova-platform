@@ -434,7 +434,8 @@ jobs:
             exit 1
           fi
           if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
-            sudo chmod 666 /dev/kvm
+            sudo chown "$(id -un)" /dev/kvm
+            sudo chmod 600 /dev/kvm
           fi
           if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
             echo "The CI runner still cannot read/write /dev/kvm after the ephemeral permission repair." >&2
