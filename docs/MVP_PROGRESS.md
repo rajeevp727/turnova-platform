@@ -596,3 +596,9 @@ The current implementation had a PRD conflict: an omitted passenger count silent
 - #18 PLATFORM-01 already has dispatch exception audit records and ambiguous selected-reservation promotion recovery in the existing QueueEntries partition. Next independent gap after #16 is deterministic Cosmos 409/create-conflict read-back/idempotency coverage for matching versus mismatched actor/trace/reason records; no new container or production provider is introduced.
 - #19 RELEASE-01 preflight is merged. Signed Android AAB/iOS IPA, verified production API endpoint/EAS linkage, Apple/Android signing credentials, physical-device/pilot acceptance and store submission remain external.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); this is the count with all acceptance evidence including external gates, not an implementation-completion score. No live Cosmos, physical-device, signed-production or production-hosting validation is claimed.
+
+
+## Infrastructure constraint correction — 2026-11-09
+
+- PR #132 had introduced a Dockerfile, .dockerignore and Render Blueprint using `runtime: docker`. This conflicts with the authoritative MVP execution constraint: no Docker/container builds, images or container deployments. Those three files are removed in the current cleanup PR; no container image was built or deployed by the engineering workflow.
+- The attempted Render Blueprint deployment was not a valid production deployment: the API correctly failed startup because production Cosmos DB endpoint/key were not configured. Do not continue that container-based path. API hosting remains an external post-coding infrastructure decision; continue native .NET publish validation only.
