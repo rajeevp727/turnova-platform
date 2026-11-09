@@ -93,6 +93,7 @@ capture_simulator_diagnostics() {
   for diagnostic in \
     "$OUTPUT_DIR/simulator-system.log" \
     "$OUTPUT_DIR/launchctl-list-failure.txt" \
+    "$OUTPUT_DIR/process-info.txt" \
     "$OUTPUT_DIR/installed-apps.txt" \
     "$OUTPUT_DIR/app-signature.txt" \
     "$OUTPUT_DIR/app-entitlements.plist"; do
@@ -183,6 +184,7 @@ else
   process_alive=false
 fi
 if [[ "$process_alive" != true ]]; then
+  capture_simulator_diagnostics
   echo "iOS Simulator app process did not remain available after launch." >&2
   echo "launchctl list output:" >&2
   cat "$OUTPUT_DIR/launchctl-list.txt" >&2 || true
