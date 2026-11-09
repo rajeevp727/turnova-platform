@@ -281,6 +281,8 @@ wait_button = next(
 )
 if wait_button is None:
     sys.exit(4)
+if wait_button.attrib.get("clickable") != "true" or wait_button.attrib.get("enabled") != "true":
+    sys.exit(6)
 
 match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", wait_button.attrib.get("bounds", ""))
 if match is None:
