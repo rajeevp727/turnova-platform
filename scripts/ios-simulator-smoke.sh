@@ -83,19 +83,29 @@ xcrun simctl boot "$DEVICE_UDID"
 # simctl bootstatus has no portable caller-configurable timeout. Bound the process
 # externally so first-boot data migration can take up to five minutes without
 # allowing a wedged CoreSimulator process to hang the CI job indefinitely.
-python3 - "$DEVICE_UDID" <<'PY'
+SIMULATOR_BOOT_TIMEOUT_SECONDS="${TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS:-300}"
+if [[ ! "$SIMULATOR_BOOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
+   (( SIMULATOR_BOOT_TIMEOUT_SECONDS > 600 )); then
+  echo "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS must be an integer from 1 to 600." >&2
+  exit 2
+fi
+python3 - "$DEVICE_UDID" "$SIMULATOR_BOOT_TIMEOUT_SECONDS" <<'PY'
 import subprocess
 import sys
 
 device_udid = sys.argv[1]
+timeout_seconds = int(sys.argv[2])
 try:
     result = subprocess.run(
         ["xcrun", "simctl", "bootstatus", device_udid, "-b"],
         check=False,
-        timeout=300,
+        timeout=timeout_seconds,
     )
 except subprocess.TimeoutExpired:
-    print("iOS Simulator did not finish first-boot migration within 300 seconds.", file=sys.stderr)
+    print(
+        f"iOS Simulator did not finish first-boot migration within {timeout_seconds} seconds.",
+        file=sys.stderr,
+    )
     raise SystemExit(124)
 raise SystemExit(result.returncode)
 PY
