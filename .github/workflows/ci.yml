@@ -291,7 +291,7 @@ jobs:
           if-no-files-found: error
       - name: Compile standalone Android release APK
         working-directory: src/mobile/${{ matrix.app }}/android
-        run: "$HOME/.gradle/turnova-distributions/gradle-8.14.3/bin/gradle" --no-daemon --stacktrace assembleRelease
+        run: '"$HOME/.gradle/turnova-distributions/gradle-8.14.3/bin/gradle" --no-daemon --stacktrace assembleRelease'
       - name: Verify standalone APK contains embedded JavaScript bundle
         shell: bash
         run: |
@@ -402,6 +402,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - name: Validate GitHub Actions workflow YAML syntax
+        run: ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/ci.yml")'
       - uses: actions/setup-node@v7
         with:
           node-version: 22
