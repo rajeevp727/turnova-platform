@@ -54,10 +54,18 @@ jobs:
               raise SystemExit(f"Backend test suite reported {failed} failure(s).")
           print(f"Backend tests executed: {executed}/{total}; failures: {failed}.")
           PY
+      - name: Restore API for Linux x64 publish
+        run: dotnet restore src/backend/TurnOva/TurnOva.API/TurnOva.API.csproj --runtime linux-x64
       - name: Publish API without containers
-        run: dotnet publish src/backend/TurnOva/TurnOva.API/TurnOva.API.csproj --configuration Release --no-restore --output "$RUNNER_TEMP/turnova-api"
+        run: dotnet publish src/backend/TurnOva/TurnOva.API/TurnOva.API.csproj --configuration Release --runtime linux-x64 --self-contained false --no-restore --output "$RUNNER_TEMP/turnova-api"
+      - name: Verify publish script syntax
+        run: |
+          bash -n scripts/verify-api-publish.sh
+          bash -n scripts/test-api-publish-verifier.sh
+      - name: Test native publish verifier
+        run: bash scripts/test-api-publish-verifier.sh
       - name: Verify publish artifact
-        run: test -s "$RUNNER_TEMP/turnova-api/TurnOva.API.dll"
+        run: bash scripts/verify-api-publish.sh "$RUNNER_TEMP/turnova-api"
       - uses: actions/upload-artifact@v6
         with:
           name: turnova-api-publish

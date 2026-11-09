@@ -1700,7 +1700,19 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
             DateTimeOffset.UtcNow);
         payslip = await SavePayslipIfAbsentAsync(payslip, ct);
     }
-    var pdf = DriverPayslipPdf.Generate(payslip);
+    byte[] pdf;
+    try
+    {
+        pdf = DriverPayslipPdf.Generate(payslip);
+    }
+    catch (NotSupportedException)
+    {
+        return Results.UnprocessableEntity(new
+        {
+            message = "This payslip contains a script that is not supported by the current embedded font set. No PDF was generated."
+        });
+    }
+
     return Results.File(pdf, "application/pdf", $"TurnOva-Payslip-{year:D4}-{month:D2}.pdf");
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 

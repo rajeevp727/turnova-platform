@@ -3,10 +3,10 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-09 02:31 IST  
+**Last verified:** 2026-11-09  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Default branch:** `main`  
-**Last audited main HEAD:** `c080e7770977feef07de46e9b67de6e70ecc627e` after RELEASE-01 PR #122 merged. PR #122 exact-head CI [42519436774](https://github.com/rajeevp727/turnova-platform/actions/runs/42519436774) passed 8/8 jobs; main post-merge CI [42523135354](https://github.com/rajeevp727/turnova-platform/actions/runs/42523135354) remains in progress at last poll. Current engineering follow-up is AI-01 supplemental passenger-count/privacy hardening on PR [#123](https://github.com/rajeevp727/turnova-platform/pull/123), branch `fix/ai-01-no-inferred-passenger-count` (outside the 19-row denominator). It includes deterministic backend service tests, endpoint role/rate-limit integration tests and shared Rider passenger-input tests. COMMENT-only review [5819672810](https://github.com/rajeevp727/turnova-platform/pull/123) found no unresolved critical/high-risk issue; exact-head CI pending. Strict acceptance remains 0/19; 15 In Progress and 4 Blocked. No live Cosmos, physical-device or signed-production validation is claimed.
+**Default branch:** main  
+**Last audited main HEAD:** `4e65b147a01230b4a303d72c1270d448071c8bd6` after supplemental AI-01 PR #123 merged; main post-merge CI #820 / 42528216521 passed. Current #14 DRIVER-03 is the sole active PR [#124](https://github.com/rajeevp727/turnova-platform/pull/124), branch `fix/driver-03-unicode-payslip-rendering`, head `9467838172c27b896075c72373c0852352f76fb8`. SkiaSharp/HarfBuzz draws visible glyphs; PDFsharp 6.2.4 adds searchable Unicode text with embedded Noto fonts/ToUnicode for Latin and nine Indic scripts. PdfSharpCore/ImageSharp 1.0.4 were removed after high-severity advisories; Pkcs is pinned to patched 10.0.13 and backend restore fails on audit-feed errors/high/critical advisories. Workflow YAML/concurrency was corrected; exact-head CI #900 passed on prior code/workflow head `c044f31de476edf28d00dba54d1ee858077a0d6f`, and exact-head CI #901 / 42545087180 passed **8/8 jobs** on `9467838172c27b896075c72373c0852352f76fb8`: 341/341 backend tests, 102/102 shared auth tests, both Android debug APKs, both unsigned iOS Simulator apps, Rider/Driver typechecks/JS exports, native Linux x64 API publish and deterministic publish-verifier fixtures. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is an external-evidence count, not an implementation-completion measure. No physical-device, live Cosmos, signed-production or production-hosting validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -413,7 +413,6 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Remaining external gates: approved radius/zone configuration, maps/geocoding/routing provider, Call/Chat provider, live Cosmos multi-instance behavior, and Android/iOS physical-device location permission/resume tests. No provider or credentials are invented.
 - Legacy FIFO queue cases are compatibility-only and do not control Rider discovery or customer-facing ranking/assignment. The internal FIFO fairness decision remains unresolved and is not changed here.
 - Next sequential item: #4 RIDER-02 — audit direct fare proposal/counterproposal, mutual confirmation and immutable agreement versioning against the API, Rider/Driver UI and tests; implement the smallest missing vertical slice.
-- The 19-area score remains 42.1% (0 Verified, 16 In progress, 0 Not started, 3 Blocked; strict 0/19). The denominator is unchanged; AI-01 remains supplemental.
 
 
 ## RIDER-02 — agreement confirmation audit timestamps (2026-11-07)
@@ -597,7 +596,6 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - #16 RIDER-04 audit found the completed-ride Driver report input hard-coded INR although the agreement/report model carries its currency. PR #101 adds only current agreement version/amount/currency to authenticated Driver history, uses that currency in the report form, and tests that Rider history remains unchanged. Final-head CI [42373100229](https://github.com/rajeevp727/turnova-platform/actions/runs/42373100229) passed all eight jobs, including 252/252 backend tests and 53/53 shared mobile tests.
 - Existing report immutability, signed delta, idempotency, ride audit and signed-unionId UnionManager privacy are preserved. Customer dispute, non-zero-delta next-ride gating and cross-Union preceding-ride disclosure remain unresolved product decisions.
 - After #16, #17 SUPPORT-01 remains Blocked pending approved Rider-support categories, escalation owner and process; continue to actionable #18 PLATFORM-01.
-- 19-area progress remains 42.1% (0 Verified, 16 In Progress, 0 Not Started, 3 Blocked; strict 0/19). AI-01 and CAB-RECON-01 remain supplemental outside the denominator.
 
 
 ## Latest sequential handoff — #18 PLATFORM-01 (2026-11-07)
@@ -607,7 +605,6 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - #18 PLATFORM-01 adds .NET Meter/ActivitySource instrumentation for ride-audit write attempts and storage readiness. Tags are low-cardinality and contain no ride/user/Union identifiers or PII. Exporter, dashboards and alert routing remain infrastructure gates.
 - New evidence: `CompletedSelectedRidePersistsPrivacyMinimisedAuditEventsForAgreementLifecycleAndPayment` observes metrics/spans from the actual API audit path; `ReadinessProbeEmitsBoundedMetricsAndTraceWithoutDependencyDetails` verifies readiness metrics/activity without exposing dependency details. PR #102 exact-head CI [42375960785](https://github.com/rajeevp727/turnova-platform/actions/runs/42375960785) passed all eight jobs on `1cb1a5f2cb8af18d932990f0269d1f3d63f5164f`: 254/254 backend tests, 53/53 shared mobile tests, both app typechecks/bundles, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish. Automated review [6707392983](https://github.com/rajeevp727/turnova-platform/pull/102#issuecomment-6707392983) found no unresolved critical/high-risk issue.
 - Next: #19 RELEASE-01 — audit native release/signing/device evidence without confusing debug APKs or unsigned simulator apps with production-signed artifacts.
-- Progress remains 42.1% = (0 Verified + 16 × 0.5 + 0 Not Started + 3 Blocked) / 19; strict fully verified count 0/19. AI-01 and CAB-RECON-01 remain supplemental.
 
 
 ## Latest sequential handoff — #19 RELEASE-01 (2026-11-07)
@@ -624,7 +621,6 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - PR #103 merged at `7222c5e4dccc2ca0f804eae92105455df89d3fb9`; final-head CI [42382259118](https://github.com/rajeevp727/turnova-platform/actions/runs/42382259118) passed 8/8 jobs: 254/254 backend tests, 53/53 shared mobile tests, Rider/Driver typechecks and bundles, Rider/Driver Android debug APKs, Rider/Driver unsigned iOS Simulator apps and non-container API publish.
 - The final audit rechecked PRD sections 15/16, architecture, test plan, all 19 matrix rows, AI-01 and the five Cab supplemental acceptance areas. It found stale CAB-DISCOVERY-01/CAB-AGREEMENT-01 evidence and a legacy Payments adapter entry in the architecture diagram; this follow-up reconciles those documents. No additional safe code-only implementation gap was found.
 - The architecture now states the MVP has no payment gateway/escrow adapter; payment is direct between Rider and Driver, with only Driver-reported/unverified reconciliation stored. Call/Chat remains an optional provider placeholder.
-- 19-area progress: 39.5% = (0 Verified + 15 × 0.5 + 0 Not started + 4 Blocked) / 19; strict fully verified 0/19. Supplemental AI-01 and CAB requirements remain outside the denominator and are not fully verified.
 - Current sequential #19 RELEASE-01 is Blocked: signed Android AAB/iOS IPA, final iOS store identifiers/certificates/profiles, physical-device install/runtime and pilot acceptance remain. Other blockers include approved pickup radius/zone, Driver location-freshness age, selected-negotiation lifetime, Driver/Rider support categories/process/owner, live Cosmos/TriSend/maps/Call/Chat/push/telemetry, document storage/retention, legal partnership/T&C, production API hosting and load tests.
 - **Next:** between runs. Re-read main on the next scheduled run and resume the first item whose external blocker has cleared, or implement a concrete newly evidenced code/test gap. Do not invent product policy or request infrastructure credentials before the coding milestone.
 
@@ -864,4 +860,35 @@ Dispatch exception event IDs are deterministic from the server-generated trace I
 
 ### AI-01 passenger-count and provider-privacy correction
 
-The baseline AI-01 implementation silently defaulted an omitted passenger count to one and included passenger count in the provider prompt contract. The current follow-up keeps passenger count local, returns it as missing for manual completion, removes family/child/accessibility and other sensitive intent tokens from the provider allow-list, and clears the Rider form's stale default so discovery/booking are blocked until explicit 1–6 entry. Branch: `fix/ai-01-no-inferred-passenger-count`. New `AiAssistanceApiIntegrationTests` role/rate-limit integration tests, shared mobile helper tests and Rider typecheck/build are pending exact-head CI. AI-01 remains supplemental and outside the 19-area denominator.
+The baseline AI-01 implementation silently defaulted an omitted passenger count to one and included passenger count in the provider prompt contract. The current follow-up keeps passenger count local, returns it as missing for manual completion, removes family/child/accessibility and other sensitive intent tokens from the provider allow-list, and clears the Rider form's stale default so discovery/booking are blocked until explicit 1–6 entry. Branch: `fix/ai-01-no-inferred-passenger-count`. AI-01 is merged through PR #123; exact-head CI [run #819](https://github.com/rajeevp727/turnova-platform/actions/runs/42523956938) passed 330/330 backend tests and 99/99 shared mobile tests. Provider sandbox, managed-secret wiring and data-processing review remain external. AI-01 is supplemental and outside the 19-area denominator.
+
+
+### DRIVER-03 Unicode payslip PDF rendering (active PR #124)
+
+- Visible glyphs use SkiaSharp/HarfBuzz raw positioned glyph runs. A separate PDFsharp 6.2.4 (MIT) layer appends low-visibility searchable Unicode text with embedded Noto fonts and ToUnicode mappings for Latin plus nine Indic scripts.
+- The separate PDFsharp layer is intentional: a Skia-only positioned-text experiment did not embed a Unicode font program or preserve searchable long-name text (two backend tests failed). PdfSharpCore was removed because its transitive ImageSharp 1.0.4 dependency triggered high-severity GIF-decoder advisories; PDFsharp 6.2.4 has no ImageSharp dependency. Its transitive Pkcs 8.0.1 was high-vulnerable and is pinned to patched 10.0.13.
+- Immutable Skia typefaces are process-cached; HarfBuzz shapers/placements are request-local; PDFsharp's process-wide resolver/cache append is serialized. The bundled fonts include SIL OFL 1.1 and per-family attribution notices.
+- Tests cover all bundled scripts, embedded font/ToUnicode, unsupported-script 422, concurrent request isolation, long-name wrapping, immutable snapshots and API privacy. PAY-023–PAY-027 document the new rendering, fail-closed, concurrency and native-publish cases.
+- The Linux x64 validation publish checks both Skia/HarfBuzz native libraries, rejects non-Linux runtime directories and optional PdfSharp.WPFonts.dll, and enforces a 120 MiB uncompressed ceiling. The check is isolated in scripts/verify-api-publish.sh and guarded by bash -n.
+- External gates: live Cosmos snapshot create-conflict visibility/restart/multi-instance; physical Android/iOS PDF visual/save/share/screen-reader acceptance; Product confirmation of DaysWorked semantics; Arabic/Sinhala/emoji and other unbundled scripts remain unsupported and return 422.
+
+
+## Latest handoff — DRIVER-03 Unicode payslip and current-head CI blocker (2026-11-09)
+
+- Active PR #124, branch fix/driver-03-unicode-payslip-rendering; current head before this docs sync is f2bf1aa279c565c17a2e02b91a852090d17f796b.
+- Run #876 attempt 1 on superseded head ebcb889c9a8ac8ab8089cad4cc243b7af7a94f33: backend 340/341 with one AuthApiIntegrationTests startup-validation ObjectDisposedException during WebApplicationFactory teardown. Only the failed backend job was rerun; attempt 2 passed, so run #876 is 8/8 on that old head. Android and both iOS builds passed. AuthApiIntegrationTests are now in a non-parallel xUnit collection.
+- Push runs #878–#882 had zero jobs because the default-branch workflow still filters pushes to main; the fix/feat/chore filter in this PR applies after merge. API-authored close/reopen did not trigger a pull_request run. The current head requires an owner-originated PR event or manual CI run before merge; no second PR is created.
+- Native publish verification is in scripts/verify-api-publish.sh. scripts/test-api-publish-verifier.sh validates a valid Linux-x64 fixture and rejects missing Skia/API assemblies, non-Linux runtime directories, PdfSharp.WPFonts.dll and output over 120 MiB. Both scripts pass bash -n and the fixture suite passed locally.
+- The PDF uses SkiaSharp/HarfBuzz visible glyph shaping and a separate PDFsharp 6.2.4 searchable Unicode layer with embedded Noto SIL OFL fonts and ToUnicode. PAY-023–PAY-027 document supported scripts, fail-closed unsupported scripts, concurrent isolation, long-name wrapping and publish artifact validation.
+- Review history is COMMENT-only; no self-approval. No unresolved inline threads were found at the prior review checkpoint; recheck after the latest commit.
+- Live Cosmos snapshot recovery, physical Android/iOS PDF visual/save/share/accessibility, Product confirmation of DaysWorked and additional script requirements remain external.
+- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). After #14, #15 DRIVER-04 remains blocked on support policy; continue to #16 RIDER-04 (query-level Cab-only Cosmos filter + deterministic SQL assertion), #17 SUPPORT-01 (same support-policy blocker), #18 PLATFORM-01 (mocked Cosmos 409/read-back idempotency tests) and #19 RELEASE-01 external release gates.
+
+
+
+## Latest execution handoff — #14 DRIVER-03 (2026-11-09)
+
+- Sole active PR #124, branch `fix/driver-03-unicode-payslip-rendering`, head `9467838172c27b896075c72373c0852352f76fb8`. Exact-head CI #901 / 42545087180 passed all 8 jobs, including 341/341 backend tests, 102/102 shared auth tests, Android debug APKs, unsigned iOS Simulator apps, mobile checks and native Linux x64 API publish plus verifier fixtures.
+- Reviews are COMMENT-only; no unresolved inline threads. Recheck exact head and repository policy before merge; do not self-approve or bypass.
+- After merge, re-read main and continue sequentially: #15 DRIVER-04 is blocked on approved support workflow inputs; #16 RIDER-04's next safe increment is a query-level case-insensitive Cab predicate plus SQL test; #17 SUPPORT-01 remains blocked; #18 PLATFORM-01 and #19 RELEASE-01 are merged and must be re-audited for any new deterministic gaps.
+- Strict acceptance is 0/19 Verified, 15 In Progress and 4 Blocked. Production readiness is not established; live Cosmos, physical-device, signing/store, provider, legal and hosting gates remain external.
