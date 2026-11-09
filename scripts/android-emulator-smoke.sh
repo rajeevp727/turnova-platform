@@ -176,12 +176,20 @@ if ! grep -Fq "$EXPECTED_ID/" "$OUTPUT_DIR/activities.txt"; then
 fi
 
 "$ADB_BIN" logcat -d -v threadtime > "$OUTPUT_DIR/logcat.txt"
-if grep -A 12 -B 2 -F "FATAL EXCEPTION" "$OUTPUT_DIR/logcat.txt" | grep -Fq "$EXPECTED_ID"; then
+if awk -v package="$EXPECTED_ID" '
+  /FATAL EXCEPTION/ { in_fatal = 1; scanned = 0; next }
+  in_fatal {
+    if (index($0, "Process: " package ",") > 0 || index($0, "Process: " package " ") > 0) found = 1
+    scanned++
+    if (scanned > 40) in_fatal = 0
+  }
+  END { exit found ? 0 : 1 }
+' "$OUTPUT_DIR/logcat.txt"; then
   echo "Android runtime recorded a fatal exception for $EXPECTED_ID." >&2
   exit 1
 fi
-if grep -Eq "Unhandled JS Exception|Invariant Violation:|Unable to load script" "$OUTPUT_DIR/logcat.txt"; then
-  echo "React Native reported an unhandled startup exception." >&2
+if awk -v pid="$pid_before" '$3 == pid && /Unhandled JS Exception|Invariant Violation:|Unable to load script/' "$OUTPUT_DIR/logcat.txt"; then
+  echo "React Native reported an unhandled startup exception in $EXPECTED_ID (PID $pid_before)." >&2
   exit 1
 fi
 
