@@ -64,3 +64,13 @@ The native Android matrix verifies the standalone release-variant APK after `ass
 The native iOS Simulator matrix verifies the built app's actual `Info.plist` with Python's standard-library `plistlib`, comparing `CFBundleIdentifier` with the explicit CI-only `PRODUCT_BUNDLE_IDENTIFIER` supplied to `xcodebuild`. XML and binary plist encodings are supported. This CI-only identifier is not a Product-approved production bundle identifier and does not remove the Apple registration gate.
 
 The shared verifier is `scripts/verify_native_app_identity.py`; 12 deterministic standard-library unit tests live in `scripts/tests/test_verify_native_app_identity.py`. These tests validate parsing, exact identity matching, missing/ambiguous metadata, malformed/placeholder identifiers, tool failures and XML/binary plist handling. CI runs the tests and both platform artifact checks. No signing credential, final Apple identifier, EAS project, production API URL or store decision is invented.
+
+
+## Native install/launch smoke
+
+The native build artifacts are exercised after compilation by two CI matrix jobs:
+
+- Android: install each standalone release APK into a clean API 35 Google APIs x86_64 emulator, resolve and start its embedded launch activity, verify the expected Rider/Driver package is installed, assert the same app process remains alive after startup, fail on app-scoped fatal native or unhandled React Native startup exceptions, and upload a screenshot plus emulator/install/launch/logcat diagnostics.
+- iOS: install each unsigned Simulator .app into an available iPhone Simulator, verify the installed bundle ID, launch it with `simctl`, require a returned process ID and confirm process availability after startup, then upload a screenshot and launch diagnostics.
+
+The jobs consume the artifacts from the native build matrices in the same workflow run, so the tested binary is the one whose package/bundle identity was verified during compilation. They do not call the production API or authentication provider and require no production credentials. Their evidence is limited to simulator installation and application startup. It does not prove physical-device compatibility, GPS hardware, notifications, SignalR, live authentication, production API reachability, signing, Apple registration, EAS linkage, security/pilot acceptance or store readiness. `RELEASE-01` therefore remains Blocked until the external gates above are completed.
