@@ -130,3 +130,12 @@ The exact-head CI run [#1041 / 42639619625](https://github.com/rajeevp727/turnov
 
 
 The first launch-diagnostic harness attempt [#1045 / 42644957570](https://github.com/rajeevp727/turnova-platform/actions/runs/42644957570) failed only because its fake-SDK test compared a shortened `log show` command as an exact string, despite the actual invocation including the filter predicate and time window. The test now matches the command prefix and verifies deterministic captured signature/entitlement content. A new exact-head run is required; no iOS simulator launch success is claimed.
+
+
+## Android emulator SDK download resilience
+
+The API 35 Google APIs x86_64 system image is installed separately from platform-tools/emulator/platform packages. The smoke retries a transient corrupt/truncated SDK archive up to three times, verifies non-empty package metadata and `system.img` before AVD creation, removes an incomplete extraction and fails before app installation when all attempts fail. The deterministic fake-SDK tests exercise both one-failure recovery and three-failure exhaustion; they do not replace the real emulator smoke.
+
+## Unsigned iOS Simulator evidence boundary
+
+The hosted simulator rejects ad-hoc signatures without an Apple-issued TeamIdentifier (launchd error 162). CI therefore keeps the original unsigned simulator artifact and requires the expected SecureStore-unavailable banner after a fresh erase, while rejecting expired-session and token-cleanup errors. This is launch and fail-closed presentation evidence only; it does not verify Keychain persistence, signed physical-device behaviour or production release readiness.
