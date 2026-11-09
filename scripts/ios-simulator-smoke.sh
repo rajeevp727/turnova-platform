@@ -193,15 +193,73 @@ if [[ "$process_alive" != true ]]; then
   exit 1
 fi
 
-if ! xcrun simctl io "$DEVICE_UDID" screenshot "$OUTPUT_DIR/launch.png"; then
-  echo "Unable to capture the iOS Simulator launch screenshot for $EXPECTED_ID." >&2
+# A cold iOS simulator can report a live process before React Native has rendered
+# the login screen. Poll only the OCR check's explicit "not ready" result; stale
+# session/token-cleanup errors and OCR/tool failures remain immediate failures.
+LOGIN_READY_TIMEOUT_SECONDS="${TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS:-90}"
+LOGIN_READY_POLL_INTERVAL_SECONDS="${TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS:-5}"
+if [[ ! "$LOGIN_READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
+   (( LOGIN_READY_TIMEOUT_SECONDS > 300 )); then
+  echo "TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS must be an integer from 1 to 300." >&2
+  exit 2
+fi
+if [[ ! "$LOGIN_READY_POLL_INTERVAL_SECONDS" =~ ^[1-9][0-9]?$ ]] ||
+   (( LOGIN_READY_POLL_INTERVAL_SECONDS > 30 )); then
+  echo "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30." >&2
+  exit 2
+fi
+
+login_ready_deadline=$((SECONDS + LOGIN_READY_TIMEOUT_SECONDS))
+login_screen_verified=false
+ocr_attempt=0
+while true; do
+  ocr_attempt=$((ocr_attempt + 1))
+  if ! xcrun simctl io "$DEVICE_UDID" screenshot "$OUTPUT_DIR/launch.png"; then
+    echo "Unable to capture the iOS Simulator launch screenshot for $EXPECTED_ID." >&2
+    capture_simulator_diagnostics
+    exit 1
+  fi
+  if [[ ! -s "$OUTPUT_DIR/launch.png" ]]; then
+    echo "iOS Simulator screenshot was not produced." >&2
+    capture_simulator_diagnostics
+    exit 1
+  fi
+
+  if swift "$(dirname "$0")/ios-simulator-screen-text-check.swift" "$OUTPUT_DIR/launch.png" --expect-secure-store-unavailable \
+      > "$OUTPUT_DIR/ui-text.txt" 2> "$OUTPUT_DIR/ui-text-error.txt"; then
+    login_screen_verified=true
+    break
+  else
+    ocr_status=$?
+  fi
+
+  if (( ocr_status != 3 )); then
+    echo "iOS login OCR failed with non-retryable status $ocr_status on attempt $ocr_attempt." >&2
+    cat "$OUTPUT_DIR/ui-text.txt" >&2 || true
+    cat "$OUTPUT_DIR/ui-text-error.txt" >&2 || true
+    capture_simulator_diagnostics
+    exit 1
+  fi
+
+  if (( SECONDS >= login_ready_deadline )); then
+    echo "iOS Simulator did not reach a stable login screen within $LOGIN_READY_TIMEOUT_SECONDS seconds." >&2
+    echo "Last OCR output:" >&2
+    cat "$OUTPUT_DIR/ui-text.txt" >&2 || true
+    cat "$OUTPUT_DIR/ui-text-error.txt" >&2 || true
+    capture_simulator_diagnostics
+    exit 1
+  fi
+
+  echo "iOS login screen is not ready yet (attempt $ocr_attempt); retrying in $LOGIN_READY_POLL_INTERVAL_SECONDS seconds."
+  sleep "$LOGIN_READY_POLL_INTERVAL_SECONDS"
+done
+
+if [[ "$login_screen_verified" != true ]]; then
+  echo "iOS login screen was not verified for $EXPECTED_ID." >&2
+  capture_simulator_diagnostics
   exit 1
 fi
-if [[ ! -s "$OUTPUT_DIR/launch.png" ]]; then
-  echo "iOS Simulator screenshot was not produced." >&2
-  exit 1
-fi
-swift "$(dirname "$0")/ios-simulator-screen-text-check.swift" "$OUTPUT_DIR/launch.png" --expect-secure-store-unavailable | tee "$OUTPUT_DIR/ui-text.txt"
+cat "$OUTPUT_DIR/ui-text.txt"
 
 python3 - "$EXPECTED_ID" "$DEVICE_UDID" "$pid" "$OUTPUT_DIR/result.json" <<'PY'
 import json
