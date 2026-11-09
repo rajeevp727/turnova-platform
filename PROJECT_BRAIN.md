@@ -914,3 +914,12 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - External #18 gates: live Cosmos 409 visibility/read-after-write consistency, partition isolation, multi-instance/restart/retention, telemetry export/alerts, production CORS origins, load testing and device acceptance.
 - #19 RELEASE-01 remains next after #18: re-audit Android/iOS native artifact/signing readiness and physical-device/pilot evidence. Signed store artifacts, production API/EAS linkage, signing credentials, physical-device acceptance and store submission remain external.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is not a measure of implementation completion. Production readiness is not established.
+
+## Latest TurnOva handoff — #19 RELEASE-01 native artifact identity (2026-11-09)
+
+- PLATFORM-01 PR #134 merged at 5f6f9cf3d25ac0fb04739b197c65fa0260d05639; exact head 37fe05de79ca8e5f97a49bfcf8ed48d7332164f0 passed CI run 42562772947, 8/8 jobs. No self-approval; main was unprotected and no rulesets were present. Live Cosmos 409/read-after-write validation remains external.
+- Main was re-read at 5f6f9cf3d25ac0fb04739b197c65fa0260d05639; no open PRs remained. Active branch is fix/release-01-native-artifact-identity-verification.
+- RELEASE-01 increment adds actual Android APK manifest package-ID verification using aapt, actual iOS Simulator Info.plist bundle-ID verification using plistlib, and 11 deterministic Python tests. The Android ID is checked against expo.android.package. The iOS ID is the CI-only value passed to xcodebuild and is not treated as Product approval or Apple registration.
+- CI now runs the Python verifier tests and both native artifact checks. Exact-head CI is pending. Release docs and test plan record the new checks and keep signed AAB/IPA, EAS, API URL, signing, physical-device, pilot and store gates external.
+- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); implementation evidence and production readiness are reported separately.
+- Next: inspect the full diff, await all exact-head checks, comment-review security/path/identity semantics, merge only if policy permits, then continue sequential re-audit. No containers or production deployments.
