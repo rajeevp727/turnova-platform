@@ -208,6 +208,59 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task KnownRideStateExceedingConfiguredOutputLimitUsesBoundedEscalation()
+    {
+        var service = CreateService(new UnavailableAiAssistantProvider(), maxOutputCharacters: 100);
+
+        var result = await service.ExplainHelpAsync(
+            "What is happening with my trip?",
+            "InProgress",
+            CancellationToken.None);
+
+        Assert.Equal("unsupported", result.SourceId);
+        Assert.True(result.EscalationRequired);
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.Contains("support contact", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.InRange(result.Answer.Length, 1, 100);
+    }
+
+    [Fact]
+    public async Task UnsupportedHelpFallbackRespectsConfiguredOutputLimit()
+    {
+        var service = CreateService(new UnavailableAiAssistantProvider(), maxOutputCharacters: 100);
+
+        var result = await service.ExplainHelpAsync(
+            "What is the weather on Mars?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("unsupported", result.SourceId);
+        Assert.True(result.EscalationRequired);
+        Assert.InRange(result.Answer.Length, 1, 100);
+    }
+
+    [Fact]
+    public async Task ProviderSelectedApprovedContentExceedingOutputLimitUsesBoundedEscalation()
+    {
+        var provider = new FakeProvider
+        {
+            HelpHandler = (_, _) => Task.FromResult<HelpProviderResult?>(
+                new HelpProviderResult("state-in-progress"))
+        };
+        var service = CreateService(provider, enabled: true, maxOutputCharacters: 100);
+
+        var result = await service.ExplainHelpAsync(
+            "Explain my trip progress",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("unsupported", result.SourceId);
+        Assert.True(result.EscalationRequired);
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.InRange(result.Answer.Length, 1, 100);
+    }
+
+    [Fact]
     public async Task ExplicitStateNameInQuestionReturnsItsApprovedExplanation()
     {
         var service = CreateService(new UnavailableAiAssistantProvider());
@@ -325,7 +378,8 @@ public sealed class AiAssistanceServiceTests
     private static AiAssistanceService CreateService(
         IAiAssistantProvider provider,
         bool enabled = false,
-        int timeoutSeconds = 4) =>
+        int timeoutSeconds = 4,
+        int maxOutputCharacters = 600) =>
         new(provider, new AiAssistantOptions
         {
             Enabled = enabled,
@@ -335,7 +389,7 @@ public sealed class AiAssistanceServiceTests
             CredentialReference = enabled ? "secret-store-reference-placeholder" : null,
             RequestTimeoutSeconds = timeoutSeconds,
             MaxInputCharacters = 1000,
-            MaxOutputCharacters = 600,
+            MaxOutputCharacters = maxOutputCharacters,
             MaxRequestsPerMinute = 10
         });
 
