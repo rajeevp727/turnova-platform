@@ -288,6 +288,23 @@ jobs:
           name: ${{ matrix.app }}-android-native-debug-apk
           path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Compile standalone Android release APK
+        working-directory: src/mobile/${{ matrix.app }}/android
+        run: "$HOME/.gradle/turnova-distributions/gradle-8.14.3/bin/gradle" --no-daemon --stacktrace assembleRelease
+      - name: Verify standalone APK contains embedded JavaScript bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          unzip -l "$apk" | grep -F 'assets/index.android.bundle' >/dev/null
+          echo "Standalone release APK verified with embedded JavaScript."
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-android-standalone-release-apk
+          path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
 
   native-ios:
     runs-on: macos-15-intel
