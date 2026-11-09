@@ -32,7 +32,8 @@ if [[ ! -d "$APP_BUNDLE" || ! -s "$APP_BUNDLE/Info.plist" ]]; then
 fi
 
 mkdir -p "$OUTPUT_DIR"
-actual_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_BUNDLE/Info.plist" 2>/dev/null || true)"
+PLIST_BUDDY="${PLIST_BUDDY:-/usr/libexec/PlistBuddy}"
+actual_id="$("$PLIST_BUDDY" -c 'Print :CFBundleIdentifier' "$APP_BUNDLE/Info.plist" 2>/dev/null || true)"
 if [[ "$actual_id" != "$EXPECTED_ID" ]]; then
   echo "iOS Simulator app identity mismatch: expected $EXPECTED_ID, found $actual_id." >&2
   exit 1
@@ -47,11 +48,11 @@ data = json.load(sys.stdin)
 for runtime in sorted(data.get("devices", {}), reverse=True):
     for device in data["devices"][runtime]:
         if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
-            print(device["udid"] + "\t" + device.get("state", "Shutdown"))
+            print(device["udid"])
             raise SystemExit(0)
 raise SystemExit("No available iPhone Simulator device was found.")
 ' <<< "$devices_json")"
-IFS=$'\t' read -r DEVICE_UDID DEVICE_STATE <<< "$selection"
+DEVICE_UDID="$selection"
 if [[ -z "$DEVICE_UDID" ]]; then
   echo "Unable to select an available iPhone Simulator device." >&2
   exit 1
@@ -62,9 +63,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ "$DEVICE_STATE" != "Booted" ]]; then
-  xcrun simctl boot "$DEVICE_UDID"
-fi
+# A fresh install must not inherit Keychain tokens or app data from a prior run.
+# iOS Keychain entries can outlive an app uninstall, so reset the simulator itself.
+xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
+xcrun simctl erase "$DEVICE_UDID"
+xcrun simctl boot "$DEVICE_UDID"
 xcrun simctl bootstatus "$DEVICE_UDID" -b
 
 xcrun simctl install "$DEVICE_UDID" "$APP_BUNDLE"
@@ -117,7 +120,9 @@ with open(output, "w", encoding="utf-8") as stream:
         "install": "passed",
         "launch": "passed",
         "processStableAfterStartup": True,
+        "simulatorDataErased": True,
         "loginScreenTextVerified": True,
+        "staleSessionErrorAbsent": True,
         "screenshot": "launch.png",
         "productionApiOrAuthentication": "not exercised",
         "signing": "unsigned simulator build"
