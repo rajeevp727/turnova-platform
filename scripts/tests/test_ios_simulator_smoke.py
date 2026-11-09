@@ -58,7 +58,7 @@ JSON
       exit 2
     }
     [[ "${FAKE_BOOTSTATUS_FAIL:-0}" != "1" ]] || exit 1
-    [[ "${FAKE_BOOTSTATUS_SLEEP:-0}" != "1" ]] || sleep 3
+    [[ "${FAKE_BOOTSTATUS_SLEEP:-0}" != "1" ]] || exec sleep 3
     ;;
   get_app_container)
     echo "$FAKE_APP_CONTAINER"
@@ -194,6 +194,15 @@ fi
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("bootstatus TEST-DEVICE -b --timeout 300", commands)
+        self.assertFalse(any(item.startswith("install ") for item in commands))
+        self.assertFalse((output / "result.json").exists())
+
+    def test_simulator_bootstatus_timeout_stops_before_install(self) -> None:
+        result, output, commands = self.run_smoke(bootstatus_sleep=True, boot_timeout_seconds=1)
+
+        self.assertEqual(result.returncode, 124)
+        self.assertIn("did not finish first-boot migration within 1 seconds", result.stderr)
+        self.assertIn("bootstatus TEST-DEVICE -b", commands)
         self.assertFalse(any(item.startswith("install ") for item in commands))
         self.assertFalse((output / "result.json").exists())
 
