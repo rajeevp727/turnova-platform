@@ -14,8 +14,9 @@ PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_
 
 
 def validate_expected_id(value: str) -> str:
-    if not isinstance(value, str) or not PACKAGE_ID_PATTERN.fullmatch(value):
-        raise ValueError("Expected application ID must be a reverse-DNS identifier.")
+    if (not isinstance(value, str) or not PACKAGE_ID_PATTERN.fullmatch(value) or
+            value.lower() == "com.example" or value.lower().startswith("com.example.")):
+        raise ValueError("Expected application ID must be a non-placeholder reverse-DNS identifier.")
     return value
 
 
