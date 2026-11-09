@@ -91,7 +91,7 @@ fi
 
 mkdir -p "$ANDROID_AVD_HOME"
 "$AVDMANAGER" delete avd -n "$AVD_NAME" >/dev/null 2>&1 || true
-printf 'no\\n' | "$AVDMANAGER" create avd -f -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "pixel_2" 2>&1 | tee "$OUTPUT_DIR/avdmanager-create.log"
+printf 'no\n' | "$AVDMANAGER" create avd -f -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "pixel_2" 2>&1 | tee "$OUTPUT_DIR/avdmanager-create.log"
 
 if [[ ! -s "$AVD_INI" || ! -d "$AVD_DIR" ]]; then
   echo "Android AVD was not created in ANDROID_AVD_HOME=$ANDROID_AVD_HOME." >&2
@@ -99,8 +99,8 @@ if [[ ! -s "$AVD_INI" || ! -d "$AVD_DIR" ]]; then
   exit 1
 fi
 
-"$EMULATOR_BIN" -avd "$AVD_NAME" -no-window -no-audio -no-boot-anim \\
-  -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics \\
+"$EMULATOR_BIN" -avd "$AVD_NAME" -no-window -no-audio -no-boot-anim \
+  -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics \
   -memory 2048 -cores 2 >"$OUTPUT_DIR/emulator.log" 2>&1 &
 EMULATOR_PID=$!
 
