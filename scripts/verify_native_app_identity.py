@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)+$")
+PACKAGE_ID_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
 
 
 def validate_expected_id(value: str) -> str:
@@ -20,7 +20,7 @@ def validate_expected_id(value: str) -> str:
 
 
 def parse_aapt_package_id(output: str) -> str:
-    matches = re.findall(r"^package:\\s+name='([^']+)'(?:\\s|$)", output, flags=re.MULTILINE)
+    matches = re.findall(r"^package:\s+name='([^']+)'(?:\s|$)", output, flags=re.MULTILINE)
     if len(matches) != 1:
         raise ValueError("Android manifest must contain exactly one package identity.")
     return validate_expected_id(matches[0])
