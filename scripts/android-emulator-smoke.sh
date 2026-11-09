@@ -70,7 +70,6 @@ EMULATOR_PID=""
 AVD_CREATED=false
 
 cleanup() {
-  "$SDK_ROOT/platform-tools/adb" emu kill >/dev/null 2>&1 || true
   if [[ -n "$EMULATOR_PID" ]]; then
     kill "$EMULATOR_PID" >/dev/null 2>&1 || true
     wait "$EMULATOR_PID" 2>/dev/null || true
