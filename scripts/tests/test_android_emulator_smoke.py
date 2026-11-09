@@ -164,7 +164,9 @@ exit 0
                     "ANDROID_AVD_HOME": str(avd_home),
                     "RUNNER_TEMP": str(root / "runner-temp"),
                     "FAKE_TARGET_EXCEPTION": "0",
-                    "FAKE_RESTORE_ERROR": "0",\n                    "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",\n                    "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS": "0",
+                    "FAKE_RESTORE_ERROR": "0",
+                    "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",
+                    "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS": "0",
                 }
             )
 
