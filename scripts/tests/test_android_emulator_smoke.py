@@ -247,8 +247,9 @@ exit 0
             create_log = (output / "avdmanager-create.log").read_text(encoding="utf-8")
             self.assertIn("Created turnova-release-smoke-", create_log)
             self.assertIn(str(avd_home), create_log)
-            self.assertFalse(list(avd_home.glob("turnova-release-smoke-*.ini")))
-            self.assertFalse(list(avd_home.glob("turnova-release-smoke-*.avd")))
+            created_avd_name = create_log.split("Created ", 1)[1].split(" in ", 1)[0]
+            self.assertFalse((avd_home / f"{created_avd_name}.ini").exists())
+            self.assertFalse((avd_home / f"{created_avd_name}.avd").exists())
             self.assertTrue(custom_avd_ini.is_file())
             self.assertEqual(custom_avd_sentinel.read_text(encoding="utf-8"), "preserve")
             attempts_file = sdk / "system-image-install-attempts"
@@ -459,7 +460,7 @@ exit 0
             self.assertIn("failed after 3 attempts", repeated_archive_failure.stderr)
             self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "3")
             self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.ini")))
-            self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.avd"))
+            self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.avd")))
             self.assertFalse(system_image_dir.exists())
             self.assertFalse((failure_output / "result.json").exists())
 
