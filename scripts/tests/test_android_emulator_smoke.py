@@ -41,7 +41,24 @@ class AndroidEmulatorSmokeHarnessTests(unittest.TestCase):
 set -euo pipefail
 case "$*" in
   *--licenses*) exit 0 ;;
-  *--install*) exit 0 ;;
+  *--install*)
+    if [[ "$*" == *"system-images;android-35;google_apis;x86_64"* ]]; then
+      attempts_file="$ANDROID_SDK_ROOT/system-image-install-attempts"
+      attempts=0
+      [[ ! -f "$attempts_file" ]] || read -r attempts < "$attempts_file"
+      attempts=$((attempts + 1))
+      printf '%s\\n' "$attempts" > "$attempts_file"
+      if (( attempts <= ${FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS:-0} )); then
+        echo "Warning: Google APIs system image download failed: ZipFile unknown archive" >&2
+        exit 1
+      fi
+      package_dir="$ANDROID_SDK_ROOT/system-images/android-35/google_apis/x86_64"
+      mkdir -p "$package_dir"
+      printf '<localPackage path="system-images;android-35;google_apis;x86_64"/>\\n' > "$package_dir/package.xml"
+      printf 'deterministic-system-image-fixture' > "$package_dir/system.img"
+    fi
+    exit 0
+    ;;
   *) echo "unexpected sdkmanager arguments: $*" >&2; exit 2 ;;
 esac
 """,
@@ -145,7 +162,7 @@ exit 0
                     "ANDROID_AVD_HOME": str(avd_home),
                     "RUNNER_TEMP": str(root / "runner-temp"),
                     "FAKE_TARGET_EXCEPTION": "0",
-                    "FAKE_RESTORE_ERROR": "0",
+                    "FAKE_RESTORE_ERROR": "0",\n                    "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",\n                    "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS": "0",
                 }
             )
 
@@ -177,6 +194,10 @@ exit 0
             self.assertTrue((avd_home / "turnova-release-smoke.ini").is_file())
             self.assertTrue((avd_home / "turnova-release-smoke.avd").is_dir())
             self.assertTrue((output / "avdmanager-create.log").is_file())
+            attempts_file = sdk / "system-image-install-attempts"
+            self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "2")
+            self.assertIn("unknown archive", (output / "sdkmanager-system-image-attempt-1.log").read_text(encoding="utf-8"))
+            self.assertIn("system image", (output / "sdkmanager-system-image-attempt-2.log").read_text(encoding="utf-8").lower())
             self.assertGreater((output / "launch.png").stat().st_size, 0)
             report = json.loads((output / "result.json").read_text(encoding="utf-8"))
             self.assertEqual(report["packageId"], "com.turnova.rider")
@@ -190,6 +211,7 @@ exit 0
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
             self.assertTrue(report["staleSessionErrorAbsent"])
 
+            environment["FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS"] = "0"
             environment["FAKE_RESTORE_ERROR"] = "1"
             stale_session_error = subprocess.run(
                 command,
@@ -216,6 +238,30 @@ exit 0
             )
             self.assertEqual(target_exception.returncode, 1)
             self.assertIn("React Native reported an unhandled startup exception", target_exception.stderr)
+
+            # A permanently corrupt SDK archive must stop before AVD creation or app install.
+            system_image_dir = sdk / "system-images" / "android-35" / "google_apis" / "x86_64"
+            shutil.rmtree(system_image_dir)
+            attempts_file.unlink()
+            failed_avd_home = root / "failed-avd-home"
+            failure_output = root / "failed-output"
+            environment["ANDROID_AVD_HOME"] = str(failed_avd_home)
+            environment["FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS"] = "3"
+            failure_command = command[:-1] + [str(failure_output)]
+            repeated_archive_failure = subprocess.run(
+                failure_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(repeated_archive_failure.returncode, 1)
+            self.assertIn("failed after 3 attempts", repeated_archive_failure.stderr)
+            self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "3")
+            self.assertFalse((failed_avd_home / "turnova-release-smoke.ini").exists())
+            self.assertFalse((failure_output / "result.json").exists())
 
     def test_invalid_package_identifier_is_rejected_before_sdk_access(self) -> None:
         with tempfile.TemporaryDirectory(prefix="turnova-invalid-package-") as temporary:
