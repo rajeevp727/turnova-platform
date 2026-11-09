@@ -204,6 +204,21 @@ exit 0
                 }
             )
 
+            # Existing AVDs in both explicit and conventional homes must survive.
+            custom_existing_dir = avd_home / "turnova-release-smoke-existing.avd"
+            custom_existing_dir.mkdir(parents=True)
+            custom_avd_ini = avd_home / "turnova-release-smoke-existing.ini"
+            custom_avd_ini.write_text("developer AVD must remain untouched", encoding="utf-8")
+            custom_avd_sentinel = custom_existing_dir / "user-data.txt"
+            custom_avd_sentinel.write_text("preserve", encoding="utf-8")
+            user_avd_home = home / ".android" / "avd"
+            user_avd_dir = user_avd_home / "turnova-release-smoke-existing.avd"
+            user_avd_dir.mkdir(parents=True)
+            user_avd_ini = user_avd_home / "turnova-release-smoke-existing.ini"
+            user_avd_ini.write_text("developer AVD must remain untouched", encoding="utf-8")
+            user_avd_sentinel = user_avd_dir / "user-data.txt"
+            user_avd_sentinel.write_text("preserve", encoding="utf-8")
+
             command = [
                 "bash",
                 str(SMOKE_SCRIPT),
@@ -229,9 +244,13 @@ exit 0
                 0,
                 msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
             )
-            self.assertTrue((avd_home / "turnova-release-smoke.ini").is_file())
-            self.assertTrue((avd_home / "turnova-release-smoke.avd").is_dir())
-            self.assertTrue((output / "avdmanager-create.log").is_file())
+            create_log = (output / "avdmanager-create.log").read_text(encoding="utf-8")
+            self.assertIn("Created turnova-release-smoke-", create_log)
+            self.assertIn(str(avd_home), create_log)
+            self.assertFalse(list(avd_home.glob("turnova-release-smoke-*.ini")))
+            self.assertFalse(list(avd_home.glob("turnova-release-smoke-*.avd")))
+            self.assertTrue(custom_avd_ini.is_file())
+            self.assertEqual(custom_avd_sentinel.read_text(encoding="utf-8"), "preserve")
             attempts_file = sdk / "system-image-install-attempts"
             self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "2")
             self.assertIn("unknown archive", (output / "sdkmanager-system-image-attempt-1.log").read_text(encoding="utf-8"))
@@ -249,6 +268,40 @@ exit 0
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
             self.assertTrue(report["staleSessionErrorAbsent"])
             self.assertEqual(report["systemUiRecovery"]["pixelLauncherAnrWaitAttempts"], 0)
+            self.assertTrue(user_avd_ini.is_file())
+            self.assertEqual(user_avd_sentinel.read_text(encoding="utf-8"), "preserve")
+
+            # With no explicit ANDROID_AVD_HOME, use an isolated RUNNER_TEMP path
+            # instead of the developer's conventional ~/.android/avd directory.
+            isolated_runner_temp = root / "isolated-runner-temp"
+            isolated_output = root / "isolated-default-avd-output"
+            environment.pop("ANDROID_AVD_HOME")
+            environment["RUNNER_TEMP"] = str(isolated_runner_temp)
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(isolated_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(isolated_output / "input-taps.txt")
+            isolated_command = command[:-1] + [str(isolated_output)]
+            isolated_result = subprocess.run(
+                isolated_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(
+                isolated_result.returncode,
+                0,
+                msg=f"stdout:\n{isolated_result.stdout}\nstderr:\n{isolated_result.stderr}",
+            )
+            isolated_create_log = (isolated_output / "avdmanager-create.log").read_text(encoding="utf-8")
+            self.assertIn(str(isolated_runner_temp / "turnova-android-avd"), isolated_create_log)
+            self.assertTrue(user_avd_ini.is_file())
+            self.assertEqual(user_avd_sentinel.read_text(encoding="utf-8"), "preserve")
+            environment["ANDROID_AVD_HOME"] = str(avd_home)
+            environment["RUNNER_TEMP"] = str(root / "runner-temp")
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(output / "input-taps.txt")
 
             # A transient Pixel Launcher ANR is handled only through its explicit Wait
             # control; the app must still render the login surface and produce evidence.
@@ -405,7 +458,8 @@ exit 0
             self.assertEqual(repeated_archive_failure.returncode, 1)
             self.assertIn("failed after 3 attempts", repeated_archive_failure.stderr)
             self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "3")
-            self.assertFalse((failed_avd_home / "turnova-release-smoke.ini").exists())
+            self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.ini")))
+            self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.avd"))
             self.assertFalse(system_image_dir.exists())
             self.assertFalse((failure_output / "result.json").exists())
 
