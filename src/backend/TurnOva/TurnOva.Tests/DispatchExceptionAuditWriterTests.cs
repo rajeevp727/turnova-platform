@@ -161,17 +161,19 @@ public sealed class DispatchExceptionAuditWriterTests
     [Fact]
     public async Task RecordAsync_PropagatesCancellationDuringCanonicalConflictReadBack()
     {
+        using var cancellation = new CancellationTokenSource();
         var store = new FakeQueueAuditEventStore
         {
             CreateResult = false,
-            ReadException = new OperationCanceledException("canonical read cancelled")
+            CancelDuringRead = cancellation
         };
         var writer = new DispatchExceptionAuditWriter(store);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => writer.RecordAsync(
             "driver-actor-1", "zone-a", "cab", "trace-read-cancelled",
-            QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None));
+            QueueAuditReasonCategories.QueueReadFailed, cancellation.Token));
 
+        Assert.True(cancellation.IsCancellationRequested);
         Assert.Equal(1, store.ReadCount);
     }
 
@@ -241,7 +243,7 @@ public sealed class DispatchExceptionAuditWriterTests
         public string? ReadPartitionKey { get; private set; }
         public int ReadCount { get; private set; }
         public Exception? CreateException { get; init; }
-        public Exception? ReadException { get; init; }
+        public CancellationTokenSource? CancelDuringRead { get; init; }
 
         public Task<bool> TryCreateAsync(
             QueueAuditEvent auditEvent, string partitionKey, CancellationToken cancellationToken)
@@ -258,7 +260,8 @@ public sealed class DispatchExceptionAuditWriterTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             ReadCount++;
-            if (ReadException is not null) throw ReadException;
+            CancelDuringRead?.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
             ReadEventId = eventId;
             ReadPartitionKey = partitionKey;
             return Task.FromResult(Existing);
