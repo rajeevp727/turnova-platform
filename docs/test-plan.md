@@ -1164,7 +1164,7 @@ The first PR #140 exact-head run [#42606662115](https://github.com/rajeevp727/tu
 
 The fake ADB emits an unhandled React Native marker from an unrelated PID during the passing case; the smoke must ignore it. A second invocation emits the same marker under the target app PID and must fail. The fake-device test also returns a deterministic UI hierarchy for the new `uiautomator`/`cat` commands and asserts all four login-surface nodes.
 
-The Android UI hierarchy and iOS OCR checks exercise only the fresh-install login screen; they do not submit credentials or call an authentication/API provider. The iOS smoke ad-hoc signs only its ephemeral simulator copy with a bundle-scoped Keychain entitlement so Expo SecureStore can read an empty Keychain; the separate native compile artifact remains unsigned and no production signing credentials are used. They supplement, but do not replace, existing functional/security suites or physical-device pilot acceptance.
+The Android UI hierarchy and iOS OCR checks exercise only the fresh-install login surface; they do not submit credentials or call an authentication/API provider. The iOS Simulator smoke keeps the native artifact unsigned because ad-hoc signing without an Apple-issued TeamIdentifier is rejected by CoreSimulator launchd (`Codesigning issue`, error 162). In this unsigned CI artifact, SecureStore access is unavailable; OCR must detect the exact restore/storage-unavailable banner while continuing to reject expired-session and token-cleanup errors. This is not Keychain success or clean-session restoration. Signed physical-device validation remains external.
 
 CI discovers all `scripts/tests/test_*.py` cases, including the existing native artifact identity tests and the fake-SDK Android harness. This validates runner control flow; the real emulator and iOS Simulator jobs remain required for platform install/launch and UI evidence.
 
@@ -1201,3 +1201,11 @@ When `simctl launch` fails after install, the smoke now captures filtered simula
 
 
 The launch-failure harness matches the full `log show` command by prefix because the predicate and time-window arguments are part of the recorded invocation. Its fake codesign emits deterministic signature/entitlement content, and the test verifies the captured files rather than only checking that empty files exist.
+
+### RELEASE-01 unsigned iOS Simulator and SecureStore boundary (2026-11-09)
+
+- `RELEASE-IOS-UNSIGNED-001`: The smoke rejects any signed/ad-hoc app bundle before simulator access and consumes the original `CODE_SIGNING_ALLOWED=NO` native artifact.
+- `RELEASE-IOS-UNSIGNED-002`: After simulator erase, install, launch and process-stability checks, Vision OCR must find the required login text and both parts of the exact SecureStore-unavailable banner: `Unable to restore your session` and `Check your connection or secure storage and retry`.
+- `RELEASE-IOS-UNSIGNED-003`: The expected storage-unavailable mode still rejects `Session expired`, `Unable to restore session` (without the expected wording), `Unable to clear secure session storage` and secure token-save failures. Missing the expected storage banner also fails and cannot create `result.json`.
+- The fake-SDK harness covers unsigned/ad-hoc signature gating, expected/missing SecureStore banner, expired-session rejection, simulator erase-before-install, boot timeout, install/launch failures and failure-only diagnostics.
+- Exact-head run [#1049 / 42645314471](https://github.com/rajeevp727/turnova-platform/actions/runs/42645314471) exposed the signing failure: both uploaded iOS diagnostics record `error=162: Codesigning issue` and `TeamIdentifier=not set`. The unsigned smoke is the supported CI path; live Keychain access, token persistence and session restoration require a signed build on approved physical devices and remain external RELEASE-01/auth acceptance gates.

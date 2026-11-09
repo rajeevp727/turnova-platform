@@ -24,8 +24,9 @@ def write_executable(path: Path, content: str) -> None:
 class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
     def run_smoke(
         self,
-        restore_error: bool = False,
-        adhoc_signature: bool = True,
+        restore_error: bool = True,
+        adhoc_signature: bool = False,
+        stale_session_error: bool = False,
         bootstatus_fail: bool = False,
         bootstatus_sleep: bool = False,
         boot_timeout_seconds: int | None = None,
@@ -125,16 +126,17 @@ echo "$FAKE_BUNDLE_ID"
             r"""#!/usr/bin/env bash
 set -euo pipefail
 case "$1" in
-  --verify) exit 0 ;;
   -dv)
     if [[ "$FAKE_ADHOC_SIGNATURE" == "1" ]]; then
       echo "Signature=adhoc"
     else
-      echo "Signature=Apple Development"
+      echo "code object is not signed at all" >&2
+      exit 1
     fi
     ;;
   -d)
-    printf '<plist><dict><key>application-identifier</key><string>%s</string></dict></plist>\n' "$FAKE_BUNDLE_ID"
+    echo "code object is not signed at all" >&2
+    exit 1
     ;;
   *) echo "unexpected codesign arguments: $*" >&2; exit 2 ;;
 esac
@@ -144,10 +146,16 @@ esac
             bin_dir / "swift",
             r"""#!/usr/bin/env bash
 set -euo pipefail
+if [[ "$*" != *"--expect-secure-store-unavailable"* ]]; then
+  echo "expected SecureStore-unavailable OCR mode was not requested" >&2
+  exit 2
+fi
 echo "Welcome back Email address Password Sign in"
 if [[ "$FAKE_RESTORE_ERROR" == "1" ]]; then
-  printf "Unable to restore your\nsession. Check your connection or secure storage and retry.\n"
-  exit 1
+  printf "Unable to restore your\\nsession. Check your connection or secure storage and retry.\\n"
+fi
+if [[ "$FAKE_STALE_SESSION" == "1" ]]; then
+  echo "Session expired. Please sign in again."
 fi
 """,
         )
@@ -162,6 +170,7 @@ fi
                 "FAKE_BUNDLE_ID": "com.turnova.rider",
                 "FAKE_RESTORE_ERROR": "1" if restore_error else "0",
                 "FAKE_ADHOC_SIGNATURE": "1" if adhoc_signature else "0",
+                "FAKE_STALE_SESSION": "1" if stale_session_error else "0",
                 "FAKE_BOOTSTATUS_FAIL": "1" if bootstatus_fail else "0",
                 "FAKE_BOOTSTATUS_SLEEP": "1" if bootstatus_sleep else "0",
                 "FAKE_INSTALL_FAIL": "1" if install_fail else "0",
@@ -194,7 +203,7 @@ fi
         commands = xcrun_log.read_text(encoding="utf-8").splitlines() if xcrun_log.exists() else []
         return result, output, commands
 
-    def test_erases_simulator_before_install_and_reports_clean_login(self) -> None:
+    def test_erases_simulator_before_install_and_reports_expected_unsigned_secure_store_failure(self) -> None:
         result, output, commands = self.run_smoke()
 
         self.assertEqual(result.returncode, 0, msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
@@ -217,17 +226,26 @@ fi
         self.assertTrue(report["processStableAfterStartup"])
         self.assertTrue(report["simulatorDataErased"])
         self.assertTrue(report["loginScreenTextVerified"])
-        self.assertTrue(report["staleSessionErrorAbsent"])
+        self.assertFalse(report["secureStoreAvailable"])
+        self.assertTrue(report["secureStoreUnavailableBannerVerified"])
+        self.assertTrue(report["staleSessionExpiredErrorAbsent"])
         self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
-        self.assertEqual(report["signing"], "ad-hoc simulator signature (test-only)")
-        self.assertEqual(report["keychainAccessGroup"], "bundle-scoped test entitlement")
+        self.assertEqual(report["signing"], "unsigned simulator artifact (CI-only)")
+        self.assertEqual(report["keychainAccessGroup"], "not available; signed-device validation required")
         self.assertGreater((output / "launch.png").stat().st_size, 0)
 
-    def test_stale_session_restore_error_fails_the_smoke(self) -> None:
-        result, output, _ = self.run_smoke(restore_error=True)
+    def test_missing_expected_secure_store_failure_fails_the_smoke(self) -> None:
+        result, output, _ = self.run_smoke(restore_error=False)
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("Unable to restore your\nsession", result.stdout)
+        self.assertIn("Expected unsigned-simulator SecureStore failure banner was not visible", result.stderr)
+        self.assertFalse((output / "result.json").exists())
+
+    def test_stale_session_expired_error_still_fails_the_smoke(self) -> None:
+        result, output, _ = self.run_smoke(stale_session_error=True)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Session expired", result.stdout)
         self.assertFalse((output / "result.json").exists())
 
     def test_simulator_bootstatus_failure_stops_before_install(self) -> None:
@@ -286,21 +304,21 @@ fi
             (output / "installed-apps.txt").read_text(encoding="utf-8"),
         )
         self.assertIn(
-            "Signature=adhoc",
+            "code object is not signed at all",
             (output / "app-signature.txt").read_text(encoding="utf-8"),
         )
         self.assertIn(
-            "com.turnova.rider",
+            "code object is not signed at all",
             (output / "app-entitlements.plist").read_text(encoding="utf-8"),
         )
         self.assertFalse((output / "launch.txt").exists())
         self.assertFalse((output / "result.json").exists())
 
-    def test_rejects_non_adhoc_signed_app_before_simulator_access(self) -> None:
-        result, output, commands = self.run_smoke(adhoc_signature=False)
+    def test_rejects_adhoc_signed_app_before_simulator_access(self) -> None:
+        result, output, commands = self.run_smoke(adhoc_signature=True)
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("requires an ad-hoc signature", result.stderr)
+        self.assertIn("requires the original unsigned CI artifact", result.stderr)
         self.assertEqual(commands, [])
         self.assertFalse((output / "result.json").exists())
 
