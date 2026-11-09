@@ -4857,6 +4857,8 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(rideId, record.GetProperty("rideId").GetString());
         Assert.Equal(unionId, record.GetProperty("unionId").GetString());
         Assert.Equal(450m, record.GetProperty("amountReceived").GetDecimal());
+        Assert.Equal("Scooty", rides[legacyRideId].ServiceClass);
+        Assert.Equal(450m, rides[legacyRideId].PaymentReconciliation!.AmountReceived);
     }
 
     [Fact]
