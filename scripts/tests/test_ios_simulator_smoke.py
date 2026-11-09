@@ -22,7 +22,7 @@ def write_executable(path: Path, content: str) -> None:
 
 
 class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
-    def run_smoke(self, restore_error: bool = False, adhoc_signature: bool = True, bootstatus_fail: bool = False) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
+    def run_smoke(self, restore_error: bool = False, adhoc_signature: bool = True, bootstatus_fail: bool = False, bootstatus_sleep: bool = False, boot_timeout_seconds: int = 300) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -58,6 +58,7 @@ JSON
       exit 2
     }
     [[ "${FAKE_BOOTSTATUS_FAIL:-0}" != "1" ]] || exit 1
+    [[ "${FAKE_BOOTSTATUS_SLEEP:-0}" != "1" ]] || sleep 3
     ;;
   get_app_container)
     echo "$FAKE_APP_CONTAINER"
@@ -125,6 +126,8 @@ fi
                 "FAKE_RESTORE_ERROR": "1" if restore_error else "0",
                 "FAKE_ADHOC_SIGNATURE": "1" if adhoc_signature else "0",
                 "FAKE_BOOTSTATUS_FAIL": "1" if bootstatus_fail else "0",
+                "FAKE_BOOTSTATUS_SLEEP": "1" if bootstatus_sleep else "0",
+                "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS": str(boot_timeout_seconds),
                 "RUNNER_TEMP": str(root / "runner-temp"),
             }
         )
