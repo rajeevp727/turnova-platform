@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-09
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `4521c7e9a1448f85208ca744cd4824fd2a02596f` after RELEASE-01 PR #140 merged. Exact-head CI [#42613834167](https://github.com/rajeevp727/turnova-platform/actions/runs/42613834167) passed 12/12, including 364/364 backend tests and all four Rider/Driver Android emulator/iOS Simulator install-launch smoke jobs. Android screenshots show the clean login UI; both iOS screenshots show a session-restore/secure-storage error banner because the simulator was not erased before install. Current #19 follow-up is PR #141 preparation on `test/release-01-clean-simulator-state`; it resets iOS simulator data and rejects stale-session error text on both platforms. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations support-policy inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `4521c7e9a1448f85208ca744cd4824fd2a02596f` after RELEASE-01 PR #140 merged. Exact-head CI [#42613834167](https://github.com/rajeevp727/turnova-platform/actions/runs/42613834167) passed 12/12, including 364/364 backend tests and all four Rider/Driver Android emulator/iOS Simulator install-launch smoke jobs. Android screenshots show the clean login UI; both iOS screenshots show a session-restore/secure-storage error banner because the simulator was not erased before install. Current #19 follow-up is PR #141 preparation on `test/release-01-clean-simulator-state`; it resets iOS simulator data and rejects stale-session error text on both platforms. The iOS Vision OCR normalizes whitespace, with a deterministic wrapped-banner negative fixture so line breaks cannot bypass the guard. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations support-policy inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1042,3 +1042,8 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - Exact-head CI must prove the clean-state result on both iOS apps; if the banner remains after erase, investigate the actual SecureStore restore path instead of weakening the assertion.
 - #19 remains externally Blocked pending signed AAB/IPA, Apple-approved identifiers, EAS linkage, production HTTPS API/DNS/TLS/CORS/readiness, build-number policy, signing credentials, physical-device/pilot acceptance and store submission. #18 live Cosmos/telemetry/CORS/load/device gates remain. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations-approved support policy.
 - Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+### RELEASE-01 OCR line-wrap regression (2026-11-09)
+
+Apple Vision may split a visible session-restore banner across multiple recognized lines. The iOS smoke checker normalizes whitespace before matching required and forbidden text; the fake-SDK test emits the stale-session phrase across a line break and must fail. PR #141's updated exact-head 12-job CI is the merge gate. No app runtime or production configuration changed.
