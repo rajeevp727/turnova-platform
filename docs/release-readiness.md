@@ -1,6 +1,6 @@
 # TurnOva Rider/Driver release readiness
 
-**Last audited:** 2026-11-09  
+**Last audited:** 2026-11-10  
 **Scope:** Rider and Driver Android/iOS MVP only. Fleet/Ops Phase 2 is excluded.
 
 ## Engineering preflight
@@ -152,10 +152,20 @@ Run [#1070 / 42663289638](https://github.com/rajeevp727/turnova-platform/actions
 
 Run [#1072 / 42669755886](https://github.com/rajeevp727/turnova-platform/actions/runs/42669755886) on head `7f2f0431de339a971851b61b4b385eff51f5d2c6` recorded 11 jobs, all successful, but the expected Android Driver emulator-smoke job was not created/recorded and no Driver Android smoke artifact exists; GitHub reports the workflow conclusion as failure. Rider Android smoke passed with a stable process and login UI. Both iOS Simulator smoke jobs passed after simulator erase: Rider [artifact 13698668818](https://github.com/rajeevp727/turnova-platform/actions/runs/42669755886/artifacts/13698668818) and Driver [artifact 13699018200](https://github.com/rajeevp727/turnova-platform/actions/runs/42669755886/artifacts/13699018200) show install/launch, stable process, login text, expected unsigned SecureStore-unavailable banner and no stale-session error. These artifacts explicitly do not claim Keychain persistence or production API/authentication. Rider Android artifact [13698723012](https://github.com/rajeevp727/turnova-platform/actions/runs/42669755886/artifacts/13698723012) verifies install/launch/login UI; no Pixel Launcher ANR occurred in that attempt.
 
-The latest code additionally requires the Android Wait control to be enabled/clickable before tapping. A fresh exact-head CI must create and pass all 12 jobs, including the Driver Android emulator smoke, before merge. RELEASE-01 remains Blocked on signed production AAB/IPA, approved identifiers/EAS linkage, production HTTPS API hosting/configuration, physical Android/iOS devices, pilot acceptance and store submission.
+The latest code additionally requires the Android Wait control to be enabled/clickable before tapping. Exact-head code run [#1079 / 42679676632](https://github.com/rajeevp727/turnova-platform/actions/runs/42679676632) on 51dbb81b6baf3a6e832889132b63f15b1923b310 passed all 12/12 jobs, including the Driver Android emulator smoke. The docs-sync commit advances the PR head; a fresh all-12 exact-head run is still required before merge. RELEASE-01 remains Blocked on signed production AAB/IPA, approved identifiers/EAS linkage, production HTTPS API hosting/configuration, physical Android/iOS devices, pilot acceptance and store submission.
 
 
 The deterministic harness also supplies a separate `TurnOva Rider isn't responding` dialog with a visible Wait button. The script must not treat it as a Pixel Launcher recovery case: it fails closed without tapping any control and without emitting `result.json`. This guards against hiding an actual app ANR behind the system-launcher workaround.
 
 
 The final code-only increment is commit [`94c07cbe1b368cc885329599f67e47121fb82b05`](https://github.com/rajeevp727/turnova-platform/commit/94c07cbe1b368cc885329599f67e47121fb82b05): the fake Android harness now also supplies a separate `TurnOva Rider isn't responding` dialog with an enabled Wait control and asserts the script fails without tapping it or emitting a success report. The current branch has a single documentation synchronization after that code commit; the resulting PR head requires a fresh exact-head run with all 12 expected jobs.
+
+## RELEASE-01 latest all-platform simulator evidence (2026-11-10)
+
+Code head 51dbb81b6baf3a6e832889132b63f15b1923b310 passed exact-head CI [#1079 / 42679676632](https://github.com/rajeevp727/turnova-platform/actions/runs/42679676632) with all 12/12 jobs: backend 364/364; shared JS 102/102; Python 28/28; both mobile validations/bundles; all four native Android/iOS builds; and both Android plus both iOS simulator smokes.
+
+- Rider standalone Android release APK smoke: [artifact 13702114989](https://github.com/rajeevp727/turnova-platform/actions/runs/42679676632/artifacts/13702114989). Driver standalone Android release APK smoke: [artifact 13702836717](https://github.com/rajeevp727/turnova-platform/actions/runs/42679676632/artifacts/13702836717). Both show install/launch passed, stable process, expected login text, no stale-session error and zero Pixel Launcher Wait attempts. The workflow downloads the standalone-release-APK artifacts, not the debug APKs.
+- Rider unsigned iOS Simulator smoke: [artifact 13705430717](https://github.com/rajeevp727/turnova-platform/actions/runs/42679676632/artifacts/13705430717). Driver unsigned iOS Simulator smoke: [artifact 13704571529](https://github.com/rajeevp727/turnova-platform/actions/runs/42679676632/artifacts/13704571529). Both show erased simulator, install/launch passed, stable process, login text, expected SecureStore-unavailable banner and no stale-session expired error.
+- iOS result JSON explicitly records secureStoreAvailable=false, no Keychain access group and productionApiOrAuthentication not exercised. This is expected for the original unsigned Simulator artifact and is not Keychain/token persistence evidence.
+- Android and iOS smokes do not exercise production auth/API, live Cosmos, SignalR, GPS providers, signed release distribution or physical devices. Production readiness remains blocked on approved identifiers/EAS, signed AAB/IPA, HTTPS API hosting/configuration, physical-device/pilot acceptance and store submission.
+- The documentation synchronization advances the PR head; run fresh exact-head CI and a COMMENT-only final review before merge. No self-approval or bypass.
