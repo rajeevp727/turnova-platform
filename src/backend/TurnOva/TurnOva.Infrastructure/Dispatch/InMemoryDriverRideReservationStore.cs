@@ -1,63 +1,190 @@
 using System.Collections.Concurrent;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
+
 namespace TurnOva.Infrastructure.Dispatch;
+
 public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationStore
 {
-    private readonly ConcurrentDictionary<string, DriverRideReservation> _items = new(StringComparer.Ordinal);
+    private sealed record ReservationState(
+        DriverRideReservation? Reservation,
+        IReadOnlyList<DriverRideReservationAuditEvent> AuditEvents);
 
-    public Task<bool> TryAcquireAsync(string driverId, string rideId, CancellationToken cancellationToken = default) =>
-        TryAcquireCoreAsync(driverId, rideId, null, cancellationToken);
+    private readonly ConcurrentDictionary<string, ReservationState> _items = new(StringComparer.Ordinal);
 
-    public Task<bool> TryAcquireTemporaryAsync(string driverId, string rideId, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken = default) =>
-        TryAcquireCoreAsync(driverId, rideId, expiresAtUtc, cancellationToken);
+    public Task<bool> TryAcquireAsync(
+        string driverId,
+        string rideId,
+        CancellationToken cancellationToken = default,
+        DriverRideReservationAuditContext? auditContext = null) =>
+        TryAcquireCoreAsync(driverId, rideId, null, cancellationToken, auditContext);
 
-    private Task<bool> TryAcquireCoreAsync(string driverId, string rideId, DateTimeOffset? expiresAtUtc, CancellationToken cancellationToken)
+    public Task<bool> TryAcquireTemporaryAsync(
+        string driverId,
+        string rideId,
+        DateTimeOffset expiresAtUtc,
+        CancellationToken cancellationToken = default,
+        DriverRideReservationAuditContext? auditContext = null) =>
+        TryAcquireCoreAsync(driverId, rideId, expiresAtUtc, cancellationToken, auditContext);
+
+    private Task<bool> TryAcquireCoreAsync(
+        string driverId,
+        string rideId,
+        DateTimeOffset? expiresAtUtc,
+        CancellationToken cancellationToken,
+        DriverRideReservationAuditContext? auditContext)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow) return Task.FromResult(false);
+        if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow)
+            return Task.FromResult(false);
+
         while (true)
         {
-            if (!_items.TryGetValue(driverId, out var current))
-                return Task.FromResult(_items.TryAdd(driverId, new(driverId, rideId, DateTimeOffset.UtcNow, expiresAtUtc)));
-            // The API must reconcile an expired lease against the ride before release.
-            if (current.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
-                return Task.FromResult(false);
-            return Task.FromResult(current.RideId == rideId);
+            var reservation = new DriverRideReservation(driverId, rideId, DateTimeOffset.UtcNow, expiresAtUtc);
+            if (!_items.TryGetValue(driverId, out var currentState))
+            {
+                var auditEvent = DriverRideReservationAuditEvent.Create(
+                    reservation, DriverRideReservationAuditEventTypes.Acquired, auditContext,
+                    previousExpiresAtUtc: null, expiresAtUtc);
+                var initial = new ReservationState(reservation, [auditEvent]);
+                if (_items.TryAdd(driverId, initial))
+                    return Task.FromResult(true);
+                continue;
+            }
+
+            if (currentState.Reservation is { } current)
+            {
+                // Expiry is reconciled against the ride lifecycle by the API; the store never
+                // steals a lease. An idempotent same-ride retry adds no duplicate audit event.
+                if (current.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+                    return Task.FromResult(false);
+                return Task.FromResult(current.RideId == rideId);
+            }
+
+            var created = DriverRideReservationAuditEvent.Create(
+                reservation, DriverRideReservationAuditEventTypes.Acquired, auditContext,
+                previousExpiresAtUtc: null, expiresAtUtc);
+            var nextState = currentState with
+            {
+                Reservation = reservation,
+                AuditEvents = [.. currentState.AuditEvents, created]
+            };
+            if (_items.TryUpdate(driverId, nextState, currentState))
+                return Task.FromResult(true);
         }
     }
 
-    public Task<bool> TryMakePermanentAsync(string driverId, string rideId, CancellationToken cancellationToken = default)
+    public Task<bool> TryMakePermanentAsync(
+        string driverId,
+        string rideId,
+        CancellationToken cancellationToken = default,
+        DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_items.TryGetValue(driverId, out var current) || current.RideId != rideId) return Task.FromResult(false);
-        if (current.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow) return Task.FromResult(false);
-        if (current.ExpiresAtUtc is null) return Task.FromResult(true);
-        return Task.FromResult(_items.TryUpdate(driverId, current with { ExpiresAtUtc = null }, current));
+        while (_items.TryGetValue(driverId, out var state))
+        {
+            var current = state.Reservation;
+            if (current is null || current.RideId != rideId)
+                return Task.FromResult(false);
+            if (current.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+                return Task.FromResult(false);
+            if (current.ExpiresAtUtc is null)
+                return Task.FromResult(true);
+
+            var updated = current with { ExpiresAtUtc = null };
+            var auditEvent = DriverRideReservationAuditEvent.Create(
+                updated, DriverRideReservationAuditEventTypes.MadePermanent, auditContext,
+                current.ExpiresAtUtc, expiresAtUtc: null);
+            var nextState = state with
+            {
+                Reservation = updated,
+                AuditEvents = [.. state.AuditEvents, auditEvent]
+            };
+            if (_items.TryUpdate(driverId, nextState, state))
+                return Task.FromResult(true);
+        }
+
+        return Task.FromResult(false);
     }
 
-    public Task<bool> TrySetExpiryAsync(string driverId, string rideId, DateTimeOffset? expiresAtUtc, CancellationToken cancellationToken = default)
+    public Task<bool> TrySetExpiryAsync(
+        string driverId,
+        string rideId,
+        DateTimeOffset? expiresAtUtc,
+        CancellationToken cancellationToken = default,
+        DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow) return Task.FromResult(false);
-        if (!_items.TryGetValue(driverId, out var current) || current.RideId != rideId) return Task.FromResult(false);
-        return Task.FromResult(_items.TryUpdate(driverId, current with { ExpiresAtUtc = expiresAtUtc }, current));
+        if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow)
+            return Task.FromResult(false);
+
+        while (_items.TryGetValue(driverId, out var state))
+        {
+            var current = state.Reservation;
+            if (current is null || current.RideId != rideId)
+                return Task.FromResult(false);
+            if (current.ExpiresAtUtc == expiresAtUtc)
+                return Task.FromResult(true);
+
+            var updated = current with { ExpiresAtUtc = expiresAtUtc };
+            var auditEvent = DriverRideReservationAuditEvent.Create(
+                updated, DriverRideReservationAuditEventTypes.ExpiryChanged, auditContext,
+                current.ExpiresAtUtc, expiresAtUtc);
+            var nextState = state with
+            {
+                Reservation = updated,
+                AuditEvents = [.. state.AuditEvents, auditEvent]
+            };
+            if (_items.TryUpdate(driverId, nextState, state))
+                return Task.FromResult(true);
+        }
+
+        return Task.FromResult(false);
     }
 
-    public Task<DriverRideReservation?> GetActiveAsync(string driverId, CancellationToken cancellationToken = default)
+    public Task<DriverRideReservation?> GetActiveAsync(
+        string driverId,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        // Return expired leases too; the API reconciles the linked ride before release.
-        return Task.FromResult(_items.TryGetValue(driverId, out var current) ? current : null);
+        return Task.FromResult(
+            _items.TryGetValue(driverId, out var state) ? state.Reservation : null);
     }
 
-    public async Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
+    public Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
+        HasActiveCoreAsync(driverId, cancellationToken);
+
+    private async Task<bool> HasActiveCoreAsync(string driverId, CancellationToken cancellationToken) =>
         await GetActiveAsync(driverId, cancellationToken) is not null;
 
-    public Task<bool> TryReleaseAsync(string driverId, string rideId, CancellationToken cancellationToken = default)
+    public Task<bool> TryReleaseAsync(
+        string driverId,
+        string rideId,
+        CancellationToken cancellationToken = default,
+        DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_items.TryGetValue(driverId, out var current) || current.RideId != rideId) return Task.FromResult(false);
-        return Task.FromResult(((ICollection<KeyValuePair<string, DriverRideReservation>>)_items).Remove(new(driverId, current)));
+        while (_items.TryGetValue(driverId, out var state))
+        {
+            var current = state.Reservation;
+            if (current is null || current.RideId != rideId)
+                return Task.FromResult(false);
+
+            var auditEvent = DriverRideReservationAuditEvent.Create(
+                current, DriverRideReservationAuditEventTypes.Released, auditContext,
+                current.ExpiresAtUtc, expiresAtUtc: null);
+            var nextState = state with
+            {
+                Reservation = null,
+                AuditEvents = [.. state.AuditEvents, auditEvent]
+            };
+            if (_items.TryUpdate(driverId, nextState, state))
+                return Task.FromResult(true);
+        }
+
+        return Task.FromResult(false);
     }
+
+    public IReadOnlyList<DriverRideReservationAuditEvent> GetAuditEvents(string driverId) =>
+        _items.TryGetValue(driverId, out var state) ? state.AuditEvents.ToArray() : [];
 }
