@@ -33,6 +33,7 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
         boot_timeout_seconds: int | None = None,
         install_fail: bool = False,
         launch_fail: bool = False,
+        process_unstable: bool = False,
     ) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
         self.addCleanup(temporary.cleanup)
@@ -94,7 +95,15 @@ JSON
         echo "SpringBoard launch denied for $FAKE_BUNDLE_ID"
         ;;
       launchctl:list)
-        echo "$FAKE_BUNDLE_ID"
+        if [[ "${FAKE_PROCESS_UNSTABLE:-0}" == "1" ]]; then
+          echo "com.apple.springboard"
+        else
+          echo "$FAKE_BUNDLE_ID"
+        fi
+        ;;
+      launchctl:procinfo)
+        echo "process not found" >&2
+        exit 1
         ;;
       *)
         echo "unexpected simctl spawn arguments: $*" >&2
@@ -186,6 +195,7 @@ fi
                 "FAKE_BOOTSTATUS_SLEEP": "1" if bootstatus_sleep else "0",
                 "FAKE_INSTALL_FAIL": "1" if install_fail else "0",
                 "FAKE_LAUNCH_FAIL": "1" if launch_fail else "0",
+                "FAKE_PROCESS_UNSTABLE": "1" if process_unstable else "0",
                 "RUNNER_TEMP": str(root / "runner-temp"),
             }
         )
@@ -346,6 +356,26 @@ fi
         )
         self.assertFalse((output / "launch.txt").exists())
         self.assertFalse((output / "result.json").exists())
+
+    def test_process_exit_captures_failure_diagnostics_without_success_report(self) -> None:
+        result, output, _ = self.run_smoke(process_unstable=True)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("process did not remain available", result.stderr)
+        self.assertIn(
+            "SpringBoard launch denied for com.turnova.rider",
+            (output / "simulator-system.log").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "process not found",
+            (output / "process-info.txt").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "Installed app: com.turnova.rider",
+            (output / "installed-apps.txt").read_text(encoding="utf-8"),
+        )
+        self.assertFalse((output / "result.json").exists())
+        self.assertFalse((output / "launch.png").exists())
 
     def test_rejects_adhoc_signed_app_before_simulator_access(self) -> None:
         result, output, commands = self.run_smoke(adhoc_signature=True)
