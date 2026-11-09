@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-09
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `a95c6219fffc164213b284e023d10019e12cb900` after PLATFORM-01 PR #138 merged. Main exact-head CI [#42581364351](https://github.com/rajeevp727/turnova-platform/actions/runs/42581364351) passed 8/8, including 361/361 backend tests. Current #18 PLATFORM-01 PR [#139](https://github.com/rajeevp727/turnova-platform/pull/139) adds PLAT-AUDIT-012–014 concurrency, conflicting-actor and cancellation coverage. Code-bearing CI [#42593042733](https://github.com/rajeevp727/turnova-platform/actions/runs/42593042733) passed 8/8 with 362/362 backend tests; branch-sync exact-head CI [#42597528464](https://github.com/rajeevp727/turnova-platform/actions/runs/42597528464) passed 8/8. The latest test refinement cancels the actual `CancellationTokenSource` during canonical conflict read-back; the final test/docs head requires fresh exact-head CI and COMMENT-only review. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on approved support-policy inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no physical-device, live Cosmos/provider, signed-production or production-hosting validation is claimed.
+**Last audited main HEAD:** `c9d7276c1af5b6b726add2f0d158dbba295282a7` after PLATFORM-01 PR #139 merged. Main exact-head CI [#42601098085](https://github.com/rajeevp727/turnova-platform/actions/runs/42601098085) passed 8/8, including 364/364 backend tests, Rider/Driver mobile validation and native Android/iOS compilation. Current sequential work is #19 RELEASE-01 PR #140: the first simulator run exposed an Android AVD-home setup defect, now corrected on the branch; fresh 12-job exact-head CI is required. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on approved support-policy inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no physical-device, live Cosmos/provider, signed-production or production-hosting validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -977,3 +977,58 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - #18 external gates: live Cosmos transactional batch/ETag, 409 read-after-write, partition isolation, multi-instance/restart/retention, telemetry export/alerts, production CORS origins, load and physical-device acceptance.
 - #15 DRIVER-04 and #17 SUPPORT-01 remain blocked pending Product/Operations-approved support categories, required intake fields, severity, escalation owner/channel, hours/targets, attachment rules, consent/privacy/retention and handoff. No support schema/SLA is invented.
 - Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); implementation evidence is separate and production readiness is not established.
+
+
+## Latest sequential handoff — #19 RELEASE-01 native install/launch smoke (2026-11-09)
+
+- Main HEAD is `c9d7276c1af5b6b726add2f0d158dbba295282a7` after PLATFORM-01 PR #139 merged. Exact PR-head CI [#42601098085](https://github.com/rajeevp727/turnova-platform/actions/runs/42601098085) passed 8/8 on `77e7bbd7408e7e77464edb610b988da563d936e1`, including 364/364 backend tests.
+- Current #19 branch is `test/release-01-native-launch-smoke` (PR #140 in preparation). It adds native install/launch checks for both standalone Android release APKs in an API 35 emulator and both unsigned iOS Simulator .app artifacts in an iPhone Simulator. Checks cover expected package/bundle, install, launch activity/process survival, startup crash markers and screenshot/diagnostic artifacts.
+- The simulator tests consume the exact artifacts built earlier in the same CI run. They deliberately do not invoke production APIs, authentication providers, maps, SignalR, push or any credentialed external service.
+- Exact-head CI for PR #140 is pending. Do not merge until all 12 jobs pass on the exact final SHA and a COMMENT-only review finds no critical/high-risk issue; do not self-approve or bypass repository policy.
+- #19 remains Blocked pending signed AAB/IPA, approved and Apple-registered iOS bundle IDs, EAS project linkage, production HTTPS API environment/DNS/TLS/CORS/readiness, approved build-number strategy, signing credentials, physical-device functional/security/pilot acceptance and store submission. Emulator/Simulator smoke is not physical-device or production acceptance.
+- #18 PLATFORM-01 still needs live Cosmos transactional-batch/ETag/409 read-after-write/partition/multi-instance/restart/retention, telemetry export/alerts, production CORS, load and device evidence. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations support-policy inputs.
+- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). This is a strict external-evidence count, not an implementation-completion percentage; production readiness is not established.
+
+
+## Latest sequential handoff — #19 RELEASE-01 Android AVD bootstrap correction (2026-11-09)
+
+- Main HEAD remains `c9d7276c1af5b6b726add2f0d158dbba295282a7`; PLATFORM-01 PR #139 is merged. Main exact-head CI [#42601098085](https://github.com/rajeevp727/turnova-platform/actions/runs/42601098085) passed 8/8, including 364/364 backend tests and Rider/Driver native build evidence.
+- PR #140 initial head `fe8f9e52d696a141422271a7d94e5ce9dbc1e700` ran CI [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115). The original eight backend/mobile/native-build/auth jobs passed; both Android emulator smoke jobs failed before ADB device registration. Their uploaded `emulator.log` showed `Unknown AVD name [turnova-release-smoke]` because the script did not explicitly pin the AVD home. The iOS Simulator jobs were still running at the last poll; no iOS smoke result is claimed from that run.
+- The Android script now exports `ANDROID_AVD_HOME` explicitly before AVD creation and launch, verifies the expected `.ini` and `.avd` exist, captures AVD-manager diagnostics, detects an emulator process that exits before ADB registration, and emits emulator logs on readiness timeout. Startup crash checks are scoped to the target app/package and process to avoid unrelated system-log false positives.
+- Code-bearing correction head `90df49fd4c28d59a308d92f937d3e597c37ff2a7`; a synchronized docs commit follows. Fresh exact-head CI is required. Do not merge unless all 12 jobs pass on the final head and a COMMENT-only review finds no critical/high-risk issue; no self-approval or bypass.
+- #19 remains Blocked pending signed AAB/IPA, approved and Apple-registered iOS bundle IDs, EAS project linkage, production HTTPS API/DNS/TLS/CORS/readiness, approved build-number strategy, signing credentials, physical-device functional/security/pilot acceptance and store submission. Simulator smoke is engineering evidence only.
+- #18 PLATFORM-01 retains live Cosmos transactional-batch/ETag/409 read-after-write/partition/multi-instance/restart/retention, telemetry export/alerts, production CORS, load and device gates. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations-approved support-policy inputs.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is a strict external-evidence count, not an implementation-completion percentage; production readiness is not established.
+
+
+## RELEASE-01 deterministic Android emulator harness (2026-11-09)
+
+- The first PR #140 run [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) passed the original eight jobs but both Android smoke jobs failed before ADB registration because the emulator could not find the AVD. The log recorded `Unknown AVD name [turnova-release-smoke]`.
+- The Android script now exports `ANDROID_AVD_HOME` before both `avdmanager` and `emulator`, checks the named `.ini` and `.avd` files, records AVD-manager output, detects early process exit and scopes startup crash checks to the target package/process.
+- A new standard-library fake-SDK test exercises a non-default AVD home, AVD creation, fake install/activity launch/process stability, result JSON/screenshot and malformed package rejection without a real emulator or network. CI now discovers all `scripts/tests/test_*.py` tests.
+- The corrected exact-head 12-job CI run must pass before merge. This deterministic harness does not replace actual emulator smoke or physical-device acceptance.
+
+### RELEASE-01 fake-device test correction
+
+- The first fake-SDK execution exposed that awk exits zero by default even when no React Native marker matches. The Android script now records a match and explicitly exits nonzero on no match, so the enclosing `if` fails only for a target-process startup marker.
+- The fake ADB emits an unhandled marker under unrelated PID 1111 for the passing case and under target PID 4242 for a negative case. The harness asserts that unrelated logs are ignored and target-app failures are rejected.
+
+## RELEASE-01 login UI assertion increment (2026-11-09)
+
+- Android emulator smoke now dumps the fresh-install UI hierarchy after launch and asserts the login title, email/password hints and sign-in action. The screenshot and hierarchy are retained as CI artifacts.
+- iOS Simulator smoke runs a local Swift/Vision OCR checker against the captured screenshot and asserts the same login-surface text. It does not enter credentials or call API/authentication services.
+- These UI checks complement process-stability, package/bundle identity and existing functional/security test evidence. They do not establish physical-device, pilot or store readiness.
+
+
+### RELEASE-01 UI hierarchy fake-device fixture correction
+
+- The first run after adding Android login UI assertions failed in the fake-SDK test because its mock ADB did not implement `uiautomator dump` or `cat`. The mock now returns deterministic XML nodes for the login title, email/password hints and sign-in action, and the harness asserts them.
+- The actual Android emulator job must still prove that the platform UI hierarchy command works and the app renders the login screen. The iOS job uses local Vision OCR against the captured simulator screenshot.
+
+
+### RELEASE-01 hosted Android KVM permission correction (2026-11-09)
+
+- Exact-head run [#42611168422](https://github.com/rajeevp727/turnova-platform/actions/runs/42611168422) passed the eight backend/mobile/native-build/auth jobs; both Android emulator jobs failed before app install because the runner lacked read/write access to `/dev/kvm`. The uploaded emulator diagnostics explicitly reported the KVM group permission issue. The iOS Simulator smoke jobs were still running at last poll.
+- CI workflow commit `eed87f2b58272eadf8d71b9d3fc6465ecac0268d` adds a fail-closed KVM preflight; follow-up commit `e6e1dcf426c9f0d934372e6383a82811d9aa6a1a` assigns `/dev/kvm` to the ephemeral runner user with owner-only mode `0600` and rechecks read/write permissions before starting the emulator. This is not a production infrastructure change and does not count as app launch evidence.
+- Require a fresh exact-head 12-job run, inspect Android Rider/Driver login UI hierarchy and iOS Vision OCR artifacts, then a COMMENT-only final review and normal policy-compliant merge. No self-approval/bypass.
+- #19 remains externally Blocked on signed AAB/IPA, approved bundle identifiers/EAS linkage, production API environment, signing, physical-device/pilot and store gates. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no production readiness is claimed.

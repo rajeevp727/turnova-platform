@@ -407,6 +407,98 @@ jobs:
           path: ${{ runner.temp }}/turnova-${{ matrix.app }}-ios/Build/Products/Release-iphonesimulator/*.app
           if-no-files-found: error
 
+  android-emulator-smoke:
+    needs: [native-android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [driver-app, rider-app]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/download-artifact@v6
+        with:
+          name: ${{ matrix.app }}-android-standalone-release-apk
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-release
+      - name: Grant runner access to hardware-accelerated Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -c /dev/kvm ]]; then
+            echo "This runner does not expose the KVM device required by the x86_64 Android emulator." >&2
+            exit 1
+          fi
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
+            sudo chown "$(id -un)" /dev/kvm
+            sudo chmod 600 /dev/kvm
+          fi
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
+            echo "The CI runner still cannot read/write /dev/kvm after the ephemeral permission repair." >&2
+            ls -l /dev/kvm >&2
+            exit 1
+          fi
+          ls -l /dev/kvm
+      - name: Install and launch standalone release APK in Android emulator
+        env:
+          APP_NAME: ${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          apk="$(find "$RUNNER_TEMP/turnova-$APP_NAME-release" -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          case "$APP_NAME" in
+            rider-app) package_id="com.turnova.rider" ;;
+            driver-app) package_id="com.turnova.driver" ;;
+            *) echo "Unknown app: $APP_NAME" >&2; exit 1 ;;
+          esac
+          bash scripts/android-emulator-smoke.sh --apk "$apk" --expected-id "$package_id" --output-dir "$RUNNER_TEMP/turnova-$APP_NAME-smoke"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ matrix.app }}-android-emulator-smoke
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-smoke/
+          if-no-files-found: warn
+          retention-days: 14
+
+  ios-simulator-smoke:
+    needs: [native-ios]
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [driver-app, rider-app]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v6
+        with:
+          name: ${{ matrix.app }}-ios-simulator-app
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-simulator-app
+      - name: Install and launch unsigned app in iOS Simulator
+        env:
+          APP_NAME: ${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          app_bundle="$(find "$RUNNER_TEMP/turnova-$APP_NAME-simulator-app" -type d -name '*.app' -print -quit)"
+          test -n "$app_bundle"
+          case "$APP_NAME" in
+            rider-app) bundle_id="com.turnova.rider" ;;
+            driver-app) bundle_id="com.turnova.driver" ;;
+            *) echo "Unknown app: $APP_NAME" >&2; exit 1 ;;
+          esac
+          bash scripts/ios-simulator-smoke.sh --app "$app_bundle" --expected-id "$bundle_id" --output-dir "$RUNNER_TEMP/turnova-$APP_NAME-smoke"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ matrix.app }}-ios-simulator-smoke
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-smoke/
+          if-no-files-found: warn
+          retention-days: 14
+
   mobile-auth-tests:
     runs-on: ubuntu-24.04
     steps:
@@ -416,7 +508,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+      - name: Validate native launch smoke script syntax
+        run: bash -n scripts/android-emulator-smoke.sh scripts/ios-simulator-smoke.sh
       - name: Test shared mobile state and refresh helpers
         run: node --test src/mobile/shared/*.test.cjs
-      - name: Test deterministic native artifact identity verifier
-        run: python3 -m unittest discover -s scripts/tests -p 'test_verify_native_app_identity.py' -v
+      - name: Test deterministic native artifact and Android smoke harnesses
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v

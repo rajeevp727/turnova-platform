@@ -1128,3 +1128,41 @@ Implementation is in `DispatchExceptionAuditWriterTests`. The barrier-controlled
 
 
 PR #139 code-bearing exact-head CI [run #42593042733](https://github.com/rajeevp727/turnova-platform/actions/runs/42593042733) passed all 8/8 jobs on `e2e6637fea7d64b49c5419f821dcdd0012c323db`, including 362/362 backend tests. Branch-sync exact-head CI [run #42597528464](https://github.com/rajeevp727/turnova-platform/actions/runs/42597528464) passed all 8/8 jobs on `72d0e16a81e918a5b54b0af01edc2bea79db1971`. The actual-token cancellation refinement and synchronized docs require their own final-head CI. Live Cosmos 409/read-after-write, transactional batch/ETag and multi-instance behaviour remain external.
+
+
+## RELEASE-01 — native install and launch smoke
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| RELEASE-SMOKE-001 | Rider standalone Android release APK install and launch | Download the Rider release APK produced by the native-Android matrix; boot the API 35 Google APIs x86_64 emulator; install the APK; resolve and start the package launch activity; wait for startup and inspect process/activity/logcat | The installed package is `com.turnova.rider`; ActivityManager reports successful launch; the activity remains in the emulator task stack; the same app process remains alive after startup; no app-scoped fatal native exception or unhandled React Native startup exception is present; screenshot and logs are uploaded | Android emulator CI using `scripts/android-emulator-smoke.sh` | P0 |
+| RELEASE-SMOKE-002 | Driver standalone Android release APK install and launch | Same as RELEASE-SMOKE-001 using the Driver release artifact | The installed package is `com.turnova.driver`; launch/activity/process checks pass and screenshot/logs are uploaded | Android emulator CI using `scripts/android-emulator-smoke.sh` | P0 |
+| RELEASE-SMOKE-003 | Rider unsigned iOS Simulator app install and launch | Download the Rider .app produced by native-iOS; select and boot an available iPhone Simulator; verify Info.plist bundle ID; install and launch with simctl; verify installed app/process and capture screenshot | The installed bundle is `com.turnova.rider`; simctl returns a process ID; the app remains discoverable through launchd/process inspection after startup; screenshot and diagnostics are uploaded | iOS Simulator CI using `scripts/ios-simulator-smoke.sh` | P0 |
+| RELEASE-SMOKE-004 | Driver unsigned iOS Simulator app install and launch | Same as RELEASE-SMOKE-003 using the Driver simulator artifact | The installed bundle is `com.turnova.driver`; install/launch/process checks pass and screenshot/diagnostics are uploaded | iOS Simulator CI using `scripts/ios-simulator-smoke.sh` | P0 |
+
+The simulator jobs consume the exact native artifacts built earlier in the same workflow run; they do not rebuild a different app. The smoke intentionally avoids production API calls, authentication-provider calls and credentials so it remains deterministic. Emulator/Simulator launch evidence is not physical-device acceptance and does not validate GPS hardware, push/SignalR provider integration, production hosting, signing, Apple registration, pilot readiness or store submission.
+
+
+### RELEASE-01 simulator CI bootstrap correction
+
+The first PR #140 exact-head run [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) passed the original eight backend/mobile/native-build/auth jobs. Both Android emulator smoke jobs failed before ADB device registration; the uploaded emulator log showed `Unknown AVD name [turnova-release-smoke]`. The smoke script now explicitly sets `ANDROID_AVD_HOME` before invoking `avdmanager` and `emulator`, verifies the generated AVD `.ini` and directory, records AVD-manager output, detects early emulator-process exit and prints emulator diagnostics on timeout. Fatal-exception checks are package-scoped and React Native startup markers are filtered to the app PID. The corrected final head must pass all 12 jobs before this smoke is counted as passing evidence. The initial failure is a test-runner setup defect, not evidence that either APK launched successfully or failed at runtime.
+
+
+### Deterministic harness and simulator login UI assertions
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| RELEASE-SMOKE-005 | Android smoke runner AVD bootstrap and fake-device execution | Run the standard-library Python harness with fake SDK manager, AVD manager, emulator and ADB; supply a custom `ANDROID_AVD_HOME`; exercise package validation, AVD creation, install, launch, process stability and diagnostics | Harness passes without SDK download, real emulator or production calls; AVD files are created in the configured home and deterministic report/screenshot fixture is emitted | Python unittest in `scripts/tests/test_android_emulator_smoke.py` | P1 |
+| RELEASE-SMOKE-006 | Android Rider/Driver login surface visible after native launch | Dump API 35 emulator UI hierarchy after process stability; assert login title, email/password hints and sign-in action are present | Fresh-install login UI is discoverable through Android UI hierarchy, not merely a live process | Android emulator CI using `scripts/android-emulator-smoke.sh` | P1 |
+| RELEASE-SMOKE-007 | iOS Rider/Driver login surface visible after native launch | Capture iPhone Simulator screenshot and run local Vision OCR for login title, email/password fields and sign-in action | Fresh-install login UI text is visible in the simulator screenshot | iOS Simulator CI using `scripts/ios-simulator-smoke.sh` and `scripts/ios-simulator-screen-text-check.swift` | P1 |
+
+The fake ADB emits an unhandled React Native marker from an unrelated PID during the passing case; the smoke must ignore it. A second invocation emits the same marker under the target app PID and must fail. The fake-device test also returns a deterministic UI hierarchy for the new `uiautomator`/`cat` commands and asserts all four login-surface nodes.
+
+The Android UI hierarchy and iOS OCR checks exercise only the fresh-install login screen; they do not submit credentials or call an authentication/API provider. They supplement, but do not replace, existing functional/security suites or physical-device pilot acceptance.
+
+CI discovers all `scripts/tests/test_*.py` cases, including the existing native artifact identity tests and the fake-SDK Android harness. This validates runner control flow; the real emulator and iOS Simulator jobs remain required for platform install/launch and UI evidence.
+
+Failure history: initial PR #140 run [#42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) found the missing explicit AVD home; fake-SDK run [#42610080183](https://github.com/rajeevp727/turnova-platform/actions/runs/42610080183) found an awk no-match success condition; run [#42610948851](https://github.com/rajeevp727/turnova-platform/actions/runs/42610948851) found that the fake ADB fixture lacked the new UI-hierarchy commands. The corresponding fixes are on the current branch and require a fresh exact-head run.
+
+### RELEASE-01 hosted Android emulator KVM preflight
+
+The Android emulator smoke job requires hardware acceleration for its x86_64 API 35 image. CI first verifies that `/dev/kvm` is present as a character device; if the runner user lacks read/write access, it changes `/dev/kvm` ownership to the current isolated GitHub-hosted runner user and applies owner-only mode `0600` and verifies access before invoking the emulator. The job fails closed when KVM is absent or access cannot be granted. This is runner setup only: it does not change production infrastructure or prove an app launch. A successful RELEASE-SMOKE-001/002 result still requires the emulator to install the exact same-run Rider/Driver APK, launch the expected activity, retain a stable process, and render the fresh-install login UI.

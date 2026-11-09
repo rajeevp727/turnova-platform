@@ -64,3 +64,30 @@ The native Android matrix verifies the standalone release-variant APK after `ass
 The native iOS Simulator matrix verifies the built app's actual `Info.plist` with Python's standard-library `plistlib`, comparing `CFBundleIdentifier` with the explicit CI-only `PRODUCT_BUNDLE_IDENTIFIER` supplied to `xcodebuild`. XML and binary plist encodings are supported. This CI-only identifier is not a Product-approved production bundle identifier and does not remove the Apple registration gate.
 
 The shared verifier is `scripts/verify_native_app_identity.py`; 12 deterministic standard-library unit tests live in `scripts/tests/test_verify_native_app_identity.py`. These tests validate parsing, exact identity matching, missing/ambiguous metadata, malformed/placeholder identifiers, tool failures and XML/binary plist handling. CI runs the tests and both platform artifact checks. No signing credential, final Apple identifier, EAS project, production API URL or store decision is invented.
+
+
+## Native install/launch smoke
+
+The native build artifacts are exercised after compilation by two CI matrix jobs:
+
+- Android: install each standalone release APK into a clean API 35 Google APIs x86_64 emulator, resolve and start its embedded launch activity, verify the expected Rider/Driver package is installed, assert the same app process remains alive after startup, fail on app-scoped fatal native or unhandled React Native startup exceptions, and upload a screenshot plus emulator/install/launch/logcat diagnostics.
+- iOS: install each unsigned Simulator .app into an available iPhone Simulator, verify the installed bundle ID, launch it with `simctl`, require a returned process ID and confirm process availability after startup, then upload a screenshot and launch diagnostics.
+
+The jobs consume the artifacts from the native build matrices in the same workflow run, so the tested binary is the one whose package/bundle identity was verified during compilation. They do not call the production API or authentication provider and require no production credentials. Their evidence is limited to simulator installation and application startup. It does not prove physical-device compatibility, GPS hardware, notifications, SignalR, live authentication, production API reachability, signing, Apple registration, EAS linkage, security/pilot acceptance or store readiness. `RELEASE-01` therefore remains Blocked until the external gates above are completed.
+
+
+## Android emulator AVD bootstrap and diagnostics
+
+The Android smoke explicitly sets `ANDROID_AVD_HOME` to the runner's `$HOME/.android/avd` (unless the runner supplies a deliberate override) before both `avdmanager` and `emulator` execute. It verifies the named AVD's `.ini` and `.avd` directory before launch, captures AVD-manager output, checks that the emulator process remains alive while waiting for ADB registration and includes the emulator log in the always-uploaded diagnostic artifact. This guards against an AVD being created in a location the emulator does not search. A first-run failure on PR #140 [CI #42606662115](https://github.com/rajeevp727/turnova-platform/actions/runs/42606662115) exposed the missing explicit AVD-home setting; the corrected script requires a fresh exact-head run. No simulator smoke is counted as passing until the relevant job concludes successfully.
+
+
+The Android smoke runner also has a standard-library Python fake-SDK harness in `scripts/tests/test_android_emulator_smoke.py`. It exercises a custom `ANDROID_AVD_HOME`, AVD file creation, install/launch/process assertions and report/screenshot output without network access or a real emulator. CI runs it alongside the existing native artifact identity verifier tests. The real emulator jobs remain the evidence for actual simulator install/launch.
+
+The fake-device harness verifies log scoping as well: it passes when the React Native marker belongs to another PID and fails when the same marker is emitted by the target app PID. The Android smoke's PID filter must therefore explicitly return a nonzero awk status when no target-process marker is found.
+
+## Fresh-install login UI smoke
+
+After the process-stability check, Android captures the UI hierarchy and asserts that the login title, email/password hints and sign-in action are present. iOS runs a local Apple Vision OCR check against the simulator screenshot for the same login-surface text. These assertions verify that the app renders its unauthenticated entry screen rather than merely keeping a process alive. They do not enter credentials or call production API/authentication providers; existing API/authentication functional tests and physical-device/pilot gates remain separate.
+
+
+The fresh-install UI smoke now checks the Android UI hierarchy for `Welcome back`, `Email address`, `Password` and `Sign in`; iOS uses the built-in Vision OCR framework against the simulator screenshot for the same strings. A failed fake-SDK test revealed that the mock ADB needed to implement `uiautomator dump` and `cat`; the fixture now returns deterministic hierarchy nodes and asserts them. Real emulator/Simulator jobs remain authoritative for actual platform UI output.
