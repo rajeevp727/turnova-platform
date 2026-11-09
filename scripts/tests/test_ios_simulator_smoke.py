@@ -34,6 +34,10 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
         install_fail: bool = False,
         launch_fail: bool = False,
         process_unstable: bool = False,
+        ocr_not_ready_attempts: int = 0,
+        ocr_never_ready: bool = False,
+        login_ready_timeout_seconds: int | None = None,
+        login_ready_poll_interval_seconds: int | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
         self.addCleanup(temporary.cleanup)
@@ -160,9 +164,20 @@ if [[ "$*" != *"--expect-secure-store-unavailable"* ]]; then
   echo "expected SecureStore-unavailable OCR mode was not requested" >&2
   exit 2
 fi
+count=0
+if [[ -f "$FAKE_OCR_COUNT_FILE" ]]; then
+  count="$(cat "$FAKE_OCR_COUNT_FILE")"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" > "$FAKE_OCR_COUNT_FILE"
+if [[ "$FAKE_OCR_NEVER_READY" == "1" ]] || (( count <= FAKE_OCR_NOT_READY_ATTEMPTS )); then
+  echo "SpringBoard home screen or loading placeholder"
+  echo "iOS login screen is not ready yet" >&2
+  exit 3
+fi
 echo "Welcome back Email address Password Sign in"
 if [[ "$FAKE_RESTORE_ERROR" == "1" ]]; then
-  if [[ "${FAKE_RESTORE_ERROR_WITHOUT_YOUR:-0}" == "1" ]]; then
+  if [[ "$FAKE_RESTORE_ERROR_WITHOUT_YOUR" == "1" ]]; then
     printf "Unable to restore\\nsession. Check your connection or secure storage and retry.\\n"
   else
     printf "Unable to restore your\\nsession. Check your connection or secure storage and retry.\\n"
@@ -170,11 +185,11 @@ if [[ "$FAKE_RESTORE_ERROR" == "1" ]]; then
 fi
 if [[ "$FAKE_RESTORE_ERROR" != "1" ]]; then
   echo "Expected unsigned-simulator SecureStore failure banner was not visible." >&2
-  exit 1
+  exit 3
 fi
 if [[ "$FAKE_STALE_SESSION" == "1" ]]; then
   printf "Session\\nexpired. Please sign in again.\\n"
-  exit 1
+  exit 4
 fi
 """,
         )
@@ -196,11 +211,18 @@ fi
                 "FAKE_INSTALL_FAIL": "1" if install_fail else "0",
                 "FAKE_LAUNCH_FAIL": "1" if launch_fail else "0",
                 "FAKE_PROCESS_UNSTABLE": "1" if process_unstable else "0",
+                "FAKE_OCR_COUNT_FILE": str(root / "ocr-count.txt"),
+                "FAKE_OCR_NOT_READY_ATTEMPTS": str(ocr_not_ready_attempts),
+                "FAKE_OCR_NEVER_READY": "1" if ocr_never_ready else "0",
                 "RUNNER_TEMP": str(root / "runner-temp"),
             }
         )
         if boot_timeout_seconds is not None:
             environment["TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS"] = str(boot_timeout_seconds)
+        if login_ready_timeout_seconds is not None:
+            environment["TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS"] = str(login_ready_timeout_seconds)
+        if login_ready_poll_interval_seconds is not None:
+            environment["TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS"] = str(login_ready_poll_interval_seconds)
 
         command = [
             "bash",
@@ -276,19 +298,51 @@ fi
         self.assertIn('"Unable to restore your session"', ocr_source)
         self.assertIn('"Unable to restore session"', ocr_source)
 
-    def test_missing_expected_secure_store_failure_fails_the_smoke(self) -> None:
-        result, output, _ = self.run_smoke(restore_error=False)
+    def test_waits_for_login_ui_after_slow_cold_start(self) -> None:
+        result, output, commands = self.run_smoke(ocr_not_ready_attempts=2)
+
+        self.assertEqual(result.returncode, 0, msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}")
+        self.assertEqual((output / "ocr-count.txt").read_text(encoding="utf-8").strip(), "3")
+        screenshot_commands = [item for item in commands if item.startswith("io TEST-DEVICE screenshot ")]
+        self.assertEqual(len(screenshot_commands), 3)
+        report = json.loads((output / "result.json").read_text(encoding="utf-8"))
+        self.assertTrue(report["loginScreenTextVerified"])
+
+    def test_login_readiness_timeout_captures_diagnostics_and_fails_closed(self) -> None:
+        result, output, commands = self.run_smoke(
+            ocr_never_ready=True,
+            login_ready_timeout_seconds=1,
+            login_ready_poll_interval_seconds=1,
+        )
 
         self.assertEqual(result.returncode, 1)
+        self.assertIn("did not reach a stable login screen within 1 seconds", result.stderr)
+        self.assertIn("spawn TEST-DEVICE log show ", " ".join(commands))
+        self.assertTrue((output / "simulator-system.log").is_file())
+        self.assertTrue((output / "launchctl-list-failure.txt").is_file())
+        self.assertTrue((output / "installed-apps.txt").is_file())
+        self.assertFalse((output / "result.json").exists())
+
+    def test_missing_expected_secure_store_failure_fails_the_smoke(self) -> None:
+        result, output, _ = self.run_smoke(
+            restore_error=False,
+            login_ready_timeout_seconds=1,
+            login_ready_poll_interval_seconds=1,
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("did not reach a stable login screen", result.stderr)
         self.assertIn("Expected unsigned-simulator SecureStore failure banner was not visible", result.stderr)
         self.assertFalse((output / "result.json").exists())
 
     def test_stale_session_expired_error_still_fails_the_smoke(self) -> None:
-        result, output, _ = self.run_smoke(stale_session_error=True)
+        result, output, commands = self.run_smoke(stale_session_error=True)
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("Session", result.stdout)
-        self.assertIn("expired", result.stdout)
+        recognized = (output / "ui-text.txt").read_text(encoding="utf-8")
+        self.assertIn("Session", recognized)
+        self.assertIn("expired", recognized)
+        self.assertEqual(len([item for item in commands if item.startswith("io TEST-DEVICE screenshot ")]), 1)
         self.assertFalse((output / "result.json").exists())
 
     def test_simulator_bootstatus_failure_stops_before_install(self) -> None:
