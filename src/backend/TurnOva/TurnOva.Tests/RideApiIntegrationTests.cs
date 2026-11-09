@@ -5275,27 +5275,32 @@ public sealed class RideApiIntegrationTests
         public void FailNextMakePermanent() => Interlocked.Exchange(ref _failNextMakePermanent, 1);
         public void FailAfterNextMakePermanent() => Interlocked.Exchange(ref _failAfterMakePermanent, 1);
 
-        public Task<bool> TryAcquireAsync(string driverId, string rideId, CancellationToken cancellationToken = default) =>
-            inner.TryAcquireAsync(driverId, rideId, cancellationToken);
+        public Task<bool> TryAcquireAsync(
+            string driverId, string rideId, CancellationToken cancellationToken = default,
+            DriverRideReservationAuditContext? auditContext = null) =>
+            inner.TryAcquireAsync(driverId, rideId, cancellationToken, auditContext);
 
         public Task<bool> TryAcquireTemporaryAsync(
-            string driverId, string rideId, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken = default) =>
-            inner.TryAcquireTemporaryAsync(driverId, rideId, expiresAtUtc, cancellationToken);
+            string driverId, string rideId, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken = default,
+            DriverRideReservationAuditContext? auditContext = null) =>
+            inner.TryAcquireTemporaryAsync(driverId, rideId, expiresAtUtc, cancellationToken, auditContext);
 
         public async Task<bool> TryMakePermanentAsync(
-            string driverId, string rideId, CancellationToken cancellationToken = default)
+            string driverId, string rideId, CancellationToken cancellationToken = default,
+            DriverRideReservationAuditContext? auditContext = null)
         {
             if (Interlocked.Exchange(ref _failNextMakePermanent, 0) == 1)
                 throw new InvalidOperationException("sensitive-reservation-store-failure");
-            var result = await inner.TryMakePermanentAsync(driverId, rideId, cancellationToken);
+            var result = await inner.TryMakePermanentAsync(driverId, rideId, cancellationToken, auditContext);
             if (result && Interlocked.Exchange(ref _failAfterMakePermanent, 0) == 1)
                 throw new InvalidOperationException("sensitive-reservation-post-commit-timeout");
             return result;
         }
 
         public Task<bool> TrySetExpiryAsync(
-            string driverId, string rideId, DateTimeOffset? expiresAtUtc, CancellationToken cancellationToken = default) =>
-            inner.TrySetExpiryAsync(driverId, rideId, expiresAtUtc, cancellationToken);
+            string driverId, string rideId, DateTimeOffset? expiresAtUtc, CancellationToken cancellationToken = default,
+            DriverRideReservationAuditContext? auditContext = null) =>
+            inner.TrySetExpiryAsync(driverId, rideId, expiresAtUtc, cancellationToken, auditContext);
 
         public Task<DriverRideReservation?> GetActiveAsync(
             string driverId, CancellationToken cancellationToken = default) =>
@@ -5305,8 +5310,9 @@ public sealed class RideApiIntegrationTests
             inner.HasActiveAsync(driverId, cancellationToken);
 
         public Task<bool> TryReleaseAsync(
-            string driverId, string rideId, CancellationToken cancellationToken = default) =>
-            inner.TryReleaseAsync(driverId, rideId, cancellationToken);
+            string driverId, string rideId, CancellationToken cancellationToken = default,
+            DriverRideReservationAuditContext? auditContext = null) =>
+            inner.TryReleaseAsync(driverId, rideId, cancellationToken, auditContext);
     }
 
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
