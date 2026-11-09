@@ -58,7 +58,7 @@ test("current Rider config passes structural checks but reports unprovided relea
     "build-number-policy", "eas-project-linkage", "ios-bundle-registration", "production-api-base-url",
     "physical-device-acceptance", "signing-credentials", "store-submission"
   ].sort());
-  assert.equal(report.currentCiArtifactEvidence.android, "debug-apk-only");
+  assert.equal(report.currentCiArtifactEvidence.android, "debug-apk-and-standalone-release-apk-variant");
   assert.equal(report.currentCiArtifactEvidence.ios, "unsigned-ios-simulator-app-only");
   assert.equal(report.currentCiArtifactEvidence.signedAndroidAabProduced, false);
   assert.equal(report.currentCiArtifactEvidence.signedIosIpaProduced, false);
