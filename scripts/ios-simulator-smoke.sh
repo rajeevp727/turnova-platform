@@ -80,7 +80,7 @@ trap cleanup EXIT
 xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
 xcrun simctl erase "$DEVICE_UDID"
 xcrun simctl boot "$DEVICE_UDID"
-xcrun simctl bootstatus "$DEVICE_UDID" -b
+xcrun simctl bootstatus "$DEVICE_UDID" -b --timeout 300
 
 xcrun simctl install "$DEVICE_UDID" "$APP_BUNDLE"
 installed_container="$(xcrun simctl get_app_container "$DEVICE_UDID" "$EXPECTED_ID" app)"
