@@ -1024,3 +1024,11 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 
 - The first run after adding Android login UI assertions failed in the fake-SDK test because its mock ADB did not implement `uiautomator dump` or `cat`. The mock now returns deterministic XML nodes for the login title, email/password hints and sign-in action, and the harness asserts them.
 - The actual Android emulator job must still prove that the platform UI hierarchy command works and the app renders the login screen. The iOS job uses local Vision OCR against the captured simulator screenshot.
+
+
+### RELEASE-01 hosted Android KVM permission correction (2026-11-09)
+
+- Exact-head run [#42611168422](https://github.com/rajeevp727/turnova-platform/actions/runs/42611168422) passed the eight backend/mobile/native-build/auth jobs; both Android emulator jobs failed before app install because the runner lacked read/write access to `/dev/kvm`. The uploaded emulator diagnostics explicitly reported the KVM group permission issue. The iOS Simulator smoke jobs were still running at last poll.
+- CI workflow commit `eed87f2b58272eadf8d71b9d3fc6465ecac0268d` adds a fail-closed preflight that verifies `/dev/kvm`, temporarily grants access on the ephemeral hosted runner only, and rechecks read/write permissions before starting the emulator. This is not a production infrastructure change and does not count as app launch evidence.
+- Require a fresh exact-head 12-job run, inspect Android Rider/Driver login UI hierarchy and iOS Vision OCR artifacts, then a COMMENT-only final review and normal policy-compliant merge. No self-approval/bypass.
+- #19 remains externally Blocked on signed AAB/IPA, approved bundle identifiers/EAS linkage, production API environment, signing, physical-device/pilot and store gates. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no production readiness is claimed.
