@@ -156,3 +156,6 @@ The latest code additionally requires the Android Wait control to be enabled/cli
 
 
 The deterministic harness also supplies a separate `TurnOva Rider isn't responding` dialog with a visible Wait button. The script must not treat it as a Pixel Launcher recovery case: it fails closed without tapping any control and without emitting `result.json`. This guards against hiding an actual app ANR behind the system-launcher workaround.
+
+
+The final code-only increment is commit [`94c07cbe1b368cc885329599f67e47121fb82b05`](https://github.com/rajeevp727/turnova-platform/commit/94c07cbe1b368cc885329599f67e47121fb82b05): the fake Android harness now also supplies a separate `TurnOva Rider isn't responding` dialog with an enabled Wait control and asserts the script fails without tapping it or emitting a success report. The current branch has a single documentation synchronization after that code commit; the resulting PR head requires a fresh exact-head run with all 12 expected jobs.
