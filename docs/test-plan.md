@@ -995,7 +995,12 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-020 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
 | AI-021 | AI trip draft omits passenger count while Rider form previously contains its default | Rider form clears the stale/default passenger value; discovery and booking remain blocked until the Rider manually enters an integer from 1 through 6 | Shared mobile helper + Rider UI | P0 |
 
-The CI provider is a deterministic fake. Live provider sandbox behavior, managed-secret wiring and data-processing terms are not claimed until infrastructure is configured. AI assistance must never invoke booking, fare agreement, payment, eligibility, discovery ordering or ride-state mutation endpoints.
+| AI-022 | Known ride-state explanation exceeds MaxOutputCharacters | Approved state content is returned only when it fits the configured limit; otherwise the service returns a short deterministic escalation response within the same limit | Unit | P0 |
+| AI-023 | Unsupported-help fallback is subject to the configured output limit | Every unsupported/ambiguous help path returns a bounded escalation response; no fallback can exceed MaxOutputCharacters | Unit | P0 |
+| AI-024 | Provider-selected approved content exceeds MaxOutputCharacters | The service rejects the oversized approved answer and returns the bounded deterministic escalation response; the provider cannot bypass the local output cap | Unit | P0 |
+| AI-025 | Direct service configuration cannot fit the bounded escalation response | Construction rejects an output maximum shorter than the fixed escalation response; the API's validated 100–1000 range remains valid | Unit | P1 |
+
+The CI provider is a deterministic fake. Live provider sandbox behavior, managed-secret wiring and data-processing terms are not claimed until infrastructure is configured. AI assistance must never invoke booking, fare agreement, payment, eligibility, discovery ordering or ride-state mutation endpoints. The help output limit applies to known-state, provider-selected, deterministic and escalation responses. The service refuses an invalid direct configuration whose maximum is shorter than its bounded escalation message; API options validation already requires at least 100 characters.
 
 
 ## DISPATCH-03 — terminal selected-ride reservation read-repair
