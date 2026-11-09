@@ -163,7 +163,8 @@ fi
         self.assertTrue(report["loginScreenTextVerified"])
         self.assertTrue(report["staleSessionErrorAbsent"])
         self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
-        self.assertEqual(report["signing"], "unsigned simulator build")
+        self.assertEqual(report["signing"], "ad-hoc simulator signature (test-only)")
+        self.assertEqual(report["keychainAccessGroup"], "bundle-scoped test entitlement")
         self.assertGreater((output / "launch.png").stat().st_size, 0)
 
     def test_stale_session_restore_error_fails_the_smoke(self) -> None:
