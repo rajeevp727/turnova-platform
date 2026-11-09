@@ -18,7 +18,8 @@ public static class UnionReconciliationQuery
         "c.paymentReconciliation.status AS status " +
         "FROM c WHERE c.unionId = @unionId " +
         "AND IS_DEFINED(c.paymentReconciliation) " +
-        "AND c.paymentReconciliation.unionId = @unionId";
+        "AND c.paymentReconciliation.unionId = @unionId " +
+        "AND LOWER(c.serviceClass) = 'cab'";
 }
 
 public sealed record UnionReconciliationQueryProjection(

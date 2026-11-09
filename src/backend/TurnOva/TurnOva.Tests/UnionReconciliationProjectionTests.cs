@@ -27,6 +27,7 @@ public sealed class UnionReconciliationProjectionTests
             selectClause);
         Assert.Contains("c.unionId = @unionId", sql, StringComparison.Ordinal);
         Assert.Contains("c.paymentReconciliation.unionId = @unionId", sql, StringComparison.Ordinal);
+        Assert.Contains("AND LOWER(c.serviceClass) = 'cab'", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("SELECT *", sql, StringComparison.OrdinalIgnoreCase);
 
         foreach (var privateField in new[]
@@ -99,5 +100,14 @@ public sealed class UnionReconciliationProjectionTests
         Assert.DoesNotContain("longitude", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("phone", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("email", json, StringComparison.OrdinalIgnoreCase);
+    }
+    [Fact]
+    public void UnionReconciliationCosmosQueryFiltersCabAtStorageBoundaryCaseInsensitively()
+    {
+        var sql = UnionReconciliationQuery.Sql;
+
+        Assert.Contains("LOWER(c.serviceClass) = 'cab'", sql, StringComparison.Ordinal);
+        Assert.Contains("c.unionId = @unionId", sql, StringComparison.Ordinal);
+        Assert.Contains("c.paymentReconciliation.unionId = @unionId", sql, StringComparison.Ordinal);
     }
 }
