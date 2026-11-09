@@ -37,10 +37,17 @@ let requiredText = ["Welcome back", "Email address", "Password", "Sign in"]
 let missingText = requiredText.filter {
     !normalizedRecognizedText.localizedCaseInsensitiveContains($0)
 }
-let secureStoreUnavailableMarker = "Unable to restore your session"
+// Rider and Driver currently use slightly different but equivalent copy. Keep
+// both variants accepted while still requiring the complete recoverable-error detail.
+let secureStoreUnavailableMarkers = [
+    "Unable to restore your session",
+    "Unable to restore session"
+]
 let secureStoreUnavailableDetail = "Check your connection or secure storage and retry"
 let secureStoreUnavailableVisible =
-    normalizedRecognizedText.localizedCaseInsensitiveContains(secureStoreUnavailableMarker) &&
+    secureStoreUnavailableMarkers.contains {
+        normalizedRecognizedText.localizedCaseInsensitiveContains($0)
+    } &&
     normalizedRecognizedText.localizedCaseInsensitiveContains(secureStoreUnavailableDetail)
 if expectsSecureStoreUnavailable && !secureStoreUnavailableVisible {
     fputs("Expected unsigned-simulator SecureStore failure banner was not visible.\n", stderr)
@@ -48,13 +55,12 @@ if expectsSecureStoreUnavailable && !secureStoreUnavailableVisible {
 }
 
 var forbiddenText = [
-    "Unable to restore session",
     "Session expired",
     "Unable to clear secure session storage",
     "Unable to securely save session tokens"
 ]
 if !expectsSecureStoreUnavailable {
-    forbiddenText.append(secureStoreUnavailableMarker)
+    forbiddenText.append(contentsOf: secureStoreUnavailableMarkers)
 }
 let unexpectedText = forbiddenText.filter {
     normalizedRecognizedText.localizedCaseInsensitiveContains($0)
