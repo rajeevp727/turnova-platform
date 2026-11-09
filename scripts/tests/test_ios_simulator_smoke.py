@@ -211,7 +211,7 @@ fi
                 "FAKE_INSTALL_FAIL": "1" if install_fail else "0",
                 "FAKE_LAUNCH_FAIL": "1" if launch_fail else "0",
                 "FAKE_PROCESS_UNSTABLE": "1" if process_unstable else "0",
-                "FAKE_OCR_COUNT_FILE": str(root / "ocr-count.txt"),
+                "FAKE_OCR_COUNT_FILE": str(output / "ocr-count.txt"),
                 "FAKE_OCR_NOT_READY_ATTEMPTS": str(ocr_not_ready_attempts),
                 "FAKE_OCR_NEVER_READY": "1" if ocr_never_ready else "0",
                 "RUNNER_TEMP": str(root / "runner-temp"),
