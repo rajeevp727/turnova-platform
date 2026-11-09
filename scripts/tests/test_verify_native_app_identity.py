@@ -1,9 +1,12 @@
 import plistlib
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 import subprocess
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from verify_native_app_identity import (
     parse_aapt_package_id,
