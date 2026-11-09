@@ -81,7 +81,7 @@ public static class DriverPayslipPdf
 
         document.EndPage();
         document.Close();
-        return output.ToArray();
+        return DriverPayslipPdfTextLayer.Append(output.ToArray(), fonts.TextPlacements);
     }
 
     private static readonly SKColor Navy = new(20, 42, 68);
@@ -102,7 +102,7 @@ public static class DriverPayslipPdf
     private static void DrawWatermark(SKCanvas canvas, FontCatalog fonts)
     {
         DrawCabMark(canvas, 247, 374, 2.6f, new SKColor(235, 242, 249), new SKColor(235, 248, 245));
-        DrawText(canvas, fonts, "TurnOva", 174, 474, 58, new SKColor(239, 244, 249, 185), bold: true);
+        DrawText(canvas, fonts, "TurnOva", 174, 474, 58, new SKColor(239, 244, 249, 185), bold: true, includeInSearchableLayer: false);
     }
 
     private static void DrawCabMark(SKCanvas canvas, float x, float y, float scale, SKColor bodyColor, SKColor accentColor)
@@ -118,12 +118,13 @@ public static class DriverPayslipPdf
             5 * scale,
             body);
 
-        using var roof = new SKPath();
-        roof.MoveTo(x + 13 * scale, y + 17 * scale);
-        roof.LineTo(x + 22 * scale, y + 5 * scale);
-        roof.LineTo(x + 43 * scale, y + 5 * scale);
-        roof.LineTo(x + 51 * scale, y + 17 * scale);
-        roof.Close();
+        using var roofBuilder = new SKPathBuilder();
+        roofBuilder.MoveTo(x + 13 * scale, y + 17 * scale);
+        roofBuilder.LineTo(x + 22 * scale, y + 5 * scale);
+        roofBuilder.LineTo(x + 43 * scale, y + 5 * scale);
+        roofBuilder.LineTo(x + 51 * scale, y + 17 * scale);
+        roofBuilder.Close();
+        using var roof = roofBuilder.Detach();
         canvas.DrawPath(roof, body);
 
         canvas.DrawRoundRect(
@@ -285,7 +286,8 @@ public static class DriverPayslipPdf
         float baseline,
         float fontSize,
         SKColor color,
-        bool bold = false)
+        bool bold = false,
+        bool includeInSearchableLayer = true)
     {
         var start = x;
         using var builder = new SKTextBlobBuilder();
@@ -302,27 +304,23 @@ public static class DriverPayslipPdf
                 var shaped = face.Shaper.Shape(run.Text, x, baseline, font);
                 EnsureGlyphCoverage(run, shaped.Codepoints);
 
-                // Keep the UTF-8 source text and HarfBuzz cluster offsets in the
-                // positioned run. Skia's PDF backend can then emit searchable text
-                // and ToUnicode mappings without a second PDF library or image codec.
-                var sourceText = Encoding.UTF8.GetBytes(run.Text);
-                var glyphRun = builder.AllocatePositionedTextRun(
-                    font,
-                    shaped.Codepoints.Length,
-                    sourceText.Length);
+                // The visible layer uses HarfBuzz's exact glyph IDs and positions.
+                // Searchable Unicode source text is appended separately by PDFsharp,
+                // because Skia's positioned glyph blob can be outlined in PDF output.
+                var glyphRun = builder.AllocateRawPositionedRun(font, shaped.Codepoints.Length, null);
                 var glyphs = glyphRun.Glyphs;
+                var positions = glyphRun.Positions;
                 for (var index = 0; index < shaped.Codepoints.Length; index++)
                 {
                     if (shaped.Codepoints[index] > ushort.MaxValue)
                         throw new NotSupportedException($"The bundled {run.Script} payslip font returned an unsupported glyph index.");
 
                     glyphs[index] = (ushort)shaped.Codepoints[index];
+                    positions[index] = shaped.Points[index];
                 }
 
-                glyphRun.SetPositions(shaped.Points);
-                glyphRun.SetText(sourceText);
-                glyphRun.SetClusters(shaped.Clusters);
-
+                if (includeInSearchableLayer)
+                    fonts.RecordText(run.Script, run.Text, x, baseline, fontSize);
                 x += shaped.Width;
             }
 
@@ -385,6 +383,27 @@ public static class DriverPayslipPdf
 
         private readonly Dictionary<FontScript, FontFace> _faces = new();
 
+        public List<PayslipTextPlacement> TextPlacements { get; } = new();
+
+        public void RecordText(FontScript script, string text, float x, float baseline, float fontSize)
+        {
+            TextPlacements.Add(new PayslipTextPlacement(text, x, baseline, fontSize, FontFamilyFor(script)));
+        }
+
+        private static string FontFamilyFor(FontScript script) => script switch
+        {
+            FontScript.Latin or FontScript.Telugu => "Noto Sans Telugu",
+            FontScript.Devanagari => "Noto Sans Devanagari",
+            FontScript.Bengali => "Noto Sans Bengali",
+            FontScript.Gurmukhi => "Noto Sans Gurmukhi",
+            FontScript.Gujarati => "Noto Sans Gujarati",
+            FontScript.Oriya => "Noto Sans Oriya",
+            FontScript.Tamil => "Noto Sans Tamil",
+            FontScript.Kannada => "Noto Sans Kannada",
+            FontScript.Malayalam => "Noto Sans Malayalam",
+            _ => throw new ArgumentOutOfRangeException(nameof(script))
+        };
+
         public FontFace Get(FontScript script)
         {
             if (_faces.TryGetValue(script, out var face))
@@ -442,15 +461,12 @@ public static class DriverPayslipPdf
                 foreach (var pair in files)
                 {
                     var resourceName = $"{typeof(DriverPayslipPdf).Namespace}.Fonts.{pair.Value}";
-                    var stream = typeof(DriverPayslipPdf).Assembly.GetManifestResourceStream(resourceName)
+                    using var stream = typeof(DriverPayslipPdf).Assembly.GetManifestResourceStream(resourceName)
                         ?? throw new InvalidOperationException($"Bundled payslip font resource '{resourceName}' is missing.");
 
                     var typeface = SKTypeface.FromStream(stream);
                     if (typeface is null)
-                    {
-                        stream.Dispose();
                         throw new InvalidOperationException($"Bundled payslip font resource '{resourceName}' is not a valid font.");
-                    }
 
                     loaded.Add(pair.Key, typeface);
                 }
