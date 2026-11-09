@@ -117,6 +117,13 @@ targetSdkVersion:'35'
             with self.assertRaisesRegex(ValueError, "reverse-DNS"):
                 verify_ios_info_plist(info, "com.turnova.rider")
 
+    def test_ios_verifier_rejects_malformed_plist_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            info = Path(directory) / "Info.plist"
+            info.write_bytes(b"not a valid XML or binary plist")
+            with self.assertRaises(plistlib.InvalidFileException):
+                verify_ios_info_plist(info, "com.turnova.rider")
+
 
 if __name__ == "__main__":
     unittest.main()
