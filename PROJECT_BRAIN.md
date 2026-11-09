@@ -925,3 +925,5 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - Next: inspect the full diff, await all exact-head checks, comment-review security/path/identity semantics, merge only if policy permits, then continue sequential re-audit. No containers or production deployments.
 
 - RELEASE-01 implementation is tracked in [PR #135](https://github.com/rajeevp727/turnova-platform/pull/135), branch fix/release-01-native-artifact-identity-verification; initial code-bearing head was 9d855b870d4212e1240d6ab8073d87021ccb31e1. Later documentation-only commits do not change the native verifier implementation; use the live PR head for final CI.
+
+- #16 RIDER-04 Cab-only reconciliation query filter merged in PR #125 at 552dadea76215fa4a1f67c545e04a79070b6d44f. Its initial push run #42552962718 failed before job creation (zero jobs); later main CI [42561935666](https://github.com/rajeevp727/turnova-platform/actions/runs/42561935666) passed 8/8 on 8368b0ef518bda956442e99f5e9cc343a332bba8 and includes the merged query change. Live Cosmos SQL/index/partition validation remains external.
