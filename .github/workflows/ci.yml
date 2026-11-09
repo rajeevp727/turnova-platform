@@ -177,6 +177,7 @@ jobs:
             ${{ runner.temp }}/turnova-${{ matrix.app }}-ios/
           if-no-files-found: error
 
+  # Release APKs are built and bundle-verified in the same native Android matrix.
   native-android:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
