@@ -88,7 +88,7 @@ fi
 
 mkdir -p "$HOME/.android/avd"
 "$AVDMANAGER" delete avd -n "$AVD_NAME" >/dev/null 2>&1 || true
-printf 'no\n' | "$AVDMANAGER" create avd --force --name "$AVD_NAME" --package "$SYSTEM_IMAGE" --device "pixel_2"
+printf 'no\n' | "$AVDMANAGER" create avd -f -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "pixel_2"
 
 "$EMULATOR_BIN" -avd "$AVD_NAME" -no-window -no-audio -no-boot-anim \
   -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics \
