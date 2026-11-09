@@ -1198,3 +1198,6 @@ The next PR #141 increment raises the default cold-boot bound to 600 seconds (th
 ### RELEASE-01 iOS launch-denial diagnostics
 
 When `simctl launch` fails after install, the smoke now captures filtered simulator unified logs for SpringBoard, amfid, runningboardd, installd and the expected bundle ID, plus launchctl state, installed-app inventory, code-signature details and embedded entitlements. Collection is best-effort and remains failure-only; it cannot produce a success report. The deterministic fake-SDK regression verifies each diagnostic command/output and confirms no launch report or screenshot is emitted.
+
+
+The launch-failure harness matches the full `log show` command by prefix because the predicate and time-window arguments are part of the recorded invocation. Its fake codesign emits deterministic signature/entitlement content, and the test verifies the captured files rather than only checking that empty files exist.
