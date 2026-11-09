@@ -22,7 +22,7 @@ def write_executable(path: Path, content: str) -> None:
 
 
 class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
-    def run_smoke(self, restore_error: bool = False) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
+    def run_smoke(self, restore_error: bool = False, adhoc_signature: bool = True) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -79,6 +79,23 @@ echo "$FAKE_BUNDLE_ID"
 """,
         )
         write_executable(
+            bin_dir / "codesign",
+            r"""#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  --verify) exit 0 ;;
+  -dv)
+    if [[ "$FAKE_ADHOC_SIGNATURE" == "1" ]]; then
+      echo "Signature=adhoc"
+    else
+      echo "Signature=Apple Development"
+    fi
+    ;;
+  *) echo "unexpected codesign arguments: $*" >&2; exit 2 ;;
+esac
+""",
+        )
+        write_executable(
             bin_dir / "swift",
             r"""#!/usr/bin/env bash
 set -euo pipefail
@@ -99,6 +116,7 @@ fi
                 "FAKE_APP_CONTAINER": str(app_container),
                 "FAKE_BUNDLE_ID": "com.turnova.rider",
                 "FAKE_RESTORE_ERROR": "1" if restore_error else "0",
+                "FAKE_ADHOC_SIGNATURE": "1" if adhoc_signature else "0",
                 "RUNNER_TEMP": str(root / "runner-temp"),
             }
         )
@@ -153,6 +171,14 @@ fi
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("Unable to restore your\nsession", result.stdout)
+        self.assertFalse((output / "result.json").exists())
+
+    def test_rejects_non_adhoc_signed_app_before_simulator_access(self) -> None:
+        result, output, commands = self.run_smoke(adhoc_signature=False)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("requires an ad-hoc signature", result.stderr)
+        self.assertEqual(commands, [])
         self.assertFalse((output / "result.json").exists())
 
     def test_invalid_bundle_identifier_is_rejected_before_simulator_access(self) -> None:
