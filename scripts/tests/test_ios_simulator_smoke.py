@@ -22,7 +22,7 @@ def write_executable(path: Path, content: str) -> None:
 
 
 class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
-    def run_smoke(self, restore_error: bool = False, adhoc_signature: bool = True) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
+    def run_smoke(self, restore_error: bool = False, adhoc_signature: bool = True, bootstatus_fail: bool = False) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -49,8 +49,15 @@ case "$1" in
 {"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-18-0":[{"name":"iPhone 16","udid":"TEST-DEVICE","isAvailable":true,"state":"Booted"}]}}
 JSON
     ;;
-  shutdown|erase|boot|bootstatus|install)
+  shutdown|erase|boot|install)
     exit 0
+    ;;
+  bootstatus)
+    [[ "$*" == "bootstatus TEST-DEVICE -b --timeout 300" ]] || {
+      echo "bootstatus did not use the bounded 300-second simulator startup timeout: $*" >&2
+      exit 2
+    }
+    [[ "${FAKE_BOOTSTATUS_FAIL:-0}" != "1" ]] || exit 1
     ;;
   get_app_container)
     echo "$FAKE_APP_CONTAINER"
@@ -117,6 +124,7 @@ fi
                 "FAKE_BUNDLE_ID": "com.turnova.rider",
                 "FAKE_RESTORE_ERROR": "1" if restore_error else "0",
                 "FAKE_ADHOC_SIGNATURE": "1" if adhoc_signature else "0",
+                "FAKE_BOOTSTATUS_FAIL": "1" if bootstatus_fail else "0",
                 "RUNNER_TEMP": str(root / "runner-temp"),
             }
         )
@@ -153,6 +161,10 @@ fi
         self.assertLess(shutdown_index, erase_index)
         self.assertLess(erase_index, boot_index)
         self.assertLess(boot_index, install_index)
+        bootstatus_index = next(i for i, item in enumerate(commands) if item.startswith("bootstatus "))
+        self.assertLess(boot_index, bootstatus_index)
+        self.assertLess(bootstatus_index, install_index)
+        self.assertEqual(commands[bootstatus_index], "bootstatus TEST-DEVICE -b --timeout 300")
 
         report = json.loads((output / "result.json").read_text(encoding="utf-8"))
         self.assertEqual(report["bundleId"], "com.turnova.rider")
@@ -172,6 +184,14 @@ fi
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("Unable to restore your\nsession", result.stdout)
+        self.assertFalse((output / "result.json").exists())
+
+    def test_simulator_bootstatus_failure_stops_before_install(self) -> None:
+        result, output, commands = self.run_smoke(bootstatus_fail=True)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("bootstatus TEST-DEVICE -b --timeout 300", commands)
+        self.assertFalse(any(item.startswith("install ") for item in commands))
         self.assertFalse((output / "result.json").exists())
 
     def test_rejects_non_adhoc_signed_app_before_simulator_access(self) -> None:
