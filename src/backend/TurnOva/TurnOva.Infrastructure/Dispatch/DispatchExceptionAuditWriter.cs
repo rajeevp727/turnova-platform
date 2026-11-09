@@ -42,7 +42,6 @@ public sealed class DispatchExceptionAuditWriter(IQueueAuditEventStore store)
     private static bool IsSameAudit(QueueAuditEvent? existing, QueueAuditEvent expected) =>
         existing is not null &&
         existing.EventId == expected.EventId &&
-        existing.DocumentType == "queue-audit" &&
         existing.EventType == QueueAuditEventTypes.DispatchException &&
         existing.ZoneServiceKey == expected.ZoneServiceKey &&
         existing.DriverId == expected.DriverId &&
