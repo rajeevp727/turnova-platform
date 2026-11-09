@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-09
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `a638e6f2ccc10e3a5aed9d067bf5827873aadcfe` after RIDER-04 PR #137 merged. Final-head CI [42578080973](https://github.com/rajeevp727/turnova-platform/actions/runs/42578080973) passed 8/8 on `610fc709ab450ec9ad562ebfae4aea12cec89ad4`, including 359/359 backend tests, both Rider/Driver Android debug and standalone release APKs, both unsigned iOS Simulator builds, mobile validation and native non-container API publish. Current sequential item #18 PLATFORM-01 adds deterministic concurrent dispatch-exception audit retry, conflicting-actor and conflict-read cancellation tests. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on approved support-policy inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no physical-device, live Cosmos/provider, signed-production or production-hosting validation is claimed.
+**Last audited main base:** `a638e6f2ccc10e3a5aed9d067bf5827873aadcfe` after RIDER-04 PR #137 merged. PLATFORM-01 PR #139 code head `e2e6637fea7d64b49c5419f821dcdd0012c323db` passed exact-head CI [42593042733](https://github.com/rajeevp727/turnova-platform/actions/runs/42593042733), 8/8, including 362/362 backend tests, both Rider/Driver Android debug and standalone release APKs with package identity checks, both unsigned iOS Simulator builds with bundle identity checks, mobile validation and native non-container API publish. Current sequential item #18 is PR #139; final documentation-head CI remains pending. #15 DRIVER-04 and #17 SUPPORT-01 remain blocked on Product/Operations support-policy inputs. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); no physical-device, live Cosmos/provider, signed-production or production-hosting validation is claimed.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -955,4 +955,15 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - #16 RIDER-04 has deterministic coverage for mixed-case Cab fallback, legacy non-Cab preservation and direct-payment report rejection without report/status/audit mutation. Live Cosmos and physical-device/policy gates remain.
 - Current #18 branch `test/platform-01-dispatch-audit-concurrency` adds three deterministic writer tests for concurrent same-trace idempotency, conflicting actor reuse and cancellation during canonical read-back. Exact-head CI is pending; no live Cosmos behaviour is inferred.
 - After #18, re-audit #19 RELEASE-01 for native Android emulator launch smoke evidence in addition to existing artifact identity/build checks. Production signing, EAS/API configuration, physical-device/pilot acceptance and store submission remain external.
+- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). Production readiness is not established.
+
+
+## Latest sequential handoff — #18 PLATFORM-01 concurrent dispatch audit retries (2026-11-09)
+
+- Active PR #139, branch `test/platform-01-dispatch-audit-concurrency`, code head `e2e6637fea7d64b49c5419f821dcdd0012c323db`, based on main `a638e6f2ccc10e3a5aed9d067bf5827873aadcfe`.
+- Exact-head CI [#42593042733](https://github.com/rajeevp727/turnova-platform/actions/runs/42593042733) passed 8/8: 362/362 backend tests, Rider/Driver mobile validation, both standalone Android release APKs with package IDs `com.turnova.rider` / `com.turnova.driver`, both iOS Simulator app bundle IDs, and native API publish. The code-bearing head passed; final docs-head CI remains pending.
+- PLAT-AUDIT-012–014 add deterministic concurrency, actor-conflict and read-back cancellation coverage; the fake store does not claim live Cosmos behaviour.
+- #15 DRIVER-04 and #17 SUPPORT-01 require Product/Operations-approved support categories, intake, priority, escalation, hours/targets, attachments, privacy/retention and handoff; do not invent a support schema or SLA.
+- #16 RIDER-04 is implemented with deterministic tests for Cab-only reconciliation, historical non-Cab preservation and non-Cab report rejection without mutation; live Cosmos and device/policy gates remain.
+- After #139 merges, #19 RELEASE-01 next: add Android emulator install/launch smoke for both standalone release APKs. Production signing, EAS/API configuration, Apple registration, physical-device/pilot acceptance and store submission remain external.
 - Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked). Production readiness is not established.
