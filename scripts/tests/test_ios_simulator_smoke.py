@@ -25,6 +25,7 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
     def run_smoke(
         self,
         restore_error: bool = True,
+        restore_error_without_your: bool = False,
         adhoc_signature: bool = False,
         stale_session_error: bool = False,
         bootstatus_fail: bool = False,
@@ -152,7 +153,11 @@ if [[ "$*" != *"--expect-secure-store-unavailable"* ]]; then
 fi
 echo "Welcome back Email address Password Sign in"
 if [[ "$FAKE_RESTORE_ERROR" == "1" ]]; then
-  printf "Unable to restore your\\nsession. Check your connection or secure storage and retry.\\n"
+  if [[ "${FAKE_RESTORE_ERROR_WITHOUT_YOUR:-0}" == "1" ]]; then
+    printf "Unable to restore\\nsession. Check your connection or secure storage and retry.\\n"
+  else
+    printf "Unable to restore your\\nsession. Check your connection or secure storage and retry.\\n"
+  fi
 fi
 if [[ "$FAKE_RESTORE_ERROR" != "1" ]]; then
   echo "Expected unsigned-simulator SecureStore failure banner was not visible." >&2
@@ -174,6 +179,7 @@ fi
                 "FAKE_APP_CONTAINER": str(app_container),
                 "FAKE_BUNDLE_ID": "com.turnova.rider",
                 "FAKE_RESTORE_ERROR": "1" if restore_error else "0",
+                "FAKE_RESTORE_ERROR_WITHOUT_YOUR": "1" if restore_error_without_your else "0",
                 "FAKE_ADHOC_SIGNATURE": "1" if adhoc_signature else "0",
                 "FAKE_STALE_SESSION": "1" if stale_session_error else "0",
                 "FAKE_BOOTSTATUS_FAIL": "1" if bootstatus_fail else "0",
@@ -238,6 +244,19 @@ fi
         self.assertEqual(report["signing"], "unsigned simulator artifact (CI-only)")
         self.assertEqual(report["keychainAccessGroup"], "not available; signed-device validation required")
         self.assertGreater((output / "launch.png").stat().st_size, 0)
+
+    def test_rider_secure_store_banner_copy_without_your_is_accepted(self) -> None:
+        result, output, _ = self.run_smoke(restore_error_without_your=True)
+
+        self.assertEqual(result.returncode, 0, msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+        report = json.loads((output / "result.json").read_text(encoding="utf-8"))
+        self.assertTrue(report["secureStoreUnavailableBannerVerified"])
+
+    def test_ocr_matcher_contains_both_rider_and_driver_banner_variants(self) -> None:
+        ocr_source = (REPO_ROOT / "scripts" / "ios-simulator-screen-text-check.swift").read_text(encoding="utf-8")
+
+        self.assertIn('"Unable to restore your session"', ocr_source)
+        self.assertIn('"Unable to restore session"', ocr_source)
 
     def test_missing_expected_secure_store_failure_fails_the_smoke(self) -> None:
         result, output, _ = self.run_smoke(restore_error=False)
