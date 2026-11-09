@@ -923,3 +923,5 @@ The baseline AI-01 implementation silently defaulted an omitted passenger count 
 - CI now runs the Python verifier tests and both native artifact checks. Exact-head CI is pending. Release docs and test plan record the new checks and keep signed AAB/IPA, EAS, API URL, signing, physical-device, pilot and store gates external.
 - Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); implementation evidence and production readiness are reported separately.
 - Next: inspect the full diff, await all exact-head checks, comment-review security/path/identity semantics, merge only if policy permits, then continue sequential re-audit. No containers or production deployments.
+
+- RELEASE-01 implementation is tracked in [PR #135](https://github.com/rajeevp727/turnova-platform/pull/135), branch fix/release-01-native-artifact-identity-verification; initial code-bearing head was 9d855b870d4212e1240d6ab8073d87021ccb31e1. Later documentation-only commits do not change the native verifier implementation; use the live PR head for final CI.
