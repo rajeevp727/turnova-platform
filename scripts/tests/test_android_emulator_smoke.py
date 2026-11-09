@@ -49,11 +49,19 @@ case "$*" in
       [[ ! -f "$attempts_file" ]] || read -r attempts < "$attempts_file"
       attempts=$((attempts + 1))
       printf '%s\n' "$attempts" > "$attempts_file"
+      package_dir="$ANDROID_SDK_ROOT/system-images/android-35/google_apis/x86_64"
       if (( attempts <= ${FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS:-0} )); then
+        mkdir -p "$package_dir"
+        printf '<localPackage path="partial-corrupt-package"/>\n' > "$package_dir/package.xml"
+        printf 'partial-corrupt-system-image' > "$package_dir/system.img"
+        printf 'corrupt' > "$package_dir/corrupt.marker"
         echo "Warning: Google APIs system image download failed: ZipFile unknown archive" >&2
         exit 1
       fi
-      package_dir="$ANDROID_SDK_ROOT/system-images/android-35/google_apis/x86_64"
+      if [[ -e "$package_dir/corrupt.marker" ]]; then
+        echo "Corrupt partial system image survived failed-attempt cleanup." >&2
+        exit 9
+      fi
       mkdir -p "$package_dir"
       printf '<localPackage path="system-images;android-35;google_apis;x86_64"/>\n' > "$package_dir/package.xml"
       printf 'deterministic-system-image-fixture' > "$package_dir/system.img"
@@ -265,6 +273,7 @@ exit 0
             self.assertIn("failed after 3 attempts", repeated_archive_failure.stderr)
             self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "3")
             self.assertFalse((failed_avd_home / "turnova-release-smoke.ini").exists())
+            self.assertFalse(system_image_dir.exists())
             self.assertFalse((failure_output / "result.json").exists())
 
     def test_invalid_package_identifier_is_rejected_before_sdk_access(self) -> None:
