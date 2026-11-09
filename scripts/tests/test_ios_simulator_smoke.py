@@ -87,7 +87,21 @@ JSON
     echo "$FAKE_BUNDLE_ID: 4242"
     ;;
   spawn)
-    echo "$FAKE_BUNDLE_ID"
+    case "$3:$4" in
+      log:show)
+        echo "SpringBoard launch denied for $FAKE_BUNDLE_ID"
+        ;;
+      launchctl:list)
+        echo "$FAKE_BUNDLE_ID"
+        ;;
+      *)
+        echo "unexpected simctl spawn arguments: $*" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  listapps)
+    echo "Installed app: $FAKE_BUNDLE_ID"
     ;;
   io)
     printf '\211PNG\r\n\032\n' > "$4"
@@ -253,6 +267,23 @@ fi
         self.assertEqual(result.returncode, 1)
         self.assertIn("simctl launch fixture failure", result.stderr)
         self.assertIn("app launch failed", result.stderr)
+        self.assertIn("spawn TEST-DEVICE log show", commands)
+        self.assertIn("spawn TEST-DEVICE launchctl list", commands)
+        self.assertIn("listapps TEST-DEVICE", commands)
+        self.assertIn(
+            "SpringBoard launch denied for com.turnova.rider",
+            (output / "simulator-system.log").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "com.turnova.rider",
+            (output / "launchctl-list-failure.txt").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "Installed app: com.turnova.rider",
+            (output / "installed-apps.txt").read_text(encoding="utf-8"),
+        )
+        self.assertTrue((output / "app-signature.txt").exists())
+        self.assertTrue((output / "app-entitlements.plist").exists())
         self.assertFalse((output / "launch.txt").exists())
         self.assertFalse((output / "result.json").exists())
 
