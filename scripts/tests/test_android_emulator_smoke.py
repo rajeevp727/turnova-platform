@@ -136,7 +136,12 @@ case "$1" in
         dump_count=$((dump_count + 1))
         printf '%s\n' "$dump_count" > "$FAKE_UI_DUMP_COUNT_FILE"
         if [[ "${FAKE_PIXEL_LAUNCHER_ANR_ALWAYS:-0}" == "1" || ( "${FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP:-0}" == "1" && "$dump_count" == "1" ) ]]; then
-          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"Pixel Launcher isn't responding\"/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\"/></hierarchy>"
+          if [[ "${FAKE_PIXEL_LAUNCHER_WAIT_DISABLED:-0}" == "1" ]]; then
+            wait_state='clickable="false" enabled="false"'
+          else
+            wait_state='clickable="true" enabled="true"'
+          fi
+          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"Pixel Launcher isn't responding\"/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" ${wait_state}/></hierarchy>"
         elif [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
           printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
         else
@@ -188,6 +193,7 @@ exit 0
                     "FAKE_RESTORE_ERROR": "0",
                     "FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP": "0",
                     "FAKE_PIXEL_LAUNCHER_ANR_ALWAYS": "0",
+                    "FAKE_PIXEL_LAUNCHER_WAIT_DISABLED": "0",
                     "FAKE_UI_DUMP_COUNT_FILE": str(output / "ui-dump-count"),
                     "FAKE_INPUT_LOG": str(output / "input-taps.txt"),
                     "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",
@@ -296,6 +302,31 @@ exit 0
             )
             self.assertFalse((persistent_output / "result.json").exists())
 
+            # Never tap a system dialog control unless the hierarchy proves it is
+            # enabled and clickable; fail closed without interacting with a disabled control.
+            disabled_wait_output = root / "anr-disabled-wait-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(disabled_wait_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(disabled_wait_output / "input-taps.txt")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "1"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "1"
+            disabled_wait_command = command[:-1] + [str(disabled_wait_output)]
+            disabled_wait = subprocess.run(
+                disabled_wait_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(disabled_wait.returncode, 1)
+            self.assertIn("safe Wait control could not be resolved", disabled_wait.stderr)
+            self.assertFalse((disabled_wait_output / "input-taps.txt").exists())
+            self.assertFalse((disabled_wait_output / "result.json").exists())
+
+            environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
             environment["FAKE_UI_DUMP_COUNT_FILE"] = str(output / "ui-dump-count")
             environment["FAKE_INPUT_LOG"] = str(output / "input-taps.txt")
