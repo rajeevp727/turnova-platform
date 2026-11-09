@@ -172,6 +172,10 @@ The API contract tests use a fake named TriSend HTTP handler; CI must never call
 | PLAT-006 | CORS | Request from configured mobile origin | Allowed origin succeeds; untrusted origins are denied in production policy | Security | P1 |
 | PLAT-007 | Sensitive log review | Trigger login failure and upstream failure | No password, bearer token, refresh token or signing key in logs | Security | P0 |
 | PLAT-008 | Dependency/CI check | Run .NET restore/build/test and both app typechecks | All jobs pass on PR | CI | P0 |
+| PLAT-RES-001 | Reservation acquisition audit | Acquire a selected-ride or technical Driver lock | Active reservation and ReservationAcquired event are one same-partition Cosmos transaction; deterministic in-memory test records exactly one event | API unit + Cosmos integration | P0 |
+| PLAT-RES-002 | Reservation mutation audit | Promote, change expiry and release a matching reservation | Each successful state change appends exactly one event in the same transaction; ETag conflict or missing item appends none | API unit + Cosmos integration | P0 |
+| PLAT-RES-003 | Reservation retry/idempotency | Retry same-ride acquire, same-state promotion/expiry and release | No duplicate event on an idempotent no-op; a wrong reservation ID cannot release another lease | API unit | P0 |
+| PLAT-RES-004 | Reservation audit privacy | Inspect serialized reservation audit events with invalid actor metadata | Only bounded actor roles/reason categories and opaque actor references persist; route, location, contact, KYC, token, fare and chat data are absent | API unit + security review | P0 |
 
 ## 8. Existing automated test baseline
 
