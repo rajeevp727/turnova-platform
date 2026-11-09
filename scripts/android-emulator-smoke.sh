@@ -115,9 +115,9 @@ install_system_image_with_retry() {
     echo "Android system image installation attempt $attempt/$max_attempts failed (exit $status):" >&2
     tail -n 80 "$log_file" >&2 || true
 
-    if [[ -d "$SYSTEM_IMAGE_DIR" ]] && {
-      [[ ! -s "$SYSTEM_IMAGE_DIR/package.xml" ]] || [[ ! -s "$SYSTEM_IMAGE_DIR/system.img" ]]
-    }; then
+    # A failed sdkmanager download can leave non-empty but corrupt files behind.
+    # Always remove this isolated package directory before the next attempt.
+    if [[ -d "$SYSTEM_IMAGE_DIR" ]]; then
       rm -rf "$SYSTEM_IMAGE_DIR"
     fi
 
