@@ -164,7 +164,7 @@ if [[ "$FAKE_RESTORE_ERROR" != "1" ]]; then
   exit 1
 fi
 if [[ "$FAKE_STALE_SESSION" == "1" ]]; then
-  echo "Session expired. Please sign in again."
+  printf "Session\\nexpired. Please sign in again.\\n"
   exit 1
 fi
 """,
@@ -252,6 +252,14 @@ fi
         report = json.loads((output / "result.json").read_text(encoding="utf-8"))
         self.assertTrue(report["secureStoreUnavailableBannerVerified"])
 
+    def test_ocr_normalizes_line_wrapped_forbidden_session_errors(self) -> None:
+        ocr_source = (REPO_ROOT / "scripts" / "ios-simulator-screen-text-check.swift").read_text(encoding="utf-8")
+
+        normalization = ocr_source.index('replacingOccurrences(of: "\\\\s+", with: " ", options: .regularExpression)')
+        forbidden_checks = ocr_source.index("let unexpectedText = forbiddenText.filter")
+        self.assertIn('"Session expired"', ocr_source)
+        self.assertLess(normalization, forbidden_checks)
+
     def test_ocr_matcher_contains_both_rider_and_driver_banner_variants(self) -> None:
         ocr_source = (REPO_ROOT / "scripts" / "ios-simulator-screen-text-check.swift").read_text(encoding="utf-8")
 
@@ -269,7 +277,8 @@ fi
         result, output, _ = self.run_smoke(stale_session_error=True)
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("Session expired", result.stdout)
+        self.assertIn("Session", result.stdout)
+        self.assertIn("expired", result.stdout)
         self.assertFalse((output / "result.json").exists())
 
     def test_simulator_bootstatus_failure_stops_before_install(self) -> None:
