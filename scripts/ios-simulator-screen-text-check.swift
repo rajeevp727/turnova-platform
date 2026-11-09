@@ -29,9 +29,22 @@ let requiredText = ["Welcome back", "Email address", "Password", "Sign in"]
 let missingText = requiredText.filter {
     !recognizedText.localizedCaseInsensitiveContains($0)
 }
+let forbiddenText = [
+    "Unable to restore your session",
+    "Unable to restore session",
+    "Session expired",
+    "Unable to clear secure session storage"
+]
+let unexpectedText = forbiddenText.filter {
+    recognizedText.localizedCaseInsensitiveContains($0)
+}
 
 print(recognizedText)
 if !missingText.isEmpty {
     fputs("iOS login screen is missing expected text: \(missingText.joined(separator: ", "))\n", stderr)
+    exit(1)
+}
+if !unexpectedText.isEmpty {
+    fputs("iOS fresh-install login screen contains an unexpected session/storage error: \(unexpectedText.joined(separator: ", "))\n", stderr)
     exit(1)
 }
