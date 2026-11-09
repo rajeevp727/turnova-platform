@@ -176,6 +176,7 @@ public sealed class DriverRideReservationStoreTests
                 "contact@example.invalid", "Administrator", "customer-supplied-free-text")));
 
         var audit = Assert.Single(store.GetAuditEvents("driver-1"));
+        Assert.Equal("system", audit.ActorId);
         Assert.Equal("System", audit.ActorRole);
         Assert.Equal(DriverRideReservationAuditReasons.Other, audit.ReasonCategory);
     }
