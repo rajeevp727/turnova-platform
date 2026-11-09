@@ -64,7 +64,7 @@ targetSdkVersion:'35'
             apk.write_bytes(b"fixture apk")
             completed = subprocess.CompletedProcess(
                 args=["aapt"], returncode=0,
-                stdout="package: name='com.example.wrong' versionCode='1'\n",
+                stdout="package: name='com.turnova.other' versionCode='1'\n",
                 stderr="",
             )
             with patch("verify_native_app_identity.subprocess.run", return_value=completed):
