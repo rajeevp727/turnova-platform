@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: turnova-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./src/backend/TurnOva/Dockerfile
+    dockerContext: ./src/backend/TurnOva
+    healthCheckPath: /health/live
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:10000
+      - key: TriSend__BaseUrl
+        value: https://auth.trisend.rajeevstech.in
+      - key: CosmosDb__DatabaseName
+        value: TurnOvaDb
+      - key: Auth__Jwt__Issuer
+        sync: false
+      - key: Auth__Jwt__Audience
+        sync: false
+      - key: Auth__Jwt__SigningKey
+        sync: false
+      - key: CosmosDb__Endpoint
+        sync: false
+      - key: CosmosDb__Key
+        sync: false
+      - key: Dispatch__NearbyRadiusKm
+        value: "0"
