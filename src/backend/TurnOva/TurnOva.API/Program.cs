@@ -773,7 +773,7 @@ async Task<DemoRide?> FindActiveRiderRideAsync(
     {
         candidateRideIds = rides.Values
             .Where(ride => ride.RiderId == riderId &&
-                ride.Status is "Requested" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress")
+                (ride.Status is "Requested" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
             .Select(ride => ride.RideId)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -808,7 +808,7 @@ async Task<bool> HasActiveRiderBookingAsync(
 {
     var reservation = await riderActiveBookingReservations.GetActiveAsync(riderId, ct);
     if (reservation is null)
-        return await FindActiveRiderRideAsync(riderId, exceptRideId, ct) is not null;
+        return (await FindActiveRiderRideAsync(riderId, exceptRideId, ct)) is not null;
 
     var isSameIdempotentBooking =
         reservation.RideId == exceptRideId &&
@@ -821,7 +821,7 @@ async Task<bool> HasActiveRiderBookingAsync(
         await riderActiveBookingReservations.TryReleaseAsync(
             riderId, reservation.RideId, ct,
             DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.InternalReconciliation));
-        return await FindActiveRiderRideAsync(riderId, exceptRideId, ct) is not null;
+        return (await FindActiveRiderRideAsync(riderId, exceptRideId, ct)) is not null;
     }
 
     if (reservedRide is null &&
@@ -833,7 +833,7 @@ async Task<bool> HasActiveRiderBookingAsync(
         await riderActiveBookingReservations.TryReleaseAsync(
             riderId, reservation.RideId, ct,
             DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.InternalReconciliation));
-        return await FindActiveRiderRideAsync(riderId, exceptRideId, ct) is not null;
+        return (await FindActiveRiderRideAsync(riderId, exceptRideId, ct)) is not null;
     }
 
     if (reservedRide is not null &&
