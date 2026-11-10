@@ -105,6 +105,7 @@ export default function App() {
     setBookingRequestKey(nextKey);
   },[]);
   const clearRiderSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
+    proposalAttemptRef.current=null;
     authenticatedSessionEpoch.current = null;
     resetSelectedBookingAttempt();
     resetRiderSessionState({
@@ -131,7 +132,7 @@ export default function App() {
     return () => { mounted = false; };
   }, []);
 
-  useEffect(()=>{proposalAttemptRef.current=null;setFollowDriverLocation(true);setReadyRideMapId(null);},[ride?.rideId]);
+  useEffect(()=>{setFollowDriverLocation(true);setReadyRideMapId(null);},[ride?.rideId]);
   useEffect(()=>{if(tab!=="Activity")setReadyRideMapId(null);},[tab]);
   useEffect(()=>{
     if(!ride||!shouldFitRideMap({tab,rideId:ride.rideId,readyRideId:readyRideMapId,followDriverLocation}))return;
@@ -322,7 +323,7 @@ export default function App() {
       try{
         await apiFetch(`/api/v1/rides/${rideId}/agreements`,{method:"POST",headers:{"Idempotency-Key":attempt.key},body:JSON.stringify({amount,currency:"INR"})});
       }catch(e){
-        if(currentRideIdRef.current===rideId)setError(e instanceof Error?e.message:"Unable to submit fare proposal. Retry the same amount to safely reuse this request.");
+        if(currentRideIdRef.current===rideId)setError((e instanceof Error?e.message:"Unable to submit fare proposal.")+" Retry the same amount to reuse this request key.");
         return;
       }
       if(currentRideIdRef.current!==rideId)return;
