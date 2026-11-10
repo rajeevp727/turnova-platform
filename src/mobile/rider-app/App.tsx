@@ -5,7 +5,7 @@ import { useColorScheme } from "react-native";
 import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { getFreshAccessToken } from "../shared/refreshCoordinator";
-import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
+import { readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
@@ -56,7 +56,7 @@ type RideHistoryItem = { rideId: string; pickup: string; dropoff: string; passen
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
 type TripIntentDraft = { pickup: string | null; dropoff: string | null; serviceClass: string; passengerCount: number | null; needsClarification: boolean; missingFields: string[]; requiresUserConfirmation: boolean; source: string };
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
-async function saveTokens(t: Tokens) { await saveSessionTokens(SecureStore, t); }
+async function saveTokens(t: Tokens, isCurrent: () => boolean = () => true) { return saveSessionTokensIfCurrent(SecureStore, t, isCurrent); }
 async function clearTokens() { await clearSessionTokens(SecureStore); }
 async function request(path: string, init: RequestInit = {}, token?: string) {
   const response = await fetch(`${API}${path}`, { ...init, headers: { "Content-Type":"application/json", ...(token ? { Authorization:`Bearer ${token}` } : {}), ...init.headers } });
@@ -125,17 +125,37 @@ export default function App() {
     void SecureStore.setItemAsync("turnova.theme", preference);
   };
 
-  const accept=useCallback(async(result:any,newSession=false)=>{
+  const accept=useCallback(async(result:any,newSession=false,expectedEpoch?:number)=>{
     const acceptedUser=result?.user?requireAppRole<User>(result.user,"Rider"):null;
     if(newSession&&!acceptedUser)throw new Error("Authentication response did not include a Rider profile.");
+    let writeEpoch=expectedEpoch;
+    if(newSession){
+      writeEpoch=sessionEpoch.current+1;
+      sessionEpoch.current=writeEpoch;
+      refreshInFlight.current=null;
+      setTokens(null);setUser(null);
+    }else if(writeEpoch===undefined){
+      writeEpoch=sessionEpoch.current;
+    }
     const t={accessToken:result.accessToken,refreshToken:result.refreshToken};
-    await saveTokens(t);
-    if(newSession)sessionEpoch.current+=1;
+    const saved=await saveTokens(t,()=>sessionEpoch.current===writeEpoch);
+    if(!saved||sessionEpoch.current!==writeEpoch){
+      if(newSession)throw new Error("Session changed before the new login could be saved.");
+      return false;
+    }
     setTokens(t);
     if(acceptedUser)setUser(acceptedUser);
     setError("");
+    return true;
   },[]);
-  const refresh=useCallback(async(rt:string,expectedEpoch:number)=>{if(sessionEpoch.current!==expectedEpoch)return "";const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(sessionEpoch.current!==expectedEpoch)return "";await accept(result);return result.accessToken as string;},[accept]);
+  const refresh=useCallback(async(rt:string,expectedEpoch:number)=>{
+    if(sessionEpoch.current!==expectedEpoch)return "";
+    const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});
+    if(sessionEpoch.current!==expectedEpoch)return "";
+    const accepted=await accept(result,false,expectedEpoch);
+    if(!accepted||sessionEpoch.current!==expectedEpoch)return "";
+    return result.accessToken as string;
+  },[accept]);
   const apiFetch=useCallback(async(path:string,init:RequestInit={})=>{
     if(!tokens)throw new Error("Please sign in again.");
     const requestEpoch=sessionEpoch.current;
@@ -152,7 +172,7 @@ export default function App() {
         );
       }catch{
         if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
-        sessionEpoch.current+=1;
+        sessionEpoch.current+=1;refreshInFlight.current=null;
         await clearTokens();setTokens(null);setUser(null);
         throw new Error("Session expired. Please sign in again.");
       }
@@ -242,7 +262,7 @@ export default function App() {
     }
   };
   const askHelp=async()=>{setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{setHelpBusy(false);}};
-  const logout=async()=>{sessionEpoch.current+=1;try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{setError("Unable to clear secure session storage. Please retry sign-out.");return;}setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
+  const logout=async()=>{sessionEpoch.current+=1;refreshInFlight.current=null;try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{setError("Unable to clear secure session storage. Please retry sign-out.");return;}setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
   const findNearbyVehicles=async()=>{
     const passengerCount=parsePassengerCountInput(passengers);
     if(passengerCount===null){setDiscovery(null);setError("Enter a passenger count from 1 to 6 before searching.");return;}
