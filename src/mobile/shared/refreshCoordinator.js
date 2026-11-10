@@ -23,4 +23,14 @@ function getFreshAccessToken(ref, rejectedAccessToken, readTokens, refresh) {
   });
 }
 
-module.exports = { singleFlight, getFreshAccessToken };
+function advanceSessionEpoch(epochRef, inFlightRefreshRef) {
+  if (!epochRef || !Number.isSafeInteger(epochRef.current) || epochRef.current < 0) {
+    throw new Error("Invalid session epoch.");
+  }
+
+  epochRef.current += 1;
+  if (inFlightRefreshRef) inFlightRefreshRef.current = null;
+  return epochRef.current;
+}
+
+module.exports = { singleFlight, getFreshAccessToken, advanceSessionEpoch };
