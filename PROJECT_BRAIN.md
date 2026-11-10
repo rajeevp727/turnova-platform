@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `33e438dba6e0a1af74959904ba132fd0e7273744` after RELEASE-01 PR #141 merged. Current sole active PR #142 is supplemental AI-01 provider resilience on `feat/ai-01-provider-resilience`, exact head `79c473661d7804f761bedebbfe871ecd9b0e94e2`; exact-head CI #1110 / 42769495825 passed 12/12 (backend 373/373, shared JS 102/102, Python 40/40, both mobile validation/bundles, four native builds and four simulator smokes). All four same-run simulator artifacts were downloaded and inspected. Android Rider/Driver login surfaces passed; unsigned iOS Rider/Driver login surfaces passed with SecureStore unavailable and no Keychain access group. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. No other feature PR is open.
+**Last audited main HEAD:** `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after supplemental AI-01 PR #142 merged. AI-01 provider resilience passed documentation-head CI #1113 / 42774588830 (12/12); it remains supplemental/outside the 19-area denominator, with live provider/managed-secret/data-processing gates external. Current sole active feature PR #144 is AUTH-02 on `fix/auth-02-session-epoch-token-persistence`, code head `c3e34f25af80278c57467b864dd6af7ed186fd44`; exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1228,3 +1228,12 @@ PR [#142](https://github.com/rajeevp727/turnova-platform/pull/142) head `79c4736
 AI-01 provider calls are independently timeout-bounded with `Task.WaitAsync`; cooperative cancellation is signalled, caller cancellation takes precedence, late task faults are observed, and synchronous/asynchronous timeout, HTTP and unexpected adapter exceptions use deterministic local fallback. Tests AI-026–AI-030 cover the failure/cancellation cases. AI-01 remains supplemental/outside the 19-row denominator; no paid provider/model/credential is selected. Live provider sandbox, managed-secret wiring and data-processing terms remain external.
 
 After PR #142 merges and main is re-read, continue AUTH-02 refresh/logout concurrency hardening. AUTH-01 editable profile fields/routes remain undefined upstream; do not invent them.
+
+
+## Current sequential handoff — AUTH-02 (2026-11-10)
+
+PR [#144](https://github.com/rajeevp727/turnova-platform/pull/144) adds epoch-aware serialized token-pair persistence to both Rider and Driver. Shared `saveSessionTokensIfCurrent` checks the captured session epoch before writing and after each secure key; if the session changes during persistence, the stale/partial pair is cleared inside the same storage mutation queue. Refresh handlers only update in-memory state when the captured epoch remains current. New login, logout, Driver sign-in start and refresh-expiry cleanup invalidate prior refresh work and reset the single-flight reference. Tests AUTH-LOGIN-031–033 cover logout during a paused access write, newer-login-over-old-refresh ordering, and a queued stale refresh no-op. Existing offline-safe logout and pair-write rollback remain.
+
+PR #142 AI-01 merged at `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after exact documentation-head CI #1113 / 42774588830 passed 12/12. AI-01 is supplemental/outside the denominator; live provider sandbox, managed-secret wiring and data-processing terms remain external.
+
+AUTH-02 remains In Progress pending exact-head CI, live TriSend refresh rotation/reuse validation, and signed Android/iOS physical-device restore/expiry/logout/SecureStore failure acceptance. Do not claim production Keychain persistence from unsigned simulator builds. After PR #144 merges, re-read `main` and continue the next actionable acceptance row in order.
