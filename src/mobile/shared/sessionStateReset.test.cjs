@@ -136,3 +136,17 @@ test("Rider and Driver session reset clears auth form secrets and successful log
   assert.match(driverAuth, /clearDriverSessionState\(credentials\)/);
   assert.ok(driverAuth.includes('setPassword("")'));
 });
+
+
+test("AUTH-LOGIN-062 clears Driver SignalR offer deduplication when resetting a session", () => {
+  const app = fs.readFileSync(path.join(__dirname, "../driver-app/App.tsx"), "utf8");
+  const resetStart = app.indexOf("const clearDriverSessionState");
+  const resetEnd = app.indexOf("const serviceClass", resetStart);
+  assert.notEqual(resetStart, -1);
+  assert.notEqual(resetEnd, -1);
+  const reset = app.slice(resetStart, resetEnd);
+
+  assert.match(reset, /receivedOfferIds\.current\.clear\(\);/);
+  assert.match(app, /const receivedOfferIds = useRef<Set<string>>\(new Set\(\)\);/);
+  assert.match(app, /if \(receivedOfferIds\.current\.size > 500\)/);
+});
