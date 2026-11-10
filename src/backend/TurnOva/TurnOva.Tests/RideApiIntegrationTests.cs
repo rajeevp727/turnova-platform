@@ -721,6 +721,32 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task ExistingLegacyActiveRideWithoutRiderReservationBlocksSelectedBooking()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "legacy-active-rider");
+        using var driver = factory.CreateClient("Driver", "legacy-active-new-driver");
+        SeedBookableDriver(factory, "legacy-active-new-driver", "legacy-active-new-union");
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides["LEGACY-ACTIVE-RIDE"] = new DemoRide(
+            "LEGACY-ACTIVE-RIDE", "KPHB", "HITEC City", 1, "InProgress",
+            DateTimeOffset.UtcNow.AddHours(-1), null, "legacy-active-rider", "legacy-active-driver",
+            null, null, null, null, DateTimeOffset.UtcNow.AddMinutes(-30), DateTimeOffset.UtcNow.AddMinutes(-1));
+
+        using var request = CreateSelectedBookingRequest(
+            "legacy-active-new-key", "legacy-active-new-driver", "legacy-active-new-union", "KPHB", "Madhapur", []);
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync("legacy-active-rider"));
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .HasActiveAsync("legacy-active-new-driver"));
+        Assert.Single(rides.Values.Where(ride => ride.RiderId == "legacy-active-rider"));
+    }
+
+    [Fact]
     public async Task DifferentRidersCanBookDifferentDriversConcurrently()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
