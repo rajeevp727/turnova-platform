@@ -401,6 +401,14 @@ public sealed class AiAssistanceService
             callerCancellationToken.ThrowIfCancellationRequested();
             return default;
         }
+        catch (Exception)
+        {
+            // Synchronous adapter failures (including malformed adapter contracts) use the
+            // same deterministic fallback as asynchronous provider failures. Caller
+            // cancellation still takes precedence, and provider details are never exposed.
+            callerCancellationToken.ThrowIfCancellationRequested();
+            return default;
+        }
 
         try
         {
