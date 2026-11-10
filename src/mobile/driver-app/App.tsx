@@ -221,11 +221,11 @@ export default function App() {
     const authEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
     setLoading(true); setError(""); setNotice("");
     try {
-      await clearTokens();
-      if (sessionEpoch.current !== authEpoch) return;
       const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
       if (cacheCleanup.failed > 0)
         throw new Error("Unable to clear payslips from a previous account. Clear the app cache before signing in.");
+      if (sessionEpoch.current !== authEpoch) return;
+      await clearTokens();
       if (sessionEpoch.current !== authEpoch) return;
       const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
       const result = await jsonRequest(path, {
