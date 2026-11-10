@@ -12,7 +12,7 @@ import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
 import { getFreshAccessToken } from "../shared/refreshCoordinator";
-import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
+import { readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
@@ -53,8 +53,8 @@ type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; 
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
 
-async function saveTokens(tokens: Tokens) {
-  await saveSessionTokens(SecureStore, tokens);
+async function saveTokens(tokens: Tokens, isCurrent: () => boolean = () => true) {
+  return saveSessionTokensIfCurrent(SecureStore, tokens, isCurrent);
 }
 async function clearTokens() {
   await clearSessionTokens(SecureStore);
@@ -122,16 +122,30 @@ export default function App() {
     void SecureStore.setItemAsync("turnova.theme", preference);
   };
 
-  const acceptSession = useCallback(async (result: any, newSession = false) => {
+  const acceptSession = useCallback(async (result: any, newSession = false, expectedEpoch?: number) => {
     const acceptedUser = result?.user ? requireAppRole<User>(result.user, "Driver") : null;
     if (newSession && !acceptedUser)
       throw new Error("Authentication response did not include a Driver profile.");
+    let writeEpoch = expectedEpoch;
+    if (newSession) {
+      writeEpoch = sessionEpoch.current + 1;
+      sessionEpoch.current = writeEpoch;
+      refreshInFlight.current = null;
+      setTokens(null);
+      setUser(null);
+    } else if (writeEpoch === undefined) {
+      writeEpoch = sessionEpoch.current;
+    }
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
-    await saveTokens(next);
-    if (newSession) sessionEpoch.current += 1;
+    const saved = await saveTokens(next, () => sessionEpoch.current === writeEpoch);
+    if (!saved || sessionEpoch.current !== writeEpoch) {
+      if (newSession) throw new Error("Session changed before the new login could be saved.");
+      return false;
+    }
     setTokens(next);
     if (acceptedUser) setUser(acceptedUser);
     setError("");
+    return true;
   }, []);
 
   const refreshSession = useCallback(async (refreshToken: string, expectedEpoch: number) => {
@@ -140,7 +154,8 @@ export default function App() {
       method: "POST", body: JSON.stringify({ refreshToken })
     });
     if (sessionEpoch.current !== expectedEpoch) return "";
-    await acceptSession(result);
+    const accepted = await acceptSession(result, false, expectedEpoch);
+    if (!accepted || sessionEpoch.current !== expectedEpoch) return "";
     return result.accessToken as string;
   }, [acceptSession]);
 
@@ -164,6 +179,7 @@ export default function App() {
       } catch {
         if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
         sessionEpoch.current += 1;
+        refreshInFlight.current = null;
         let tokenCleanupFailed = false;
         try { await clearTokens(); } catch { tokenCleanupFailed = true; }
         const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
@@ -216,6 +232,8 @@ export default function App() {
   }, []);
 
   const authenticate = async (replaceOldest = false) => {
+    sessionEpoch.current += 1;
+    refreshInFlight.current = null;
     setLoading(true); setError(""); setNotice("");
     try {
       const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
@@ -947,6 +965,7 @@ export default function App() {
 
   const logout = async () => {
     sessionEpoch.current += 1;
+    refreshInFlight.current = null;
     try {
       await logoutSession(SecureStore, async () => {
         if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken);
