@@ -375,21 +375,68 @@ public sealed class AiAssistanceService
         Func<CancellationToken, Task<T?>> operation,
         CancellationToken callerCancellationToken)
     {
+        callerCancellationToken.ThrowIfCancellationRequested();
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(callerCancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.RequestTimeoutSeconds));
 
+        Task<T?> providerTask;
         try
         {
-            return await operation(timeout.Token);
+            providerTask = operation(timeout.Token);
+            ArgumentNullException.ThrowIfNull(providerTask);
         }
-        catch (OperationCanceledException) when (!callerCancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            callerCancellationToken.ThrowIfCancellationRequested();
             return default;
         }
         catch (HttpRequestException)
         {
+            callerCancellationToken.ThrowIfCancellationRequested();
             return default;
         }
+        catch (TimeoutException)
+        {
+            callerCancellationToken.ThrowIfCancellationRequested();
+            return default;
+        }
+
+        try
+        {
+            // WaitAsync enforces the request deadline even when a provider ignores its
+            // cancellation token. The linked token still asks a cooperative provider to stop.
+            return await providerTask.WaitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Caller cancellation always wins over timeout/provider cancellation. If the
+            // provider is still running, observe a later fault without logging its contents.
+            if (!providerTask.IsCompleted)
+                ObserveLateProviderTask(providerTask);
+
+            callerCancellationToken.ThrowIfCancellationRequested();
+            return default;
+        }
+        catch (HttpRequestException)
+        {
+            callerCancellationToken.ThrowIfCancellationRequested();
+            return default;
+        }
+        catch (TimeoutException)
+        {
+            callerCancellationToken.ThrowIfCancellationRequested();
+            return default;
+        }
+    }
+
+    private static void ObserveLateProviderTask(Task providerTask)
+    {
+        _ = providerTask.ContinueWith(
+            static faultedTask => _ = faultedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private sealed record HelpEntry(string Id, string Answer, IReadOnlyList<string> Keywords);
