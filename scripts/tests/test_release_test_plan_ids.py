@@ -16,7 +16,7 @@ TEST_PLAN = REPO_ROOT / "docs" / "test-plan.md"
 class ReleaseTestPlanIdTests(unittest.TestCase):
     def test_release_smoke_test_ids_are_unique(self) -> None:
         content = TEST_PLAN.read_text(encoding="utf-8")
-        identifiers = re.findall(r"^\\|\\s*(RELEASE-SMOKE-\\d+)\\s*\\|", content, flags=re.MULTILINE)
+        identifiers = re.findall(r"^\|\s*(RELEASE-SMOKE-\d+)\s*\|", content, flags=re.MULTILINE)
         duplicates = sorted(identifier for identifier, count in Counter(identifiers).items() if count > 1)
         self.assertGreater(len(identifiers), 0, "No RELEASE-SMOKE test IDs were found")
         self.assertEqual(duplicates, [], f"Duplicate RELEASE-SMOKE IDs: {duplicates}")
