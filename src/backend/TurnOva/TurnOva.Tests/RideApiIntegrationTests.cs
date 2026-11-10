@@ -714,10 +714,15 @@ public sealed class RideApiIntegrationTests
         Assert.NotNull(activeReservation);
         var activeRides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()
             .Values.Where(ride => ride.RiderId == "single-active-rider" &&
-                ride.Status is "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress")
+                (ride.Status is "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
             .ToArray();
         Assert.Single(activeRides);
         Assert.Equal(activeRides[0].RideId, activeReservation.RideId);
+        var driverReservationStore = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var driverLeaseResults = await Task.WhenAll(
+            driverReservationStore.HasActiveAsync("single-active-driver-a"),
+            driverReservationStore.HasActiveAsync("single-active-driver-b"));
+        Assert.Single(driverLeaseResults, active => active);
     }
 
     [Fact]
