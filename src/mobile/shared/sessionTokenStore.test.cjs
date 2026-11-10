@@ -408,3 +408,38 @@ test("does not write any token when the session epoch changed before a queued re
   assert.equal(storage.values.size, 0);
   assert.equal(storage.calls.some(call => call[0] === "set"), false);
 });
+
+
+test("clears a rotated pair when logout advances the epoch during the refresh-token write", async () => {
+  let epoch = 30;
+  let signalRefreshWriteStarted;
+  let releaseRefreshWrite;
+  const refreshWriteStarted = new Promise(resolve => { signalRefreshWriteStarted = resolve; });
+  const blockedRefreshWrite = new Promise(resolve => { releaseRefreshWrite = resolve; });
+  const storage = createStorage({}, {
+    set: async key => {
+      if (key === REFRESH_TOKEN_KEY) {
+        signalRefreshWriteStarted();
+        await blockedRefreshWrite;
+      }
+    }
+  });
+
+  const saving = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "rotated-access", refreshToken: "rotated-refresh" },
+    () => epoch === 30
+  );
+  await refreshWriteStarted;
+  epoch = 31;
+  const clearing = clearSessionTokens(storage);
+
+  releaseRefreshWrite();
+  assert.equal(await saving, false);
+  await clearing;
+
+  assert.equal(storage.values.size, 0);
+  assert.deepEqual(storage.calls.map(call => call[0]), [
+    "set", "set", "delete", "delete", "delete", "delete"
+  ]);
+});
