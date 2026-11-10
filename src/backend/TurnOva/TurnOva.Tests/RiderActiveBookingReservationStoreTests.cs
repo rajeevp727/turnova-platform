@@ -20,7 +20,7 @@ public sealed class RiderActiveBookingReservationStoreTests
 
         var results = await Task.WhenAll(requests.Select(request => Task.Factory.StartNew(async () =>
         {
-            barrier.SignalAndWait(TimeSpan.FromSeconds(5));
+            Assert.True(barrier.SignalAndWait(TimeSpan.FromSeconds(5)));
             return await store.TryAcquireAsync(request);
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap()));
 
