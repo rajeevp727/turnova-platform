@@ -118,7 +118,7 @@ export default function App() {
   const [registrationReference, setRegistrationReference] = useState("");
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
   const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
-  const clearDriverSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string }) => {
+  const clearDriverSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
     authenticatedSessionEpoch.current = null;
     resetDriverSessionState({
       tokens: setTokens, user: setUser, mode: setMode, email: setEmail, password: setPassword, name: setName, tab: setTab, error: setError, queue: setQueue, membership: setMembership,
@@ -136,6 +136,7 @@ export default function App() {
       setEmail(preserveAuthInput.email);
       setPassword(preserveAuthInput.password);
       setName(preserveAuthInput.name);
+      setMode(preserveAuthInput.mode);
     }
   }, []);
 
@@ -251,7 +252,7 @@ export default function App() {
   }, []);
 
   const authenticate = async (replaceOldest = false) => {
-    const credentials = { email: email.trim(), password, name: name.trim() };
+    const credentials = { email: email.trim(), password, name: name.trim(), mode };
     const authEpoch = invalidateSession();
     clearDriverSessionState(credentials);
     setLoading(true); setError(""); setNotice("");
@@ -262,7 +263,7 @@ export default function App() {
       if (sessionEpoch.current !== authEpoch) return;
       await clearTokens();
       if (sessionEpoch.current !== authEpoch) return;
-      const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
+      const path = credentials.mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
       const result = await jsonRequest(path, {
         method: "POST",
         body: JSON.stringify({ email: credentials.email, password: credentials.password, name: credentials.name || null, replaceOldest })

@@ -98,7 +98,7 @@ export default function App() {
     bookingRequestKeyRef.current=nextKey;
     setBookingRequestKey(nextKey);
   },[]);
-  const clearRiderSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string }) => {
+  const clearRiderSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
     authenticatedSessionEpoch.current = null;
     resetSelectedBookingAttempt();
     resetRiderSessionState({
@@ -114,6 +114,7 @@ export default function App() {
       setEmail(preserveAuthInput.email);
       setPassword(preserveAuthInput.password);
       setName(preserveAuthInput.name);
+      setMode(preserveAuthInput.mode);
     }
   }, [resetSelectedBookingAttempt]);
   useEffect(() => {
@@ -263,7 +264,7 @@ export default function App() {
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const authenticate=async()=>{const credentials={email:email.trim(),password,name:name.trim()};const authEpoch=invalidateSession();clearRiderSessionState(credentials);setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:credentials.email,password:credentials.password,name:credentials.name||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");setPassword("");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
+  const authenticate=async()=>{const credentials={email:email.trim(),password,name:name.trim(),mode};const authEpoch=invalidateSession();clearRiderSessionState(credentials);setLoading(true);setError("");try{const path=credentials.mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:credentials.email,password:credentials.password,name:credentials.name||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");setPassword("");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
   const draftTripIntent=async()=>{
     setTripIntentBusy(true);setTripIntentNotice("");setError("");
     try {
