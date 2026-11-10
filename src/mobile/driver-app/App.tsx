@@ -544,8 +544,9 @@ export default function App() {
     }
   };
 
+  useEffect(() => { proposalAttemptRef.current = null; }, [activeRide?.rideId]);
+
   useEffect(() => {
-    proposalAttemptRef.current = null;
     if (!activeRide?.rideId) { setAgreementHistory([]); setAgreementAmount(""); return; }
     if (tab !== "Trips") return;
     let active = true;
@@ -1157,7 +1158,7 @@ export default function App() {
               </View>)}
               <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>
               {["Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
-                <TextInput value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/>
+                <TextInput value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" editable={!proposalSubmitting} style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/>
                 <Pressable style={styles.secondary} disabled={loading||proposalSubmitting||!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>{proposalSubmitting?"Submitting…":"Propose / counter fare"}</Text></Pressable>
                 {agreementHistory.length>0&&<Pressable style={styles.secondary} disabled={agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void confirmAgreement()}><Text style={styles.secondaryText}>{agreementHistory[agreementHistory.length-1].driverConfirmed?"You confirmed this version":"Confirm current agreement"}</Text></Pressable>}
               </>}
