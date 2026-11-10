@@ -19,6 +19,7 @@ import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { resetDriverSessionState } from "../shared/sessionStateReset";
+import { clearProposalAttempt, getOrCreateProposalAttempt, type ProposalAttempt } from "../shared/proposalAttempt";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
@@ -106,6 +107,11 @@ export default function App() {
   const [driverRideHistory, setDriverRideHistory] = useState<DriverRideHistoryItem[]>([]);
   const [agreementHistory, setAgreementHistory] = useState<AgreementVersion[]>([]);
   const [agreementAmount, setAgreementAmount] = useState("");
+  const proposalAttemptRef = useRef<ProposalAttempt | null>(null);
+  const proposalSubmissionInFlight = useRef(false);
+  const [proposalSubmitting, setProposalSubmitting] = useState(false);
+  const currentActiveRideIdRef = useRef<string | null>(null);
+  currentActiveRideIdRef.current = activeRide?.rideId ?? null;
   const [paymentReportAmounts, setPaymentReportAmounts] = useState<Record<string, string>>({});
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
   const [unionAssignment, setUnionAssignment] = useState<any>(null);
@@ -504,9 +510,11 @@ export default function App() {
 
   const loadAgreementHistory = useCallback(async (rideId: string, isActive: () => boolean = () => true) => {
     const isCurrent = () => isActive() && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
-    if (!isCurrent()) return;
+    if (!isCurrent()) return false;
     const result = await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];
-    if (isCurrent()) setAgreementHistory(result);
+    if (!isCurrent()) return false;
+    setAgreementHistory(result);
+    return true;
   }, [apiFetch]);
 
   const reportPaymentReceived = async (rideId: string) => {
@@ -537,6 +545,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    proposalAttemptRef.current = null;
     if (!activeRide?.rideId) { setAgreementHistory([]); setAgreementAmount(""); return; }
     if (tab !== "Trips") return;
     let active = true;
@@ -547,19 +556,42 @@ export default function App() {
   }, [activeRide?.rideId, tab, apiFetch]);
 
   const proposeAgreement = async () => {
-    if (!activeRide?.rideId) return;
+    const rideId = activeRide?.rideId;
+    if (!rideId || proposalSubmissionInFlight.current) return;
     const amount = Number(agreementAmount);
     if (!Number.isFinite(amount) || amount <= 0) { setError("Enter a positive proposed amount in INR."); return; }
+    const attempt = getOrCreateProposalAttempt(proposalAttemptRef, { rideId, actor: "driver", amount, currency: "INR" });
+    proposalSubmissionInFlight.current = true;
+    setProposalSubmitting(true);
     setError("");
     try {
-      await apiFetch(`/api/v1/rides/${activeRide.rideId}/agreements`, {
-        method: "POST",
-        headers: { "Idempotency-Key": `driver-${Date.now()}-${Math.random().toString(36).slice(2)}` },
-        body: JSON.stringify({ amount, currency: "INR" })
-      });
-      setAgreementAmount("");
-      await loadAgreementHistory(activeRide.rideId);
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to submit fare proposal."); }
+      try {
+        await apiFetch(`/api/v1/rides/${rideId}/agreements`, {
+          method: "POST",
+          headers: { "Idempotency-Key": attempt.key },
+          body: JSON.stringify({ amount, currency: "INR" })
+        });
+      } catch (e) {
+        if (currentActiveRideIdRef.current === rideId) {
+          setError(e instanceof Error ? e.message : "Unable to submit fare proposal. Retry the same amount to safely reuse this request.");
+        }
+        return;
+      }
+      if (currentActiveRideIdRef.current !== rideId) return;
+      try {
+        const refreshed = await loadAgreementHistory(rideId, () => currentActiveRideIdRef.current === rideId);
+        if (!refreshed || currentActiveRideIdRef.current !== rideId) return;
+        clearProposalAttempt(proposalAttemptRef, attempt.key);
+        setAgreementAmount("");
+      } catch {
+        if (currentActiveRideIdRef.current === rideId) {
+          setError("The proposal may already be saved. Retry the same amount to safely reload it; the same request key will be reused.");
+        }
+      }
+    } finally {
+      proposalSubmissionInFlight.current = false;
+      setProposalSubmitting(false);
+    }
   };
 
   const confirmAgreement = async () => {
@@ -1126,7 +1158,7 @@ export default function App() {
               <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>
               {["Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(activeRide.status)&&<>
                 <TextInput value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/>
-                <Pressable style={styles.secondary} disabled={!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>Propose / counter fare</Text></Pressable>
+                <Pressable style={styles.secondary} disabled={loading||proposalSubmitting||!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>{proposalSubmitting?"Submitting…":"Propose / counter fare"}</Text></Pressable>
                 {agreementHistory.length>0&&<Pressable style={styles.secondary} disabled={agreementHistory[agreementHistory.length-1].driverConfirmed} onPress={()=>void confirmAgreement()}><Text style={styles.secondaryText}>{agreementHistory[agreementHistory.length-1].driverConfirmed?"You confirmed this version":"Confirm current agreement"}</Text></Pressable>}
               </>}
             </View>
