@@ -6,7 +6,7 @@ import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
-import { getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
+import { getSignalRAccessToken, getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -570,7 +570,11 @@ export default function App() {
     const isConnectionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, connectionEpoch);
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?driverId=${encodeURIComponent(user.id)}`, {
-        accessTokenFactory: async () => readAccessTokenIfCurrent(SecureStore, tokens?.accessToken ?? "", isConnectionCurrent),
+        accessTokenFactory: async () => getSignalRAccessToken({
+          readAccessToken: () => readAccessTokenIfCurrent(SecureStore, "", isConnectionCurrent),
+          isCurrent: isConnectionCurrent,
+          validateSession: async () => { await apiFetch("/api/v1/auth/me"); }
+        }),
         transport: HttpTransportType.WebSockets
       })
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
@@ -622,7 +626,7 @@ export default function App() {
       activeSessionStops.current.delete(stopConnection);
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
-  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory, apiFetch]);
 
   useEffect(() => {
     if (!user?.id || tab !== "Trips" || !activeRide?.rideId || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
@@ -631,7 +635,11 @@ export default function App() {
     const isConnectionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, connectionEpoch);
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
-        accessTokenFactory: async () => readAccessTokenIfCurrent(SecureStore, tokens.accessToken, isConnectionCurrent),
+        accessTokenFactory: async () => getSignalRAccessToken({
+          readAccessToken: () => readAccessTokenIfCurrent(SecureStore, "", isConnectionCurrent),
+          isCurrent: isConnectionCurrent,
+          validateSession: async () => { await apiFetch("/api/v1/auth/me"); }
+        }),
         transport: HttpTransportType.WebSockets
       })
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
@@ -656,7 +664,7 @@ export default function App() {
       }
     });
     return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); activeSessionStops.current.delete(stopConnection); stopRegisteredConnections(new Set<() => unknown>([stopConnection])); };
-  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
+  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory, apiFetch]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Selected Rider request declined. No automatic reassignment was made."); if (activeRide?.rideId === rideId) { setActiveRide(null); setAgreementHistory([]); } } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
@@ -667,7 +675,11 @@ export default function App() {
     const isConnectionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, connectionEpoch);
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
-        accessTokenFactory: async () => readAccessTokenIfCurrent(SecureStore, tokens?.accessToken ?? "", isConnectionCurrent),
+        accessTokenFactory: async () => getSignalRAccessToken({
+          readAccessToken: () => readAccessTokenIfCurrent(SecureStore, "", isConnectionCurrent),
+          isCurrent: isConnectionCurrent,
+          validateSession: async () => { await apiFetch("/api/v1/auth/me"); }
+        }),
         transport: HttpTransportType.WebSockets
       })
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
@@ -699,7 +711,7 @@ export default function App() {
       }
     });
     return () => { mounted = false; connection.off("RideStatusChanged", handleRideStatusChanged); activeSessionStops.current.delete(stopConnection); stopRegisteredConnections(new Set<() => unknown>([stopConnection])); };
-  }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory]);
+  }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory, apiFetch]);
 
   useEffect(() => {
     if (!user || tab !== "Trips" || !activeRide || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;

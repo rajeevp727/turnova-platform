@@ -12,7 +12,7 @@ import { findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecov
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
-import { getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
+import { getSignalRAccessToken, getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
 import { discoverNearbyCabDrivers } from "../shared/foregroundPickupLocation";
 import { createSelectedBookingLocation } from "../shared/selectedBookingLocation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
@@ -183,7 +183,11 @@ export default function App() {
     const isConnectionCurrent=()=>isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,connectionEpoch);
     const connection=new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(ride.rideId)}`,{
-        accessTokenFactory:async()=>readAccessTokenIfCurrent(SecureStore,tokens.accessToken,isConnectionCurrent),
+        accessTokenFactory:async()=>getSignalRAccessToken({
+          readAccessToken:()=>readAccessTokenIfCurrent(SecureStore,"",isConnectionCurrent),
+          isCurrent:isConnectionCurrent,
+          validateSession:async()=>{await apiFetch("/api/v1/auth/me");}
+        }),
         transport:HttpTransportType.WebSockets
       })
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
