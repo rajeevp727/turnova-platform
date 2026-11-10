@@ -64,13 +64,11 @@ public sealed record RiderActiveBookingReservationAuditEvent(
     {
         var supplied = context ?? DriverRideReservationAuditContext.ForSystem();
         var actorId = supplied.ActorId?.Trim();
-        var invalidActor = string.IsNullOrWhiteSpace(actorId) ||
-            actorId.Length > 128 ||
-            actorId.Any(char.IsControl) ||
-            actorId.Any(character =>
-                !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or ':')) ||
-            (actorId.Length >= 8 && actorId.All(char.IsDigit));
-        if (invalidActor)
+        var containsNonIdentifierCharacters = actorId?.Any(character =>
+            !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or ':')) ?? true;
+        var looksLikePhoneNumber = actorId is { Length: >= 8 } && actorId.All(char.IsDigit);
+        if (string.IsNullOrWhiteSpace(actorId) || actorId.Length > 128 ||
+            actorId.Any(char.IsControl) || containsNonIdentifierCharacters || looksLikePhoneNumber)
             actorId = "system";
 
         var actorRole = supplied.ActorRole is "Rider" or "Driver" or "UnionManager" or "Ops" or "System"
