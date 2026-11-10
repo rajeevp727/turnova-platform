@@ -51,6 +51,13 @@ if grep -Fq "Signature=" <<< "$signature_info"; then
   exit 1
 fi
 
+# This script erases the selected simulator to guarantee a clean Keychain/app-data
+# state. Never allow a local developer invocation to erase a personal simulator.
+if [[ "${CI:-}" != "true" ]]; then
+  echo "iOS Simulator smoke is destructive and may run only on a CI runner (CI=true)." >&2
+  exit 2
+fi
+
 devices_json="$(xcrun simctl list devices available -j)"
 selection="$(python3 -c '
 import json

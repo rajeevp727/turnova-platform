@@ -275,6 +275,58 @@ exit 0
             self.assertTrue(user_avd_ini.is_file())
             self.assertEqual(user_avd_sentinel.read_text(encoding="utf-8"), "preserve")
 
+            # A complete system image that predates this invocation is reused as-is.
+            # The retry cleanup must never delete or reinstall a user's existing SDK package.
+            system_image_dir = sdk / "system-images" / "android-35" / "google_apis" / "x86_64"
+            system_image_marker = system_image_dir / "user-package-sentinel.txt"
+            system_image_marker.write_text("preserve-existing-sdk-image", encoding="utf-8")
+            attempts_before_reuse = int(attempts_file.read_text(encoding="utf-8").strip())
+            reuse_output = root / "reuse-existing-system-image-output"
+            reuse_command = command[:-1] + [str(reuse_output)]
+            reused_existing_image = subprocess.run(
+                reuse_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(
+                reused_existing_image.returncode,
+                0,
+                msg=f"stdout:\\n{reused_existing_image.stdout}\\nstderr:\\n{reused_existing_image.stderr}",
+            )
+            self.assertIn("pre-existing Android API 35 system image", reused_existing_image.stdout)
+            self.assertEqual(int(attempts_file.read_text(encoding="utf-8").strip()), attempts_before_reuse)
+            self.assertEqual(system_image_marker.read_text(encoding="utf-8"), "preserve-existing-sdk-image")
+
+            # An incomplete image that predates the invocation is not treated as a
+            # partial download owned by this script; fail closed and preserve it.
+            shutil.rmtree(system_image_dir)
+            system_image_dir.mkdir(parents=True)
+            (system_image_dir / "package.xml").write_text("<localPackage/>", encoding="utf-8")
+            incomplete_sentinel = system_image_dir / "user-data.txt"
+            incomplete_sentinel.write_text("preserve-incomplete-user-package", encoding="utf-8")
+            attempts_before_incomplete = int(attempts_file.read_text(encoding="utf-8").strip())
+            incomplete_output = root / "incomplete-existing-system-image-output"
+            incomplete_command = command[:-1] + [str(incomplete_output)]
+            incomplete_existing_image = subprocess.run(
+                incomplete_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(incomplete_existing_image.returncode, 1)
+            self.assertIn("refusing to modify or remove it", incomplete_existing_image.stderr)
+            self.assertEqual(int(attempts_file.read_text(encoding="utf-8").strip()), attempts_before_incomplete)
+            self.assertEqual(incomplete_sentinel.read_text(encoding="utf-8"), "preserve-incomplete-user-package")
+            self.assertFalse(incomplete_output.joinpath("result.json").exists())
+            shutil.rmtree(system_image_dir)
+
             # With no explicit ANDROID_AVD_HOME, use an isolated RUNNER_TEMP path
             # instead of the developer's conventional ~/.android/avd directory.
             isolated_runner_temp = root / "isolated-runner-temp"
@@ -441,9 +493,10 @@ exit 0
             self.assertEqual(target_exception.returncode, 1)
             self.assertIn("React Native reported an unhandled startup exception", target_exception.stderr)
 
-            # A permanently corrupt SDK archive must stop before AVD creation or app install.
-            system_image_dir = sdk / "system-images" / "android-35" / "google_apis" / "x86_64"
-            shutil.rmtree(system_image_dir)
+            # A permanently corrupt SDK archive created by this invocation must stop
+            # before AVD creation or app install after cleaning only its own partial files.
+            if system_image_dir.exists():
+                shutil.rmtree(system_image_dir)
             attempts_file.unlink()
             failed_avd_home = root / "failed-avd-home"
             failure_output = root / "failed-output"

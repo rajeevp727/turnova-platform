@@ -38,6 +38,7 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
         ocr_never_ready: bool = False,
         login_ready_timeout_seconds: int | None = None,
         login_ready_poll_interval_seconds: int | None = None,
+        ci: bool = True,
     ) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
         self.addCleanup(temporary.cleanup)
@@ -198,6 +199,7 @@ fi
         environment.update(
             {
                 "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+                "CI": "true",
                 "PLIST_BUDDY": str(plist_buddy),
                 "FAKE_XCRUN_LOG": str(xcrun_log),
                 "FAKE_APP_CONTAINER": str(app_container),
@@ -217,6 +219,8 @@ fi
                 "RUNNER_TEMP": str(root / "runner-temp"),
             }
         )
+        if not ci:
+            environment.pop("CI", None)
         if boot_timeout_seconds is not None:
             environment["TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS"] = str(boot_timeout_seconds)
         if login_ready_timeout_seconds is not None:
@@ -438,6 +442,15 @@ fi
         self.assertIn("requires the original unsigned CI artifact", result.stderr)
         self.assertEqual(commands, [])
         self.assertFalse((output / "result.json").exists())
+
+    def test_refuses_to_erase_a_local_simulator_outside_ci(self) -> None:
+        result, output, commands = self.run_smoke(ci=False)
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("may run only on a CI runner", result.stderr)
+        self.assertEqual(commands, [])
+        self.assertFalse((output / "result.json").exists())
+        self.assertFalse((output / "launch.png").exists())
 
     def test_invalid_bundle_identifier_is_rejected_before_simulator_access(self) -> None:
         with tempfile.TemporaryDirectory(prefix="turnova-ios-invalid-id-") as temporary:

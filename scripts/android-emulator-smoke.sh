@@ -91,6 +91,15 @@ yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null 2>&1 || true
 # archive ("ZipFile unknown archive"). Retry only the API 35 system image, verify
 # the extracted package before AVD creation, and fail closed after three attempts.
 SYSTEM_IMAGE_DIR="$SDK_ROOT/system-images/android-35/google_apis/x86_64"
+SYSTEM_IMAGE_PREEXISTED=false
+if [[ -e "$SYSTEM_IMAGE_DIR" || -L "$SYSTEM_IMAGE_DIR" ]]; then
+  if [[ -s "$SYSTEM_IMAGE_DIR/package.xml" && -s "$SYSTEM_IMAGE_DIR/system.img" ]]; then
+    SYSTEM_IMAGE_PREEXISTED=true
+  else
+    echo "Existing Android API 35 system image is incomplete; refusing to modify or remove it." >&2
+    exit 1
+  fi
+fi
 SYSTEM_IMAGE_RETRY_DELAY_SECONDS="${TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS:-2}"
 if [[ ! "$SYSTEM_IMAGE_RETRY_DELAY_SECONDS" =~ ^(0|[1-9]|[12][0-9]|30)$ ]]; then
   echo "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS must be an integer from 0 to 30." >&2
@@ -98,6 +107,11 @@ if [[ ! "$SYSTEM_IMAGE_RETRY_DELAY_SECONDS" =~ ^(0|[1-9]|[12][0-9]|30)$ ]]; then
 fi
 
 install_system_image_with_retry() {
+  if [[ "$SYSTEM_IMAGE_PREEXISTED" == true ]]; then
+    echo "Using the pre-existing Android API 35 system image without modifying it."
+    return 0
+  fi
+
   local attempt=1
   local max_attempts=3
   local status=1
@@ -122,7 +136,7 @@ install_system_image_with_retry() {
 
     # A failed sdkmanager download can leave non-empty but corrupt files behind.
     # Always remove this isolated package directory before the next attempt.
-    if [[ -d "$SYSTEM_IMAGE_DIR" ]]; then
+    if [[ "$SYSTEM_IMAGE_PREEXISTED" != true && -d "$SYSTEM_IMAGE_DIR" ]]; then
       rm -rf "$SYSTEM_IMAGE_DIR"
     fi
 
