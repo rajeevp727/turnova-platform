@@ -26,6 +26,12 @@ export function saveSessionTokens(
   tokens: StoredSessionTokens
 ): Promise<void>;
 
+export function saveSessionTokensIfCurrent(
+  storage: SessionTokenStorage,
+  tokens: StoredSessionTokens,
+  isCurrent: () => boolean
+): Promise<boolean>;
+
 export function clearSessionTokens(storage: SessionTokenStorage): Promise<void>;
 
 export function logoutSession(
