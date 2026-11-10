@@ -140,6 +140,37 @@ public sealed class RiderActiveBookingReservationStoreTests
         Assert.Equal("RIDE-EXPIRED", (await store.GetActiveAsync("rider-expired"))?.RideId);
     }
 
+
+    [Fact]
+    public async Task ExpiredReservationRequiresExplicitAuthoritativeActiveRidePromotion()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        var store = new InMemoryRiderActiveBookingReservationStore(clock);
+        var reservation = new RiderActiveBookingReservation(
+            "rider-expired-promotion", "RIDE-ACCEPTED", "HASH-ACCEPTED",
+            clock.GetUtcNow(), clock.GetUtcNow().AddMinutes(1));
+
+        Assert.Equal(RiderBookingReservationAcquireResult.Acquired,
+            await store.TryAcquireAsync(reservation));
+        clock.Advance(TimeSpan.FromMinutes(2));
+
+        Assert.False(await store.TryMakePermanentAsync(
+            reservation.RiderId, reservation.RideId));
+        Assert.NotNull((await store.GetActiveAsync(reservation.RiderId))?.ExpiresAtUtc);
+
+        Assert.True(await store.TryMakePermanentAsync(
+            reservation.RiderId, reservation.RideId,
+            allowExpiredForAuthoritativeActiveRide: true));
+        Assert.Null((await store.GetActiveAsync(reservation.RiderId))?.ExpiresAtUtc);
+        Assert.Equal(
+            new[]
+            {
+                RiderActiveBookingReservationAuditEventTypes.Acquired,
+                RiderActiveBookingReservationAuditEventTypes.MadePermanent
+            },
+            store.GetAuditEvents(reservation.RiderId).Select(item => item.EventType));
+    }
+
     private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         private DateTimeOffset _utcNow = utcNow;
