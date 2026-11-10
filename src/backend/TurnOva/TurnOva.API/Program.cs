@@ -809,8 +809,9 @@ async Task<bool> HasActiveRiderBookingAsync(
             DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.AgreementConfirmed));
     }
 
-    if (isSameIdempotentBooking &&
-        (reservedRide is null || reservedRide.Status is "Negotiating" or "AgreementConfirmed"))
+    // A retry for the same deterministic booking may replay any active lifecycle
+    // state. The reservation above is still repaired/promoted before allowing the replay.
+    if (isSameIdempotentBooking)
         return false;
 
     // Active rides remain exclusive. Expired Negotiating/AgreementConfirmed rides are
