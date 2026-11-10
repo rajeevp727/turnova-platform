@@ -130,7 +130,7 @@ test("Rider and Driver session reset clears auth form secrets and successful log
   const riderAuth = rider.slice(riderAuthStart, riderAuthEnd);
   const driverAuth = driver.slice(driverAuthStart, driverAuthEnd);
   assert.match(riderAuth, /clearRiderSessionState\(credentials\)/);
-  assert.match(riderAuth, /setPassword\("")/);
+  assert.match(riderAuth, /setPassword\("+"\)/);
   assert.match(driverAuth, /clearDriverSessionState\(credentials\)/);
   assert.match(driverAuth, /setPassword\("")/);
 });
