@@ -773,7 +773,7 @@ async Task<DemoRide?> FindActiveRiderRideAsync(
     {
         candidateRideIds = rides.Values
             .Where(ride => ride.RiderId == riderId &&
-                (ride.Status is "Requested" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+                (ride.Status is "Requested" or "Matching" or "Offered" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
             .Select(ride => ride.RideId)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -781,7 +781,7 @@ async Task<DemoRide?> FindActiveRiderRideAsync(
     else
     {
         var query = new QueryDefinition(
-            "SELECT VALUE c.rideId FROM c WHERE c.riderId = @riderId AND c.status IN ('Requested','Negotiating','AgreementConfirmed','Accepted','Arrived','InProgress')")
+            "SELECT VALUE c.rideId FROM c WHERE c.riderId = @riderId AND c.status IN ('Requested','Matching','Offered','Negotiating','AgreementConfirmed','Accepted','Arrived','InProgress')")
             .WithParameter("@riderId", riderId);
         var ids = new List<string>();
         using var iterator = rideContainer.GetItemQueryIterator<string>(query);
@@ -796,7 +796,7 @@ async Task<DemoRide?> FindActiveRiderRideAsync(
             continue;
         var candidate = await FindRideAsync(candidateRideId, ct);
         if (candidate is not null &&
-            (candidate.Status is "Requested" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+            (candidate.Status is "Requested" or "Matching" or "Offered" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
             return candidate;
     }
 
