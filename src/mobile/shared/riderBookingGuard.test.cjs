@@ -5,7 +5,7 @@ const test = require("node:test");
 const { hasActiveRiderRide } = require("./riderBookingGuard.js");
 
 for (const status of [
-  "Requested", "Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"
+  "Requested", "Matching", "Offered", "Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"
 ]) {
   test("active Rider booking guard blocks " + status, () => {
     assert.equal(hasActiveRiderRide({ status }), true);
