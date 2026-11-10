@@ -154,10 +154,13 @@ export default function App() {
       }catch{
         if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
         const expiredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);
-        await clearTokens();
+        let tokenCleanupFailed=false;
+        try{await clearTokens();}catch{tokenCleanupFailed=true;}
         if(sessionEpoch.current!==expiredEpoch)throw new Error("Session changed. Please sign in again.");
         setTokens(null);setUser(null);
-        throw new Error("Session expired. Please sign in again.");
+        throw new Error(tokenCleanupFailed
+          ?"Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
+          :"Session expired. Please sign in again.");
       }
       if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
       response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});
