@@ -125,6 +125,7 @@ export default function App() {
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
   const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
   const clearDriverSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
+    proposalAttemptRef.current = null;
     authenticatedSessionEpoch.current = null;
     resetDriverSessionState({
       tokens: setTokens, user: setUser, mode: setMode, email: setEmail, password: setPassword, name: setName, tab: setTab, error: setError, queue: setQueue, membership: setMembership,
@@ -544,8 +545,6 @@ export default function App() {
     }
   };
 
-  useEffect(() => { proposalAttemptRef.current = null; }, [activeRide?.rideId]);
-
   useEffect(() => {
     if (!activeRide?.rideId) { setAgreementHistory([]); setAgreementAmount(""); return; }
     if (tab !== "Trips") return;
@@ -574,7 +573,7 @@ export default function App() {
         });
       } catch (e) {
         if (currentActiveRideIdRef.current === rideId) {
-          setError(e instanceof Error ? e.message : "Unable to submit fare proposal. Retry the same amount to safely reuse this request.");
+          setError((e instanceof Error ? e.message : "Unable to submit fare proposal.") + " Retry the same amount to reuse this request key.");
         }
         return;
       }
