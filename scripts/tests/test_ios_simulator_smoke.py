@@ -533,6 +533,17 @@ chmod +x "$output"
         self.assertIn("bootstatus TEST-DEVICE -b", commands)
         self.assertTrue((output / "result.json").exists())
 
+    def test_default_simulator_operation_timeout_is_300_seconds(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('TURNOVA_SIMULATOR_OPERATION_TIMEOUT_SECONDS:-300', script)
+
+        result, output, commands = self.run_smoke()
+
+        self.assertEqual(result.returncode, 0, msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}")
+        self.assertIn("Using bounded iOS Simulator operation timeout: 300 seconds.", result.stdout)
+        self.assertTrue(any(command.startswith("install TEST-DEVICE ") for command in commands))
+        self.assertTrue((output / "result.json").exists())
+
     def test_install_failure_reports_captured_simctl_error(self) -> None:
         result, output, commands = self.run_smoke(install_fail=True)
 

@@ -10,3 +10,13 @@ export function startSignalRConnection(
   onRetry?: () => void,
   waitForRetry?: (milliseconds: number) => Promise<void>
 ): Promise<boolean>;
+
+export interface SignalRAccessTokenOptions {
+  readAccessToken: () => Promise<string> | string;
+  isCurrent: () => boolean;
+  validateSession: () => Promise<unknown>;
+  now?: () => number;
+}
+
+export function getJwtExpiryMilliseconds(accessToken: string): number | null;
+export function getSignalRAccessToken(options: SignalRAccessTokenOptions): Promise<string>;

@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { singleFlight, getFreshAccessToken } = require("./refreshCoordinator.js");
+const { singleFlight, getFreshAccessToken, advanceSessionEpoch, isAuthenticatedSessionCurrent, isSessionEpochCurrent } = require("./refreshCoordinator.js");
 
 test("shares one refresh promise across concurrent unauthorized requests", async () => {
   const ref = { current: null };
@@ -129,4 +129,86 @@ test("missing refresh token fails without calling the refresh endpoint", async (
 
   assert.equal(refreshCalls, 0);
   assert.equal(ref.current, null);
+});
+
+
+test("advancing the session epoch detaches an old refresh without clearing a newer in-flight refresh", async () => {
+  const epoch = { current: 0 };
+  const ref = { current: null };
+  let resolveOldRefresh;
+  let resolveNewRefresh;
+  const oldResult = new Promise(resolve => { resolveOldRefresh = resolve; });
+  const newResult = new Promise(resolve => { resolveNewRefresh = resolve; });
+
+  const oldRefresh = singleFlight(ref, () => oldResult);
+  await Promise.resolve();
+  assert.equal(ref.current, oldRefresh);
+
+  assert.equal(advanceSessionEpoch(epoch, ref), 1);
+  assert.equal(ref.current, null);
+
+  const newRefresh = singleFlight(ref, () => newResult);
+  assert.notEqual(newRefresh, oldRefresh);
+  await Promise.resolve();
+
+  resolveOldRefresh("stale-access-token");
+  assert.equal(await oldRefresh, "stale-access-token");
+  assert.equal(ref.current, newRefresh);
+
+  resolveNewRefresh("current-access-token");
+  assert.equal(await newRefresh, "current-access-token");
+  assert.equal(ref.current, null);
+  assert.equal(epoch.current, 1);
+});
+
+test("rejects an invalid session epoch instead of silently resetting it", () => {
+  const ref = { current: null };
+  assert.throws(
+    () => advanceSessionEpoch({ current: -1 }, ref),
+    /Invalid session epoch/
+  );
+  assert.equal(ref.current, null);
+});
+
+
+test("an accepted session is current only while its authenticated epoch matches", () => {
+  const sessionEpoch = { current: 4 };
+  const authenticatedEpoch = { current: 4 };
+
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, authenticatedEpoch), true);
+  authenticatedEpoch.current = 3;
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, authenticatedEpoch), false);
+});
+
+test("advancing the session epoch immediately blocks old in-memory credentials", () => {
+  const sessionEpoch = { current: 8 };
+  const authenticatedEpoch = { current: 8 };
+  const refresh = { current: null };
+
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, authenticatedEpoch), true);
+  assert.equal(advanceSessionEpoch(sessionEpoch, refresh), 9);
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, authenticatedEpoch), false);
+});
+
+test("missing or invalid authenticated epochs fail closed", () => {
+  const sessionEpoch = { current: 0 };
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, { current: null }), false);
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, { current: Number.NaN }), false);
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, { current: -1 }), false);
+  assert.equal(isAuthenticatedSessionCurrent({ current: -1 }, { current: -1 }), false);
+});
+
+
+test("a realtime connection is current only for its captured authenticated session epoch", () => {
+  const sessionEpoch = { current: 5 };
+  const authenticatedEpoch = { current: 5 };
+  assert.equal(isSessionEpochCurrent(sessionEpoch, authenticatedEpoch, 5), true);
+  assert.equal(isSessionEpochCurrent(sessionEpoch, authenticatedEpoch, 4), false);
+  advanceSessionEpoch(sessionEpoch);
+  assert.equal(isSessionEpochCurrent(sessionEpoch, authenticatedEpoch, 5), false);
+});
+
+test("a realtime connection fails closed when its authenticated epoch is missing", () => {
+  assert.equal(isSessionEpochCurrent({ current: 2 }, { current: null }, 2), false);
+  assert.equal(isSessionEpochCurrent({ current: 2 }, { current: 2 }, Number.NaN), false);
 });

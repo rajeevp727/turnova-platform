@@ -244,3 +244,44 @@ Provider calls remain disabled by default and use the unavailable placeholder ad
 PR #142 head `79c473661d7804f761bedebbfe871ecd9b0e94e2` passed [CI #1110 / 42769495825](https://github.com/rajeevp727/turnova-platform/actions/runs/42769495825) 12/12: backend 373/373, shared JavaScript 102/102, Python fake-SDK/native tests 40/40, both app validation/bundles, four native builds and four simulator smokes. Same-run Android Rider/Driver and unsigned iOS Rider/Driver artifacts were inspected. Android login surfaces passed with stable processes and no stale-session errors. iOS login surfaces passed with SecureStore unavailable, no Keychain access group and production API/authentication not exercised.
 
 AI-01 provider resilience is supplemental and outside the 19-area denominator. Deterministic tests AI-026–AI-030 cover timeout, caller cancellation, late faults, HTTP failures and unexpected provider-adapter exceptions. No paid provider/model/credential is selected; AI remains disabled by default. Live provider sandbox, managed-secret wiring and data-processing terms remain external.
+
+
+## AUTH-02 exact-head simulator evidence — 2026-11-10
+
+CI [#1149 / 42814411667](https://github.com/rajeevp727/turnova-platform/actions/runs/42814411667) passed all 12 jobs on source/test head `65a1ea8eca5087a6ad64d88b47dce602938b3c94`, including Rider/Driver Android and unsigned iOS native builds plus all four simulator smoke jobs. Artifact result JSON and screenshots were inspected: Rider Android `13764416739`, Driver Android `13765480564`, Rider iOS `13764818112`, Driver iOS `13765668500`. Both Android apps installed/launched and displayed their correct login screens with stable processes and no stale-session errors. Both iOS apps installed/launched from erased simulator data and displayed their correct login screens; SecureStore was unavailable in the unsigned builds and no Keychain access group was present. Production API/authentication was not exercised. Signed-device Keychain/SecureStore, production identifiers/signing, HTTPS API configuration, physical-device/pilot and store acceptance remain external.
+
+The iOS smoke harness uses a default 300-second bound per simulator operation (maximum 300) and a separate 600-second first-boot bound. RELEASE-SMOKE-026 is included in the 41/41 Python test run. No Docker/container build or deployment was introduced.
+
+
+## Latest exact-head verification — AUTH-02 PR #143 (2026-11-10)
+
+The documentation head `97c8528f56596537c9e46aec0277a4a83b4286a1` passed [CI #1153 / 42832334281](https://github.com/rajeevp727/turnova-platform/actions/runs/42832334281) with **12/12 jobs successful**. Exact-head results: .NET 10 backend **373/373**; shared mobile JavaScript **140/140**; Python native-artifact/simulator harness **41/41**; Rider and Driver TypeScript validation and production JS bundles; both Android native builds; both unsigned iOS Simulator native builds; and all four Android/iOS simulator smoke jobs.
+
+Same-run artifacts were downloaded and inspected, including each result JSON and screenshot:
+- Rider Android: `13773461057` — `com.turnova.rider`, install/launch passed, process stable, Rider login screen verified, no stale-session error, zero Pixel Launcher ANR recovery attempts.
+- Driver Android: `13773895577` — `com.turnova.driver`, install/launch passed, process stable, Driver login screen verified, no stale-session error, zero Pixel Launcher ANR recovery attempts.
+- Rider iOS: `13772979189` — `com.turnova.rider`, clean simulator data erased, install/launch passed, process stable, Rider login screen verified.
+- Driver iOS: `13775055975` — `com.turnova.driver`, clean simulator data erased, install/launch passed, process stable, Driver login screen verified.
+
+Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureStore-unavailable banner verified, no Keychain access group, unsigned simulator artifacts, and production API/authentication not exercised. The screenshots visibly show the expected warning. This is simulator startup/UI evidence only; it does not establish signed-device Keychain persistence, production authentication, or physical-device acceptance.
+
+CI #1153 and its four inspected simulator artifacts belong to pre-documentation head `97c8528f56596537c9e46aec0277a4a83b4286a1`. Subsequent commits update documentation only and do not change runtime or test source. The current PR head is recorded in PR #143 metadata; exact-head CI #42841628009 is pending. The prior review is COMMENT-only on the pre-documentation head; a fresh exact-head COMMENT review and current thread check are required after CI completes. The repository rulesets endpoint returned an empty list, while branch-protection details were not readable by the connected integration (403). The expected-head merge operation must enforce any remaining GitHub policy; do not self-approve or bypass protections.
+
+AUTH-02 engineering implementation and deterministic evidence are complete for this increment. Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established. External AUTH-02 gates remain live TriSend refresh rotation/reuse semantics and signed Android/iOS physical-device restore, expiry, logout, and SecureStore/Keychain failure acceptance.
+
+Next sequential work after merge: re-read `main`, finish the #3 RIDER-01 audit, implement #4 RIDER-02 stable same-payload proposal Idempotency-Key reuse for double-tap/ambiguous retries in both apps, then #5 RIDER-03 server-side single-active Rider booking reservation across different keys. Maintain one active feature PR.
+
+
+## CI #1159 simulator evidence (2026-11-10)
+
+Previous AUTH-02 source/test head 639e6c1516693995997571983619f980dac9f75f passed [CI #1159 / 42842677468](https://github.com/rajeevp727/turnova-platform/actions/runs/42842677468) with 12/12 jobs successful: backend 373/373, shared JavaScript 141/141, Python native-artifact/simulator harness 41/41, Rider/Driver typechecks and bundles, four native builds and four simulator smoke jobs.
+
+Same-run artifacts were downloaded and inspected:
+- Rider Android smoke: 13777386979 — install/launch and Rider login surface verified.
+- Driver Android smoke: 13778300986 — install/launch and Driver login surface verified.
+- Rider iOS smoke: 13777927561 — install/launch and Rider login surface verified; SecureStore unavailable warning expected.
+- Driver iOS smoke: 13778222906 — install/launch and Driver login surface verified; SecureStore unavailable warning expected.
+- Rider iOS app bundle: 13778820239 — embedded identifier com.turnova.rider.
+- Driver iOS app bundle: 13778236148 — embedded identifier com.turnova.driver.
+
+Both iOS artifacts are unsigned simulator builds without a Keychain access group. These checks do not establish signed-device SecureStore/Keychain persistence, production authentication, physical-device acceptance, signing, hosting, pilot or store readiness. The latest AUTH-02 source/test follow-up (auth form and Rider pickup-cache reset) postdates CI #1159; fresh exact-head CI is required before merge. No production readiness is claimed.

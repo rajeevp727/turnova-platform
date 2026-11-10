@@ -5,8 +5,7 @@
 
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Default branch:** main  
-**Last audited main HEAD:** `33e438dba6e0a1af74959904ba132fd0e7273744` after RELEASE-01 PR #141 merged. Current sole active PR #142 is supplemental AI-01 provider resilience on `feat/ai-01-provider-resilience`, exact head `79c473661d7804f761bedebbfe871ecd9b0e94e2`; exact-head CI #1110 / 42769495825 passed 12/12 (backend 373/373, shared JS 102/102, Python 40/40, both mobile validation/bundles, four native builds and four simulator smokes). All four same-run simulator artifacts were downloaded and inspected. Android Rider/Driver login surfaces passed; unsigned iOS Rider/Driver login surfaces passed with SecureStore unavailable and no Keychain access group. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. No other feature PR is open.
+**Last audited main HEAD:** 6f0dc4821ae6408c7057f6b34aa4990ea01d948d after AI-01 PR #142 merged. Sole active PR #143 is AUTH-02 on fix/auth-02-refresh-logout-epoch-race; latest source/test head 87129ce909ae39c1b3a42e0b175a93436201ee58. Preceding head fe3c029 passed [CI #1163 / 42852250391](https://github.com/rajeevp727/turnova-platform/actions/runs/42852250391) 12/12: backend 373/373, shared JS 143/143, Python 41/41, Rider/Driver validation and bundles, four native builds and four simulator smokes. Same-run Android/iOS smoke artifacts were downloaded and inspected; unsigned iOS SecureStore unavailable warning is expected, but Keychain persistence and production authentication are not established. Current head adds AUTH-LOGIN-062 and needs fresh exact-head CI. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1228,3 +1227,138 @@ PR [#142](https://github.com/rajeevp727/turnova-platform/pull/142) head `79c4736
 AI-01 provider calls are independently timeout-bounded with `Task.WaitAsync`; cooperative cancellation is signalled, caller cancellation takes precedence, late task faults are observed, and synchronous/asynchronous timeout, HTTP and unexpected adapter exceptions use deterministic local fallback. Tests AI-026–AI-030 cover the failure/cancellation cases. AI-01 remains supplemental/outside the 19-row denominator; no paid provider/model/credential is selected. Live provider sandbox, managed-secret wiring and data-processing terms remain external.
 
 After PR #142 merges and main is re-read, continue AUTH-02 refresh/logout concurrency hardening. AUTH-01 editable profile fields/routes remain undefined upstream; do not invent them.
+
+
+## Current sequential handoff — AUTH-02 (2026-11-10)
+
+PR [#143](https://github.com/rajeevp727/turnova-platform/pull/143) adds epoch-aware serialized token-pair persistence to both Rider and Driver. Shared `saveSessionTokensIfCurrent` checks the captured session epoch before writing and after each secure key; if the session changes during persistence, the stale/partial pair is cleared inside the same storage mutation queue. Refresh handlers only update in-memory state when the captured epoch remains current. New login, logout, Rider/Driver sign-in start and refresh-expiry cleanup invalidate prior refresh work and reset the single-flight reference. `isAuthenticatedSessionCurrent` binds the in-memory token pair to the accepted epoch; protected API calls and Driver payslip downloads fail closed immediately after logout/account-switch/expiry advances the session epoch. AUTH-LOGIN-031–035 cover guarded storage and stale-refresh/login/logout races; AUTH-LOGIN-036–038 cover authenticated-epoch matching and invalidation. Existing offline-safe logout and pair-write rollback remain.
+
+PR #142 AI-01 merged at `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after exact documentation-head CI #1113 / 42774588830 passed 12/12. AI-01 is supplemental/outside the denominator; live provider sandbox, managed-secret wiring and data-processing terms remain external.
+
+AUTH-02 remains In Progress pending exact-head CI on `97ffdbb0819dab51046980698035cd364fce3bb2`, live TriSend refresh rotation/reuse validation, and signed Android/iOS physical-device restore/expiry/logout/SecureStore failure acceptance. Do not claim production Keychain persistence from unsigned simulator builds. After PR #143 merges, re-read `main` and continue the next actionable acceptance row in order.
+
+
+## Current sequential handoff — AUTH-02 authenticated-epoch request fencing (2026-11-10)
+
+PR [#143](https://github.com/rajeevp727/turnova-platform/pull/143) is the sole active feature PR on `fix/auth-02-refresh-logout-epoch-race`. Current code/test head: `97ffdbb0819dab51046980698035cd364fce3bb2`. The narrower duplicate PR #144 was closed and its documentation state consolidated here.
+
+The new `isAuthenticatedSessionCurrent` predicate ensures the token pair in React state is usable only when its accepted epoch matches the active session epoch. Both apps set the authenticated epoch only after guarded token persistence or successful startup restore. Protected API calls reject before network dispatch when logout/account-switch/expiry has advanced the active epoch. Driver payslip downloads use the same guard. Three deterministic tests cover matching/mismatched epochs, immediate invalidation after epoch advance, and invalid/missing authenticated epochs; test-plan IDs AUTH-LOGIN-036–038.
+
+Previous code head dc5daf passed [CI #1120 / 42782377492](https://github.com/rajeevp727/turnova-platform/actions/runs/42782377492) 12/12: backend 373/373, shared JS 109/109, Python native-artifact tests, both mobile validation/bundles, four native builds and four simulator smokes. Same-run simulator artifacts were inspected; unsigned iOS SecureStore limitations remain. Current head `97ffdbb0819dab51046980698035cd364fce3bb2` requires fresh exact-head CI and artifact inspection before merge.
+
+
+
+## Latest sequential handoff — AUTH-02 realtime session invalidation (2026-11-10)
+
+PR [#143](https://github.com/rajeevp727/turnova-platform/pull/143) remains the sole active feature PR. In addition to epoch-aware token-pair persistence, stale async completion fencing and protected REST request guards, the latest review found that an open SignalR connection could remain active during asynchronous logout cleanup. The follow-up adds `readAccessTokenIfCurrent` so SignalR token factories return an empty token when the captured authenticated epoch is stale (including when the epoch changes during SecureStore read); `isSessionEpochCurrent` for captured connection epochs; and `stopRegisteredConnections` to stop active Rider/Driver transports immediately when logout, account switch or refresh expiry advances the session epoch. Rider location/status/agreement callbacks and Driver offer/selection/agreement/status callbacks plus reconnect recovery require the captured authenticated epoch. Protected REST response bodies are checked again after parsing. Deterministic tests and AUTH-LOGIN-039–042 cover stale token reads, captured epochs, connection teardown and late response rejection. Fresh exact-head CI and all four same-run simulator artifacts are required before merge. AUTH-02 remains In Progress pending live TriSend rotation/reuse semantics and signed Android/iOS physical-device SecureStore/Keychain acceptance. After merge, re-read `main` and continue sequentially to RIDER-01, then RIDER-02.
+
+
+## Latest sequential handoff — AUTH-02 complete session-resource invalidation (2026-11-10)
+
+PR [#143](https://github.com/rajeevp727/turnova-platform/pull/143) remains the sole active feature PR. The latest AUTH-02 increment adds a shared `readJsonResponseIfCurrent` guard used by Rider/Driver protected API helpers and Driver payslip error parsing, with deterministic tests for a response body that completes after logout. The active session-stop registry now includes Rider/Driver SignalR connections and the Driver foreground location watcher. Logout/account switch/refresh expiry advances the session epoch and stops those resources immediately; location permission/watch continuations, history/agreement loaders, SignalR token factories, event callbacks and reconnect recovery all require the captured authenticated epoch. `startSignalRConnection` rechecks its owner after successful start and stops a transport if invalidation happened while `start()` was pending. AUTH-LOGIN-039–044 cover stale token reads, captured epochs, resource teardown, late response bodies, location watcher stop and in-flight SignalR start. Fresh exact-head CI and all four same-run simulator artifacts are required before merge. AUTH-02 remains In Progress pending live TriSend rotation/reuse semantics and signed Android/iOS physical-device SecureStore/Keychain acceptance. After merge, re-read `main` and continue sequentially to RIDER-01, then RIDER-02.
+
+
+## AUTH-02 startup restore race — 2026-11-10
+
+A final concurrency audit found startup restore was not bound to the session epoch. If a Rider/Driver began a replacement sign-in while the old /auth/me or /auth/refresh request was pending, the old restore could later publish its profile/tokens or clear the new token pair. This is fixed in the active PR #143:
+
+- restoreStoredSession(storage, request, isCurrent) checks the captured epoch before and after token reads, /auth/me, /auth/refresh, guarded token persistence and the final profile read.
+- Startup token rotation uses saveSessionTokensIfCurrent; stale results do not write.
+- Stale 400/401 cleanup is serialized, re-reads the pair and deletes only when it still matches the pair owned by that restore.
+- Partial-token cleanup also runs under the mutation queue and rechecks the exact observed pair, preventing a delayed stale read from deleting a replacement login.
+- Rider and Driver mount effects fence restore state, errors and loading completion. The successful restore adopts the new epoch it creates; a sign-in that advances the epoch first wins.
+
+AUTH-LOGIN-045–048 add deterministic deferred-promise tests for delayed startup profile, delayed refresh, stale rejection cleanup and partial-pair cleanup. These are code/test evidence only; live TriSend rotation/reuse and signed-device SecureStore/Keychain behavior remain external. Active PR #143 remains the only feature PR; do not open a parallel PR.
+
+
+## AUTH-02 startup restore test refinements — 2026-11-10
+
+AUTH-LOGIN-048 now deterministically exercises the serialized snapshot recheck: a token-pair write pauses after the access key, a concurrent read observes a partial pair, the refresh-key write completes, and queued cleanup must preserve the now-complete pair because it no longer matches the observed snapshot. AUTH-LOGIN-049 holds the final /auth/me after token rotation while a replacement login writes a new pair; the stale profile result must be ignored and the new pair preserved. The exact-head CI for the combined PR #143 change must pass before merge.
+
+
+## Latest verified handoff — AUTH-02 (2026-11-10)
+
+PR [#143](https://github.com/rajeevp727/turnova-platform/pull/143) is the sole active feature PR; PR #144 was closed as a superseded narrower duplicate. Exact code/test head `de2c8779aa196b7f82e6c4453e08041eea9f1892` passed [CI #1143 / 42796791632](https://github.com/rajeevp727/turnova-platform/actions/runs/42796791632) 12/12: .NET backend 373/373, shared JavaScript 129/129, Python native-artifact tests 40/40, Rider/Driver typechecks and Android/iOS bundles, four native Android/iOS builds and four simulator smoke jobs. All four same-run artifacts were downloaded and visually inspected: Rider Android `13754982878`, Driver Android `13753564082`, Rider iOS `13754729815`, Driver iOS `13755816466`. Both Android login screens passed. Both unsigned iOS login screens passed with SecureStore unavailable and no Keychain access group; production authentication and signed-device persistence are not claimed.
+
+The 21-file PR diff was reviewed for token-pair mutation ordering, stale refresh and startup-restore races, epoch invalidation, authenticated request gating, SignalR token factories/callbacks/reconnects, Driver location watcher teardown, protected response parsing, late completion and data/privacy exposure. Deterministic AUTH-LOGIN-031–049 coverage passed within the 129 shared mobile tests. Final COMMENT-only review is on exact head; zero unresolved inline threads and no critical/high-risk issue identified. AUTH-02 remains In Progress pending live TriSend refresh rotation/reuse semantics and signed Android/iOS physical-device restore, expiry, logout and SecureStore read/write/delete acceptance.
+
+**Next sequential action:** merge PR #143 only if GitHub permits with expected head unchanged; re-read `main`; proceed to #3 RIDER-01 for a fresh API/Rider/Driver/persistence/privacy/test audit. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is not an implementation-completion percentage. Production readiness is not established.
+
+
+## Latest handoff — AUTH-02 SignalR expiry-aware token factory (2026-11-10)
+
+The active PR #143 uses getSignalRAccessToken for the Rider selected-ride hub and all three Driver hubs. A finite future JWT exp is used directly. Expired or locally unverifiable tokens go through the existing epoch-guarded apiFetch('/api/v1/auth/me') path, which owns refresh and session invalidation; the helper re-reads SecureStore with no stale in-memory fallback and rechecks the captured epoch. AUTH-LOGIN-050–056 add seven deterministic cases, including overflow expiry and logout during SecureStore read or server validation.
+
+CI #1145 / 42805017563 failed 11/12 because Rider iOS simctl install exceeded the 180-second bound after a 2m41 first-boot migration. The simulator harness now defaults individual operations to 300 seconds (maximum remains 300) while first-boot bootstatus remains separately bounded at 600 seconds. RELEASE-SMOKE-026 verifies the default. Expected suite totals after this increment: shared JS 136, Python 41; backend remains 373. Exact-head CI and all four same-run simulator artifact inspections are pending.
+
+Do not merge PR #143 until exact-head CI is green, all four simulator artifacts are inspected, and final review/policy checks pass. Live TriSend rotation/reuse and signed-device SecureStore/Keychain acceptance remain external.
+
+
+## Latest handoff — SignalR helper TypeScript declaration (2026-11-10)
+
+CI #1147 / 42813653333 passed backend but exposed TS2305 in Driver mobile typecheck because signalRConnection.d.ts did not export getSignalRAccessToken. Rider mobile typecheck was cancelled after the same missing declaration. The current PR commit adds SignalRAccessTokenOptions and declarations for getJwtExpiryMilliseconds/getSignalRAccessToken. Fresh exact-head CI is mandatory. Expected backend/shared/Python totals: 373/136/41. Do not merge until all checks and four same-run simulator artifacts pass. Live TriSend rotation/reuse and signed-device Keychain/SecureStore remain external.
+
+
+## Latest CI correction — RELEASE-SMOKE-026 assertion (2026-11-10)
+
+CI #1148 / 42813974342 passed backend 373/373 and both Rider/Driver mobile typecheck/bundle jobs. Python ran 41 tests; 40 passed and the new RELEASE-SMOKE-026 test failed because its exact command string omitted the app path. The test now checks the recorded command prefix `install TEST-DEVICE `, preserving the install-invocation assertion while allowing the expected temporary app path. CI #1148 is not green; fresh exact-head CI must pass all 12 jobs and all four same-run simulator artifacts must be inspected before merge.
+
+
+## Latest handoff — AUTH-02 exact-head verification (2026-11-10)
+
+PR #143 remains the sole active feature PR on `fix/auth-02-refresh-logout-epoch-race`. Verified source/test head `65a1ea8eca5087a6ad64d88b47dce602938b3c94` passed [CI #1149 / 42814411667](https://github.com/rajeevp727/turnova-platform/actions/runs/42814411667) 12/12 (backend 373, shared JS 136, Python 41, both app typechecks/bundles, four native builds and four simulator smokes). All four same-run result JSON files and screenshots were inspected. iOS evidence is unsigned simulator only; SecureStore is unavailable and Keychain persistence is not verified.
+
+Current documentation synchronization creates a new PR head and must receive fresh exact-head CI. After that run and final COMMENT-only review, merge only if every required check passes and GitHub permits. Then re-read `main` and continue sequentially to #3 RIDER-01; after its audit, proceed to #4 RIDER-02 proposal idempotency. The next RIDER-02 audit found that Rider and Driver proposal handlers generate a new random Idempotency-Key on every button press/retry, despite backend same-key/same-payload replay and changed-payload conflict semantics. Implement a shared stable proposal-attempt key with an in-flight guard, retaining the key after ambiguous failures and resetting only after a confirmed proposal success or payload/ride change. Do not open a second feature PR while #143 is active.
+
+Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion percentage. Production readiness is not established. Live TriSend rotation/reuse, signed-device SecureStore/Keychain, live Cosmos, maps/realtime providers, support policies, reconciliation decisions, legal review, signing, hosting and pilot/store acceptance remain external gates.
+
+
+## Latest AUTH-02 handoff — session-state privacy (2026-11-10)
+
+Source/test commit `b9f02acdc0d67ca5ecf70d4796ef40f933a90677` adds shared role-specific reset helpers. Rider refresh expiry previously cleared tokens/user but retained ride/history/discovery/agreement/route/help state; Driver expiry retained some queue, membership, onboarding, vehicle/document and selfie state. The new reset helpers clear those session-scoped values before replacement login, after refresh expiry, and after successful logout (only after SecureStore deletion succeeds). AUTH-LOGIN-057/058 plus two additional shared tests verify complete reset, setter preflight and fresh collection instances.
+
+CI #1151 / 42831865877 is pending on the exact source/test head. Documentation synchronization is on top and requires a fresh final-head CI. CI #1150 / 42819171585 is still in progress on superseded documentation head `c10b19f...` after the Rider iOS artifact-upload DNS retry; do not merge based on it.
+
+After AUTH-02 merges, re-read main and continue sequentially: #3 RIDER-01 audit; #4 RIDER-02 stable proposal Idempotency-Key reuse for double-tap/ambiguous retries; #5 RIDER-03 server-side single-active Rider booking reservation across different keys. Do not open another feature PR while #143 is active.
+
+Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is not an implementation-completion percentage. Production readiness is not established. Live TriSend rotation/reuse, signed-device SecureStore/Keychain, live Cosmos ETag/multi-instance/restart, product-approved dispatch radius/zones/location freshness and negotiation lifetime, maps/realtime providers, support policies, reconciliation decisions, legal review, signing, hosting and pilot/store acceptance remain external.
+
+
+## Latest exact-head verification — AUTH-02 PR #143 (2026-11-10)
+
+The documentation head `97c8528f56596537c9e46aec0277a4a83b4286a1` passed [CI #1153 / 42832334281](https://github.com/rajeevp727/turnova-platform/actions/runs/42832334281) with **12/12 jobs successful**. Exact-head results: .NET 10 backend **373/373**; shared mobile JavaScript **140/140**; Python native-artifact/simulator harness **41/41**; Rider and Driver TypeScript validation and production JS bundles; both Android native builds; both unsigned iOS Simulator native builds; and all four Android/iOS simulator smoke jobs.
+
+Same-run artifacts were downloaded and inspected, including each result JSON and screenshot:
+- Rider Android: `13773461057` — `com.turnova.rider`, install/launch passed, process stable, Rider login screen verified, no stale-session error, zero Pixel Launcher ANR recovery attempts.
+- Driver Android: `13773895577` — `com.turnova.driver`, install/launch passed, process stable, Driver login screen verified, no stale-session error, zero Pixel Launcher ANR recovery attempts.
+- Rider iOS: `13772979189` — `com.turnova.rider`, clean simulator data erased, install/launch passed, process stable, Rider login screen verified.
+- Driver iOS: `13775055975` — `com.turnova.driver`, clean simulator data erased, install/launch passed, process stable, Driver login screen verified.
+
+Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureStore-unavailable banner verified, no Keychain access group, unsigned simulator artifacts, and production API/authentication not exercised. The screenshots visibly show the expected warning. This is simulator startup/UI evidence only; it does not establish signed-device Keychain persistence, production authentication, or physical-device acceptance.
+
+CI #1153 and its four inspected simulator artifacts belong to pre-documentation head `97c8528f56596537c9e46aec0277a4a83b4286a1`. Subsequent commits update documentation only and do not change runtime or test source. The current PR head is recorded in PR #143 metadata; exact-head CI #42841628009 is pending. The prior review is COMMENT-only on the pre-documentation head; a fresh exact-head COMMENT review and current thread check are required after CI completes. The repository rulesets endpoint returned an empty list, while branch-protection details were not readable by the connected integration (403). The expected-head merge operation must enforce any remaining GitHub policy; do not self-approve or bypass protections.
+
+AUTH-02 engineering implementation and deterministic evidence are complete for this increment. Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established. External AUTH-02 gates remain live TriSend refresh rotation/reuse semantics and signed Android/iOS physical-device restore, expiry, logout, and SecureStore/Keychain failure acceptance.
+
+Next sequential work after merge: re-read `main`, finish the #3 RIDER-01 audit, implement #4 RIDER-02 stable same-payload proposal Idempotency-Key reuse for double-tap/ambiguous retries in both apps, then #5 RIDER-03 server-side single-active Rider booking reservation across different keys. Maintain one active feature PR.
+
+
+## AUTH-02 latest privacy correction — Driver payslip expiry (2026-11-10)
+
+The separate Driver payslip-download 401/refresh-failure branch previously cleared only a subset of state. It now calls `clearDriverSessionState()` after secure-token and cached-payslip cleanup, ensuring queue/membership, availability, onboarding, Union, vehicle/document/selfie and Help state are cleared too. AUTH-LOGIN-059 is a source-integration regression for the wiring. Current PR head requires fresh exact-head CI; CI #1153 passed before this follow-up and must not be reused as its evidence.
+
+
+## Latest AUTH-02 handoff — auth form and Rider pickup cache (2026-11-10)
+
+PR #143 remains the sole active feature PR. Current source/test head is dd5b61efde3f730cddce434c3371c859b4f19001. Previous source/test head 639e6c1 passed [CI #1159 / 42842677468](https://github.com/rajeevp727/turnova-platform/actions/runs/42842677468) 12/12: backend 373/373, shared JavaScript 141/141, Python 41/41, both mobile validation/bundles, four native builds and four simulator smoke jobs. Same-run artifacts were inspected: Rider Android 13777386979, Driver Android 13778300986, Rider iOS 13777927561 and Driver iOS 13778222906. The iOS app artifacts 13778820239 and 13778236148 contain the expected com.turnova.rider and com.turnova.driver identifiers. Both iOS smoke result JSONs/screenshots show the expected SecureStore-unavailable warning; no Keychain access group or production auth was exercised.
+
+The current follow-up extends role-specific reset helpers to clear old email/password/name/mode/error state. Replacement-login flows preserve only the current attempt's input, and successful login clears the password. Rider reset invalidates cached pickup GPS coordinates, rotates the booking idempotency key and does not release bookingInFlight while an older request remains unresolved. New deterministic tests AUTH-LOGIN-060/061 bring the expected shared suite to 143/143; these changes are not yet covered by CI. Run exact-head CI and inspect all four same-run simulator artifacts before final review/merge.
+
+After AUTH-02 merges, re-read main, finish #3 RIDER-01 audit, then implement #4 RIDER-02 stable proposal idempotency and #5 RIDER-03 single-active Rider booking reservation. Keep one active feature PR.
+
+Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); substantial implementation/evidence exists separately. External gates include live TriSend refresh rotation/reuse, signed-device SecureStore/Keychain, live Cosmos ETag/multi-instance/restart, Product dispatch radius/zones/location freshness, support policies, reconciliation policy, maps/realtime providers, private document controls, legal partnership review, signing, hosting, physical-device/pilot and store acceptance. Production readiness is not established.
+
+
+## Latest AUTH-02 handoff — 2026-11-10
+
+Driver `clearDriverSessionState()` now clears the session-scoped `receivedOfferIds` Set used to deduplicate at-least-once SignalR offers. This prevents a prior account's seen-offer IDs from suppressing a new account's offer. The existing 500-entry cap remains. AUTH-LOGIN-062 covers the source integration. Source/test head 87129ce909ae39c1b3a42e0b175a93436201ee58; fresh exact-head CI is required. Preceding head fe3c029 passed CI #1163 / 42852250391 12/12; all four same-run simulator smoke artifacts were inspected. Next sequential work after AUTH-02 merge: re-read main, complete #3 RIDER-01 audit, then implement #4 RIDER-02 stable same-payload proposal idempotency and #5 RIDER-03 Rider-scoped active-booking reservation.

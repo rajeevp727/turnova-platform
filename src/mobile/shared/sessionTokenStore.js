@@ -19,11 +19,19 @@ async function clearSessionTokensCore(storage) {
   }
 }
 
+async function readAccessTokenIfCurrent(storage, fallbackToken, isCurrent) {
+  if (typeof isCurrent !== "function") throw new Error("A session-current predicate is required.");
+  if (!isCurrent()) return "";
+  const storedToken = await storage.getItemAsync(ACCESS_TOKEN_KEY);
+  if (!isCurrent()) return "";
+  return storedToken ?? fallbackToken ?? "";
+}
+
 function clearSessionTokens(storage) {
   return serializeMutation(storage, () => clearSessionTokensCore(storage));
 }
 
-async function saveSessionTokens(storage, tokens) {
+function validateSessionTokens(tokens) {
   if (
     !tokens ||
     typeof tokens.accessToken !== "string" ||
@@ -33,37 +41,93 @@ async function saveSessionTokens(storage, tokens) {
   ) {
     throw new Error("Invalid session tokens.");
   }
+}
 
-  return serializeMutation(storage, async () => {
-    try {
-      await storage.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken);
-      await storage.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken);
-    } catch {
-      try {
-        await clearSessionTokensCore(storage);
-      } catch {
-        // Preserve the save failure; callers surface a recoverable storage error.
-      }
-      throw new Error("Unable to securely save session tokens.");
+async function saveSessionTokensCore(storage, tokens, isCurrent) {
+  try {
+    if (!isCurrent()) return false;
+
+    await storage.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken);
+    if (!isCurrent()) {
+      await clearSessionTokensCore(storage);
+      return false;
     }
+
+    await storage.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    if (!isCurrent()) {
+      await clearSessionTokensCore(storage);
+      return false;
+    }
+
+    return true;
+  } catch {
+    try {
+      await clearSessionTokensCore(storage);
+    } catch {
+      // Preserve the save failure; callers surface a recoverable storage error.
+    }
+    throw new Error("Unable to securely save session tokens.");
+  }
+}
+
+async function saveSessionTokens(storage, tokens) {
+  validateSessionTokens(tokens);
+  return serializeMutation(storage, async () => {
+    await saveSessionTokensCore(storage, tokens, () => true);
   });
 }
 
-async function readSessionTokens(storage) {
+function saveSessionTokensIfCurrent(storage, tokens, isCurrent) {
+  validateSessionTokens(tokens);
+  if (typeof isCurrent !== "function") {
+    throw new Error("A session-current predicate is required.");
+  }
+
+  return serializeMutation(storage, () => saveSessionTokensCore(storage, tokens, isCurrent));
+}
+
+async function readSessionTokens(storage, isCurrent = () => true) {
+  if (typeof isCurrent !== "function") throw new Error("A session-current predicate is required.");
+  if (!isCurrent()) return null;
   const [accessToken, refreshToken] = await Promise.all([
     storage.getItemAsync(ACCESS_TOKEN_KEY),
     storage.getItemAsync(REFRESH_TOKEN_KEY)
   ]);
-
-  if (accessToken && refreshToken) {
-    return { accessToken, refreshToken };
-  }
-
+  if (!isCurrent()) return null;
+  if (accessToken && refreshToken) return { accessToken, refreshToken };
   if (accessToken || refreshToken) {
-    await clearSessionTokens(storage);
+    await serializeMutation(storage, async () => {
+      if (!isCurrent()) return;
+      const [currentAccessToken, currentRefreshToken] = await Promise.all([
+        storage.getItemAsync(ACCESS_TOKEN_KEY),
+        storage.getItemAsync(REFRESH_TOKEN_KEY)
+      ]);
+      if (!isCurrent()) return;
+      if (currentAccessToken === accessToken && currentRefreshToken === refreshToken) {
+        await clearSessionTokensCore(storage);
+      }
+    });
   }
-
   return null;
+}
+
+function clearSessionTokensIfCurrent(storage, isCurrent, expectedTokens) {
+  if (typeof isCurrent !== "function") throw new Error("A session-current predicate is required.");
+  return serializeMutation(storage, async () => {
+    if (!isCurrent()) return false;
+    const [accessToken, refreshToken] = await Promise.all([
+      storage.getItemAsync(ACCESS_TOKEN_KEY),
+      storage.getItemAsync(REFRESH_TOKEN_KEY)
+    ]);
+    if (!isCurrent()) return false;
+    if (expectedTokens && (
+      accessToken !== expectedTokens.accessToken ||
+      refreshToken !== expectedTokens.refreshToken
+    )) return false;
+    if (!accessToken && !refreshToken) return true;
+    await clearSessionTokensCore(storage);
+    return true;
+  });
 }
 
 async function logoutSession(storage, revoke) {
@@ -74,35 +138,38 @@ async function logoutSession(storage, revoke) {
   void revocation;
 }
 
-async function restoreStoredSession(storage, request) {
-  const tokens = await readSessionTokens(storage);
-  if (!tokens) return null;
-
+async function restoreStoredSession(storage, request, isCurrent = () => true) {
+  if (typeof isCurrent !== "function") throw new Error("A session-current predicate is required.");
+  if (!isCurrent()) return null;
+  const tokens = await readSessionTokens(storage, isCurrent);
+  if (!isCurrent() || !tokens) return null;
+  let activeTokens = tokens;
   try {
-    const user = await request("/api/v1/auth/me", {}, tokens.accessToken);
-    return { tokens, user };
-  } catch (error) {
-    if (error?.status !== 401) throw error;
-  }
-
-  try {
+    try {
+      const user = await request("/api/v1/auth/me", {}, tokens.accessToken);
+      if (!isCurrent()) return null;
+      return { tokens, user };
+    } catch (error) {
+      if (!isCurrent()) return null;
+      if (error?.status !== 401) throw error;
+    }
+    if (!isCurrent()) return null;
     const result = await request("/api/v1/auth/refresh", {
       method: "POST",
       body: JSON.stringify({ refreshToken: tokens.refreshToken })
     });
-    const nextTokens = {
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken
-    };
-    await saveSessionTokens(storage, nextTokens);
-
-    // Refresh providers may return only the rotated token pair. Always reload the
-    // authoritative profile with the new access token before restoring app state.
+    if (!isCurrent()) return null;
+    const nextTokens = { accessToken: result.accessToken, refreshToken: result.refreshToken };
+    const saved = await saveSessionTokensIfCurrent(storage, nextTokens, isCurrent);
+    if (!saved || !isCurrent()) return null;
+    activeTokens = nextTokens;
     const user = await request("/api/v1/auth/me", {}, nextTokens.accessToken);
+    if (!isCurrent()) return null;
     return { tokens: nextTokens, user };
   } catch (error) {
+    if (!isCurrent()) return null;
     if (error?.status === 400 || error?.status === 401) {
-      await clearSessionTokens(storage);
+      await clearSessionTokensIfCurrent(storage, isCurrent, activeTokens);
       return null;
     }
     throw error;
@@ -113,7 +180,9 @@ module.exports = {
   ACCESS_TOKEN_KEY,
   REFRESH_TOKEN_KEY,
   readSessionTokens,
+  readAccessTokenIfCurrent,
   saveSessionTokens,
+  saveSessionTokensIfCurrent,
   clearSessionTokens,
   logoutSession,
   restoreStoredSession

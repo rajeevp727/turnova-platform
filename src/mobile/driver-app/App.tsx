@@ -6,16 +6,19 @@ import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
-import { getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
+import { getSignalRAccessToken, getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
-import { getFreshAccessToken } from "../shared/refreshCoordinator";
-import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
+import { advanceSessionEpoch, getFreshAccessToken, isAuthenticatedSessionCurrent, isSessionEpochCurrent } from "../shared/refreshCoordinator";
+import { readAccessTokenIfCurrent, readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
+import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
+import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
+import { resetDriverSessionState } from "../shared/sessionStateReset";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
@@ -53,8 +56,8 @@ type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; 
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
 
-async function saveTokens(tokens: Tokens) {
-  await saveSessionTokens(SecureStore, tokens);
+async function saveTokens(tokens: Tokens, isCurrent: () => boolean) {
+  return saveSessionTokensIfCurrent(SecureStore, tokens, isCurrent);
 }
 async function clearTokens() {
   await clearSessionTokens(SecureStore);
@@ -76,6 +79,14 @@ export default function App() {
   const [tokens, setTokens] = useState<Tokens | null>(null);
   const refreshInFlight = useRef<Promise<string> | null>(null);
   const sessionEpoch = useRef(0);
+  const authenticatedSessionEpoch = useRef<number | null>(null);
+  const activeSessionStops = useRef<Set<() => unknown>>(new Set());
+  const stopSessionResources = useCallback(() => stopRegisteredConnections(activeSessionStops.current), []);
+  const invalidateSession = useCallback(() => {
+    const epoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
+    stopSessionResources();
+    return epoch;
+  }, [stopSessionResources]);
   const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Payslips" | "Profile">("Home");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -107,6 +118,30 @@ export default function App() {
   const [registrationReference, setRegistrationReference] = useState("");
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
   const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
+  const clearDriverSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
+    authenticatedSessionEpoch.current = null;
+    resetDriverSessionState({
+      tokens: setTokens, user: setUser, mode: setMode, email: setEmail, password: setPassword, name: setName, tab: setTab, error: setError, queue: setQueue, membership: setMembership,
+      availabilityStatus: setAvailabilityStatus, notice: setNotice, helpQuestion: setHelpQuestion,
+      helpBusy: setHelpBusy, helpAnswer: setHelpAnswer, availableRides: setAvailableRides,
+      activeRide: setActiveRide, driverRideHistory: setDriverRideHistory, agreementHistory: setAgreementHistory,
+      agreementAmount: setAgreementAmount, paymentReportAmounts: setPaymentReportAmounts,
+      onboardingProfile: setOnboardingProfile, unionAssignment: setUnionAssignment, driverName: setDriverName,
+      phoneNumber: setPhoneNumber, vehicleMake: setVehicleMake, vehicleModel: setVehicleModel,
+      vehicleRegistration: setVehicleRegistration, licenceReference: setLicenceReference,
+      registrationReference: setRegistrationReference, profilePhotoBase64: setProfilePhotoBase64,
+      legacyServiceClass: setLegacyServiceClass
+    });
+    // Offer IDs are session-scoped deduplication state; never carry them across accounts.
+    receivedOfferIds.current.clear();
+    if (preserveAuthInput) {
+      setEmail(preserveAuthInput.email);
+      setPassword(preserveAuthInput.password);
+      setName(preserveAuthInput.name);
+      setMode(preserveAuthInput.mode);
+    }
+  }, []);
+
   const serviceClass = legacyServiceClass ?? DEFAULT_SERVICE_CLASS;
 
   useEffect(() => {
@@ -122,16 +157,18 @@ export default function App() {
     void SecureStore.setItemAsync("turnova.theme", preference);
   };
 
-  const acceptSession = useCallback(async (result: any, newSession = false) => {
+  const acceptSession = useCallback(async (result: any, expectedEpoch: number, requireProfile = false) => {
     const acceptedUser = result?.user ? requireAppRole<User>(result.user, "Driver") : null;
-    if (newSession && !acceptedUser)
+    if (requireProfile && !acceptedUser)
       throw new Error("Authentication response did not include a Driver profile.");
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
-    await saveTokens(next);
-    if (newSession) sessionEpoch.current += 1;
+    const saved = await saveTokens(next, () => sessionEpoch.current === expectedEpoch);
+    if (!saved || sessionEpoch.current !== expectedEpoch) return false;
+    authenticatedSessionEpoch.current = expectedEpoch;
     setTokens(next);
     if (acceptedUser) setUser(acceptedUser);
     setError("");
+    return true;
   }, []);
 
   const refreshSession = useCallback(async (refreshToken: string, expectedEpoch: number) => {
@@ -140,12 +177,13 @@ export default function App() {
       method: "POST", body: JSON.stringify({ refreshToken })
     });
     if (sessionEpoch.current !== expectedEpoch) return "";
-    await acceptSession(result);
+    const accepted = await acceptSession(result, expectedEpoch);
+    if (!accepted || sessionEpoch.current !== expectedEpoch) return "";
     return result.accessToken as string;
   }, [acceptSession]);
 
   const apiFetch = useCallback(async (path: string, init: RequestInit = {}) => {
-    if (!tokens) throw new Error("Please sign in again.");
+    if (!tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) throw new Error("Please sign in again.");
     const requestEpoch = sessionEpoch.current;
     let response = await fetch(`${API}${path}`, {
       ...init,
@@ -163,17 +201,13 @@ export default function App() {
         );
       } catch {
         if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
-        sessionEpoch.current += 1;
+        const expiredEpoch = invalidateSession();
         let tokenCleanupFailed = false;
         try { await clearTokens(); } catch { tokenCleanupFailed = true; }
+        if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
         const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
-        setTokens(null);
-        setUser(null);
-        setActiveRide(null);
-        setDriverRideHistory([]);
-        setUnionAssignment(null);
-        setPaymentReportAmounts({});
-        setAvailableRides([]);
+        if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
+        clearDriverSessionState();
         const expiryMessage = tokenCleanupFailed
           ? "Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
           : cacheCleanup.failed > 0
@@ -188,48 +222,59 @@ export default function App() {
       });
       if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
     }
-    const body = await response.json().catch(() => ({}));
+    const body = await readJsonResponseIfCurrent(response, () => sessionEpoch.current === requestEpoch && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) as any;
     if (!response.ok) { const error = new Error(body.message ?? body.title ?? "Request failed."); (error as Error & { status: number }).status = response.status; throw error; }
     return body;
-  }, [tokens, refreshSession]);
+  }, [tokens, refreshSession, invalidateSession, clearDriverSessionState]);
 
   useEffect(() => {
     let active = true;
+    let restoreEpoch = sessionEpoch.current;
+    const isRestoreCurrent = () => active && sessionEpoch.current === restoreEpoch;
     (async () => {
       try {
-        const restored = await restoreStoredSession(SecureStore, jsonRequest);
-        if (active && restored) {
-          sessionEpoch.current += 1;
+        const restored = await restoreStoredSession(SecureStore, jsonRequest, isRestoreCurrent);
+        if (isRestoreCurrent() && restored) {
+          const restoredEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
+          restoreEpoch = restoredEpoch;
           const restoredUser = requireAppRole<User>(restored.user, "Driver");
+          authenticatedSessionEpoch.current = restoredEpoch;
           setTokens(restored.tokens);
           setUser(restoredUser);
-        } else if (active) {
+        } else if (isRestoreCurrent()) {
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
-          if (active && cacheCleanup.failed > 0)
+          if (isRestoreCurrent() && cacheCleanup.failed > 0)
             setError("No active session was restored, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");
         }
       } catch {
-        if (active) setError("Unable to restore your session. Check your connection or secure storage and retry.");
-      } finally { if (active) setLoading(false); }
+        if (isRestoreCurrent()) setError("Unable to restore your session. Check your connection or secure storage and retry.");
+      } finally { if (isRestoreCurrent()) setLoading(false); }
     })();
     return () => { active = false; };
   }, []);
 
   const authenticate = async (replaceOldest = false) => {
+    const credentials = { email: email.trim(), password, name: name.trim(), mode };
+    const authEpoch = invalidateSession();
+    clearDriverSessionState(credentials);
     setLoading(true); setError(""); setNotice("");
     try {
       const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
       if (cacheCleanup.failed > 0)
         throw new Error("Unable to clear payslips from a previous account. Clear the app cache before signing in.");
+      if (sessionEpoch.current !== authEpoch) return;
       await clearTokens();
-      const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
+      if (sessionEpoch.current !== authEpoch) return;
+      const path = credentials.mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
       const result = await jsonRequest(path, {
         method: "POST",
-        body: JSON.stringify({ email: email.trim(), password, name: name.trim() || null, replaceOldest })
+        body: JSON.stringify({ email: credentials.email, password: credentials.password, name: credentials.name || null, replaceOldest })
       });
-      await acceptSession(result, true);
-    } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed."); }
-    finally { setLoading(false); }
+      const accepted = await acceptSession(result, authEpoch, true);
+      if (!accepted) throw new Error("Session changed. Please sign in again.");
+      setPassword("");
+    } catch (e) { if (sessionEpoch.current === authEpoch) setError(e instanceof Error ? e.message : "Authentication failed."); }
+    finally { if (sessionEpoch.current === authEpoch) setLoading(false); }
   };
 
   const loadAvailability = useCallback(async () => {
@@ -435,23 +480,33 @@ export default function App() {
     finally { setLoading(false); }
   };
 
-  const loadAvailableRides = useCallback(async () => {
+  const loadAvailableRides = useCallback(async (isActive: () => boolean = () => true) => {
+    const isCurrent = () => isActive() && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
+    if (!isCurrent()) return;
     if (legacyServiceClass) { setAvailableRides([]); return; }
-    try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); }
-    catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); }
+    try {
+      const rides = await apiFetch("/api/v1/driver/rides/available");
+      if (isCurrent()) setAvailableRides(rides);
+    } catch (e) {
+      if (isCurrent()) setError(e instanceof Error ? e.message : "Unable to load ride requests.");
+    }
   }, [apiFetch, legacyServiceClass]);
 
   const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
+    const isCurrent = () => isActive() && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
+    if (!isCurrent()) return;
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
-    if (!isActive()) return;
+    if (!isCurrent()) return;
     setDriverRideHistory(history);
     const active = findActiveRide(history, "driver");
     setActiveRide(active ?? null);
   }, [apiFetch]);
 
-  const loadAgreementHistory = useCallback(async (rideId: string) => {
+  const loadAgreementHistory = useCallback(async (rideId: string, isActive: () => boolean = () => true) => {
+    const isCurrent = () => isActive() && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
+    if (!isCurrent()) return;
     const result = await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];
-    setAgreementHistory(result);
+    if (isCurrent()) setAgreementHistory(result);
   }, [apiFetch]);
 
   const reportPaymentReceived = async (rideId: string) => {
@@ -530,34 +585,42 @@ export default function App() {
   // SignalR is at-least-once: deduplicate by the server-issued offerId before surfacing it.
   const receivedOfferIds = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!user?.id || availabilityStatus !== "Online" || legacyServiceClass) return;
+    if (!user?.id || availabilityStatus !== "Online" || legacyServiceClass || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
     let mounted = true;
+    const connectionEpoch = sessionEpoch.current;
+    const isConnectionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, connectionEpoch);
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?driverId=${encodeURIComponent(user.id)}`, {
-        accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens?.accessToken ?? "",
+        accessTokenFactory: async () => getSignalRAccessToken({
+          readAccessToken: () => readAccessTokenIfCurrent(SecureStore, "", isConnectionCurrent),
+          isCurrent: isConnectionCurrent,
+          validateSession: async () => { await apiFetch("/api/v1/auth/me"); }
+        }),
         transport: HttpTransportType.WebSockets
       })
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
+    const stopConnection = () => connection.stop();
+    activeSessionStops.current.add(stopConnection);
 
-    const refreshOffers = () => { if (mounted) void loadAvailableRides(); };
+    const refreshOffers = () => { if (mounted && isConnectionCurrent()) void loadAvailableRides(() => mounted && isConnectionCurrent()); };
     const refreshDriverState = () => {
-      if (!mounted) return;
+      if (!mounted || !isConnectionCurrent()) return;
       refreshOffers();
-      void loadDriverRideHistory(() => mounted).catch(e => {
-        if (mounted) setError(e instanceof Error ? e.message : "Unable to recover selected Rider bookings.");
+      void loadDriverRideHistory(() => mounted && isConnectionCurrent()).catch(e => {
+        if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to recover selected Rider bookings.");
       });
     };
     connection.on("RideSelected", (selection: { rideId?: string; expiresAtUtc?: string }) => {
-      if (!mounted || !selection?.rideId) return;
+      if (!mounted || !isConnectionCurrent() || !selection?.rideId) return;
       setNotice("A Rider selected you for a Cab trip. Review the request and negotiate directly.");
-      void loadDriverRideHistory(() => mounted).catch(e => {
-        if (mounted) setError(e instanceof Error ? e.message : "Unable to load selected Rider booking.");
+      void loadDriverRideHistory(() => mounted && isConnectionCurrent()).catch(e => {
+        if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to load selected Rider booking.");
       });
     });
     connection.on("RideOfferReceived", (offer: { rideId?: string; offerId?: string; expiresAtUtc?: string }) => {
-      if (!mounted || !offer?.offerId || receivedOfferIds.current.has(offer.offerId)) return;
+      if (!mounted || !isConnectionCurrent() || !offer?.offerId || receivedOfferIds.current.has(offer.offerId)) return;
       receivedOfferIds.current.add(offer.offerId);
       if (receivedOfferIds.current.size > 500) {
         const oldest = receivedOfferIds.current.values().next().value;
@@ -568,11 +631,11 @@ export default function App() {
     });
     // Recover selected bookings as well as legacy offers after initial connect/reconnect;
     // SignalR delivery is at-least-once and may be missed while the app is suspended.
-    connection.onreconnected(refreshDriverState);
-    void startSignalRConnection(connection, () => mounted, () => {
-      if (mounted) setError("Live ride offers are temporarily unavailable. Retrying connection…");
+    connection.onreconnected(() => { if (mounted && isConnectionCurrent()) refreshDriverState(); });
+    void startSignalRConnection(connection, () => mounted && isConnectionCurrent(), () => {
+      if (mounted && isConnectionCurrent()) setError("Live ride offers are temporarily unavailable. Retrying connection…");
     }).then(connected => {
-      if (connected && mounted) {
+      if (connected && mounted && isConnectionCurrent()) {
         setError(current => current === "Live ride offers are temporarily unavailable. Retrying connection…" ? "" : current);
         refreshDriverState();
       }
@@ -581,55 +644,72 @@ export default function App() {
       mounted = false;
       connection.off("RideOfferReceived");
       connection.off("RideSelected");
-      void connection.stop();
+      activeSessionStops.current.delete(stopConnection);
+      stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
-  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory]);
+  }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory, apiFetch]);
 
   useEffect(() => {
-    if (!user?.id || tab !== "Trips" || !activeRide?.rideId || !tokens) return;
+    if (!user?.id || tab !== "Trips" || !activeRide?.rideId || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
     let mounted = true;
+    const connectionEpoch = sessionEpoch.current;
+    const isConnectionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, connectionEpoch);
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
-        accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens.accessToken,
+        accessTokenFactory: async () => getSignalRAccessToken({
+          readAccessToken: () => readAccessTokenIfCurrent(SecureStore, "", isConnectionCurrent),
+          isCurrent: isConnectionCurrent,
+          validateSession: async () => { await apiFetch("/api/v1/auth/me"); }
+        }),
         transport: HttpTransportType.WebSockets
       })
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
+    const stopConnection = () => connection.stop();
+    activeSessionStops.current.add(stopConnection);
     const refreshAgreement = (update?: { rideId?: string }) => {
-      if (mounted && (!update?.rideId || update.rideId === activeRide.rideId))
-        void loadAgreementHistory(activeRide.rideId).catch(e => {
-          if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh fare agreement.");
+      if (mounted && isConnectionCurrent() && (!update?.rideId || update.rideId === activeRide.rideId))
+        void loadAgreementHistory(activeRide.rideId, () => mounted && isConnectionCurrent()).catch(e => {
+          if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to refresh fare agreement.");
         });
     };
     connection.on("RideAgreementChanged", refreshAgreement);
-    connection.onreconnected(() => refreshAgreement());
-    void startSignalRConnection(connection, () => mounted, () => {
-      if (mounted) setError("Live fare agreement updates are temporarily unavailable. Retrying connection…");
+    connection.onreconnected(() => { if (mounted && isConnectionCurrent()) refreshAgreement(); });
+    void startSignalRConnection(connection, () => mounted && isConnectionCurrent(), () => {
+      if (mounted && isConnectionCurrent()) setError("Live fare agreement updates are temporarily unavailable. Retrying connection…");
     }).then(connected => {
-      if (connected && mounted) {
+      if (connected && mounted && isConnectionCurrent()) {
         setError(current => current === "Live fare agreement updates are temporarily unavailable. Retrying connection…" ? "" : current);
         refreshAgreement();
       }
     });
-    return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); void connection.stop(); };
-  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
+    return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); activeSessionStops.current.delete(stopConnection); stopRegisteredConnections(new Set<() => unknown>([stopConnection])); };
+  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory, apiFetch]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Selected Rider request declined. No automatic reassignment was made."); if (activeRide?.rideId === rideId) { setActiveRide(null); setAgreementHistory([]); } } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
   useEffect(() => {
-    if (!user || tab !== "Trips" || !activeRide) return;
+    if (!user || tab !== "Trips" || !activeRide || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
     let mounted = true;
+    const connectionEpoch = sessionEpoch.current;
+    const isConnectionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, connectionEpoch);
     const connection = new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(activeRide.rideId)}`, {
-        accessTokenFactory: async () => await SecureStore.getItemAsync("turnova.access") ?? tokens?.accessToken ?? "",
+        accessTokenFactory: async () => getSignalRAccessToken({
+          readAccessToken: () => readAccessTokenIfCurrent(SecureStore, "", isConnectionCurrent),
+          isCurrent: isConnectionCurrent,
+          validateSession: async () => { await apiFetch("/api/v1/auth/me"); }
+        }),
         transport: HttpTransportType.WebSockets
       })
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
+    const stopConnection = () => connection.stop();
+    activeSessionStops.current.add(stopConnection);
     const handleRideStatusChanged = (update: { rideId: string; status: string }) => {
-      if (!shouldApplyRideStatusUpdate(activeRide.rideId, update.rideId, mounted)) return;
+      if (!shouldApplyRideStatusUpdate(activeRide.rideId, update.rideId, mounted && isConnectionCurrent())) return;
       setActiveRide((current: any) => current?.rideId === update.rideId
         ? applyRideStatusUpdate(current, update)
         : current);
@@ -637,31 +717,34 @@ export default function App() {
     };
     connection.on("RideStatusChanged", handleRideStatusChanged);
     connection.onreconnected(() => {
-      if (mounted) void loadDriverRideHistory(() => mounted).catch(e => {
-        if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
+      if (mounted && isConnectionCurrent()) void loadDriverRideHistory(() => mounted && isConnectionCurrent()).catch(e => {
+        if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
       });
     });
-    void startSignalRConnection(connection, () => mounted, () => {
-      if (mounted) setError("Live trip status updates are temporarily unavailable. Retrying connection…");
+    void startSignalRConnection(connection, () => mounted && isConnectionCurrent(), () => {
+      if (mounted && isConnectionCurrent()) setError("Live trip status updates are temporarily unavailable. Retrying connection…");
     }).then(connected => {
-      if (connected && mounted) {
+      if (connected && mounted && isConnectionCurrent()) {
         setError(current => current === "Live trip status updates are temporarily unavailable. Retrying connection…" ? "" : current);
-        void loadDriverRideHistory(() => mounted).catch(e => {
-          if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
+        void loadDriverRideHistory(() => mounted && isConnectionCurrent()).catch(e => {
+          if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
         });
       }
     });
-    return () => { mounted = false; connection.off("RideStatusChanged", handleRideStatusChanged); void connection.stop(); };
-  }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory]);
+    return () => { mounted = false; connection.off("RideStatusChanged", handleRideStatusChanged); activeSessionStops.current.delete(stopConnection); stopRegisteredConnections(new Set<() => unknown>([stopConnection])); };
+  }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory, apiFetch]);
 
   useEffect(() => {
-    if (!user || tab !== "Trips" || !activeRide) return;
+    if (!user || tab !== "Trips" || !activeRide || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
+    const locationEpoch = sessionEpoch.current;
+    const isLocationSessionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, locationEpoch);
+    let appStateSubscription: ReturnType<typeof AppState.addEventListener> | undefined;
     let subscription: Location.LocationSubscription | undefined;
     let mounted = true;
     let starting = false;
     let restartRequested = false;
 
-    const canShare = () => canShareTripLocation({
+    const canShare = () => isLocationSessionCurrent() && canShareTripLocation({
       appState: AppState.currentState,
       mounted,
       status: activeRide.status,
@@ -671,6 +754,13 @@ export default function App() {
       subscription?.remove();
       subscription = undefined;
     };
+    const stopForSessionInvalidation = () => {
+      mounted = false;
+      restartRequested = false;
+      stopWatching();
+      appStateSubscription?.remove();
+    };
+    activeSessionStops.current.add(stopForSessionInvalidation);
     const startWatching = async () => {
       if (!canShare() || subscription) return;
       if (starting) {
@@ -729,7 +819,8 @@ export default function App() {
       }
     };
 
-    const appStateSubscription = AppState.addEventListener("change", state => {
+    appStateSubscription = AppState.addEventListener("change", state => {
+      if (!isLocationSessionCurrent()) { stopForSessionInvalidation(); return; }
       if (state === "active") void startWatching();
       else {
         restartRequested = false;
@@ -739,10 +830,8 @@ export default function App() {
     if (AppState.currentState === "active") void startWatching();
 
     return () => {
-      mounted = false;
-      restartRequested = false;
-      stopWatching();
-      appStateSubscription.remove();
+      activeSessionStops.current.delete(stopForSessionInvalidation);
+      stopForSessionInvalidation();
     };
   }, [user?.id, tab, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
 
@@ -750,9 +839,9 @@ export default function App() {
 
 
   const downloadPayslip = async (year: number, month: number) => {
-    if (!tokens) return;
+    if (!tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
     const requestEpoch = sessionEpoch.current;
-    const isSessionCurrent = () => sessionEpoch.current === requestEpoch;
+    const isSessionCurrent = () => sessionEpoch.current === requestEpoch && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
     setLoading(true); setError(""); setNotice("");
     try {
       let response = await fetch(API + "/api/v1/driver/payslips/" + year + "/" + month + ".pdf", {
@@ -770,12 +859,13 @@ export default function App() {
           );
         } catch {
           if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
-          sessionEpoch.current += 1;
+          const expiredEpoch = invalidateSession();
           let tokenCleanupFailed = false;
           try { await clearTokens(); } catch { tokenCleanupFailed = true; }
+          if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
-          setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
-          setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
+          if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
+          clearDriverSessionState();
           const expiryMessage = tokenCleanupFailed
             ? "Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
             : cacheCleanup.failed > 0
@@ -791,7 +881,7 @@ export default function App() {
         if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
       }
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
+        const body = await readJsonResponseIfCurrent(response, () => isSessionCurrent()) as any;
         throw new Error(body.message ?? body.title ?? "Payslip is not available yet.");
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
@@ -946,14 +1036,19 @@ export default function App() {
   };
 
   const logout = async () => {
-    sessionEpoch.current += 1;
+    const logoutEpoch = invalidateSession();
     try {
       await logoutSession(SecureStore, async () => {
         if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken);
       });
-    } catch { setError("Unable to clear secure session storage. Please retry sign-out."); return; }
+    } catch {
+      if (sessionEpoch.current === logoutEpoch) setError("Unable to clear secure session storage. Please retry sign-out.");
+      return;
+    }
+    if (sessionEpoch.current !== logoutEpoch) return;
     const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
-    setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
+    if (sessionEpoch.current !== logoutEpoch) return;
+    clearDriverSessionState();
     if (cacheCleanup.failed > 0)
       setError("Signed out, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");
   };
