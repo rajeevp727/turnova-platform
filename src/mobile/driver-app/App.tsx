@@ -165,10 +165,12 @@ export default function App() {
         );
       } catch {
         if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
-        advanceSessionEpoch(sessionEpoch, refreshInFlight);
+        const expiredEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
         let tokenCleanupFailed = false;
         try { await clearTokens(); } catch { tokenCleanupFailed = true; }
+        if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
         const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
+        if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
         setTokens(null);
         setUser(null);
         setActiveRide(null);
@@ -234,8 +236,8 @@ export default function App() {
       });
       const accepted = await acceptSession(result, authEpoch, true);
       if (!accepted) throw new Error("Session changed. Please sign in again.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed."); }
-    finally { setLoading(false); }
+    } catch (e) { if (sessionEpoch.current === authEpoch) setError(e instanceof Error ? e.message : "Authentication failed."); }
+    finally { if (sessionEpoch.current === authEpoch) setLoading(false); }
   };
 
   const loadAvailability = useCallback(async () => {
@@ -776,10 +778,12 @@ export default function App() {
           );
         } catch {
           if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
-          advanceSessionEpoch(sessionEpoch, refreshInFlight);
+          const expiredEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
           let tokenCleanupFailed = false;
           try { await clearTokens(); } catch { tokenCleanupFailed = true; }
+          if (!isSessionCurrent() && sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
+          if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
           setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
           setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
           const expiryMessage = tokenCleanupFailed
@@ -952,13 +956,18 @@ export default function App() {
   };
 
   const logout = async () => {
-    advanceSessionEpoch(sessionEpoch, refreshInFlight);
+    const logoutEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
     try {
       await logoutSession(SecureStore, async () => {
         if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken);
       });
-    } catch { setError("Unable to clear secure session storage. Please retry sign-out."); return; }
+    } catch {
+      if (sessionEpoch.current === logoutEpoch) setError("Unable to clear secure session storage. Please retry sign-out.");
+      return;
+    }
+    if (sessionEpoch.current !== logoutEpoch) return;
     const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
+    if (sessionEpoch.current !== logoutEpoch) return;
     setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
     if (cacheCleanup.failed > 0)
       setError("Signed out, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");
