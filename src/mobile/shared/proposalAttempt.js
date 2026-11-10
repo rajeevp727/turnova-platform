@@ -35,4 +35,16 @@ function clearProposalAttempt(ref, expectedKey) {
   return true;
 }
 
-module.exports = { getOrCreateProposalAttempt, clearProposalAttempt };
+function finishProposalSubmission(ref, expectedKey) {
+  if (!ref || typeof ref !== "object" || !("current" in ref)) {
+    throw new TypeError("A proposal-submission ref is required.");
+  }
+  if (typeof expectedKey !== "string" || !expectedKey.trim()) {
+    throw new TypeError("The expected proposal key is required.");
+  }
+  if (ref.current !== expectedKey) return false;
+  ref.current = null;
+  return true;
+}
+
+module.exports = { getOrCreateProposalAttempt, clearProposalAttempt, finishProposalSubmission };
