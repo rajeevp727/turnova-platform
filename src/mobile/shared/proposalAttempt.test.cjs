@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const { clearProposalAttempt, getOrCreateProposalAttempt } = require("./proposalAttempt.js");
+const { clearProposalAttempt, finishProposalSubmission, getOrCreateProposalAttempt } = require("./proposalAttempt.js");
 
 function createRef() {
   return { current: null };
@@ -45,6 +45,14 @@ test("a late completion cannot clear a newer proposal attempt", () => {
   assert.equal(ref.current, null);
 });
 
+test("a stale proposal completion cannot release a newer in-flight submission", () => {
+  const inFlight = { current: "new-attempt" };
+  assert.equal(finishProposalSubmission(inFlight, "old-attempt"), false);
+  assert.equal(inFlight.current, "new-attempt");
+  assert.equal(finishProposalSubmission(inFlight, "new-attempt"), true);
+  assert.equal(inFlight.current, null);
+});
+
 test("confirmed success clears the attempt so an intentional new proposal gets a fresh key", () => {
   const ref = createRef();
   let generated = 0;
@@ -76,6 +84,8 @@ for (const [role, appPath] of [
     assert.match(handler, /getOrCreateProposalAttempt\(proposalAttemptRef/);
     assert.match(handler, /clearProposalAttempt\(proposalAttemptRef/);
     assert.match(handler, /proposalSubmissionInFlight\.current/);
+    assert.match(handler, /proposalSubmissionInFlight\.current\s*=\s*attempt\.key/);
+    assert.match(handler, /finishProposalSubmission\(proposalSubmissionInFlight,\s*attempt\.key\)/);
     assert.match(handler, /"Idempotency-Key":\s*attempt\.key/);
     assert.doesNotMatch(handler, /Date\.now|Math\.random/);
     assert.ok(handler.indexOf("loadAgreementHistory") < handler.indexOf("clearProposalAttempt"),
@@ -86,7 +96,11 @@ for (const [role, appPath] of [
     const resetStart = source.indexOf(resetName);
     const resetEnd = source.indexOf("useEffect", resetStart);
     assert.ok(resetStart >= 0 && resetEnd > resetStart, role + " session reset must be present");
-    assert.match(source.slice(resetStart, resetEnd), /proposalAttemptRef\.current\s*=\s*null/);
+    const reset = source.slice(resetStart, resetEnd);
+    assert.match(reset, /proposalAttemptRef\.current\s*=\s*null/);
+    assert.match(reset, /proposalSubmissionInFlight\.current\s*=\s*null/);
+    assert.match(reset, /setProposalSubmitting\(false\)/);
+    assert.match(source, /proposalRideIdRef/);
   });
 }
 
