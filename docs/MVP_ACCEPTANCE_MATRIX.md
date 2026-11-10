@@ -2,8 +2,8 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.  
 **Source of truth:** PRD.md, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; docs/test-plan.md.  
-**Last audited:** 2026-11-10; main/base HEAD `4521c7e9a1448f85208ca744cd4824fd2a02596f`; sole active sequential PR #141 on `test/release-01-clean-simulator-state`; tested code/evidence head `ce88ade0f6b265de72d9bb520e8e866ea71e88d1`; exact-head CI [#1101 / 42750283649](https://github.com/rajeevp727/turnova-platform/actions/runs/42750283649) passed 12/12 jobs.
-**Current engineering item:** #19 RELEASE-01 — PR #141 code/evidence head `ce88ade0f6b265de72d9bb520e8e866ea71e88d1` passed all 12/12 jobs in CI #42750283649: backend 364/364, shared JS 102/102, Python 40/40, both mobile validation/bundle jobs, all four native builds and all four simulator smokes. Same-run Rider/Driver Android and iOS artifacts were downloaded and inspected. Android confirms install/launch, stable process, role-specific login UI and no stale-session error. Unsigned iOS confirms erase/install/launch, stable process and login UI plus the expected SecureStore-unavailable warning; `secureStoreAvailable=false`, no Keychain access group and production API/authentication not exercised. This does not prove Keychain persistence or signed-device authentication. Documentation synchronization now requires a new exact-head CI run and final COMMENT-only review.
+**Last audited:** 2026-11-10; main HEAD `33e438dba6e0a1af74959904ba132fd0e7273744` after PR #141 RELEASE-01 merged. The sole active PR is supplemental AI-01 PR #142 on `feat/ai-01-provider-resilience`, exact head `79c473661d7804f761bedebbfe871ecd9b0e94e2`.
+**Current engineering item:** AI-01 provider resilience (supplemental/outside denominator) passed exact-head CI #1110 / 42769495825 12/12: backend 373/373, shared JS 102/102, Python 40/40, Rider/Driver mobile validation/bundles, four native builds and four simulator smokes. Same-run Android Rider/Driver and unsigned iOS Rider/Driver artifacts were downloaded and inspected. iOS explicitly reports SecureStore unavailable and no Keychain access group; production authentication is not exercised.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.  
 **Current acceptance snapshot:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is a strict evidence count, not a statement that nothing is implemented. Read implementation evidence row by row; external gates remain explicit.
 
@@ -337,3 +337,38 @@ PR #141 code head 3316980ec59d1e865eb2bfbd2c9d0be55015fa09 passed [CI run #42726
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is the full-evidence count, not an implementation-completion percentage. Production readiness is not established.
 - External gates: Product-approved dispatch radius/non-overlapping zones/location freshness; Product/Operations support categories/intake/severity/escalation owner/channel/hours/targets/attachment/privacy/retention/handoff; live Cosmos ETag/transactional-batch/partition/multi-instance/restart/retention; telemetry/alerts/production CORS/load; approved app IDs/EAS, signed AAB/IPA, HTTPS API/DNS/TLS, physical-device/pilot/store acceptance; maps/realtime providers; private document storage/scanning/consent/retention; reconciliation dispute and non-zero-delta next-ride policy; legal partnership review.
 - After merge, re-read main and continue approved supplemental AI-01 provider timeout/cancellation/fallback hardening. AI-01 remains outside the 19-row denominator; do not choose a paid provider/model or credentials.
+
+## Latest supplemental handoff — AI-01 provider resilience (2026-11-10)
+
+RELEASE-01 PR [#141](https://github.com/rajeevp727/turnova-platform/pull/141) merged at `33e438dba6e0a1af74959904ba132fd0e7273744` after exact-head CI [#1102 / 42753704595](https://github.com/rajeevp727/turnova-platform/actions/runs/42753704595) passed 12/12 jobs and all four same-run simulator artifacts were inspected. This release evidence does not establish production signing, physical-device behaviour, Keychain persistence, live API/authentication, Cosmos or provider readiness.
+
+The current sequential task is approved supplemental AI-01, which is **not** a twentieth acceptance area. Branch `feat/ai-01-provider-resilience` contains provider-boundary changes and deterministic tests:
+- `Task.WaitAsync(timeout.Token)` independently bounds the request when a provider ignores its cancellation token; the linked token still requests cooperative cancellation.
+- Synchronous and asynchronous `TimeoutException` and `HttpRequestException` paths return deterministic local fallback.
+- Caller cancellation is checked before fallback conversion and wins over a racing provider HTTP failure.
+- Late provider-task faults are observed without logging exception text or prompt/provider content.
+- Tests cover ignored cancellation, late fault, synchronous/asynchronous timeout and HTTP failures, in-flight cancellation and cancellation/HTTP-failure precedence.
+
+Code-head exact-head CI #1105 / 42759995138 passed 12/12 after the targeted Rider Android smoke retry; the documentation-synchronized head still requires fresh CI. Live provider sandbox validation, provider/model selection, managed-secret wiring and data-processing terms remain external. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this count is independent of implementation evidence.
+
+
+
+## Latest AI-01 provider-resilience execution evidence — 2026-11-10
+
+PR [#142](https://github.com/rajeevp727/turnova-platform/pull/142) code head `05d20e176abf3c97c360650d3daa5e426a8a253a` passed all 12/12 jobs in [CI run #42759995138 (run 1105)](https://github.com/rajeevp727/turnova-platform/actions/runs/42759995138) after a targeted retry of the Rider Android emulator smoke. The run executed .NET 10 backend tests 371/371, shared JavaScript tests 102/102, Python fake-SDK/native tests 40/40, Rider/Driver mobile validation and production bundle exports, all four native Android/iOS builds, and all four same-run simulator smokes.
+
+The first Rider Android smoke attempt failed because the Pixel Launcher ANR dialog persisted after two bounded Wait attempts; the app's launch command had succeeded, but the harness correctly failed closed. Only that failed job was rerun. The retry passed and its inspected artifact [13739865249](https://github.com/rajeevp727/turnova-platform/actions/runs/42759995138/artifacts/13739865249) reports install/launch passed, stable Rider process, login text verified, no stale-session error and zero Pixel Launcher ANR Wait attempts. The Driver Android artifact [13737179773](https://github.com/rajeevp727/turnova-platform/actions/runs/42759995138/artifacts/13737179773) reports the same successful app evidence and zero ANR attempts. Rider iOS [13738776886](https://github.com/rajeevp727/turnova-platform/actions/runs/42759995138/artifacts/13738776886) and Driver iOS [13738339007](https://github.com/rajeevp727/turnova-platform/actions/runs/42759995138/artifacts/13738339007) both report install/launch passed, stable process and role-specific login screen; both explicitly report unsigned simulator artifact, `secureStoreAvailable=false`, SecureStore-unavailable banner verified, no Keychain access group and production API/authentication not exercised. All four screenshots were downloaded and visually inspected. This does not establish Keychain persistence, signed-device authentication, physical-device or production readiness.
+
+The documentation synchronization is a new PR head and requires a fresh exact-head CI run plus a COMMENT-only review anchored to that SHA before merge. PR #142 remains open; no self-approval or bypass. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked), and production readiness is not established. AI-01 remains supplemental and outside the 19-row denominator.
+
+
+## Supplemental AI-01 evidence — 2026-11-10
+
+AI-01 remains outside the 19-row acceptance denominator. Provider resilience now covers independent timeout, cooperative cancellation, caller-cancellation precedence, late fault observation, explicit timeout/HTTP failures and unexpected synchronous/asynchronous provider adapter exceptions with deterministic fallback. Test-plan cases AI-026–AI-030 provide deterministic evidence. Live provider sandbox, managed-secret wiring, provider/model selection and data-processing terms remain external; no paid provider or credential is configured.
+
+
+## Latest exact-head evidence — AI-01 (2026-11-10)
+
+PR #142 head `79c473661d7804f761bedebbfe871ecd9b0e94e2` passed all 12/12 jobs in [CI #1110 / 42769495825](https://github.com/rajeevp727/turnova-platform/actions/runs/42769495825): backend 373/373, shared JavaScript 102/102, Python 40/40, both mobile validation/bundles, four native builds and four simulator smokes. Same-run Rider/Driver Android and unsigned iOS artifacts were downloaded and inspected. Android showed role-specific login UI with stable processes and no stale-session errors; iOS showed role-specific login UI with SecureStore unavailable and no Keychain access group. This does not establish signed-device, production-authentication or production readiness.
+
+AI-01 remains supplemental/outside the 19-row denominator. Provider timeout, cancellation precedence, late-fault observation and deterministic fallback are covered by AI-026–AI-030. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is a full-evidence count, not an implementation-completion score.

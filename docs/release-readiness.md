@@ -224,3 +224,23 @@ Inspected same-run artifacts: Rider Android [13734170935](https://github.com/raj
 The native smoke harness compiles the Vision OCR checker once before simulator access with a separate bounded timeout, then reuses it during readiness polling; deterministic fake-SDK tests cover success/reuse, compile failure, timeout and configuration boundaries. The 40/40 Python suite and all 12 CI jobs passed.
 
 RELEASE-01 remains Blocked for strict acceptance pending approved production identifiers/EAS linkage, signed Android AAB/iOS IPA, verified HTTPS API/DNS/TLS/CORS/readiness, physical-device functional/security testing, pilot acceptance and store submission. No production deployment or production readiness is claimed. The documentation synchronization creates a new PR head and therefore requires a fresh exact-head CI run and final COMMENT-only review before merge.
+
+## Final RELEASE-01 merge evidence — 2026-11-10
+
+PR [#141](https://github.com/rajeevp727/turnova-platform/pull/141) merged at `33e438dba6e0a1af74959904ba132fd0e7273744`. The documentation-synchronized exact head `c14b28d33ecc45d36164b658435296ca256107c3` passed all 12/12 jobs in [CI #1102 / 42753704595](https://github.com/rajeevp727/turnova-platform/actions/runs/42753704595): backend 364/364, shared JavaScript 102/102, Python fake-SDK/native-artifact 40/40, both mobile validation/bundle jobs, four native builds and four same-run simulator smokes. Same-run Rider/Driver Android and iOS result JSONs and screenshots were inspected.
+
+Android Rider/Driver both installed and launched from the same-run standalone release APKs, remained stable and displayed their role-specific login screen without stale-session errors or Pixel Launcher Wait attempts. Unsigned iOS Rider/Driver simulators were erased before install, installed/launched, remained stable and displayed their role-specific login screen. Both iOS screenshots visibly include the expected SecureStore-unavailable warning; results state `secureStoreAvailable=false`, no Keychain access group and production API/authentication not exercised. This is not Keychain persistence, signed-device authentication, physical-device or production readiness evidence.
+
+RELEASE-01 remains Blocked for strict acceptance until approved production identifiers/EAS linkage, signed AAB/IPA, HTTPS API/auth configuration, physical-device testing, pilot acceptance and store submission are evidenced. Other external gates remain Product dispatch radius/zones/location freshness, Product/Operations support policy, live Cosmos ETag/transactional-batch/multi-instance/restart/retention, telemetry/alerts/CORS/load, maps/realtime providers, private document controls, reconciliation policy and legal partnership review.
+
+
+## AI-01 provider failure boundary — 2026-11-10
+
+Provider calls remain disabled by default and use the unavailable placeholder adapter. The service now returns deterministic local fallback for timeout, transient HTTP and unexpected provider-adapter exceptions while propagating caller cancellation. No provider/model/credential is selected, no sensitive data is sent, and no booking/fare/payment/dispatch/ride-state operation is exposed. Deterministic test-plan cases AI-026–AI-030 cover timeout, cancellation, late faults and unexpected adapter failures. Live provider sandbox and managed-secret validation remain external; AI-01 is supplemental and outside the 19-area denominator.
+
+
+## AI-01 exact-head verification — 2026-11-10
+
+PR #142 head `79c473661d7804f761bedebbfe871ecd9b0e94e2` passed [CI #1110 / 42769495825](https://github.com/rajeevp727/turnova-platform/actions/runs/42769495825) 12/12: backend 373/373, shared JavaScript 102/102, Python fake-SDK/native tests 40/40, both app validation/bundles, four native builds and four simulator smokes. Same-run Android Rider/Driver and unsigned iOS Rider/Driver artifacts were inspected. Android login surfaces passed with stable processes and no stale-session errors. iOS login surfaces passed with SecureStore unavailable, no Keychain access group and production API/authentication not exercised.
+
+AI-01 provider resilience is supplemental and outside the 19-area denominator. Deterministic tests AI-026–AI-030 cover timeout, caller cancellation, late faults, HTTP failures and unexpected provider-adapter exceptions. No paid provider/model/credential is selected; AI remains disabled by default. Live provider sandbox, managed-secret wiring and data-processing terms remain external.
