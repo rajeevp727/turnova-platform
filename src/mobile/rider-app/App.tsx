@@ -92,12 +92,12 @@ export default function App() {
   const bookingRequestKeyRef=useRef(bookingRequestKey);
   const selectedBookingLocation=useRef(createSelectedBookingLocation(Location));
   const bookingInFlight=useRef(false);
-  const resetSelectedBookingAttempt=()=>{
+  const resetSelectedBookingAttempt=useCallback(()=>{
     selectedBookingLocation.current.reset();
     const nextKey=`${Date.now()}-${Math.random().toString(36).slice(2)}`;
     bookingRequestKeyRef.current=nextKey;
     setBookingRequestKey(nextKey);
-  };
+  },[]);
   const clearRiderSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string }) => {
     authenticatedSessionEpoch.current = null;
     resetSelectedBookingAttempt();
@@ -115,7 +115,7 @@ export default function App() {
       setPassword(preserveAuthInput.password);
       setName(preserveAuthInput.name);
     }
-  }, []);
+  }, [resetSelectedBookingAttempt]);
   useEffect(() => {
     let mounted = true;
     void SecureStore.getItemAsync("turnova.theme").then(value => {
