@@ -2,8 +2,8 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.  
 **Source of truth:** PRD.md, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; docs/test-plan.md.  
-**Last audited:** 2026-11-10; main HEAD `33e438dba6e0a1af74959904ba132fd0e7273744` after PR #141 RELEASE-01 merged. The active engineering branch is supplemental `feat/ai-01-provider-resilience`; it is outside the 19 acceptance rows.
-**Current engineering item:** Supplemental AI-01 provider resilience (outside denominator): independent `Task.WaitAsync` timeout enforcement, deterministic fallback for synchronous/asynchronous `TimeoutException` and `HttpRequestException`, caller-cancellation precedence, and late provider-task fault observation. Code head `05d20e1` passed exact-head CI #1105 / 42759995138 12/12 after a targeted Rider Android smoke retry; backend 371/371, shared JS 102/102, Python 40/40, four native builds and four simulator smokes. The documentation-synchronized head still requires fresh CI before merge.
+**Last audited:** 2026-11-10; main HEAD `33e438dba6e0a1af74959904ba132fd0e7273744` after PR #141 RELEASE-01 merged. The sole active PR is supplemental AI-01 PR #142 on `feat/ai-01-provider-resilience`, exact head `79c473661d7804f761bedebbfe871ecd9b0e94e2`.
+**Current engineering item:** AI-01 provider resilience (supplemental/outside denominator) passed exact-head CI #1110 / 42769495825 12/12: backend 373/373, shared JS 102/102, Python 40/40, Rider/Driver mobile validation/bundles, four native builds and four simulator smokes. Same-run Android Rider/Driver and unsigned iOS Rider/Driver artifacts were downloaded and inspected. iOS explicitly reports SecureStore unavailable and no Keychain access group; production authentication is not exercised.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.  
 **Current acceptance snapshot:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is a strict evidence count, not a statement that nothing is implemented. Read implementation evidence row by row; external gates remain explicit.
 
@@ -365,3 +365,10 @@ The documentation synchronization is a new PR head and requires a fresh exact-he
 ## Supplemental AI-01 evidence — 2026-11-10
 
 AI-01 remains outside the 19-row acceptance denominator. Provider resilience now covers independent timeout, cooperative cancellation, caller-cancellation precedence, late fault observation, explicit timeout/HTTP failures and unexpected synchronous/asynchronous provider adapter exceptions with deterministic fallback. Test-plan cases AI-026–AI-030 provide deterministic evidence. Live provider sandbox, managed-secret wiring, provider/model selection and data-processing terms remain external; no paid provider or credential is configured.
+
+
+## Latest exact-head evidence — AI-01 (2026-11-10)
+
+PR #142 head `79c473661d7804f761bedebbfe871ecd9b0e94e2` passed all 12/12 jobs in [CI #1110 / 42769495825](https://github.com/rajeevp727/turnova-platform/actions/runs/42769495825): backend 373/373, shared JavaScript 102/102, Python 40/40, both mobile validation/bundles, four native builds and four simulator smokes. Same-run Rider/Driver Android and unsigned iOS artifacts were downloaded and inspected. Android showed role-specific login UI with stable processes and no stale-session errors; iOS showed role-specific login UI with SecureStore unavailable and no Keychain access group. This does not establish signed-device, production-authentication or production readiness.
+
+AI-01 remains supplemental/outside the 19-row denominator. Provider timeout, cancellation precedence, late-fault observation and deterministic fallback are covered by AI-026–AI-030. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is a full-evidence count, not an implementation-completion score.
