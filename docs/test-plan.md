@@ -60,6 +60,12 @@
 | AUTH-LOGIN-030 | Refreshed access token is rejected | Return a new token pair, then make `/me` return 401 | Clear both stored token keys and return to sign-in; no authenticated profile is restored | Mobile unit | P0 |
 | AUTH-MOBILE-028 | App-specific profile role guard | Return a Rider profile to the Driver app or a Driver profile to the Rider app during login/register or /me restoration | The client rejects the mismatched profile before saving a new token pair or setting authenticated app state | Shared mobile unit + Rider/Driver typecheck | P0 |
 
+| AUTH-LOGIN-031 | Logout during an epoch-guarded access-token write | Pause the access-key write for a refresh, advance the session epoch and begin logout before releasing the write | The stale pair is rolled back inside the serialized storage mutation; logout clears both keys; no stale refresh can restore authenticated state | Mobile unit | P0 |
+| AUTH-LOGIN-032 | Logout during an epoch-guarded refresh-token write | Pause the refresh-key write after the access key has been written, advance the epoch and begin logout | Both token keys are removed before the storage queue completes; the stale refresh reports not accepted | Mobile unit | P0 |
+| AUTH-LOGIN-033 | New login supersedes an in-flight refresh persistence | Pause an old refresh write, begin a new login (advancing epoch and queueing prior-token cleanup), then complete the new login pair | The old refresh cannot overwrite or clear the new pair; only the new access/refresh pair remains stored and authenticated | Mobile unit + Rider/Driver | P0 |
+| AUTH-LOGIN-034 | New session does not reuse an old single-flight refresh | Keep an old refresh promise pending, advance the session epoch, then request a refresh for the new session before resolving the old promise | The new session starts its own refresh; late completion of the old promise cannot clear or replace the new in-flight promise | Mobile unit | P0 |
+| AUTH-LOGIN-035 | Superseded login stops before sending credentials | Begin login, advance the epoch through a newer login/logout while secure-storage cleanup is pending, then release cleanup | The stale login attempt does not call the authentication endpoint or persist tokens | Mobile unit + Rider/Driver | P1 |
+
 ## 2A. Authentication API integration contracts
 
 The API contract tests use a fake named TriSend HTTP handler; CI must never call the production authentication service.
