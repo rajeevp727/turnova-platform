@@ -153,8 +153,10 @@ export default function App() {
         );
       }catch{
         if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
-        advanceSessionEpoch(sessionEpoch,refreshInFlight);
-        await clearTokens();setTokens(null);setUser(null);
+        const expiredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);
+        await clearTokens();
+        if(sessionEpoch.current!==expiredEpoch)throw new Error("Session changed. Please sign in again.");
+        setTokens(null);setUser(null);
         throw new Error("Session expired. Please sign in again.");
       }
       if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
@@ -222,7 +224,7 @@ export default function App() {
       void connection.stop();
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const authenticate=async()=>{const authEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
+  const authenticate=async()=>{const authEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
   const draftTripIntent=async()=>{
     setTripIntentBusy(true);setTripIntentNotice("");setError("");
     try {
@@ -243,7 +245,7 @@ export default function App() {
     }
   };
   const askHelp=async()=>{setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{setHelpBusy(false);}};
-  const logout=async()=>{advanceSessionEpoch(sessionEpoch,refreshInFlight);try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{setError("Unable to clear secure session storage. Please retry sign-out.");return;}setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
+  const logout=async()=>{const logoutEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}if(sessionEpoch.current!==logoutEpoch)return;setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
   const findNearbyVehicles=async()=>{
     const passengerCount=parsePassengerCountInput(passengers);
     if(passengerCount===null){setDiscovery(null);setError("Enter a passenger count from 1 to 6 before searching.");return;}
