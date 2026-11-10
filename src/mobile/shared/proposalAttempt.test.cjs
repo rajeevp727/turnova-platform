@@ -69,11 +69,18 @@ for (const [role, appPath] of [
 ]) {
   test(`${role} proposal submission uses stable attempts and blocks concurrent taps`, () => {
     const source = fs.readFileSync(appPath, "utf8");
-    assert.match(source, /getOrCreateProposalAttempt\(proposalAttemptRef/);
-    assert.match(source, /clearProposalAttempt\(proposalAttemptRef/);
-    assert.match(source, /proposalSubmissionInFlight\.current/);
+    const handlerStart = source.indexOf("const proposeAgreement");
+    const handlerEnd = source.indexOf("const confirmAgreement", handlerStart);
+    assert.ok(handlerStart >= 0 && handlerEnd > handlerStart, `${role} proposal handler must be present`);
+    const handler = source.slice(handlerStart, handlerEnd);
+    assert.match(handler, /getOrCreateProposalAttempt\\(proposalAttemptRef/);
+    assert.match(handler, /clearProposalAttempt\\(proposalAttemptRef/);
+    assert.match(handler, /proposalSubmissionInFlight\\.current/);
+    assert.match(handler, /"Idempotency-Key":\\s*attempt\\.key/);
+    assert.doesNotMatch(handler, /Date\\.now|Math\\.random/);
+    assert.ok(handler.indexOf("loadAgreementHistory") < handler.indexOf("clearProposalAttempt"),
+      "attempt must remain available until agreement history refresh succeeds");
     assert.match(source, /proposalSubmitting/);
-    assert.match(source, /"Idempotency-Key":\s*attempt\.key/);
-    assert.doesNotMatch(source, /Idempotency-Key[\s\S]{0,160}Date\.now/);
+    assert.match(source, /editable=\\{!proposalSubmitting\\}/);
   });
 }
