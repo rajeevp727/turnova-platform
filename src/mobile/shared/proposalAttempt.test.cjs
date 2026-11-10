@@ -82,5 +82,10 @@ for (const [role, appPath] of [
       "attempt must remain available until agreement history refresh succeeds");
     assert.match(source, /proposalSubmitting/);
     assert.match(source, /editable=\{!proposalSubmitting\}/);
+    const resetName = role === "Rider" ? "const clearRiderSessionState" : "const clearDriverSessionState";
+    const resetStart = source.indexOf(resetName);
+    const resetEnd = source.indexOf("useEffect", resetStart);
+    assert.ok(resetStart >= 0 && resetEnd > resetStart, role + " session reset must be present");
+    assert.match(source.slice(resetStart, resetEnd), /proposalAttemptRef\.current\s*=\s*null/);
   });
 }
