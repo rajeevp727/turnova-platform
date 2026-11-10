@@ -222,7 +222,7 @@ export default function App() {
       void connection.stop();
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const authenticate=async()=>{const authEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);setLoading(true);setError("");try{await clearTokens();if(sessionEpoch.current!==authEpoch)return;const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
+  const authenticate=async()=>{const authEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
   const draftTripIntent=async()=>{
     setTripIntentBusy(true);setTripIntentNotice("");setError("");
     try {
