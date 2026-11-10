@@ -412,8 +412,9 @@ public sealed class AiAssistanceService
         {
             // Caller cancellation always wins over timeout/provider cancellation. If the
             // provider is still running, observe a later fault without logging its contents.
-            if (!providerTask.IsCompleted)
-                ObserveLateProviderTask(providerTask);
+            // Attach even if the provider task just completed: it may have faulted in
+            // the race between WaitAsync cancellation and this catch block.
+            ObserveLateProviderTask(providerTask);
 
             callerCancellationToken.ThrowIfCancellationRequested();
             return default;
