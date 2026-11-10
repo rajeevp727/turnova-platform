@@ -429,6 +429,14 @@ public sealed class AiAssistanceService
             callerCancellationToken.ThrowIfCancellationRequested();
             return default;
         }
+        catch (Exception)
+        {
+            // Provider adapters can fail during serialization, parsing or provider-specific
+            // execution. Treat non-caller-cancellation failures as unavailable and keep the
+            // approved deterministic fallback; never leak provider exception content.
+            callerCancellationToken.ThrowIfCancellationRequested();
+            return default;
+        }
     }
 
     private static void ObserveLateProviderTask(Task providerTask)

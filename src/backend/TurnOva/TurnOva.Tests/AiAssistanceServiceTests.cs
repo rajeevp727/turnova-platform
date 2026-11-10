@@ -252,6 +252,48 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task UnexpectedAsynchronousProviderFailureUsesDeterministicTripFallback()
+    {
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) =>
+                Task.FromException<TripIntentProviderResult?>(
+                    new InvalidOperationException("provider adapter payload failure"))
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.DraftTripIntentAsync(
+            "from Hyderabad to Secunderabad",
+            CancellationToken.None);
+
+        Assert.Equal("Hyderabad", result.Pickup);
+        Assert.Equal("Secunderabad", result.Dropoff);
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.True(result.RequiresUserConfirmation);
+    }
+
+    [Fact]
+    public async Task UnexpectedSynchronousProviderFailureUsesDeterministicHelpFallback()
+    {
+        var provider = new FakeProvider
+        {
+            HelpHandler = (_, _) =>
+                throw new InvalidOperationException("provider adapter parsing failure")
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("fare-negotiation", result.SourceId);
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.Contains("negotiate the fare directly", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.False(result.EscalationRequired);
+    }
+
+    [Fact]
     public async Task CallerCancellationDuringInFlightProviderRequestIsPropagated()
     {
         var providerStarted = new TaskCompletionSource<CancellationToken>(
