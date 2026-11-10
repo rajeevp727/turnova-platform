@@ -2245,11 +2245,9 @@ app.MapPost("/api/v1/rider/bookings", async (
     if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 128)
         return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
     var stops = request.Stops?.Select(stop => stop.Trim()).ToArray() ?? [];
-    var requestFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
-    {
+    var requestFingerprint = CreateSelectedBookingRequestHash(
         selectedDriverId, unionId, pickup, dropoff, stops, request.Passengers,
-        request.PickupLatitude, request.PickupLongitude
-    })));
+        request.PickupLatitude, request.PickupLongitude);
     var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)));
     var idempotencyIndex = $"{riderId}:{keyId}";
     var bookingIdempotency = app.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
@@ -2266,6 +2264,48 @@ app.MapPost("/api/v1/rider/bookings", async (
         var priorRide = await FindRideAsync(prior.rideId, ct);
         if (priorRide is not null)
         {
+            if (!string.IsNullOrWhiteSpace(priorRide.UnionId) &&
+                string.Equals(priorRide.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
+                priorRide.Status is "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress")
+            {
+                if (await HasActiveRiderBookingAsync(riderId, priorRide.RideId, requestFingerprint, ct))
+                    return Results.Problem(
+                        "The existing selected booking could not safely restore its Rider reservation.",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+
+                var currentRiderReservation = await riderActiveBookingReservations.GetActiveAsync(riderId, ct);
+                if (currentRiderReservation is null)
+                {
+                    var expiry = priorRide.Status is "Negotiating" or "AgreementConfirmed"
+                        ? priorRide.NegotiationExpiresAtUtc
+                        : null;
+                    var recoveredReservation = new RiderActiveBookingReservation(
+                        riderId, priorRide.RideId, requestFingerprint, priorRide.RequestedAt, expiry);
+                    var recoveryResult = await riderActiveBookingReservations.TryAcquireAsync(
+                        recoveredReservation, ct,
+                        new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.InternalReconciliation));
+                    if (recoveryResult == RiderBookingReservationAcquireResult.Conflict)
+                        return Results.Problem(
+                            "The existing selected booking could not safely restore its Rider reservation.",
+                            statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+                else if (currentRiderReservation.RideId != priorRide.RideId ||
+                         currentRiderReservation.RequestHash != requestFingerprint)
+                {
+                    return Results.Problem(
+                        "The existing selected booking conflicts with the Rider's active reservation.",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+
+                if (priorRide.Status is "Accepted" or "Arrived" or "InProgress" &&
+                    !await riderActiveBookingReservations.TryMakePermanentAsync(
+                        riderId, priorRide.RideId, ct,
+                        DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.AgreementConfirmed)))
+                    return Results.Problem(
+                        "The existing selected booking's Rider reservation could not be made permanent.",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
             // Re-send the selected-driver notification on an idempotent replay so a
             // transient SignalR failure after persistence does not strand the Driver.
             if (priorRide.DriverId is not null &&
@@ -2799,6 +2839,56 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
 
         if (!reservationMade)
             return Results.Conflict(new { message = "The selected-driver reservation expired or is no longer held. Refresh Rider discovery." });
+
+        var selectedBookingRequestHash = CreateSelectedBookingRequestHash(
+            driverId, selectedRide.UnionId!, selectedRide.Pickup, selectedRide.Dropoff,
+            selectedRide.Stops ?? [], selectedRide.Passengers,
+            selectedRide.PickupLatitude!.Value, selectedRide.PickupLongitude!.Value);
+        var riderReservationMade = false;
+        try
+        {
+            riderReservationMade = await riderActiveBookingReservations.TryMakePermanentAsync(
+                selectedRide.RiderId, rideId, ct,
+                new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.AgreementConfirmed));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            var currentRiderReservation = await riderActiveBookingReservations.GetActiveAsync(
+                selectedRide.RiderId, CancellationToken.None);
+            riderReservationMade = currentRiderReservation?.RideId == rideId &&
+                currentRiderReservation.ExpiresAtUtc is null;
+            if (!riderReservationMade)
+                throw;
+        }
+
+        if (!riderReservationMade)
+        {
+            // Repair a pre-deployment or interrupted selected booking that has no Rider
+            // reservation yet. A different active ride in the same Rider partition wins.
+            var currentRiderReservation = await riderActiveBookingReservations.GetActiveAsync(
+                selectedRide.RiderId, ct);
+            if (currentRiderReservation is null)
+            {
+                var recovered = new RiderActiveBookingReservation(
+                    selectedRide.RiderId, rideId, selectedBookingRequestHash,
+                    selectedRide.RequestedAt, ExpiresAtUtc: null);
+                var acquired = await riderActiveBookingReservations.TryAcquireAsync(
+                    recovered, ct,
+                    new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.AgreementConfirmed));
+                if (acquired is RiderBookingReservationAcquireResult.Acquired or RiderBookingReservationAcquireResult.AlreadyOwned)
+                    riderReservationMade = await riderActiveBookingReservations.TryMakePermanentAsync(
+                        selectedRide.RiderId, rideId, ct,
+                        new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.AgreementConfirmed));
+            }
+        }
+
+        if (!riderReservationMade)
+            return Results.Conflict(new { message = "The Rider already has another active booking or its reservation could not be secured." });
+
         var acceptedSelectedRide = await TryTransitionAsync(selectedRide, "Accepted", driverId, "Driver", ct);
         if (acceptedSelectedRide is null)
         {
@@ -3451,6 +3541,15 @@ async Task<DemoRide?> TryTransitionAsync(
 
     return updated;
 }
+
+string CreateSelectedBookingRequestHash(
+    string selectedDriverId, string unionId, string pickup, string dropoff,
+    IReadOnlyList<string> stops, int passengers, double pickupLatitude, double pickupLongitude) =>
+    Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+    {
+        selectedDriverId, unionId, pickup, dropoff, stops,
+        Passengers = passengers, PickupLatitude = pickupLatitude, PickupLongitude = pickupLongitude
+    })));
 
 string CreateAgreementRequestHash(decimal amount, string currency)
 {
