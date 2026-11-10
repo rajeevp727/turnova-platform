@@ -31,6 +31,13 @@ if [[ ! -s "$APK_PATH" ]]; then
   exit 1
 fi
 
+# This smoke installs SDK packages and launches an emulator. Keep it on the
+# ephemeral CI runner; local developer SDK/emulator state must not be mutated.
+if [[ "${CI:-}" != "true" ]]; then
+  echo "Android emulator smoke installs SDK packages and may run only on a CI runner (CI=true)." >&2
+  exit 2
+fi
+
 mkdir -p "$OUTPUT_DIR"
 SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [[ -z "$SDK_ROOT" ]]; then

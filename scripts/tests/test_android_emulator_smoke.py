@@ -188,6 +188,7 @@ exit 0
             environment.update(
                 {
                     "HOME": str(home),
+                    "CI": "true",
                     "ANDROID_SDK_ROOT": str(sdk),
                     "ANDROID_HOME": str(sdk),
                     "ANDROID_AVD_HOME": str(avd_home),
@@ -519,6 +520,38 @@ exit 0
             self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.avd")))
             self.assertFalse(system_image_dir.exists())
             self.assertFalse((failure_output / "result.json").exists())
+
+    def test_refuses_to_modify_an_android_sdk_outside_ci(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="turnova-android-non-ci-") as temporary:
+            root = Path(temporary)
+            apk = root / "fixture.apk"
+            apk.write_bytes(b"fixture")
+            output = root / "output"
+            environment = os.environ.copy()
+            environment.pop("CI", None)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(SMOKE_SCRIPT),
+                    "--apk",
+                    str(apk),
+                    "--expected-id",
+                    "com.turnova.rider",
+                    "--output-dir",
+                    str(output),
+                ],
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("may run only on a CI runner", result.stderr)
+            self.assertFalse(output.exists())
 
     def test_invalid_package_identifier_is_rejected_before_sdk_access(self) -> None:
         with tempfile.TemporaryDirectory(prefix="turnova-invalid-package-") as temporary:
