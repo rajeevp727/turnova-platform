@@ -12,6 +12,10 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
 
     private readonly ConcurrentDictionary<string, ReservationState> _items =
         new(StringComparer.Ordinal);
+    private readonly TimeProvider _timeProvider;
+
+    public InMemoryRiderActiveBookingReservationStore(TimeProvider? timeProvider = null) =>
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
     public Task<RiderBookingReservationAcquireResult> TryAcquireAsync(
         RiderActiveBookingReservation reservation,
@@ -19,7 +23,7 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (reservation.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+        if (reservation.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow())
             return Task.FromResult(RiderBookingReservationAcquireResult.Conflict);
 
         while (true)
@@ -38,7 +42,7 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
             {
                 if (current.RideId == reservation.RideId &&
                     current.RequestHash == reservation.RequestHash &&
-                    (current.ExpiresAtUtc is null || current.ExpiresAtUtc > DateTimeOffset.UtcNow))
+                    (current.ExpiresAtUtc is null || current.ExpiresAtUtc > _timeProvider.GetUtcNow()))
                     return Task.FromResult(RiderBookingReservationAcquireResult.AlreadyOwned);
 
                 // Expiry is reconciled by the API against the authoritative ride state.
@@ -80,7 +84,7 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
             var current = state.Reservation;
             if (current is null || current.RideId != rideId)
                 return Task.FromResult(false);
-            if (current.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+            if (current.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow())
                 return Task.FromResult(false);
             if (current.ExpiresAtUtc is null)
                 return Task.FromResult(true);
