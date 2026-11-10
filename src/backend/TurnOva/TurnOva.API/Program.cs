@@ -2885,6 +2885,14 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
             selectedRide.PickupLatitude!.Value, selectedRide.PickupLongitude!.Value);
         var riderReservationContext = new DriverRideReservationAuditContext(
             driverId, "Driver", DriverRideReservationAuditReasons.AgreementConfirmed);
+        if (await FindActiveRiderRideAsync(selectedRide.RiderId, rideId, ct) is not null)
+        {
+            if (selectedRide.NegotiationExpiresAtUtc is { } restoreExpiry)
+                await driverRideReservations.TrySetExpiryAsync(driverId, rideId, restoreExpiry, ct,
+                    DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.ReservationExpiryRestored));
+            return Results.Conflict(new { message = "The Rider has another active ride and cannot accept a second selected booking." });
+        }
+
         var currentRiderReservation = await riderActiveBookingReservations.GetActiveAsync(
             selectedRide.RiderId, ct);
         if (currentRiderReservation is not null &&
