@@ -855,9 +855,7 @@ export default function App() {
           if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
           if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
-          authenticatedSessionEpoch.current = null;
-          setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
-          setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
+          clearDriverSessionState();
           const expiryMessage = tokenCleanupFailed
             ? "Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
             : cacheCleanup.failed > 0

@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const fs = require("node:fs");
+const path = require("node:path");
 const { resetRiderSessionState, resetDriverSessionState } = require("./sessionStateReset.js");
 
 function createSetters(keys) {
@@ -77,4 +79,22 @@ test("each reset receives fresh mutable collections", () => {
   resetDriverSessionState(driverSecond.setters);
   assert.notEqual(driverFirst.values.queue, driverSecond.values.queue);
   assert.notEqual(driverFirst.values.paymentReportAmounts, driverSecond.values.paymentReportAmounts);
+});
+
+
+test("Driver payslip refresh expiry delegates to the complete session reset", () => {
+  const app = fs.readFileSync(path.join(__dirname, "../driver-app/App.tsx"), "utf8");
+  const downloadStart = app.indexOf("const downloadPayslip = async");
+  assert.notEqual(downloadStart, -1);
+  const expiryStart = app.indexOf("if (response.status === 401)", downloadStart);
+  assert.notEqual(expiryStart, -1);
+  const expiryEnd = app.indexOf("if (!response.ok)", expiryStart);
+  assert.notEqual(expiryEnd, -1);
+  const expiryBranch = app.slice(expiryStart, expiryEnd);
+
+  assert.match(expiryBranch, /clearDriverSessionState\(\);/);
+  assert.doesNotMatch(
+    expiryBranch,
+    /setTokens\(null\)|setUser\(null\)|setActiveRide\(null\)|setDriverRideHistory\(\[\]\)/
+  );
 });

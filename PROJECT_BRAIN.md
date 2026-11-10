@@ -1341,3 +1341,8 @@ CI #1153 and its four inspected simulator artifacts belong to pre-documentation 
 AUTH-02 engineering implementation and deterministic evidence are complete for this increment. Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established. External AUTH-02 gates remain live TriSend refresh rotation/reuse semantics and signed Android/iOS physical-device restore, expiry, logout, and SecureStore/Keychain failure acceptance.
 
 Next sequential work after merge: re-read `main`, finish the #3 RIDER-01 audit, implement #4 RIDER-02 stable same-payload proposal Idempotency-Key reuse for double-tap/ambiguous retries in both apps, then #5 RIDER-03 server-side single-active Rider booking reservation across different keys. Maintain one active feature PR.
+
+
+## AUTH-02 latest privacy correction — Driver payslip expiry (2026-11-10)
+
+The separate Driver payslip-download 401/refresh-failure branch previously cleared only a subset of state. It now calls `clearDriverSessionState()` after secure-token and cached-payslip cleanup, ensuring queue/membership, availability, onboarding, Union, vehicle/document/selfie and Help state are cleared too. AUTH-LOGIN-059 is a source-integration regression for the wiring. Current PR head requires fresh exact-head CI; CI #1153 passed before this follow-up and must not be reused as its evidence.
