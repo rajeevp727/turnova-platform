@@ -144,7 +144,7 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
-    public async Task ProviderIgnoringCancellationIsBoundedByTimeoutAndLateFaultIsObserved()
+    public async Task ProviderIgnoringCancellationIsBoundedByTimeoutAndLateFaultDoesNotChangeFallback()
     {
         var providerStarted = new TaskCompletionSource<CancellationToken>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -203,6 +203,42 @@ public sealed class AiAssistanceServiceTests
         {
             TripHandler = (_, _) =>
                 Task.FromException<TripIntentProviderResult?>(new HttpRequestException("temporary provider failure"))
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.Equal("Nizampet", result.Pickup);
+        Assert.Equal("HITEC City", result.Dropoff);
+    }
+
+    [Fact]
+    public async Task SynchronousProviderHttpFailureUsesDeterministicFallback()
+    {
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) => throw new HttpRequestException("temporary provider failure")
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.Equal("Nizampet", result.Pickup);
+        Assert.Equal("HITEC City", result.Dropoff);
+    }
+
+    [Fact]
+    public async Task SynchronousProviderTimeoutExceptionUsesDeterministicFallback()
+    {
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) => throw new TimeoutException("provider timeout")
         };
         var service = CreateService(provider, enabled: true);
 
