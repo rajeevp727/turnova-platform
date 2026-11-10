@@ -724,8 +724,7 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
         return await ReleaseTerminalSelectedRideReservationAsync(latest, rideId, ct);
     }
 
-    if (!string.IsNullOrWhiteSpace(expired.DriverId))
-        await driverRideReservations.TryReleaseAsync(expired.DriverId, rideId, ct);
+    await ReleaseTerminalSelectedRideReservationAsync(expired, rideId, ct);
     await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
         .SendAsync("RideStatusChanged", new { rideId, status = expired.Status }, ct);
     return expired;
