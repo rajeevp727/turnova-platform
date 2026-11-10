@@ -3001,6 +3001,8 @@ public sealed class RideApiIntegrationTests
             (await driver.PostAsync($"/api/v1/rides/{rideId}/reject", null)).StatusCode);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("decline-booking-driver"));
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync("decline-booking-rider"));
         using var rideResponse = await rider.GetAsync($"/api/v1/rides/{rideId}");
         using var rideJson = JsonDocument.Parse(await rideResponse.Content.ReadAsStringAsync());
         Assert.Equal("Cancelled", rideJson.RootElement.GetProperty("status").GetString());
