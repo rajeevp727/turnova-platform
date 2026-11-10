@@ -17,7 +17,8 @@ public interface IRiderActiveBookingReservationStore
         string riderId,
         string rideId,
         CancellationToken cancellationToken = default,
-        DriverRideReservationAuditContext? auditContext = null);
+        DriverRideReservationAuditContext? auditContext = null,
+        bool allowExpiredForAuthoritativeActiveRide = false);
 
     Task<bool> TryReleaseAsync(
         string riderId,
