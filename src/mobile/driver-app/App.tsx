@@ -781,7 +781,7 @@ export default function App() {
           const expiredEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
           let tokenCleanupFailed = false;
           try { await clearTokens(); } catch { tokenCleanupFailed = true; }
-          if (!isSessionCurrent() && sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
+          if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
           if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
           setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
