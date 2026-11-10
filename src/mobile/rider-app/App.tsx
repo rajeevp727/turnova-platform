@@ -241,7 +241,7 @@ export default function App() {
       void connection.stop();
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const authenticate=async()=>{setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});await accept(result,true);}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
+  const authenticate=async()=>{sessionEpoch.current+=1;refreshInFlight.current=null;setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});await accept(result,true);}catch(e){setError(e instanceof Error?e.message:"Authentication failed.");}finally{setLoading(false);}};
   const draftTripIntent=async()=>{
     setTripIntentBusy(true);setTripIntentNotice("");setError("");
     try {
