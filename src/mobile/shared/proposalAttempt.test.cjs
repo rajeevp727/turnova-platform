@@ -92,7 +92,7 @@ for (const [role, appPath] of [
 
 
 test("changing actor or currency creates a new proposal attempt key", () => {
-  const ref = { current: null };
+  const ref = createRef();
   const generatedActors = [];
   const keyFactory = actor => {
     generatedActors.push(actor);
@@ -100,22 +100,22 @@ test("changing actor or currency creates a new proposal attempt key", () => {
   };
 
   const riderInr = getOrCreateProposalAttempt(
-    { rideId: "ride-1", actor: "rider", amount: 450, currency: "INR" },
     ref,
+    { rideId: "ride-1", actor: "rider", amount: 450, currency: "INR" },
     keyFactory
   );
   const driverInr = getOrCreateProposalAttempt(
-    { rideId: "ride-1", actor: "driver", amount: 450, currency: "INR" },
     ref,
+    { rideId: "ride-1", actor: "driver", amount: 450, currency: "INR" },
     keyFactory
   );
   const driverUsd = getOrCreateProposalAttempt(
-    { rideId: "ride-1", actor: "driver", amount: 450, currency: "USD" },
     ref,
+    { rideId: "ride-1", actor: "driver", amount: 450, currency: "USD" },
     keyFactory
   );
 
-  assert.notEqual(driverInr.idempotencyKey, riderInr.idempotencyKey);
-  assert.notEqual(driverUsd.idempotencyKey, driverInr.idempotencyKey);
+  assert.notEqual(driverInr.key, riderInr.key);
+  assert.notEqual(driverUsd.key, driverInr.key);
   assert.deepEqual(generatedActors, ["rider", "driver", "driver"]);
 });
