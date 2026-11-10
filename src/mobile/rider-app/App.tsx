@@ -176,7 +176,7 @@ export default function App() {
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current&&current.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);}else if(isActive()){setRide(null);}},[apiFetch]);
   useEffect(()=>{let active=true;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request);if(active&&restored){const restoredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);const restoredUser=requireAppRole<User>(restored.user,"Rider");authenticatedSessionEpoch.current=restoredEpoch;setTokens(restored.tokens);setUser(restoredUser);}}catch{if(active)setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{
-    if(!ride||tab!=="Activity"||!tokens)return;
+    if(!ride||tab!=="Activity"||!tokens||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;
     let active=true;
     const connectionEpoch=sessionEpoch.current;
     const isConnectionCurrent=()=>isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,connectionEpoch);
@@ -219,7 +219,7 @@ export default function App() {
         setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
-      if(active&&isConnectionCurrent()&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>setError(e instanceof Error?e.message:"Unable to refresh fare agreement."));
+      if(active&&isConnectionCurrent()&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>{if(active&&isConnectionCurrent())setError(e instanceof Error?e.message:"Unable to refresh fare agreement.");});
     });
     connection.onreconnected(()=>{if(active&&isConnectionCurrent())void refreshRiderState();});
     void startSignalRConnection(connection, () => active&&isConnectionCurrent(), () => {
@@ -236,7 +236,7 @@ export default function App() {
       connection.off("RideStatusChanged");
       connection.off("RideAgreementChanged");
       activeSignalRStops.current.delete(stopConnection);
-      stopRegisteredConnections(new Set([stopConnection]));
+      stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
   const authenticate=async()=>{const authEpoch=invalidateSession();setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};

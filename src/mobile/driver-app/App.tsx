@@ -456,13 +456,19 @@ export default function App() {
     finally { setLoading(false); }
   };
 
-  const loadAvailableRides = useCallback(async () => {
+  const loadAvailableRides = useCallback(async (isActive: () => boolean = () => true) => {
+    if (!isActive()) return;
     if (legacyServiceClass) { setAvailableRides([]); return; }
-    try { setAvailableRides(await apiFetch("/api/v1/driver/rides/available")); }
-    catch (e) { setError(e instanceof Error ? e.message : "Unable to load ride requests."); }
+    try {
+      const rides = await apiFetch("/api/v1/driver/rides/available");
+      if (isActive()) setAvailableRides(rides);
+    } catch (e) {
+      if (isActive()) setError(e instanceof Error ? e.message : "Unable to load ride requests.");
+    }
   }, [apiFetch, legacyServiceClass]);
 
   const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
+    if (!isActive()) return;
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
     if (!isActive()) return;
     setDriverRideHistory(history);
@@ -470,9 +476,10 @@ export default function App() {
     setActiveRide(active ?? null);
   }, [apiFetch]);
 
-  const loadAgreementHistory = useCallback(async (rideId: string) => {
+  const loadAgreementHistory = useCallback(async (rideId: string, isActive: () => boolean = () => true) => {
+    if (!isActive()) return;
     const result = await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];
-    setAgreementHistory(result);
+    if (isActive()) setAgreementHistory(result);
   }, [apiFetch]);
 
   const reportPaymentReceived = async (rideId: string) => {
@@ -566,19 +573,19 @@ export default function App() {
     const stopConnection = () => connection.stop();
     activeSignalRStops.current.add(stopConnection);
 
-    const refreshOffers = () => { if (mounted && isConnectionCurrent()) void loadAvailableRides(); };
+    const refreshOffers = () => { if (mounted && isConnectionCurrent()) void loadAvailableRides(() => mounted && isConnectionCurrent()); };
     const refreshDriverState = () => {
       if (!mounted || !isConnectionCurrent()) return;
       refreshOffers();
-      void loadDriverRideHistory(() => mounted).catch(e => {
+      void loadDriverRideHistory(() => mounted && isConnectionCurrent()).catch(e => {
         if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to recover selected Rider bookings.");
       });
     };
     connection.on("RideSelected", (selection: { rideId?: string; expiresAtUtc?: string }) => {
       if (!mounted || !isConnectionCurrent() || !selection?.rideId) return;
       setNotice("A Rider selected you for a Cab trip. Review the request and negotiate directly.");
-      void loadDriverRideHistory(() => mounted).catch(e => {
-        if (mounted) setError(e instanceof Error ? e.message : "Unable to load selected Rider booking.");
+      void loadDriverRideHistory(() => mounted && isConnectionCurrent()).catch(e => {
+        if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to load selected Rider booking.");
       });
     });
     connection.on("RideOfferReceived", (offer: { rideId?: string; offerId?: string; expiresAtUtc?: string }) => {
@@ -607,7 +614,7 @@ export default function App() {
       connection.off("RideOfferReceived");
       connection.off("RideSelected");
       activeSignalRStops.current.delete(stopConnection);
-      stopRegisteredConnections(new Set([stopConnection]));
+      stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory]);
 
@@ -628,7 +635,7 @@ export default function App() {
     activeSignalRStops.current.add(stopConnection);
     const refreshAgreement = (update?: { rideId?: string }) => {
       if (mounted && isConnectionCurrent() && (!update?.rideId || update.rideId === activeRide.rideId))
-        void loadAgreementHistory(activeRide.rideId).catch(e => {
+        void loadAgreementHistory(activeRide.rideId, () => mounted && isConnectionCurrent()).catch(e => {
           if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to refresh fare agreement.");
         });
     };
@@ -680,8 +687,8 @@ export default function App() {
     }).then(connected => {
       if (connected && mounted && isConnectionCurrent()) {
         setError(current => current === "Live trip status updates are temporarily unavailable. Retrying connection…" ? "" : current);
-        void loadDriverRideHistory(() => mounted).catch(e => {
-          if (mounted) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
+        void loadDriverRideHistory(() => mounted && isConnectionCurrent()).catch(e => {
+          if (mounted && isConnectionCurrent()) setError(e instanceof Error ? e.message : "Unable to refresh trip history.");
         });
       }
     });
@@ -829,6 +836,7 @@ export default function App() {
       }
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
+        if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
         throw new Error(body.message ?? body.title ?? "Payslip is not available yet.");
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
