@@ -1412,3 +1412,22 @@ Source/test commit `b9f02acdc0d67ca5ecf70d4796ef40f933a90677` adds role-specific
 CI #1151 / 42831865877 on the source/test head was superseded by the documentation synchronization. Current documentation head `8dfaa27945a993d2e313fd83558f6d7e66066405` is queued in [CI #1152 / 42832058614](https://github.com/rajeevp727/turnova-platform/actions/runs/42832058614); it is not yet verified. Earlier documentation head `c10b19f...` CI #1150 / 42819171585 remains in progress after its first Rider iOS attempt failed during artifact upload with transient DNS `ENOTFOUND`; a targeted retry was still running when the source/test fix superseded that head. Do not count #1150 or #1151 as final evidence.
 
 After the final documentation-only update in this commit, a fresh exact-head CI run is required. Merge PR #143 only when every required job passes on the final head, all four same-run simulator result JSON files and screenshots are inspected, the final COMMENT-only review is anchored to the exact SHA, no critical/high risk or unresolved review thread remains, and GitHub permits the expected-head merge. Unsigned iOS builds do not establish Keychain persistence or production authentication.
+
+
+## Latest exact-head verification — AUTH-02 PR #143 (2026-11-10)
+
+The documentation head `97c8528f56596537c9e46aec0277a4a83b4286a1` passed [CI #1153 / 42832334281](https://github.com/rajeevp727/turnova-platform/actions/runs/42832334281) with **12/12 jobs successful**. Exact-head results: .NET 10 backend **373/373**; shared mobile JavaScript **140/140**; Python native-artifact/simulator harness **41/41**; Rider and Driver TypeScript validation and production JS bundles; both Android native builds; both unsigned iOS Simulator native builds; and all four Android/iOS simulator smoke jobs.
+
+Same-run artifacts were downloaded and inspected, including each result JSON and screenshot:
+- Rider Android: `13773461057` — `com.turnova.rider`, install/launch passed, process stable, Rider login screen verified, no stale-session error, zero Pixel Launcher ANR recovery attempts.
+- Driver Android: `13773895577` — `com.turnova.driver`, install/launch passed, process stable, Driver login screen verified, no stale-session error, zero Pixel Launcher ANR recovery attempts.
+- Rider iOS: `13772979189` — `com.turnova.rider`, clean simulator data erased, install/launch passed, process stable, Rider login screen verified.
+- Driver iOS: `13775055975` — `com.turnova.driver`, clean simulator data erased, install/launch passed, process stable, Driver login screen verified.
+
+Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureStore-unavailable banner verified, no Keychain access group, unsigned simulator artifacts, and production API/authentication not exercised. The screenshots visibly show the expected warning. This is simulator startup/UI evidence only; it does not establish signed-device Keychain persistence, production authentication, or physical-device acceptance.
+
+PR #143 remains open on branch `fix/auth-02-refresh-logout-epoch-race`, head `97c8528f56596537c9e46aec0277a4a83b4286a1`. The latest review is COMMENT-only and anchored to this head; there are no unresolved inline review threads. The repository rulesets endpoint returned an empty list, while branch-protection details were not readable by the connected integration (403). The expected-head merge operation must enforce any remaining GitHub policy; do not self-approve or bypass protections.
+
+AUTH-02 engineering implementation and deterministic evidence are complete for this increment. Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established. External AUTH-02 gates remain live TriSend refresh rotation/reuse semantics and signed Android/iOS physical-device restore, expiry, logout, and SecureStore/Keychain failure acceptance.
+
+Next sequential work after merge: re-read `main`, finish the #3 RIDER-01 audit, implement #4 RIDER-02 stable same-payload proposal Idempotency-Key reuse for double-tap/ambiguous retries in both apps, then #5 RIDER-03 server-side single-active Rider booking reservation across different keys. Maintain one active feature PR.
