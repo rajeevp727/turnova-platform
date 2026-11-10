@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after AI-01 PR #142 merged. Sole active PR #143 is AUTH-02. CI #1153 / 42832334281 passed 12/12 on pre-documentation head `97c8528f56596537c9e46aec0277a4a83b4286a1`; subsequent documentation-only synchronization commits updated all five handoff/readiness documents. Current PR head is shown in PR metadata and exact-head CI #42841628009 is pending. Unsigned iOS SecureStore/Keychain limitations remain explicit. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness not established.
+**Last audited main HEAD:** 6f0dc4821ae6408c7057f6b34aa4990ea01d948d after AI-01 PR #142 merged. Sole active PR #143 is AUTH-02 on fix/auth-02-refresh-logout-epoch-race; current source/test head dd5b61efde3f730cddce434c3371c859b4f19001. Previous head 639e6c1 passed CI #1159 / 42842677468 12/12; current auth-form/Rider pickup-cache follow-up requires fresh exact-head CI. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1346,3 +1346,14 @@ Next sequential work after merge: re-read `main`, finish the #3 RIDER-01 audit, 
 ## AUTH-02 latest privacy correction — Driver payslip expiry (2026-11-10)
 
 The separate Driver payslip-download 401/refresh-failure branch previously cleared only a subset of state. It now calls `clearDriverSessionState()` after secure-token and cached-payslip cleanup, ensuring queue/membership, availability, onboarding, Union, vehicle/document/selfie and Help state are cleared too. AUTH-LOGIN-059 is a source-integration regression for the wiring. Current PR head requires fresh exact-head CI; CI #1153 passed before this follow-up and must not be reused as its evidence.
+
+
+## Latest AUTH-02 handoff — auth form and Rider pickup cache (2026-11-10)
+
+PR #143 remains the sole active feature PR. Current source/test head is dd5b61efde3f730cddce434c3371c859b4f19001. Previous source/test head 639e6c1 passed [CI #1159 / 42842677468](https://github.com/rajeevp727/turnova-platform/actions/runs/42842677468) 12/12: backend 373/373, shared JavaScript 141/141, Python 41/41, both mobile validation/bundles, four native builds and four simulator smoke jobs. Same-run artifacts were inspected: Rider Android 13777386979, Driver Android 13778300986, Rider iOS 13777927561 and Driver iOS 13778222906. The iOS app artifacts 13778820239 and 13778236148 contain the expected com.turnova.rider and com.turnova.driver identifiers. Both iOS smoke result JSONs/screenshots show the expected SecureStore-unavailable warning; no Keychain access group or production auth was exercised.
+
+The current follow-up extends role-specific reset helpers to clear old email/password/name/mode/error state. Replacement-login flows preserve only the current attempt's input, and successful login clears the password. Rider reset invalidates cached pickup GPS coordinates, rotates the booking idempotency key and does not release bookingInFlight while an older request remains unresolved. New deterministic tests AUTH-LOGIN-060/061 bring the expected shared suite to 143/143; these changes are not yet covered by CI. Run exact-head CI and inspect all four same-run simulator artifacts before final review/merge.
+
+After AUTH-02 merges, re-read main, finish #3 RIDER-01 audit, then implement #4 RIDER-02 stable proposal idempotency and #5 RIDER-03 single-active Rider booking reservation. Keep one active feature PR.
+
+Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); substantial implementation/evidence exists separately. External gates include live TriSend refresh rotation/reuse, signed-device SecureStore/Keychain, live Cosmos ETag/multi-instance/restart, Product dispatch radius/zones/location freshness, support policies, reconciliation policy, maps/realtime providers, private document controls, legal partnership review, signing, hosting, physical-device/pilot and store acceptance. Production readiness is not established.
