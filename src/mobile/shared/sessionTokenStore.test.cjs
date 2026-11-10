@@ -5,6 +5,7 @@ const {
   REFRESH_TOKEN_KEY,
   readSessionTokens,
   saveSessionTokens,
+  saveSessionTokensIfCurrent,
   clearSessionTokens,
   logoutSession,
   restoreStoredSession
@@ -320,4 +321,90 @@ test("does not wait for an unresponsive server logout before clearing local toke
 
   assert.equal(storage.values.size, 0);
   resolveRevoke();
+});
+
+
+test("does not persist a refresh pair when logout advances the session epoch during the access write", async () => {
+  let epoch = 7;
+  let signalAccessWriteStarted;
+  let releaseAccessWrite;
+  const accessWriteStarted = new Promise(resolve => { signalAccessWriteStarted = resolve; });
+  const blockedAccessWrite = new Promise(resolve => { releaseAccessWrite = resolve; });
+  const storage = createStorage({}, {
+    set: async key => {
+      if (key === ACCESS_TOKEN_KEY) {
+        signalAccessWriteStarted();
+        await blockedAccessWrite;
+      }
+    }
+  });
+
+  const saving = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "stale-access", refreshToken: "stale-refresh" },
+    () => epoch === 7
+  );
+  await accessWriteStarted;
+  epoch = 8;
+  const clearing = clearSessionTokens(storage);
+
+  releaseAccessWrite();
+  assert.equal(await saving, false);
+  await clearing;
+
+  assert.equal(storage.values.size, 0);
+  assert.deepEqual(storage.calls.map(call => call[0]), ["set", "delete", "delete"]);
+});
+
+test("a queued stale refresh cannot overwrite a newer login token pair", async () => {
+  let epoch = 11;
+  let signalAccessWriteStarted;
+  let releaseAccessWrite;
+  const accessWriteStarted = new Promise(resolve => { signalAccessWriteStarted = resolve; });
+  const blockedAccessWrite = new Promise(resolve => { releaseAccessWrite = resolve; });
+  const storage = createStorage({}, {
+    set: async (key, value) => {
+      if (key === ACCESS_TOKEN_KEY && value === "old-access") {
+        signalAccessWriteStarted();
+        await blockedAccessWrite;
+      }
+    }
+  });
+
+  const staleRefresh = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "old-access", refreshToken: "old-refresh" },
+    () => epoch === 11
+  );
+  await accessWriteStarted;
+
+  epoch = 12;
+  const newLogin = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "new-access", refreshToken: "new-refresh" },
+    () => epoch === 12
+  );
+
+  releaseAccessWrite();
+  assert.equal(await staleRefresh, false);
+  assert.equal(await newLogin, true);
+
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "new-access");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "new-refresh");
+  assert.deepEqual(storage.calls.map(call => call[0]), ["set", "delete", "delete", "set", "set"]);
+});
+
+test("does not write any token when the session epoch changed before a queued refresh begins", async () => {
+  let epoch = 20;
+  const storage = createStorage();
+  const pending = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "stale-access", refreshToken: "stale-refresh" },
+    () => epoch === 20
+  );
+  epoch = 21;
+
+  assert.equal(await pending, false);
+  assert.equal(storage.values.size, 0);
+  assert.equal(storage.calls.some(call => call[0] === "set"), false);
 });
