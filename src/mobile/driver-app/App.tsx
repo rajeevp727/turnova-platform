@@ -19,7 +19,7 @@ import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { resetDriverSessionState } from "../shared/sessionStateReset";
-import { clearProposalAttempt, getOrCreateProposalAttempt, type ProposalAttempt } from "../shared/proposalAttempt";
+import { clearProposalAttempt, finishProposalSubmission, getOrCreateProposalAttempt, type ProposalAttempt } from "../shared/proposalAttempt";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
@@ -108,10 +108,19 @@ export default function App() {
   const [agreementHistory, setAgreementHistory] = useState<AgreementVersion[]>([]);
   const [agreementAmount, setAgreementAmount] = useState("");
   const proposalAttemptRef = useRef<ProposalAttempt | null>(null);
-  const proposalSubmissionInFlight = useRef(false);
+  const proposalSubmissionInFlight = useRef<string | null>(null);
   const [proposalSubmitting, setProposalSubmitting] = useState(false);
   const currentActiveRideIdRef = useRef<string | null>(null);
   currentActiveRideIdRef.current = activeRide?.rideId ?? null;
+  const proposalRideIdRef = useRef<string | null>(activeRide?.rideId ?? null);
+  useEffect(() => {
+    const nextRideId = activeRide?.rideId ?? null;
+    if (proposalRideIdRef.current === nextRideId) return;
+    proposalRideIdRef.current = nextRideId;
+    proposalAttemptRef.current = null;
+    proposalSubmissionInFlight.current = null;
+    setProposalSubmitting(false);
+  }, [activeRide?.rideId]);
   const [paymentReportAmounts, setPaymentReportAmounts] = useState<Record<string, string>>({});
   const [onboardingProfile, setOnboardingProfile] = useState<any>(null);
   const [unionAssignment, setUnionAssignment] = useState<any>(null);
@@ -126,6 +135,8 @@ export default function App() {
   const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
   const clearDriverSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
     proposalAttemptRef.current = null;
+    proposalSubmissionInFlight.current = null;
+    setProposalSubmitting(false);
     authenticatedSessionEpoch.current = null;
     resetDriverSessionState({
       tokens: setTokens, user: setUser, mode: setMode, email: setEmail, password: setPassword, name: setName, tab: setTab, error: setError, queue: setQueue, membership: setMembership,
@@ -561,7 +572,7 @@ export default function App() {
     const amount = Number(agreementAmount);
     if (!Number.isFinite(amount) || amount <= 0) { setError("Enter a positive proposed amount in INR."); return; }
     const attempt = getOrCreateProposalAttempt(proposalAttemptRef, { rideId, actor: "driver", amount, currency: "INR" });
-    proposalSubmissionInFlight.current = true;
+    proposalSubmissionInFlight.current = attempt.key;
     setProposalSubmitting(true);
     setError("");
     try {
@@ -589,8 +600,7 @@ export default function App() {
         }
       }
     } finally {
-      proposalSubmissionInFlight.current = false;
-      setProposalSubmitting(false);
+      if (finishProposalSubmission(proposalSubmissionInFlight, attempt.key)) setProposalSubmitting(false);
     }
   };
 
