@@ -98,10 +98,11 @@ export default function App() {
     bookingRequestKeyRef.current=nextKey;
     setBookingRequestKey(nextKey);
   };
-  const clearRiderSessionState = useCallback(() => {
+  const clearRiderSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string }) => {
     authenticatedSessionEpoch.current = null;
+    resetSelectedBookingAttempt();
     resetRiderSessionState({
-      tokens: setTokens, user: setUser, tab: setTab,
+      tokens: setTokens, user: setUser, mode: setMode, email: setEmail, password: setPassword, name: setName, tab: setTab, error: setError,
       pickup: setPickup, dropoff: setDropoff, stopsText: setStopsText, passengers: setPassengers,
       tripIntentText: setTripIntentText, tripIntentBusy: setTripIntentBusy, tripIntentNotice: setTripIntentNotice,
       helpQuestion: setHelpQuestion, helpBusy: setHelpBusy, helpAnswer: setHelpAnswer,
@@ -109,11 +110,11 @@ export default function App() {
       agreementHistory: setAgreementHistory, agreementAmount: setAgreementAmount,
       followDriverLocation: setFollowDriverLocation, readyRideMapId: setReadyRideMapId
     });
-    selectedBookingLocation.current.reset();
-    bookingInFlight.current = false;
-    const nextKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    bookingRequestKeyRef.current = nextKey;
-    setBookingRequestKey(nextKey);
+    if (preserveAuthInput) {
+      setEmail(preserveAuthInput.email);
+      setPassword(preserveAuthInput.password);
+      setName(preserveAuthInput.name);
+    }
   }, []);
   useEffect(() => {
     let mounted = true;
@@ -262,7 +263,7 @@ export default function App() {
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const authenticate=async()=>{const authEpoch=invalidateSession();clearRiderSessionState();setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
+  const authenticate=async()=>{const credentials={email:email.trim(),password,name:name.trim()};const authEpoch=invalidateSession();clearRiderSessionState(credentials);setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:credentials.email,password:credentials.password,name:credentials.name||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");setPassword("");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
   const draftTripIntent=async()=>{
     setTripIntentBusy(true);setTripIntentNotice("");setError("");
     try {

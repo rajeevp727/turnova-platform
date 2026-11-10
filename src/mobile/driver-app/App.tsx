@@ -118,10 +118,10 @@ export default function App() {
   const [registrationReference, setRegistrationReference] = useState("");
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
   const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
-  const clearDriverSessionState = useCallback(() => {
+  const clearDriverSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string }) => {
     authenticatedSessionEpoch.current = null;
     resetDriverSessionState({
-      tokens: setTokens, user: setUser, tab: setTab, queue: setQueue, membership: setMembership,
+      tokens: setTokens, user: setUser, mode: setMode, email: setEmail, password: setPassword, name: setName, tab: setTab, error: setError, queue: setQueue, membership: setMembership,
       availabilityStatus: setAvailabilityStatus, notice: setNotice, helpQuestion: setHelpQuestion,
       helpBusy: setHelpBusy, helpAnswer: setHelpAnswer, availableRides: setAvailableRides,
       activeRide: setActiveRide, driverRideHistory: setDriverRideHistory, agreementHistory: setAgreementHistory,
@@ -132,6 +132,11 @@ export default function App() {
       registrationReference: setRegistrationReference, profilePhotoBase64: setProfilePhotoBase64,
       legacyServiceClass: setLegacyServiceClass
     });
+    if (preserveAuthInput) {
+      setEmail(preserveAuthInput.email);
+      setPassword(preserveAuthInput.password);
+      setName(preserveAuthInput.name);
+    }
   }, []);
 
   const serviceClass = legacyServiceClass ?? DEFAULT_SERVICE_CLASS;
@@ -246,8 +251,9 @@ export default function App() {
   }, []);
 
   const authenticate = async (replaceOldest = false) => {
+    const credentials = { email: email.trim(), password, name: name.trim() };
     const authEpoch = invalidateSession();
-    clearDriverSessionState();
+    clearDriverSessionState(credentials);
     setLoading(true); setError(""); setNotice("");
     try {
       const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
@@ -259,10 +265,11 @@ export default function App() {
       const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
       const result = await jsonRequest(path, {
         method: "POST",
-        body: JSON.stringify({ email: email.trim(), password, name: name.trim() || null, replaceOldest })
+        body: JSON.stringify({ email: credentials.email, password: credentials.password, name: credentials.name || null, replaceOldest })
       });
       const accepted = await acceptSession(result, authEpoch, true);
       if (!accepted) throw new Error("Session changed. Please sign in again.");
+      setPassword("");
     } catch (e) { if (sessionEpoch.current === authEpoch) setError(e instanceof Error ? e.message : "Authentication failed."); }
     finally { if (sessionEpoch.current === authEpoch) setLoading(false); }
   };
