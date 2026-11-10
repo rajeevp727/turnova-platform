@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after supplemental AI-01 PR #142 merged. AI-01 provider resilience passed documentation-head CI #1113 / 42774588830 (12/12); it remains supplemental/outside the 19-area denominator, with live provider/managed-secret/data-processing gates external. Current sole active feature PR #144 is AUTH-02 on `fix/auth-02-session-epoch-token-persistence`, final documentation-synchronized head `c2062ef765679675447b84afc7804c6736883854` (latest code commit `cf4e5addddb398482f7ec310de86c8ee3eeaff38`); exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after supplemental AI-01 PR #142 merged. AI-01 provider resilience passed documentation-head CI #1113 / 42774588830 (12/12); it remains supplemental/outside the 19-area denominator, with live provider/managed-secret/data-processing gates external. Current sole active feature PR #144 is AUTH-02 on `fix/auth-02-session-epoch-token-persistence`, latest implementation commit `cf4e5addddb398482f7ec310de86c8ee3eeaff38`; project documentation synchronized in the active PR; exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
