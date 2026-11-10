@@ -34,7 +34,7 @@ test("Rider app loads the server-owned active ride before enabling booking", () 
   const resetStart = source.indexOf("const clearRiderSessionState");
   const resetEnd = source.indexOf("useEffect", resetStart);
   assert.ok(resetStart >= 0 && resetEnd > resetStart);
-  assert.match(source.slice(resetStart, resetEnd), /setActiveRideStateLoaded\\(false\\)/);
+  assert.match(source.slice(resetStart, resetEnd), /setActiveRideStateLoaded\(false\)/);
   const historyStart = source.indexOf("const loadRideHistory");
   const historyEnd = source.indexOf("useEffect", historyStart);
   assert.ok(historyStart >= 0 && historyEnd > historyStart);
