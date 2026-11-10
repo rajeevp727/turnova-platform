@@ -163,8 +163,6 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         throw BatchFailure("release", batch.StatusCode);
     }
 
-    public IReadOnlyList<RiderActiveBookingReservationAuditEvent> GetAuditEvents(string riderId) => [];
-
     private static bool IsReservationWriteConflict(TransactionalBatchResponse batch) =>
         batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed;
 
