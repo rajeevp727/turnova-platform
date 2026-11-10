@@ -1375,3 +1375,25 @@ PR #142 head `79c473661d7804f761bedebbfe871ecd9b0e94e2` passed all 12/12 jobs in
 AI-026–AI-030 were included in the 373-test backend run and cover independent timeout when the provider ignores cancellation, late fault observation, synchronous/asynchronous timeout and HTTP failures, in-flight caller cancellation, caller-cancellation precedence and unexpected synchronous/asynchronous adapter exceptions. AI-01 remains supplemental/outside the 19 acceptance rows.
 
 | AUTH-LOGIN-049 | Final startup profile lookup completes after account switch | Let startup /auth/me return 401, rotate and persist the old pair, then hold the final /auth/me while a replacement login writes a new pair | The stale final profile is not published and the replacement token pair remains intact | Shared mobile unit + Rider/Driver | P0 |
+
+## AUTH-02 SignalR access-token refresh regressions
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| AUTH-LOGIN-050 | Parse JWT expiry safely | Exercise a valid NumericDate, missing/malformed expiry, non-numeric expiry and overflow | A finite NumericDate is converted to milliseconds; missing, malformed or overflowing values are treated as unknown and require server validation | Shared mobile unit | P0 |
+| AUTH-LOGIN-051 | Reuse a valid SignalR JWT without an unnecessary REST request | Supply an unexpired JWT and an active session epoch | The token factory returns the stored token without calling the authenticated /me endpoint | Shared mobile unit + Rider/Driver wiring | P1 |
+| AUTH-LOGIN-052 | Refresh an expired SignalR JWT through the existing authenticated path | Supply an expired JWT; make guarded /me receive 401, complete the existing refresh coordinator and rotate SecureStore; re-read the token | The token factory returns only the rotated token after /me succeeds and the captured session epoch remains current | Shared mobile unit + Rider/Driver wiring | P0 |
+| AUTH-LOGIN-053 | Validate a JWT whose expiry cannot be decoded locally | Supply a token with missing/unknown exp; make guarded /me succeed | The token is returned only after server validation and a second SecureStore read | Shared mobile unit | P1 |
+| AUTH-LOGIN-054 | Reject a token when logout/account switch occurs during /me validation | Expire the token, pause validation, advance the session epoch, then complete validation | The token factory returns an empty token and does not perform a post-validation token read | Shared mobile unit | P0 |
+| AUTH-LOGIN-055 | Reject a token when logout/account switch occurs during SecureStore read | Pause the initial token read, advance the session epoch, then complete the read | The token factory returns an empty token and never calls the authenticated /me endpoint | Shared mobile unit | P0 |
+| AUTH-LOGIN-056 | Fail closed when no access token is stored | Return an empty SecureStore value while the session predicate remains current | The token factory returns an empty token without server validation or use of a stale in-memory fallback | Shared mobile unit | P0 |
+
+Rider's selected-ride SignalR connection and all three Driver SignalR connections use the shared expiry-aware helper. The helper checks JWT exp locally; expired or unverifiable tokens are passed through the existing guarded apiFetch('/api/v1/auth/me') path, which owns 401 refresh and session invalidation. The helper then re-reads SecureStore and rechecks the captured epoch. No API/JWT/refresh-token provider contract is changed.
+
+### RELEASE-SMOKE-011 — cold iOS install operation bound
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| RELEASE-SMOKE-026 | Allow a slow first clean iOS install without an unbounded simulator command | Run the smoke with the default operation timeout and verify the announced bound; exercise explicit 1-second operation timeout through the existing erase/boot timeout fixtures | Default individual simulator operations are bounded at 300 seconds (maximum remains 300); explicit shorter bounds still fail closed and no success artifact is written after timeout | Python unittest + iOS Simulator CI | P1 |
+
+The default operation timeout increased from 180 to 300 seconds after CI #1145 showed the Rider app install exceeded 180 seconds following a 2m41 first-boot migration. Every simctl operation remains independently bounded; first-boot bootstatus remains separately bounded at 600 seconds. The Python harness verifies the default and existing explicit-timeout fail-closed behaviour.

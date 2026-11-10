@@ -26,7 +26,8 @@ function getJwtExpiryMilliseconds(accessToken) {
     const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
     const payload = JSON.parse(decodeBase64(padded));
     if (!Number.isFinite(payload?.exp) || payload.exp <= 0) return null;
-    return payload.exp * 1000;
+    const expiresAt = payload.exp * 1000;
+    return Number.isFinite(expiresAt) ? expiresAt : null;
   } catch {
     return null;
   }

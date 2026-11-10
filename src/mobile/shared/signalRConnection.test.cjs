@@ -85,6 +85,7 @@ test("JWT expiry parser returns a finite expiry and fails closed for unknown tok
   assert.equal(getJwtExpiryMilliseconds(createJwt({ sub: "rider-1" })), null);
   assert.equal(getJwtExpiryMilliseconds("not-a-jwt"), null);
   assert.equal(getJwtExpiryMilliseconds(createJwt({ exp: "1800" })), null);
+  assert.equal(getJwtExpiryMilliseconds(createJwt({ exp: Number.MAX_VALUE })), null);
 });
 
 test("SignalR uses an unexpired JWT without an unnecessary REST validation", async () => {
