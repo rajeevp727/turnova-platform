@@ -3531,7 +3531,7 @@ async Task<DemoRide?> TryTransitionAsync(
             "Completed" => DriverRideReservationAuditReasons.RideCompleted,
             "Cancelled" when actorRole == "Rider" => DriverRideReservationAuditReasons.RiderCancelled,
             "Cancelled" when actorRole == "Driver" => DriverRideReservationAuditReasons.DriverDeclined,
-            "Expired" => DriverRideReservationAuditReasons.ReservationExpiryRestored,
+            "Expired" => DriverRideReservationAuditReasons.InternalReconciliation,
             _ => DriverRideReservationAuditReasons.InternalReconciliation
         };
         await riderActiveBookingReservations.TryReleaseAsync(
