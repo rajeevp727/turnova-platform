@@ -1,5 +1,7 @@
 export type RiderBookingStatus =
   | "Requested"
+  | "Matching"
+  | "Offered"
   | "Negotiating"
   | "AgreementConfirmed"
   | "Accepted"
