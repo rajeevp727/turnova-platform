@@ -1514,3 +1514,11 @@ Same-run smoke artifacts were downloaded and inspected, including result JSON an
 - Driver iOS `13795844308`: `com.turnova.driver`, clean simulator data erased, install/launch passed, process stable, Driver login screen verified.
 
 Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureStore-unavailable banner, no Keychain access group, unsigned simulator artifacts, and production API/authentication not exercised. These artifacts prove simulator install/launch/login-surface checks only; they do not establish signed-device Keychain persistence, production authentication, live Cosmos, or physical-device acceptance. Final-head COMMENT-only review [5847757020](https://github.com/rajeevp727/turnova-platform/pull/145#pullrequestreview-5847757020) found no critical/high issue; unresolved review threads: **0**. The subsequent documentation-only synchronization requires fresh exact-head CI before merge.
+
+
+## RIDER-03 client-side active-ride hydration guard — 2026-11-10
+
+- CAB-BOOK-001: After session restore or sign-in, keep Rider booking unavailable until the server-owned ride-history request and active-ride detail read complete successfully. A failed/in-flight read must not be treated as an empty ride history.
+- CAB-BOOK-002: Once hydration succeeds, allow booking only when no active ride exists; keep Book disabled and route to Activity when an active legacy or selected ride is found.
+- CAB-BOOK-003: Verify discovery and selected-booking handlers independently reject an unverified ride state, with the API remaining authoritative.
+- CAB-BOOK-004: Verify session reset returns the hydration state to unverified and a new account must perform its own server read.
