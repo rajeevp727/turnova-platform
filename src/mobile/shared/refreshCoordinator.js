@@ -45,9 +45,16 @@ function isAuthenticatedSessionCurrent(sessionEpochRef, authenticatedEpochRef) {
   );
 }
 
+function isSessionEpochCurrent(sessionEpochRef, authenticatedEpochRef, expectedEpoch) {
+  return Number.isSafeInteger(expectedEpoch) &&
+    sessionEpochRef?.current === expectedEpoch &&
+    isAuthenticatedSessionCurrent(sessionEpochRef, authenticatedEpochRef);
+}
+
 module.exports = {
   singleFlight,
   getFreshAccessToken,
   advanceSessionEpoch,
-  isAuthenticatedSessionCurrent
+  isAuthenticatedSessionCurrent,
+  isSessionEpochCurrent
 };

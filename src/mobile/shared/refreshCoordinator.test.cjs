@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { singleFlight, getFreshAccessToken, advanceSessionEpoch, isAuthenticatedSessionCurrent } = require("./refreshCoordinator.js");
+const { singleFlight, getFreshAccessToken, advanceSessionEpoch, isAuthenticatedSessionCurrent, isSessionEpochCurrent } = require("./refreshCoordinator.js");
 
 test("shares one refresh promise across concurrent unauthorized requests", async () => {
   const ref = { current: null };
@@ -196,4 +196,19 @@ test("missing or invalid authenticated epochs fail closed", () => {
   assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, { current: Number.NaN }), false);
   assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, { current: -1 }), false);
   assert.equal(isAuthenticatedSessionCurrent({ current: -1 }, { current: -1 }), false);
+});
+
+
+test("a realtime connection is current only for its captured authenticated session epoch", () => {
+  const sessionEpoch = { current: 5 };
+  const authenticatedEpoch = { current: 5 };
+  assert.equal(isSessionEpochCurrent(sessionEpoch, authenticatedEpoch, 5), true);
+  assert.equal(isSessionEpochCurrent(sessionEpoch, authenticatedEpoch, 4), false);
+  advanceSessionEpoch(sessionEpoch);
+  assert.equal(isSessionEpochCurrent(sessionEpoch, authenticatedEpoch, 5), false);
+});
+
+test("a realtime connection fails closed when its authenticated epoch is missing", () => {
+  assert.equal(isSessionEpochCurrent({ current: 2 }, { current: null }, 2), false);
+  assert.equal(isSessionEpochCurrent({ current: 2 }, { current: 2 }, Number.NaN), false);
 });

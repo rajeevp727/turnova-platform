@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useColorScheme } from "react-native";
 import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
-import { advanceSessionEpoch, getFreshAccessToken, isAuthenticatedSessionCurrent } from "../shared/refreshCoordinator";
-import { readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
+import { advanceSessionEpoch, getFreshAccessToken, isAuthenticatedSessionCurrent, isSessionEpochCurrent } from "../shared/refreshCoordinator";
+import { readAccessTokenIfCurrent, readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
@@ -15,6 +15,7 @@ import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/si
 import { getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/signalRConnection";
 import { discoverNearbyCabDrivers } from "../shared/foregroundPickupLocation";
 import { createSelectedBookingLocation } from "../shared/selectedBookingLocation";
+import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
 
@@ -69,6 +70,9 @@ export default function App() {
   const [user,setUser]=useState<User|null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0); const authenticatedSessionEpoch=useRef<number|null>(null);
+  const activeSignalRStops=useRef<Set<() => unknown>>(new Set());
+  const stopRealtimeConnections=useCallback(()=>stopRegisteredConnections(activeSignalRStops.current),[]);
+  const invalidateSession=useCallback(()=>{const epoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);stopRealtimeConnections();return epoch;},[stopRealtimeConnections]);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
   const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
@@ -154,7 +158,7 @@ export default function App() {
         );
       }catch{
         if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
-        const expiredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);
+        const expiredEpoch=invalidateSession();
         let tokenCleanupFailed=false;
         try{await clearTokens();}catch{tokenCleanupFailed=true;}
         if(sessionEpoch.current!==expiredEpoch)throw new Error("Session changed. Please sign in again.");
@@ -167,33 +171,39 @@ export default function App() {
       response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});
       if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
     }
-    const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
-  },[tokens,refresh]);
+    const body=await response.json().catch(()=>({}));if(sessionEpoch.current!==requestEpoch||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))throw new Error("Session changed. Please sign in again.");if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
+  },[tokens,refresh,invalidateSession]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current&&current.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);}else if(isActive()){setRide(null);}},[apiFetch]);
   useEffect(()=>{let active=true;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request);if(active&&restored){const restoredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);const restoredUser=requireAppRole<User>(restored.user,"Rider");authenticatedSessionEpoch.current=restoredEpoch;setTokens(restored.tokens);setUser(restoredUser);}}catch{if(active)setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{
     if(!ride||tab!=="Activity"||!tokens)return;
     let active=true;
+    const connectionEpoch=sessionEpoch.current;
+    const isConnectionCurrent=()=>isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,connectionEpoch);
     const connection=new HubConnectionBuilder()
       .withUrl(`${API}/hubs/rides?rideId=${encodeURIComponent(ride.rideId)}`,{
-        accessTokenFactory:async()=>await SecureStore.getItemAsync("turnova.access")??tokens.accessToken,
+        accessTokenFactory:async()=>readAccessTokenIfCurrent(SecureStore,tokens.accessToken,isConnectionCurrent),
         transport:HttpTransportType.WebSockets
       })
       .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (context: { previousRetryCount: number }) => getSignalRReconnectDelayMs(context.previousRetryCount) })
       .configureLogging(LogLevel.Warning)
       .build();
+    const stopConnection=()=>connection.stop();
+    activeSignalRStops.current.add(stopConnection);
     const refreshAgreements=async()=>{
+      if(!active||!isConnectionCurrent())return;
       const history=await apiFetch(`/api/v1/rides/${ride.rideId}/agreements`) as AgreementVersion[];
-      if(active)setAgreementHistory(history);
+      if(active&&isConnectionCurrent())setAgreementHistory(history);
     };
     const refreshRiderState=async()=>{
+      if(!active||!isConnectionCurrent())return;
       try{
-        await loadRideHistory(()=>active);
-        if(active)await refreshAgreements();
-      }catch(e){if(active)setError(e instanceof Error?e.message:"Unable to recover the latest ride state.");}
+        await loadRideHistory(()=>active&&isConnectionCurrent());
+        if(active&&isConnectionCurrent())await refreshAgreements();
+      }catch(e){if(active&&isConnectionCurrent())setError(e instanceof Error?e.message:"Unable to recover the latest ride state.");}
     };
     connection.on("DriverLocationUpdated",(update:{rideId:string;latitude:number;longitude:number;locationUpdatedAt:string;locationCapturedAtUtc?:string|null})=>{
-      if(active)setRide(current=>{
+      if(active&&isConnectionCurrent())setRide(current=>{
         if(!current||!shouldApplyTripLocationUpdate(current,update))return current;
         return {
           ...current,
@@ -205,17 +215,17 @@ export default function App() {
       });
     });
     connection.on("RideStatusChanged",(update:{rideId:string;status:string})=>{
-      if(shouldApplyRideStatusUpdate(ride.rideId,update.rideId,active))
+      if(shouldApplyRideStatusUpdate(ride.rideId,update.rideId,active&&isConnectionCurrent()))
         setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
-      if(active&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>setError(e instanceof Error?e.message:"Unable to refresh fare agreement."));
+      if(active&&isConnectionCurrent()&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>setError(e instanceof Error?e.message:"Unable to refresh fare agreement."));
     });
-    connection.onreconnected(()=>{void refreshRiderState();});
-    void startSignalRConnection(connection, () => active, () => {
-      if (active) setError("Live ride updates are temporarily unavailable. Retrying connection…");
+    connection.onreconnected(()=>{if(active&&isConnectionCurrent())void refreshRiderState();});
+    void startSignalRConnection(connection, () => active&&isConnectionCurrent(), () => {
+      if (active&&isConnectionCurrent()) setError("Live ride updates are temporarily unavailable. Retrying connection…");
     }).then(connected => {
-      if (connected && active) {
+      if (connected && active&&isConnectionCurrent()) {
         setError(current => current === "Live ride updates are temporarily unavailable. Retrying connection…" ? "" : current);
         void refreshRiderState();
       }
@@ -225,10 +235,11 @@ export default function App() {
       connection.off("DriverLocationUpdated");
       connection.off("RideStatusChanged");
       connection.off("RideAgreementChanged");
-      void connection.stop();
+      activeSignalRStops.current.delete(stopConnection);
+      stopRegisteredConnections(new Set([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const authenticate=async()=>{const authEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
+  const authenticate=async()=>{const authEpoch=invalidateSession();setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
   const draftTripIntent=async()=>{
     setTripIntentBusy(true);setTripIntentNotice("");setError("");
     try {
@@ -249,7 +260,7 @@ export default function App() {
     }
   };
   const askHelp=async()=>{setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{setHelpBusy(false);}};
-  const logout=async()=>{const logoutEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}if(sessionEpoch.current!==logoutEpoch)return;authenticatedSessionEpoch.current=null;setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
+  const logout=async()=>{const logoutEpoch=invalidateSession();try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}if(sessionEpoch.current!==logoutEpoch)return;authenticatedSessionEpoch.current=null;setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
   const findNearbyVehicles=async()=>{
     const passengerCount=parsePassengerCountInput(passengers);
     if(passengerCount===null){setDiscovery(null);setError("Enter a passenger count from 1 to 6 before searching.");return;}

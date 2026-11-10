@@ -19,6 +19,14 @@ async function clearSessionTokensCore(storage) {
   }
 }
 
+async function readAccessTokenIfCurrent(storage, fallbackToken, isCurrent) {
+  if (typeof isCurrent !== "function") throw new Error("A session-current predicate is required.");
+  if (!isCurrent()) return "";
+  const storedToken = await storage.getItemAsync(ACCESS_TOKEN_KEY);
+  if (!isCurrent()) return "";
+  return storedToken ?? fallbackToken ?? "";
+}
+
 function clearSessionTokens(storage) {
   return serializeMutation(storage, () => clearSessionTokensCore(storage));
 }
@@ -142,6 +150,7 @@ module.exports = {
   ACCESS_TOKEN_KEY,
   REFRESH_TOKEN_KEY,
   readSessionTokens,
+  readAccessTokenIfCurrent,
   saveSessionTokens,
   saveSessionTokensIfCurrent,
   clearSessionTokens,

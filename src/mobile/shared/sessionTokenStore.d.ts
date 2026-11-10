@@ -21,6 +21,12 @@ export function readSessionTokens(
   storage: SessionTokenStorage
 ): Promise<StoredSessionTokens | null>;
 
+export function readAccessTokenIfCurrent(
+  storage: SessionTokenStorage,
+  fallbackToken: string,
+  isCurrent: () => boolean
+): Promise<string>;
+
 export function saveSessionTokens(
   storage: SessionTokenStorage,
   tokens: StoredSessionTokens

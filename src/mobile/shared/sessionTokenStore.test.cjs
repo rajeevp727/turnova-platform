@@ -4,6 +4,7 @@ const {
   ACCESS_TOKEN_KEY,
   REFRESH_TOKEN_KEY,
   readSessionTokens,
+  readAccessTokenIfCurrent,
   saveSessionTokens,
   saveSessionTokensIfCurrent,
   clearSessionTokens,
@@ -452,4 +453,33 @@ test("a new login pair wins after an older refresh is invalidated during persist
   assert.equal(await newLogin, true);
   assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new");
   assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new");
+});
+
+
+test("does not read or return a fallback access token after the session is already stale", async () => {
+  let reads = 0;
+  const storage = createStorage({ [ACCESS_TOKEN_KEY]: "stored-old" }, { get: async () => { reads += 1; } });
+  const token = await readAccessTokenIfCurrent(storage, "memory-old", () => false);
+  assert.equal(token, "");
+  assert.equal(reads, 0);
+});
+
+test("does not return a stored or fallback access token when logout advances the epoch during secure read", async () => {
+  let current = true;
+  let signalReadStarted;
+  let releaseRead;
+  const readStarted = new Promise(resolve => { signalReadStarted = resolve; });
+  const blockedRead = new Promise(resolve => { releaseRead = resolve; });
+  const storage = createStorage({ [ACCESS_TOKEN_KEY]: "stored-old" }, { get: async () => { signalReadStarted(); await blockedRead; } });
+  const reading = readAccessTokenIfCurrent(storage, "memory-old", () => current);
+  await readStarted;
+  current = false;
+  releaseRead();
+  assert.equal(await reading, "");
+});
+
+test("returns only the current session access token or its same-session fallback", async () => {
+  const storage = createStorage({ [ACCESS_TOKEN_KEY]: "stored-current" });
+  assert.equal(await readAccessTokenIfCurrent(storage, "memory-current", () => true), "stored-current");
+  assert.equal(await readAccessTokenIfCurrent(createStorage(), "memory-current", () => true), "memory-current");
 });

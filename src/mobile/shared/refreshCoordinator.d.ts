@@ -36,3 +36,9 @@ export function isAuthenticatedSessionCurrent(
   sessionEpochRef: SessionEpochRef,
   authenticatedEpochRef: AuthenticatedSessionEpochRef
 ): boolean;
+
+export function isSessionEpochCurrent(
+  sessionEpochRef: SessionEpochRef,
+  authenticatedEpochRef: AuthenticatedSessionEpochRef,
+  expectedEpoch: number
+): boolean;
