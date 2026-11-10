@@ -843,7 +843,8 @@ async Task<bool> HasActiveRiderBookingAsync(
         // response was lost. A permanent lease is safer than permitting another booking.
         await riderActiveBookingReservations.TryMakePermanentAsync(
             riderId, reservation.RideId, ct,
-            DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.AgreementConfirmed));
+            DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.AgreementConfirmed),
+            allowExpiredForAuthoritativeActiveRide: true);
     }
 
     // A retry for the same deterministic booking may replay any active lifecycle
@@ -2338,7 +2339,8 @@ app.MapPost("/api/v1/rider/bookings", async (
                 if ((priorRide.Status is "Accepted" or "Arrived" or "InProgress") &&
                     !await riderActiveBookingReservations.TryMakePermanentAsync(
                         riderId, priorRide.RideId, ct,
-                        DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.AgreementConfirmed)))
+                        DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.AgreementConfirmed),
+                        allowExpiredForAuthoritativeActiveRide: true))
                     return Results.Problem(
                         "The existing selected booking's Rider reservation could not be made permanent.",
                         statusCode: StatusCodes.Status503ServiceUnavailable);
