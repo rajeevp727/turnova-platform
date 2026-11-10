@@ -11,8 +11,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
-import { getFreshAccessToken } from "../shared/refreshCoordinator";
-import { readSessionTokens, saveSessionTokens, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
+import { advanceSessionEpoch, getFreshAccessToken } from "../shared/refreshCoordinator";
+import { readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
@@ -53,8 +53,8 @@ type DriverRideHistoryItem = { rideId: string; pickup: string; dropoff: string; 
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
 
-async function saveTokens(tokens: Tokens) {
-  await saveSessionTokens(SecureStore, tokens);
+async function saveTokens(tokens: Tokens, isCurrent: () => boolean) {
+  return saveSessionTokensIfCurrent(SecureStore, tokens, isCurrent);
 }
 async function clearTokens() {
   await clearSessionTokens(SecureStore);
@@ -122,16 +122,17 @@ export default function App() {
     void SecureStore.setItemAsync("turnova.theme", preference);
   };
 
-  const acceptSession = useCallback(async (result: any, newSession = false) => {
+  const acceptSession = useCallback(async (result: any, expectedEpoch: number, requireProfile = false) => {
     const acceptedUser = result?.user ? requireAppRole<User>(result.user, "Driver") : null;
-    if (newSession && !acceptedUser)
+    if (requireProfile && !acceptedUser)
       throw new Error("Authentication response did not include a Driver profile.");
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
-    await saveTokens(next);
-    if (newSession) sessionEpoch.current += 1;
+    const saved = await saveTokens(next, () => sessionEpoch.current === expectedEpoch);
+    if (!saved || sessionEpoch.current !== expectedEpoch) return false;
     setTokens(next);
     if (acceptedUser) setUser(acceptedUser);
     setError("");
+    return true;
   }, []);
 
   const refreshSession = useCallback(async (refreshToken: string, expectedEpoch: number) => {
@@ -140,7 +141,8 @@ export default function App() {
       method: "POST", body: JSON.stringify({ refreshToken })
     });
     if (sessionEpoch.current !== expectedEpoch) return "";
-    await acceptSession(result);
+    const accepted = await acceptSession(result, expectedEpoch);
+    if (!accepted || sessionEpoch.current !== expectedEpoch) return "";
     return result.accessToken as string;
   }, [acceptSession]);
 
@@ -163,7 +165,7 @@ export default function App() {
         );
       } catch {
         if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
-        sessionEpoch.current += 1;
+        advanceSessionEpoch(sessionEpoch, refreshInFlight);
         let tokenCleanupFailed = false;
         try { await clearTokens(); } catch { tokenCleanupFailed = true; }
         const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
@@ -199,7 +201,7 @@ export default function App() {
       try {
         const restored = await restoreStoredSession(SecureStore, jsonRequest);
         if (active && restored) {
-          sessionEpoch.current += 1;
+          advanceSessionEpoch(sessionEpoch, refreshInFlight);
           const restoredUser = requireAppRole<User>(restored.user, "Driver");
           setTokens(restored.tokens);
           setUser(restoredUser);
@@ -216,18 +218,20 @@ export default function App() {
   }, []);
 
   const authenticate = async (replaceOldest = false) => {
+    const authEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
     setLoading(true); setError(""); setNotice("");
     try {
+      await clearTokens();
       const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
       if (cacheCleanup.failed > 0)
         throw new Error("Unable to clear payslips from a previous account. Clear the app cache before signing in.");
-      await clearTokens();
       const path = mode === "register" ? "/api/v1/auth/driver/register" : "/api/v1/auth/driver/login";
       const result = await jsonRequest(path, {
         method: "POST",
         body: JSON.stringify({ email: email.trim(), password, name: name.trim() || null, replaceOldest })
       });
-      await acceptSession(result, true);
+      const accepted = await acceptSession(result, authEpoch, true);
+      if (!accepted) throw new Error("Session changed. Please sign in again.");
     } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed."); }
     finally { setLoading(false); }
   };
@@ -770,7 +774,7 @@ export default function App() {
           );
         } catch {
           if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
-          sessionEpoch.current += 1;
+          advanceSessionEpoch(sessionEpoch, refreshInFlight);
           let tokenCleanupFailed = false;
           try { await clearTokens(); } catch { tokenCleanupFailed = true; }
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
@@ -946,7 +950,7 @@ export default function App() {
   };
 
   const logout = async () => {
-    sessionEpoch.current += 1;
+    advanceSessionEpoch(sessionEpoch, refreshInFlight);
     try {
       await logoutSession(SecureStore, async () => {
         if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken);
