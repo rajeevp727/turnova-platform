@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Last audited main HEAD:** `ab988b02b01d89394e5213586f9ee24f0e78c6b1` after RIDER-02 PR #145 merged. Its exact-head CI [#1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12: backend 373/373, shared JS 153/153, Python 41/41, both app validation/bundles, four native builds and four simulator smokes. All four same-run artifacts were inspected; unsigned iOS SecureStore-unavailable behavior and the targeted Driver Android Pixel Launcher retry remain qualified as simulator evidence only.
-**Current engineering item:** #5 RIDER-03 — durable single-active selected booking per Rider, branch `feat/rider-03-single-active-booking`. The implementation adds a Rider reservation to the existing `RideIdempotency` container's `/riderId` partition, ETag/create-if-absent lifecycle and privacy-minimised audit, terminal/orphan reconciliation, permanent promotion on Driver acceptance, and Rider app active-ride guards. Deterministic store/API/mobile regression tests are committed; exact-head CI is pending. The feature PR is being prepared and has not been merged.
+**Current engineering item:** #5 RIDER-03 — durable single-active selected booking per Rider, branch `feat/rider-03-single-active-booking`. The implementation adds a Rider reservation to the existing `RideIdempotency` container's `/riderId` partition, ETag/create-if-absent lifecycle and privacy-minimised audit, terminal/orphan reconciliation, permanent promotion on Driver acceptance, and Rider app active-ride guards. It also checks pre-deployment/legacy active ride records (Requested/Matching/Offered and later states) when no reservation exists, including before Driver acceptance. Deterministic store/API/mobile regression tests are committed. Draft PR [#146](https://github.com/rajeevp727/turnova-platform/pull/146) is open at head `7e49cce79698fe5c107d8d8014e5eca61dd54d56`; exact-head CI [#1199 / 42904689967](https://github.com/rajeevp727/turnova-platform/actions/runs/42904689967) is pending; no merge has occurred.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -1418,7 +1418,7 @@ Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a comple
 
 ## Current RIDER-03 handoff — 2026-11-11
 
-Main HEAD: `ab988b02b01d89394e5213586f9ee24f0e78c6b1` (RIDER-02 PR #145 merged). Active branch: `feat/rider-03-single-active-booking`; current feature PR creation and exact-head CI are pending.
+Main HEAD: `ab988b02b01d89394e5213586f9ee24f0e78c6b1` (RIDER-02 PR #145 merged). Active draft PR #146: `feat/rider-03-single-active-booking`, head `7e49cce79698fe5c107d8d8014e5eca61dd54d56`; exact-head CI #1199 is pending.
 
 ### Rider-scoped reservation design
 - Reuse the existing Cosmos `RideIdempotency` container, partition key `/riderId`; reservation document ID is `active-selected-booking`. No new container or migration.
