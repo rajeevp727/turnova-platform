@@ -77,7 +77,8 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         string riderId,
         string rideId,
         CancellationToken cancellationToken = default,
-        DriverRideReservationAuditContext? auditContext = null)
+        DriverRideReservationAuditContext? auditContext = null,
+        bool allowExpiredForAuthoritativeActiveRide = false)
     {
         for (var attempt = 0; attempt < 3; attempt++)
         {
@@ -96,7 +97,8 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
 
             if (current.Resource.RideId != rideId)
                 return false;
-            if (current.Resource.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+            if (current.Resource.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow &&
+                !allowExpiredForAuthoritativeActiveRide)
                 return false;
             if (current.Resource.ExpiresAtUtc is null)
                 return true;
