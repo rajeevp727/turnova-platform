@@ -13,4 +13,8 @@ function hasActiveRiderRide(ride) {
   return Boolean(ride && typeof ride.status === "string" && ACTIVE_RIDE_STATUSES.has(ride.status));
 }
 
-module.exports = { hasActiveRiderRide };
+function canStartRiderBooking(rideStateLoaded, ride) {
+  return rideStateLoaded === true && !hasActiveRiderRide(ride);
+}
+
+module.exports = { canStartRiderBooking, hasActiveRiderRide };
