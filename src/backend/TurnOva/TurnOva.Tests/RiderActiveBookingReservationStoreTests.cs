@@ -122,16 +122,28 @@ public sealed class RiderActiveBookingReservationStoreTests
     }
 
     [Fact]
-    public async Task ExpiredReservationIsNotStolenWithoutApiLifecycleReconciliation()
+    public async Task ExpiredReservationIsNotStolenUntilApiReconcilesTheRide()
     {
-        var store = new InMemoryRiderActiveBookingReservationStore();
-        var expired = CreateReservation("rider-expired", "RIDE-EXPIRED", "HASH-EXPIRED") with
-        {
-            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
-        };
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        var store = new InMemoryRiderActiveBookingReservationStore(clock);
+        var first = new RiderActiveBookingReservation(
+            "rider-expired", "RIDE-EXPIRED", "HASH-EXPIRED",
+            clock.GetUtcNow(), clock.GetUtcNow().AddMinutes(1));
+        Assert.Equal(RiderBookingReservationAcquireResult.Acquired, await store.TryAcquireAsync(first));
 
-        Assert.Equal(RiderBookingReservationAcquireResult.Conflict, await store.TryAcquireAsync(expired));
-        Assert.Null(await store.GetActiveAsync("rider-expired"));
+        clock.Advance(TimeSpan.FromMinutes(2));
+        var second = first with { RideId = "RIDE-SECOND", RequestHash = "HASH-SECOND", AcquiredAtUtc = clock.GetUtcNow(),
+            ExpiresAtUtc = clock.GetUtcNow().AddMinutes(15) };
+
+        Assert.Equal(RiderBookingReservationAcquireResult.Conflict, await store.TryAcquireAsync(second));
+        Assert.Equal("RIDE-EXPIRED", (await store.GetActiveAsync("rider-expired"))?.RideId);
+    }
+
+    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+        public void Advance(TimeSpan duration) => _utcNow = _utcNow.Add(duration);
     }
 
     private static RiderActiveBookingReservation CreateReservation(string riderId, string rideId, string requestHash)
