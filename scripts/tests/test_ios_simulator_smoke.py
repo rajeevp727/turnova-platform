@@ -541,7 +541,7 @@ chmod +x "$output"
 
         self.assertEqual(result.returncode, 0, msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}")
         self.assertIn("Using bounded iOS Simulator operation timeout: 300 seconds.", result.stdout)
-        self.assertIn("install TEST-DEVICE", commands)
+        self.assertTrue(any(command.startswith("install TEST-DEVICE ") for command in commands))
         self.assertTrue((output / "result.json").exists())
 
     def test_install_failure_reports_captured_simctl_error(self) -> None:

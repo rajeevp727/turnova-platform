@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after supplemental AI-01 PR #142 merged. Sole active feature PR #143 is AUTH-02 on `fix/auth-02-refresh-logout-epoch-race`; latest SignalR/simulator source commit is `33326106419fdbaf628b598782ff63fa59067ce6`, with documentation head `8bba68a5b14ecc15e28403b0cf33aa4a5d6e75af`. CI #1145 failed 11/12 due Rider iOS install timeout at 180 seconds; default is now 300 seconds, still bounded. CI #1147 backend passed but mobile typecheck failed because signalRConnection.d.ts lacked the new helper exports; the current correction adds those declarations and requires fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after supplemental AI-01 PR #142 merged. Sole active feature PR #143 is AUTH-02 on `fix/auth-02-refresh-logout-epoch-race`; latest SignalR/simulator source commit is `33326106419fdbaf628b598782ff63fa59067ce6`, with documentation head `8bba68a5b14ecc15e28403b0cf33aa4a5d6e75af`. CI #1145 failed 11/12 due Rider iOS install timeout at 180 seconds; default is now 300 seconds, still bounded. CI #1147 backend passed but mobile typecheck failed because signalRConnection.d.ts lacked the new helper exports; the declaration is now corrected. CI #1148 then passed backend and both mobile typechecks, but the 41-test Python suite failed only because RELEASE-SMOKE-026 asserted an exact install command instead of the command prefix; the assertion is corrected and requires fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1298,3 +1298,8 @@ Do not merge PR #143 until exact-head CI is green, all four simulator artifacts 
 ## Latest handoff — SignalR helper TypeScript declaration (2026-11-10)
 
 CI #1147 / 42813653333 passed backend but exposed TS2305 in Driver mobile typecheck because signalRConnection.d.ts did not export getSignalRAccessToken. Rider mobile typecheck was cancelled after the same missing declaration. The current PR commit adds SignalRAccessTokenOptions and declarations for getJwtExpiryMilliseconds/getSignalRAccessToken. Fresh exact-head CI is mandatory. Expected backend/shared/Python totals: 373/136/41. Do not merge until all checks and four same-run simulator artifacts pass. Live TriSend rotation/reuse and signed-device Keychain/SecureStore remain external.
+
+
+## Latest CI correction — RELEASE-SMOKE-026 assertion (2026-11-10)
+
+CI #1148 / 42813974342 passed backend 373/373 and both Rider/Driver mobile typecheck/bundle jobs. Python ran 41 tests; 40 passed and the new RELEASE-SMOKE-026 test failed because its exact command string omitted the app path. The test now checks the recorded command prefix `install TEST-DEVICE `, preserving the install-invocation assertion while allowing the expected temporary app path. CI #1148 is not green; fresh exact-head CI must pass all 12 jobs and all four same-run simulator artifacts must be inspected before merge.
