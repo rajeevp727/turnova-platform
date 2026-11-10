@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `33e438dba6e0a1af74959904ba132fd0e7273744` after RELEASE-01 PR #141 merged. Documentation-synchronized PR head `c14b28d33ecc45d36164b658435296ca256107c3` passed CI #1102 / 42753704595 12/12; Android Rider/Driver and unsigned iOS Rider/Driver simulator login surfaces were inspected. iOS explicitly reports SecureStore unavailable, no Keychain access group and production API/authentication not exercised. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. Current sequential work is supplemental AI-01 provider resilience on `feat/ai-01-provider-resilience` (PR #142, code head `05d20e176abf3c97c360650d3daa5e426a8a253a`). Exact-head CI #1105 / 42759995138 passed 12/12 after a targeted Rider Android smoke retry; the documentation-synchronized head still needs its own CI and COMMENT-only review. No other feature PR is open.
+**Last audited main HEAD:** `33e438dba6e0a1af74959904ba132fd0e7273744` after RELEASE-01 PR #141 merged. Current sole active PR #142 is supplemental AI-01 provider resilience on `feat/ai-01-provider-resilience`, exact head `79c473661d7804f761bedebbfe871ecd9b0e94e2`; exact-head CI #1110 / 42769495825 passed 12/12 (backend 373/373, shared JS 102/102, Python 40/40, both mobile validation/bundles, four native builds and four simulator smokes). All four same-run simulator artifacts were downloaded and inspected. Android Rider/Driver login surfaces passed; unsigned iOS Rider/Driver login surfaces passed with SecureStore unavailable and no Keychain access group. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. No other feature PR is open.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1219,3 +1219,12 @@ The documentation synchronization is a new PR head and requires a fresh exact-he
 ### AI-01 provider-boundary hardening — 2026-11-10
 
 The provider invocation boundary independently bounds waits with `Task.WaitAsync`, sends cancellation to cooperative providers, observes late task faults, gives caller cancellation precedence, and returns deterministic fallback for timeout, HTTP and unexpected provider-adapter exceptions. Provider exception messages and prompt content are not logged or returned. AI-030 tests unexpected synchronous/asynchronous failures. AI-01 remains supplemental/outside the 19-row denominator; live provider and managed-secret validation remain external.
+
+
+## Latest exact-head evidence — AI-01 (2026-11-10)
+
+PR [#142](https://github.com/rajeevp727/turnova-platform/pull/142) head `79c473661d7804f761bedebbfe871ecd9b0e94e2` passed all 12/12 jobs in [CI #1110 / 42769495825](https://github.com/rajeevp727/turnova-platform/actions/runs/42769495825). Backend 373/373, shared JavaScript 102/102, Python fake-SDK/native 40/40; both app validation/bundles, four native builds and four simulator smokes passed. Same-run artifacts 13742280744 (Rider Android), 13742285530 (Driver Android), 13741469890 (Rider iOS), and 13742567031 (Driver iOS) were downloaded; all result JSONs and screenshots were inspected. Android login surfaces passed with stable processes and no stale-session errors. Unsigned iOS login surfaces passed with SecureStore unavailable, no Keychain access group and production authentication not exercised.
+
+AI-01 provider calls are independently timeout-bounded with `Task.WaitAsync`; cooperative cancellation is signalled, caller cancellation takes precedence, late task faults are observed, and synchronous/asynchronous timeout, HTTP and unexpected adapter exceptions use deterministic local fallback. Tests AI-026–AI-030 cover the failure/cancellation cases. AI-01 remains supplemental/outside the 19-row denominator; no paid provider/model/credential is selected. Live provider sandbox, managed-secret wiring and data-processing terms remain external.
+
+After PR #142 merges and main is re-read, continue AUTH-02 refresh/logout concurrency hardening. AUTH-01 editable profile fields/routes remain undefined upstream; do not invent them.
