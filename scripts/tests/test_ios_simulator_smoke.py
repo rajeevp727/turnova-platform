@@ -30,7 +30,7 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
         stale_session_error: bool = False,
         bootstatus_fail: bool = False,
         bootstatus_sleep: bool = False,
-        boot_timeout_seconds: int | None = None,
+        boot_timeout_seconds: int | str | None = None,
         erase_sleep: bool = False,
         boot_sleep: bool = False,
         operation_timeout_seconds: int | None = None,
@@ -39,8 +39,8 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
         process_unstable: bool = False,
         ocr_not_ready_attempts: int = 0,
         ocr_never_ready: bool = False,
-        login_ready_timeout_seconds: int | None = None,
-        login_ready_poll_interval_seconds: int | None = None,
+        login_ready_timeout_seconds: int | str | None = None,
+        login_ready_poll_interval_seconds: int | str | None = None,
         ci: bool = True,
     ) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
@@ -404,6 +404,56 @@ fi
         self.assertIn("must be an integer from 1 to 300", result.stderr)
         self.assertEqual(commands, [])
         self.assertFalse((output / "result.json").exists())
+
+    def test_all_timeout_configuration_is_validated_before_simulator_access(self) -> None:
+        invalid_cases = (
+            ({"operation_timeout_seconds": "invalid"}, "TURNOVA_SIMULATOR_OPERATION_TIMEOUT_SECONDS must be an integer from 1 to 300."),
+            ({"operation_timeout_seconds": 0}, "TURNOVA_SIMULATOR_OPERATION_TIMEOUT_SECONDS must be an integer from 1 to 300."),
+            ({"operation_timeout_seconds": 301}, "TURNOVA_SIMULATOR_OPERATION_TIMEOUT_SECONDS must be an integer from 1 to 300."),
+            ({"boot_timeout_seconds": "invalid"}, "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS must be an integer from 1 to 600."),
+            ({"boot_timeout_seconds": 0}, "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS must be an integer from 1 to 600."),
+            ({"boot_timeout_seconds": 601}, "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS must be an integer from 1 to 600."),
+            ({"login_ready_timeout_seconds": "invalid"}, "TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS must be an integer from 1 to 300."),
+            ({"login_ready_timeout_seconds": 0}, "TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS must be an integer from 1 to 300."),
+            ({"login_ready_timeout_seconds": 301}, "TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS must be an integer from 1 to 300."),
+            ({"login_ready_poll_interval_seconds": "invalid"}, "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30."),
+            ({"login_ready_poll_interval_seconds": 0}, "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30."),
+            ({"login_ready_poll_interval_seconds": 31}, "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30."),
+        )
+
+        for configuration, expected_error in invalid_cases:
+            with self.subTest(configuration=configuration):
+                result, output, commands = self.run_smoke(**configuration)
+
+                self.assertEqual(result.returncode, 2, msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}")
+                self.assertIn(expected_error, result.stderr)
+                self.assertEqual(commands, [], "Invalid timeout configuration must be rejected before any simctl command.")
+                self.assertFalse((output / "result.json").exists())
+                self.assertFalse((output / "launch.png").exists())
+
+    def test_valid_timeout_boundaries_are_accepted_before_simulator_access(self) -> None:
+        valid_boundaries = (
+            {
+                "operation_timeout_seconds": 1,
+                "boot_timeout_seconds": 1,
+                "login_ready_timeout_seconds": 1,
+                "login_ready_poll_interval_seconds": 1,
+            },
+            {
+                "operation_timeout_seconds": 300,
+                "boot_timeout_seconds": 600,
+                "login_ready_timeout_seconds": 300,
+                "login_ready_poll_interval_seconds": 30,
+            },
+        )
+
+        for configuration in valid_boundaries:
+            with self.subTest(configuration=configuration):
+                result, output, commands = self.run_smoke(**configuration)
+
+                self.assertEqual(result.returncode, 0, msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}")
+                self.assertIn("bootstatus TEST-DEVICE -b", commands)
+                self.assertTrue((output / "result.json").exists())
 
     def test_default_boot_timeout_is_600_seconds_and_allows_slow_first_boot(self) -> None:
         self.assertIn('TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600', SMOKE_SCRIPT.read_text(encoding="utf-8"))

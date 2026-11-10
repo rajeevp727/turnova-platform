@@ -65,6 +65,29 @@ if [[ ! "$SIMULATOR_OPERATION_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
   exit 2
 fi
 
+SIMULATOR_BOOT_TIMEOUT_SECONDS="${TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600}"
+if [[ ! "$SIMULATOR_BOOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
+   (( SIMULATOR_BOOT_TIMEOUT_SECONDS > 600 )); then
+  echo "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS must be an integer from 1 to 600." >&2
+  exit 2
+fi
+
+LOGIN_READY_TIMEOUT_SECONDS="${TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS:-90}"
+if [[ ! "$LOGIN_READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
+   (( LOGIN_READY_TIMEOUT_SECONDS > 300 )); then
+  echo "TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS must be an integer from 1 to 300." >&2
+  exit 2
+fi
+
+LOGIN_READY_POLL_INTERVAL_SECONDS="${TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS:-5}"
+if [[ ! "$LOGIN_READY_POLL_INTERVAL_SECONDS" =~ ^[1-9][0-9]?$ ]] ||
+   (( LOGIN_READY_POLL_INTERVAL_SECONDS > 30 )); then
+  echo "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30." >&2
+  exit 2
+fi
+
+# Validate every timeout before the first simulator enumeration or mutation.
+# Invalid configuration must never erase, boot, install into, or launch a device.
 # Bound every simctl operation independently. bootstatus retains its separate,
 # longer first-boot migration bound below.
 run_simulator_operation() {
@@ -149,12 +172,6 @@ run_simulator_operation boot xcrun simctl boot "$DEVICE_UDID"
 # simctl bootstatus has no portable caller-configurable timeout. Bound the process
 # externally so first-boot data migration can take up to ten minutes without
 # allowing a wedged CoreSimulator process to hang the CI job indefinitely.
-SIMULATOR_BOOT_TIMEOUT_SECONDS="${TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS:-600}"
-if [[ ! "$SIMULATOR_BOOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
-   (( SIMULATOR_BOOT_TIMEOUT_SECONDS > 600 )); then
-  echo "TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS must be an integer from 1 to 600." >&2
-  exit 2
-fi
 python3 - "$DEVICE_UDID" "$SIMULATOR_BOOT_TIMEOUT_SECONDS" <<'PY'
 import subprocess
 import sys
@@ -233,19 +250,6 @@ fi
 # A cold iOS simulator can report a live process before React Native has rendered
 # the login screen. Poll only the OCR check's explicit "not ready" result; stale
 # session/token-cleanup errors and OCR/tool failures remain immediate failures.
-LOGIN_READY_TIMEOUT_SECONDS="${TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS:-90}"
-LOGIN_READY_POLL_INTERVAL_SECONDS="${TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS:-5}"
-if [[ ! "$LOGIN_READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
-   (( LOGIN_READY_TIMEOUT_SECONDS > 300 )); then
-  echo "TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS must be an integer from 1 to 300." >&2
-  exit 2
-fi
-if [[ ! "$LOGIN_READY_POLL_INTERVAL_SECONDS" =~ ^[1-9][0-9]?$ ]] ||
-   (( LOGIN_READY_POLL_INTERVAL_SECONDS > 30 )); then
-  echo "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30." >&2
-  exit 2
-fi
-
 login_ready_deadline=$((SECONDS + LOGIN_READY_TIMEOUT_SECONDS))
 login_screen_verified=false
 ocr_attempt=0
