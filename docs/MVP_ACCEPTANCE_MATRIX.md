@@ -2,8 +2,8 @@
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.  
 **Source of truth:** PRD.md, especially sections 7, 8, 9, 10, 12, 14 and the authoritative Cab-only scope in §15; docs/test-plan.md.  
-**Last audited:** 2026-11-10; main/base HEAD `4521c7e9a1448f85208ca744cd4824fd2a02596f`; sole active sequential PR #141 on `test/release-01-clean-simulator-state`; tested code/evidence head `ce88ade0f6b265de72d9bb520e8e866ea71e88d1`; exact-head CI [#1101 / 42750283649](https://github.com/rajeevp727/turnova-platform/actions/runs/42750283649) passed 12/12 jobs.
-**Current engineering item:** #19 RELEASE-01 — PR #141 code/evidence head `ce88ade0f6b265de72d9bb520e8e866ea71e88d1` passed all 12/12 jobs in CI #42750283649: backend 364/364, shared JS 102/102, Python 40/40, both mobile validation/bundle jobs, all four native builds and all four simulator smokes. Same-run Rider/Driver Android and iOS artifacts were downloaded and inspected. Android confirms install/launch, stable process, role-specific login UI and no stale-session error. Unsigned iOS confirms erase/install/launch, stable process and login UI plus the expected SecureStore-unavailable warning; `secureStoreAvailable=false`, no Keychain access group and production API/authentication not exercised. This does not prove Keychain persistence or signed-device authentication. Documentation synchronization now requires a new exact-head CI run and final COMMENT-only review.
+**Last audited:** 2026-11-10; main HEAD `33e438dba6e0a1af74959904ba132fd0e7273744` after PR #141 RELEASE-01 merged. The active engineering branch is supplemental `feat/ai-01-provider-resilience`; it is outside the 19 acceptance rows.
+**Current engineering item:** Supplemental AI-01 provider resilience (outside denominator): independent `Task.WaitAsync` timeout enforcement, deterministic fallback for synchronous/asynchronous `TimeoutException` and `HttpRequestException`, caller-cancellation precedence, and late provider-task fault observation. Exact-head CI is pending; do not count the new tests as passed until CI completes.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.  
 **Current acceptance snapshot:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is a strict evidence count, not a statement that nothing is implemented. Read implementation evidence row by row; external gates remain explicit.
 
@@ -337,3 +337,17 @@ PR #141 code head 3316980ec59d1e865eb2bfbd2c9d0be55015fa09 passed [CI run #42726
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is the full-evidence count, not an implementation-completion percentage. Production readiness is not established.
 - External gates: Product-approved dispatch radius/non-overlapping zones/location freshness; Product/Operations support categories/intake/severity/escalation owner/channel/hours/targets/attachment/privacy/retention/handoff; live Cosmos ETag/transactional-batch/partition/multi-instance/restart/retention; telemetry/alerts/production CORS/load; approved app IDs/EAS, signed AAB/IPA, HTTPS API/DNS/TLS, physical-device/pilot/store acceptance; maps/realtime providers; private document storage/scanning/consent/retention; reconciliation dispute and non-zero-delta next-ride policy; legal partnership review.
 - After merge, re-read main and continue approved supplemental AI-01 provider timeout/cancellation/fallback hardening. AI-01 remains outside the 19-row denominator; do not choose a paid provider/model or credentials.
+
+## Latest supplemental handoff — AI-01 provider resilience (2026-11-10)
+
+RELEASE-01 PR [#141](https://github.com/rajeevp727/turnova-platform/pull/141) merged at `33e438dba6e0a1af74959904ba132fd0e7273744` after exact-head CI [#1102 / 42753704595](https://github.com/rajeevp727/turnova-platform/actions/runs/42753704595) passed 12/12 jobs and all four same-run simulator artifacts were inspected. This release evidence does not establish production signing, physical-device behaviour, Keychain persistence, live API/authentication, Cosmos or provider readiness.
+
+The current sequential task is approved supplemental AI-01, which is **not** a twentieth acceptance area. Branch `feat/ai-01-provider-resilience` contains provider-boundary changes and deterministic tests:
+- `Task.WaitAsync(timeout.Token)` independently bounds the request when a provider ignores its cancellation token; the linked token still requests cooperative cancellation.
+- Synchronous and asynchronous `TimeoutException` and `HttpRequestException` paths return deterministic local fallback.
+- Caller cancellation is checked before fallback conversion and wins over a racing provider HTTP failure.
+- Late provider-task faults are observed without logging exception text or prompt/provider content.
+- Tests cover ignored cancellation, late fault, synchronous/asynchronous timeout and HTTP failures, in-flight cancellation and cancellation/HTTP-failure precedence.
+
+The branch's exact-head CI is pending; no new AI test pass is claimed. Live provider sandbox validation, provider/model selection, managed-secret wiring and data-processing terms remain external. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this count is independent of implementation evidence.
+
