@@ -58,7 +58,37 @@ if [[ "${CI:-}" != "true" ]]; then
   exit 2
 fi
 
-devices_json="$(xcrun simctl list devices available -j)"
+SIMULATOR_OPERATION_TIMEOUT_SECONDS="${TURNOVA_SIMULATOR_OPERATION_TIMEOUT_SECONDS:-180}"
+if [[ ! "$SIMULATOR_OPERATION_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
+   (( SIMULATOR_OPERATION_TIMEOUT_SECONDS > 300 )); then
+  echo "TURNOVA_SIMULATOR_OPERATION_TIMEOUT_SECONDS must be an integer from 1 to 300." >&2
+  exit 2
+fi
+
+# Bound every simctl operation independently. bootstatus retains its separate,
+# longer first-boot migration bound below.
+run_simulator_operation() {
+  local operation="$1"
+  shift
+  python3 - "$operation" "$SIMULATOR_OPERATION_TIMEOUT_SECONDS" "$@" <<'PY'
+import subprocess
+import sys
+
+operation, timeout_text, *command = sys.argv[1:]
+timeout_seconds = int(timeout_text)
+try:
+    completed = subprocess.run(command, check=False, timeout=timeout_seconds)
+except subprocess.TimeoutExpired:
+    print(
+        f"iOS Simulator {operation} timed out after {timeout_seconds} seconds.",
+        file=sys.stderr,
+    )
+    raise SystemExit(124)
+raise SystemExit(completed.returncode)
+PY
+}
+
+devices_json="$(run_simulator_operation list xcrun simctl list devices available -j)"
 selection="$(python3 -c '
 import json
 import sys
@@ -78,7 +108,7 @@ if [[ -z "$DEVICE_UDID" ]]; then
 fi
 
 cleanup() {
-  xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
+  run_simulator_operation shutdown xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -90,11 +120,11 @@ capture_simulator_diagnostics() {
   # or credentials. The simulator has not been given production API/auth inputs.
   codesign -dv --verbose=4 "$APP_BUNDLE" > "$OUTPUT_DIR/app-signature.txt" 2>&1 || true
   codesign -d --entitlements :- "$APP_BUNDLE" > "$OUTPUT_DIR/app-entitlements.plist" 2>&1 || true
-  xcrun simctl spawn "$DEVICE_UDID" log show --last 5m --style compact --predicate "$predicate" \
+  run_simulator_operation diagnostics-log xcrun simctl spawn "$DEVICE_UDID" log show --last 5m --style compact --predicate "$predicate" \
     > "$OUTPUT_DIR/simulator-system.log" 2>&1 || true
-  xcrun simctl spawn "$DEVICE_UDID" launchctl list \
+  run_simulator_operation diagnostics-launchctl xcrun simctl spawn "$DEVICE_UDID" launchctl list \
     > "$OUTPUT_DIR/launchctl-list-failure.txt" 2>&1 || true
-  xcrun simctl listapps "$DEVICE_UDID" > "$OUTPUT_DIR/installed-apps.txt" 2>&1 || true
+  run_simulator_operation diagnostics-listapps xcrun simctl listapps "$DEVICE_UDID" > "$OUTPUT_DIR/installed-apps.txt" 2>&1 || true
 
   echo "Captured iOS Simulator launch diagnostics in $OUTPUT_DIR." >&2
   for diagnostic in \
@@ -113,9 +143,9 @@ capture_simulator_diagnostics() {
 
 # A fresh install must not inherit Keychain tokens or app data from a prior run.
 # iOS Keychain entries can outlive an app uninstall, so reset the simulator itself.
-xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
-xcrun simctl erase "$DEVICE_UDID"
-xcrun simctl boot "$DEVICE_UDID"
+run_simulator_operation shutdown xcrun simctl shutdown "$DEVICE_UDID" >/dev/null 2>&1 || true
+run_simulator_operation erase xcrun simctl erase "$DEVICE_UDID"
+run_simulator_operation boot xcrun simctl boot "$DEVICE_UDID"
 # simctl bootstatus has no portable caller-configurable timeout. Bound the process
 # externally so first-boot data migration can take up to ten minutes without
 # allowing a wedged CoreSimulator process to hang the CI job indefinitely.
@@ -147,7 +177,7 @@ raise SystemExit(result.returncode)
 PY
 
 echo "Installing $EXPECTED_ID into the clean iOS Simulator."
-if ! install_output="$(xcrun simctl install "$DEVICE_UDID" "$APP_BUNDLE" 2>&1)"; then
+if ! install_output="$(run_simulator_operation install xcrun simctl install "$DEVICE_UDID" "$APP_BUNDLE" 2>&1)"; then
   printf '%s\n' "$install_output" >&2
   echo "iOS Simulator installation failed for $EXPECTED_ID." >&2
   exit 1
@@ -157,7 +187,7 @@ if [[ -n "$install_output" ]]; then
 fi
 
 echo "Verifying the installed iOS Simulator app container."
-if ! installed_container="$(xcrun simctl get_app_container "$DEVICE_UDID" "$EXPECTED_ID" app 2>&1)"; then
+if ! installed_container="$(run_simulator_operation get-app-container xcrun simctl get_app_container "$DEVICE_UDID" "$EXPECTED_ID" app 2>&1)"; then
   printf '%s\n' "$installed_container" >&2
   echo "Unable to locate the installed iOS Simulator app container for $EXPECTED_ID." >&2
   exit 1
@@ -168,7 +198,7 @@ if [[ -z "$installed_container" || ! -d "$installed_container" ]]; then
 fi
 
 echo "Launching $EXPECTED_ID in the iOS Simulator."
-if ! launch_output="$(xcrun simctl launch "$DEVICE_UDID" "$EXPECTED_ID" 2>&1)"; then
+if ! launch_output="$(run_simulator_operation launch xcrun simctl launch "$DEVICE_UDID" "$EXPECTED_ID" 2>&1)"; then
   printf '%s\n' "$launch_output" >&2
   capture_simulator_diagnostics
   echo "iOS Simulator app launch failed for $EXPECTED_ID." >&2
@@ -182,10 +212,10 @@ if [[ -z "$pid" ]]; then
 fi
 
 sleep 8
-if xcrun simctl spawn "$DEVICE_UDID" launchctl list > "$OUTPUT_DIR/launchctl-list.txt" 2>&1 &&
+if run_simulator_operation launchctl-list xcrun simctl spawn "$DEVICE_UDID" launchctl list > "$OUTPUT_DIR/launchctl-list.txt" 2>&1 &&
    grep -Fq "$EXPECTED_ID" "$OUTPUT_DIR/launchctl-list.txt"; then
   process_alive=true
-elif xcrun simctl spawn "$DEVICE_UDID" launchctl procinfo "$pid" > "$OUTPUT_DIR/process-info.txt" 2>&1; then
+elif run_simulator_operation launchctl-procinfo xcrun simctl spawn "$DEVICE_UDID" launchctl procinfo "$pid" > "$OUTPUT_DIR/process-info.txt" 2>&1; then
   process_alive=true
 else
   process_alive=false
@@ -221,7 +251,7 @@ login_screen_verified=false
 ocr_attempt=0
 while true; do
   ocr_attempt=$((ocr_attempt + 1))
-  if ! xcrun simctl io "$DEVICE_UDID" screenshot "$OUTPUT_DIR/launch.png"; then
+  if ! run_simulator_operation screenshot xcrun simctl io "$DEVICE_UDID" screenshot "$OUTPUT_DIR/launch.png"; then
     echo "Unable to capture the iOS Simulator launch screenshot for $EXPECTED_ID." >&2
     capture_simulator_diagnostics
     exit 1

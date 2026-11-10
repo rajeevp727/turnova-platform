@@ -31,6 +31,9 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
         bootstatus_fail: bool = False,
         bootstatus_sleep: bool = False,
         boot_timeout_seconds: int | None = None,
+        erase_sleep: bool = False,
+        boot_sleep: bool = False,
+        operation_timeout_seconds: int | None = None,
         install_fail: bool = False,
         launch_fail: bool = False,
         process_unstable: bool = False,
@@ -67,6 +70,10 @@ case "$1" in
 JSON
     ;;
   shutdown|erase|boot)
+    case "$1" in
+      erase) [[ "${FAKE_ERASE_SLEEP:-0}" != "1" ]] || exec sleep 3 ;;
+      boot) [[ "${FAKE_BOOT_SLEEP:-0}" != "1" ]] || exec sleep 3 ;;
+    esac
     exit 0
     ;;
   install)
@@ -210,6 +217,8 @@ fi
                 "FAKE_STALE_SESSION": "1" if stale_session_error else "0",
                 "FAKE_BOOTSTATUS_FAIL": "1" if bootstatus_fail else "0",
                 "FAKE_BOOTSTATUS_SLEEP": "1" if bootstatus_sleep else "0",
+                "FAKE_ERASE_SLEEP": "1" if erase_sleep else "0",
+                "FAKE_BOOT_SLEEP": "1" if boot_sleep else "0",
                 "FAKE_INSTALL_FAIL": "1" if install_fail else "0",
                 "FAKE_LAUNCH_FAIL": "1" if launch_fail else "0",
                 "FAKE_PROCESS_UNSTABLE": "1" if process_unstable else "0",
@@ -223,6 +232,8 @@ fi
             environment.pop("CI", None)
         if boot_timeout_seconds is not None:
             environment["TURNOVA_SIMULATOR_BOOT_TIMEOUT_SECONDS"] = str(boot_timeout_seconds)
+        if operation_timeout_seconds is not None:
+            environment["TURNOVA_SIMULATOR_OPERATION_TIMEOUT_SECONDS"] = str(operation_timeout_seconds)
         if login_ready_timeout_seconds is not None:
             environment["TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS"] = str(login_ready_timeout_seconds)
         if login_ready_poll_interval_seconds is not None:
@@ -364,6 +375,34 @@ fi
         self.assertIn("did not finish first-boot migration within 1 seconds", result.stderr)
         self.assertIn("bootstatus TEST-DEVICE -b", commands)
         self.assertFalse(any(item.startswith("install ") for item in commands))
+        self.assertFalse((output / "result.json").exists())
+
+    def test_simulator_erase_timeout_stops_before_boot_and_install(self) -> None:
+        result, output, commands = self.run_smoke(erase_sleep=True, operation_timeout_seconds=1)
+
+        self.assertEqual(result.returncode, 124)
+        self.assertIn("iOS Simulator erase timed out after 1 seconds", result.stderr)
+        self.assertIn("erase TEST-DEVICE", commands)
+        self.assertFalse(any(item.startswith("boot TEST-DEVICE") for item in commands))
+        self.assertFalse(any(item.startswith("install TEST-DEVICE") for item in commands))
+        self.assertFalse((output / "result.json").exists())
+
+    def test_simulator_boot_timeout_stops_before_bootstatus_and_install(self) -> None:
+        result, output, commands = self.run_smoke(boot_sleep=True, operation_timeout_seconds=1)
+
+        self.assertEqual(result.returncode, 124)
+        self.assertIn("iOS Simulator boot timed out after 1 seconds", result.stderr)
+        self.assertIn("boot TEST-DEVICE", commands)
+        self.assertFalse(any(item.startswith("bootstatus TEST-DEVICE") for item in commands))
+        self.assertFalse(any(item.startswith("install TEST-DEVICE") for item in commands))
+        self.assertFalse((output / "result.json").exists())
+
+    def test_simulator_operation_timeout_configuration_is_bounded_before_device_access(self) -> None:
+        result, output, commands = self.run_smoke(operation_timeout_seconds=0)
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("must be an integer from 1 to 300", result.stderr)
+        self.assertEqual(commands, [])
         self.assertFalse((output / "result.json").exists())
 
     def test_default_boot_timeout_is_600_seconds_and_allows_slow_first_boot(self) -> None:

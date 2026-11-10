@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main/base HEAD:** 4521c7e9a1448f85208ca744cd4824fd2a02596f after PR #140 merged. Sole active sequential PR #141 is on test/release-01-clean-simulator-state; tested code/evidence head 3316980ec59d1e865eb2bfbd2c9d0be55015fa09 passed CI #42726122385 12/12 (backend 364/364, shared JS 102/102, Python 32/32, both mobile validations/bundles, four native builds and four simulator smokes).
+**Last audited main/base HEAD:** 4521c7e9a1448f85208ca744cd4824fd2a02596f after PR #140 merged. Sole active sequential PR #141 is on test/release-01-clean-simulator-state; code/evidence head 3316980ec59d1e865eb2bfbd2c9d0be55015fa09 passed CI #42726122385 12/12. Documentation-sync CI #42732287844 passed 10/12; the two iOS smoke steps exceeded 30 minutes. The current PR increment bounds each iOS simctl operation (default 180 seconds) and adds deterministic timeout/fail-closed tests; exact-head CI remains required.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
