@@ -76,7 +76,8 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         string riderId,
         string rideId,
         CancellationToken cancellationToken = default,
-        DriverRideReservationAuditContext? auditContext = null)
+        DriverRideReservationAuditContext? auditContext = null,
+        bool allowExpiredForAuthoritativeActiveRide = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         while (_items.TryGetValue(riderId, out var state))
@@ -84,7 +85,8 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
             var current = state.Reservation;
             if (current is null || current.RideId != rideId)
                 return Task.FromResult(false);
-            if (current.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow())
+            if (current.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow() &&
+                !allowExpiredForAuthoritativeActiveRide)
                 return Task.FromResult(false);
             if (current.ExpiresAtUtc is null)
                 return Task.FromResult(true);
