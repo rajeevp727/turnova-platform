@@ -5,7 +5,9 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `a3e701f7acb3793d70d6656e5f7ac8b55791a1a4` after AUTH-02 PR #143 merged. Sole active feature PR #145 is RIDER-02 on `fix/rider-02-proposal-idempotency`; source/test head `56a363621029fbfb16e2ef7c72d14f1faad48c8d`, documentation head `9fbca10d57334167aa41018a9104096f9f85e877`. Exact-head CI [#1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12, including backend 373/373, shared JS 153/153, Python 41/41, both app validation/bundles, four native builds and four simulator smokes; the Driver Android emulator smoke passed on a targeted retry after a Pixel Launcher ANR. All four same-run smoke artifacts were inspected. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `ab988b02b01d89394e5213586f9ee24f0e78c6b1` after RIDER-02 PR #145 merged. Its exact-head CI [#1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12: backend 373/373, shared JS 153/153, Python 41/41, both app validation/bundles, four native builds and four simulator smokes. All four same-run artifacts were inspected; unsigned iOS SecureStore-unavailable behavior and the targeted Driver Android Pixel Launcher retry remain qualified as simulator evidence only.
+**Current engineering item:** #5 RIDER-03 — durable single-active selected booking per Rider, branch `feat/rider-03-single-active-booking`. The implementation adds a Rider reservation to the existing `RideIdempotency` container's `/riderId` partition, ETag/create-if-absent lifecycle and privacy-minimised audit, terminal/orphan reconciliation, permanent promotion on Driver acceptance, and Rider app active-ride guards. Deterministic store/API/mobile regression tests are committed; exact-head CI is pending. The feature PR is being prepared and has not been merged.
+**Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1412,3 +1414,27 @@ PR #145 adds stable client proposal-attempt idempotency in Rider and Driver: sam
 Fresh #3 RIDER-01 audit found no additional independent source-code gap. Product-approved dispatch radius/zones/location freshness, routing/maps, live Call/Chat, live Cosmos and physical-device location acceptance remain external. Next sequential item after PR #145 merges is #5 RIDER-03: add a durable Rider-scoped active-booking reservation across different Idempotency-Keys. The current route has per-Driver reservation only; verify the existing RideIdempotency container migration/partition and transaction semantics before adding create-if-absent/ETag-safe Rider reservation, terminal/orphan reconciliation, matching release and concurrent different-key tests. Production negotiation lifetime remains unset and booking fails closed with 503.
 
 Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
+
+
+## Current RIDER-03 handoff — 2026-11-11
+
+Main HEAD: `ab988b02b01d89394e5213586f9ee24f0e78c6b1` (RIDER-02 PR #145 merged). Active branch: `feat/rider-03-single-active-booking`; current feature PR creation and exact-head CI are pending.
+
+### Rider-scoped reservation design
+- Reuse the existing Cosmos `RideIdempotency` container, partition key `/riderId`; reservation document ID is `active-selected-booking`. No new container or migration.
+- Create-if-absent reservation and privacy-minimised audit event are written in one same-partition transactional batch. Permanent promotion and matching release are ETag-conditional transactional batches with append-only audit.
+- In-memory implementation is atomic and uses an injectable clock for deterministic expiry tests. It never steals an expired reservation; the API reconciles the authoritative ride first.
+- The booking route reserves the Rider before acquiring the selected Driver lease and persisting the ride. Same RideId/request-hash retries are idempotent; a different active RideId returns HTTP 409.
+- Negotiating/AgreementConfirmed leases remain temporary. Driver acceptance promotes the Rider reservation to permanent. Cancellation, Driver decline, expiry and completion release only the matching RiderId+RideId. Terminal read-repair handles interrupted release.
+- Same-key replay repairs a missing reservation and returns the existing ride. Acceptance can repair a pre-deployment selected ride only if no different Rider reservation exists and the request fingerprint reconstructed from the ride matches.
+- Rider app loads server-owned active ride state after sign-in, redirects to Activity and blocks Book/discovery/request until terminal state. Backend enforcement is authoritative.
+
+### Deterministic evidence added (pending CI)
+- Store unit tests: atomic different-Ride acquisition, same-Ride/hash replay, independent Rider partitions, permanent promotion, exact/stale release, expired no-steal and audit privacy.
+- API integration tests: one Rider/two Drivers/different keys, independent Riders, cancellation/rebooking, accepted promotion and same-key replay, completion release, expired-negotiation reconciliation and Driver-decline release.
+- Mobile shared tests: active status helper and source integration for sign-in hydration, Book tab guard, discovery guard and request guard.
+
+### External gates
+Live Cosmos transactional-batch/ETag/multi-instance/restart validation and Android/iOS physical-device booking/cancel/expiry acceptance remain unverified. Production `Dispatch:SelectedDriverNegotiationLifetimeMinutes` is unset; selected booking correctly returns 503 until Product approves/configures the value. The 15-minute test fixture is not a product default.
+
+Next after merge: re-read main, audit #6 DISPATCH-01 in order, implement all safe gaps, then proceed to DISPATCH-02. Do not open a second feature PR while this one is active.
