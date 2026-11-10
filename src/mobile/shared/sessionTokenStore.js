@@ -23,7 +23,7 @@ function clearSessionTokens(storage) {
   return serializeMutation(storage, () => clearSessionTokensCore(storage));
 }
 
-async function saveSessionTokens(storage, tokens) {
+async function saveSessionTokensIfCurrent(storage, tokens, isCurrent) {
   if (
     !tokens ||
     typeof tokens.accessToken !== "string" ||
@@ -33,11 +33,27 @@ async function saveSessionTokens(storage, tokens) {
   ) {
     throw new Error("Invalid session tokens.");
   }
+  if (typeof isCurrent !== "function") {
+    throw new Error("A session-current predicate is required.");
+  }
 
   return serializeMutation(storage, async () => {
+    if (!isCurrent()) return false;
+
     try {
       await storage.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken);
+      if (!isCurrent()) {
+        await clearSessionTokensCore(storage);
+        return false;
+      }
+
       await storage.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken);
+      if (!isCurrent()) {
+        await clearSessionTokensCore(storage);
+        return false;
+      }
+
+      return true;
     } catch {
       try {
         await clearSessionTokensCore(storage);
@@ -47,6 +63,10 @@ async function saveSessionTokens(storage, tokens) {
       throw new Error("Unable to securely save session tokens.");
     }
   });
+}
+
+async function saveSessionTokens(storage, tokens) {
+  return saveSessionTokensIfCurrent(storage, tokens, () => true);
 }
 
 async function readSessionTokens(storage) {
@@ -114,6 +134,7 @@ module.exports = {
   REFRESH_TOKEN_KEY,
   readSessionTokens,
   saveSessionTokens,
+  saveSessionTokensIfCurrent,
   clearSessionTokens,
   logoutSession,
   restoreStoredSession
