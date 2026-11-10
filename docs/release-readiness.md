@@ -237,3 +237,10 @@ RELEASE-01 remains Blocked for strict acceptance until approved production ident
 ## AI-01 provider failure boundary — 2026-11-10
 
 Provider calls remain disabled by default and use the unavailable placeholder adapter. The service now returns deterministic local fallback for timeout, transient HTTP and unexpected provider-adapter exceptions while propagating caller cancellation. No provider/model/credential is selected, no sensitive data is sent, and no booking/fare/payment/dispatch/ride-state operation is exposed. Deterministic test-plan cases AI-026–AI-030 cover timeout, cancellation, late faults and unexpected adapter failures. Live provider sandbox and managed-secret validation remain external; AI-01 is supplemental and outside the 19-area denominator.
+
+
+## AI-01 exact-head verification — 2026-11-10
+
+PR #142 head `79c473661d7804f761bedebbfe871ecd9b0e94e2` passed [CI #1110 / 42769495825](https://github.com/rajeevp727/turnova-platform/actions/runs/42769495825) 12/12: backend 373/373, shared JavaScript 102/102, Python fake-SDK/native tests 40/40, both app validation/bundles, four native builds and four simulator smokes. Same-run Android Rider/Driver and unsigned iOS Rider/Driver artifacts were inspected. Android login surfaces passed with stable processes and no stale-session errors. iOS login surfaces passed with SecureStore unavailable, no Keychain access group and production API/authentication not exercised.
+
+AI-01 provider resilience is supplemental and outside the 19-area denominator. Deterministic tests AI-026–AI-030 cover timeout, caller cancellation, late faults, HTTP failures and unexpected provider-adapter exceptions. No paid provider/model/credential is selected; AI remains disabled by default. Live provider sandbox, managed-secret wiring and data-processing terms remain external.
