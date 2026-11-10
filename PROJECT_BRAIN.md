@@ -1438,3 +1438,12 @@ Main HEAD: `ab988b02b01d89394e5213586f9ee24f0e78c6b1` (RIDER-02 PR #145 merged).
 Live Cosmos transactional-batch/ETag/multi-instance/restart validation and Android/iOS physical-device booking/cancel/expiry acceptance remain unverified. Production `Dispatch:SelectedDriverNegotiationLifetimeMinutes` is unset; selected booking correctly returns 503 until Product approves/configures the value. The 15-minute test fixture is not a product default.
 
 Next after merge: re-read main, audit #6 DISPATCH-01 in order, implement all safe gaps, then proceed to DISPATCH-02. Do not open a second feature PR while this one is active.
+
+
+## Latest engineering handoff — 2026-11-11 (RIDER-03)
+
+- Main HEAD: `ab988b02b01d89394e5213586f9ee24f0e78c6b1`; PR #145 RIDER-02 is merged. Sole active feature PR: draft #146 `feat/rider-03-single-active-booking`.
+- Source/test HEAD before this documentation sync: `726d1b4356231d4993aa6292c09d5e5a33f635de`. The code adds a durable Rider-scoped reservation in the existing `RideIdempotency` `/riderId` partition, transactional audit, ETag promotion/release, legacy active-ride reconciliation, and fail-closed Rider app hydration. An explicit `allowExpiredForAuthoritativeActiveRide` option repairs only a lease attached to a ride the API has re-read as Accepted/Arrived/InProgress; default expired promotion remains rejected.
+- Test plan CAB-BOOK-001–005 covers UI hydration/reset and explicit expired-lease repair. Previous tested head `18b8651d23970030f111310ad510103aea02957e` passed workflow `42904988755` 12/12 (backend 388/388, shared mobile 167/167, Python 41/41, four native builds and four simulator smokes); all four same-run artifacts were inspected. New source/test head and this docs sync require fresh exact-head CI; no result is claimed yet.
+- External gates: Product-approved `Dispatch:SelectedDriverNegotiationLifetimeMinutes` is unset; live Cosmos ETag/transactional-batch/multi-instance/restart validation; physical Android/iOS booking/cancel/expiry acceptance. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+- Next: finish exact-head CI and review/merge PR #146 only if policy permits; re-read main; continue to #6 DISPATCH-01 in order. Do not open a parallel feature PR.

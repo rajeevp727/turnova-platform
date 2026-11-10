@@ -1516,7 +1516,7 @@ Same-run smoke artifacts were downloaded and inspected, including result JSON an
 Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureStore-unavailable banner, no Keychain access group, unsigned simulator artifacts, and production API/authentication not exercised. These artifacts prove simulator install/launch/login-surface checks only; they do not establish signed-device Keychain persistence, production authentication, live Cosmos, or physical-device acceptance. Final-head COMMENT-only review [5847757020](https://github.com/rajeevp727/turnova-platform/pull/145#pullrequestreview-5847757020) found no critical/high issue; unresolved review threads: **0**. The subsequent documentation-only synchronization requires fresh exact-head CI before merge.
 
 
-## RIDER-03 client-side active-ride hydration guard — 2026-11-10
+## RIDER-03 client-side active-ride hydration guard — 2026-11-11
 
 - CAB-BOOK-001: After session restore or sign-in, keep Rider booking unavailable until the server-owned ride-history request and active-ride detail read complete successfully. A failed/in-flight read must not be treated as an empty ride history.
 - CAB-BOOK-002: Once hydration succeeds, allow booking only when no active ride exists; keep Book disabled and route to Activity when an active legacy or selected ride is found.
@@ -1525,3 +1525,11 @@ Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureSt
 
 
 - CAB-BOOK-005: An expired temporary Rider reservation is not promoted by default; it may be made permanent only after the API has re-read the authoritative ride and confirmed it is Accepted, Arrived or InProgress. Verify the promotion appends its audit event and never permits a different Rider booking.
+
+
+## RIDER-03 exact-head follow-up — 2026-11-11
+
+- Source/test head `726d1b4356231d4993aa6292c09d5e5a33f635de` adds explicit authoritative active-ride promotion for an expired temporary Rider reservation. The default store operation still rejects expired promotion; only the API path that has re-read the same ride as Accepted/Arrived/InProgress opts in. New manual-clock test: `ExpiredReservationRequiresExplicitAuthoritativeActiveRidePromotion`.
+- Rider UI hydration is fail-closed until both ride-history and active-ride detail reads succeed; failed/in-flight reads cannot be interpreted as an empty ride history. Session reset clears the hydration flag and the Book tab exposes a retry.
+- CAB-BOOK-001–005 cover active-ride hydration, active-state gating, discovery/request guards, session reset and explicit expired-lease repair.
+- Previous tested head `18b8651d23970030f111310ad510103aea02957e` passed workflow [42904988755](https://github.com/rajeevp727/turnova-platform/actions/runs/42904988755) 12/12; all four same-run simulator artifacts were inspected. The new source/test head and this documentation sync require a fresh exact-head workflow; no latest-head result is claimed until it completes.
