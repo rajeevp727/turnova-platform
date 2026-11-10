@@ -25,5 +25,4 @@ public interface IRiderActiveBookingReservationStore
         CancellationToken cancellationToken = default,
         DriverRideReservationAuditContext? auditContext = null);
 
-    IReadOnlyList<RiderActiveBookingReservationAuditEvent> GetAuditEvents(string riderId);
 }
