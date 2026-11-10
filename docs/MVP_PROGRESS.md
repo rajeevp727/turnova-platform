@@ -1,6 +1,6 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-11 (main HEAD `ab988b02b01d89394e5213586f9ee24f0e78c6b1`; PR #145 RIDER-02 merged after exact-head CI [#1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12. Current engineering item #5 RIDER-03 is being implemented on `feat/rider-03-single-active-booking`; the PR is being prepared after source/test and documentation review. Exact-head CI for this new increment is pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.)
+**Last updated:** 2026-11-11 (main HEAD `ab988b02b01d89394e5213586f9ee24f0e78c6b1`; PR #145 RIDER-02 merged after exact-head CI [#1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12. Current engineering item #5 RIDER-03 is open as draft PR [#146](https://github.com/rajeevp727/turnova-platform/pull/146) on `feat/rider-03-single-active-booking`, head `7e49cce79698fe5c107d8d8014e5eca61dd54d56`. Exact-head CI [#1199 / 42904689967](https://github.com/rajeevp727/turnova-platform/actions/runs/42904689967) is pending; no result is claimed. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.)
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded. Approved AI-01 is supplemental and remains outside the 19-row denominator.
 
 ## 1. Current step
@@ -13,9 +13,9 @@ The RIDER-03 source audit confirmed that the selected-booking API had a per-Driv
 
 The API reconciles the authoritative ride before releasing an expired temporary reservation. A missing ride with an expired temporary reservation may be reconciled as an interrupted pre-persistence attempt; a live or permanent reservation is never stolen based on its timestamp alone. Same-key replay repairs a missing reservation and returns the existing ride. Different active bookings for the same Rider conflict. Cancellation, Driver decline, negotiation expiry and completion release only the matching Rider reservation.
 
-The Rider app now loads the server-owned active ride after sign-in, redirects to Activity and blocks Book, discovery and selected-booking submission while an active ride exists. Backend enforcement remains authoritative.
+The Rider app now loads the server-owned active ride after sign-in, including legacy Requested/Matching/Offered states, redirects to Activity and blocks Book, discovery and selected-booking submission while an active ride exists. The API also checks active ride records when no Rider reservation exists, so pre-deployment legacy rides cannot be bypassed at booking or Driver acceptance. Backend enforcement remains authoritative.
 
-Deterministic coverage added in this increment includes concurrent different-key bookings by one Rider, independent bookings by different Riders, cancellation/rebooking, permanent promotion and same-key replay, expiry reconciliation, completion release, Driver-decline release, stale-release protection, expired-lease no-steal and privacy-minimised reservation audit. The mobile helper tests active ride statuses and source-integrates the Rider Book/discovery/request guard. CI for this branch has not yet completed; no passing test/build evidence is claimed for this increment until final-head GitHub Actions finishes.
+Deterministic coverage added in this increment includes concurrent different-key bookings by one Rider, independent bookings by different Riders, cancellation/rebooking, permanent promotion and same-key replay, expiry reconciliation, completion release, Driver-decline release, stale-release protection, expired-lease no-steal and privacy-minimised reservation audit. The mobile helper tests active ride statuses and source-integrates the Rider Book/discovery/request guard. CI [#1199 / 42904689967](https://github.com/rajeevp727/turnova-platform/actions/runs/42904689967) is pending on exact head `7e49cce79698fe5c107d8d8014e5eca61dd54d56`; no passing test/build evidence is claimed for this increment until final-head GitHub Actions finishes.
 
 External gates remain: production `Dispatch:SelectedDriverNegotiationLifetimeMinutes` is unset and booking correctly returns 503; live Cosmos transactional-batch/ETag/multi-instance/restart validation; Android/iOS physical-device booking/cancel/expiry acceptance. The 15-minute integration-test lifetime is not a product default.
 
@@ -1068,7 +1068,7 @@ Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); substantial engi
 
 ## Latest sequential handoff — RIDER-03 single-active Rider booking (2026-11-11)
 
-Main HEAD at branch creation: `ab988b02b01d89394e5213586f9ee24f0e78c6b1` (PR #145 merged). Active engineering branch: `feat/rider-03-single-active-booking`. The feature PR is being prepared; no merge has occurred. The implementation and regression tests are committed on this branch; exact-head CI is pending.
+Main HEAD at branch creation: `ab988b02b01d89394e5213586f9ee24f0e78c6b1` (PR #145 merged). Active engineering branch: `feat/rider-03-single-active-booking`. Draft PR [#146](https://github.com/rajeevp727/turnova-platform/pull/146) is open at exact head `7e49cce79698fe5c107d8d8014e5eca61dd54d56`; no merge has occurred. CI [#1199 / 42904689967](https://github.com/rajeevp727/turnova-platform/actions/runs/42904689967) is pending.
 
 Backend:
 - `RiderActiveBookingReservation` is stored as ID `active-selected-booking` in the existing `RideIdempotency` container partitioned by `/riderId`.
