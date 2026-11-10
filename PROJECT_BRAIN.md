@@ -1270,3 +1270,8 @@ A final concurrency audit found startup restore was not bound to the session epo
 - Rider and Driver mount effects fence restore state, errors and loading completion. The successful restore adopts the new epoch it creates; a sign-in that advances the epoch first wins.
 
 AUTH-LOGIN-045–048 add deterministic deferred-promise tests for delayed startup profile, delayed refresh, stale rejection cleanup and partial-pair cleanup. These are code/test evidence only; live TriSend rotation/reuse and signed-device SecureStore/Keychain behavior remain external. Active PR #143 remains the only feature PR; do not open a parallel PR.
+
+
+## AUTH-02 startup restore test refinements — 2026-11-10
+
+AUTH-LOGIN-048 now deterministically exercises the serialized snapshot recheck: a token-pair write pauses after the access key, a concurrent read observes a partial pair, the refresh-key write completes, and queued cleanup must preserve the now-complete pair because it no longer matches the observed snapshot. AUTH-LOGIN-049 holds the final /auth/me after token rotation while a replacement login writes a new pair; the stale profile result must be ignored and the new pair preserved. The exact-head CI for the combined PR #143 change must pass before merge.

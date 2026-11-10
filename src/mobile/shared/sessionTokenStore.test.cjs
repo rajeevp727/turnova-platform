@@ -562,30 +562,62 @@ test("a stale startup restore rejection cannot clear a replacement login token p
   assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new-login");
 });
 
-test("a stale partial-token read cannot clear a replacement login pair", async () => {
-  let epoch = 9;
-  let getCalls = 0;
-  let signalReadsStarted;
-  let releaseReads;
-  const readsStarted = new Promise(resolve => { signalReadsStarted = resolve; });
-  const pendingReads = new Promise(resolve => { releaseReads = resolve; });
+test("partial-token cleanup rechecks the observed pair after a queued token-pair write", async () => {
+  let signalRefreshWriteStarted;
+  let releaseRefreshWrite;
+  const refreshWriteStarted = new Promise(resolve => { signalRefreshWriteStarted = resolve; });
+  const pendingRefreshWrite = new Promise(resolve => { releaseRefreshWrite = resolve; });
   const storage = createStorage({ [ACCESS_TOKEN_KEY]: "partial-old-access" }, {
-    get: async () => {
-      getCalls += 1;
-      if (getCalls === 2) {
-        signalReadsStarted();
-        await pendingReads;
+    set: async key => {
+      if (key === REFRESH_TOKEN_KEY) {
+        signalRefreshWriteStarted();
+        await pendingRefreshWrite;
       }
     }
   });
-  const reading = readSessionTokens(storage, () => epoch === 9);
-  await readsStarted;
-  epoch = 10;
+
+  const saving = saveSessionTokensIfCurrent(storage, {
+    accessToken: "access-new-login", refreshToken: "refresh-new-login"
+  }, () => true);
+  await refreshWriteStarted;
+  const reading = readSessionTokens(storage, () => true);
+  releaseRefreshWrite();
+
+  assert.equal(await saving, true);
+  assert.equal(await reading, null);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new-login");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new-login");
+});
+
+
+test("startup profile lookup after token rotation cannot publish after account switch", async () => {
+  let epoch = 11;
+  let profileCalls = 0;
+  let signalFinalProfileStarted;
+  let releaseFinalProfile;
+  const finalProfileStarted = new Promise(resolve => { signalFinalProfileStarted = resolve; });
+  const pendingFinalProfile = new Promise(resolve => { releaseFinalProfile = resolve; });
+  const storage = createStorage({ [ACCESS_TOKEN_KEY]: "expired-old", [REFRESH_TOKEN_KEY]: "refresh-old" });
+
+  const restoring = restoreStoredSession(storage, async (path, init, token) => {
+    if (path === "/api/v1/auth/me" && profileCalls++ === 0) throw httpError(401);
+    if (path === "/api/v1/auth/refresh") return { accessToken: "access-rotated-old", refreshToken: "refresh-rotated-old" };
+    if (path === "/api/v1/auth/me" && token === "access-rotated-old") {
+      signalFinalProfileStarted();
+      await pendingFinalProfile;
+      return { userId: "old-account" };
+    }
+    throw new Error("Unexpected request.");
+  }, () => epoch === 11);
+
+  await finalProfileStarted;
+  epoch = 12;
   assert.equal(await saveSessionTokensIfCurrent(storage, {
     accessToken: "access-new-login", refreshToken: "refresh-new-login"
-  }, () => epoch === 10), true);
-  releaseReads();
-  assert.equal(await reading, null);
+  }, () => epoch === 12), true);
+  releaseFinalProfile();
+
+  assert.equal(await restoring, null);
   assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new-login");
   assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new-login");
 });
