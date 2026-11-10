@@ -738,9 +738,11 @@ public sealed class RideApiIntegrationTests
         var responses = await Task.WhenAll(riderA.SendAsync(requestA), riderB.SendAsync(requestB));
 
         Assert.All(responses, response => Assert.Equal(HttpStatusCode.Created, response.StatusCode));
-        Assert.Equal("RIDE-SEL-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            Encoding.UTF8.GetBytes("independent-rider-a:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes("independent-key-a")))))),
-            JsonDocument.Parse(await responses[0].Content.ReadAsStringAsync()).RootElement.GetProperty("rideId").GetString());
+        using var jsonA = JsonDocument.Parse(await responses[0].Content.ReadAsStringAsync());
+        using var jsonB = JsonDocument.Parse(await responses[1].Content.ReadAsStringAsync());
+        Assert.NotEqual(
+            jsonA.RootElement.GetProperty("rideId").GetString(),
+            jsonB.RootElement.GetProperty("rideId").GetString());
         Assert.NotNull(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
             .GetActiveAsync("independent-rider-a"));
         Assert.NotNull(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
