@@ -847,6 +847,35 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task DriverAcceptanceRejectsPreExistingLegacyActiveRideForSameRider()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "rider-legacy-active-accept");
+        using var driver = factory.CreateClient("Driver", "rider-legacy-active-driver");
+        SeedBookableDriver(factory, "rider-legacy-active-driver", "rider-legacy-active-union");
+
+        var rideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, "rider-legacy-active-driver", "rider-legacy-active-union",
+            "rider-legacy-active-key", 410m);
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides["LEGACY-ACTIVE-DURING-NEGOTIATION"] = new DemoRide(
+            "LEGACY-ACTIVE-DURING-NEGOTIATION", "KPHB", "HITEC City", 1, "InProgress",
+            DateTimeOffset.UtcNow.AddHours(-1), null, "rider-legacy-active-accept", "legacy-driver",
+            null, null, null, null, DateTimeOffset.UtcNow.AddMinutes(-30), DateTimeOffset.UtcNow.AddMinutes(-1));
+
+        using var accept = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
+        Assert.Equal(HttpStatusCode.Conflict, accept.StatusCode);
+        Assert.Equal("AgreementConfirmed", rides[rideId].Status);
+        var riderReservation = await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync("rider-legacy-active-accept");
+        Assert.Equal(rideId, riderReservation?.RideId);
+        Assert.NotNull(riderReservation?.ExpiresAtUtc);
+        var driverReservation = await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync("rider-legacy-active-driver");
+        Assert.NotNull(driverReservation?.ExpiresAtUtc);
+    }
+
+    [Fact]
     public async Task CompletedSelectedRideReleasesRiderReservation()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
