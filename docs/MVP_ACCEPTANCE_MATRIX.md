@@ -1,7 +1,7 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.  
-**Last audited:** 2026-11-11; main HEAD a3e701f7acb3793d70d6656e5f7ac8b55791a1a4. Sole active PR #145 RIDER-02 on fix/rider-02-proposal-idempotency; source/test head 56a363621029fbfb16e2ef7c72d14f1faad48c8d; documentation head e2f2e8f937494f7288bc00fe9a52505b09e5c6db; exact-head CI #1176 / 42881619627 is running. Earlier CI #1168 passed 12/12 before actor/currency and submission-lock ownership tests; CI #1171 was superseded.
+**Last audited:** 2026-11-11; main HEAD a3e701f7acb3793d70d6656e5f7ac8b55791a1a4. Sole active PR #145 RIDER-02 on fix/rider-02-proposal-idempotency; source/test head 56a363621029fbfb16e2ef7c72d14f1faad48c8d; exact-head CI #1178 / 42881881756 is pending. Earlier CI #1168 passed 12/12 before actor/currency and submission-lock ownership tests; CI #1171 and #1176 were superseded.
 **Current engineering item:** #4 RIDER-02 — direct proposal-attempt idempotency in Rider and Driver, including same-payload retry keys, actor/currency fingerprinting, double-tap protection, attempt-key-owned submission locks, session/ride reset and stale-finalizer fencing. CAB-AGR-022–030; latest source/test head requires exact-head CI.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.  
 **Current acceptance snapshot:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is a strict evidence count, not a statement that nothing is implemented. Read implementation evidence row by row; external gates remain explicit.
