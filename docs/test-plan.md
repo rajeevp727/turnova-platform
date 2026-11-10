@@ -1522,3 +1522,6 @@ Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureSt
 - CAB-BOOK-002: Once hydration succeeds, allow booking only when no active ride exists; keep Book disabled and route to Activity when an active legacy or selected ride is found.
 - CAB-BOOK-003: Verify discovery and selected-booking handlers independently reject an unverified ride state, with the API remaining authoritative.
 - CAB-BOOK-004: Verify session reset returns the hydration state to unverified and a new account must perform its own server read.
+
+
+- CAB-BOOK-005: An expired temporary Rider reservation is not promoted by default; it may be made permanent only after the API has re-read the authoritative ride and confirmed it is Accepted, Arrived or InProgress. Verify the promotion appends its audit event and never permits a different Rider booking.
