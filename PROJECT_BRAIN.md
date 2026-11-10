@@ -1374,3 +1374,22 @@ Fresh #3 RIDER-01 audit found no additional independent source gap: Cab-only uni
 Next sequential work after PR #145 merges: #5 RIDER-03. The selected-booking API protects each Driver with a reservation but has no Rider-scoped active-booking reservation across different Idempotency-Keys. Add durable Rider reservation using existing `RideIdempotency` container partitioned by `/riderId` (or equivalent), create-if-absent/ETag protection, expiry/orphan reconciliation, promotion on Driver acceptance, matching terminal release and concurrent different-key tests. Production negotiation lifetime remains unset and booking fails closed with 503.
 
 Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## Latest sequential handoff — RIDER-02 proposal submission ownership hardening (2026-11-11)
+
+PR #145 remains the sole active feature PR on `fix/rider-02-proposal-idempotency`. Current source/test head: `56a363621029fbfb16e2ef7c72d14f1faad48c8d`.
+
+A deeper review found that the original boolean proposal in-flight guard could remain set after account reset/ride change until an old network promise settled. Its unconditional `finally` could also release a newer submission. Both Rider and Driver now use an attempt-key-owned lock. `finishProposalSubmission(ref, expectedKey)` only clears a matching owner; session reset and ride identity change clear the old attempt/lock and set submitting UI state false. The old finalizer is harmless if a replacement attempt owns the lock.
+
+New deterministic coverage:
+- `a stale proposal completion cannot release a newer in-flight submission`.
+- Rider/Driver source-integration assertions verify lock ownership, session reset cleanup and ride-change cleanup.
+- New test-plan cases CAB-AGR-029 and CAB-AGR-030.
+- Expected shared JavaScript suite: 153 tests.
+
+Earlier CI #1168 passed 12/12 before the actor/currency and lock-ownership additions. CI #1171 / 42879001921 was on superseded head `0a7bb547...`; it must not be reused. Fresh exact-head CI on `56a363621029fbfb16e2ef7c72d14f1faad48c8d` and all same-run native/simulator artifact inspection are required. PR #145 is not merged.
+
+The pending proposal attempt remains in-memory; replay across process death is not proven. Live Cosmos ETag/multi-instance and physical-device negotiation/reconnect remain external gates.
+
+Next after PR #145 merges: re-read main and implement #5 RIDER-03 Rider-scoped active-booking reservation across different Idempotency-Keys, using the existing rider-partitioned `RideIdempotency` storage only after verifying partition/ETag/transaction semantics. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
