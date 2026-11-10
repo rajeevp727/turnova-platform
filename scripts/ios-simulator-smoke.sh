@@ -86,6 +86,13 @@ if [[ ! "$LOGIN_READY_POLL_INTERVAL_SECONDS" =~ ^[1-9][0-9]?$ ]] ||
   exit 2
 fi
 
+OCR_COMPILE_TIMEOUT_SECONDS="${TURNOVA_IOS_OCR_COMPILE_TIMEOUT_SECONDS:-300}"
+if [[ ! "$OCR_COMPILE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
+   (( OCR_COMPILE_TIMEOUT_SECONDS > 600 )); then
+  echo "TURNOVA_IOS_OCR_COMPILE_TIMEOUT_SECONDS must be an integer from 1 to 600." >&2
+  exit 2
+fi
+
 # Validate every timeout before the first simulator enumeration or mutation.
 # Invalid configuration must never erase, boot, install into, or launch a device.
 # Bound every simctl operation independently. bootstatus retains its separate,
@@ -110,6 +117,40 @@ except subprocess.TimeoutExpired:
 raise SystemExit(completed.returncode)
 PY
 }
+
+# The Swift interpreter compiles the OCR source on first invocation. On a cold
+# macOS runner that compilation can consume the login-readiness budget before a
+# second screenshot is attempted. Compile once, before touching the simulator,
+# then reuse the executable for every readiness poll. Keep the executable in a
+# hidden temporary artifact subdirectory so it is not uploaded with screenshots/logs.
+mkdir -p "$OUTPUT_DIR/.ocr"
+SCREEN_TEXT_CHECKER="$OUTPUT_DIR/.ocr/ios-simulator-screen-text-check"
+SCREEN_TEXT_CHECKER_SOURCE="$(dirname "$0")/ios-simulator-screen-text-check.swift"
+echo "Compiling iOS Simulator screenshot OCR checker once before simulator access."
+python3 - "$OCR_COMPILE_TIMEOUT_SECONDS" "$SCREEN_TEXT_CHECKER" "$SCREEN_TEXT_CHECKER_SOURCE" <<'PY'
+import subprocess
+import sys
+
+timeout_seconds = int(sys.argv[1])
+output_path, source_path = sys.argv[2:]
+try:
+    result = subprocess.run(
+        ["swiftc", "-o", output_path, source_path],
+        check=False,
+        timeout=timeout_seconds,
+    )
+except subprocess.TimeoutExpired:
+    print(
+        f"iOS screenshot OCR checker compilation timed out after {timeout_seconds} seconds.",
+        file=sys.stderr,
+    )
+    raise SystemExit(124)
+raise SystemExit(result.returncode)
+PY
+if [[ ! -x "$SCREEN_TEXT_CHECKER" ]]; then
+  echo "Swift compiler did not produce the iOS screenshot OCR checker executable." >&2
+  exit 1
+fi
 
 devices_json="$(run_simulator_operation list xcrun simctl list devices available -j)"
 selection="$(python3 -c '
@@ -266,7 +307,7 @@ while true; do
     exit 1
   fi
 
-  if swift "$(dirname "$0")/ios-simulator-screen-text-check.swift" "$OUTPUT_DIR/launch.png" --expect-secure-store-unavailable \
+  if "$SCREEN_TEXT_CHECKER" "$OUTPUT_DIR/launch.png" --expect-secure-store-unavailable \
       > "$OUTPUT_DIR/ui-text.txt" 2> "$OUTPUT_DIR/ui-text-error.txt"; then
     login_screen_verified=true
     break

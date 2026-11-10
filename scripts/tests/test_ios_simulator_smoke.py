@@ -41,6 +41,9 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
         ocr_never_ready: bool = False,
         login_ready_timeout_seconds: int | str | None = None,
         login_ready_poll_interval_seconds: int | str | None = None,
+        ocr_compile_timeout_seconds: int | str | None = None,
+        ocr_compile_fail: bool = False,
+        ocr_compile_sleep: bool = False,
         ci: bool = True,
     ) -> tuple[subprocess.CompletedProcess[str], Path, list[str]]:
         temporary = tempfile.TemporaryDirectory(prefix="turnova-ios-smoke-")
@@ -54,6 +57,9 @@ class IOSSimulatorSmokeHarnessTests(unittest.TestCase):
         bin_dir = root / "bin"
         output = root / "output"
         xcrun_log = root / "xcrun.log"
+        swiftc_log = output / "swiftc.log"
+        event_log = output / "events.log"
+        fake_ocr_checker = bin_dir / "fake-ocr-checker"
         plist_buddy = bin_dir / "PlistBuddy"
 
         write_executable(
@@ -63,6 +69,7 @@ set -euo pipefail
 [[ "$1" == "simctl" ]] || exit 2
 shift
 printf '%s\n' "$*" >> "$FAKE_XCRUN_LOG"
+printf 'simctl %s\n' "$*" >> "$FAKE_EVENT_LOG"
 case "$1" in
   list)
     cat <<'JSON'
@@ -165,9 +172,10 @@ esac
 """,
         )
         write_executable(
-            bin_dir / "swift",
+            fake_ocr_checker,
             r"""#!/usr/bin/env bash
 set -euo pipefail
+printf 'ocr\n' >> "$FAKE_EVENT_LOG"
 if [[ "$*" != *"--expect-secure-store-unavailable"* ]]; then
   echo "expected SecureStore-unavailable OCR mode was not requested" >&2
   exit 2
@@ -186,9 +194,9 @@ fi
 echo "Welcome back Email address Password Sign in"
 if [[ "$FAKE_RESTORE_ERROR" == "1" ]]; then
   if [[ "$FAKE_RESTORE_ERROR_WITHOUT_YOUR" == "1" ]]; then
-    printf "Unable to restore\\nsession. Check your connection or secure storage and retry.\\n"
+    printf "Unable to restore\nsession. Check your connection or secure storage and retry.\n"
   else
-    printf "Unable to restore your\\nsession. Check your connection or secure storage and retry.\\n"
+    printf "Unable to restore your\nsession. Check your connection or secure storage and retry.\n"
   fi
 fi
 if [[ "$FAKE_RESTORE_ERROR" != "1" ]]; then
@@ -196,9 +204,32 @@ if [[ "$FAKE_RESTORE_ERROR" != "1" ]]; then
   exit 3
 fi
 if [[ "$FAKE_STALE_SESSION" == "1" ]]; then
-  printf "Session\\nexpired. Please sign in again.\\n"
+  printf "Session\nexpired. Please sign in again.\n"
   exit 4
 fi
+""",
+        )
+        write_executable(
+            bin_dir / "swiftc",
+            r"""#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_SWIFTC_LOG"
+printf 'swiftc\n' >> "$FAKE_EVENT_LOG"
+[[ "${FAKE_SWIFTC_FAIL:-0}" != "1" ]] || {
+  echo "fixture swiftc failure" >&2
+  exit 1
+}
+[[ "${FAKE_SWIFTC_SLEEP:-0}" != "1" ]] || exec sleep 3
+output=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o) output="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+[[ -n "$output" ]] || { echo "swiftc output path missing" >&2; exit 2; }
+cp "$FAKE_OCR_CHECKER" "$output"
+chmod +x "$output"
 """,
         )
 
@@ -209,6 +240,11 @@ fi
                 "CI": "true",
                 "PLIST_BUDDY": str(plist_buddy),
                 "FAKE_XCRUN_LOG": str(xcrun_log),
+                "FAKE_SWIFTC_LOG": str(swiftc_log),
+                "FAKE_EVENT_LOG": str(event_log),
+                "FAKE_OCR_CHECKER": str(fake_ocr_checker),
+                "FAKE_SWIFTC_FAIL": "1" if ocr_compile_fail else "0",
+                "FAKE_SWIFTC_SLEEP": "1" if ocr_compile_sleep else "0",
                 "FAKE_APP_CONTAINER": str(app_container),
                 "FAKE_BUNDLE_ID": "com.turnova.rider",
                 "FAKE_RESTORE_ERROR": "1" if restore_error else "0",
@@ -238,6 +274,8 @@ fi
             environment["TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS"] = str(login_ready_timeout_seconds)
         if login_ready_poll_interval_seconds is not None:
             environment["TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS"] = str(login_ready_poll_interval_seconds)
+        if ocr_compile_timeout_seconds is not None:
+            environment["TURNOVA_IOS_OCR_COMPILE_TIMEOUT_SECONDS"] = str(ocr_compile_timeout_seconds)
 
         command = [
             "bash",
@@ -318,10 +356,37 @@ fi
 
         self.assertEqual(result.returncode, 0, msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}")
         self.assertEqual((output / "ocr-count.txt").read_text(encoding="utf-8").strip(), "3")
+        events = (output / "events.log").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(events[0], "swiftc")
+        self.assertEqual(events[1], "simctl list devices available -j")
+        self.assertEqual(events.count("swiftc"), 1)
+        self.assertEqual(events.count("ocr"), 3)
+        self.assertEqual(len((output / "swiftc.log").read_text(encoding="utf-8").splitlines()), 1)
         screenshot_commands = [item for item in commands if item.startswith("io TEST-DEVICE screenshot ")]
         self.assertEqual(len(screenshot_commands), 3)
         report = json.loads((output / "result.json").read_text(encoding="utf-8"))
         self.assertTrue(report["loginScreenTextVerified"])
+
+    def test_ocr_checker_compilation_failure_stops_before_simulator_access(self) -> None:
+        result, output, commands = self.run_smoke(ocr_compile_fail=True)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("fixture swiftc failure", result.stderr)
+        self.assertEqual(commands, [])
+        self.assertEqual((output / "events.log").read_text(encoding="utf-8").splitlines(), ["swiftc"])
+        self.assertFalse((output / "result.json").exists())
+
+    def test_ocr_checker_compilation_timeout_stops_before_simulator_access(self) -> None:
+        result, output, commands = self.run_smoke(
+            ocr_compile_sleep=True,
+            ocr_compile_timeout_seconds=1,
+        )
+
+        self.assertEqual(result.returncode, 124)
+        self.assertIn("iOS screenshot OCR checker compilation timed out after 1 seconds", result.stderr)
+        self.assertEqual(commands, [])
+        self.assertEqual((output / "events.log").read_text(encoding="utf-8").splitlines(), ["swiftc"])
+        self.assertFalse((output / "result.json").exists())
 
     def test_login_readiness_timeout_captures_diagnostics_and_fails_closed(self) -> None:
         result, output, commands = self.run_smoke(
@@ -419,6 +484,9 @@ fi
             ({"login_ready_poll_interval_seconds": "invalid"}, "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30."),
             ({"login_ready_poll_interval_seconds": 0}, "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30."),
             ({"login_ready_poll_interval_seconds": 31}, "TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS must be an integer from 1 to 30."),
+            ({"ocr_compile_timeout_seconds": "invalid"}, "TURNOVA_IOS_OCR_COMPILE_TIMEOUT_SECONDS must be an integer from 1 to 600."),
+            ({"ocr_compile_timeout_seconds": 0}, "TURNOVA_IOS_OCR_COMPILE_TIMEOUT_SECONDS must be an integer from 1 to 600."),
+            ({"ocr_compile_timeout_seconds": 601}, "TURNOVA_IOS_OCR_COMPILE_TIMEOUT_SECONDS must be an integer from 1 to 600."),
         )
 
         for configuration, expected_error in invalid_cases:
@@ -438,12 +506,14 @@ fi
                 "boot_timeout_seconds": 1,
                 "login_ready_timeout_seconds": 1,
                 "login_ready_poll_interval_seconds": 1,
+                "ocr_compile_timeout_seconds": 1,
             },
             {
                 "operation_timeout_seconds": 300,
                 "boot_timeout_seconds": 600,
                 "login_ready_timeout_seconds": 300,
                 "login_ready_poll_interval_seconds": 30,
+                "ocr_compile_timeout_seconds": 600,
             },
         )
 

@@ -1309,3 +1309,12 @@ Exact-head CI [#1097 / 42736524343](https://github.com/rajeevp727/turnova-platfo
 
 Implementation is covered by `scripts/tests/test_ios_simulator_smoke.py`. All four timeout settings are now parsed and validated before the first simulator enumeration or mutation. This prevents malformed late-stage configuration from erasing or launching a simulator before the smoke fails closed.
 
+
+
+### RELEASE-SMOKE-010 — iOS OCR checker compile-once preflight
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| RELEASE-SMOKE-025 | Compile the iOS screenshot OCR checker once before simulator access and reuse it for readiness polling | Fake Swift compiler success/failure/timeout; force two not-ready OCR results before login text appears; exercise compile-timeout values outside 1–600 seconds and both valid boundaries | The checker is compiled exactly once before the first simctl command and reused for every screenshot poll. Compilation failure or timeout fails closed before simulator enumeration/erasure/install/launch and cannot write a success artifact. Invalid compile timeout values are rejected before simulator access. | Python unittest + iOS CI | P1 |
+
+Implementation is covered by `scripts/tests/test_ios_simulator_smoke.py`. The script now compiles the Vision OCR checker to a temporary executable once, outside the login-readiness deadline, then reuses it for each screenshot. This prevents first-invocation Swift interpreter compilation from consuming the cold-start polling budget.
