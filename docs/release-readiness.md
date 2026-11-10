@@ -270,3 +270,18 @@ CI #1153 and its four inspected simulator artifacts belong to pre-documentation 
 AUTH-02 engineering implementation and deterministic evidence are complete for this increment. Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established. External AUTH-02 gates remain live TriSend refresh rotation/reuse semantics and signed Android/iOS physical-device restore, expiry, logout, and SecureStore/Keychain failure acceptance.
 
 Next sequential work after merge: re-read `main`, finish the #3 RIDER-01 audit, implement #4 RIDER-02 stable same-payload proposal Idempotency-Key reuse for double-tap/ambiguous retries in both apps, then #5 RIDER-03 server-side single-active Rider booking reservation across different keys. Maintain one active feature PR.
+
+
+## CI #1159 simulator evidence (2026-11-10)
+
+Previous AUTH-02 source/test head 639e6c1516693995997571983619f980dac9f75f passed [CI #1159 / 42842677468](https://github.com/rajeevp727/turnova-platform/actions/runs/42842677468) with 12/12 jobs successful: backend 373/373, shared JavaScript 141/141, Python native-artifact/simulator harness 41/41, Rider/Driver typechecks and bundles, four native builds and four simulator smoke jobs.
+
+Same-run artifacts were downloaded and inspected:
+- Rider Android smoke: 13777386979 — install/launch and Rider login surface verified.
+- Driver Android smoke: 13778300986 — install/launch and Driver login surface verified.
+- Rider iOS smoke: 13777927561 — install/launch and Rider login surface verified; SecureStore unavailable warning expected.
+- Driver iOS smoke: 13778222906 — install/launch and Driver login surface verified; SecureStore unavailable warning expected.
+- Rider iOS app bundle: 13778820239 — embedded identifier com.turnova.rider.
+- Driver iOS app bundle: 13778236148 — embedded identifier com.turnova.driver.
+
+Both iOS artifacts are unsigned simulator builds without a Keychain access group. These checks do not establish signed-device SecureStore/Keychain persistence, production authentication, physical-device acceptance, signing, hosting, pilot or store readiness. The latest AUTH-02 source/test follow-up (auth form and Rider pickup-cache reset) postdates CI #1159; fresh exact-head CI is required before merge. No production readiness is claimed.
