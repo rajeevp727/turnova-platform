@@ -18,3 +18,12 @@ export function getFreshAccessToken(
   readTokens: () => Promise<StoredSessionTokens | null>,
   refresh: (refreshToken: string) => Promise<string>
 ): Promise<string>;
+
+export interface SessionEpochRef {
+  current: number;
+}
+
+export function advanceSessionEpoch(
+  epochRef: SessionEpochRef,
+  inFlightRefreshRef?: InFlightPromiseRef<string>
+): number;
