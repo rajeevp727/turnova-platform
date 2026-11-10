@@ -58,6 +58,33 @@ test("Rider app loads the server-owned active ride before enabling booking", () 
   assert.match(source.slice(bookingStart, bookingEnd), /canStartRiderBooking\(activeRideStateLoaded,ride\)/);
 });
 
+test("Rider active-ride hydration is triggered after sign-in and restored session", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+
+  const hydrationStart = source.indexOf("useEffect(()=>{if(!user||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;");
+  const hydrationEnd = source.indexOf("const resolvedTheme", hydrationStart);
+  assert.ok(hydrationStart >= 0 && hydrationEnd > hydrationStart);
+  const hydrationEffect = source.slice(hydrationStart, hydrationEnd);
+  assert.match(hydrationEffect, /loadRideHistory\(\(\)=>active&&isAuthenticatedSessionCurrent\(sessionEpoch,authenticatedSessionEpoch\)\)/);
+  assert.match(hydrationEffect, /\},\[user\?\.id,loadRideHistory,ride\?\.status\]\);/);
+
+  const acceptStart = source.indexOf("const accept=useCallback");
+  const acceptEnd = source.indexOf("const refresh=useCallback", acceptStart);
+  assert.ok(acceptStart >= 0 && acceptEnd > acceptStart);
+  const acceptSource = source.slice(acceptStart, acceptEnd);
+  const acceptedEpoch = acceptSource.indexOf("authenticatedSessionEpoch.current=expectedEpoch;");
+  const acceptedUser = acceptSource.indexOf("setUser(acceptedUser);");
+  assert.ok(acceptedEpoch >= 0 && acceptedUser > acceptedEpoch);
+
+  const restoreStart = source.indexOf("useEffect(()=>{let active=true;let restoreEpoch=sessionEpoch.current;");
+  const restoreEnd = source.indexOf("useEffect(()=>{", restoreStart + 1);
+  assert.ok(restoreStart >= 0 && restoreEnd > restoreStart);
+  const restoreSource = source.slice(restoreStart, restoreEnd);
+  const restoredEpoch = restoreSource.indexOf("authenticatedSessionEpoch.current=restoredEpoch;");
+  const restoredUser = restoreSource.indexOf("setUser(restoredUser);");
+  assert.ok(restoredEpoch >= 0 && restoredUser > restoredEpoch);
+});
+
 test("Rider booking guard fails closed until server-owned ride state is loaded", () => {
   assert.equal(canStartRiderBooking(false, null), false);
   assert.equal(canStartRiderBooking(false, { status: "Completed" }), false);

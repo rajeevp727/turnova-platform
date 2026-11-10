@@ -725,8 +725,16 @@ public sealed class RideApiIntegrationTests
         Assert.Single(driverLeaseResults, active => active);
     }
 
-    [Fact]
-    public async Task ExistingLegacyActiveRideWithoutRiderReservationBlocksSelectedBooking()
+    [Theory]
+    [InlineData("Requested")]
+    [InlineData("Matching")]
+    [InlineData("Offered")]
+    [InlineData("Negotiating")]
+    [InlineData("AgreementConfirmed")]
+    [InlineData("Accepted")]
+    [InlineData("Arrived")]
+    [InlineData("InProgress")]
+    public async Task ExistingLegacyActiveRideWithoutRiderReservationBlocksSelectedBooking(string legacyStatus)
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "legacy-active-rider");
@@ -735,9 +743,9 @@ public sealed class RideApiIntegrationTests
 
         var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
         rides["LEGACY-ACTIVE-RIDE"] = new DemoRide(
-            "LEGACY-ACTIVE-RIDE", "KPHB", "HITEC City", 1, "InProgress",
+            "LEGACY-ACTIVE-RIDE", "KPHB", "HITEC City", 1, legacyStatus,
             DateTimeOffset.UtcNow.AddHours(-1), null, "legacy-active-rider", "legacy-active-driver",
-            null, null, null, null, DateTimeOffset.UtcNow.AddMinutes(-30), DateTimeOffset.UtcNow.AddMinutes(-1));
+            null, null, null, null, DateTimeOffset.UtcNow.AddMinutes(-30), DateTimeOffset.UtcNow.AddMinutes(15));
 
         using var request = CreateSelectedBookingRequest(
             "legacy-active-new-key", "legacy-active-new-driver", "legacy-active-new-union", "KPHB", "Madhapur", []);
@@ -851,8 +859,16 @@ public sealed class RideApiIntegrationTests
             .GetActiveAsync("rider-permanent-booking"))?.RideId);
     }
 
-    [Fact]
-    public async Task DriverAcceptanceRejectsPreExistingLegacyActiveRideForSameRider()
+    [Theory]
+    [InlineData("Requested")]
+    [InlineData("Matching")]
+    [InlineData("Offered")]
+    [InlineData("Negotiating")]
+    [InlineData("AgreementConfirmed")]
+    [InlineData("Accepted")]
+    [InlineData("Arrived")]
+    [InlineData("InProgress")]
+    public async Task DriverAcceptanceRejectsPreExistingLegacyActiveRideForSameRider(string legacyStatus)
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var rider = factory.CreateClient("Rider", "rider-legacy-active-accept");
@@ -864,9 +880,9 @@ public sealed class RideApiIntegrationTests
             "rider-legacy-active-key", 410m);
         var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
         rides["LEGACY-ACTIVE-DURING-NEGOTIATION"] = new DemoRide(
-            "LEGACY-ACTIVE-DURING-NEGOTIATION", "KPHB", "HITEC City", 1, "InProgress",
+            "LEGACY-ACTIVE-DURING-NEGOTIATION", "KPHB", "HITEC City", 1, legacyStatus,
             DateTimeOffset.UtcNow.AddHours(-1), null, "rider-legacy-active-accept", "legacy-driver",
-            null, null, null, null, DateTimeOffset.UtcNow.AddMinutes(-30), DateTimeOffset.UtcNow.AddMinutes(-1));
+            null, null, null, null, DateTimeOffset.UtcNow.AddMinutes(-30), DateTimeOffset.UtcNow.AddMinutes(15));
 
         using var accept = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
         Assert.Equal(HttpStatusCode.Conflict, accept.StatusCode);
