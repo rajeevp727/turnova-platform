@@ -353,7 +353,7 @@ test("does not persist a refresh pair when logout advances the session epoch dur
   await clearing;
 
   assert.equal(storage.values.size, 0);
-  assert.deepEqual(storage.calls.map(call => call[0]), ["set", "delete", "delete"]);
+  assert.deepEqual(storage.calls.map(call => call[0]), ["set", "delete", "delete", "delete", "delete"]);
 });
 
 test("a queued stale refresh cannot overwrite a newer login token pair", async () => {
