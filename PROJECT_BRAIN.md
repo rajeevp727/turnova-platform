@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `a3e701f7acb3793d70d6656e5f7ac8b55791a1a4` after AUTH-02 PR #143 merged. Sole active feature PR #145 is RIDER-02 on `fix/rider-02-proposal-idempotency`; source/test head `56a363621029fbfb16e2ef7c72d14f1faad48c8d`; fresh exact-head CI for the current documentation head is pending. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `a3e701f7acb3793d70d6656e5f7ac8b55791a1a4` after AUTH-02 PR #143 merged. Sole active feature PR #145 is RIDER-02 on `fix/rider-02-proposal-idempotency`; source/test head `56a363621029fbfb16e2ef7c72d14f1faad48c8d`, documentation head `9fbca10d57334167aa41018a9104096f9f85e877`. Exact-head CI [#1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12, including backend 373/373, shared JS 153/153, Python 41/41, both app validation/bundles, four native builds and four simulator smokes; the Driver Android emulator smoke passed on a targeted retry after a Pixel Launcher ANR. All four same-run smoke artifacts were inspected. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1393,3 +1393,22 @@ Earlier CI #1168 passed 12/12 before the actor/currency and lock-ownership addit
 The pending proposal attempt remains in-memory; replay across process death is not proven. Live Cosmos ETag/multi-instance and physical-device negotiation/reconnect remain external gates.
 
 Next after PR #145 merges: re-read main and implement #5 RIDER-03 Rider-scoped active-booking reservation across different Idempotency-Keys, using the existing rider-partitioned `RideIdempotency` storage only after verifying partition/ETag/transaction semantics. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## Latest verified handoff — RIDER-02 (2026-11-11)
+
+PR #145 source/test head `56a363621029fbfb16e2ef7c72d14f1faad48c8d` and documentation head `9fbca10d57334167aa41018a9104096f9f85e877` passed [CI #1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) with **12/12 jobs successful**. Results: .NET 10 backend **373/373**, shared mobile JavaScript **153/153**, Python native-artifact/simulator harness **41/41**, Rider/Driver TypeScript validation and production bundles, both Android native builds, both iOS Simulator native builds, and all four Android/iOS simulator smoke jobs. The Driver Android smoke initially encountered a Pixel Launcher ANR; only that failed job was rerun, and the retry passed without app changes. The final workflow conclusion is success.
+
+Same-run smoke artifacts were downloaded and inspected, including result JSON and screenshots:
+- Rider Android `13795890654`: `com.turnova.rider`, install/launch passed, process stable, Rider login text and screenshot verified, stale-session error absent.
+- Driver Android `13798054264`: `com.turnova.driver`, targeted retry after the first artifact `13795995296` recorded a Pixel Launcher ANR; retry install/launch passed, process stable, Driver login text and screenshot verified, stale-session error absent, zero launcher recovery attempts on the successful retry.
+- Rider iOS `13796097620`: `com.turnova.rider`, clean simulator data erased, install/launch passed, process stable, Rider login screen verified.
+- Driver iOS `13795844308`: `com.turnova.driver`, clean simulator data erased, install/launch passed, process stable, Driver login screen verified.
+
+Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureStore-unavailable banner, no Keychain access group, unsigned simulator artifacts, and production API/authentication not exercised. These artifacts prove simulator install/launch/login-surface checks only; they do not establish signed-device Keychain persistence, production authentication, live Cosmos, or physical-device acceptance. Final-head COMMENT-only review [5847757020](https://github.com/rajeevp727/turnova-platform/pull/145#pullrequestreview-5847757020) found no critical/high issue; unresolved review threads: **0**. The subsequent documentation-only synchronization requires fresh exact-head CI before merge.
+
+PR #145 adds stable client proposal-attempt idempotency in Rider and Driver: same ride/actor/amount/currency reuses the same actor-prefixed key after ambiguous POST or history-refresh failure; a changed fingerprint creates a new key; double taps are blocked; the amount field is disabled while submitting; and an attempt is cleared only after the agreement history refresh succeeds or the session/ride resets. The in-flight lock is owned by the attempt key, so a stale request finalizer cannot release a newer account/ride submission. Deterministic coverage includes actor/currency fingerprinting, stale-finalizer ownership and Rider/Driver session/ride cleanup. The pending attempt remains in an in-memory ref; replay across process death is not proven.
+
+Fresh #3 RIDER-01 audit found no additional independent source-code gap. Product-approved dispatch radius/zones/location freshness, routing/maps, live Call/Chat, live Cosmos and physical-device location acceptance remain external. Next sequential item after PR #145 merges is #5 RIDER-03: add a durable Rider-scoped active-booking reservation across different Idempotency-Keys. The current route has per-Driver reservation only; verify the existing RideIdempotency container migration/partition and transaction semantics before adding create-if-absent/ETag-safe Rider reservation, terminal/orphan reconciliation, matching release and concurrent different-key tests. Production negotiation lifetime remains unset and booking fails closed with 503.
+
+Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
