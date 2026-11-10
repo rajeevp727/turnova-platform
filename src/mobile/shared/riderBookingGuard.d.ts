@@ -14,3 +14,8 @@ export type RiderBookingStatus =
 export function hasActiveRiderRide(
   ride: { status: string } | null | undefined
 ): boolean;
+
+export function canStartRiderBooking(
+  rideStateLoaded: boolean,
+  ride: { status: string } | null | undefined
+): boolean;
