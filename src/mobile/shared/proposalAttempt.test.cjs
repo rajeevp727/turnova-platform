@@ -89,3 +89,33 @@ for (const [role, appPath] of [
     assert.match(source.slice(resetStart, resetEnd), /proposalAttemptRef\.current\s*=\s*null/);
   });
 }
+
+
+test("changing actor or currency creates a new proposal attempt key", () => {
+  const ref = { current: null };
+  const generatedActors = [];
+  const keyFactory = actor => {
+    generatedActors.push(actor);
+    return `${actor}-proposal-${generatedActors.length}`;
+  };
+
+  const riderInr = getOrCreateProposalAttempt(
+    { rideId: "ride-1", actor: "rider", amount: 450, currency: "INR" },
+    ref,
+    keyFactory
+  );
+  const driverInr = getOrCreateProposalAttempt(
+    { rideId: "ride-1", actor: "driver", amount: 450, currency: "INR" },
+    ref,
+    keyFactory
+  );
+  const driverUsd = getOrCreateProposalAttempt(
+    { rideId: "ride-1", actor: "driver", amount: 450, currency: "USD" },
+    ref,
+    keyFactory
+  );
+
+  assert.notEqual(driverInr.idempotencyKey, riderInr.idempotencyKey);
+  assert.notEqual(driverUsd.idempotencyKey, driverInr.idempotencyKey);
+  assert.deepEqual(generatedActors, ["rider", "driver", "driver"]);
+});
