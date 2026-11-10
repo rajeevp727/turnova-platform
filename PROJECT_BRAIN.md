@@ -1447,3 +1447,10 @@ Next after merge: re-read main, audit #6 DISPATCH-01 in order, implement all saf
 - Test plan CAB-BOOK-001–005 covers UI hydration/reset and explicit expired-lease repair. Previous tested head `18b8651d23970030f111310ad510103aea02957e` passed workflow `42904988755` 12/12 (backend 388/388, shared mobile 167/167, Python 41/41, four native builds and four simulator smokes); all four same-run artifacts were inspected. New source/test head and this docs sync require fresh exact-head CI; no result is claimed yet.
 - External gates: Product-approved `Dispatch:SelectedDriverNegotiationLifetimeMinutes` is unset; live Cosmos ETag/transactional-batch/multi-instance/restart validation; physical Android/iOS booking/cancel/expiry acceptance. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 - Next: finish exact-head CI and review/merge PR #146 only if policy permits; re-read main; continue to #6 DISPATCH-01 in order. Do not open a parallel feature PR.
+
+
+## RIDER-03 final source/test hardening — 2026-11-11
+
+- Source/test head: `d8a052a2ccad3ee1a733b099505d2d5c9433eaee`.
+- Added fail-closed Rider booking hydration and explicit authoritative expired-lease promotion. The shared mobile source-integration test now asserts that `clearRiderSessionState` resets `activeRideStateLoaded`, `loadRideHistory` clears it before the server history read, and it becomes true only after the active-ride detail read completes. This directly covers CAB-BOOK-004 rather than merely finding a reset call elsewhere in the file.
+- The prior docs head `80c4676dca6907093a03dc0e8e6af1d7c2a1e7de` had backend 389/389, shared mobile 170/170, Python 41/41 and both app validation jobs passed; native/simulator jobs were superseded before completion by this final test assertion. Fresh exact-head CI is required.

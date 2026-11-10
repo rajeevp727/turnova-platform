@@ -1533,3 +1533,10 @@ Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureSt
 - Rider UI hydration is fail-closed until both ride-history and active-ride detail reads succeed; failed/in-flight reads cannot be interpreted as an empty ride history. Session reset clears the hydration flag and the Book tab exposes a retry.
 - CAB-BOOK-001–005 cover active-ride hydration, active-state gating, discovery/request guards, session reset and explicit expired-lease repair.
 - Previous tested head `18b8651d23970030f111310ad510103aea02957e` passed workflow [42904988755](https://github.com/rajeevp727/turnova-platform/actions/runs/42904988755) 12/12; all four same-run simulator artifacts were inspected. The new source/test head and this documentation sync require a fresh exact-head workflow; no latest-head result is claimed until it completes.
+
+
+## RIDER-03 final hydration assertion — 2026-11-11
+
+- CAB-BOOK-004 is now source-integration checked against the actual `clearRiderSessionState` block: session reset must set `activeRideStateLoaded` to false.
+- The `loadRideHistory` source integration verifies the flag is cleared before `/api/v1/rides/mine` and becomes true only after the selected active-ride detail read completes. This prevents an in-flight/failed history read from being interpreted as an empty ride history.
+- Source/test head `d8a052a2ccad3ee1a733b099505d2d5c9433eaee` requires fresh exact-head CI after the final documentation sync.
