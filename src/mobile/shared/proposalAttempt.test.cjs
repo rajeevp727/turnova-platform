@@ -11,7 +11,7 @@ function createRef() {
 test("identical proposal retries reuse the same key after an ambiguous request failure", () => {
   const ref = createRef();
   let generated = 0;
-  const keyFactory = actor => `${actor}-attempt-${++generated}`;
+  const keyFactory = actor => actor + "-attempt-" + (++generated);
   const input = { rideId: "ride-1", actor: "rider", amount: 250, currency: "INR" };
   const first = getOrCreateProposalAttempt(ref, input, keyFactory);
   // An ambiguous network error intentionally leaves the attempt available for retry.
@@ -24,7 +24,7 @@ test("identical proposal retries reuse the same key after an ambiguous request f
 test("changing amount or ride creates a new proposal idempotency key", () => {
   const ref = createRef();
   let generated = 0;
-  const keyFactory = actor => `${actor}-attempt-${++generated}`;
+  const keyFactory = actor => actor + "-attempt-" + (++generated);
   const first = getOrCreateProposalAttempt(ref, { rideId: "ride-1", actor: "driver", amount: 250 }, keyFactory);
   const changedAmount = getOrCreateProposalAttempt(ref, { rideId: "ride-1", actor: "driver", amount: 275 }, keyFactory);
   const changedRide = getOrCreateProposalAttempt(ref, { rideId: "ride-2", actor: "driver", amount: 275 }, keyFactory);
@@ -36,7 +36,7 @@ test("changing amount or ride creates a new proposal idempotency key", () => {
 test("a late completion cannot clear a newer proposal attempt", () => {
   const ref = createRef();
   let generated = 0;
-  const keyFactory = actor => `${actor}-attempt-${++generated}`;
+  const keyFactory = actor => actor + "-attempt-" + (++generated);
   const oldAttempt = getOrCreateProposalAttempt(ref, { rideId: "ride-1", actor: "rider", amount: 100 }, keyFactory);
   const newAttempt = getOrCreateProposalAttempt(ref, { rideId: "ride-2", actor: "rider", amount: 100 }, keyFactory);
   assert.equal(clearProposalAttempt(ref, oldAttempt.key), false);
@@ -48,7 +48,7 @@ test("a late completion cannot clear a newer proposal attempt", () => {
 test("confirmed success clears the attempt so an intentional new proposal gets a fresh key", () => {
   const ref = createRef();
   let generated = 0;
-  const keyFactory = actor => `${actor}-attempt-${++generated}`;
+  const keyFactory = actor => actor + "-attempt-" + (++generated);
   const input = { rideId: "ride-1", actor: "rider", amount: 100 };
   const first = getOrCreateProposalAttempt(ref, input, keyFactory);
   assert.equal(clearProposalAttempt(ref, first.key), true);
@@ -67,20 +67,20 @@ for (const [role, appPath] of [
   ["Rider", path.join(__dirname, "../rider-app/App.tsx")],
   ["Driver", path.join(__dirname, "../driver-app/App.tsx")]
 ]) {
-  test(`${role} proposal submission uses stable attempts and blocks concurrent taps`, () => {
+  test(role + " proposal submission uses stable attempts and blocks concurrent taps", () => {
     const source = fs.readFileSync(appPath, "utf8");
     const handlerStart = source.indexOf("const proposeAgreement");
     const handlerEnd = source.indexOf("const confirmAgreement", handlerStart);
-    assert.ok(handlerStart >= 0 && handlerEnd > handlerStart, `${role} proposal handler must be present`);
+    assert.ok(handlerStart >= 0 && handlerEnd > handlerStart, role + " proposal handler must be present");
     const handler = source.slice(handlerStart, handlerEnd);
-    assert.match(handler, /getOrCreateProposalAttempt\\(proposalAttemptRef/);
-    assert.match(handler, /clearProposalAttempt\\(proposalAttemptRef/);
-    assert.match(handler, /proposalSubmissionInFlight\\.current/);
-    assert.match(handler, /"Idempotency-Key":\\s*attempt\\.key/);
-    assert.doesNotMatch(handler, /Date\\.now|Math\\.random/);
+    assert.match(handler, /getOrCreateProposalAttempt\(proposalAttemptRef/);
+    assert.match(handler, /clearProposalAttempt\(proposalAttemptRef/);
+    assert.match(handler, /proposalSubmissionInFlight\.current/);
+    assert.match(handler, /"Idempotency-Key":\s*attempt\.key/);
+    assert.doesNotMatch(handler, /Date\.now|Math\.random/);
     assert.ok(handler.indexOf("loadAgreementHistory") < handler.indexOf("clearProposalAttempt"),
       "attempt must remain available until agreement history refresh succeeds");
     assert.match(source, /proposalSubmitting/);
-    assert.match(source, /editable=\\{!proposalSubmitting\\}/);
+    assert.match(source, /editable=\{!proposalSubmitting\}/);
   });
 }
