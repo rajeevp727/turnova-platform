@@ -80,11 +80,12 @@ public sealed class RiderActiveBookingReservationStoreTests
 
         var events = store.GetAuditEvents(reservation.RiderId);
         Assert.Equal(
-            [
+            new[]
+            {
                 RiderActiveBookingReservationAuditEventTypes.Acquired,
                 RiderActiveBookingReservationAuditEventTypes.MadePermanent,
                 RiderActiveBookingReservationAuditEventTypes.Released
-            ],
+            },
             events.Select(item => item.EventType));
     }
 
