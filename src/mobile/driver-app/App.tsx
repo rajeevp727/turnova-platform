@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, useColorScheme, Image } from "react-native";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
-import { advanceSessionEpoch, getFreshAccessToken } from "../shared/refreshCoordinator";
+import { advanceSessionEpoch, getFreshAccessToken, isAuthenticatedSessionCurrent } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
@@ -76,6 +76,7 @@ export default function App() {
   const [tokens, setTokens] = useState<Tokens | null>(null);
   const refreshInFlight = useRef<Promise<string> | null>(null);
   const sessionEpoch = useRef(0);
+  const authenticatedSessionEpoch = useRef<number | null>(null);
   const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Payslips" | "Profile">("Home");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -129,6 +130,7 @@ export default function App() {
     const next = { accessToken: result.accessToken, refreshToken: result.refreshToken };
     const saved = await saveTokens(next, () => sessionEpoch.current === expectedEpoch);
     if (!saved || sessionEpoch.current !== expectedEpoch) return false;
+    authenticatedSessionEpoch.current = expectedEpoch;
     setTokens(next);
     if (acceptedUser) setUser(acceptedUser);
     setError("");
@@ -147,7 +149,7 @@ export default function App() {
   }, [acceptSession]);
 
   const apiFetch = useCallback(async (path: string, init: RequestInit = {}) => {
-    if (!tokens) throw new Error("Please sign in again.");
+    if (!tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) throw new Error("Please sign in again.");
     const requestEpoch = sessionEpoch.current;
     let response = await fetch(`${API}${path}`, {
       ...init,
@@ -171,6 +173,7 @@ export default function App() {
         if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
         const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
         if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
+        authenticatedSessionEpoch.current = null;
         setTokens(null);
         setUser(null);
         setActiveRide(null);
@@ -203,8 +206,9 @@ export default function App() {
       try {
         const restored = await restoreStoredSession(SecureStore, jsonRequest);
         if (active && restored) {
-          advanceSessionEpoch(sessionEpoch, refreshInFlight);
+          const restoredEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
           const restoredUser = requireAppRole<User>(restored.user, "Driver");
+          authenticatedSessionEpoch.current = restoredEpoch;
           setTokens(restored.tokens);
           setUser(restoredUser);
         } else if (active) {
@@ -758,9 +762,9 @@ export default function App() {
 
 
   const downloadPayslip = async (year: number, month: number) => {
-    if (!tokens) return;
+    if (!tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
     const requestEpoch = sessionEpoch.current;
-    const isSessionCurrent = () => sessionEpoch.current === requestEpoch;
+    const isSessionCurrent = () => sessionEpoch.current === requestEpoch && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
     setLoading(true); setError(""); setNotice("");
     try {
       let response = await fetch(API + "/api/v1/driver/payslips/" + year + "/" + month + ".pdf", {
@@ -784,6 +788,7 @@ export default function App() {
           if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
           if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
+          authenticatedSessionEpoch.current = null;
           setTokens(null); setUser(null); setActiveRide(null); setDriverRideHistory([]);
           setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
           const expiryMessage = tokenCleanupFailed
@@ -968,6 +973,7 @@ export default function App() {
     if (sessionEpoch.current !== logoutEpoch) return;
     const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
     if (sessionEpoch.current !== logoutEpoch) return;
+    authenticatedSessionEpoch.current = null;
     setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
     if (cacheCleanup.failed > 0)
       setError("Signed out, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");

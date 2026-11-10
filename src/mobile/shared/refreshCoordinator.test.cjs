@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { singleFlight, getFreshAccessToken, advanceSessionEpoch } = require("./refreshCoordinator.js");
+const { singleFlight, getFreshAccessToken, advanceSessionEpoch, isAuthenticatedSessionCurrent } = require("./refreshCoordinator.js");
 
 test("shares one refresh promise across concurrent unauthorized requests", async () => {
   const ref = { current: null };
@@ -168,4 +168,32 @@ test("rejects an invalid session epoch instead of silently resetting it", () => 
     /Invalid session epoch/
   );
   assert.equal(ref.current, null);
+});
+
+
+test("an accepted session is current only while its authenticated epoch matches", () => {
+  const sessionEpoch = { current: 4 };
+  const authenticatedEpoch = { current: 4 };
+
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, authenticatedEpoch), true);
+  authenticatedEpoch.current = 3;
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, authenticatedEpoch), false);
+});
+
+test("advancing the session epoch immediately blocks old in-memory credentials", () => {
+  const sessionEpoch = { current: 8 };
+  const authenticatedEpoch = { current: 8 };
+  const refresh = { current: null };
+
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, authenticatedEpoch), true);
+  assert.equal(advanceSessionEpoch(sessionEpoch, refresh), 9);
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, authenticatedEpoch), false);
+});
+
+test("missing or invalid authenticated epochs fail closed", () => {
+  const sessionEpoch = { current: 0 };
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, { current: null }), false);
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, { current: Number.NaN }), false);
+  assert.equal(isAuthenticatedSessionCurrent(sessionEpoch, { current: -1 }), false);
+  assert.equal(isAuthenticatedSessionCurrent({ current: -1 }, { current: -1 }), false);
 });

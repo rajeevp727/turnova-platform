@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useColorScheme } from "react-native";
 import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TurnOvaLogo from "./TurnOvaLogo";
-import { advanceSessionEpoch, getFreshAccessToken } from "../shared/refreshCoordinator";
+import { advanceSessionEpoch, getFreshAccessToken, isAuthenticatedSessionCurrent } from "../shared/refreshCoordinator";
 import { readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
@@ -68,7 +68,7 @@ async function request(path: string, init: RequestInit = {}, token?: string) {
 export default function App() {
   const [user,setUser]=useState<User|null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
-  const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0);
+  const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0); const authenticatedSessionEpoch=useRef<number|null>(null);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
   const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
@@ -131,6 +131,7 @@ export default function App() {
     const t={accessToken:result.accessToken,refreshToken:result.refreshToken};
     const saved=await saveTokens(t,()=>sessionEpoch.current===expectedEpoch);
     if(!saved||sessionEpoch.current!==expectedEpoch)return false;
+    authenticatedSessionEpoch.current=expectedEpoch;
     setTokens(t);
     if(acceptedUser)setUser(acceptedUser);
     setError("");
@@ -138,7 +139,7 @@ export default function App() {
   },[]);
   const refresh=useCallback(async(rt:string,expectedEpoch:number)=>{if(sessionEpoch.current!==expectedEpoch)return "";const result=await request("/api/v1/auth/refresh",{method:"POST",body:JSON.stringify({refreshToken:rt})});if(sessionEpoch.current!==expectedEpoch)return "";const accepted=await accept(result,expectedEpoch);if(!accepted||sessionEpoch.current!==expectedEpoch)return "";return result.accessToken as string;},[accept]);
   const apiFetch=useCallback(async(path:string,init:RequestInit={})=>{
-    if(!tokens)throw new Error("Please sign in again.");
+    if(!tokens||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))throw new Error("Please sign in again.");
     const requestEpoch=sessionEpoch.current;
     let response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${tokens.accessToken}`,...init.headers}});
     if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
@@ -157,7 +158,7 @@ export default function App() {
         let tokenCleanupFailed=false;
         try{await clearTokens();}catch{tokenCleanupFailed=true;}
         if(sessionEpoch.current!==expiredEpoch)throw new Error("Session changed. Please sign in again.");
-        setTokens(null);setUser(null);
+        authenticatedSessionEpoch.current=null;setTokens(null);setUser(null);
         throw new Error(tokenCleanupFailed
           ?"Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
           :"Session expired. Please sign in again.");
@@ -169,7 +170,7 @@ export default function App() {
     const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current&&current.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);}else if(isActive()){setRide(null);}},[apiFetch]);
-  useEffect(()=>{let active=true;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request);if(active&&restored){advanceSessionEpoch(sessionEpoch,refreshInFlight);const restoredUser=requireAppRole<User>(restored.user,"Rider");setTokens(restored.tokens);setUser(restoredUser);}}catch{if(active)setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request);if(active&&restored){const restoredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);const restoredUser=requireAppRole<User>(restored.user,"Rider");authenticatedSessionEpoch.current=restoredEpoch;setTokens(restored.tokens);setUser(restoredUser);}}catch{if(active)setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{
     if(!ride||tab!=="Activity"||!tokens)return;
     let active=true;
@@ -248,7 +249,7 @@ export default function App() {
     }
   };
   const askHelp=async()=>{setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{setHelpBusy(false);}};
-  const logout=async()=>{const logoutEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}if(sessionEpoch.current!==logoutEpoch)return;setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
+  const logout=async()=>{const logoutEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}if(sessionEpoch.current!==logoutEpoch)return;authenticatedSessionEpoch.current=null;setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
   const findNearbyVehicles=async()=>{
     const passengerCount=parsePassengerCountInput(passengers);
     if(passengerCount===null){setDiscovery(null);setError("Enter a passenger count from 1 to 6 before searching.");return;}

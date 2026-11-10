@@ -27,3 +27,12 @@ export function advanceSessionEpoch(
   epochRef: SessionEpochRef,
   inFlightRefreshRef?: InFlightPromiseRef<string>
 ): number;
+
+export interface AuthenticatedSessionEpochRef {
+  current: number | null;
+}
+
+export function isAuthenticatedSessionCurrent(
+  sessionEpochRef: SessionEpochRef,
+  authenticatedEpochRef: AuthenticatedSessionEpochRef
+): boolean;

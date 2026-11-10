@@ -33,4 +33,21 @@ function advanceSessionEpoch(epochRef, inFlightRefreshRef) {
   return epochRef.current;
 }
 
-module.exports = { singleFlight, getFreshAccessToken, advanceSessionEpoch };
+function isAuthenticatedSessionCurrent(sessionEpochRef, authenticatedEpochRef) {
+  return Boolean(
+    sessionEpochRef &&
+    Number.isSafeInteger(sessionEpochRef.current) &&
+    sessionEpochRef.current >= 0 &&
+    authenticatedEpochRef &&
+    Number.isSafeInteger(authenticatedEpochRef.current) &&
+    authenticatedEpochRef.current >= 0 &&
+    authenticatedEpochRef.current === sessionEpochRef.current
+  );
+}
+
+module.exports = {
+  singleFlight,
+  getFreshAccessToken,
+  advanceSessionEpoch,
+  isAuthenticatedSessionCurrent
+};
