@@ -805,12 +805,36 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(rideId, reservation?.RideId);
         Assert.Null(reservation?.ExpiresAtUtc);
 
+        using var replayRequest = CreateSelectedBookingRequest(
+            "rider-permanent-key-a", "rider-permanent-driver-a", "rider-permanent-union-a", "KPHB", "HITEC City", []);
+        using var replayResponse = await rider.SendAsync(replayRequest);
+        Assert.Equal(HttpStatusCode.OK, replayResponse.StatusCode);
+        using var replayJson = JsonDocument.Parse(await replayResponse.Content.ReadAsStringAsync());
+        Assert.Equal(rideId, replayJson.RootElement.GetProperty("rideId").GetString());
+
         using var secondRequest = CreateSelectedBookingRequest(
             "rider-permanent-key-b", "rider-permanent-driver-b", "rider-permanent-union-b", "KPHB", "Madhapur", []);
         using var secondResponse = await rider.SendAsync(secondRequest);
         Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
         Assert.Equal(rideId, (await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
             .GetActiveAsync("rider-permanent-booking"))?.RideId);
+    }
+
+    [Fact]
+    public async Task CompletedSelectedRideReleasesRiderReservation()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "rider-completed-booking");
+        using var driver = factory.CreateClient("Driver", "rider-completed-driver");
+        SeedBookableDriver(factory, "rider-completed-driver", "rider-completed-union");
+
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, "rider-completed-driver", "rider-completed-union",
+            "rider-completed-key", 390m);
+
+        Assert.Equal("Completed", factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId].Status);
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync("rider-completed-booking"));
     }
 
     [Fact]
