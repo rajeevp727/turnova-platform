@@ -18,7 +18,7 @@ import { createSelectedBookingLocation } from "../shared/selectedBookingLocation
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { resetRiderSessionState } from "../shared/sessionStateReset";
-import { clearProposalAttempt, getOrCreateProposalAttempt, type ProposalAttempt } from "../shared/proposalAttempt";
+import { clearProposalAttempt, finishProposalSubmission, getOrCreateProposalAttempt, type ProposalAttempt } from "../shared/proposalAttempt";
 import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
 
@@ -90,10 +90,19 @@ export default function App() {
   const [agreementHistory,setAgreementHistory]=useState<AgreementVersion[]>([]);
   const [agreementAmount,setAgreementAmount]=useState("");
   const proposalAttemptRef=useRef<ProposalAttempt|null>(null);
-  const proposalSubmissionInFlight=useRef(false);
+  const proposalSubmissionInFlight=useRef<string|null>(null);
   const [proposalSubmitting,setProposalSubmitting]=useState(false);
   const currentRideIdRef=useRef<string|null>(null);
   currentRideIdRef.current=ride?.rideId??null;
+  const proposalRideIdRef=useRef<string|null>(ride?.rideId??null);
+  useEffect(()=>{
+    const nextRideId=ride?.rideId??null;
+    if(proposalRideIdRef.current===nextRideId)return;
+    proposalRideIdRef.current=nextRideId;
+    proposalAttemptRef.current=null;
+    proposalSubmissionInFlight.current=null;
+    setProposalSubmitting(false);
+  },[ride?.rideId]);
   const [bookingRequestKey,setBookingRequestKey]=useState(()=>`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const bookingRequestKeyRef=useRef(bookingRequestKey);
   const selectedBookingLocation=useRef(createSelectedBookingLocation(Location));
@@ -106,6 +115,8 @@ export default function App() {
   },[]);
   const clearRiderSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
     proposalAttemptRef.current=null;
+    proposalSubmissionInFlight.current=null;
+    setProposalSubmitting(false);
     authenticatedSessionEpoch.current = null;
     resetSelectedBookingAttempt();
     resetRiderSessionState({
@@ -316,7 +327,7 @@ export default function App() {
     const amount=Number(agreementAmount);
     if(!Number.isFinite(amount)||amount<=0){setError("Enter a positive agreed amount in INR.");return;}
     const attempt=getOrCreateProposalAttempt(proposalAttemptRef,{rideId,actor:"rider",amount,currency:"INR"});
-    proposalSubmissionInFlight.current=true;
+    proposalSubmissionInFlight.current=attempt.key;
     setProposalSubmitting(true);
     setError("");
     try{
@@ -336,8 +347,7 @@ export default function App() {
         if(currentRideIdRef.current===rideId)setError("The proposal may already be saved. Retry the same amount to safely reload it; the same request key will be reused.");
       }
     }finally{
-      proposalSubmissionInFlight.current=false;
-      setProposalSubmitting(false);
+      if(finishProposalSubmission(proposalSubmissionInFlight,attempt.key))setProposalSubmitting(false);
     }
   };
   const confirmAgreement=async()=>{if(!ride)return;const current=agreementHistory[agreementHistory.length-1];if(!current)return;setError("");try{await apiFetch(`/api/v1/rides/${ride.rideId}/agreements/${current.version}/confirm`,{method:"POST"});await loadAgreementHistory(ride.rideId);}catch(e){setError(e instanceof Error?e.message:"Unable to confirm fare agreement.");}};
