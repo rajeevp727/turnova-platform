@@ -17,3 +17,6 @@ export function getOrCreateProposalAttempt(
 ): ProposalAttempt;
 
 export function clearProposalAttempt(ref: ProposalAttemptRef, expectedKey: string): boolean;
+
+export type ProposalSubmissionRef = { current: string | null };
+export function finishProposalSubmission(ref: ProposalSubmissionRef, expectedKey: string): boolean;
