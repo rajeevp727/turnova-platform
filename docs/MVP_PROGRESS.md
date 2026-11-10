@@ -1027,3 +1027,5 @@ Source/test commits: 385923b9c2802ccb76d6e8dff12866b24e6c2989 and dd5b61efde3f73
 The previous head 639e6c1 passed CI #1159 / 42842677468 12/12 with backend 373/373, shared JS 141/141, Python 41/41, both app typechecks/bundles, four native builds and four simulator smokes. This evidence predates the latest follow-up and is not a substitute for fresh CI.
 
 Strict acceptance remains 0/19 (15 In Progress, 4 Blocked), not an implementation-completion percentage. Production readiness remains not established.
+
+**Final AUTH-02 documentation synchronization:** The current source/test head remains dd5b61efde3f730cddce434c3371c859b4f19001; documentation commit d790a0def269a791536b59ba254288893b0b700c synchronizes MVP_PROGRESS, MVP_ACCEPTANCE_MATRIX, test-plan and PROJECT_BRAIN. The latest exact-head workflow must cover both the source/test changes and this documentation commit. Previous CI #1159 belongs only to source/test head 639e6c1516693995997571983619f980dac9f75f and must not be reused as evidence for AUTH-LOGIN-060/061.
