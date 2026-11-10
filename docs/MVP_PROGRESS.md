@@ -1,6 +1,6 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-10 (main HEAD 6f0dc4821ae6408c7057f6b34aa4990ea01d948d; sole active PR #143 AUTH-02 on fix/auth-02-refresh-logout-epoch-race; latest source/docs head 08c5ec6aa2bb49aaf8aa59e8dfc2326ae7c5e980. CI #1147 exposed TS2305 because signalRConnection.d.ts omitted the new helper exports; the declaration fix is included. CI #1148 confirmed backend and both mobile typechecks passed, but the Python suite failed one new RELEASE-SMOKE-026 assertion because the recorded simctl command includes the app path after the device ID. The test now checks the command prefix rather than exact equality; fresh exact-head CI is pending.)
+**Last updated:** 2026-11-10 (main HEAD `6f0dc4821ae6408c7057f6b34aa4990ea01d948d`; sole active PR #143 AUTH-02 on `fix/auth-02-refresh-logout-epoch-race`; verified source/test head `65a1ea8eca5087a6ad64d88b47dce602938b3c94`; exact-head CI #1149 / 42814411667 passed 12/12: backend 373/373, shared JS 136/136, Python 41/41, both app validation/bundles, four native builds and four simulator smokes. All four same-run simulator artifacts were downloaded and inspected. A documentation-synchronized head requires a fresh exact-head CI run.)
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded. Approved AI-01 is supplemental and remains outside the 19-row denominator.
 
 ## 1. Current step
@@ -1042,3 +1042,14 @@ Expected suite totals remain backend 373, shared JS 136 and Python 41. Strict ac
 ## Latest CI correction — RELEASE-SMOKE-026 command assertion (2026-11-10)
 
 CI #1148 / 42813974342 confirmed the backend job passed (373/373) and both Rider/Driver mobile typecheck+bundle jobs passed after the SignalR declaration correction. The mobile-auth-tests job ran 41 Python tests and failed only RELEASE-SMOKE-026: the test asserted the exact string `install TEST-DEVICE`, while the harness correctly records `install TEST-DEVICE <app-path>`. The regression now asserts that one recorded command starts with `install TEST-DEVICE `, preserving verification that install ran without coupling to its temporary artifact path. The remaining native builds were still running when this failure was diagnosed; CI #1148 is not green. Fresh exact-head CI is required. Expected totals remain backend 373, shared JS 136, Python 41.
+
+
+## Latest exact-head verification — AUTH-02 / PR #143 (2026-11-10)
+
+Code/test head `65a1ea8eca5087a6ad64d88b47dce602938b3c94` passed [CI #1149 / 42814411667](https://github.com/rajeevp727/turnova-platform/actions/runs/42814411667) **12/12 jobs**. Results: .NET 10 backend **373/373**; shared mobile JavaScript **136/136**; Python native-artifact/simulator harness **41/41**; Rider and Driver TypeScript validation and production JS bundles; both Android native builds; both unsigned iOS Simulator native builds; and all four Android/iOS simulator smoke jobs.
+
+Same-run smoke artifacts were downloaded and inspected, including result JSON and screenshots: Rider Android `13764416739`, Driver Android `13765480564`, Rider iOS `13764818112`, Driver iOS `13765668500`. Both Android apps installed/launched, remained stable and displayed the correct role-specific login screen with no stale-session error and zero Pixel Launcher ANR recovery attempts. Both iOS apps installed/launched after a clean simulator erase, remained stable and displayed the correct role-specific login screen; `secureStoreAvailable=false`, the expected SecureStore-unavailable banner was verified, and no Keychain access group was available. Production API/authentication was not exercised. This is unsigned simulator startup evidence only, not signed-device Keychain persistence or production acceptance.
+
+`RELEASE-SMOKE-026` is covered by Python test 41/41: the default per-operation iOS Simulator timeout is 300 seconds (maximum 300), while first-boot `bootstatus` remains separately bounded at 600 seconds. Explicit shorter-timeout fixtures still fail closed.
+
+The documentation synchronization is based on this verified source/test head and creates a new PR head; a fresh exact-head CI run is required before merge. PR #143 remains open. Merge only after the documentation-head CI is green, final review is anchored to the latest SHA, all four same-run artifacts are inspected, no critical/high risk or unresolved review thread remains, and GitHub permits the expected-head merge.
