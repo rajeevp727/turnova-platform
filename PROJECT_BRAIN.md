@@ -3,9 +3,9 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-10
+**Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** 6f0dc4821ae6408c7057f6b34aa4990ea01d948d after AI-01 PR #142 merged. Sole active PR #143 is AUTH-02 on fix/auth-02-refresh-logout-epoch-race; latest source/test head 87129ce909ae39c1b3a42e0b175a93436201ee58. Preceding head fe3c029 passed [CI #1163 / 42852250391](https://github.com/rajeevp727/turnova-platform/actions/runs/42852250391) 12/12: backend 373/373, shared JS 143/143, Python 41/41, Rider/Driver validation and bundles, four native builds and four simulator smokes. Same-run Android/iOS smoke artifacts were downloaded and inspected; unsigned iOS SecureStore unavailable warning is expected, but Keychain persistence and production authentication are not established. Current head adds AUTH-LOGIN-062 and needs fresh exact-head CI. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `a3e701f7acb3793d70d6656e5f7ac8b55791a1a4` after AUTH-02 PR #143 merged. Sole active feature PR #145 is RIDER-02 on `fix/rider-02-proposal-idempotency`; source/test head `56a363621029fbfb16e2ef7c72d14f1faad48c8d`, documentation head `e2f2e8f937494f7288bc00fe9a52505b09e5c6db`, exact-head CI #1176 / 42881619627 is running. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
