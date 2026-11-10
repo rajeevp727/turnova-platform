@@ -5,6 +5,7 @@ const {
   REFRESH_TOKEN_KEY,
   readSessionTokens,
   saveSessionTokens,
+  saveSessionTokensIfCurrent,
   clearSessionTokens,
   logoutSession,
   restoreStoredSession
@@ -320,4 +321,135 @@ test("does not wait for an unresponsive server logout before clearing local toke
 
   assert.equal(storage.values.size, 0);
   resolveRevoke();
+});
+
+
+test("persists a token pair while the expected session epoch remains current", async () => {
+  const storage = createStorage();
+  const epoch = { current: 4 };
+
+  const saved = await saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "access-current", refreshToken: "refresh-current" },
+    () => epoch.current === 4
+  );
+
+  assert.equal(saved, true);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-current");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-current");
+});
+
+test("skips token persistence when the session epoch is already stale", async () => {
+  const storage = createStorage();
+  const epoch = { current: 2 };
+
+  const saved = await saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "access-stale", refreshToken: "refresh-stale" },
+    () => epoch.current === 1
+  );
+
+  assert.equal(saved, false);
+  assert.equal(storage.calls.some(call => call[0] === "set"), false);
+  assert.equal(storage.values.size, 0);
+});
+
+test("rolls back an access-token write when logout advances the session epoch", async () => {
+  let epoch = 1;
+  let signalAccessWriteStarted;
+  let releaseAccessWrite;
+  const accessWriteStarted = new Promise(resolve => { signalAccessWriteStarted = resolve; });
+  const blockedAccessWrite = new Promise(resolve => { releaseAccessWrite = resolve; });
+  const storage = createStorage({}, {
+    set: async key => {
+      if (key === ACCESS_TOKEN_KEY) {
+        signalAccessWriteStarted();
+        await blockedAccessWrite;
+      }
+    }
+  });
+
+  const saving = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "access-old", refreshToken: "refresh-old" },
+    () => epoch === 1
+  );
+  await accessWriteStarted;
+
+  epoch = 2;
+  const logout = clearSessionTokens(storage);
+  releaseAccessWrite();
+
+  assert.equal(await saving, false);
+  await logout;
+  assert.equal(storage.values.size, 0);
+});
+
+test("rolls back a complete pair when logout advances the epoch during refresh-token persistence", async () => {
+  let epoch = 7;
+  let signalRefreshWriteStarted;
+  let releaseRefreshWrite;
+  const refreshWriteStarted = new Promise(resolve => { signalRefreshWriteStarted = resolve; });
+  const blockedRefreshWrite = new Promise(resolve => { releaseRefreshWrite = resolve; });
+  const storage = createStorage({}, {
+    set: async key => {
+      if (key === REFRESH_TOKEN_KEY) {
+        signalRefreshWriteStarted();
+        await blockedRefreshWrite;
+      }
+    }
+  });
+
+  const saving = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "access-old", refreshToken: "refresh-old" },
+    () => epoch === 7
+  );
+  await refreshWriteStarted;
+
+  epoch = 8;
+  const logout = clearSessionTokens(storage);
+  releaseRefreshWrite();
+
+  assert.equal(await saving, false);
+  await logout;
+  assert.equal(storage.values.size, 0);
+});
+
+test("a new login pair wins after an older refresh is invalidated during persistence", async () => {
+  let epoch = 10;
+  let signalAccessWriteStarted;
+  let releaseAccessWrite;
+  const accessWriteStarted = new Promise(resolve => { signalAccessWriteStarted = resolve; });
+  const blockedAccessWrite = new Promise(resolve => { releaseAccessWrite = resolve; });
+  const storage = createStorage({}, {
+    set: async (key, value) => {
+      if (key === ACCESS_TOKEN_KEY && value === "access-old") {
+        signalAccessWriteStarted();
+        await blockedAccessWrite;
+      }
+    }
+  });
+
+  const staleRefresh = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "access-old", refreshToken: "refresh-old" },
+    () => epoch === 10
+  );
+  await accessWriteStarted;
+
+  epoch = 11;
+  const clearPreviousSession = clearSessionTokens(storage);
+  const newLogin = saveSessionTokensIfCurrent(
+    storage,
+    { accessToken: "access-new", refreshToken: "refresh-new" },
+    () => epoch === 11
+  );
+  releaseAccessWrite();
+
+  assert.equal(await staleRefresh, false);
+  await clearPreviousSession;
+  assert.equal(await newLogin, true);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new");
 });
