@@ -3,9 +3,9 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-10
+**Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** 6f0dc4821ae6408c7057f6b34aa4990ea01d948d after AI-01 PR #142 merged. Sole active PR #143 is AUTH-02 on fix/auth-02-refresh-logout-epoch-race; latest source/test head 87129ce909ae39c1b3a42e0b175a93436201ee58. Preceding head fe3c029 passed [CI #1163 / 42852250391](https://github.com/rajeevp727/turnova-platform/actions/runs/42852250391) 12/12: backend 373/373, shared JS 143/143, Python 41/41, Rider/Driver validation and bundles, four native builds and four simulator smokes. Same-run Android/iOS smoke artifacts were downloaded and inspected; unsigned iOS SecureStore unavailable warning is expected, but Keychain persistence and production authentication are not established. Current head adds AUTH-LOGIN-062 and needs fresh exact-head CI. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `a3e701f7acb3793d70d6656e5f7ac8b55791a1a4` after AUTH-02 PR #143 merged. Sole active feature PR #145 is RIDER-02 on `fix/rider-02-proposal-idempotency`; source/test head `56a363621029fbfb16e2ef7c72d14f1faad48c8d`, documentation head `9fbca10d57334167aa41018a9104096f9f85e877`. Exact-head CI [#1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12, including backend 373/373, shared JS 153/153, Python 41/41, both app validation/bundles, four native builds and four simulator smokes; the Driver Android emulator smoke passed on a targeted retry after a Pixel Launcher ANR. All four same-run smoke artifacts were inspected. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1362,3 +1362,53 @@ Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); substantial implemen
 ## Latest AUTH-02 handoff — 2026-11-10
 
 Driver `clearDriverSessionState()` now clears the session-scoped `receivedOfferIds` Set used to deduplicate at-least-once SignalR offers. This prevents a prior account's seen-offer IDs from suppressing a new account's offer. The existing 500-entry cap remains. AUTH-LOGIN-062 covers the source integration. Source/test head 87129ce909ae39c1b3a42e0b175a93436201ee58; fresh exact-head CI is required. Preceding head fe3c029 passed CI #1163 / 42852250391 12/12; all four same-run simulator smoke artifacts were inspected. Next sequential work after AUTH-02 merge: re-read main, complete #3 RIDER-01 audit, then implement #4 RIDER-02 stable same-payload proposal idempotency and #5 RIDER-03 Rider-scoped active-booking reservation.
+
+## Latest sequential handoff — RIDER-02 proposal-attempt idempotency (2026-11-10)
+
+PR #143 AUTH-02 merged at `a3e701f7acb3793d70d6656e5f7ac8b55791a1a4` after [CI #1166 / 42861806486](https://github.com/rajeevp727/turnova-platform/actions/runs/42861806486) passed 12/12. All four same-run simulator artifacts were downloaded and inspected; unsigned iOS SecureStore-unavailable behavior is expected, and signed-device Keychain/production authentication is not claimed.
+
+PR #145 is the sole active feature PR on `fix/rider-02-proposal-idempotency`. It adds shared client proposal-attempt idempotency in Rider and Driver: stable key for identical retry payloads, new key on ride/actor/amount/currency changes, double-tap guard, disabled amount input, retained key after ambiguous POST/history refresh failure, expected-key clear and session-reset cleanup. Backend actor-scoped immutable-version replay and HTTP 409 mismatch remain authoritative. Code head `ca5df7792e3962c542e5c5b129b3a0cc52e0c016` CI #1168 / 42872267649 passed 12/12; backend 373/373, shared JS 151/151, Python 41/41, both app validation/bundles, four native builds and four simulator smokes passed. All four same-run simulator artifacts were downloaded and inspected. A new actor/currency fingerprint regression was added at `927657d1917fd7cb1d32cc234b3bb4051979ba27`; documentation synchronization on this PR still requires fresh exact-head CI; CI #1168 predates this test. COMMENT-only review 5847336885 found no critical/high issue. Pending attempt persistence across process death is not proven.
+
+Fresh #3 RIDER-01 audit found no additional independent source gap: Cab-only union-grouped discovery, max-three pickup-proximity ordering, union-approved selfie/verified Cab details, location freshness, distance separation and privacy filtering are implemented and covered by deterministic tests. Product-approved radius/zones/freshness, maps/routing, Call/Chat, live Cosmos and physical-device location acceptance remain external.
+
+Next sequential work after PR #145 merges: #5 RIDER-03. The selected-booking API protects each Driver with a reservation but has no Rider-scoped active-booking reservation across different Idempotency-Keys. Add durable Rider reservation using existing `RideIdempotency` container partitioned by `/riderId` (or equivalent), create-if-absent/ETag protection, expiry/orphan reconciliation, promotion on Driver acceptance, matching terminal release and concurrent different-key tests. Production negotiation lifetime remains unset and booking fails closed with 503.
+
+Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## Latest sequential handoff — RIDER-02 proposal submission ownership hardening (2026-11-11)
+
+PR #145 remains the sole active feature PR on `fix/rider-02-proposal-idempotency`. Current source/test head: `56a363621029fbfb16e2ef7c72d14f1faad48c8d`.
+
+A deeper review found that the original boolean proposal in-flight guard could remain set after account reset/ride change until an old network promise settled. Its unconditional `finally` could also release a newer submission. Both Rider and Driver now use an attempt-key-owned lock. `finishProposalSubmission(ref, expectedKey)` only clears a matching owner; session reset and ride identity change clear the old attempt/lock and set submitting UI state false. The old finalizer is harmless if a replacement attempt owns the lock.
+
+New deterministic coverage:
+- `a stale proposal completion cannot release a newer in-flight submission`.
+- Rider/Driver source-integration assertions verify lock ownership, session reset cleanup and ride-change cleanup.
+- New test-plan cases CAB-AGR-029 and CAB-AGR-030.
+- Expected shared JavaScript suite: 153 tests.
+
+Earlier CI #1168 passed 12/12 before the actor/currency and lock-ownership additions. CI #1171 / 42879001921 was on superseded head `0a7bb547...`; it must not be reused. Fresh exact-head CI on `56a363621029fbfb16e2ef7c72d14f1faad48c8d` and all same-run native/simulator artifact inspection are required. PR #145 is not merged.
+
+The pending proposal attempt remains in-memory; replay across process death is not proven. Live Cosmos ETag/multi-instance and physical-device negotiation/reconnect remain external gates.
+
+Next after PR #145 merges: re-read main and implement #5 RIDER-03 Rider-scoped active-booking reservation across different Idempotency-Keys, using the existing rider-partitioned `RideIdempotency` storage only after verifying partition/ETag/transaction semantics. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## Latest verified handoff — RIDER-02 (2026-11-11)
+
+PR #145 source/test head `56a363621029fbfb16e2ef7c72d14f1faad48c8d` and documentation head `9fbca10d57334167aa41018a9104096f9f85e877` passed [CI #1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) with **12/12 jobs successful**. Results: .NET 10 backend **373/373**, shared mobile JavaScript **153/153**, Python native-artifact/simulator harness **41/41**, Rider/Driver TypeScript validation and production bundles, both Android native builds, both iOS Simulator native builds, and all four Android/iOS simulator smoke jobs. The Driver Android smoke initially encountered a Pixel Launcher ANR; only that failed job was rerun, and the retry passed without app changes. The final workflow conclusion is success.
+
+Same-run smoke artifacts were downloaded and inspected, including result JSON and screenshots:
+- Rider Android `13795890654`: `com.turnova.rider`, install/launch passed, process stable, Rider login text and screenshot verified, stale-session error absent.
+- Driver Android `13798054264`: `com.turnova.driver`, targeted retry after the first artifact `13795995296` recorded a Pixel Launcher ANR; retry install/launch passed, process stable, Driver login text and screenshot verified, stale-session error absent, zero launcher recovery attempts on the successful retry.
+- Rider iOS `13796097620`: `com.turnova.rider`, clean simulator data erased, install/launch passed, process stable, Rider login screen verified.
+- Driver iOS `13795844308`: `com.turnova.driver`, clean simulator data erased, install/launch passed, process stable, Driver login screen verified.
+
+Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureStore-unavailable banner, no Keychain access group, unsigned simulator artifacts, and production API/authentication not exercised. These artifacts prove simulator install/launch/login-surface checks only; they do not establish signed-device Keychain persistence, production authentication, live Cosmos, or physical-device acceptance. Final-head COMMENT-only review [5847757020](https://github.com/rajeevp727/turnova-platform/pull/145#pullrequestreview-5847757020) found no critical/high issue; unresolved review threads: **0**. The subsequent documentation-only synchronization requires fresh exact-head CI before merge.
+
+PR #145 adds stable client proposal-attempt idempotency in Rider and Driver: same ride/actor/amount/currency reuses the same actor-prefixed key after ambiguous POST or history-refresh failure; a changed fingerprint creates a new key; double taps are blocked; the amount field is disabled while submitting; and an attempt is cleared only after the agreement history refresh succeeds or the session/ride resets. The in-flight lock is owned by the attempt key, so a stale request finalizer cannot release a newer account/ride submission. Deterministic coverage includes actor/currency fingerprinting, stale-finalizer ownership and Rider/Driver session/ride cleanup. The pending attempt remains in an in-memory ref; replay across process death is not proven.
+
+Fresh #3 RIDER-01 audit found no additional independent source-code gap. Product-approved dispatch radius/zones/location freshness, routing/maps, live Call/Chat, live Cosmos and physical-device location acceptance remain external. Next sequential item after PR #145 merges is #5 RIDER-03: add a durable Rider-scoped active-booking reservation across different Idempotency-Keys. The current route has per-Driver reservation only; verify the existing RideIdempotency container migration/partition and transaction semantics before adding create-if-absent/ETag-safe Rider reservation, terminal/orphan reconciliation, matching release and concurrent different-key tests. Production negotiation lifetime remains unset and booking fails closed with 503.
+
+Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
