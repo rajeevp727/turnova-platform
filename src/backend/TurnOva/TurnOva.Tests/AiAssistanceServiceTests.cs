@@ -144,6 +144,130 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task ProviderIgnoringCancellationIsBoundedByTimeoutAndLateFaultIsObserved()
+    {
+        var providerStarted = new TaskCompletionSource<CancellationToken>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingProvider = new TaskCompletionSource<TripIntentProviderResult?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, token) =>
+            {
+                providerStarted.TrySetResult(token);
+                return pendingProvider.Task;
+            }
+        };
+        var service = CreateService(provider, enabled: true, timeoutSeconds: 1);
+
+        var operation = service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+        var providerToken = await providerStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var result = await operation.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.True(providerToken.IsCancellationRequested);
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.Equal("Nizampet", result.Pickup);
+        Assert.Equal("HITEC City", result.Dropoff);
+
+        // Complete the abandoned provider task with a late fault. The service has already
+        // attached a fault observer and must not surface provider exception details.
+        Assert.True(pendingProvider.TrySetException(new HttpRequestException("late provider failure")));
+        await Task.Yield();
+    }
+
+    [Fact]
+    public async Task ExplicitProviderTimeoutExceptionUsesDeterministicFallback()
+    {
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) =>
+                Task.FromException<TripIntentProviderResult?>(new TimeoutException("provider timeout"))
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.Equal("Nizampet", result.Pickup);
+        Assert.Equal("HITEC City", result.Dropoff);
+    }
+
+    [Fact]
+    public async Task TransientProviderHttpFailureUsesDeterministicFallback()
+    {
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) =>
+                Task.FromException<TripIntentProviderResult?>(new HttpRequestException("temporary provider failure"))
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.Equal("Nizampet", result.Pickup);
+        Assert.Equal("HITEC City", result.Dropoff);
+    }
+
+    [Fact]
+    public async Task CallerCancellationDuringInFlightProviderRequestIsPropagated()
+    {
+        var providerStarted = new TaskCompletionSource<CancellationToken>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingProvider = new TaskCompletionSource<TripIntentProviderResult?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, token) =>
+            {
+                providerStarted.TrySetResult(token);
+                return pendingProvider.Task;
+            }
+        };
+        var service = CreateService(provider, enabled: true, timeoutSeconds: 10);
+        using var callerCancellation = new CancellationTokenSource();
+
+        var operation = service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            callerCancellation.Token);
+        var providerToken = await providerStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await callerCancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+        Assert.True(providerToken.IsCancellationRequested);
+        pendingProvider.TrySetResult(null);
+    }
+
+    [Fact]
+    public async Task CallerCancellationTakesPrecedenceOverAlreadyFaultedProviderHttpRequest()
+    {
+        using var callerCancellation = new CancellationTokenSource();
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) =>
+            {
+                var failed = Task.FromException<TripIntentProviderResult?>(
+                    new HttpRequestException("temporary provider failure"));
+                callerCancellation.Cancel();
+                return failed;
+            }
+        };
+        var service = CreateService(provider, enabled: true);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.DraftTripIntentAsync(
+                "Cab from Nizampet to HITEC City for 2 passengers",
+                callerCancellation.Token));
+    }
+
+    [Fact]
     public async Task CallerCancellationIsPropagatedInsteadOfConvertedToFallback()
     {
         var service = CreateService(new UnavailableAiAssistantProvider());
