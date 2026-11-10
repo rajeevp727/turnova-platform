@@ -31,6 +31,13 @@ if [[ ! -s "$APK_PATH" ]]; then
   exit 1
 fi
 
+# This smoke installs SDK packages and launches an emulator. Keep it on the
+# ephemeral CI runner; local developer SDK/emulator state must not be mutated.
+if [[ "${CI:-}" != "true" ]]; then
+  echo "Android emulator smoke installs SDK packages and may run only on a CI runner (CI=true)." >&2
+  exit 2
+fi
+
 mkdir -p "$OUTPUT_DIR"
 SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [[ -z "$SDK_ROOT" ]]; then
@@ -59,28 +66,99 @@ fi
 
 export ANDROID_SDK_ROOT="$SDK_ROOT"
 export ANDROID_HOME="$SDK_ROOT"
-export ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
+export ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/turnova-android-avd}"
 export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
 
 SYSTEM_IMAGE="system-images;android-35;google_apis;x86_64"
-AVD_NAME="turnova-release-smoke"
+AVD_NAME="turnova-release-smoke-${PPID}-${RANDOM}-${RANDOM}"
 AVD_INI="$ANDROID_AVD_HOME/$AVD_NAME.ini"
 AVD_DIR="$ANDROID_AVD_HOME/$AVD_NAME.avd"
 EMULATOR_PID=""
+AVD_CREATED=false
 
 cleanup() {
-  "$SDK_ROOT/platform-tools/adb" emu kill >/dev/null 2>&1 || true
   if [[ -n "$EMULATOR_PID" ]]; then
     kill "$EMULATOR_PID" >/dev/null 2>&1 || true
     wait "$EMULATOR_PID" 2>/dev/null || true
   fi
+  # Remove only the uniquely named AVD created by this invocation. Never delete
+  # a pre-existing developer AVD from a shared ANDROID_AVD_HOME.
+  if [[ "$AVD_CREATED" == true ]]; then
+    rm -rf "$AVD_DIR" "$AVD_INI"
+  fi
 }
 trap cleanup EXIT
 
-# Accept SDK licenses and install only the native emulator packages needed for this smoke.
+# Accept SDK licenses and install the stable platform/emulator packages first.
 yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null 2>&1 || true
 "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install \
-  "platform-tools" "emulator" "platforms;android-35" "$SYSTEM_IMAGE"
+  "platform-tools" "emulator" "platforms;android-35"
+
+# Google-hosted SDK package downloads occasionally arrive as a truncated/corrupt
+# archive ("ZipFile unknown archive"). Retry only the API 35 system image, verify
+# the extracted package before AVD creation, and fail closed after three attempts.
+SYSTEM_IMAGE_DIR="$SDK_ROOT/system-images/android-35/google_apis/x86_64"
+SYSTEM_IMAGE_PREEXISTED=false
+if [[ -e "$SYSTEM_IMAGE_DIR" || -L "$SYSTEM_IMAGE_DIR" ]]; then
+  if [[ -s "$SYSTEM_IMAGE_DIR/package.xml" && -s "$SYSTEM_IMAGE_DIR/system.img" ]]; then
+    SYSTEM_IMAGE_PREEXISTED=true
+  else
+    echo "Existing Android API 35 system image is incomplete; refusing to modify or remove it." >&2
+    exit 1
+  fi
+fi
+SYSTEM_IMAGE_RETRY_DELAY_SECONDS="${TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS:-2}"
+if [[ ! "$SYSTEM_IMAGE_RETRY_DELAY_SECONDS" =~ ^(0|[1-9]|[12][0-9]|30)$ ]]; then
+  echo "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS must be an integer from 0 to 30." >&2
+  exit 2
+fi
+
+install_system_image_with_retry() {
+  if [[ "$SYSTEM_IMAGE_PREEXISTED" == true ]]; then
+    echo "Using the pre-existing Android API 35 system image without modifying it."
+    return 0
+  fi
+
+  local attempt=1
+  local max_attempts=3
+  local status=1
+  local log_file
+
+  while (( attempt <= max_attempts )); do
+    log_file="$OUTPUT_DIR/sdkmanager-system-image-attempt-$attempt.log"
+    if "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "$SYSTEM_IMAGE" >"$log_file" 2>&1; then
+      if [[ -s "$SYSTEM_IMAGE_DIR/package.xml" && -s "$SYSTEM_IMAGE_DIR/system.img" ]]; then
+        cat "$log_file"
+        echo "Android API 35 system image installed and verified on attempt $attempt."
+        return 0
+      fi
+      status=1
+      echo "sdkmanager returned success but the system image package is incomplete." >>"$log_file"
+    else
+      status=$?
+    fi
+
+    echo "Android system image installation attempt $attempt/$max_attempts failed (exit $status):" >&2
+    tail -n 80 "$log_file" >&2 || true
+
+    # A failed sdkmanager download can leave non-empty but corrupt files behind.
+    # Always remove this isolated package directory before the next attempt.
+    if [[ "$SYSTEM_IMAGE_PREEXISTED" != true && -d "$SYSTEM_IMAGE_DIR" ]]; then
+      rm -rf "$SYSTEM_IMAGE_DIR"
+    fi
+
+    if (( attempt < max_attempts )); then
+      echo "Retrying the Android API 35 system image download." >&2
+      sleep "$SYSTEM_IMAGE_RETRY_DELAY_SECONDS"
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  echo "Android API 35 system image installation failed after $max_attempts attempts." >&2
+  return "$status"
+}
+
+install_system_image_with_retry
 
 EMULATOR_BIN="$SDK_ROOT/emulator/emulator"
 ADB_BIN="$SDK_ROOT/platform-tools/adb"
@@ -90,12 +168,16 @@ if [[ ! -x "$EMULATOR_BIN" || ! -x "$ADB_BIN" ]]; then
 fi
 
 mkdir -p "$ANDROID_AVD_HOME"
-"$AVDMANAGER" delete avd -n "$AVD_NAME" >/dev/null 2>&1 || true
+if [[ -e "$AVD_INI" || -e "$AVD_DIR" ]]; then
+  echo "Refusing to replace an existing Android AVD at $AVD_INI or $AVD_DIR." >&2
+  exit 1
+fi
+AVD_CREATED=true
 printf 'no\n' | "$AVDMANAGER" create avd -f -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "pixel_2" 2>&1 | tee "$OUTPUT_DIR/avdmanager-create.log"
 
 if [[ ! -s "$AVD_INI" || ! -d "$AVD_DIR" ]]; then
   echo "Android AVD was not created in ANDROID_AVD_HOME=$ANDROID_AVD_HOME." >&2
-  find "$HOME/.android" -maxdepth 3 -name "$AVD_NAME.ini" -o -name "$AVD_NAME.avd" >&2 || true
+  find "$ANDROID_AVD_HOME" -maxdepth 3 -name "$AVD_NAME.ini" -o -name "$AVD_NAME.avd" >&2 || true
   exit 1
 fi
 
@@ -175,17 +257,104 @@ if ! grep -Fq "$EXPECTED_ID/" "$OUTPUT_DIR/activities.txt"; then
   exit 1
 fi
 
-"$ADB_BIN" shell uiautomator dump /sdcard/turnova-ui-hierarchy.xml > "$OUTPUT_DIR/uiautomator-dump.txt" 2>&1
-"$ADB_BIN" shell cat /sdcard/turnova-ui-hierarchy.xml | tr -d '\r' > "$OUTPUT_DIR/ui-hierarchy.xml"
-if [[ ! -s "$OUTPUT_DIR/ui-hierarchy.xml" ]]; then
-  echo "Android UI hierarchy dump is missing or empty." >&2
-  cat "$OUTPUT_DIR/uiautomator-dump.txt" >&2 || true
+capture_ui_hierarchy() {
+  "$ADB_BIN" shell uiautomator dump /sdcard/turnova-ui-hierarchy.xml > "$OUTPUT_DIR/uiautomator-dump.txt" 2>&1
+  "$ADB_BIN" shell cat /sdcard/turnova-ui-hierarchy.xml | tr -d '\r' > "$OUTPUT_DIR/ui-hierarchy.xml"
+  if [[ ! -s "$OUTPUT_DIR/ui-hierarchy.xml" ]]; then
+    echo "Android UI hierarchy dump is missing or empty." >&2
+    cat "$OUTPUT_DIR/uiautomator-dump.txt" >&2 || true
+    exit 1
+  fi
+}
+
+capture_ui_hierarchy
+pixel_launcher_anr_wait_attempts=0
+while grep -Fq "Pixel Launcher isn't responding" "$OUTPUT_DIR/ui-hierarchy.xml"; do
+  if (( pixel_launcher_anr_wait_attempts >= 2 )); then
+    echo "Pixel Launcher ANR dialog persisted after two bounded Wait attempts." >&2
+    cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+    exit 1
+  fi
+
+  pixel_launcher_anr_wait_attempts=$((pixel_launcher_anr_wait_attempts + 1))
+  cp "$OUTPUT_DIR/ui-hierarchy.xml" "$OUTPUT_DIR/pixel-launcher-anr-$pixel_launcher_anr_wait_attempts.xml"
+
+  if ! wait_coordinates="$(python3 - "$OUTPUT_DIR/ui-hierarchy.xml" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except (OSError, ET.ParseError):
+    sys.exit(2)
+
+title = next(
+    (
+        node.attrib.get("text")
+        for node in root.iter("node")
+        if node.attrib.get("resource-id") == "android:id/alertTitle"
+    ),
+    None,
+)
+if title != "Pixel Launcher isn't responding":
+    sys.exit(3)
+
+wait_button = next(
+    (
+        node
+        for node in root.iter("node")
+        if node.attrib.get("resource-id") == "android:id/aerr_wait"
+        and node.attrib.get("text") == "Wait"
+    ),
+    None,
+)
+if wait_button is None:
+    sys.exit(4)
+if wait_button.attrib.get("clickable") != "true" or wait_button.attrib.get("enabled") != "true":
+    sys.exit(6)
+
+match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", wait_button.attrib.get("bounds", ""))
+if match is None:
+    sys.exit(5)
+
+left, top, right, bottom = map(int, match.groups())
+print((left + right) // 2, (top + bottom) // 2)
+PY
+  )"; then
+    echo "Pixel Launcher ANR was detected but its safe Wait control could not be resolved." >&2
+    cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+    exit 1
+  fi
+
+  if [[ ! "$wait_coordinates" =~ ^[0-9]+[[:space:]][0-9]+$ ]]; then
+    echo "Pixel Launcher ANR Wait control returned invalid coordinates." >&2
+    exit 1
+  fi
+
+  read -r wait_x wait_y <<< "$wait_coordinates"
+  echo "Pixel Launcher ANR detected; selecting Wait at ($wait_x,$wait_y), attempt $pixel_launcher_anr_wait_attempts/2." | tee -a "$OUTPUT_DIR/system-ui-recovery.txt"
+  "$ADB_BIN" shell input tap "$wait_x" "$wait_y"
+  sleep 5
+  capture_ui_hierarchy
+done
+
+if grep -Fq "isn't responding" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+  echo "Unexpected Android app/system ANR dialog remains after Pixel Launcher recovery." >&2
+  cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
   exit 1
 fi
+
 for expected_text in "Welcome back" "Email address" "Password" "Sign in"; do
   if ! grep -Fq "$expected_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
     echo "Android login screen is missing expected visible/accessibility text: $expected_text" >&2
     cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+    exit 1
+  fi
+done
+for forbidden_text in "Unable to restore your session" "Unable to restore session" "Session expired" "Unable to clear secure session storage"; do
+  if grep -Fq "$forbidden_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+    echo "Android fresh-install login UI contains an unexpected session/storage error: $forbidden_text" >&2
     exit 1
   fi
 done
@@ -221,11 +390,11 @@ if [[ ! -s "$OUTPUT_DIR/launch.png" ]]; then
   exit 1
 fi
 
-python3 - "$EXPECTED_ID" "$activity" "$pid_after" "$SYSTEM_IMAGE" "$OUTPUT_DIR/result.json" <<'PY'
+python3 - "$EXPECTED_ID" "$activity" "$pid_after" "$SYSTEM_IMAGE" "$pixel_launcher_anr_wait_attempts" "$OUTPUT_DIR/result.json" <<'PY'
 import json
 import sys
 
-package_id, activity, pid, system_image, output = sys.argv[1:]
+package_id, activity, pid, system_image, anr_wait_attempts, output = sys.argv[1:]
 with open(output, "w", encoding="utf-8") as stream:
     json.dump({
         "platform": "android-emulator",
@@ -237,6 +406,11 @@ with open(output, "w", encoding="utf-8") as stream:
         "launch": "passed",
         "processStableAfterStartup": True,
         "loginScreenTextVerified": True,
+        "staleSessionErrorAbsent": True,
+        "systemUiRecovery": {
+            "pixelLauncherAnrWaitAttempts": int(anr_wait_attempts),
+            "pixelLauncherAnrRecovered": int(anr_wait_attempts) > 0
+        },
         "screenshot": "launch.png",
         "productionApiOrAuthentication": "not exercised"
     }, stream, indent=2)

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -41,7 +42,33 @@ class AndroidEmulatorSmokeHarnessTests(unittest.TestCase):
 set -euo pipefail
 case "$*" in
   *--licenses*) exit 0 ;;
-  *--install*) exit 0 ;;
+  *--install*)
+    if [[ "$*" == *"system-images;android-35;google_apis;x86_64"* ]]; then
+      attempts_file="$ANDROID_SDK_ROOT/system-image-install-attempts"
+      attempts=0
+      [[ ! -f "$attempts_file" ]] || read -r attempts < "$attempts_file"
+      attempts=$((attempts + 1))
+      printf '%s\n' "$attempts" > "$attempts_file"
+      package_dir="$ANDROID_SDK_ROOT/system-images/android-35/google_apis/x86_64"
+      if (( attempts <= ${FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS:-0} )); then
+        mkdir -p "$package_dir"
+        printf '<localPackage path="partial-corrupt-package"/>\n' > "$package_dir/package.xml"
+        printf 'partial-corrupt-system-image' > "$package_dir/system.img"
+        printf 'corrupt' > "$package_dir/corrupt.marker"
+        echo "Warning: Google APIs system image download failed: ZipFile unknown archive" >&2
+        exit 1
+      fi
+      if [[ -e "$package_dir/corrupt.marker" ]]; then
+        echo "Corrupt partial system image survived failed-attempt cleanup." >&2
+        exit 9
+      fi
+      mkdir -p "$package_dir"
+      printf '<localPackage path="system-images;android-35;google_apis;x86_64"/>\n' > "$package_dir/package.xml"
+      printf 'deterministic-system-image-fixture' > "$package_dir/system.img"
+      echo "Installed system image package fixture."
+    fi
+    exit 0
+    ;;
   *) echo "unexpected sdkmanager arguments: $*" >&2; exit 2 ;;
 esac
 """,
@@ -85,6 +112,7 @@ case "$1" in
     printf 'List of devices attached\nemulator-5554 device\n'
     ;;
   emu)
+    printf 'global adb emu kill\n' >> "$FAKE_ADB_EMU_KILL_LOG"
     exit 0
     ;;
   install)
@@ -94,9 +122,35 @@ case "$1" in
     shift
     case "$1" in
       getprop) echo "1" ;;
-      settings|input) exit 0 ;;
+      settings) exit 0 ;;
+      input)
+        if [[ "${2:-}" == "tap" ]]; then
+          printf '%s %s\n' "${3:-}" "${4:-}" >> "$FAKE_INPUT_LOG"
+        fi
+        ;;
       uiautomator) echo "UI hierarchy dumped to: /sdcard/turnova-ui-hierarchy.xml" ;;
-      cat) printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/></hierarchy>\n' ;;
+      cat)
+        dump_count=0
+        if [[ -f "$FAKE_UI_DUMP_COUNT_FILE" ]]; then
+          read -r dump_count < "$FAKE_UI_DUMP_COUNT_FILE"
+        fi
+        dump_count=$((dump_count + 1))
+        printf '%s\n' "$dump_count" > "$FAKE_UI_DUMP_COUNT_FILE"
+        if [[ "${FAKE_OTHER_ANR_ALWAYS:-0}" == "1" ]]; then
+          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"TurnOva Rider isn't responding\"/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" clickable=\"true\" enabled=\"true\"/></hierarchy>"
+        elif [[ "${FAKE_PIXEL_LAUNCHER_ANR_ALWAYS:-0}" == "1" || ( "${FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP:-0}" == "1" && "$dump_count" == "1" ) ]]; then
+          if [[ "${FAKE_PIXEL_LAUNCHER_WAIT_DISABLED:-0}" == "1" ]]; then
+            wait_state='clickable="false" enabled="false"'
+          else
+            wait_state='clickable="true" enabled="true"'
+          fi
+          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"Pixel Launcher isn't responding\"/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" ${wait_state}/></hierarchy>"
+        elif [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
+          printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
+        else
+          printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/></hierarchy>\n'
+        fi
+        ;;
       pm) echo "package:/data/app/turnova/base.apk" ;;
       cmd) echo "com.turnova.rider/.MainActivity" ;;
       am) printf 'Status: ok\nActivity: com.turnova.rider/.MainActivity\n' ;;
@@ -134,13 +188,39 @@ exit 0
             environment.update(
                 {
                     "HOME": str(home),
+                    "CI": "true",
                     "ANDROID_SDK_ROOT": str(sdk),
                     "ANDROID_HOME": str(sdk),
                     "ANDROID_AVD_HOME": str(avd_home),
                     "RUNNER_TEMP": str(root / "runner-temp"),
                     "FAKE_TARGET_EXCEPTION": "0",
+                    "FAKE_RESTORE_ERROR": "0",
+                    "FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP": "0",
+                    "FAKE_PIXEL_LAUNCHER_ANR_ALWAYS": "0",
+                    "FAKE_PIXEL_LAUNCHER_WAIT_DISABLED": "0",
+                    "FAKE_OTHER_ANR_ALWAYS": "0",
+                    "FAKE_UI_DUMP_COUNT_FILE": str(output / "ui-dump-count"),
+                    "FAKE_INPUT_LOG": str(output / "input-taps.txt"),
+                    "FAKE_ADB_EMU_KILL_LOG": str(output / "global-adb-emu-kill.txt"),
+                    "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",
+                    "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS": "0",
                 }
             )
+
+            # Existing AVDs in both explicit and conventional homes must survive.
+            custom_existing_dir = avd_home / "turnova-release-smoke-existing.avd"
+            custom_existing_dir.mkdir(parents=True)
+            custom_avd_ini = avd_home / "turnova-release-smoke-existing.ini"
+            custom_avd_ini.write_text("developer AVD must remain untouched", encoding="utf-8")
+            custom_avd_sentinel = custom_existing_dir / "user-data.txt"
+            custom_avd_sentinel.write_text("preserve", encoding="utf-8")
+            user_avd_home = home / ".android" / "avd"
+            user_avd_dir = user_avd_home / "turnova-release-smoke-existing.avd"
+            user_avd_dir.mkdir(parents=True)
+            user_avd_ini = user_avd_home / "turnova-release-smoke-existing.ini"
+            user_avd_ini.write_text("developer AVD must remain untouched", encoding="utf-8")
+            user_avd_sentinel = user_avd_dir / "user-data.txt"
+            user_avd_sentinel.write_text("preserve", encoding="utf-8")
 
             command = [
                 "bash",
@@ -167,9 +247,18 @@ exit 0
                 0,
                 msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
             )
-            self.assertTrue((avd_home / "turnova-release-smoke.ini").is_file())
-            self.assertTrue((avd_home / "turnova-release-smoke.avd").is_dir())
-            self.assertTrue((output / "avdmanager-create.log").is_file())
+            create_log = (output / "avdmanager-create.log").read_text(encoding="utf-8")
+            self.assertIn("Created turnova-release-smoke-", create_log)
+            self.assertIn(str(avd_home), create_log)
+            created_avd_name = create_log.split("Created ", 1)[1].split(" in ", 1)[0]
+            self.assertFalse((avd_home / f"{created_avd_name}.ini").exists())
+            self.assertFalse((avd_home / f"{created_avd_name}.avd").exists())
+            self.assertTrue(custom_avd_ini.is_file())
+            self.assertEqual(custom_avd_sentinel.read_text(encoding="utf-8"), "preserve")
+            attempts_file = sdk / "system-image-install-attempts"
+            self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "2")
+            self.assertIn("unknown archive", (output / "sdkmanager-system-image-attempt-1.log").read_text(encoding="utf-8"))
+            self.assertIn("system image", (output / "sdkmanager-system-image-attempt-2.log").read_text(encoding="utf-8").lower())
             self.assertGreater((output / "launch.png").stat().st_size, 0)
             report = json.loads((output / "result.json").read_text(encoding="utf-8"))
             self.assertEqual(report["packageId"], "com.turnova.rider")
@@ -181,7 +270,217 @@ exit 0
             for expected_text in ("Welcome back", "Email address", "Password", "Sign in"):
                 self.assertIn(expected_text, ui_hierarchy)
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
+            self.assertTrue(report["staleSessionErrorAbsent"])
+            self.assertEqual(report["systemUiRecovery"]["pixelLauncherAnrWaitAttempts"], 0)
+            self.assertFalse((output / "global-adb-emu-kill.txt").exists())
+            self.assertTrue(user_avd_ini.is_file())
+            self.assertEqual(user_avd_sentinel.read_text(encoding="utf-8"), "preserve")
 
+            # A complete system image that predates this invocation is reused as-is.
+            # The retry cleanup must never delete or reinstall a user's existing SDK package.
+            system_image_dir = sdk / "system-images" / "android-35" / "google_apis" / "x86_64"
+            system_image_marker = system_image_dir / "user-package-sentinel.txt"
+            system_image_marker.write_text("preserve-existing-sdk-image", encoding="utf-8")
+            attempts_before_reuse = int(attempts_file.read_text(encoding="utf-8").strip())
+            reuse_output = root / "reuse-existing-system-image-output"
+            reuse_command = command[:-1] + [str(reuse_output)]
+            reused_existing_image = subprocess.run(
+                reuse_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(
+                reused_existing_image.returncode,
+                0,
+                msg=f"stdout:\\n{reused_existing_image.stdout}\\nstderr:\\n{reused_existing_image.stderr}",
+            )
+            self.assertIn("pre-existing Android API 35 system image", reused_existing_image.stdout)
+            self.assertEqual(int(attempts_file.read_text(encoding="utf-8").strip()), attempts_before_reuse)
+            self.assertEqual(system_image_marker.read_text(encoding="utf-8"), "preserve-existing-sdk-image")
+
+            # An incomplete image that predates the invocation is not treated as a
+            # partial download owned by this script; fail closed and preserve it.
+            shutil.rmtree(system_image_dir)
+            system_image_dir.mkdir(parents=True)
+            (system_image_dir / "package.xml").write_text("<localPackage/>", encoding="utf-8")
+            incomplete_sentinel = system_image_dir / "user-data.txt"
+            incomplete_sentinel.write_text("preserve-incomplete-user-package", encoding="utf-8")
+            attempts_before_incomplete = int(attempts_file.read_text(encoding="utf-8").strip())
+            incomplete_output = root / "incomplete-existing-system-image-output"
+            incomplete_command = command[:-1] + [str(incomplete_output)]
+            incomplete_existing_image = subprocess.run(
+                incomplete_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(incomplete_existing_image.returncode, 1)
+            self.assertIn("refusing to modify or remove it", incomplete_existing_image.stderr)
+            self.assertEqual(int(attempts_file.read_text(encoding="utf-8").strip()), attempts_before_incomplete)
+            self.assertEqual(incomplete_sentinel.read_text(encoding="utf-8"), "preserve-incomplete-user-package")
+            self.assertFalse(incomplete_output.joinpath("result.json").exists())
+            shutil.rmtree(system_image_dir)
+
+            # With no explicit ANDROID_AVD_HOME, use an isolated RUNNER_TEMP path
+            # instead of the developer's conventional ~/.android/avd directory.
+            isolated_runner_temp = root / "isolated-runner-temp"
+            isolated_output = root / "isolated-default-avd-output"
+            environment.pop("ANDROID_AVD_HOME")
+            environment["RUNNER_TEMP"] = str(isolated_runner_temp)
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(isolated_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(isolated_output / "input-taps.txt")
+            isolated_command = command[:-1] + [str(isolated_output)]
+            isolated_result = subprocess.run(
+                isolated_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(
+                isolated_result.returncode,
+                0,
+                msg=f"stdout:\n{isolated_result.stdout}\nstderr:\n{isolated_result.stderr}",
+            )
+            isolated_create_log = (isolated_output / "avdmanager-create.log").read_text(encoding="utf-8")
+            self.assertIn(str(isolated_runner_temp / "turnova-android-avd"), isolated_create_log)
+            self.assertTrue(user_avd_ini.is_file())
+            self.assertEqual(user_avd_sentinel.read_text(encoding="utf-8"), "preserve")
+            environment["ANDROID_AVD_HOME"] = str(avd_home)
+            environment["RUNNER_TEMP"] = str(root / "runner-temp")
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(output / "input-taps.txt")
+
+            # A transient Pixel Launcher ANR is handled only through its explicit Wait
+            # control; the app must still render the login surface and produce evidence.
+            recovered_output = root / "anr-recovered-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(recovered_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(recovered_output / "input-taps.txt")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "1"
+            recovered_command = command[:-1] + [str(recovered_output)]
+            recovered_anr = subprocess.run(
+                recovered_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(
+                recovered_anr.returncode,
+                0,
+                msg=f"stdout:\n{recovered_anr.stdout}\nstderr:\n{recovered_anr.stderr}",
+            )
+            recovered_report = json.loads((recovered_output / "result.json").read_text(encoding="utf-8"))
+            self.assertEqual(recovered_report["systemUiRecovery"]["pixelLauncherAnrWaitAttempts"], 1)
+            self.assertTrue(recovered_report["systemUiRecovery"]["pixelLauncherAnrRecovered"])
+            self.assertIn("540 1087", (recovered_output / "input-taps.txt").read_text(encoding="utf-8"))
+            self.assertTrue((recovered_output / "pixel-launcher-anr-1.xml").is_file())
+            recovered_ui = (recovered_output / "ui-hierarchy.xml").read_text(encoding="utf-8")
+            for expected_text in ("Welcome back", "Email address", "Password", "Sign in"):
+                self.assertIn(expected_text, recovered_ui)
+
+            # A persistent launcher ANR fails closed after two Wait attempts and
+            # cannot leave a success result behind.
+            persistent_output = root / "anr-persistent-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(persistent_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(persistent_output / "input-taps.txt")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "1"
+            persistent_command = command[:-1] + [str(persistent_output)]
+            persistent_anr = subprocess.run(
+                persistent_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(persistent_anr.returncode, 1)
+            self.assertIn("persisted after two bounded Wait attempts", persistent_anr.stderr)
+            self.assertEqual(
+                (persistent_output / "input-taps.txt").read_text(encoding="utf-8").splitlines(),
+                ["540 1087", "540 1087"],
+            )
+            self.assertFalse((persistent_output / "result.json").exists())
+
+            # Never tap a system dialog control unless the hierarchy proves it is
+            # enabled and clickable; fail closed without interacting with a disabled control.
+            disabled_wait_output = root / "anr-disabled-wait-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(disabled_wait_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(disabled_wait_output / "input-taps.txt")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "1"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "1"
+            disabled_wait_command = command[:-1] + [str(disabled_wait_output)]
+            disabled_wait = subprocess.run(
+                disabled_wait_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(disabled_wait.returncode, 1)
+            self.assertIn("safe Wait control could not be resolved", disabled_wait.stderr)
+            self.assertFalse((disabled_wait_output / "input-taps.txt").exists())
+            self.assertFalse((disabled_wait_output / "result.json").exists())
+
+            # A different app/system ANR must never be dismissed as a launcher issue.
+            other_anr_output = root / "other-anr-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(other_anr_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(other_anr_output / "input-taps.txt")
+            environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
+            environment["FAKE_OTHER_ANR_ALWAYS"] = "1"
+            other_anr_command = command[:-1] + [str(other_anr_output)]
+            other_anr = subprocess.run(
+                other_anr_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(other_anr.returncode, 1)
+            self.assertIn("Unexpected Android app/system ANR dialog remains", other_anr.stderr)
+            self.assertFalse((other_anr_output / "input-taps.txt").exists())
+            self.assertFalse((other_anr_output / "result.json").exists())
+
+            environment["FAKE_OTHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(output / "input-taps.txt")
+            environment["FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS"] = "0"
+            environment["FAKE_RESTORE_ERROR"] = "1"
+            stale_session_error = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(stale_session_error.returncode, 1)
+            self.assertIn("unexpected session/storage error", stale_session_error.stderr)
+
+            environment["FAKE_RESTORE_ERROR"] = "0"
             environment["FAKE_TARGET_EXCEPTION"] = "1"
             target_exception = subprocess.run(
                 command,
@@ -194,6 +493,65 @@ exit 0
             )
             self.assertEqual(target_exception.returncode, 1)
             self.assertIn("React Native reported an unhandled startup exception", target_exception.stderr)
+
+            # A permanently corrupt SDK archive created by this invocation must stop
+            # before AVD creation or app install after cleaning only its own partial files.
+            if system_image_dir.exists():
+                shutil.rmtree(system_image_dir)
+            attempts_file.unlink()
+            failed_avd_home = root / "failed-avd-home"
+            failure_output = root / "failed-output"
+            environment["ANDROID_AVD_HOME"] = str(failed_avd_home)
+            environment["FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS"] = "3"
+            failure_command = command[:-1] + [str(failure_output)]
+            repeated_archive_failure = subprocess.run(
+                failure_command,
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(repeated_archive_failure.returncode, 1)
+            self.assertIn("failed after 3 attempts", repeated_archive_failure.stderr)
+            self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "3")
+            self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.ini")))
+            self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.avd")))
+            self.assertFalse(system_image_dir.exists())
+            self.assertFalse((failure_output / "result.json").exists())
+
+    def test_refuses_to_modify_an_android_sdk_outside_ci(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="turnova-android-non-ci-") as temporary:
+            root = Path(temporary)
+            apk = root / "fixture.apk"
+            apk.write_bytes(b"fixture")
+            output = root / "output"
+            environment = os.environ.copy()
+            environment.pop("CI", None)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(SMOKE_SCRIPT),
+                    "--apk",
+                    str(apk),
+                    "--expected-id",
+                    "com.turnova.rider",
+                    "--output-dir",
+                    str(output),
+                ],
+                cwd=REPO_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("may run only on a CI runner", result.stderr)
+            self.assertFalse(output.exists())
 
     def test_invalid_package_identifier_is_rejected_before_sdk_access(self) -> None:
         with tempfile.TemporaryDirectory(prefix="turnova-invalid-package-") as temporary:
