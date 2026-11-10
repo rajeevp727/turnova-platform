@@ -132,6 +132,8 @@ export default function App() {
       registrationReference: setRegistrationReference, profilePhotoBase64: setProfilePhotoBase64,
       legacyServiceClass: setLegacyServiceClass
     });
+    // Offer IDs are session-scoped deduplication state; never carry them across accounts.
+    receivedOfferIds.current.clear();
     if (preserveAuthInput) {
       setEmail(preserveAuthInput.email);
       setPassword(preserveAuthInput.password);
