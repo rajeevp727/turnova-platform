@@ -20,6 +20,10 @@ async function startSignalRConnection(connection, shouldContinue, onRetry = () =
   while (shouldContinue()) {
     try {
       await connection.start();
+      if (!shouldContinue()) {
+        try { await connection.stop?.(); } catch { /* Session invalidation wins over transport shutdown errors. */ }
+        return false;
+      }
       return true;
     } catch {
       if (!shouldContinue()) return false;

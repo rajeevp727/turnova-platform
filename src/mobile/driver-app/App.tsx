@@ -17,6 +17,7 @@ import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
+import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
@@ -78,13 +79,13 @@ export default function App() {
   const refreshInFlight = useRef<Promise<string> | null>(null);
   const sessionEpoch = useRef(0);
   const authenticatedSessionEpoch = useRef<number | null>(null);
-  const activeSignalRStops = useRef<Set<() => unknown>>(new Set());
-  const stopRealtimeConnections = useCallback(() => stopRegisteredConnections(activeSignalRStops.current), []);
+  const activeSessionStops = useRef<Set<() => unknown>>(new Set());
+  const stopSessionResources = useCallback(() => stopRegisteredConnections(activeSessionStops.current), []);
   const invalidateSession = useCallback(() => {
     const epoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
-    stopRealtimeConnections();
+    stopSessionResources();
     return epoch;
-  }, [stopRealtimeConnections]);
+  }, [stopSessionResources]);
   const [tab, setTab] = useState<"Home" | "Queue" | "Trips" | "Payslips" | "Profile">("Home");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -203,8 +204,7 @@ export default function App() {
       });
       if (sessionEpoch.current !== requestEpoch) throw new Error("Session changed. Please sign in again.");
     }
-    const body = await response.json().catch(() => ({}));
-    if (sessionEpoch.current !== requestEpoch || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) throw new Error("Session changed. Please sign in again.");
+    const body = await readJsonResponseIfCurrent(response, () => sessionEpoch.current === requestEpoch && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) as any;
     if (!response.ok) { const error = new Error(body.message ?? body.title ?? "Request failed."); (error as Error & { status: number }).status = response.status; throw error; }
     return body;
   }, [tokens, refreshSession, invalidateSession]);
@@ -457,29 +457,32 @@ export default function App() {
   };
 
   const loadAvailableRides = useCallback(async (isActive: () => boolean = () => true) => {
-    if (!isActive()) return;
+    const isCurrent = () => isActive() && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
+    if (!isCurrent()) return;
     if (legacyServiceClass) { setAvailableRides([]); return; }
     try {
       const rides = await apiFetch("/api/v1/driver/rides/available");
-      if (isActive()) setAvailableRides(rides);
+      if (isCurrent()) setAvailableRides(rides);
     } catch (e) {
-      if (isActive()) setError(e instanceof Error ? e.message : "Unable to load ride requests.");
+      if (isCurrent()) setError(e instanceof Error ? e.message : "Unable to load ride requests.");
     }
   }, [apiFetch, legacyServiceClass]);
 
   const loadDriverRideHistory = useCallback(async (isActive: () => boolean) => {
-    if (!isActive()) return;
+    const isCurrent = () => isActive() && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
+    if (!isCurrent()) return;
     const history = await apiFetch("/api/v1/driver/rides/mine") as DriverRideHistoryItem[];
-    if (!isActive()) return;
+    if (!isCurrent()) return;
     setDriverRideHistory(history);
     const active = findActiveRide(history, "driver");
     setActiveRide(active ?? null);
   }, [apiFetch]);
 
   const loadAgreementHistory = useCallback(async (rideId: string, isActive: () => boolean = () => true) => {
-    if (!isActive()) return;
+    const isCurrent = () => isActive() && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
+    if (!isCurrent()) return;
     const result = await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];
-    if (isActive()) setAgreementHistory(result);
+    if (isCurrent()) setAgreementHistory(result);
   }, [apiFetch]);
 
   const reportPaymentReceived = async (rideId: string) => {
@@ -571,7 +574,7 @@ export default function App() {
       .configureLogging(LogLevel.Warning)
       .build();
     const stopConnection = () => connection.stop();
-    activeSignalRStops.current.add(stopConnection);
+    activeSessionStops.current.add(stopConnection);
 
     const refreshOffers = () => { if (mounted && isConnectionCurrent()) void loadAvailableRides(() => mounted && isConnectionCurrent()); };
     const refreshDriverState = () => {
@@ -613,7 +616,7 @@ export default function App() {
       mounted = false;
       connection.off("RideOfferReceived");
       connection.off("RideSelected");
-      activeSignalRStops.current.delete(stopConnection);
+      activeSessionStops.current.delete(stopConnection);
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory]);
@@ -632,7 +635,7 @@ export default function App() {
       .configureLogging(LogLevel.Warning)
       .build();
     const stopConnection = () => connection.stop();
-    activeSignalRStops.current.add(stopConnection);
+    activeSessionStops.current.add(stopConnection);
     const refreshAgreement = (update?: { rideId?: string }) => {
       if (mounted && isConnectionCurrent() && (!update?.rideId || update.rideId === activeRide.rideId))
         void loadAgreementHistory(activeRide.rideId, () => mounted && isConnectionCurrent()).catch(e => {
@@ -649,7 +652,7 @@ export default function App() {
         refreshAgreement();
       }
     });
-    return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); activeSignalRStops.current.delete(stopConnection); stopRegisteredConnections(new Set([stopConnection])); };
+    return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); activeSessionStops.current.delete(stopConnection); stopRegisteredConnections(new Set<() => unknown>([stopConnection])); };
   }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory]);
 
   const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
@@ -668,7 +671,7 @@ export default function App() {
       .configureLogging(LogLevel.Warning)
       .build();
     const stopConnection = () => connection.stop();
-    activeSignalRStops.current.add(stopConnection);
+    activeSessionStops.current.add(stopConnection);
     const handleRideStatusChanged = (update: { rideId: string; status: string }) => {
       if (!shouldApplyRideStatusUpdate(activeRide.rideId, update.rideId, mounted && isConnectionCurrent())) return;
       setActiveRide((current: any) => current?.rideId === update.rideId
@@ -692,17 +695,20 @@ export default function App() {
         });
       }
     });
-    return () => { mounted = false; connection.off("RideStatusChanged", handleRideStatusChanged); activeSignalRStops.current.delete(stopConnection); stopRegisteredConnections(new Set([stopConnection])); };
+    return () => { mounted = false; connection.off("RideStatusChanged", handleRideStatusChanged); activeSessionStops.current.delete(stopConnection); stopRegisteredConnections(new Set<() => unknown>([stopConnection])); };
   }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory]);
 
   useEffect(() => {
-    if (!user || tab !== "Trips" || !activeRide) return;
+    if (!user || tab !== "Trips" || !activeRide || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
+    const locationEpoch = sessionEpoch.current;
+    const isLocationSessionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, locationEpoch);
+    let appStateSubscription: ReturnType<typeof AppState.addEventListener> | undefined;
     let subscription: Location.LocationSubscription | undefined;
     let mounted = true;
     let starting = false;
     let restartRequested = false;
 
-    const canShare = () => canShareTripLocation({
+    const canShare = () => isLocationSessionCurrent() && canShareTripLocation({
       appState: AppState.currentState,
       mounted,
       status: activeRide.status,
@@ -712,6 +718,13 @@ export default function App() {
       subscription?.remove();
       subscription = undefined;
     };
+    const stopForSessionInvalidation = () => {
+      mounted = false;
+      restartRequested = false;
+      stopWatching();
+      appStateSubscription?.remove();
+    };
+    activeSessionStops.current.add(stopForSessionInvalidation);
     const startWatching = async () => {
       if (!canShare() || subscription) return;
       if (starting) {
@@ -770,7 +783,8 @@ export default function App() {
       }
     };
 
-    const appStateSubscription = AppState.addEventListener("change", state => {
+    appStateSubscription = AppState.addEventListener("change", state => {
+      if (!isLocationSessionCurrent()) { stopForSessionInvalidation(); return; }
       if (state === "active") void startWatching();
       else {
         restartRequested = false;
@@ -780,10 +794,8 @@ export default function App() {
     if (AppState.currentState === "active") void startWatching();
 
     return () => {
-      mounted = false;
-      restartRequested = false;
-      stopWatching();
-      appStateSubscription.remove();
+      activeSessionStops.current.delete(stopForSessionInvalidation);
+      stopForSessionInvalidation();
     };
   }, [user?.id, tab, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
 
@@ -835,8 +847,7 @@ export default function App() {
         if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
       }
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        if (!isSessionCurrent()) throw new Error("Session changed. Please sign in again.");
+        const body = await readJsonResponseIfCurrent(response, () => isSessionCurrent()) as any;
         throw new Error(body.message ?? body.title ?? "Payslip is not available yet.");
       }
       const bytes = new Uint8Array(await response.arrayBuffer());

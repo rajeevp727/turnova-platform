@@ -7,11 +7,12 @@ test("stops and clears every registered realtime connection exactly once", () =>
   const stops = new Set([
     () => { calls.push("rider"); },
     () => { calls.push("driver-offers"); },
-    () => { calls.push("driver-ride"); }
+    () => { calls.push("driver-ride"); },
+    () => { calls.push("driver-location-watch"); }
   ]);
   stopRegisteredConnections(stops);
   stopRegisteredConnections(stops);
-  assert.deepEqual(calls, ["rider", "driver-offers", "driver-ride"]);
+  assert.deepEqual(calls, ["rider", "driver-offers", "driver-ride", "driver-location-watch"]);
   assert.equal(stops.size, 0);
 });
 

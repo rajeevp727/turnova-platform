@@ -214,3 +214,13 @@ test("map viewport includes valid Driver and pickup coordinates only", () => {
     pickupLongitude: null
   }), []);
 });
+
+
+test("session invalidation immediately makes an otherwise active foreground location watcher non-shareable", () => {
+  let mounted = true;
+  const isSessionCurrent = () => mounted;
+  const canShare = () => isSessionCurrent() && canShareTripLocation({ ...base, mounted });
+  assert.equal(canShare(), true);
+  mounted = false;
+  assert.equal(canShare(), false);
+});

@@ -16,6 +16,7 @@ import { getSignalRReconnectDelayMs, startSignalRConnection } from "../shared/si
 import { discoverNearbyCabDrivers } from "../shared/foregroundPickupLocation";
 import { createSelectedBookingLocation } from "../shared/selectedBookingLocation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
+import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
 
@@ -70,9 +71,9 @@ export default function App() {
   const [user,setUser]=useState<User|null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0); const authenticatedSessionEpoch=useRef<number|null>(null);
-  const activeSignalRStops=useRef<Set<() => unknown>>(new Set());
-  const stopRealtimeConnections=useCallback(()=>stopRegisteredConnections(activeSignalRStops.current),[]);
-  const invalidateSession=useCallback(()=>{const epoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);stopRealtimeConnections();return epoch;},[stopRealtimeConnections]);
+  const activeSessionStops=useRef<Set<() => unknown>>(new Set());
+  const stopSessionResources=useCallback(()=>stopRegisteredConnections(activeSessionStops.current),[]);
+  const invalidateSession=useCallback(()=>{const epoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);stopSessionResources();return epoch;},[stopSessionResources]);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
   const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
@@ -171,9 +172,9 @@ export default function App() {
       response=await fetch(`${API}${path}`,{...init,headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`,...init.headers}});
       if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
     }
-    const body=await response.json().catch(()=>({}));if(sessionEpoch.current!==requestEpoch||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))throw new Error("Session changed. Please sign in again.");if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
+    const body=await readJsonResponseIfCurrent(response,()=>sessionEpoch.current===requestEpoch&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)) as any;if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh,invalidateSession]);
-  const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isActive())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isActive())return;setRide(current=>current&&current.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);}else if(isActive()){setRide(null);}},[apiFetch]);
+  const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);if(!isCurrent())return;const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isCurrent())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isCurrent())return;setRide(current=>current&&current.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);}else if(isCurrent()){setRide(null);}},[apiFetch]);
   useEffect(()=>{let active=true;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request);if(active&&restored){const restoredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);const restoredUser=requireAppRole<User>(restored.user,"Rider");authenticatedSessionEpoch.current=restoredEpoch;setTokens(restored.tokens);setUser(restoredUser);}}catch{if(active)setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(active)setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{
     if(!ride||tab!=="Activity"||!tokens||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;
@@ -189,7 +190,7 @@ export default function App() {
       .configureLogging(LogLevel.Warning)
       .build();
     const stopConnection=()=>connection.stop();
-    activeSignalRStops.current.add(stopConnection);
+    activeSessionStops.current.add(stopConnection);
     const refreshAgreements=async()=>{
       if(!active||!isConnectionCurrent())return;
       const history=await apiFetch(`/api/v1/rides/${ride.rideId}/agreements`) as AgreementVersion[];
@@ -235,7 +236,7 @@ export default function App() {
       connection.off("DriverLocationUpdated");
       connection.off("RideStatusChanged");
       connection.off("RideAgreementChanged");
-      activeSignalRStops.current.delete(stopConnection);
+      activeSessionStops.current.delete(stopConnection);
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
@@ -276,12 +277,12 @@ export default function App() {
   };
   const cancelRide=async()=>{if(!ride)return;setLoading(true);setError("");try{const updated=await apiFetch(`/api/v1/rides/${ride.rideId}/cancel`,{method:"POST"});setRide(updated);}catch(e){setError(e instanceof Error?e.message:"Unable to cancel ride.");}finally{setLoading(false);}};
    const requestSelectedDriver=async()=>{if(!selectedDriver||!selectedUnion||bookingInFlight.current)return;const requestKey=bookingRequestKey;const selectedDriverIdForRequest=selectedDriver.driverId;const unionIdForRequest=selectedUnion.unionId;const pickupForRequest=pickup;const dropoffForRequest=dropoff;const stops=stopsText.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean);const passengerCount=parsePassengerCountInput(passengers);if(passengerCount===null){setError("Enter a passenger count from 1 to 6 before requesting a driver.");return;}bookingInFlight.current=true;setLoading(true);setError("");try{const coordinates=await selectedBookingLocation.current.capture();if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");const created=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});setRide(created as Ride);setRideHistory(current=>[created as RideHistoryItem,...current.filter(item=>item.rideId!==created.rideId)]);setAgreementHistory([]);setAgreementAmount("");setTab("Activity");setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}catch(e){setError(e instanceof Error?e.message:"Unable to request the selected driver.");}finally{bookingInFlight.current=false;setLoading(false);}};
-  const loadAgreementHistory=useCallback(async(rideId:string)=>{const result=await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];setAgreementHistory(result);},[apiFetch]);
-  useEffect(()=>{if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}if(tab!=="Activity")return;let active=true;void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(result=>{if(active)setAgreementHistory(result as AgreementVersion[]);}).catch(()=>{if(active)setAgreementHistory([]);});return()=>{active=false;};},[ride?.rideId,tab,apiFetch]);
+  const loadAgreementHistory=useCallback(async(rideId:string)=>{if(!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;const result=await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];if(isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory(result);},[apiFetch]);
+  useEffect(()=>{if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}if(tab!=="Activity"||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;let active=true;void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(result=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory(result as AgreementVersion[]);}).catch(()=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory([]);});return()=>{active=false;};},[ride?.rideId,tab,apiFetch]);
   const proposeAgreement=async()=>{if(!ride)return;const amount=Number(agreementAmount);if(!Number.isFinite(amount)||amount<=0){setError("Enter a positive agreed amount in INR.");return;}setError("");try{await apiFetch(`/api/v1/rides/${ride.rideId}/agreements`,{method:"POST",headers:{"Idempotency-Key":`rider-${Date.now()}-${Math.random().toString(36).slice(2)}`},body:JSON.stringify({amount,currency:"INR"})});setAgreementAmount("");await loadAgreementHistory(ride.rideId);}catch(e){setError(e instanceof Error?e.message:"Unable to submit fare proposal.");}};
   const confirmAgreement=async()=>{if(!ride)return;const current=agreementHistory[agreementHistory.length-1];if(!current)return;setError("");try{await apiFetch(`/api/v1/rides/${ride.rideId}/agreements/${current.version}/confirm`,{method:"POST"});await loadAgreementHistory(ride.rideId);}catch(e){setError(e instanceof Error?e.message:"Unable to confirm fare agreement.");}};
 
-  useEffect(()=>{if(!user||tab!=="Activity")return;let active=true;void loadRideHistory(()=>active).catch(e=>{if(active)setError(e instanceof Error?e.message:"Unable to load trip history.");});return()=>{active=false;};},[user?.id,tab,loadRideHistory,ride?.status]);
+  useEffect(()=>{if(!user||tab!=="Activity"||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;let active=true;void loadRideHistory(()=>active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)).catch(e=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setError(e instanceof Error?e.message:"Unable to load trip history.");});return()=>{active=false;};},[user?.id,tab,loadRideHistory,ride?.status]);
   const resolvedTheme = themePreference === "system" ? (systemColorScheme ?? "light") : themePreference;
   const colors = resolvedTheme === "dark" ? darkColors : lightColors;
   const styles = createStyles(colors);

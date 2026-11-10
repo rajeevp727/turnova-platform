@@ -53,3 +53,21 @@ test("initial SignalR start retries until connected and stops when the owner is 
   assert.equal(cancelled, false);
   assert.equal(attempts, 1);
 });
+
+
+test("SignalR start that completes after session invalidation is stopped and reported inactive", async () => {
+  let active = true;
+  let finishStart;
+  let stopCalls = 0;
+  const startPending = new Promise(resolve => { finishStart = resolve; });
+  const connection = {
+    start: () => startPending,
+    stop: async () => { stopCalls += 1; }
+  };
+  const starting = startSignalRConnection(connection, () => active);
+  await new Promise(resolve => setImmediate(resolve));
+  active = false;
+  finishStart();
+  assert.equal(await starting, false);
+  assert.equal(stopCalls, 1);
+});
