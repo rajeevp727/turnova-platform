@@ -831,6 +831,22 @@ Agreement proposal idempotency additionally fingerprints the canonical two-decim
 RIDER-02 backend tests are now executed evidence: PR #64 final-head CI run [42272254259](https://github.com/rajeevp727/turnova-platform/actions/runs/42272254259) ran 189/189 tests successfully, including the agreement integration suite. Live Cosmos ETag/multi-instance and Android/iOS device acceptance remain separate gates.
 
 
+### RIDER-02 mobile proposal-attempt idempotency
+
+| ID | Scenario | Expected result | Automated evidence | Status |
+|---|---|---|---|---|
+| CAB-AGR-022 | Same Rider/Driver repeats the same ride/amount/currency after an ambiguous proposal POST failure | Same actor-prefixed Idempotency-Key is reused; backend returns the original immutable version rather than creating a duplicate | identical proposal retries reuse the same key after an ambiguous request failure | CI #1168 source/test head |
+| CAB-AGR-023 | Rider or Driver changes ride ID or amount after a prior attempt | New fingerprint and new key; the old attempt remains isolated | proposalAttempt helper fingerprint tests | CI #1168 source/test head |
+| CAB-AGR-024 | Rider or Driver double-taps proposal submission | Only one request is active; amount input is not editable while submitting | Rider proposal submission uses stable attempts and blocks concurrent taps; Driver proposal submission uses stable attempts and blocks concurrent taps | CI #1168 source/test head |
+| CAB-AGR-025 | Proposal POST succeeds but agreement-history refresh fails | Attempt key remains available; retry replays the same server version; clear only after history refresh succeeds | app source integration assertions in proposalAttempt.test.cjs | CI #1168 source/test head |
+| CAB-AGR-026 | A late completion for an old proposal attempt arrives after a newer attempt exists | Old completion cannot clear the newer attempt | a late completion cannot clear a newer proposal attempt | CI #1168 source/test head |
+| CAB-AGR-027 | Rider or Driver session reset occurs with a pending proposal attempt | Pending attempt ref is cleared for the previous session | Rider and Driver proposal submission uses stable attempts and blocks concurrent taps (session-reset source assertions) | CI #1168 source/test head |
+| CAB-AGR-028 | Actor or currency changes while ride and amount stay the same | A distinct key is generated for the changed actor/currency fingerprint | changing actor or currency creates a new proposal attempt key | New source/test commit; exact-head CI pending |
+
+PR #145 code/test head `ca5df7792e3962c542e5c5b129b3a0cc52e0c016` reached 10/12 jobs in [CI #1168 / 42872267649](https://github.com/rajeevp727/turnova-platform/actions/runs/42872267649): backend 373/373, shared JS 151/151, Python 41/41, both app validation/bundles, four native builds and both Android simulator smokes passed; both iOS Simulator smokes remained in progress. Same-run Android artifacts 13785189832 and 13785977358 were downloaded and inspected; same-run iOS native artifacts 13785862399 and 13786228044 were inspected for app identity. The actor/currency regression was subsequently added in `a730a7aa37a940f7d3c289293f586e1e0faf42d4`; CI #1168 predates it and is not evidence for CAB-AGR-028. Fresh exact-head CI is required.
+
+The client attempt is currently held in an in-memory ref. Startup agreement-history reload mitigates ambiguous outcomes after process restart, but persistent client-key replay across process death is not established and remains a device-level limitation. Live Cosmos ETag/multi-instance and Android/iOS negotiation/reconnect acceptance remain external.
+
 ## RIDER-03 — selected-driver booking and reservation
 
 - Verify only an active Cab Union, active membership, approved Cab Driver, approved driving licence/vehicle registration, Online state, fresh location, passenger capacity and configured pickup radius can be booked.
@@ -838,6 +854,7 @@ RIDER-02 backend tests are now executed evidence: PR #64 final-head CI run [4227
 - Verify Idempotency-Key retries return the same ride, while reusing a key with a different request fingerprint conflicts.
 - Verify interrupted-write recovery reuses the original idempotency CreatedAtUtc for ride RequestedAt, the RideCreated audit timestamp and NegotiationExpiresAtUtc; the recovered ride deadline must equal the already-held reservation expiry and must not be extended by retry time.
 - Verify two Riders cannot acquire overlapping reservations for one Driver; Rider cancellation, Driver decline, negotiation expiry and trip completion release only the matching reservation.
+- Verify one Rider cannot hold two concurrent active selected bookings for different Drivers using different Idempotency-Keys; the second request conflicts without creating a second ride or Driver lease. Acquire/release must be Rider-partitioned, ETag-safe, idempotent and reconciled against the authoritative ride state on cancellation, decline, expiry and completion. This Rider-scoped invariant is a newly confirmed code gap; implementation/tests are the next sequential RIDER-03 increment.
 - Verify an expired temporary lease is not stolen by the store: the API first transitions the linked Negotiating/AgreementConfirmed ride to Expired (or releases an expired orphan lease), then releases only the matching reservation so a new booking can acquire it. A live lease becomes permanent only after mutual agreement and Driver acceptance; active reservations prevent going offline.
 - Verify Driver acceptance is rejected before both parties confirm the current agreement and the selected booking transitions Negotiating → AgreementConfirmed → Accepted.
 - Verify expiry is configuration-gated: missing Dispatch:SelectedDriverNegotiationLifetimeMinutes returns 503; no default lifetime is invented. Lazy expiry is triggered on ride reads/history, Rider discovery and Driver availability/reservation checks. Reservation stores expose expired leases to the API and never delete a lease before ride-state reconciliation.
