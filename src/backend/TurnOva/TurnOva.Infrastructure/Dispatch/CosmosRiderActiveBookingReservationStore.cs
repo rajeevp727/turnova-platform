@@ -130,37 +130,42 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         CancellationToken cancellationToken = default,
         DriverRideReservationAuditContext? auditContext = null)
     {
-        ItemResponse<RiderActiveBookingReservation> current;
-        try
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            current = await container.ReadItemAsync<RiderActiveBookingReservation>(
-                RiderActiveBookingReservation.DocumentId,
-                new PartitionKey(riderId),
-                cancellationToken: cancellationToken);
+            ItemResponse<RiderActiveBookingReservation> current;
+            try
+            {
+                current = await container.ReadItemAsync<RiderActiveBookingReservation>(
+                    RiderActiveBookingReservation.DocumentId,
+                    new PartitionKey(riderId),
+                    cancellationToken: cancellationToken);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return false;
+            }
+
+            if (current.Resource.RideId != rideId)
+                return false;
+
+            var audit = RiderActiveBookingReservationAuditEvent.Create(
+                current.Resource, RiderActiveBookingReservationAuditEventTypes.Released,
+                auditContext, current.Resource.ExpiresAtUtc, expiresAtUtc: null);
+            using var batch = await container.CreateTransactionalBatch(new PartitionKey(riderId))
+                .DeleteItem(
+                    RiderActiveBookingReservation.DocumentId,
+                    new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
+                .CreateItem(audit)
+                .ExecuteAsync(cancellationToken);
+
+            if (batch.IsSuccessStatusCode)
+                return true;
+            if (IsReservationWriteConflict(batch))
+                continue;
+            throw BatchFailure("release", batch.StatusCode);
         }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return false;
-        }
 
-        if (current.Resource.RideId != rideId)
-            return false;
-
-        var audit = RiderActiveBookingReservationAuditEvent.Create(
-            current.Resource, RiderActiveBookingReservationAuditEventTypes.Released,
-            auditContext, current.Resource.ExpiresAtUtc, expiresAtUtc: null);
-        using var batch = await container.CreateTransactionalBatch(new PartitionKey(riderId))
-            .DeleteItem(
-                RiderActiveBookingReservation.DocumentId,
-                new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
-            .CreateItem(audit)
-            .ExecuteAsync(cancellationToken);
-
-        if (batch.IsSuccessStatusCode)
-            return true;
-        if (IsReservationWriteConflict(batch))
-            return false;
-        throw BatchFailure("release", batch.StatusCode);
+        return false;
     }
 
     private static bool IsReservationWriteConflict(TransactionalBatchResponse batch) =>
