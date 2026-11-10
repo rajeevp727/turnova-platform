@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-10
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Default branch:** main  
-**Last audited main HEAD:** `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after supplemental AI-01 PR #142 merged (CI #1113 / 42774588830 passed 12/12). Sole active feature PR #143 is AUTH-02 on `fix/auth-02-refresh-logout-epoch-race`; latest code commit `33326106419fdbaf628b598782ff63fa59067ce6` adds expiry-aware SignalR token acquisition to Rider and all three Driver connections plus a bounded 300-second iOS simulator operation default. Previous code head `de2c8779aa196b7f82e6c4453e08041eea9f1892` passed CI #1143 12/12. Documentation head `23a709f3c6eea0c7f39c31b930f31ce7ff79830a` failed CI #1145 11/12 due Rider iOS install exceeding its 180-second operation timeout; the latest fix is awaiting exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `6f0dc4821ae6408c7057f6b34aa4990ea01d948d` after supplemental AI-01 PR #142 merged. Sole active feature PR #143 is AUTH-02 on `fix/auth-02-refresh-logout-epoch-race`; latest SignalR/simulator source commit is `33326106419fdbaf628b598782ff63fa59067ce6`, with documentation head `8bba68a5b14ecc15e28403b0cf33aa4a5d6e75af`. CI #1145 failed 11/12 due Rider iOS install timeout at 180 seconds; default is now 300 seconds, still bounded. CI #1147 backend passed but mobile typecheck failed because signalRConnection.d.ts lacked the new helper exports; the current correction adds those declarations and requires fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1293,3 +1293,8 @@ The active PR #143 uses getSignalRAccessToken for the Rider selected-ride hub an
 CI #1145 / 42805017563 failed 11/12 because Rider iOS simctl install exceeded the 180-second bound after a 2m41 first-boot migration. The simulator harness now defaults individual operations to 300 seconds (maximum remains 300) while first-boot bootstatus remains separately bounded at 600 seconds. RELEASE-SMOKE-026 verifies the default. Expected suite totals after this increment: shared JS 136, Python 41; backend remains 373. Exact-head CI and all four same-run simulator artifact inspections are pending.
 
 Do not merge PR #143 until exact-head CI is green, all four simulator artifacts are inspected, and final review/policy checks pass. Live TriSend rotation/reuse and signed-device SecureStore/Keychain acceptance remain external.
+
+
+## Latest handoff — SignalR helper TypeScript declaration (2026-11-10)
+
+CI #1147 / 42813653333 passed backend but exposed TS2305 in Driver mobile typecheck because signalRConnection.d.ts did not export getSignalRAccessToken. Rider mobile typecheck was cancelled after the same missing declaration. The current PR commit adds SignalRAccessTokenOptions and declarations for getJwtExpiryMilliseconds/getSignalRAccessToken. Fresh exact-head CI is mandatory. Expected backend/shared/Python totals: 373/136/41. Do not merge until all checks and four same-run simulator artifacts pass. Live TriSend rotation/reuse and signed-device Keychain/SecureStore remain external.

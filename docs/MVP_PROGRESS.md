@@ -1,6 +1,6 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-10 (main HEAD 6f0dc4821ae6408c7057f6b34aa4990ea01d948d; sole active PR #143 AUTH-02 on fix/auth-02-refresh-logout-epoch-race; latest code commit 33326106419fdbaf628b598782ff63fa59067ce6. Previous code head de2c8779aa196b7f82e6c4453e08041eea9f1892 passed CI #1143 12/12. Documentation-synchronized head 23a709f3c6eea0c7f39c31b930f31ce7ff79830a failed CI #1145 11/12 because Rider iOS simctl install exceeded its 180-second operation bound after a 2m41 first-boot migration. The latest code commit raises the still-bounded operation default to 300 seconds and adds expiry-aware SignalR token validation for Rider/Driver; exact-head CI on the documentation-synchronized follow-up is pending.)
+**Last updated:** 2026-11-10 (main HEAD 6f0dc4821ae6408c7057f6b34aa4990ea01d948d; sole active PR #143 AUTH-02 on fix/auth-02-refresh-logout-epoch-race; latest SignalR/simulator implementation commit 33326106419fdbaf628b598782ff63fa59067ce6; documentation head 8bba68a5b14ecc15e28403b0cf33aa4a5d6e75af. CI #1145 failed 11/12 on Rider iOS install timeout; CI #1147 backend passed but Driver TypeScript failed and Rider TypeScript was cancelled because signalRConnection.d.ts did not yet declare getSignalRAccessToken. The current commit adds the missing declaration; a fresh exact-head CI is required.)
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded. Approved AI-01 is supplemental and remains outside the 19-row denominator.
 
 ## 1. Current step
@@ -1030,3 +1030,10 @@ The preceding documentation head 23a709f3c6eea0c7f39c31b930f31ce7ff79830a failed
 Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is not an implementation-completion percentage. AUTH-02 remains In Progress pending live TriSend refresh rotation/reuse semantics and signed Android/iOS physical-device restore, expiry, logout and SecureStore failure acceptance. Unsigned simulator builds do not prove Keychain persistence or production authentication. RELEASE-01 remains Blocked for signed AAB/IPA, approved identifiers/EAS, production HTTPS API, physical-device/pilot acceptance and store submission. No production validation is claimed.
 
 **Next:** inspect exact-head CI for the documentation-synchronized commit, inspect all four same-run simulator artifacts, review the final diff and merge PR #143 only when all required checks pass and GitHub permits. Then re-read main and continue to #3 RIDER-01.
+
+
+## Latest exact-state correction — AUTH-02 SignalR declaration (2026-11-10)
+
+CI #1147 / 42813653333 confirmed the backend job passed. Driver mobile typecheck failed with TS2305 because the existing signalRConnection.d.ts declaration exported only reconnect/start helpers and did not declare the new getSignalRAccessToken/getJwtExpiryMilliseconds exports. Rider mobile typecheck was cancelled after the same module error. The source implementation and deterministic helper tests are present; the current correction adds a typed SignalRAccessTokenOptions interface and exports for both helper functions. Do not treat CI #1147 as successful. Run a fresh exact-head workflow after this declaration fix; verify backend, shared mobile, Python, both app typechecks/bundles, four native builds and four simulator smokes before merge.
+
+Expected suite totals remain backend 373, shared JS 136 and Python 41. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. Live TriSend rotation/reuse and signed-device SecureStore/Keychain acceptance remain external.
