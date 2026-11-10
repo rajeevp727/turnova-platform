@@ -24,7 +24,13 @@ export function readSessionTokens(
 export function saveSessionTokens(
   storage: SessionTokenStorage,
   tokens: StoredSessionTokens
-): Promise<void>;
+): Promise<boolean>;
+
+export function saveSessionTokensIfCurrent(
+  storage: SessionTokenStorage,
+  tokens: StoredSessionTokens,
+  isCurrent: () => boolean
+): Promise<boolean>;
 
 export function clearSessionTokens(storage: SessionTokenStorage): Promise<void>;
 
