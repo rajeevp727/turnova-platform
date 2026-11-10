@@ -483,3 +483,109 @@ test("returns only the current session access token or its same-session fallback
   assert.equal(await readAccessTokenIfCurrent(storage, "memory-current", () => true), "stored-current");
   assert.equal(await readAccessTokenIfCurrent(createStorage(), "memory-current", () => true), "memory-current");
 });
+
+
+test("startup restore does not publish a profile after a replacement login advances the session epoch", async () => {
+  let epoch = 3;
+  let signalProfileStarted;
+  let releaseProfile;
+  const profileStarted = new Promise(resolve => { signalProfileStarted = resolve; });
+  const pendingProfile = new Promise(resolve => { releaseProfile = resolve; });
+  const storage = createStorage({ [ACCESS_TOKEN_KEY]: "access-old", [REFRESH_TOKEN_KEY]: "refresh-old" });
+  const restoring = restoreStoredSession(storage, async path => {
+    assert.equal(path, "/api/v1/auth/me");
+    signalProfileStarted();
+    await pendingProfile;
+    return { userId: "old-account" };
+  }, () => epoch === 3);
+  await profileStarted;
+  epoch = 4;
+  assert.equal(await saveSessionTokensIfCurrent(storage, {
+    accessToken: "access-new", refreshToken: "refresh-new"
+  }, () => epoch === 4), true);
+  releaseProfile();
+  assert.equal(await restoring, null);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new");
+});
+
+test("startup restore does not persist a rotated pair when login supersedes an in-flight refresh", async () => {
+  let epoch = 5;
+  let signalRefreshStarted;
+  let releaseRefresh;
+  const refreshStarted = new Promise(resolve => { signalRefreshStarted = resolve; });
+  const pendingRefresh = new Promise(resolve => { releaseRefresh = resolve; });
+  const storage = createStorage({ [ACCESS_TOKEN_KEY]: "expired-old", [REFRESH_TOKEN_KEY]: "refresh-old" });
+  const restoring = restoreStoredSession(storage, async path => {
+    if (path === "/api/v1/auth/me") throw httpError(401);
+    if (path === "/api/v1/auth/refresh") {
+      signalRefreshStarted();
+      await pendingRefresh;
+      return { accessToken: "access-stale-refresh", refreshToken: "refresh-stale-refresh" };
+    }
+    throw new Error("Unexpected request.");
+  }, () => epoch === 5);
+  await refreshStarted;
+  epoch = 6;
+  assert.equal(await saveSessionTokensIfCurrent(storage, {
+    accessToken: "access-new-login", refreshToken: "refresh-new-login"
+  }, () => epoch === 6), true);
+  releaseRefresh();
+  assert.equal(await restoring, null);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new-login");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new-login");
+});
+
+test("a stale startup restore rejection cannot clear a replacement login token pair", async () => {
+  let epoch = 7;
+  let signalRefreshStarted;
+  let rejectRefresh;
+  const refreshStarted = new Promise(resolve => { signalRefreshStarted = resolve; });
+  const pendingRefresh = new Promise((resolve, reject) => { rejectRefresh = reject; });
+  const storage = createStorage({ [ACCESS_TOKEN_KEY]: "expired-old", [REFRESH_TOKEN_KEY]: "refresh-old" });
+  const restoring = restoreStoredSession(storage, async path => {
+    if (path === "/api/v1/auth/me") throw httpError(401);
+    if (path === "/api/v1/auth/refresh") {
+      signalRefreshStarted();
+      return pendingRefresh;
+    }
+    throw new Error("Unexpected request.");
+  }, () => epoch === 7);
+  await refreshStarted;
+  epoch = 8;
+  assert.equal(await saveSessionTokensIfCurrent(storage, {
+    accessToken: "access-new-login", refreshToken: "refresh-new-login"
+  }, () => epoch === 8), true);
+  rejectRefresh(httpError(401));
+  assert.equal(await restoring, null);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new-login");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new-login");
+});
+
+test("a stale partial-token read cannot clear a replacement login pair", async () => {
+  let epoch = 9;
+  let getCalls = 0;
+  let signalReadsStarted;
+  let releaseReads;
+  const readsStarted = new Promise(resolve => { signalReadsStarted = resolve; });
+  const pendingReads = new Promise(resolve => { releaseReads = resolve; });
+  const storage = createStorage({ [ACCESS_TOKEN_KEY]: "partial-old-access" }, {
+    get: async () => {
+      getCalls += 1;
+      if (getCalls === 2) {
+        signalReadsStarted();
+        await pendingReads;
+      }
+    }
+  });
+  const reading = readSessionTokens(storage, () => epoch === 9);
+  await readsStarted;
+  epoch = 10;
+  assert.equal(await saveSessionTokensIfCurrent(storage, {
+    accessToken: "access-new-login", refreshToken: "refresh-new-login"
+  }, () => epoch === 10), true);
+  releaseReads();
+  assert.equal(await reading, null);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new-login");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new-login");
+});

@@ -211,23 +211,26 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    let restoreEpoch = sessionEpoch.current;
+    const isRestoreCurrent = () => active && sessionEpoch.current === restoreEpoch;
     (async () => {
       try {
-        const restored = await restoreStoredSession(SecureStore, jsonRequest);
-        if (active && restored) {
+        const restored = await restoreStoredSession(SecureStore, jsonRequest, isRestoreCurrent);
+        if (isRestoreCurrent() && restored) {
           const restoredEpoch = advanceSessionEpoch(sessionEpoch, refreshInFlight);
+          restoreEpoch = restoredEpoch;
           const restoredUser = requireAppRole<User>(restored.user, "Driver");
           authenticatedSessionEpoch.current = restoredEpoch;
           setTokens(restored.tokens);
           setUser(restoredUser);
-        } else if (active) {
+        } else if (isRestoreCurrent()) {
           const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
-          if (active && cacheCleanup.failed > 0)
+          if (isRestoreCurrent() && cacheCleanup.failed > 0)
             setError("No active session was restored, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");
         }
       } catch {
-        if (active) setError("Unable to restore your session. Check your connection or secure storage and retry.");
-      } finally { if (active) setLoading(false); }
+        if (isRestoreCurrent()) setError("Unable to restore your session. Check your connection or secure storage and retry.");
+      } finally { if (isRestoreCurrent()) setLoading(false); }
     })();
     return () => { active = false; };
   }, []);

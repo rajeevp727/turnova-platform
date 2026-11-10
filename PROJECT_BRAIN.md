@@ -1257,3 +1257,16 @@ PR [#143](https://github.com/rajeevp727/turnova-platform/pull/143) remains the s
 ## Latest sequential handoff — AUTH-02 complete session-resource invalidation (2026-11-10)
 
 PR [#143](https://github.com/rajeevp727/turnova-platform/pull/143) remains the sole active feature PR. The latest AUTH-02 increment adds a shared `readJsonResponseIfCurrent` guard used by Rider/Driver protected API helpers and Driver payslip error parsing, with deterministic tests for a response body that completes after logout. The active session-stop registry now includes Rider/Driver SignalR connections and the Driver foreground location watcher. Logout/account switch/refresh expiry advances the session epoch and stops those resources immediately; location permission/watch continuations, history/agreement loaders, SignalR token factories, event callbacks and reconnect recovery all require the captured authenticated epoch. `startSignalRConnection` rechecks its owner after successful start and stops a transport if invalidation happened while `start()` was pending. AUTH-LOGIN-039–044 cover stale token reads, captured epochs, resource teardown, late response bodies, location watcher stop and in-flight SignalR start. Fresh exact-head CI and all four same-run simulator artifacts are required before merge. AUTH-02 remains In Progress pending live TriSend rotation/reuse semantics and signed Android/iOS physical-device SecureStore/Keychain acceptance. After merge, re-read `main` and continue sequentially to RIDER-01, then RIDER-02.
+
+
+## AUTH-02 startup restore race — 2026-11-10
+
+A final concurrency audit found startup restore was not bound to the session epoch. If a Rider/Driver began a replacement sign-in while the old /auth/me or /auth/refresh request was pending, the old restore could later publish its profile/tokens or clear the new token pair. This is fixed in the active PR #143:
+
+- restoreStoredSession(storage, request, isCurrent) checks the captured epoch before and after token reads, /auth/me, /auth/refresh, guarded token persistence and the final profile read.
+- Startup token rotation uses saveSessionTokensIfCurrent; stale results do not write.
+- Stale 400/401 cleanup is serialized, re-reads the pair and deletes only when it still matches the pair owned by that restore.
+- Partial-token cleanup also runs under the mutation queue and rechecks the exact observed pair, preventing a delayed stale read from deleting a replacement login.
+- Rider and Driver mount effects fence restore state, errors and loading completion. The successful restore adopts the new epoch it creates; a sign-in that advances the epoch first wins.
+
+AUTH-LOGIN-045–048 add deterministic deferred-promise tests for delayed startup profile, delayed refresh, stale rejection cleanup and partial-pair cleanup. These are code/test evidence only; live TriSend rotation/reuse and signed-device SecureStore/Keychain behavior remain external. Active PR #143 remains the only feature PR; do not open a parallel PR.
