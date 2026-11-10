@@ -1,5 +1,7 @@
 const ACTIVE_RIDE_STATUSES = new Set([
   "Requested",
+  "Matching",
+  "Offered",
   "Negotiating",
   "AgreementConfirmed",
   "Accepted",
