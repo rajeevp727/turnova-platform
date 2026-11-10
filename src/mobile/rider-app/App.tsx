@@ -17,6 +17,7 @@ import { discoverNearbyCabDrivers } from "../shared/foregroundPickupLocation";
 import { createSelectedBookingLocation } from "../shared/selectedBookingLocation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
+import { resetRiderSessionState } from "../shared/sessionStateReset";
 import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
 
@@ -97,6 +98,23 @@ export default function App() {
     bookingRequestKeyRef.current=nextKey;
     setBookingRequestKey(nextKey);
   };
+  const clearRiderSessionState = useCallback(() => {
+    authenticatedSessionEpoch.current = null;
+    resetRiderSessionState({
+      tokens: setTokens, user: setUser, tab: setTab,
+      pickup: setPickup, dropoff: setDropoff, stopsText: setStopsText, passengers: setPassengers,
+      tripIntentText: setTripIntentText, tripIntentBusy: setTripIntentBusy, tripIntentNotice: setTripIntentNotice,
+      helpQuestion: setHelpQuestion, helpBusy: setHelpBusy, helpAnswer: setHelpAnswer,
+      ride: setRide, rideHistory: setRideHistory, discovery: setDiscovery, selectedDriverId: setSelectedDriverId,
+      agreementHistory: setAgreementHistory, agreementAmount: setAgreementAmount,
+      followDriverLocation: setFollowDriverLocation, readyRideMapId: setReadyRideMapId
+    });
+    selectedBookingLocation.current.reset();
+    bookingInFlight.current = false;
+    const nextKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    bookingRequestKeyRef.current = nextKey;
+    setBookingRequestKey(nextKey);
+  }, []);
   useEffect(() => {
     let mounted = true;
     void SecureStore.getItemAsync("turnova.theme").then(value => {
@@ -163,7 +181,7 @@ export default function App() {
         let tokenCleanupFailed=false;
         try{await clearTokens();}catch{tokenCleanupFailed=true;}
         if(sessionEpoch.current!==expiredEpoch)throw new Error("Session changed. Please sign in again.");
-        authenticatedSessionEpoch.current=null;setTokens(null);setUser(null);
+        clearRiderSessionState();
         throw new Error(tokenCleanupFailed
           ?"Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
           :"Session expired. Please sign in again.");
@@ -173,7 +191,7 @@ export default function App() {
       if(sessionEpoch.current!==requestEpoch)throw new Error("Session changed. Please sign in again.");
     }
     const body=await readJsonResponseIfCurrent(response,()=>sessionEpoch.current===requestEpoch&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)) as any;if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
-  },[tokens,refresh,invalidateSession]);
+  },[tokens,refresh,invalidateSession,clearRiderSessionState]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);if(!isCurrent())return;const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];if(!isCurrent())return;setRideHistory(history);const active=findActiveRide(history, "rider");if(active){const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));if(!isCurrent())return;setRide(current=>current&&current.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);}else if(isCurrent()){setRide(null);}},[apiFetch]);
   useEffect(()=>{let active=true;let restoreEpoch=sessionEpoch.current;const isRestoreCurrent=()=>active&&sessionEpoch.current===restoreEpoch;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request,isRestoreCurrent);if(isRestoreCurrent()&&restored){const restoredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);restoreEpoch=restoredEpoch;const restoredUser=requireAppRole<User>(restored.user,"Rider");authenticatedSessionEpoch.current=restoredEpoch;setTokens(restored.tokens);setUser(restoredUser);}}catch{if(isRestoreCurrent())setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(isRestoreCurrent())setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{
@@ -244,7 +262,7 @@ export default function App() {
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const authenticate=async()=>{const authEpoch=invalidateSession();setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
+  const authenticate=async()=>{const authEpoch=invalidateSession();clearRiderSessionState();setLoading(true);setError("");try{const path=mode==="register"?"/api/v1/auth/rider/register":"/api/v1/auth/rider/login";const result=await request(path,{method:"POST",body:JSON.stringify({email:email.trim(),password,name:name.trim()||null})});const accepted=await accept(result,authEpoch,true);if(!accepted)throw new Error("Session changed. Please sign in again.");}catch(e){if(sessionEpoch.current===authEpoch)setError(e instanceof Error?e.message:"Authentication failed.");}finally{if(sessionEpoch.current===authEpoch)setLoading(false);}};
   const draftTripIntent=async()=>{
     setTripIntentBusy(true);setTripIntentNotice("");setError("");
     try {
@@ -265,7 +283,7 @@ export default function App() {
     }
   };
   const askHelp=async()=>{setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{setHelpBusy(false);}};
-  const logout=async()=>{const logoutEpoch=invalidateSession();try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}if(sessionEpoch.current!==logoutEpoch)return;authenticatedSessionEpoch.current=null;setTokens(null);setUser(null);setRide(null);setRideHistory([]);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();setAgreementHistory([]);setAgreementAmount("");};
+  const logout=async()=>{const logoutEpoch=invalidateSession();try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}if(sessionEpoch.current!==logoutEpoch)return;clearRiderSessionState();};
   const findNearbyVehicles=async()=>{
     const passengerCount=parsePassengerCountInput(passengers);
     if(passengerCount===null){setDiscovery(null);setError("Enter a passenger count from 1 to 6 before searching.");return;}

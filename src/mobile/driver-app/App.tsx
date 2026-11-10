@@ -18,6 +18,7 @@ import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
+import { resetDriverSessionState } from "../shared/sessionStateReset";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
@@ -117,6 +118,22 @@ export default function App() {
   const [registrationReference, setRegistrationReference] = useState("");
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
   const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
+  const clearDriverSessionState = useCallback(() => {
+    authenticatedSessionEpoch.current = null;
+    resetDriverSessionState({
+      tokens: setTokens, user: setUser, tab: setTab, queue: setQueue, membership: setMembership,
+      availabilityStatus: setAvailabilityStatus, notice: setNotice, helpQuestion: setHelpQuestion,
+      helpBusy: setHelpBusy, helpAnswer: setHelpAnswer, availableRides: setAvailableRides,
+      activeRide: setActiveRide, driverRideHistory: setDriverRideHistory, agreementHistory: setAgreementHistory,
+      agreementAmount: setAgreementAmount, paymentReportAmounts: setPaymentReportAmounts,
+      onboardingProfile: setOnboardingProfile, unionAssignment: setUnionAssignment, driverName: setDriverName,
+      phoneNumber: setPhoneNumber, vehicleMake: setVehicleMake, vehicleModel: setVehicleModel,
+      vehicleRegistration: setVehicleRegistration, licenceReference: setLicenceReference,
+      registrationReference: setRegistrationReference, profilePhotoBase64: setProfilePhotoBase64,
+      legacyServiceClass: setLegacyServiceClass
+    });
+  }, []);
+
   const serviceClass = legacyServiceClass ?? DEFAULT_SERVICE_CLASS;
 
   useEffect(() => {
@@ -182,14 +199,7 @@ export default function App() {
         if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
         const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
         if (sessionEpoch.current !== expiredEpoch) throw new Error("Session changed. Please sign in again.");
-        authenticatedSessionEpoch.current = null;
-        setTokens(null);
-        setUser(null);
-        setActiveRide(null);
-        setDriverRideHistory([]);
-        setUnionAssignment(null);
-        setPaymentReportAmounts({});
-        setAvailableRides([]);
+        clearDriverSessionState();
         const expiryMessage = tokenCleanupFailed
           ? "Session expired, but secure credential cleanup failed. Clear app data before another account signs in."
           : cacheCleanup.failed > 0
@@ -207,7 +217,7 @@ export default function App() {
     const body = await readJsonResponseIfCurrent(response, () => sessionEpoch.current === requestEpoch && isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) as any;
     if (!response.ok) { const error = new Error(body.message ?? body.title ?? "Request failed."); (error as Error & { status: number }).status = response.status; throw error; }
     return body;
-  }, [tokens, refreshSession, invalidateSession]);
+  }, [tokens, refreshSession, invalidateSession, clearDriverSessionState]);
 
   useEffect(() => {
     let active = true;
@@ -237,6 +247,7 @@ export default function App() {
 
   const authenticate = async (replaceOldest = false) => {
     const authEpoch = invalidateSession();
+    clearDriverSessionState();
     setLoading(true); setError(""); setNotice("");
     try {
       const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
@@ -1029,8 +1040,7 @@ export default function App() {
     if (sessionEpoch.current !== logoutEpoch) return;
     const cacheCleanup = await clearCachedDriverPayslips(FileSystem);
     if (sessionEpoch.current !== logoutEpoch) return;
-    authenticatedSessionEpoch.current = null;
-    setTokens(null); setUser(null); setQueue([]); setMembership({ isQueued: false, position: null }); setActiveRide(null); setDriverRideHistory([]); setAvailableRides([]); setUnionAssignment(null); setPaymentReportAmounts({});
+    clearDriverSessionState();
     if (cacheCleanup.failed > 0)
       setError("Signed out, but cached payslip cleanup was incomplete. Clear the app cache before another account signs in.");
   };
