@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const fs = require("node:fs");
 const path = require("node:path");
-const { resetRiderSessionState, resetDriverSessionState } = require("./sessionStateReset.js");
+const { resetRiderSessionState, resetDriverSessionState, finishLoadingIfSessionCurrent } = require("./sessionStateReset.js");
 
 function createSetters(keys) {
   const values = {};
@@ -18,7 +18,7 @@ const riderKeys = [
 ];
 
 const driverKeys = [
-  "tokens", "user", "mode", "email", "password", "name", "tab", "error", "queue", "membership", "availabilityStatus", "notice",
+  "tokens", "user", "mode", "email", "password", "name", "tab", "error", "queue", "membership", "availabilityStatus", "loading", "notice",
   "helpQuestion", "helpBusy", "helpAnswer", "availableRides", "activeRide",
   "driverRideHistory", "agreementHistory", "agreementAmount", "paymentReportAmounts",
   "onboardingProfile", "unionAssignment", "driverName", "phoneNumber", "vehicleMake",
@@ -46,7 +46,7 @@ test("Driver session reset clears prior-account queue, ride, payment, onboarding
 
   assert.deepEqual(values, {
     tokens: null, user: null, mode: "login", email: "", password: "", name: "", tab: "Home", error: "", queue: [],
-    membership: { isQueued: false, position: null }, availabilityStatus: "Offline",
+    membership: { isQueued: false, position: null }, availabilityStatus: "Offline", loading: false,
     notice: "", helpQuestion: "", helpBusy: false, helpAnswer: "",
     availableRides: [], activeRide: null, driverRideHistory: [], agreementHistory: [],
     agreementAmount: "", paymentReportAmounts: {}, onboardingProfile: null,
@@ -149,4 +149,45 @@ test("AUTH-LOGIN-062 clears Driver SignalR offer deduplication when resetting a 
   assert.match(reset, /receivedOfferIds\.current\.clear\(\);/);
   assert.match(app, /const receivedOfferIds = useRef<Set<string>>\(new Set\(\)\);/);
   assert.match(app, /if \(receivedOfferIds\.current\.size > 500\)/);
+});
+
+
+test("stale payslip finalizer cannot clear a newer authenticated session loading state", () => {
+  let loading = true;
+  let initiatingSessionCurrent = false;
+
+  const cleared = finishLoadingIfSessionCurrent(value => { loading = value; }, () => initiatingSessionCurrent);
+
+  assert.equal(cleared, false);
+  assert.equal(loading, true);
+});
+
+test("current payslip finalizer clears loading for its own authenticated session", () => {
+  let loading = true;
+  const cleared = finishLoadingIfSessionCurrent(value => { loading = value; }, () => true);
+
+  assert.equal(cleared, true);
+  assert.equal(loading, false);
+});
+
+test("Driver payslip finalizer uses the captured session guard and session reset clears loading", () => {
+  const app = fs.readFileSync(path.join(__dirname, "../driver-app/App.tsx"), "utf8");
+  const resetStart = app.indexOf("const clearDriverSessionState");
+  const resetEnd = app.indexOf("const serviceClass", resetStart);
+  const downloadStart = app.indexOf("const downloadPayslip = async");
+  const downloadEnd = app.indexOf("const loadOnboarding", downloadStart);
+  assert.notEqual(resetStart, -1);
+  assert.notEqual(resetEnd, -1);
+  assert.notEqual(downloadStart, -1);
+  assert.notEqual(downloadEnd, -1);
+  const reset = app.slice(resetStart, resetEnd);
+  const download = app.slice(downloadStart, downloadEnd);
+  const finallyStart = download.lastIndexOf("} finally {");
+  assert.notEqual(finallyStart, -1);
+  const finalizer = download.slice(finallyStart);
+
+  assert.match(reset, /loading:\\s*setLoading/);
+  assert.match(download, /const isSessionCurrent = \\(\\) => sessionEpoch\\.current === requestEpoch/);
+  assert.match(finalizer, /finishLoadingIfSessionCurrent\\(setLoading, isSessionCurrent\\)/);
+  assert.doesNotMatch(finalizer, /setLoading\\(false\\)/);
 });

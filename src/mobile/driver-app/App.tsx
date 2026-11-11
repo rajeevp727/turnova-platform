@@ -18,7 +18,7 @@ import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
-import { resetDriverSessionState } from "../shared/sessionStateReset";
+import { finishLoadingIfSessionCurrent, resetDriverSessionState } from "../shared/sessionStateReset";
 import { clearProposalAttempt, finishProposalSubmission, getOrCreateProposalAttempt, type ProposalAttempt } from "../shared/proposalAttempt";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
@@ -140,7 +140,7 @@ export default function App() {
     authenticatedSessionEpoch.current = null;
     resetDriverSessionState({
       tokens: setTokens, user: setUser, mode: setMode, email: setEmail, password: setPassword, name: setName, tab: setTab, error: setError, queue: setQueue, membership: setMembership,
-      availabilityStatus: setAvailabilityStatus, notice: setNotice, helpQuestion: setHelpQuestion,
+      availabilityStatus: setAvailabilityStatus, loading: setLoading, notice: setNotice, helpQuestion: setHelpQuestion,
       helpBusy: setHelpBusy, helpAnswer: setHelpAnswer, availableRides: setAvailableRides,
       activeRide: setActiveRide, driverRideHistory: setDriverRideHistory, agreementHistory: setAgreementHistory,
       agreementAmount: setAgreementAmount, paymentReportAmounts: setPaymentReportAmounts,
@@ -965,7 +965,7 @@ export default function App() {
           (e instanceof Error && e.message.includes("cached file cleanup failed")))
         setError(e instanceof Error ? e.message : "Unable to download payslip.");
     } finally {
-      setLoading(false);
+      finishLoadingIfSessionCurrent(setLoading, isSessionCurrent);
     }
   };
 

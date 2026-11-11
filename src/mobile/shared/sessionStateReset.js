@@ -57,6 +57,7 @@ function resetDriverSessionState(setters) {
     queue: [],
     membership: { isQueued: false, position: null },
     availabilityStatus: "Offline",
+    loading: false,
     notice: "",
     helpQuestion: "",
     helpBusy: false,
@@ -81,4 +82,16 @@ function resetDriverSessionState(setters) {
   }, "Driver");
 }
 
-module.exports = { resetRiderSessionState, resetDriverSessionState };
+function finishLoadingIfSessionCurrent(setLoading, isSessionCurrent) {
+  if (typeof setLoading !== "function") {
+    throw new TypeError("Loading state setter is required.");
+  }
+  if (typeof isSessionCurrent !== "function") {
+    throw new TypeError("Session-current predicate is required.");
+  }
+  if (!isSessionCurrent()) return false;
+  setLoading(false);
+  return true;
+}
+
+module.exports = { resetRiderSessionState, resetDriverSessionState, finishLoadingIfSessionCurrent };
