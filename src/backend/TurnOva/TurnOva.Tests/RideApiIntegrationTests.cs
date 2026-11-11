@@ -979,6 +979,9 @@ public sealed class RideApiIntegrationTests
     [InlineData("+91987654321A")]
     [InlineData("+91 9876543210")]
     [InlineData("+919876543")]
+    [InlineData("1234567890123456")]
+    [InlineData("+1234567890123456")]
+    [InlineData("+٩١٩٨٧٦٥٤٣٢١٠")]
     public async Task DriverOnboardingRejectsMalformedPhoneNumbersWithoutCreatingProfile(string phoneNumber)
     {
         using var factory = new TurnOvaApiFactory();
@@ -995,21 +998,47 @@ public sealed class RideApiIntegrationTests
     }
 
 
-    [Fact]
-    public async Task DriverOnboardingAcceptsDigitsOnlyPhoneNumber()
+    [Theory]
+    [InlineData("1234567890")]
+    [InlineData("123456789012345")]
+    [InlineData("+1234567890")]
+    [InlineData("+123456789012345")]
+    public async Task DriverOnboardingAcceptsPhoneNumbersAtBothE164LengthBoundaries(string phoneNumber)
     {
         using var factory = new TurnOvaApiFactory();
-        const string driverId = "driver-onboarding-digits-only-phone";
+        const string driverId = "driver-onboarding-phone-boundary";
         using var driver = factory.CreateClient("Driver", driverId);
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         profiles.TryRemove(driverId, out _);
 
         using var response = await driver.PostAsJsonAsync(
-            "/api/v1/driver/onboarding", ValidOnboardingRequest(phoneNumber: "919876543210"));
+            "/api/v1/driver/onboarding", ValidOnboardingRequest(phoneNumber: phoneNumber));
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()[driverId];
-        Assert.Equal("919876543210", profile.PhoneNumber);
+        var profile = profiles[driverId];
+        Assert.Equal(phoneNumber, profile.PhoneNumber);
+    }
+
+
+    [Fact]
+    public async Task DriverOnboardingRejectsMalformedPhoneNumberWithoutReplacingExistingProfile()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-onboarding-phone-preserve";
+        using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
+
+        Assert.Equal(HttpStatusCode.Accepted,
+            (await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())).StatusCode);
+        var before = profiles[driverId];
+
+        using var response = await driver.PostAsJsonAsync(
+            "/api/v1/driver/onboarding",
+            ValidOnboardingRequest(phoneNumber: "+91987654321A"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(before, profiles[driverId]);
     }
 
 
