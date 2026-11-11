@@ -1456,9 +1456,9 @@ Next after merge: re-read main, audit #6 DISPATCH-01 in order, implement all saf
 - The prior docs head `80c4676dca6907093a03dc0e8e6af1d7c2a1e7de` had backend 389/389, shared mobile 170/170, Python 41/41 and both app validation jobs passed; native/simulator jobs were superseded before completion by this final test assertion. Fresh exact-head CI is required.
 
 
-## Latest verified handoff — RIDER-03 exact-head CI #1214 (2026-11-11)
+## Previous verified handoff — RIDER-03 exact-head CI #1214 (2026-11-11)
 
-PR #146 remains the sole active feature PR. Exact documentation head `a949f6e4f002721b17d5bd426f226416e109943a` passed CI [#1214 / 42920911797](https://github.com/rajeevp727/turnova-platform/actions/runs/42920911797) 12/12: backend 403/403, shared mobile 171/171, Python 41/41, both app validation/bundles, four native builds and four simulator smokes. Same-run artifacts 13811579024, 13813150972, 13812929395 and 13813746404 were inspected. Next sequential engineering task after merge is DISPATCH-01 selected-booking fail-closed tests for missing/invalid radius and location-freshness configuration; then continue DISPATCH-02. Product-approved dispatch values and live Cosmos/physical-device checks remain external.
+PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI-verified code/test evidence is CI [#1214 / 42920911797](https://github.com/rajeevp727/turnova-platform/actions/runs/42920911797), 12/12: backend 403/403, shared mobile 171/171, Python 41/41, both app validation/bundles, four native builds and four simulator smokes. Same-run artifacts 13811579024, 13813150972, 13812929395 and 13813746404 were inspected. The next sequential task is DISPATCH-01 selected-booking fail-closed tests; see the latest handoff below.
 
 ## Latest handoff — DISPATCH-01
 
