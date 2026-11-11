@@ -28,6 +28,10 @@ public static class RideTrackingHubAuthorization
     {
         if (!CanRequestRideGroup(user, rideId) || ride is null) return false;
 
+        // Bind authorization to the exact aggregate that will back the requested SignalR group.
+        // Owner checks alone are insufficient if a stale or inconsistent store entry is returned.
+        if (!string.Equals(ride.RideId, rideId, StringComparison.Ordinal)) return false;
+
         var userId = GetUserId(user)!;
         if (user?.IsInRole("Rider") == true &&
             !string.Equals(ride.RiderId, userId, StringComparison.Ordinal)) return false;

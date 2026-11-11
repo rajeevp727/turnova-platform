@@ -1592,3 +1592,13 @@ Same-run simulator result JSONs and screenshots were inspected: Rider Android `1
 - DISPATCH-02 audit remains: capped three-per-union discovery, raw pickup-distance ordering, union-approved selfie/verified Cab projection, foreground GPS capture and same-process retry are implemented. Exact response replay across process death is not guaranteed; precise GPS is not persisted locally. No independent source gap identified.
 - DISPATCH-03 next regression increment: prove active selected-driver decline and Driver rejection of an already-expired selected negotiation never invoke the legacy FIFO advancer. Preserve legacy FIFO compatibility; it must not rank, auto-assign or advance the customer-selected Rider flow.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is the full-evidence count, not an implementation-completion score. Product-approved radius/zones/freshness, live Cosmos, physical-device, signing, maps/realtime, support, reconciliation, legal and production-hosting gates remain. Production readiness is not established.
+
+
+## REALTIME-01 — SignalR ride-group identity binding
+
+| Test ID | Scenario | Expected result | Evidence | Priority |
+|---|---|---|---|---|
+| REALTIME-01-HUB-018 | An authenticated owning Rider or assigned Driver requests a ride group whose loaded aggregate has a different `RideId` | Authorization denies the group for both roles using ordinal exact-ID comparison, even when the caller owns the stored aggregate | `RiderOrAssignedDriverCannotJoinWhenStoredRideIdDiffersFromRequestedGroup` in `RideTrackingHubTests` | P0 |
+| REALTIME-01-HUB-019 | `OnConnectedAsync` resolves the requested dictionary key to an aggregate whose `RideId` differs | Connection is aborted and no SignalR group membership is added | `OnConnectedAsyncAbortsWhenStoredRideIdDiffersFromRequestedGroup` in `RideTrackingHubTests` | P0 |
+
+The guard binds the authorization decision to the exact aggregate used for group membership before role/owner checks. Existing owning Rider/assigned Driver positive cases, unrelated-user denial, UnionManager denial and Driver notification-group isolation remain regression controls. Automated in-memory tests do not validate live Cosmos reads, WebSocket delivery, multi-instance SignalR backplanes, long-outage reconnect or Android/iOS background/resume behaviour; those remain external gates.

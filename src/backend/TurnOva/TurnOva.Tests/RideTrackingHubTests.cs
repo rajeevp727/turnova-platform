@@ -28,6 +28,19 @@ public sealed class RideTrackingHubTests
         Assert.False(RideTrackingHubAuthorization.CanJoinRideGroup(driver, "ride-1", CreateRide("rider-1", "driver-2")));
     }
 
+    [Theory]
+    [InlineData("rider-1", "Rider")]
+    [InlineData("driver-1", "Driver")]
+    public void RiderOrAssignedDriverCannotJoinWhenStoredRideIdDiffersFromRequestedGroup(
+        string userId,
+        string role)
+    {
+        var user = CreatePrincipal(userId, role);
+        var mismatchedRide = CreateRide("rider-1", "driver-1", "different-ride");
+
+        Assert.False(RideTrackingHubAuthorization.CanJoinRideGroup(user, "ride-1", mismatchedRide));
+    }
+
     [Fact]
     public void DriverCanJoinOnlyTheirOwnSelectedBookingNotificationGroup()
     {
@@ -92,6 +105,23 @@ public sealed class RideTrackingHubTests
 
         Assert.True(otherContext.IsAborted);
         Assert.Empty(otherGroups.Added);
+    }
+
+    [Fact]
+    public async Task OnConnectedAsyncAbortsWhenStoredRideIdDiffersFromRequestedGroup()
+    {
+        var rides = new ConcurrentDictionary<string, DemoRide>
+        {
+            ["requested-ride"] = CreateRide("rider-1", "driver-1", "different-stored-ride")
+        };
+        var context = CreateHubContext(CreatePrincipal("rider-1", "Rider"), "?rideId=requested-ride");
+        var groups = new RecordingGroupManager();
+        var hub = CreateHub(rides, context, groups);
+
+        await hub.OnConnectedAsync();
+
+        Assert.True(context.IsAborted);
+        Assert.Empty(groups.Added);
     }
 
     [Fact]
@@ -189,7 +219,7 @@ public sealed class RideTrackingHubTests
             new Claim(ClaimTypes.Role, role)
         ], "test"));
 
-    private static DemoRide CreateRide(string riderId, string driverId) => new(
-        "ride-1", "Pickup", "Dropoff", 1, "Negotiating", DateTimeOffset.UtcNow,
+    private static DemoRide CreateRide(string riderId, string driverId, string rideId = "ride-1") => new(
+        rideId, "Pickup", "Dropoff", 1, "Negotiating", DateTimeOffset.UtcNow,
         null, riderId, driverId, null, null, null, null, null, null);
 }
