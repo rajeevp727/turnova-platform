@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
 **Last audited main HEAD:** `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged. Sole active feature PR #150 is `fix/driver-01-phone-validation`, source/test head `e2c665a248b816f4e29de109e01ad430c4e5cfdb`; the earlier CI #1244 passed on the superseded `b1da63b` head. Expanded 10/15-digit boundary, non-ASCII rejection and existing-profile-preservation regressions require fresh exact-head CI.
-**Current engineering item:** #11 DRIVER-01 — onboarding phone-number structure validation is implemented and exact-head CI #1244 passed 12/12. Nine malformed inputs return HTTP 400 without profile creation; four 10/15-digit boundary values with/without '+' are accepted, and a malformed resubmission preserves the entire existing profile. Phone ownership/OTP and identity-provider assurance remain external.
+**Current engineering item:** #11 DRIVER-01 — onboarding phone-number structure validation and expanded boundary/profile-preservation regressions are implemented. Earlier CI #1244 passed 12/12 on the superseded `b1da63b` source/test head; the current source/test head `e2c665a248b816f4e29de109e01ad430c4e5cfdb` requires fresh exact-head CI. Phone ownership/OTP and identity-provider assurance remain external.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line

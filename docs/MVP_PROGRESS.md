@@ -1,11 +1,11 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-11 (main HEAD `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged; sole active feature PR #150 is DRIVER-01 on `fix/driver-01-phone-validation`, source/test head `e2c665a248b816f4e29de109e01ad430c4e5cfdb`; the previous CI #1244 passed on the superseded `b1da63b` head, and expanded boundary/profile-preservation tests require fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.)
+**Last updated:** 2026-11-11 (main HEAD `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged; sole active feature PR #150 is DRIVER-01 on `fix/driver-01-phone-validation`, source/test head `e2c665a248b816f4e29de109e01ad430c4e5cfdb`; expanded boundary/profile-preservation tests require fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.)
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded. Approved AI-01 is supplemental and remains outside the 19-row denominator.
 
 ## 1. Current step
 
-**Current engineering item: #11 DRIVER-01 — onboarding phone-number structure validation.** PR #150 adds an optional single leading '+' plus 10–15 ASCII-digit validation. Nine malformed inputs return HTTP 400 without profile creation; four 10/15-digit boundary values with/without '+' are accepted; malformed resubmission preserves the existing profile. Exact-head CI #1244 passed 12/12 on `b1da63bb5987d27f26455119bd4e0e280a4c7428`.
+**Current engineering item: #11 DRIVER-01 — onboarding phone-number structure validation.** PR #150 adds an optional single leading '+' plus 10–15 ASCII-digit validation. Nine malformed inputs return HTTP 400 without profile creation; four 10/15-digit boundary values with/without '+' are accepted; malformed resubmission preserves the existing profile. Earlier CI #1244 passed on superseded source/test head `b1da63bb5987d27f26455119bd4e0e280a4c7428`; expanded boundary/profile-preservation tests on `e2c665a248b816f4e29de109e01ad430c4e5cfdb` require fresh exact-head CI.
 
 
 PR #145 RIDER-02 merged at `ab988b02b01d89394e5213586f9ee24f0e78c6b1` after [CI #1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12. Evidence: backend 373/373, shared mobile 153/153, Python 41/41, Rider/Driver validation and bundles, four native builds and four simulator smokes. All four same-run artifacts were inspected. The unsigned iOS SecureStore-unavailable qualification and Driver Android targeted Pixel Launcher retry remain documented; no signed-device Keychain or production authentication is claimed.
@@ -1172,7 +1172,7 @@ Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a comple
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a full-evidence count, not an implementation-completion score. Production readiness is not established.
 
 
-## Latest exact handoff — DRIVER-01 exact-head CI passed (2026-11-11)
+## Latest exact handoff — DRIVER-01 expanded phone tests pending exact-head CI (2026-11-11)
 
 - REALTIME-01 PR #149 merged at `9129b2bfbf174e8df07a9713f7e99f51d232cb45`; CI #1239 / 42963719244 attempt 2 passed 12/12 (416 backend, 171 shared mobile, 41 Python, four native builds and four simulator smokes).
 - Sole active PR #150: `fix/driver-01-phone-validation`, exact tested head `b1da63bb5987d27f26455119bd4e0e280a4c7428`. Runtime commit `6adf12d2ebaad3c532fa68a606ad95ade89b7987`; latest test commit `e2c665a248b816f4e29de109e01ad430c4e5cfdb`.
