@@ -5,8 +5,8 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `2f99083b4ac57bca7a6a1cefaa1a212f1c82a80e` after DISPATCH-01 PR #147 merged. Sole active feature PR #148 is `test/dispatch-03-selected-reject-fifo-isolation`; source/test commit `c7a9d4649dfa5343f27515e12780e0cbdab166fc`; tested PR head `3ef0e10c953a4538e25162fcc015aea36d513541`. Exact-head CI #1231 / 42950871464, run attempt 3, passed 12/12 after one targeted retry each for Driver Android and Driver iOS simulator smoke. Backend 413/413, shared mobile 171/171, Python 41/41, four native builds and four simulator smokes; all four same-run result JSONs/screenshots were inspected.
-**Current engineering item:** #8 DISPATCH-03 — PR #148 adds active selected Driver decline and expired selected Driver reject regressions. Both assert no legacy FIFO advancer call, exact Driver/Rider reservation release and correct Driver/System audit ownership. CI #1231 passed 12/12; no runtime FIFO behaviour changed. Next after docs-sync CI/review/merge is #10 REALTIME-01; current audit found a missing exact `ride.RideId` ↔ requested SignalR group ID guard.
+**Last audited main HEAD:** `f46fa5ed0bce3a6a94e4196bd46c9a7b2d09e619` after DISPATCH-03 PR #148 merged. Sole active feature PR #149 is `fix/realtime-01-signalr-group-id-binding`; runtime commit `c56149f1c521648b0e5d2c9bb6aa926661b30d18`, test commit `ac5bb877d8d1205ffa8eac201fe5dcbe898b19fc`; exact-head CI pending.
+**Current engineering item:** #10 REALTIME-01 — PR #149 adds ordinal exact `DemoRide.RideId` ↔ requested SignalR group ID binding before role/owner authorization, plus Rider/assigned-Driver mismatch coverage and `OnConnectedAsync` abort-before-group-add regression. Exact-head CI pending; no live WebSocket/device/Cosmos validation claimed.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -1496,3 +1496,12 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - Next sequential item #10 REALTIME-01: `RideTrackingHubAuthorization.CanJoinRideGroup` currently checks role/ownership but does not require `ride.RideId` to equal the requested query/group ID. Add an ordinal exact-ID check and an `OnConnectedAsync` regression proving a mismatched stored aggregate aborts before any group membership. Then continue to #11 DRIVER-01.
 - DISPATCH-04 audit confirmed existing exclusive per-Driver leases, booking-vs-Offline/Union-transfer concurrency protection, accepted-active-ride exclusion and UnionManager selfie-review reservation reconciliation; no additional independent source gap found. Live Cosmos ETag/transactional-batch/multi-instance/restart, Product-approved negotiation lifetime, Android/iOS physical-device acceptance, signed-device SecureStore/Keychain, maps/realtime providers, support/escalation policies, private document controls, reconciliation policy, legal partnership review, production hosting/signing/pilot/store gates remain external.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
+
+
+## Latest exact handoff — REALTIME-01 (2026-11-11)
+
+- DISPATCH-03 PR #148 merged at `f46fa5ed0bce3a6a94e4196bd46c9a7b2d09e619`; documentation-head CI #1235 / 42955862813 passed 12/12, including backend 413/413, shared mobile 171/171, Python 41/41, four native builds and four simulator smokes. Same-run artifacts were inspected. PR #148's two new Driver rejection tests prove selected flow never invokes legacy FIFO and releases exact Rider/Driver reservations with correct audit actor.
+- Sole active PR #149: `fix/realtime-01-signalr-group-id-binding`. Runtime commit `c56149f1c521648b0e5d2c9bb6aa926661b30d18`; test commit `ac5bb877d8d1205ffa8eac201fe5dcbe898b19fc`; docs sync in progress, CI pending.
+- `CanJoinRideGroup` now checks ordinal equality between the requested group ID and loaded `DemoRide.RideId` before Rider/assigned-Driver ownership checks. Tests cover both roles and the actual hub connection abort path with no group addition.
+- Next after merge: #11 DRIVER-01. Live WebSocket/backplane, long-outage reconnect, physical-device background/resume, live Cosmos, signing, identity provider and production hosting remain external.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
