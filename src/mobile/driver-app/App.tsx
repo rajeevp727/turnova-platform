@@ -530,11 +530,16 @@ export default function App() {
   }, [apiFetch]);
 
   const reportPaymentReceived = async (rideId: string) => {
+    if (!tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
+    const requestEpoch = sessionEpoch.current;
+    const isSessionCurrent = () => sessionEpoch.current === requestEpoch &&
+      isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch);
     const rawAmount = (paymentReportAmounts[rideId] ?? "").trim();
     if (!/^\d+(?:\.\d{1,2})?$/.test(rawAmount)) {
-      setError("Enter an amount received of zero or more with up to two decimal places.");
+      if (isSessionCurrent()) setError("Enter an amount received of zero or more with up to two decimal places.");
       return;
     }
+    if (!isSessionCurrent()) return;
     setLoading(true); setError(""); setNotice("");
     try {
       await apiFetch(`/api/v1/driver/rides/${rideId}/payment-report`, {
@@ -542,20 +547,25 @@ export default function App() {
         headers: { "Idempotency-Key": "driver-payment-report-" + rideId },
         body: '{"amountReceived":' + rawAmount + '}'
       });
-      await loadDriverRideHistory(() => true);
+      if (!isSessionCurrent()) return;
+      await loadDriverRideHistory(isSessionCurrent);
+      if (!isSessionCurrent()) return;
       setPaymentReportAmounts(current => {
+        if (!isSessionCurrent()) return current;
         const next = { ...current };
         delete next[rideId];
         return next;
       });
-      setNotice("Amount recorded as Driver-reported and unverified. TurnOva does not verify cash or bank receipt.");
+      setNotice(current => isSessionCurrent()
+        ? "Amount recorded as Driver-reported and unverified. TurnOva does not verify cash or bank receipt."
+        : current);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to record the amount received.");
+      if (isSessionCurrent())
+        setError(e instanceof Error ? e.message : "Unable to record the amount received.");
     } finally {
-      setLoading(false);
+      finishLoadingIfSessionCurrent(setLoading, isSessionCurrent);
     }
   };
-
   useEffect(() => {
     if (!activeRide?.rideId) { setAgreementHistory([]); setAgreementAmount(""); return; }
     if (tab !== "Trips") return;
