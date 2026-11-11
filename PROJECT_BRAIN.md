@@ -5,8 +5,8 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `f46fa5ed0bce3a6a94e4196bd46c9a7b2d09e619` after DISPATCH-03 PR #148 merged. Sole active feature PR #149 is `fix/realtime-01-signalr-group-id-binding`; runtime commit `c56149f1c521648b0e5d2c9bb6aa926661b30d18`, test commit `ac5bb877d8d1205ffa8eac201fe5dcbe898b19fc`; exact-head CI pending.
-**Current engineering item:** #10 REALTIME-01 — PR #149 adds ordinal exact `DemoRide.RideId` ↔ requested SignalR group ID binding before role/owner authorization, plus Rider/assigned-Driver mismatch coverage and `OnConnectedAsync` abort-before-group-add regression. Exact-head CI pending; no live WebSocket/device/Cosmos validation claimed.
+**Last audited main HEAD:** `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged. Sole active feature PR #150 is `fix/driver-01-phone-validation`, code/test head `85c5ca6444617294500f552201df0ddd1fba9a93`; exact-head CI pending.
+**Current engineering item:** #11 DRIVER-01 — tighten onboarding phone-number structure validation to an optional single leading '+' followed by 10–15 ASCII digits. Six malformed inputs must return HTTP 400 without creating a profile; a digits-only number remains accepted. No phone ownership/OTP or identity-provider behaviour is inferred.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -1498,10 +1498,11 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 
-## Latest exact handoff — REALTIME-01 (2026-11-11)
+## Latest exact handoff — DRIVER-01 phone validation (2026-11-11)
 
-- DISPATCH-03 PR #148 merged at `f46fa5ed0bce3a6a94e4196bd46c9a7b2d09e619`; documentation-head CI #1235 / 42955862813 passed 12/12, including backend 413/413, shared mobile 171/171, Python 41/41, four native builds and four simulator smokes. Same-run artifacts were inspected. PR #148's two new Driver rejection tests prove selected flow never invokes legacy FIFO and releases exact Rider/Driver reservations with correct audit actor.
-- Sole active PR #149: `fix/realtime-01-signalr-group-id-binding`. Runtime commit `c56149f1c521648b0e5d2c9bb6aa926661b30d18`; test commit `ac5bb877d8d1205ffa8eac201fe5dcbe898b19fc`; docs sync in progress, CI pending.
-- `CanJoinRideGroup` now checks ordinal equality between the requested group ID and loaded `DemoRide.RideId` before Rider/assigned-Driver ownership checks. Tests cover both roles and the actual hub connection abort path with no group addition.
-- Next after merge: #11 DRIVER-01. Live WebSocket/backplane, long-outage reconnect, physical-device background/resume, live Cosmos, signing, identity provider and production hosting remain external.
-- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+- REALTIME-01 PR [#149](https://github.com/rajeevp727/turnova-platform/pull/149) merged at `9129b2bfbf174e8df07a9713f7e99f51d232cb45`. Exact-head CI [#1239 / 42963719244](https://github.com/rajeevp727/turnova-platform/actions/runs/42963719244), attempt 2, passed 12/12: backend 416/416, shared mobile 171/171, Rider/Driver validation and bundles, four native builds and four simulator smokes. The initial Rider Android smoke hit a Pixel Launcher ANR; only that job was retried, and attempt 2 passed. Its result JSON and screenshot were inspected; all four same-run simulator jobs are green. No live WebSocket/backplane, production auth, live Cosmos or physical-device acceptance is claimed.
+- Sole active feature PR [#150](https://github.com/rajeevp727/turnova-platform/pull/150), branch `fix/driver-01-phone-validation`, based on main `9129b2bfbf174e8df07a9713f7e99f51d232cb45`. Runtime commit `6adf12d2ebaad3c532fa68a606ad95ade89b7987`; latest test commit `85c5ca6444617294500f552201df0ddd1fba9a93`; docs synchronization is in progress and exact-head CI is pending.
+- DRIVER-01 change: onboarding now accepts an optional single leading plus followed by 10–15 ASCII digits; malformed plus placement/repetition, embedded spaces, letters and too-short numbers are rejected before profile create/update. Six invalid-value theory cases assert HTTP 400 and no profile creation; a digits-only positive case preserves the prior no-plus form. Test-plan ID `DRIVER-01-ONBOARD-014`.
+- No OTP/phone ownership verification, identity-provider claim issuance, private object-storage upload/scanning/retention, or legal policy was added. Those remain external gates along with signed UnionManager claim mapping, live Cosmos ETag/multi-instance/restart validation, physical-device camera/document permissions and production hosting/signing.
+- Next sequential area after PR #150: #12 DRIVER-02 — monotonic Driver availability/location capture and session/background recovery audit.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
