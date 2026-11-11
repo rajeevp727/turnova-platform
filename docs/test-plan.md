@@ -1771,3 +1771,19 @@ This follow-up was discovered in `HasActiveDriverRideAsync`: when `driverRideRes
 - Same-run npm audit artifacts Rider `13894024579` and Driver `13893769604` each report **12 advisories: 11 moderate, 1 low, 0 high, 0 critical**. Full automated remediation requires the major Expo upgrade to `58.0.24` (with related Expo package alignment); keep this as a separate compatibility/native-build hardening increment, not an unreviewed override.
 - CI #1290 verifies the documentation head that records CI #1288. This section itself is a subsequent documentation-only update and therefore requires a fresh exact-head CI and final COMMENT-only review before PR #153 can merge. RIDER-04 source/test code is unchanged from the previously verified head. The DISPATCH-04 historical active-ride fallback remains a separate P0 follow-up and is not implemented by PR #153.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established. No payment gateway, escrow, in-app collection, customer dispute/confirmation or delta-based next-ride policy is introduced.
+
+
+## DISPATCH-04 legacy active-ride fallback — planned regression expansion (2026-11-12)
+
+The source audit found that `HasActiveDriverRideAsync` returns false when no Driver reservation exists without checking the ride aggregate; after terminal/orphan reservation cleanup it can also return false without checking for a second legacy active ride. Discovery currently calls the guard per candidate, so the new historical lookup must be batched by candidate Driver IDs (bounded chunks) rather than issuing one cross-partition ride query per Driver.
+
+- `DISPATCH-04-LEGACY-001`: Historical active Cab negotiation without a reservation blocks a new selected booking.
+- `DISPATCH-04-LEGACY-002`: Historical Accepted/Arrived/InProgress ride without a reservation blocks a new selected booking, availability change and Union transfer.
+- `DISPATCH-04-LEGACY-003`: Terminal historical ride does not block a new booking after only its matching reservation is released.
+- `DISPATCH-04-LEGACY-004`: Historical non-Cab active ride continues to block overlapping work and is not deleted or rewritten.
+- `DISPATCH-04-LEGACY-005`: A terminal/orphan reservation plus a separate historical active ride releases only the matching stale reservation and still blocks the Driver.
+- `DISPATCH-04-LEGACY-006`: Same-ride idempotent recovery may exclude its own ride, but a different active historical ride for the same Driver still blocks.
+- `DISPATCH-04-LEGACY-007`: Rider discovery batches candidate Driver IDs, excludes every Driver with a historical active ride, and retains eligible nearby Drivers without customer-facing FIFO ranking.
+- `DISPATCH-04-LEGACY-008`: An expired historical Negotiating/AgreementConfirmed ride is reconciled through the authoritative `FindRideAsync` transition before eligibility is restored; terminal audit and matching-only reservation release are verified.
+
+Also add a query-contract test for the minimal projection (`rideId`, `driverId`, `status`, `negotiationExpiresAtUtc` only), `ARRAY_CONTAINS(@driverIds, c.driverId)`, the complete active-state predicate and bounded driver-ID chunks. No live Cosmos query-plan or multi-instance result is inferred from deterministic tests.
