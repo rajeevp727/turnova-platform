@@ -3331,6 +3331,97 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task DriverDecliningSelectedBookingDoesNotAdvanceLegacyFifoOffer()
+    {
+        const string riderId = "selected-decline-no-fifo-rider";
+        const string driverId = "selected-decline-no-fifo-driver";
+        const string unionId = "selected-decline-no-fifo-union";
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            rideOfferAdvancer: advancer);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var request = CreateSelectedBookingRequest(
+            "selected-decline-no-fifo-key", driverId, unionId, "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var driverReservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var riderReservations = factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
+        Assert.True(await driverReservations.HasActiveAsync(driverId));
+        Assert.NotNull(await riderReservations.GetActiveAsync(riderId));
+
+        using var rejected = await driver.PostAsync($"/api/v1/rides/{rideId}/reject", null);
+        Assert.Equal(HttpStatusCode.NoContent, rejected.StatusCode);
+
+        var cancelledRide = rides[rideId];
+        Assert.Equal("Cancelled", cancelledRide.Status);
+        var declineEvent = Assert.Single(cancelledRide.AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Cancelled");
+        Assert.Equal(driverId, declineEvent.ActorId);
+        Assert.Equal("Driver", declineEvent.ActorRole);
+        Assert.Equal("Negotiating", declineEvent.PreviousStatus);
+
+        Assert.Empty(advancer.AdvancedRideIds);
+        Assert.False(await driverReservations.HasActiveAsync(driverId));
+        Assert.Null(await riderReservations.GetActiveAsync(riderId));
+    }
+
+    [Fact]
+    public async Task DriverRejectingExpiredSelectedNegotiationDoesNotAdvanceLegacyFifoOffer()
+    {
+        const string riderId = "selected-expired-reject-no-fifo-rider";
+        const string driverId = "selected-expired-reject-no-fifo-driver";
+        const string unionId = "selected-expired-reject-no-fifo-union";
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            rideOfferAdvancer: advancer);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var request = CreateSelectedBookingRequest(
+            "selected-expired-reject-no-fifo-key", driverId, unionId, "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var driverReservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var riderReservations = factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
+        Assert.True(await driverReservations.HasActiveAsync(driverId));
+        Assert.NotNull(await riderReservations.GetActiveAsync(riderId));
+
+        rides[rideId] = rides[rideId] with
+        {
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1)
+        };
+
+        using var rejected = await driver.PostAsync($"/api/v1/rides/{rideId}/reject", null);
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
+
+        var expiredRide = rides[rideId];
+        Assert.Equal("Expired", expiredRide.Status);
+        var expiryEvent = Assert.Single(expiredRide.AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Expired");
+        Assert.Equal("system", expiryEvent.ActorId);
+        Assert.Equal("System", expiryEvent.ActorRole);
+        Assert.Equal("Negotiating", expiryEvent.PreviousStatus);
+
+        Assert.Empty(advancer.AdvancedRideIds);
+        Assert.False(await driverReservations.HasActiveAsync(driverId));
+        Assert.Null(await riderReservations.GetActiveAsync(riderId));
+    }
+
+    [Fact]
     public async Task ExpiredSelectedNegotiationBecomesTerminalAndReleasesDriverReservation()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
