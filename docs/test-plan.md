@@ -379,6 +379,12 @@ Payslip output is PDF only; monetary calculations are intentionally absent until
 |---|---|---|---|---|
 | PAY-028 | Account A starts a payslip download, then logs out or is replaced by Account B while Account B authentication is still loading; Account A's request finalizes afterward | The stale Account A finalizer must not clear Account B's loading state. Session reset clears prior-account loading, while a finalizer for the still-current initiating session clears its own loading state. If logout invalidates the session but secure-storage cleanup fails, loading is released only when that same logout epoch is still current; a stale logout failure cannot clear a newer account's loading state. Existing exact-file payslip cache cleanup remains unchanged. | `finishLoadingIfSessionCurrent` deterministic unit cases and `sessionStateReset.test.cjs` App.tsx source-integration assertions | P1 |
 
+### RIDER-04 Driver payment-report session concurrency
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| PAY-029 | Account A submits a Driver-reported direct-payment amount, then the authenticated session changes before the POST/history response completes | The stale request cannot refresh the new account's history, clear its payment-report input, set its notice/error or clear its loading state. A current-session report still refreshes history and clears only that ride's input. The API idempotency key and Driver-reported/unverified semantics remain unchanged. | Deferred-promise session regression and App.tsx source-integration assertions in `sessionStateReset.test.cjs` | P1 |
+
 ## Light and dark application themes
 
 | ID | Scenario | Expected result |
@@ -750,6 +756,7 @@ These supplement and supersede legacy fare-estimate, payment-gateway and automat
 | CAB-REC-013 | Historical or mixed-case non-Cab service class is present in the Rides container | Cosmos reconciliation query filters with `LOWER(c.serviceClass) = 'cab'` before materializing the allow-listed projection; signed union/report-union predicates remain and the API Cab post-filter remains defense in depth | `UnionReconciliationCosmosQueryFiltersCabAtStorageBoundaryCaseInsensitively` | Deterministic query-contract test; live Cosmos SQL/index validation remains external | P1 |
 | CAB-REC-014 | The in-memory UnionManager reconciliation fallback contains mixed-case Cab and retained legacy non-Cab rides | Uppercase `CAB` remains visible through the case-insensitive API filter; a historical `Scooty` aggregate with an old report is excluded without migration or mutation | `UnionReconciliationExcludesLegacyNonCabRecordsAndKeepsMixedCaseCabRecords` | API integration with deterministic in-memory fixtures; live Cosmos query validation remains external | P1 |
 | CAB-REC-015 | A retained historical non-Cab ride is submitted to the direct-payment report endpoint | The Driver receives HTTP 409; no payment report or audit mutation is added, and the legacy service class/status remain unchanged | `DriverPaymentReportRejectsHistoricalNonCabRideWithoutMutation` | API integration with deterministic in-memory fixtures | P1 |
+| CAB-REC-016 | Stored payment report RideId differs from its containing DemoRide.RideId | Cosmos query and in-memory fallback exclude the mismatched report; a matching report remains visible and the stored aggregate is not mutated | `UnionReconciliationCosmosQueryRequiresReportRideIdToMatchAggregateId`; `UnionReconciliationExcludesReportWhoseRideIdDoesNotMatchAggregate` | API/privacy + deterministic query-contract test; live Cosmos SQL validation remains external | P0 |
 | CAB-UNION-001 | Driver transferred unions | Prior selfie approval invalidated until new union approval | API/privacy | P0 |
 
 Do not test or implement platform fare estimates, in-app payment collection, gateway/escrow or customer-facing FIFO ranking/automatic assignment as MVP behaviour. Dispute and non-zero-delta next-ride outcomes remain pending product decisions.
