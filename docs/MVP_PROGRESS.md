@@ -1,6 +1,6 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-11 (main/base HEAD `9129b2bfbf174e8df07a9713f7e99f51d232cb45`; sole active feature PR #150, branch `fix/driver-01-phone-validation`, expanded source/test `e2c665a248b816f4e29de109e01ad430c4e5cfdb`, documentation head `09f7be0c91ba64741c680ce477438920fdda9828`; exact-head CI #1248 / 42977122031 passed 12/12. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.)
+**Last updated:** 2026-11-11 (main/base HEAD `9129b2bfbf174e8df07a9713f7e99f51d232cb45`; sole active feature PR #150 `fix/driver-01-phone-validation`; source/test head `e2c665a248b816f4e29de109e01ad430c4e5cfdb`; exact-head source/test CI #1248 / 42977122031 passed 12/12. Documentation-only consistency updates are on PR #150; inspect its current head and final-head CI before merge. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.)
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded. Approved AI-01 is supplemental and remains outside the 19-row denominator.
 
 ## 1. Current step
