@@ -908,6 +908,17 @@ The recovery regression SelectedBookingRecoversAfterInterruptedRideWriteUsingSam
 
 PR #105 merged at `b4833a210fbb31ea6faefe5892272abcf36357e3`; its final-head CI [42401645940](https://github.com/rajeevp727/turnova-platform/actions/runs/42401645940) passed all eight jobs and executed 257/257 backend tests. PR #106 adds the 14 invalid-input cases plus the positive maximum-boundary case. Its code commit `2d76c556ade57eea01621121859532f5a06c1fcd` passed backend build/tests (272/272) and the Rider/Driver mobile typecheck/bundle jobs in CI [42404536969](https://github.com/rajeevp727/turnova-platform/actions/runs/42404536969); four native Android/iOS jobs were still running when this documentation update was prepared. This is API boundary evidence only; the final PR head must pass all required jobs before merge.
 
+### DISPATCH-01 — selected-booking radius and location-freshness fail-closed gates
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| DISPATCH-01-BOOKING-001 | Selected booking has no configured discovery radius | HTTP 503 before ride, idempotency, Driver reservation or Rider reservation writes | SelectedBookingFailsClosedWhenNearbyRadiusIsMissingOrInvalidBeforeAnyReservationWrites(null) | P0 |
+| DISPATCH-01-BOOKING-002 | Selected-booking radius is zero, negative, NaN, positive infinity or negative infinity | HTTP 503 before ride, idempotency, Driver reservation or Rider reservation writes | SelectedBookingFailsClosedWhenNearbyRadiusIsMissingOrInvalidBeforeAnyReservationWrites theory cases | P0 |
+| DISPATCH-01-BOOKING-003 | Selected booking has no configured maximum Driver location age | HTTP 503 before ride, idempotency, Driver reservation or Rider reservation writes | SelectedBookingFailsClosedWhenLocationFreshnessPolicyIsMissingOrNonPositive(null) | P0 |
+| DISPATCH-01-BOOKING-004 | Selected-booking maximum Driver location age is zero or negative | HTTP 503 before ride, idempotency, Driver reservation or Rider reservation writes | SelectedBookingFailsClosedWhenLocationFreshnessPolicyIsMissingOrNonPositive theory cases | P0 |
+
+These tests prove selected-booking has the same fail-closed configuration boundary as discovery and that invalid policy cannot leave partial booking or reservation state. They do not choose the production radius or freshness threshold; Product approval remains an external gate.
+
 ### DISPATCH-03 — selected-driver expiry and reservation reconciliation evidence
 
 - `ExpiredSelectedNegotiationBecomesTerminalAndReleasesDriverReservation` verifies an expired Negotiating ride becomes terminal and releases only its selected Driver lease.
