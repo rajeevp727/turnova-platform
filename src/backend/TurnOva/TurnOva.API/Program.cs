@@ -415,6 +415,17 @@ bool IsValidDriverSelfie(string? base64)
     catch (FormatException) { return false; }
 }
 
+bool IsValidDriverPhoneNumber(string? phoneNumber)
+{
+    if (string.IsNullOrWhiteSpace(phoneNumber))
+        return false;
+
+    // Accept an optional single leading '+' followed by 10-15 ASCII digits.
+    // A plus sign in the middle or repeated plus signs are not valid phone numbers.
+    var digits = phoneNumber[0] == '+' ? phoneNumber[1..] : phoneNumber;
+    return digits.Length is >= 10 and <= 15 && digits.All(char.IsAsciiDigit);
+}
+
 bool IsOpsAuthorized(HttpContext context)
 {
     var configuredKey = app.Configuration["DriverOnboarding:AdminApiKey"];
@@ -1077,8 +1088,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         return Results.BadRequest(new { message = "A valid JPEG selfie is required. Capture it in the app; maximum decoded size is 300 KB." });
     if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length > 120 ||
         string.IsNullOrWhiteSpace(request.ZoneId) || request.ZoneId.Trim().Length > 80 ||
-        string.IsNullOrWhiteSpace(request.PhoneNumber) || request.PhoneNumber.Any(c => !char.IsDigit(c) && c != '+') ||
-        request.PhoneNumber.Length is < 10 or > 16 ||
+        !IsValidDriverPhoneNumber(request.PhoneNumber) ||
         string.IsNullOrWhiteSpace(request.VehicleMake) || request.VehicleMake.Trim().Length > 60 ||
         string.IsNullOrWhiteSpace(request.VehicleModel) || request.VehicleModel.Trim().Length > 60 ||
         string.IsNullOrWhiteSpace(request.VehicleRegistration) || request.VehicleRegistration.Trim().Length > 20 ||
