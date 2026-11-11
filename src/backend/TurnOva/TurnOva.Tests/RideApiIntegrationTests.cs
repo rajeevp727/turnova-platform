@@ -1001,6 +1001,8 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory();
         const string driverId = "driver-onboarding-digits-only-phone";
         using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
 
         using var response = await driver.PostAsJsonAsync(
             "/api/v1/driver/onboarding", ValidOnboardingRequest(phoneNumber: "919876543210"));
