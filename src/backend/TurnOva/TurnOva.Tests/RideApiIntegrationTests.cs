@@ -996,6 +996,22 @@ public sealed class RideApiIntegrationTests
 
 
     [Fact]
+    public async Task DriverOnboardingAcceptsDigitsOnlyPhoneNumber()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-onboarding-digits-only-phone";
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        using var response = await driver.PostAsJsonAsync(
+            "/api/v1/driver/onboarding", ValidOnboardingRequest(phoneNumber: "919876543210"));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var profile = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()[driverId];
+        Assert.Equal("919876543210", profile.PhoneNumber);
+    }
+
+
+    [Fact]
     public async Task OperationsCanCreateUnionAssignDriverTransferAndReadAuditHistory()
     {
         using var factory = new TurnOvaApiFactory();
