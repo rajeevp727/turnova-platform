@@ -152,13 +152,25 @@ test("AUTH-LOGIN-062 clears Driver SignalR offer deduplication when resetting a 
 });
 
 
-test("stale payslip finalizer cannot clear a newer authenticated session loading state", () => {
+test("stale in-flight payslip finalizer cannot clear a newer authenticated session loading state", async () => {
+  let sessionEpoch = 7;
+  const requestEpoch = sessionEpoch;
+  const isSessionCurrent = () => sessionEpoch === requestEpoch;
   let loading = true;
-  let initiatingSessionCurrent = false;
+  let completeRequest;
+  const request = new Promise(resolve => { completeRequest = resolve; });
+  const finalized = request.finally(() => finishLoadingIfSessionCurrent(
+    value => { loading = value; },
+    isSessionCurrent
+  ));
 
-  const cleared = finishLoadingIfSessionCurrent(value => { loading = value; }, () => initiatingSessionCurrent);
+  // Account A's request remains in flight while Account B starts authenticating.
+  sessionEpoch += 1;
+  loading = true;
+  completeRequest();
+  await finalized;
 
-  assert.equal(cleared, false);
+  assert.equal(isSessionCurrent(), false);
   assert.equal(loading, true);
 });
 
