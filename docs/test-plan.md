@@ -377,7 +377,7 @@ Payslip output is PDF only; monetary calculations are intentionally absent until
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
 |---|---|---|---|---|
-| PAY-028 | Account A starts a payslip download, then logs out or is replaced by Account B while Account B authentication is still loading; Account A's request finalizes afterward | The stale Account A finalizer must not clear Account B's loading state. Session reset clears prior-account loading, while a finalizer for the still-current initiating session clears its own loading state. Existing exact-file payslip cache cleanup remains unchanged. | `finishLoadingIfSessionCurrent` deterministic unit cases and `sessionStateReset.test.cjs` App.tsx source-integration assertions | P1 |
+| PAY-028 | Account A starts a payslip download, then logs out or is replaced by Account B while Account B authentication is still loading; Account A's request finalizes afterward | The stale Account A finalizer must not clear Account B's loading state. Session reset clears prior-account loading, while a finalizer for the still-current initiating session clears its own loading state. If logout invalidates the session but secure-storage cleanup fails, loading is released only when that same logout epoch is still current; a stale logout failure cannot clear a newer account's loading state. Existing exact-file payslip cache cleanup remains unchanged. | `finishLoadingIfSessionCurrent` deterministic unit cases and `sessionStateReset.test.cjs` App.tsx source-integration assertions | P1 |
 
 ## Light and dark application themes
 
