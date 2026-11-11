@@ -5,6 +5,9 @@
 
 ## 1. Current step
 
+**Current engineering item: #11 DRIVER-01 — onboarding phone-number syntax validation.** PR #150 accepts an optional single leading '+' followed by 10–15 ASCII digits; nine malformed values return HTTP 400 before profile creation, four valid 10/15-digit boundary forms with/without '+' are accepted, and malformed resubmission preserves the complete existing profile. Exact-head CI #1255 / 42985442306 passed 12/12 on documentation head `af9548dadde101776d1568de6900ece53739aceb`: backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes. Same-run Android/iOS screenshots and result JSONs were inspected. Phone ownership/OTP, signed-device Keychain and production gates remain external.
+
+
 
 
 PR #145 RIDER-02 merged at `ab988b02b01d89394e5213586f9ee24f0e78c6b1` after [CI #1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12. Evidence: backend 373/373, shared mobile 153/153, Python 41/41, Rider/Driver validation and bundles, four native builds and four simulator smokes. All four same-run artifacts were inspected. The unsigned iOS SecureStore-unavailable qualification and Driver Android targeted Pixel Launcher retry remain documented; no signed-device Keychain or production authentication is claimed.
