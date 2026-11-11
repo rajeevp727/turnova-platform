@@ -1135,6 +1135,9 @@ The documentation synchronization is a new PR head and requires a fresh exact-he
 | DRIVER-PROFILE-003 | Operations reviews a profile after its submitted document reference/status, vehicle identity, submission state or prior review state changes | The stale review is rejected with HTTP 409; no document or profile approval is applied to a different snapshot | DriverProfileReviewGuardTests.ChangedDocumentReferenceOrStatusRejectsStaleReviewSnapshot and ChangedVehicleIdentityOrReviewStatusRejectsStaleReviewSnapshot | CI [42455925931] passed 8/8 jobs |
 | DRIVER-PROFILE-004 | Availability/location changes while Operations reviews the same unchanged document snapshot | Review applies to the current profile using compare-and-swap and preserves the latest unrelated fields | DriverProfileReviewGuardTests.UnrelatedAvailabilityAndLocationChangesDoNotInvalidateDocumentReviewSnapshot | CI [42455925931] passed 8/8 jobs |
 | DRIVER-PROFILE-005 | Two initial onboarding requests race to create the same Driver profile | Only one create-if-absent succeeds; a losing create re-reads and conditionally updates the authoritative profile, never blindly upserts | ConcurrentInitialOnboardingSubmissionsLeaveOneCompleteProfile | CI [42455925931] passed 8/8 jobs |
+| DRIVER-01-ONBOARD-014 | Driver submits malformed phone numbers or a digits-only valid number | Reject misplaced/repeated '+', embedded spaces, letters and fewer than 10 digits with HTTP 400 before profile create/update; preserve a digits-only 10–15 digit value | `DriverOnboardingRejectsMalformedPhoneNumbersWithoutCreatingProfile` (six invalid values) and `DriverOnboardingAcceptsDigitsOnlyPhoneNumber`; exact-head CI pending | P1 |
+
+Phone-number syntax is validated locally by the API; this does not prove ownership. OTP/SMS verification and upstream identity-provider assurance remain external.
 
 ### DRIVER-02 — monotonic availability GPS capture ordering and conflict recovery
 
