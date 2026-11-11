@@ -972,6 +972,29 @@ public sealed class RideApiIntegrationTests
     }
 
 
+    [Theory]
+    [InlineData("91+9876543210")]
+    [InlineData("++919876543210")]
+    [InlineData("+91+9876543210")]
+    [InlineData("+91987654321A")]
+    [InlineData("+91 9876543210")]
+    [InlineData("+919876543")]
+    public async Task DriverOnboardingRejectsMalformedPhoneNumbersWithoutCreatingProfile(string phoneNumber)
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-onboarding-malformed-phone";
+        using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
+
+        using var response = await driver.PostAsJsonAsync(
+            "/api/v1/driver/onboarding", ValidOnboardingRequest(phoneNumber: phoneNumber));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(profiles.ContainsKey(driverId));
+    }
+
+
     [Fact]
     public async Task OperationsCanCreateUnionAssignDriverTransferAndReadAuditHistory()
     {
@@ -1616,12 +1639,14 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("auto", driverHistory[0].GetProperty("serviceClass").GetString());
     }
 
-    private static object ValidOnboardingRequest(string serviceClass = "cab") => new
+    private static object ValidOnboardingRequest(
+        string serviceClass = "cab",
+        string phoneNumber = "+919876543210") => new
     {
         profilePhotoBase64 = "/9j/2Q==",
         zoneId = "hyderabad-central",
         fullName = "Test Driver",
-        phoneNumber = "+919876543210",
+        phoneNumber,
         vehicleMake = "Maruti",
         vehicleModel = "Dzire",
         vehicleRegistration = "TS09AB1234",
