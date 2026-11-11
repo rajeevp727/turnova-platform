@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `2f99083b4ac57bca7a6a1cefaa1a212f1c82a80e` after DISPATCH-01 PR #147 merged. Current item #8 DISPATCH-03 is PR #148 on `test/dispatch-03-selected-reject-fifo-isolation`; source/test commit `c7a9d4649dfa5343f27515e12780e0cbdab166fc`; exact-head CI pending. DISPATCH-01 final-head CI #1227 / 42942754020 passed 12/12, including backend 411/411, shared mobile 171/171, Python 41/41, four native builds and four simulator smokes; all four same-run result JSONs/screenshots were inspected.
+**Last audited main HEAD:** `2f99083b4ac57bca7a6a1cefaa1a212f1c82a80e` after DISPATCH-01 PR #147 merged. Current item #8 DISPATCH-03 is PR #148 on `test/dispatch-03-selected-reject-fifo-isolation`; source/test commit `c7a9d4649dfa5343f27515e12780e0cbdab166fc`; current PR head `e1e83b60b0aafa3e9e5cc0f2d0bd17c4cda3af5d`; exact-head CI pending. DISPATCH-01 final-head CI #1227 / 42942754020 passed 12/12, including backend 411/411, shared mobile 171/171, Python 41/41, four native builds and four simulator smokes; all four same-run result JSONs/screenshots were inspected.
 **Current engineering item:** #8 DISPATCH-03 — PR #148 adds active selected Driver decline and expired selected Driver reject regressions. Both assert no legacy FIFO advancer call and matching Driver/Rider reservation release; active decline audit is Driver-owned and expiry audit is System-owned. Exact-head CI is pending. Do not change runtime FIFO behavior or infer the unresolved internal FIFO policy.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
