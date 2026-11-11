@@ -1,11 +1,11 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-11 (main HEAD `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged; sole active feature PR #150 is DRIVER-01 on `fix/driver-01-phone-validation`, code/test head `85c5ca6444617294500f552201df0ddd1fba9a93`; exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.)
+**Last updated:** 2026-11-11 (main HEAD `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged; sole active feature PR #150 is DRIVER-01 on `fix/driver-01-phone-validation`, exact tested head `b1da63bb5987d27f26455119bd4e0e280a4c7428`; CI #1244 / 42971085313 passed 12/12. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.)
 **Scope:** 19 agreed Rider/Driver MVP acceptance areas. Fleet/Ops Phase 2 is excluded. Approved AI-01 is supplemental and remains outside the 19-row denominator.
 
 ## 1. Current step
 
-**Current engineering item: #11 DRIVER-01 — onboarding phone-number structure validation.** PR #150 adds an optional single leading '+' plus 10–15 ASCII-digit validation. Six malformed inputs return HTTP 400 without profile creation; a digits-only positive case preserves compatibility. Exact-head CI is pending.
+**Current engineering item: #11 DRIVER-01 — onboarding phone-number structure validation.** PR #150 adds an optional single leading '+' plus 10–15 ASCII-digit validation. Six malformed inputs return HTTP 400 without profile creation; a digits-only positive case preserves compatibility. Exact-head CI #1244 passed 12/12 on `b1da63bb5987d27f26455119bd4e0e280a4c7428`.
 
 
 PR #145 RIDER-02 merged at `ab988b02b01d89394e5213586f9ee24f0e78c6b1` after [CI #1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12. Evidence: backend 373/373, shared mobile 153/153, Python 41/41, Rider/Driver validation and bundles, four native builds and four simulator smokes. All four same-run artifacts were inspected. The unsigned iOS SecureStore-unavailable qualification and Driver Android targeted Pixel Launcher retry remain documented; no signed-device Keychain or production authentication is claimed.
@@ -1170,3 +1170,14 @@ Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a comple
 - Next after PR #150: #12 DRIVER-02 — monotonic Driver availability/location capture and session/background recovery audit.
 - External gates remain private document storage/scanning/consent/retention, signed UnionManager claim issuance, phone ownership/OTP, live Cosmos ETag/multi-instance/restart, Android/iOS camera/document permission tests, legal partnership, maps/realtime providers, support/escalation, reconciliation policy, production signing/hosting/pilot/store acceptance.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a full-evidence count, not an implementation-completion score. Production readiness is not established.
+
+
+## Latest exact handoff — DRIVER-01 exact-head CI passed (2026-11-11)
+
+- REALTIME-01 PR #149 merged at `9129b2bfbf174e8df07a9713f7e99f51d232cb45`; CI #1239 / 42963719244 attempt 2 passed 12/12 (416 backend, 171 shared mobile, 41 Python, four native builds and four simulator smokes).
+- Sole active PR #150: `fix/driver-01-phone-validation`, exact tested head `b1da63bb5987d27f26455119bd4e0e280a4c7428`. Runtime commit `6adf12d2ebaad3c532fa68a606ad95ade89b7987`; latest test commit `b1da63bb5987d27f26455119bd4e0e280a4c7428`.
+- Exact-head CI [#1244 / 42971085313](https://github.com/rajeevp727/turnova-platform/actions/runs/42971085313) passed **12/12 jobs** on `b1da63bb5987d27f26455119bd4e0e280a4c7428`: backend **423/423**, shared mobile **171/171**, Python **41/41**, Rider/Driver TypeScript validation and production JS bundles, native API publish, four Android/iOS native builds and four simulator smoke jobs. Same-run simulator artifacts inspected: Rider Android `13833549494`, Driver Android `13833473650`, Rider iOS `13834578010`, Driver iOS `13834996824`. Android results report install/launch passed, stable processes, role-specific login text, no stale-session error and zero Pixel Launcher ANR recovery attempts. Unsigned iOS simulator results report install/launch passed, stable processes, role-specific login text and the expected SecureStore-unavailable banner; `secureStoreAvailable=false`, no Keychain access group, and production API/authentication not exercised. These are simulator/build checks, not signed-device, live-provider or production acceptance.
+- Driver onboarding syntax change does not verify phone ownership, OTP/SMS, or identity-provider assurance. Private document storage/scanning/consent/retention, signed UnionManager claims, live Cosmos ETag/multi-instance/restart, physical-device camera/document permissions, legal review, production API URL, EAS, signing, pilot and store acceptance remain external.
+- Rider and Driver dependency audits each report 11 moderate, 1 low, 0 high and 0 critical advisories. Expo SDK 54 to SDK 58 is a major upgrade and is not mixed into this PR; schedule a separate compatibility/native verification increment.
+- DRIVER-02 is already implemented/merged (PR #117). Next sequential row after #11 DRIVER-01 is #13 DRIVER-03.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
