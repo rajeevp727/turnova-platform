@@ -186,8 +186,8 @@ test("Driver payslip finalizer uses the captured session guard and session reset
   assert.notEqual(finallyStart, -1);
   const finalizer = download.slice(finallyStart);
 
-  assert.match(reset, /loading:\\s*setLoading/);
-  assert.match(download, /const isSessionCurrent = \\(\\) => sessionEpoch\\.current === requestEpoch/);
-  assert.match(finalizer, /finishLoadingIfSessionCurrent\\(setLoading, isSessionCurrent\\)/);
-  assert.doesNotMatch(finalizer, /setLoading\\(false\\)/);
+  assert.match(reset, /loading:\s*setLoading/);
+  assert.match(download, /const isSessionCurrent = \(\) => sessionEpoch\.current === requestEpoch/);
+  assert.match(finalizer, /finishLoadingIfSessionCurrent\(setLoading, isSessionCurrent\)/);
+  assert.doesNotMatch(finalizer, /setLoading\(false\)/);
 });
