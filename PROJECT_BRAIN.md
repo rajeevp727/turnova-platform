@@ -5,8 +5,8 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged. Sole active feature PR #150 is `fix/driver-01-phone-validation`; expanded source/test commit `e2c665a248b816f4e29de109e01ad430c4e5cfdb` passed exact-head CI #1248 / 42977122031 (12/12). A documentation-only consistency follow-up is on the active PR branch; verify the current PR head and final-head CI before merge.
-**Current engineering item:** #11 DRIVER-01 — optional single-leading-plus and 10–15 ASCII-digit validation, nine malformed-input rejections before profile creation, four accepted length-boundary forms and malformed-resubmission profile preservation. Exact source/test CI #1248 / 42977122031 passed 12/12: backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes. Phone ownership/OTP and production gates remain external.
+**Last audited main HEAD:** `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged. Sole active feature PR #150 is `fix/driver-01-phone-validation`; source/test commit `e2c665a248b816f4e29de109e01ad430c4e5cfdb`; latest documentation head `af9548dadde101776d1568de6900ece53739aceb` passed exact-head CI #1255 / 42985442306 (12/12). Backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes. All four same-run artifacts were downloaded and visually inspected. Any documentation-only commits after this verified head require fresh exact-head CI.
+**Current engineering item:** #11 DRIVER-01 — optional single-leading-plus and 10–15 ASCII-digit validation, nine malformed-input rejections before profile creation, four accepted length-boundary forms and malformed-resubmission profile preservation. CI #1255 / 42985442306 passed 12/12 on `af9548dadde101776d1568de6900ece53739aceb`: backend 430/430, shared mobile 171/171, Python 41/41. Rider/Driver Android and unsigned iOS simulator install/launch/login checks passed; iOS SecureStore was unavailable and production auth was not exercised. Phone ownership/OTP and production gates remain external.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -722,7 +722,7 @@ Supplemental acceptance IDs: CAB-SCOPE-01, CAB-DISCOVERY-01, CAB-AGREEMENT-01, C
 - Added integration tests for onboarding/selfie profile-field preservation and unit tests for stale document/vehicle review snapshots plus unrelated availability/location changes.
 - Bounded retries fail closed with HTTP 409 rather than blindly overwriting newer state. CI is pending; no live Cosmos concurrency/restart evidence is claimed.
 - External gates remain private document upload/storage/scanning/consent/retention, signed UnionManager/unionId claims, Android/iOS camera/document permissions and physical onboarding, live Cosmos multi-instance/restart/ETag, and legal partnership approval.
-- Next sequential item after DRIVER-01: DRIVER-02.
+- DRIVER-02 is already implemented/merged (PR #117); after PR #150 merges, the next ordered row is #13 TRIP-01, followed by #14 DRIVER-03.
 
 ## Latest execution handoff — DRIVER-01 merged; DRIVER-02 in progress (2026-11-08)
 
@@ -1521,3 +1521,13 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - Dependency audit artifacts remain a separate follow-up: the previously inspected Rider/Driver reports show 11 moderate, 1 low, 0 high and 0 critical advisories per app. Expo SDK 54 to SDK 58 is a major compatibility upgrade and is not mixed into this focused PR.
 - Ordered acceptance rows: #12 DRIVER-02 is already implemented/merged (PR #117); next is #13 TRIP-01 (reconcile the progress/brain evidence with merged PR #118, then re-audit), followed by #14 DRIVER-03. Do not skip or renumber the matrix.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
+
+## Latest sequential handoff — DRIVER-01 final-head CI #1255 (2026-11-11)
+
+- Last audited main/base HEAD: `9129b2bfbf174e8df07a9713f7e99f51d232cb45`. Sole active feature PR [#150](https://github.com/rajeevp727/turnova-platform/pull/150), branch `fix/driver-01-phone-validation`; source/test commit `e2c665a248b816f4e29de109e01ad430c4e5cfdb`; documentation head verified by CI #1255: `af9548dadde101776d1568de6900ece53739aceb`.
+- Exact-head CI [#1255 / 42985442306](https://github.com/rajeevp727/turnova-platform/actions/runs/42985442306) passed 12/12: backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes.
+- Same-run artifacts inspected: Rider Android `13839539421`, Driver Android `13839718872`, Rider iOS `13840987499`, Driver iOS `13840917053`. Android apps installed/launched, remained stable and displayed correct role-specific login screens; no stale-session errors and zero Pixel Launcher ANR recovery attempts. Unsigned iOS apps installed/launched and displayed role-specific login screens plus the expected SecureStore-unavailable banner; `secureStoreAvailable=false`, no Keychain access group, and production API/authentication not exercised.
+- Release-readiness artifacts Rider `13839790635` and Driver `13839381740` report engineering checks passed but production readiness blocked: iOS bundle registration, EAS linkage, build-number policy, production HTTPS API URL, signing credentials, signed physical-device acceptance and store submission remain.
+- The PR review is COMMENT-only, not approval; there are zero unresolved review threads. No self-approval or branch-protection bypass is permitted. The latest PR head is documentation-only relative to source/test commit `e2c665a`; fresh CI is required after any further docs synchronization.
+- After PR #150 merges, #12 DRIVER-02 is already implemented/merged (PR #117). Next ordered row is #13 TRIP-01: reconcile progress/Project Brain evidence with merged PR #118, then re-audit; #14 DRIVER-03 follows.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is the full-evidence count, not an implementation-completion score. Production readiness is not established.
