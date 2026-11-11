@@ -1504,6 +1504,7 @@ unionManagerApi.MapGet("/reconciliation", async (ClaimsPrincipal user, Cancellat
     {
         reconciliationRecords.AddRange(rides.Values
             .Where(ride => ride.PaymentReconciliation is { } report &&
+                string.Equals(ride.RideId, report.RideId, StringComparison.Ordinal) &&
                 unionIds.Contains(ride.UnionId ?? "") &&
                 string.Equals(ride.UnionId, report.UnionId, StringComparison.Ordinal))
             .Select(ride =>
