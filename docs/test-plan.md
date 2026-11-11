@@ -908,6 +908,17 @@ The recovery regression SelectedBookingRecoversAfterInterruptedRideWriteUsingSam
 
 PR #105 merged at `b4833a210fbb31ea6faefe5892272abcf36357e3`; its final-head CI [42401645940](https://github.com/rajeevp727/turnova-platform/actions/runs/42401645940) passed all eight jobs and executed 257/257 backend tests. PR #106 adds the 14 invalid-input cases plus the positive maximum-boundary case. Its code commit `2d76c556ade57eea01621121859532f5a06c1fcd` passed backend build/tests (272/272) and the Rider/Driver mobile typecheck/bundle jobs in CI [42404536969](https://github.com/rajeevp727/turnova-platform/actions/runs/42404536969); four native Android/iOS jobs were still running when this documentation update was prepared. This is API boundary evidence only; the final PR head must pass all required jobs before merge.
 
+### DISPATCH-01 — selected-booking radius and location-freshness fail-closed gates
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| DISPATCH-01-BOOKING-001 | Selected booking has no configured discovery radius | HTTP 503 before ride, idempotency, Driver reservation or Rider reservation writes | SelectedBookingFailsClosedWhenNearbyRadiusIsMissingOrInvalidBeforeAnyReservationWrites(null) | P0 |
+| DISPATCH-01-BOOKING-002 | Selected-booking radius is zero, negative, NaN, positive infinity or negative infinity | HTTP 503 before ride, idempotency, Driver reservation or Rider reservation writes | SelectedBookingFailsClosedWhenNearbyRadiusIsMissingOrInvalidBeforeAnyReservationWrites theory cases | P0 |
+| DISPATCH-01-BOOKING-003 | Selected booking has no configured maximum Driver location age | HTTP 503 before ride, idempotency, Driver reservation or Rider reservation writes | SelectedBookingFailsClosedWhenLocationFreshnessPolicyIsMissingOrNonPositive(null) | P0 |
+| DISPATCH-01-BOOKING-004 | Selected-booking maximum Driver location age is zero or negative | HTTP 503 before ride, idempotency, Driver reservation or Rider reservation writes | SelectedBookingFailsClosedWhenLocationFreshnessPolicyIsMissingOrNonPositive theory cases | P0 |
+
+These tests prove selected-booking has the same fail-closed configuration boundary as discovery and that invalid policy cannot leave partial booking or reservation state. They do not choose the production radius or freshness threshold; Product approval remains an external gate.
+
 ### DISPATCH-03 — selected-driver expiry and reservation reconciliation evidence
 
 - `ExpiredSelectedNegotiationBecomesTerminalAndReleasesDriverReservation` verifies an expired Negotiating ride becomes terminal and releases only its selected Driver lease.
@@ -1548,3 +1559,29 @@ Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureSt
 PR #146 documentation head `a949f6e4f002721b17d5bd426f226416e109943a` passed [CI #1214 / 42920911797](https://github.com/rajeevp727/turnova-platform/actions/runs/42920911797) with 12/12 jobs successful: .NET backend 403/403, shared mobile 171/171, Python native-artifact/simulator harness 41/41, Rider/Driver TypeScript validation and production bundles, both Android native builds, both unsigned iOS Simulator native builds, and all four Android/iOS simulator smoke jobs. The source/test follow-up `d8a052a2ccad3ee1a733b099505d2d5c9433eaee` includes RIDER03-RES-010/011 across all eight active legacy statuses and CAB-BOOK-006 for sign-in/restored-session hydration ordering.
 
 Same-run simulator artifacts inspected: Rider Android `13811579024`, Driver Android `13813150972`, Rider iOS `13812929395`, Driver iOS `13813746404`. Both Android apps installed/launched with role-specific login text, stable processes, no stale-session error and zero Pixel Launcher ANR recovery attempts. Both unsigned iOS apps installed/launched and displayed the expected SecureStore-unavailable banner; no signed-device Keychain or production authentication is claimed. Live Cosmos, physical-device booking and signed release acceptance remain external.
+
+### DISPATCH-01 exact-head CI evidence — 2026-11-11
+
+Source/test head `8cca1958f0e9d67d57ee69ee5327fd4449d9651a` passed exact-head CI [#1222 / 42929505358](https://github.com/rajeevp727/turnova-platform/actions/runs/42929505358) on run attempt 2, **12/12** checks:
+- .NET backend: **411/411**.
+- Shared mobile JavaScript: **171/171**.
+- Python native-artifact and simulator harness: **41/41**.
+- Rider/Driver TypeScript validation and production bundles: passed.
+- Rider/Driver Android and iOS native builds: **4/4**.
+- Rider/Driver Android emulator and iOS Simulator smoke: **4/4**.
+
+The nine executed theory cases comprise six radius values (missing, zero, negative, NaN, positive infinity, negative infinity) and three freshness values (missing, zero, negative). This adds eight net backend tests versus the prior 403-test suite because one existing missing-freshness Fact was expanded to three cases. All cases assert HTTP 503 before ride, idempotency, Driver-reservation or Rider-reservation writes; Driver availability remains Online and profile state is unchanged.
+
+Same-run simulator result JSONs and screenshots were inspected: Rider Android `13817215681`, Driver Android `13816635972`, Rider iOS `13818882794`, Driver iOS `13818155109`. Both Android apps installed/launched with stable processes, correct role-specific login screens, no stale-session error and zero Pixel Launcher ANR recovery attempts. Both unsigned iOS apps installed/launched, remained stable and displayed the expected SecureStore-unavailable banner. The first Rider iOS smoke attempt timed out during `simctl install` after the bounded 300-second operation timeout; only that failed job was retried and the retry passed without code changes. Native iOS app bundle IDs are `com.turnova.rider` and `com.turnova.driver`. These unsigned simulator results do not establish signed-device Keychain persistence, production authentication or physical-device acceptance. No production radius/freshness values are selected by these tests.
+
+
+## Latest exact-head verification — DISPATCH-01 documentation CI #1225 (2026-11-11)
+
+- PR #147 remains the sole active feature PR on `test/dispatch-01-selected-booking-config-guards`; source/test head `8cca1958f0e9d67d57ee69ee5327fd4449d9651a`, documentation head verified by CI `7bcb81cb9596fc9f2877bb6f79a7c502665f8e80`, base main HEAD `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`.
+- Documentation-synchronized CI [#1225 / 42938055684](https://github.com/rajeevp727/turnova-platform/actions/runs/42938055684) completed **12/12 jobs successfully**: .NET backend **411/411**, shared mobile **171/171**, Python native-artifact/simulator tests **41/41**, Rider/Driver TypeScript validation and production bundles, four native Android/iOS builds, and four Android/iOS simulator smoke jobs.
+- Same-run simulator artifacts were downloaded and inspected: Rider Android `13818804661`, Driver Android `13819773601`, Rider iOS `13820856185`, Driver iOS `13821041213`. Both Android apps installed/launched, remained stable and displayed their role-specific login screens; stale-session errors were absent and Pixel Launcher ANR recovery attempts were zero. Both unsigned iOS apps installed/launched, remained stable and displayed role-specific login screens plus the expected SecureStore-unavailable banner. Their result JSONs report `secureStoreAvailable=false`, no Keychain access group, unsigned simulator artifacts and production API/authentication not exercised. This is not signed-device Keychain, production authentication or physical-device acceptance.
+- Backend job steps confirm native .NET 10 restore/build/test and non-container Linux-x64 publish succeeded. No Docker/container build or deployment was added.
+- Final review must be COMMENT-only on the latest post-sync head; the existing review [5851552534](https://github.com/rajeevp727/turnova-platform/pull/147) is anchored to the source/test head, not this documentation head. Recheck review threads and exact-head CI before marking ready. Merge only if GitHub permits the expected-head merge.
+- DISPATCH-02 audit remains: capped three-per-union discovery, raw pickup-distance ordering, union-approved selfie/verified Cab projection, foreground GPS capture and same-process retry are implemented. Exact response replay across process death is not guaranteed; precise GPS is not persisted locally. No independent source gap identified.
+- DISPATCH-03 next regression increment: prove active selected-driver decline and Driver rejection of an already-expired selected negotiation never invoke the legacy FIFO advancer. Preserve legacy FIFO compatibility; it must not rank, auto-assign or advance the customer-selected Rider flow.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is the full-evidence count, not an implementation-completion score. Product-approved radius/zones/freshness, live Cosmos, physical-device, signing, maps/realtime, support, reconciliation, legal and production-hosting gates remain. Production readiness is not established.
