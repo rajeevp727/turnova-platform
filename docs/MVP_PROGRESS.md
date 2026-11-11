@@ -1102,14 +1102,6 @@ Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a comple
 - Next sequential item after PR #146 merges: DISPATCH-01 selected-booking regression coverage for missing/invalid radius and location-freshness configuration, then DISPATCH-02 audit. Do not open a second feature PR before #146 is merged.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); substantial engineering implementation and deterministic evidence exist separately. Production readiness is not established. Live Cosmos transactional-batch/ETag/multi-instance/restart, approved negotiation lifetime, signed-device authentication, maps/realtime providers, support policies, reconciliation decisions, legal review, signing/hosting and physical-device/pilot/store acceptance remain external.
 
-## Latest handoff — DISPATCH-01 selected-booking configuration guards (2026-11-11)
-
-- Main HEAD: `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`; PR #146 RIDER-03 merged as `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`.
-- Sole active feature branch: `test/dispatch-01-selected-booking-config-guards`; source/test commit `7eb1619a960dc5471d7c7a8a9a36b7c82c927ab3`; test-plan commit `f002bb475d3c7f502dd57f22a0ac40d2be941732`.
-- Added eight API test cases: radius missing, zero, negative, NaN, positive infinity and negative infinity; location freshness missing, zero and negative. Each asserts 503 and no ride/idempotency/Driver reservation/Rider reservation side effects.
-- Exact-head CI is pending. Next: create one focused draft PR, inspect the diff, wait for all backend/mobile/native/simulator checks, then merge only if the exact tested head passes and GitHub policy permits.
-- External Product inputs remain positive radius, non-overlapping zones and freshness threshold. No values are inferred. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
-
 ## Latest sequential handoff — DISPATCH-01 exact-head CI #1222 (2026-11-11)
 
 - Main HEAD: `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Sole active feature PR: [#147](https://github.com/rajeevp727/turnova-platform/pull/147), branch `test/dispatch-01-selected-booking-config-guards`, base `main`, source/test HEAD `8cca1958f0e9d67d57ee69ee5327fd4449d9651a`. PR remains Draft pending documentation-synchronized exact-head CI.
