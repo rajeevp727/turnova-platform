@@ -166,6 +166,8 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
     builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
+    builder.Services.AddSingleton<IRiderActiveBookingReservationStore>(sp =>
+        new CosmosRiderActiveBookingReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency")));
     builder.Services.AddSingleton<IRideOfferStore>(sp =>
         new CosmosRideOfferStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideOffers")));
     builder.Services.AddSingleton<CosmosMigrationRunner>();
@@ -191,6 +193,7 @@ else
     builder.Services.AddSingleton<IQueueStore>(queueStore);
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
+    builder.Services.AddSingleton<IRiderActiveBookingReservationStore, InMemoryRiderActiveBookingReservationStore>();
 }
 
 builder.Services.AddSingleton<StorageReadinessProbe>(sp =>
@@ -269,6 +272,7 @@ var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRid
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
 Container? rideContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Rides") : null;
 var driverRideReservations = app.Services.GetRequiredService<IDriverRideReservationStore>();
+var riderActiveBookingReservations = app.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
 Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
 Container? driverContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null;
 var driverProfiles = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -692,6 +696,10 @@ async Task<DemoRide?> ReleaseTerminalSelectedRideReservationAsync(
         return ride;
 
     await driverRideReservations.TryReleaseAsync(ride.DriverId, rideId, ct);
+    if (!string.IsNullOrWhiteSpace(ride.RiderId))
+        await riderActiveBookingReservations.TryReleaseAsync(
+            ride.RiderId, rideId, ct,
+            DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.InternalReconciliation));
     return ride;
 }
 
@@ -716,8 +724,7 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
         return await ReleaseTerminalSelectedRideReservationAsync(latest, rideId, ct);
     }
 
-    if (!string.IsNullOrWhiteSpace(expired.DriverId))
-        await driverRideReservations.TryReleaseAsync(expired.DriverId, rideId, ct);
+    await ReleaseTerminalSelectedRideReservationAsync(expired, rideId, ct);
     await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
         .SendAsync("RideStatusChanged", new { rideId, status = expired.Status }, ct);
     return expired;
@@ -754,6 +761,99 @@ async Task<bool> HasActiveDriverRideAsync(string driverId, CancellationToken ct,
 
     // An expired lease with a still-active ride is inconsistent and must fail closed.
     // FindRideAsync has already attempted the authoritative Negotiating/AgreementConfirmed expiry transition.
+    return true;
+}
+
+async Task<DemoRide?> FindActiveRiderRideAsync(
+    string riderId, string? exceptRideId, CancellationToken ct)
+{
+    string[] candidateRideIds;
+    if (rideContainer is null)
+    {
+        candidateRideIds = rides.Values
+            .Where(ride => ride.RiderId == riderId &&
+                (ride.Status is "Requested" or "Matching" or "Offered" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+            .Select(ride => ride.RideId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+    else
+    {
+        var query = new QueryDefinition(
+            "SELECT VALUE c.rideId FROM c WHERE c.riderId = @riderId AND c.status IN ('Requested','Matching','Offered','Negotiating','AgreementConfirmed','Accepted','Arrived','InProgress')")
+            .WithParameter("@riderId", riderId);
+        var ids = new List<string>();
+        using var iterator = rideContainer.GetItemQueryIterator<string>(query);
+        while (iterator.HasMoreResults)
+            ids.AddRange(await iterator.ReadNextAsync(ct));
+        candidateRideIds = ids.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    foreach (var candidateRideId in candidateRideIds)
+    {
+        if (candidateRideId == exceptRideId)
+            continue;
+        var candidate = await FindRideAsync(candidateRideId, ct);
+        if (candidate is not null &&
+            (candidate.Status is "Requested" or "Matching" or "Offered" or "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+            return candidate;
+    }
+
+    return null;
+}
+
+async Task<bool> HasActiveRiderBookingAsync(
+    string riderId, string? exceptRideId, string? requestHash, CancellationToken ct)
+{
+    var reservation = await riderActiveBookingReservations.GetActiveAsync(riderId, ct);
+    if (reservation is null)
+        return (await FindActiveRiderRideAsync(riderId, exceptRideId, ct)) is not null;
+
+    var isSameIdempotentBooking =
+        reservation.RideId == exceptRideId &&
+        reservation.RequestHash == requestHash;
+    var reservedRide = await FindRideAsync(reservation.RideId, ct);
+
+    if (reservedRide is not null &&
+        (reservedRide.Status is "Completed" or "Cancelled" or "Expired"))
+    {
+        await riderActiveBookingReservations.TryReleaseAsync(
+            riderId, reservation.RideId, ct,
+            DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.InternalReconciliation));
+        return (await FindActiveRiderRideAsync(riderId, exceptRideId, ct)) is not null;
+    }
+
+    if (reservedRide is null &&
+        reservation.ExpiresAtUtc is { } orphanExpiry &&
+        orphanExpiry <= DateTimeOffset.UtcNow)
+    {
+        // A missing ride plus an expired temporary reservation is an interrupted
+        // pre-persistence booking. A permanent orphan is never automatically stolen.
+        await riderActiveBookingReservations.TryReleaseAsync(
+            riderId, reservation.RideId, ct,
+            DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.InternalReconciliation));
+        return (await FindActiveRiderRideAsync(riderId, exceptRideId, ct)) is not null;
+    }
+
+    if (reservedRide is not null &&
+        (reservedRide.Status is "Accepted" or "Arrived" or "InProgress") &&
+        reservation.ExpiresAtUtc is not null)
+    {
+        // Repair a temporary lease if the ride transition committed but the promotion
+        // response was lost. A permanent lease is safer than permitting another booking.
+        await riderActiveBookingReservations.TryMakePermanentAsync(
+            riderId, reservation.RideId, ct,
+            DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.AgreementConfirmed),
+            allowExpiredForAuthoritativeActiveRide: true);
+    }
+
+    // A retry for the same deterministic booking may replay any active lifecycle
+    // state. The reservation above is still repaired/promoted before allowing the replay.
+    if (isSameIdempotentBooking)
+        return false;
+
+    // Active rides remain exclusive. Expired Negotiating/AgreementConfirmed rides are
+    // transitioned by FindRideAsync before this point. A permanent orphan fails closed.
     return true;
 }
 
@@ -2184,11 +2284,9 @@ app.MapPost("/api/v1/rider/bookings", async (
     if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 128)
         return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
     var stops = request.Stops?.Select(stop => stop.Trim()).ToArray() ?? [];
-    var requestFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
-    {
+    var requestFingerprint = CreateSelectedBookingRequestHash(
         selectedDriverId, unionId, pickup, dropoff, stops, request.Passengers,
-        request.PickupLatitude, request.PickupLongitude
-    })));
+        request.PickupLatitude, request.PickupLongitude);
     var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)));
     var idempotencyIndex = $"{riderId}:{keyId}";
     var bookingIdempotency = app.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
@@ -2205,6 +2303,49 @@ app.MapPost("/api/v1/rider/bookings", async (
         var priorRide = await FindRideAsync(prior.rideId, ct);
         if (priorRide is not null)
         {
+            if (!string.IsNullOrWhiteSpace(priorRide.UnionId) &&
+                string.Equals(priorRide.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
+                (priorRide.Status is "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+            {
+                if (await HasActiveRiderBookingAsync(riderId, priorRide.RideId, requestFingerprint, ct))
+                    return Results.Problem(
+                        "The existing selected booking could not safely restore its Rider reservation.",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+
+                var currentRiderReservation = await riderActiveBookingReservations.GetActiveAsync(riderId, ct);
+                if (currentRiderReservation is null)
+                {
+                    var expiry = (priorRide.Status is "Negotiating" or "AgreementConfirmed")
+                        ? priorRide.NegotiationExpiresAtUtc
+                        : null;
+                    var recoveredReservation = new RiderActiveBookingReservation(
+                        riderId, priorRide.RideId, requestFingerprint, priorRide.RequestedAt, expiry);
+                    var recoveryResult = await riderActiveBookingReservations.TryAcquireAsync(
+                        recoveredReservation, ct,
+                        new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.InternalReconciliation));
+                    if (recoveryResult == RiderBookingReservationAcquireResult.Conflict)
+                        return Results.Problem(
+                            "The existing selected booking could not safely restore its Rider reservation.",
+                            statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+                else if (currentRiderReservation.RideId != priorRide.RideId ||
+                         currentRiderReservation.RequestHash != requestFingerprint)
+                {
+                    return Results.Problem(
+                        "The existing selected booking conflicts with the Rider's active reservation.",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+
+                if ((priorRide.Status is "Accepted" or "Arrived" or "InProgress") &&
+                    !await riderActiveBookingReservations.TryMakePermanentAsync(
+                        riderId, priorRide.RideId, ct,
+                        DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.AgreementConfirmed),
+                        allowExpiredForAuthoritativeActiveRide: true))
+                    return Results.Problem(
+                        "The existing selected booking's Rider reservation could not be made permanent.",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
             // Re-send the selected-driver notification on an idempotent replay so a
             // transient SignalR failure after persistence does not strand the Driver.
             if (priorRide.DriverId is not null &&
@@ -2331,14 +2472,50 @@ app.MapPost("/api/v1/rider/bookings", async (
         }
     }
 
+    if (await HasActiveRiderBookingAsync(riderId, rideId, requestFingerprint, ct))
+    {
+        await RemoveIdempotencyRecordAsync();
+        return Results.Conflict(new { message = "You already have an active selected-driver negotiation or ride. Complete or cancel it before booking another Driver." });
+    }
+
+    var riderReservation = new RiderActiveBookingReservation(
+        riderId, rideId, requestFingerprint, bookingCreatedAtUtc, expiresAtUtc);
+    var riderReservationAcquire = await riderActiveBookingReservations.TryAcquireAsync(
+        riderReservation, ct,
+        new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.SelectedCabBooking));
+    if (riderReservationAcquire == RiderBookingReservationAcquireResult.Conflict)
+    {
+        // Close the read/create race: another request may have acquired the Rider partition
+        // after the first lifecycle read. Reconcile a terminal/expired orphan once, then retry.
+        if (!await HasActiveRiderBookingAsync(riderId, rideId, requestFingerprint, ct))
+            riderReservationAcquire = await riderActiveBookingReservations.TryAcquireAsync(
+                riderReservation, ct,
+                new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.SelectedCabBooking));
+    }
+    if (riderReservationAcquire == RiderBookingReservationAcquireResult.Conflict)
+    {
+        await RemoveIdempotencyRecordAsync();
+        return Results.Conflict(new { message = "You already have an active selected-driver negotiation or ride. Complete or cancel it before booking another Driver." });
+    }
+
+    async Task ReleaseRiderReservationIfNewAsync()
+    {
+        if (riderReservationAcquire == RiderBookingReservationAcquireResult.Acquired)
+            await riderActiveBookingReservations.TryReleaseAsync(
+                riderId, rideId, ct,
+                new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.BookingEligibilityChanged));
+    }
+
     if (await HasActiveDriverRideAsync(selectedDriverId, ct, rideId))
     {
+        await ReleaseRiderReservationIfNewAsync();
         await RemoveIdempotencyRecordAsync();
         return Results.Conflict(new { message = "The selected Driver has another active negotiation or ride. Refresh discovery and select an available Driver." });
     }
     if (!await driverRideReservations.TryAcquireTemporaryAsync(selectedDriverId, rideId, expiresAtUtc, ct,
         new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.SelectedCabBooking)))
     {
+        await ReleaseRiderReservationIfNewAsync();
         await RemoveIdempotencyRecordAsync();
         return Results.Conflict(new { message = "The selected Driver has another active negotiation or ride. Refresh discovery and select an available Driver." });
     }
@@ -2367,6 +2544,7 @@ app.MapPost("/api/v1/rider/bookings", async (
     {
         await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct,
             new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.BookingEligibilityChanged));
+        await ReleaseRiderReservationIfNewAsync();
         await RemoveIdempotencyRecordAsync();
         return Results.Conflict(new { message = "The selected Driver or Union changed eligibility while the booking was being created. Refresh discovery." });
     }
@@ -2377,6 +2555,7 @@ app.MapPost("/api/v1/rider/bookings", async (
     {
         await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct,
             new DriverRideReservationAuditContext(riderId, "Rider", DriverRideReservationAuditReasons.BookingEligibilityChanged));
+        await ReleaseRiderReservationIfNewAsync();
         await RemoveIdempotencyRecordAsync();
         return Results.Conflict(new { message = "The selected Driver is no longer within the approved pickup radius." });
     }
@@ -2447,6 +2626,9 @@ app.MapPost("/api/v1/rider/bookings", async (
     if (ride.Status is "Completed" or "Cancelled" or "Expired")
     {
         await driverRideReservations.TryReleaseAsync(selectedDriverId, rideId, ct);
+        await riderActiveBookingReservations.TryReleaseAsync(
+            riderId, rideId, ct,
+            DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.InternalReconciliation));
         return Results.Ok(ride);
     }
 
@@ -2697,6 +2879,80 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
 
         if (!reservationMade)
             return Results.Conflict(new { message = "The selected-driver reservation expired or is no longer held. Refresh Rider discovery." });
+
+        var selectedBookingRequestHash = CreateSelectedBookingRequestHash(
+            driverId, selectedRide.UnionId!, selectedRide.Pickup, selectedRide.Dropoff,
+            selectedRide.Stops ?? [], selectedRide.Passengers,
+            selectedRide.PickupLatitude!.Value, selectedRide.PickupLongitude!.Value);
+        var riderReservationContext = new DriverRideReservationAuditContext(
+            driverId, "Driver", DriverRideReservationAuditReasons.AgreementConfirmed);
+        if (await FindActiveRiderRideAsync(selectedRide.RiderId, rideId, ct) is not null)
+        {
+            if (selectedRide.NegotiationExpiresAtUtc is { } restoreExpiry)
+                await driverRideReservations.TrySetExpiryAsync(driverId, rideId, restoreExpiry, ct,
+                    DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.ReservationExpiryRestored));
+            return Results.Conflict(new { message = "The Rider has another active ride and cannot accept a second selected booking." });
+        }
+
+        var currentRiderReservation = await riderActiveBookingReservations.GetActiveAsync(
+            selectedRide.RiderId, ct);
+        if (currentRiderReservation is not null &&
+            (currentRiderReservation.RideId != rideId ||
+             currentRiderReservation.RequestHash != selectedBookingRequestHash))
+        {
+            if (selectedRide.NegotiationExpiresAtUtc is { } restoreExpiry)
+                await driverRideReservations.TrySetExpiryAsync(driverId, rideId, restoreExpiry, ct,
+                    DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.ReservationExpiryRestored));
+            return Results.Conflict(new { message = "The Rider already has another active booking." });
+        }
+
+        if (currentRiderReservation is null)
+        {
+            // Repair a pre-deployment or interrupted selected booking that has no Rider
+            // reservation yet. A different active ride in the same Rider partition wins.
+            var recovered = new RiderActiveBookingReservation(
+                selectedRide.RiderId, rideId, selectedBookingRequestHash,
+                selectedRide.RequestedAt, ExpiresAtUtc: null);
+            var acquired = await riderActiveBookingReservations.TryAcquireAsync(
+                recovered, ct, riderReservationContext);
+            if (acquired == RiderBookingReservationAcquireResult.Conflict)
+            {
+                if (selectedRide.NegotiationExpiresAtUtc is { } restoreExpiry)
+                    await driverRideReservations.TrySetExpiryAsync(driverId, rideId, restoreExpiry, ct,
+                        DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.ReservationExpiryRestored));
+                return Results.Conflict(new { message = "The Rider already has another active booking." });
+            }
+        }
+
+        var riderReservationMade = false;
+        try
+        {
+            riderReservationMade = await riderActiveBookingReservations.TryMakePermanentAsync(
+                selectedRide.RiderId, rideId, ct, riderReservationContext);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            var latestRiderReservation = await riderActiveBookingReservations.GetActiveAsync(
+                selectedRide.RiderId, CancellationToken.None);
+            riderReservationMade = latestRiderReservation?.RideId == rideId &&
+                latestRiderReservation.RequestHash == selectedBookingRequestHash &&
+                latestRiderReservation.ExpiresAtUtc is null;
+            if (!riderReservationMade)
+                throw;
+        }
+
+        if (!riderReservationMade)
+        {
+            if (selectedRide.NegotiationExpiresAtUtc is { } restoreExpiry)
+                await driverRideReservations.TrySetExpiryAsync(driverId, rideId, restoreExpiry, ct,
+                    DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.ReservationExpiryRestored));
+            return Results.Conflict(new { message = "The Rider already has another active booking or its reservation could not be secured." });
+        }
+
         var acceptedSelectedRide = await TryTransitionAsync(selectedRide, "Accepted", driverId, "Driver", ct);
         if (acceptedSelectedRide is null)
         {
@@ -3326,8 +3582,38 @@ async Task<DemoRide?> TryTransitionAsync(
         AuditEvents = AppendRideAuditEvent(current, "RideStatusChanged", actorId, actorRole,
             current.Status, next, occurredAtUtc: occurredAtUtc)
     };
-    return await TryReplaceRideAsync(current, updated, ct) ? updated : null;
+    if (!await TryReplaceRideAsync(current, updated, ct))
+        return null;
+
+    if ((next is "Completed" or "Cancelled" or "Expired") &&
+        !string.IsNullOrWhiteSpace(current.UnionId) &&
+        string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(current.DriverId))
+    {
+        var reason = next switch
+        {
+            "Completed" => DriverRideReservationAuditReasons.RideCompleted,
+            "Cancelled" when actorRole == "Rider" => DriverRideReservationAuditReasons.RiderCancelled,
+            "Cancelled" when actorRole == "Driver" => DriverRideReservationAuditReasons.DriverDeclined,
+            "Expired" => DriverRideReservationAuditReasons.InternalReconciliation,
+            _ => DriverRideReservationAuditReasons.InternalReconciliation
+        };
+        await riderActiveBookingReservations.TryReleaseAsync(
+            current.RiderId, current.RideId, ct,
+            new DriverRideReservationAuditContext(actorId, actorRole, reason));
+    }
+
+    return updated;
 }
+
+string CreateSelectedBookingRequestHash(
+    string selectedDriverId, string unionId, string pickup, string dropoff,
+    IReadOnlyList<string> stops, int passengers, double pickupLatitude, double pickupLongitude) =>
+    Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+    {
+        selectedDriverId, unionId, pickup, dropoff, stops,
+        Passengers = passengers, PickupLatitude = pickupLatitude, PickupLongitude = pickupLongitude
+    })));
 
 string CreateAgreementRequestHash(decimal amount, string currency)
 {

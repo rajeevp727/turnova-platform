@@ -5,7 +5,9 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `a3e701f7acb3793d70d6656e5f7ac8b55791a1a4` after AUTH-02 PR #143 merged. Sole active feature PR #145 is RIDER-02 on `fix/rider-02-proposal-idempotency`; source/test head `56a363621029fbfb16e2ef7c72d14f1faad48c8d`, documentation head `9fbca10d57334167aa41018a9104096f9f85e877`. Exact-head CI [#1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12, including backend 373/373, shared JS 153/153, Python 41/41, both app validation/bundles, four native builds and four simulator smokes; the Driver Android emulator smoke passed on a targeted retry after a Pixel Launcher ANR. All four same-run smoke artifacts were inspected. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last audited main HEAD:** `ab988b02b01d89394e5213586f9ee24f0e78c6b1` after RIDER-02 PR #145 merged. Sole active feature PR #146 is RIDER-03 on `feat/rider-03-single-active-booking`, CI-verified commit `a949f6e4f002721b17d5bd426f226416e109943a` (later commits only synchronize documentation), source/test head `d8a052a2ccad3ee1a733b099505d2d5c9433eaee`. Exact-head CI [#1214 / 42920911797](https://github.com/rajeevp727/turnova-platform/actions/runs/42920911797) passed **12/12**: backend **403/403**, shared JS **171/171**, Python **41/41**, Rider/Driver validation and bundles, four native builds and four simulator smokes. All four same-run simulator artifacts were downloaded and inspected; Android install/launch/login passed with stable processes and no stale-session/launcher-recovery issue; unsigned iOS apps installed/launched with expected SecureStore-unavailable warning. Signed-device Keychain and production auth are not claimed.
+**Current engineering item:** #5 RIDER-03 — durable single-active selected booking per Rider. PR #146 adds Rider-scoped reservation lifecycle in the existing `RideIdempotency` `/riderId` partition, ETag-guarded acquisition/promotion/release, terminal/legacy reconciliation and fail-closed Rider hydration. The follow-up `d8a052a2ccad3ee1a733b099505d2d5c9433eaee` covers all eight active legacy ride statuses at booking and Driver acceptance and authenticated sign-in/restoration hydration ordering. Product-approved negotiation lifetime, live Cosmos multi-instance/restart validation and physical-device booking acceptance remain external gates.
+**Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -1412,3 +1414,48 @@ PR #145 adds stable client proposal-attempt idempotency in Rider and Driver: sam
 Fresh #3 RIDER-01 audit found no additional independent source-code gap. Product-approved dispatch radius/zones/location freshness, routing/maps, live Call/Chat, live Cosmos and physical-device location acceptance remain external. Next sequential item after PR #145 merges is #5 RIDER-03: add a durable Rider-scoped active-booking reservation across different Idempotency-Keys. The current route has per-Driver reservation only; verify the existing RideIdempotency container migration/partition and transaction semantics before adding create-if-absent/ETag-safe Rider reservation, terminal/orphan reconciliation, matching release and concurrent different-key tests. Production negotiation lifetime remains unset and booking fails closed with 503.
 
 Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
+
+
+## Current RIDER-03 handoff — 2026-11-11
+
+Main HEAD: `ab988b02b01d89394e5213586f9ee24f0e78c6b1` (RIDER-02 PR #145 merged). Active draft PR #146: `feat/rider-03-single-active-booking`, head `7e49cce79698fe5c107d8d8014e5eca61dd54d56`; exact-head CI #1199 is pending.
+
+### Rider-scoped reservation design
+- Reuse the existing Cosmos `RideIdempotency` container, partition key `/riderId`; reservation document ID is `active-selected-booking`. No new container or migration.
+- Create-if-absent reservation and privacy-minimised audit event are written in one same-partition transactional batch. Permanent promotion and matching release are ETag-conditional transactional batches with append-only audit.
+- In-memory implementation is atomic and uses an injectable clock for deterministic expiry tests. It never steals an expired reservation; the API reconciles the authoritative ride first.
+- The booking route reserves the Rider before acquiring the selected Driver lease and persisting the ride. Same RideId/request-hash retries are idempotent; a different active RideId returns HTTP 409.
+- Negotiating/AgreementConfirmed leases remain temporary. Driver acceptance promotes the Rider reservation to permanent. Cancellation, Driver decline, expiry and completion release only the matching RiderId+RideId. Terminal read-repair handles interrupted release.
+- Same-key replay repairs a missing reservation and returns the existing ride. Acceptance can repair a pre-deployment selected ride only if no different Rider reservation exists and the request fingerprint reconstructed from the ride matches.
+- Rider app loads server-owned active ride state after sign-in, redirects to Activity and blocks Book/discovery/request until terminal state. Backend enforcement is authoritative.
+
+### Deterministic evidence added (pending CI)
+- Store unit tests: atomic different-Ride acquisition, same-Ride/hash replay, independent Rider partitions, permanent promotion, exact/stale release, expired no-steal and audit privacy.
+- API integration tests: one Rider/two Drivers/different keys, independent Riders, cancellation/rebooking, accepted promotion and same-key replay, completion release, expired-negotiation reconciliation and Driver-decline release.
+- Mobile shared tests: active status helper and source integration for sign-in hydration, Book tab guard, discovery guard and request guard.
+
+### External gates
+Live Cosmos transactional-batch/ETag/multi-instance/restart validation and Android/iOS physical-device booking/cancel/expiry acceptance remain unverified. Production `Dispatch:SelectedDriverNegotiationLifetimeMinutes` is unset; selected booking correctly returns 503 until Product approves/configures the value. The 15-minute test fixture is not a product default.
+
+Next after merge: re-read main, audit #6 DISPATCH-01 in order, implement all safe gaps, then proceed to DISPATCH-02. Do not open a second feature PR while this one is active.
+
+
+## Latest engineering handoff — 2026-11-11 (RIDER-03)
+
+- Main HEAD: `ab988b02b01d89394e5213586f9ee24f0e78c6b1`; PR #145 RIDER-02 is merged. Sole active feature PR: draft #146 `feat/rider-03-single-active-booking`.
+- Source/test HEAD before this documentation sync: `726d1b4356231d4993aa6292c09d5e5a33f635de`. The code adds a durable Rider-scoped reservation in the existing `RideIdempotency` `/riderId` partition, transactional audit, ETag promotion/release, legacy active-ride reconciliation, and fail-closed Rider app hydration. An explicit `allowExpiredForAuthoritativeActiveRide` option repairs only a lease attached to a ride the API has re-read as Accepted/Arrived/InProgress; default expired promotion remains rejected.
+- Test plan CAB-BOOK-001–005 covers UI hydration/reset and explicit expired-lease repair. Previous tested head `18b8651d23970030f111310ad510103aea02957e` passed workflow `42904988755` 12/12 (backend 388/388, shared mobile 167/167, Python 41/41, four native builds and four simulator smokes); all four same-run artifacts were inspected. New source/test head and this docs sync require fresh exact-head CI; no result is claimed yet.
+- External gates: Product-approved `Dispatch:SelectedDriverNegotiationLifetimeMinutes` is unset; live Cosmos ETag/transactional-batch/multi-instance/restart validation; physical Android/iOS booking/cancel/expiry acceptance. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+- Next: finish exact-head CI and review/merge PR #146 only if policy permits; re-read main; continue to #6 DISPATCH-01 in order. Do not open a parallel feature PR.
+
+
+## RIDER-03 final source/test hardening — 2026-11-11
+
+- Source/test head: `d8a052a2ccad3ee1a733b099505d2d5c9433eaee`.
+- Added fail-closed Rider booking hydration and explicit authoritative expired-lease promotion. The shared mobile source-integration test now asserts that `clearRiderSessionState` resets `activeRideStateLoaded`, `loadRideHistory` clears it before the server history read, and it becomes true only after the active-ride detail read completes. This directly covers CAB-BOOK-004 rather than merely finding a reset call elsewhere in the file.
+- The prior docs head `80c4676dca6907093a03dc0e8e6af1d7c2a1e7de` had backend 389/389, shared mobile 170/170, Python 41/41 and both app validation jobs passed; native/simulator jobs were superseded before completion by this final test assertion. Fresh exact-head CI is required.
+
+
+## Latest verified handoff — RIDER-03 exact-head CI #1214 (2026-11-11)
+
+PR #146 remains the sole active feature PR. Exact documentation head `a949f6e4f002721b17d5bd426f226416e109943a` passed CI [#1214 / 42920911797](https://github.com/rajeevp727/turnova-platform/actions/runs/42920911797) 12/12: backend 403/403, shared mobile 171/171, Python 41/41, both app validation/bundles, four native builds and four simulator smokes. Same-run artifacts 13811579024, 13813150972, 13812929395 and 13813746404 were inspected. Next sequential engineering task after merge is DISPATCH-01 selected-booking fail-closed tests for missing/invalid radius and location-freshness configuration; then continue DISPATCH-02. Product-approved dispatch values and live Cosmos/physical-device checks remain external.
