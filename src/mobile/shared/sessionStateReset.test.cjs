@@ -231,6 +231,6 @@ test("Driver logout storage cleanup failure releases loading only for the same l
   assert.notEqual(returnEnd, -1);
   const catchBlock = logout.slice(catchStart, returnEnd);
 
-  assert.match(catchBlock, /finishLoadingIfSessionCurrent\\(setLoading, \\(\\) => sessionEpoch\\.current === logoutEpoch\\)/);
-  assert.match(catchBlock, /if \\(sessionEpoch\\.current === logoutEpoch\\) setError/);
+  assert.match(catchBlock, /finishLoadingIfSessionCurrent\(setLoading, \(\) => sessionEpoch\.current === logoutEpoch\)/);
+  assert.match(catchBlock, /if \(sessionEpoch\.current === logoutEpoch\) setError/);
 });
