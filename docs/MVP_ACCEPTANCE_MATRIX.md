@@ -538,3 +538,12 @@ The current follow-up adds AUTH-LOGIN-060/061. Session reset clears old auth for
 - Release-readiness artifacts Rider `13884494776` and Driver `13885995696` report engineering checks passed but production readiness blocked. Dependency audit artifacts Rider `13884244938` and Driver `13885747350` remain a separate Expo compatibility hardening follow-up.
 - The separate DISPATCH-04 historical active-ride fallback finding remains open and is not implemented by PR #153. Planned cases `DISPATCH-04-LEGACY-001` through `004` remain the next safety follow-up after this PR merges.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
+
+## Latest evidence update — RIDER-04 / CI #1288 (2026-11-12)
+
+- PR [#153](https://github.com/rajeevp727/turnova-platform/pull/153) exact head `0b7576b2c6da8a13eeac889c314f1e4a31e3d453` passed [CI #1288 / 43093306250](https://github.com/rajeevp727/turnova-platform/actions/runs/43093306250) **12/12**. Backend 431/431, shared mobile 179/179, Python 41/41, Rider/Driver validation and bundles, native API publish, four native builds and four simulator smoke tests all passed.
+- Smoke artifacts inspected: Rider Android `13892642047`, Driver Android `13893215862`, Rider iOS `13892604439`, Driver iOS `13893277507`. Android install/launch, package identity, login and stability passed; no stale-session error and zero Pixel Launcher ANR recovery. Unsigned iOS install/launch, bundle identity, login and stability passed; simulator data erased and expected SecureStore-unavailable warning visible. Signed-device Keychain and production authentication remain unverified.
+- Release-readiness artifacts Rider `13890031208` and Driver `13888833914` keep RELEASE-01 production-blocked pending registered app identifiers, EAS linkage/build-number policy, production HTTPS API/DNS/TLS/CORS/readiness, secure signing, signed physical-device acceptance and store approval. No signed AAB/IPA produced.
+- Dependency audits Rider `13889986207` and Driver `13888604434` each report 11 moderate, 1 low, 0 high and 0 critical advisories; major Expo `58.0.24` upgrade remains a separate compatibility task.
+- Strict acceptance count remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. The earlier artifact-upload transient is resolved by the successful final retry; no CI failure remains for #1288.
+
