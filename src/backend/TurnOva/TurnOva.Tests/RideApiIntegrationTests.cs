@@ -2240,22 +2240,67 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
-    [Fact]
-    public async Task SelectedBookingFailsClosedWhenLocationFreshnessPolicyIsNotConfigured()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task SelectedBookingFailsClosedWhenLocationFreshnessPolicyIsMissingOrNonPositive(
+        int? maxAgeSeconds)
     {
-        using var factory = new TurnOvaApiFactory(nearbyLocationMaxAgeSeconds: null);
-        using var rider = factory.CreateClient("Rider", "location-freshness-booking-rider");
-        using var driver = factory.CreateClient("Driver", "location-freshness-booking-driver");
-        SeedBookableDriver(factory, "location-freshness-booking-driver", "location-freshness-booking-union");
+        const string riderId = "location-freshness-booking-rider";
+        const string driverId = "location-freshness-booking-driver";
+        const string unionId = "location-freshness-booking-union";
+        using var factory = new TurnOvaApiFactory(nearbyLocationMaxAgeSeconds: maxAgeSeconds);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
 
         using var request = CreateSelectedBookingRequest(
-            "location-freshness-booking-key", "location-freshness-booking-driver",
-            "location-freshness-booking-union", "KPHB", "HITEC City", []);
+            "location-freshness-booking-key-" + (maxAgeSeconds?.ToString() ?? "missing"),
+            driverId, unionId, "KPHB", "HITEC City", []);
         using var response = await rider.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
         Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
-            .GetActiveAsync("location-freshness-booking-driver"));
+            .GetActiveAsync(driverId));
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync(riderId));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0d)]
+    [InlineData(-1d)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public async Task SelectedBookingFailsClosedWhenNearbyRadiusIsMissingOrInvalidBeforeAnyReservationWrites(
+        double? radiusKm)
+    {
+        const string riderId = "selected-booking-radius-policy-rider";
+        const string driverId = "selected-booking-radius-policy-driver";
+        const string unionId = "selected-booking-radius-policy-union";
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            nearbyRadiusKm: radiusKm);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var request = CreateSelectedBookingRequest(
+            "selected-booking-radius-policy-" + (radiusKm?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "missing"),
+            driverId, unionId, "KPHB", "HITEC City", []);
+        using var response = await rider.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync(driverId));
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync(riderId));
     }
 
     [Fact]
