@@ -1183,11 +1183,12 @@ The active-trip capture watermark is optional on existing ride documents and is 
 | TRIP-LOC-009 | A delayed ride-history/reconnect API response returns after a newer SignalR location event | Merge status/agreement/other non-location fields from the response but preserve the newer Driver coordinates and capture watermark; a genuinely newer API snapshot may replace them | `stale history refresh cannot overwrite a newer SignalR location snapshot` in `src/mobile/shared/tripLocationSharing.test.cjs` | P0 |
 
 
-### TRIP-01 exact-head CI execution evidence (2026-11-08)
+### TRIP-01 merged exact-head CI execution evidence (2026-11-08)
 
-- PR #118 exact head `a13a8b706ddd0ee46eb635cbc6cd6ad6a48390a2` passed [GitHub Actions run #746 / 42491279009](https://github.com/rajeevp727/turnova-platform/actions/runs/42491279009), 8/8 jobs.
-- Backend Release suite executed **317/317 tests** with zero failures. Rider/Driver typechecks and production JS exports, shared mobile tests, Android debug APK builds, unsigned iOS Simulator builds and native non-container API publish all passed.
-- Both npm audits reported 0 critical, 0 high, 11 moderate and 1 low; the JSON reports and generated lockfiles are CI artifacts. No live Cosmos, physical-device, device-to-device SignalR or production validation is implied.
+- PR #118 merged at `4a58ea6d5e4d0a516754f3500d8ef60a3ea48829`; exact source head `31d79773ea14115bb0f6f822f45814b271426204` passed [GitHub Actions run #747 / 42492757245](https://github.com/rajeevp727/turnova-platform/actions/runs/42492757245), 8/8 jobs.
+- Backend Release suite executed **317/317 tests** with zero failures. Shared mobile auth test job, Rider/Driver typechecks and production JS exports, Android debug APKs, unsigned iOS Simulator apps and native non-container API publish all passed. This eight-job run did not include emulator/simulator smoke jobs.
+- The implementation persists a per-ride GPS capture watermark, rejects future/out-of-order fixes before mutation/broadcast through the existing ride CAS guard, emits capture time in SignalR, sends Expo LocationObject.timestamp from the Driver foreground watcher, fences stale/mismatched Rider events and delayed history responses, and gates map follow/recenter on the matching MapView ready callback while respecting manual pan.
+- Test-plan cases TRIP-LOC-001–009 and TRIP-MAP-001–005 cover these deterministic API/shared-mobile behaviours. No live Cosmos multi-instance/ETag/restart, live SignalR/backplane/reconnect, routing provider or physical-device GPS/map acceptance is claimed. The one-minute future allowance is clock-skew tolerance, not a Product freshness policy.
 
 
 ### DRIVER-03 Unicode payslip PDF rendering (2026-11-09)
@@ -1653,3 +1654,12 @@ The guard binds the authorization decision to the exact aggregate used for group
 - The phone validator remains syntax-only: optional one leading '+' followed by 10–15 ASCII digits. Nine malformed values are rejected before profile creation, four valid boundary forms are accepted, and malformed resubmission preserves the full existing profile. Phone ownership/OTP and identity-provider assurance remain external.
 - No source/test changes occurred after the verified source/test commit. This documentation synchronization is based on the completed CI #1259 evidence; the new documentation commit itself requires fresh exact-head CI before PR merge.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is the complete-evidence count, not an implementation-completion score. Production readiness is not established.
+
+
+## DRIVER-01 merged exact-head verification — PR #150 (2026-11-11)
+
+- PR #150 merged at `f7114f6c3df896b53b3ab4f502dce17c97982d6b` after final documentation-head [CI #1260 / 43000036463](https://github.com/rajeevp727/turnova-platform/actions/runs/43000036463) passed **12/12 jobs** on `da576ba4d4d63067c638a9d55a13118221c85cee`: backend **430/430**, shared mobile **171/171**, Python **41/41**, Rider/Driver validation and production bundles, native non-container API publish, two Android and two iOS native builds, and all four Android/iOS simulator smoke jobs.
+- Same-run smoke artifacts downloaded and inspected: Rider Android `13846033280`, Driver Android `13846586793`, Rider iOS `13846678727`, Driver iOS `13847208793`. Android result JSONs show correct package IDs, install/launch passed, stable processes, role-specific login text and zero Pixel Launcher ANR recovery attempts. Unsigned iOS result JSONs show correct bundle IDs, install/launch passed, stable processes, role-specific login text and the expected SecureStore-unavailable banner; `secureStoreAvailable=false`, no Keychain access group, and production API/authentication not exercised. All four screenshots were visually inspected.
+- Release-readiness artifacts Rider `13844579992` and Driver `13845108913` report engineering checks passed but production readiness blocked. Missing inputs: registered iOS bundle identifiers, EAS project IDs, build-number ownership policy, production HTTPS API URL, secure signing credentials, signed physical-device acceptance and store submission. No signed AAB or IPA was produced.
+- DRIVER-01 syntax tests cover nine malformed inputs rejected before profile creation, four accepted 10/15-ASCII-digit boundaries with/without a leading plus, and malformed resubmission preserving the complete existing profile. Phone ownership/OTP and upstream identity assurance remain external.
+
