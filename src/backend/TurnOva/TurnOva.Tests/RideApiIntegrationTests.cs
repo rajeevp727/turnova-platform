@@ -2261,12 +2261,16 @@ public sealed class RideApiIntegrationTests
         using var response = await rider.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("The approved maximum Driver location age is not configured.",
+            await response.Content.ReadAsStringAsync());
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
         Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .GetActiveAsync(driverId));
         Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
             .GetActiveAsync(riderId));
+        Assert.Equal("Online", factory.Services
+            .GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()[driverId].AvailabilityStatus);
     }
 
     [Theory]
@@ -2295,12 +2299,16 @@ public sealed class RideApiIntegrationTests
         using var response = await rider.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("The approved Rider discovery radius is not configured.",
+            await response.Content.ReadAsStringAsync());
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
         Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .GetActiveAsync(driverId));
         Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
             .GetActiveAsync(riderId));
+        Assert.Equal("Online", factory.Services
+            .GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()[driverId].AvailabilityStatus);
     }
 
     [Fact]
