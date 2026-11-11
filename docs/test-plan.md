@@ -1721,3 +1721,22 @@ The guard binds the authorization decision to the exact aggregate used for group
 - Same-run dependency audits Rider `13873704726` and Driver `13875265447` each report 11 moderate, 1 low, 0 high and 0 critical advisories. The automated full remediation points to Expo `58.0.24`, a major SDK upgrade; keep it as a separate compatibility/native-build hardening increment, not an unreviewed override.
 - CI #1280 / 43054989137 remains the source/test verification on `b7aae701904b6cc33b88d66a43c1aecae98180a7`; CI #1282 verifies the final documentation head above. Live Cosmos SQL/index/partition/multi-instance/restart, signed-device Keychain, physical-device, production API/authentication and legal/product-policy gates remain external.
 - No payment gateway, escrow, in-app collection, customer dispute/confirmation or delta-based next-ride policy is introduced. Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
+
+
+## DISPATCH-04 legacy active-ride fallback follow-up (planned; implementation pending)
+
+| ID | Scenario | Expected result | Planned automated evidence | Priority |
+|---|---|---|---|---|
+| DISPATCH-04-LEGACY-001 | A Driver has a historical `Negotiating` or `AgreementConfirmed` ride but no Driver reservation record | The active ride aggregate blocks a different selected Cab booking; an expired negotiation is reconciled through the authoritative ride transition before the matching lease can be released | Backend API integration using deterministic in-memory ride fixtures and no reservation | P0 |
+| DISPATCH-04-LEGACY-002 | A Driver has a historical `Accepted`, `Arrived` or `InProgress` ride but no Driver reservation record | The Driver remains ineligible for another selected booking, availability change or conflicting Union transfer | Backend API integration with active lifecycle fixtures and endpoint assertions | P0 |
+| DISPATCH-04-LEGACY-003 | A Driver has only terminal `Completed`, `Cancelled` or `Expired` historical rides and no active reservation | The terminal history does not block a new selected Cab booking; existing audit/history is not mutated or deleted | Backend API integration with terminal fixtures and no-mutation assertions | P1 |
+| DISPATCH-04-LEGACY-004 | A Driver has a retained historical non-Cab active ride and no reservation record | The active historical ride still blocks overlapping work; the record remains non-Cab and is not migrated or destructively changed | Backend API integration with legacy service-class fixture and no-mutation assertions | P0 |
+
+This follow-up was discovered in `HasActiveDriverRideAsync`: when `driverRideReservations.GetActiveAsync` returns null, the method currently returns false without checking the Rides aggregate. The exact fix must preserve same-ride idempotent retry behavior, reconcile only authoritative expired negotiations, and avoid N+1 cross-partition queries in candidate discovery. Product-approved negotiation lifetime and live Cosmos multi-instance/restart validation remain external.
+
+## RIDER-04 exact documentation-head verification — CI #1285 (2026-11-12)
+
+- PR [#153](https://github.com/rajeevp727/turnova-platform/pull/153), exact tested documentation head `ecb526ae524be443df4eace659d3ad64a694da4c`.
+- GitHub Actions [CI #1285 / 43073753705](https://github.com/rajeevp727/turnova-platform/actions/runs/43073753705) passed **12/12 jobs on exact documentation head `ecb526ae524be443df4eace659d3ad64a694da4c`**: backend 431/431, shared mobile 179/179, Python 41/41, Rider/Driver typechecks and production JS bundles, native non-container API publish, two Android native builds, two unsigned iOS Simulator builds, two Android emulator smoke tests and two iOS Simulator smoke tests.
+- Same-run smoke artifacts: Rider Android `13882271982`, Driver Android `13879934066`, Rider iOS `13882698962`, Driver iOS `13883585816`. All four result JSONs, UI text and screenshots were inspected. Android install/launch and role-specific login passed with stable processes and zero Pixel Launcher ANR recovery attempts. Unsigned iOS simulator install/launch and role-specific login passed with stable processes; SecureStore was unavailable and the expected recoverable banner was visible; production API/authentication and signed-device Keychain were not exercised.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established.
