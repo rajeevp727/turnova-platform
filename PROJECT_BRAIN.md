@@ -5,8 +5,8 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged. Sole active feature PR #150 is `fix/driver-01-phone-validation`; source/test commit `e2c665a248b816f4e29de109e01ad430c4e5cfdb`; latest documentation head `a4a21d73be69301ccd8f8a71cf5fd1f6a6c1c14e` passed exact-head CI #1259 / 42991278634 (12/12). Backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes. All four same-run artifacts were downloaded and visually inspected. Any documentation-only commits after this verified head require fresh exact-head CI.
-**Current engineering item:** #11 DRIVER-01 — optional single-leading-plus and 10–15 ASCII-digit validation, nine malformed-input rejections, four valid boundary forms and malformed-resubmission profile preservation. CI #1259 / 42991278634 passed 12/12 on `a4a21d73be69301ccd8f8a71cf5fd1f6a6c1c14e`; phone ownership/OTP and signed-device/production gates remain external.
+**Last audited main HEAD:** `f7114f6c3df896b53b3ab4f502dce17c97982d6b` after DRIVER-01 PR #150 merged. PR #150 exact-head CI #1260 / 43000036463 passed 12/12 on `da576ba4d4d63067c638a9d55a13118221c85cee`: backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes. All four same-run simulator artifacts were inspected; unsigned iOS SecureStore/Keychain and production authentication limitations remain explicit.
+**Current engineering item:** #13 TRIP-01 — reconcile progress/matrix evidence with merged PR #118 and complete the fresh source audit. PR #118 source head `31d79773ea14115bb0f6f822f45814b271426204`; exact-head CI #747 / 42492757245 passed 8/8, including backend 317/317. Next ordered row is #14 DRIVER-03.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -1529,7 +1529,7 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - Same-run artifacts inspected: Rider Android `13839539421`, Driver Android `13839718872`, Rider iOS `13840987499`, Driver iOS `13840917053`. Android apps installed/launched, remained stable and displayed correct role-specific login screens; no stale-session errors and zero Pixel Launcher ANR recovery attempts. Unsigned iOS apps installed/launched and displayed role-specific login screens plus the expected SecureStore-unavailable banner; `secureStoreAvailable=false`, no Keychain access group, and production API/authentication not exercised.
 - Release-readiness artifacts Rider `13839790635` and Driver `13839381740` report engineering checks passed but production readiness blocked: iOS bundle registration, EAS linkage, build-number policy, production HTTPS API URL, signing credentials, signed physical-device acceptance and store submission remain.
 - The PR review is COMMENT-only, not approval; there are zero unresolved review threads. No self-approval or branch-protection bypass is permitted. The latest PR head is documentation-only relative to source/test commit `e2c665a`; fresh CI is required after any further docs synchronization.
-- After PR #150 merges, #12 DRIVER-02 is already implemented/merged (PR #117). Next ordered row is #13 TRIP-01: reconcile progress/Project Brain evidence with merged PR #118, then re-audit; #14 DRIVER-03 follows.
+- PR #150 merged at `f7114f6c3df896b53b3ab4f502dce17c97982d6b`. #12 DRIVER-02 is already implemented/merged (PR #117); #13 TRIP-01 evidence reconciliation is the current step, followed by #14 DRIVER-03.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is the full-evidence count, not an implementation-completion score. Production readiness is not established.
 
 
@@ -1542,3 +1542,12 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - The phone validator remains syntax-only: optional one leading '+' followed by 10–15 ASCII digits. Nine malformed values are rejected before profile creation, four valid boundary forms are accepted, and malformed resubmission preserves the full existing profile. Phone ownership/OTP and identity-provider assurance remain external.
 - No source/test changes occurred after the verified source/test commit. This documentation synchronization is based on the completed CI #1259 evidence; the new documentation commit itself requires fresh exact-head CI before PR merge.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is the complete-evidence count, not an implementation-completion score. Production readiness is not established.
+
+
+## Latest engineering handoff — TRIP-01 evidence reconciliation (2026-11-11)
+
+- Main HEAD: `f7114f6c3df896b53b3ab4f502dce17c97982d6b`. DRIVER-01 PR #150 merged after exact-head CI #1260 / 43000036463 passed 12/12 on `da576ba4d4d63067c638a9d55a13118221c85cee` (backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes).
+- TRIP-01 PR #118 merged at `4a58ea6d5e4d0a516754f3500d8ef60a3ea48829`; source head `31d79773ea14115bb0f6f822f45814b271426204`; exact-head CI #747 / 42492757245 passed 8/8, backend 317/317. Code covers capture watermark/CAS, future/out-of-order rejection, SignalR timestamp, Rider stale-event/history fencing, map-ready follow/recenter/manual-pan pause and Driver foreground-only GPS watcher.
+- Fresh main audit found no additional independent TRIP-01 runtime defect. External gates: live Cosmos ETag/multi-instance/restart; live SignalR/backplane/reconnect; maps/routing; physical Android/iOS foreground GPS, map pan/follow and resume; Product decision on next-ride-before-payment-report and non-zero-delta eligibility.
+- Next row #14 DRIVER-03. Preserve the existing IST month-boundary tests; the identified code increment is session-safe payslip loading cleanup so an old request finalizer cannot clear a newer authenticated session's loading state.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
