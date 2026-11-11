@@ -1,8 +1,8 @@
 # TurnOva MVP Acceptance Matrix
 
+**Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.  
 **Last audited:** 2026-11-11; main HEAD `b1ea22f4e2d19e76f5b182b93e527960b110ad7a` after RIDER-03 PR #146 merged. Current engineering item #6 DISPATCH-01 is PR #147 on `test/dispatch-01-selected-booking-config-guards`, source/test HEAD `8cca1958f0e9d67d57ee69ee5327fd4449d9651a`, test-plan commit `f002bb475d3c7f502dd57f22a0ac40d2be941732`; exact-head CI #1222 / 42929505358 passed 12/12 after targeted Rider iOS smoke retry. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Current engineering item:** #6 DISPATCH-01 — selected-booking radius and Driver location-freshness configuration guards. Nine executed theory cases add eight net backend tests and prove HTTP 503 before any ride/idempotency/Driver-reservation/Rider-reservation write.
-**Current engineering item:** #6 DISPATCH-01 — selected-booking radius and Driver location-freshness configuration guards. The API already fails closed; new deterministic tests assert invalid configuration returns HTTP 503 before any ride/idempotency/Driver-reservation/Rider-reservation write.
 **Rule:** A row is **Verified** only when implementation exists and its required automated/manual evidence is recorded. A merged PR or successful typecheck alone does not verify a user-facing acceptance criterion.  
 **Current acceptance snapshot:** 0/19 strictly Verified; 15 In Progress; 4 Blocked. This is a strict evidence count, not a statement that nothing is implemented. Read implementation evidence row by row; external gates remain explicit.
 
