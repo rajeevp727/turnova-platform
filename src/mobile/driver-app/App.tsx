@@ -1084,6 +1084,7 @@ export default function App() {
         if (tokens) await jsonRequest("/api/v1/auth/logout", { method: "POST" }, tokens.accessToken);
       });
     } catch {
+      finishLoadingIfSessionCurrent(setLoading, () => sessionEpoch.current === logoutEpoch);
       if (sessionEpoch.current === logoutEpoch) setError("Unable to clear secure session storage. Please retry sign-out.");
       return;
     }
