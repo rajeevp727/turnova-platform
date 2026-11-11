@@ -5,8 +5,8 @@
 
 **Last verified:** 2026-11-11
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Last audited main HEAD:** `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged. Sole active feature PR #150 is `fix/driver-01-phone-validation`, expanded source/test commit `e2c665a248b816f4e29de109e01ad430c4e5cfdb`, latest documentation head `09f7be0c91ba64741c680ce477438920fdda9828`; exact-head CI #1248 / 42977122031 passed 12/12.
-**Current engineering item:** #11 DRIVER-01 — optional single-leading-plus and 10–15 ASCII-digit validation, nine malformed-input rejections before profile creation, four accepted length-boundary forms and malformed-resubmission profile preservation. Exact documentation-head CI #1248 / 42977122031 passed 12/12: backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes. Phone ownership/OTP, signed-device and production gates remain external.
+**Last audited main HEAD:** `9129b2bfbf174e8df07a9713f7e99f51d232cb45` after REALTIME-01 PR #149 merged. Sole active feature PR #150 is `fix/driver-01-phone-validation`; expanded source/test commit `e2c665a248b816f4e29de109e01ad430c4e5cfdb` passed exact-head CI #1248 / 42977122031 (12/12). A documentation-only consistency follow-up is on the active PR branch; verify the current PR head and final-head CI before merge.
+**Current engineering item:** #11 DRIVER-01 — optional single-leading-plus and 10–15 ASCII-digit validation, nine malformed-input rejections before profile creation, four accepted length-boundary forms and malformed-resubmission profile preservation. Exact source/test CI #1248 / 42977122031 passed 12/12: backend 430/430, shared mobile 171/171, Python 41/41, Rider/Driver validation/bundles, native API publish, four native builds and four simulator smokes. Phone ownership/OTP and production gates remain external.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
