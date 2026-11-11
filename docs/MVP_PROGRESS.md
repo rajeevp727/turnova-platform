@@ -7,7 +7,6 @@
 
 **Current engineering item: #6 DISPATCH-01 — selected-booking radius and Driver location-freshness fail-closed tests.** The implementation already rejects missing/non-positive/non-finite radius and missing/non-positive freshness before booking writes. The new tests prove HTTP 503 and zero ride, idempotency, Driver-reservation and Rider-reservation side effects. Product-approved positive radius, non-overlapping zones and freshness threshold remain external inputs; this PR does not choose them.
 
-**Current engineering item: #5 RIDER-03 — durable single-active selected booking per Rider.**
 
 PR #145 RIDER-02 merged at `ab988b02b01d89394e5213586f9ee24f0e78c6b1` after [CI #1180 / 42882071110](https://github.com/rajeevp727/turnova-platform/actions/runs/42882071110) passed 12/12. Evidence: backend 373/373, shared mobile 153/153, Python 41/41, Rider/Driver validation and bundles, four native builds and four simulator smokes. All four same-run artifacts were inspected. The unsigned iOS SecureStore-unavailable qualification and Driver Android targeted Pixel Launcher retry remain documented; no signed-device Keychain or production authentication is claimed.
 
