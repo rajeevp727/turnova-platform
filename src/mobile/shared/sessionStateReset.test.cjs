@@ -203,3 +203,34 @@ test("Driver payslip finalizer uses the captured session guard and session reset
   assert.match(finalizer, /finishLoadingIfSessionCurrent\(setLoading, isSessionCurrent\)/);
   assert.doesNotMatch(finalizer, /setLoading\(false\)/);
 });
+
+
+test("stale logout cleanup finalizer cannot clear a newer session loading state", () => {
+  let sessionEpoch = 11;
+  const logoutEpoch = sessionEpoch;
+  let loading = true;
+
+  sessionEpoch += 1;
+  loading = true;
+  const cleared = finishLoadingIfSessionCurrent(value => { loading = value; }, () => sessionEpoch === logoutEpoch);
+
+  assert.equal(cleared, false);
+  assert.equal(loading, true);
+});
+
+test("Driver logout storage cleanup failure releases loading only for the same logout epoch", () => {
+  const app = fs.readFileSync(path.join(__dirname, "../driver-app/App.tsx"), "utf8");
+  const logoutStart = app.indexOf("const logout = async");
+  const logoutEnd = app.indexOf("const askHelp", logoutStart);
+  assert.notEqual(logoutStart, -1);
+  assert.notEqual(logoutEnd, -1);
+  const logout = app.slice(logoutStart, logoutEnd);
+  const catchStart = logout.indexOf("} catch {");
+  const returnEnd = logout.indexOf("return;", catchStart);
+  assert.notEqual(catchStart, -1);
+  assert.notEqual(returnEnd, -1);
+  const catchBlock = logout.slice(catchStart, returnEnd);
+
+  assert.match(catchBlock, /finishLoadingIfSessionCurrent\\(setLoading, \\(\\) => sessionEpoch\\.current === logoutEpoch\\)/);
+  assert.match(catchBlock, /if \\(sessionEpoch\\.current === logoutEpoch\\) setError/);
+});
