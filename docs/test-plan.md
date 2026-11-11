@@ -1532,7 +1532,7 @@ Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureSt
 
 - Source/test head `726d1b4356231d4993aa6292c09d5e5a33f635de` adds explicit authoritative active-ride promotion for an expired temporary Rider reservation. The default store operation still rejects expired promotion; only the API path that has re-read the same ride as Accepted/Arrived/InProgress opts in. New manual-clock test: `ExpiredReservationRequiresExplicitAuthoritativeActiveRidePromotion`.
 - Rider UI hydration is fail-closed until both ride-history and active-ride detail reads succeed; failed/in-flight reads cannot be interpreted as an empty ride history. Session reset clears the hydration flag and the Book tab exposes a retry.
-- CAB-BOOK-001–005 cover active-ride hydration, active-state gating, discovery/request guards, session reset and explicit expired-lease repair.
+- CAB-BOOK-001–006 cover active-ride hydration, active-state gating, discovery/request guards, session reset, explicit expired-lease repair and authenticated sign-in/restoration epoch ordering.
 - Previous tested head `18b8651d23970030f111310ad510103aea02957e` passed workflow [42904988755](https://github.com/rajeevp727/turnova-platform/actions/runs/42904988755) 12/12; all four same-run simulator artifacts were inspected. The new source/test head and this documentation sync require a fresh exact-head workflow; no latest-head result is claimed until it completes.
 
 
@@ -1541,3 +1541,10 @@ Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureSt
 - CAB-BOOK-004 is now source-integration checked against the actual `clearRiderSessionState` block: session reset must set `activeRideStateLoaded` to false.
 - The `loadRideHistory` source integration verifies the flag is cleared before `/api/v1/rides/mine` and becomes true only after the selected active-ride detail read completes. This prevents an in-flight/failed history read from being interpreted as an empty ride history.
 - Source/test head `d8a052a2ccad3ee1a733b099505d2d5c9433eaee` requires fresh exact-head CI after the final documentation sync.
+
+
+### RIDER-03 final exact-head verification — CI #1214 (2026-11-11)
+
+PR #146 documentation head `a949f6e4f002721b17d5bd426f226416e109943a` passed [CI #1214 / 42920911797](https://github.com/rajeevp727/turnova-platform/actions/runs/42920911797) with 12/12 jobs successful: .NET backend 403/403, shared mobile 171/171, Python native-artifact/simulator harness 41/41, Rider/Driver TypeScript validation and production bundles, both Android native builds, both unsigned iOS Simulator native builds, and all four Android/iOS simulator smoke jobs. The source/test follow-up `d8a052a2ccad3ee1a733b099505d2d5c9433eaee` includes RIDER03-RES-010/011 across all eight active legacy statuses and CAB-BOOK-006 for sign-in/restored-session hydration ordering.
+
+Same-run simulator artifacts inspected: Rider Android `13811579024`, Driver Android `13813150972`, Rider iOS `13812929395`, Driver iOS `13813746404`. Both Android apps installed/launched with role-specific login text, stable processes, no stale-session error and zero Pixel Launcher ANR recovery attempts. Both unsigned iOS apps installed/launched and displayed the expected SecureStore-unavailable banner; no signed-device Keychain or production authentication is claimed. Live Cosmos, physical-device booking and signed release acceptance remain external.
