@@ -1980,7 +1980,9 @@ unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToke
                 profile.ProfilePhotoCapturedAtUtc,
                 profile.ProfilePhotoApprovalStatus,
                 profile.ProfilePhotoReviewedAtUtc,
-                profile.ProfilePhotoReviewReason
+                profilePhotoReviewReason = DriverUnionAuditReason.IsSafe(profile.ProfilePhotoReviewReason)
+                    ? profile.ProfilePhotoReviewReason
+                    : null
             }
         });
     }
@@ -2062,9 +2064,9 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
 {
     if (request.Status is not ("Approved" or "Rejected"))
         return Results.BadRequest(new { message = "Selfie review status must be Approved or Rejected." });
-    if (request.Status == "Rejected" &&
-        (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 300))
-        return Results.BadRequest(new { message = "A rejection reason of 1–300 characters is required." });
+    var rejectionReason = DriverProfileReviewGuard.NormalizeRejectionReason(request.Reason);
+    if (request.Status == "Rejected" && rejectionReason is null)
+        return Results.BadRequest(new { message = "A normalized rejection reason of 1–300 characters without contact details is required." });
 
     // Authorize against the current assignment before acquiring any per-driver lease.
     // This prevents a manager from another Union from reserving an unrelated Driver ID.
@@ -2112,7 +2114,7 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "The active union, Cab driver profile and required licence/vehicle documents must be approved before selfie review." });
 
-        var reason = request.Status == "Rejected" ? request.Reason!.Trim() : null;
+        var reason = request.Status == "Rejected" ? rejectionReason : null;
         if (DriverProfileReviewGuard.HasConflictingReviewMetadata(profile))
             return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before UnionManager review." });
         if (DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(profile))
@@ -2199,8 +2201,9 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
     HttpContext context, string driverId, AssignDriverUnionRequest request, CancellationToken ct) =>
 {
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
-    if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 300)
-        return Results.BadRequest(new { message = "A transfer/assignment reason of 1–300 characters is required." });
+    var assignmentReason = DriverUnionAuditReason.Normalize(request.Reason);
+    if (assignmentReason is null)
+        return Results.BadRequest(new { message = "A normalized transfer/assignment reason of 1–300 characters without contact details is required." });
 
     // Membership changes share the same per-driver exclusive lease as selected bookings.
     // This closes the check-then-transfer race: either a ride or a transfer owns the lease,
@@ -2263,7 +2266,6 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             await EnsureUnionSelfieAuditAsync(profile, ct);
         }
 
-        var assignmentReason = request.Reason.Trim();
         if (previous?.UnionId == union.UnionId && previous.Status == "Active")
         {
             var latestAssignment = await FindUnionAssignmentAsync(driverId, ct) ?? previous;
