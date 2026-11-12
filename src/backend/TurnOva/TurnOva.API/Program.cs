@@ -530,7 +530,7 @@ async Task EnsureOperationsSelfieRejectionAuditAsync(
         ? "Operations"
         : reviewedProfile.ProfilePhotoOperationsReviewActorId;
     var eventId = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-        reviewedProfile.DriverId, union.UnionId, reviewedProfile.ProfilePhotoCapturedAtUtc,
+        reviewedProfile.DriverId, union.UnionId, reviewedProfile.ProfilePhotoCapturedAtUtc, reviewedAtUtc,
         reviewedProfile.ProfilePhotoBase64
             ?? throw new InvalidOperationException("A rejected selfie review must retain the reviewed selfie content."), reason);
     await SaveUnionAuditAsync(new DriverUnionAuditEvent(
