@@ -992,6 +992,7 @@ DRIVER-01 code/test audit (2026-11-07): `DriverOnboardingRequest` accepts Cab on
 | PLATFORM-AUDIT-016 | Opaque actor reference contains letters and digits | Opaque internal IDs containing letters remain intact; only phone-like numeric references are redacted | `ReservationAuditPreservesOpaqueActorIdsContainingLetters` | P1 |
 | PLATFORM-AUDIT-017 | Reservation audit event uses a declared event type | The four declared reservation event types are accepted unchanged | `ReservationAuditAcceptsOnlyTheFourDeclaredEventTypes` | P1 |
 | PLATFORM-AUDIT-018 | Reservation audit event uses an unknown or malformed event type | Factory rejects the event before an append-only audit fact can be created | `ReservationAuditRejectsUnknownEventTypesBeforeCreatingAnEvent` | P0 |
+| PLATFORM-AUDIT-019 | Operations selfie rejection reason is missing, oversized or padded | Normalize once; reject null/blank or over-300-character input and persist the same trimmed value in profile and audit event | `RejectionReasonIsTrimmedToOneStableValue`, `RejectionReasonRejectsNullOrWhitespace`, `RejectionReasonRejectsMoreThanThreeHundredCharactersAndAcceptsTheLimit` | P1 |
 
 The readiness failure-path test uses a deterministic fake probe. Reservation-audit privacy and event-contract tests use deterministic domain fixtures and the in-memory reservation boundary. These tests do not claim live Cosmos transactional-batch, ETag, retention or telemetry-export validation; those remain infrastructure gates.
 

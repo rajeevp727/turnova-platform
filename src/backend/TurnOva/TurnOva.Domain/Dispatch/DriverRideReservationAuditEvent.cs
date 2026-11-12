@@ -79,12 +79,12 @@ public sealed record DriverRideReservationAuditEvent(
                 nameof(eventType));
 
         var supplied = context ?? DriverRideReservationAuditContext.ForSystem();
-        var actorId = supplied.ActorId?.Trim();
-        var containsNonIdentifierCharacters = actorId?.Any(character =>
-            !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or ':')) ?? true;
-        var containsOnlyPhoneCharacters = actorId is not null && actorId.All(character =>
+        var actorId = supplied.ActorId?.Trim() ?? string.Empty;
+        var containsNonIdentifierCharacters = actorId.Any(character =>
+            !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or ':'));
+        var containsOnlyPhoneCharacters = actorId.All(character =>
             char.IsDigit(character) || character is '-' or '_' or '.' or ':');
-        var phoneDigitCount = actorId?.Count(char.IsDigit) ?? 0;
+        var phoneDigitCount = actorId.Count(char.IsDigit);
         var looksLikePhoneNumber = containsOnlyPhoneCharacters && phoneDigitCount >= 8;
         var actorIdIsInvalid = string.IsNullOrWhiteSpace(actorId) || actorId.Length > 128 ||
             actorId.Any(char.IsControl) || containsNonIdentifierCharacters || looksLikePhoneNumber;

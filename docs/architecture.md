@@ -142,6 +142,7 @@ Store identity documents in protected object storage rather than large Cosmos DB
 
 - Driver reservation audit facts use exactly four event types: `ReservationAcquired`, `ReservationMadePermanent`, `ReservationExpiryChanged` and `ReservationReleased`. The domain factory rejects any other or malformed event type before creating an append-only fact.
 - Actor roles and reason categories remain allow-listed. Actor identifiers containing only digits and the permitted separators (`-`, `_`, `.`, `:`) are treated as phone-like when they contain at least eight digits and are replaced with the System actor. Opaque internal identifiers containing letters remain unchanged.
+- Null/blank actor IDs also fall back to System. Operations selfie-rejection reasons are trimmed once, limited to 1–300 characters and the same normalized value is persisted in both the Driver profile and append-only Union audit event.
 - Audit facts remain limited to reservation/actor/reason/time metadata; ride routes, precise location, contact details, credentials and payment values do not belong in this event contract.
 
 ## 8. Initial API resource groups

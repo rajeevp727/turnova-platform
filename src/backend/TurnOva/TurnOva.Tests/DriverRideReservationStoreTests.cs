@@ -200,6 +200,24 @@ public sealed class DriverRideReservationStoreTests
         Assert.True(expired.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow);
     }
 
+    [Fact]
+    public void ReservationAuditUsesSystemActorWhenActorIdIsNull()
+    {
+        var reservation = new DriverRideReservation(
+            "driver-1", "ride-1", DateTimeOffset.UtcNow);
+
+        var audit = DriverRideReservationAuditEvent.Create(
+            reservation,
+            DriverRideReservationAuditEventTypes.Acquired,
+            new DriverRideReservationAuditContext(
+                null!, "Driver", DriverRideReservationAuditReasons.SelectedCabBooking),
+            previousExpiresAtUtc: null,
+            expiresAtUtc: null);
+
+        Assert.Equal("system", audit.ActorId);
+        Assert.Equal("System", audit.ActorRole);
+    }
+
     [Theory]
     [InlineData("12345678")]
     [InlineData("123-456-7890")]

@@ -1476,7 +1476,8 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
     if (request.Status is not ("Approved" or "Rejected"))
         return Results.BadRequest(new { message = "Selfie review status must be Approved or Rejected." });
-    if (request.Status == "Rejected" && (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 300))
+    var rejectionReason = DriverProfileReviewGuard.NormalizeRejectionReason(request.Reason);
+    if (request.Status == "Rejected" && rejectionReason is null)
         return Results.BadRequest(new { message = "A rejection reason of 1–300 characters is required." });
 
     var union = await FindUnionAsync(unionId, ct);
@@ -1492,6 +1493,8 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
     if (request.Status == "Approved")
         return Results.Forbid(); // Only an authenticated manager of the current union may approve public selfie visibility.
 
+    var reason = rejectionReason
+        ?? throw new InvalidOperationException("Rejected selfie review requires a valid reason.");
     var now = DateTimeOffset.UtcNow;
     var saved = await TryUpdateDriverProfileAsync(driverId, current =>
     {
@@ -1507,7 +1510,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
             ProfilePhotoApprovalStatus = "Rejected",
             ProfilePhotoApprovedByUnionId = null,
             ProfilePhotoReviewedAtUtc = now,
-            ProfilePhotoReviewReason = request.Reason!.Trim()
+            ProfilePhotoReviewReason = reason
         };
     }, ct);
     if (!saved)
@@ -1517,7 +1520,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         ?? throw new InvalidOperationException("The rejected driver profile could not be reloaded.");
     await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
         unionId, union.Name, unionId, union.Name, "SelfieRejectedByOperations",
-        request.Reason.Trim(), context.User.Identity?.Name ?? "Operations", now), ct);
+        reason, context.User.Identity?.Name ?? "Operations", now), ct);
     return Results.Ok(new
     {
         driverId,

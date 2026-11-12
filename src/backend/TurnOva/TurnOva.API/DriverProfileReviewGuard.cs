@@ -4,6 +4,14 @@ using TurnOva.Domain.Dispatch;
 
 public static class DriverProfileReviewGuard
 {
+    public static string? NormalizeRejectionReason(string? reason)
+    {
+        var normalized = reason?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) || normalized.Length > 300
+            ? null
+            : normalized;
+    }
+
     public static bool Matches(DriverOnboardingProfile current, DriverOnboardingProfile reviewedSnapshot)
     {
         return current.Id == reviewedSnapshot.Id &&
