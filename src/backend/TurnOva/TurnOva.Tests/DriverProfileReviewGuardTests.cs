@@ -81,6 +81,30 @@ public sealed class DriverProfileReviewGuardTests
             DriverProfileReviewGuard.NormalizeRejectionReason(new string('x', 300)));
     }
 
+    [Fact]
+    public void OperationsRetryRequiresAnOperationsReviewMarker()
+    {
+        const string reason = "Image is unclear";
+        var unionManagerRejection = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoCapturedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2),
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ProfilePhotoReviewReason = reason,
+            ProfilePhotoOperationsReviewActorId = null
+        };
+        var operationsRejection = unionManagerRejection with
+        {
+            ProfilePhotoOperationsReviewActorId = "ops-actor-42"
+        };
+
+        Assert.False(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
+            unionManagerRejection, unionManagerRejection, reason));
+        Assert.True(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
+            operationsRejection, operationsRejection, reason));
+    }
+
     private static DriverOnboardingProfile CreateProfile() => new(
         "driver-1", "driver-1", "zone-1", "Test Driver", "+919876543210",
         "Maruti", "Dzire", "TS09AB1234", "cab", 3,
