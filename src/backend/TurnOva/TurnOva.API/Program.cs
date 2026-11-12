@@ -734,7 +734,8 @@ async Task<IReadOnlyList<DriverUnionAssignment>> ListActiveUnionAssignmentsAsync
     return results;
 }
 
-async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string driverId, CancellationToken ct)
+async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(
+    string driverId, CancellationToken ct, bool repairSelfieReviewSnapshots = false)
 {
     // Repair pending assignment and selfie-review snapshots before returning history.
     // Completed/legacy records without a recovery snapshot are never synthesized.
@@ -742,18 +743,21 @@ async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string drive
     if (currentAssignment is not null)
         await EnsureUnionAssignmentAuditAsync(currentAssignment, ct);
 
-    var currentProfile = await FindDriverProfileAsync(driverId, ct);
-    if (currentProfile is not null)
+    if (repairSelfieReviewSnapshots)
     {
-        if (DriverProfileReviewGuard.HasConflictingReviewMetadata(currentProfile))
-            throw new InvalidOperationException(
-                "The Driver profile contains conflicting Union selfie-review recovery metadata. Preserve the profile and resolve its audit state before returning history.");
+        var currentProfile = await FindDriverProfileAsync(driverId, ct);
+        if (currentProfile is not null)
+        {
+            if (DriverProfileReviewGuard.HasConflictingReviewMetadata(currentProfile))
+                throw new InvalidOperationException(
+                    "The Driver profile contains conflicting Union selfie-review recovery metadata. Preserve the profile and resolve its audit state before returning history.");
 
-        if (DriverProfileReviewGuard.HasOperationsReviewMetadata(currentProfile))
-            await EnsureOperationsSelfieRejectionAuditAsync(currentProfile, ct);
+            if (DriverProfileReviewGuard.HasOperationsReviewMetadata(currentProfile))
+                await EnsureOperationsSelfieRejectionAuditAsync(currentProfile, ct);
 
-        if (DriverProfileReviewGuard.HasUnionReviewMetadata(currentProfile))
-            await EnsureUnionSelfieAuditAsync(currentProfile, ct);
+            if (DriverProfileReviewGuard.HasUnionReviewMetadata(currentProfile))
+                await EnsureUnionSelfieAuditAsync(currentProfile, ct);
+        }
     }
 
     if (unionAuditContainer is null) return unionAudit.Values.Where(item => item.DriverId == driverId).OrderByDescending(item => item.OccurredAtUtc).ToArray();
@@ -2352,7 +2356,7 @@ app.MapGet("/api/v1/ops/drivers/{driverId}/union-history", async (
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
     try
     {
-        return Results.Ok(await GetUnionAuditAsync(driverId, ct));
+        return Results.Ok(await GetUnionAuditAsync(driverId, ct, repairSelfieReviewSnapshots: true));
     }
     catch (InvalidOperationException)
     {
