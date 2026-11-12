@@ -46,9 +46,13 @@ public static class DriverUnionAuditReason
             if (EmailPattern.IsMatch(reason))
                 return false;
 
-            return !PhonePattern.Matches(reason)
-                .Cast<Match>()
-                .Any(match => match.Value.Count(char.IsAsciiDigit) >= 10);
+            foreach (Match match in PhonePattern.Matches(reason))
+            {
+                if (match.Value.Count(char.IsAsciiDigit) >= 10)
+                    return false;
+            }
+
+            return true;
         }
         catch (RegexMatchTimeoutException)
         {
