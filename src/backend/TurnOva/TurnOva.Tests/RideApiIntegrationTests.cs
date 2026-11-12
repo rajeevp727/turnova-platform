@@ -456,7 +456,9 @@ public sealed class RideApiIntegrationTests
             ProfilePhotoApprovalStatus = "Rejected",
             ProfilePhotoReviewedAtUtc = reviewedAt,
             ProfilePhotoReviewReason = "Previous Operations rejection",
-            ProfilePhotoOperationsReviewActorId = "ops-actor-without-union-context"
+            ProfilePhotoOperationsReviewActorId = "",
+            ProfilePhotoOperationsReviewUnionId = "",
+            ProfilePhotoOperationsReviewUnionName = ""
         };
         profiles[driverId] = incomplete;
 
