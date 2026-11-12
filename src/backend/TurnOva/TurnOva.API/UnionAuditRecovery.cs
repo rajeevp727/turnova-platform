@@ -167,8 +167,7 @@ public static class DriverUnionAssignmentAuditSnapshot
 
         if (string.IsNullOrWhiteSpace(assignment.DriverId) ||
             string.IsNullOrWhiteSpace(assignment.UnionId) ||
-            string.IsNullOrWhiteSpace(assignment.AssignmentReason) ||
-            assignment.AssignmentReason.Length > 300 ||
+            !DriverUnionAuditReason.IsNormalizedSafe(assignment.AssignmentReason) ||
             string.IsNullOrWhiteSpace(assignment.AuditEventId) ||
             assignment.AuditEventId.Length != 64 ||
             assignment.AuditEventId.Any(character => !char.IsAsciiHexDigit(character)) ||
