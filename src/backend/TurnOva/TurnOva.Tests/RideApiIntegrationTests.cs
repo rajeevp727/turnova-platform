@@ -1258,6 +1258,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string driverId = "union-then-operations-review-driver";
         const string unionId = "union-then-operations-review-union";
+        using var driver = factory.CreateClient("Driver", driverId);
         using var ops = factory.CreateClient("Ops", "ops-reviewer-after-union");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-rejector");
