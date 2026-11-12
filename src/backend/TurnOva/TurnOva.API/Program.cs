@@ -1960,7 +1960,7 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
 
         await EnsureUnionSelfieAuditAsync(
             driverId, assignment.UnionId, union.Name, request.Status, reason,
-            user.FindFirstValue("sub") ?? "UnionManager", reviewedAtUtc.Value, ct);
+            DriverUnionAuditActor.ResolveUnionManager(user), reviewedAtUtc.Value, ct);
 
         return Results.Ok(new
         {
