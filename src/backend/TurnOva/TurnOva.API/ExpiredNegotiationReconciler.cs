@@ -43,4 +43,33 @@ public static class ExpiredNegotiationReconciler
 
         return new(latest, true, false);
     }
+    /// <summary>
+    /// Resolves an already-observed active ride after its expiry reconciliation read.
+    /// Only an authoritative terminal aggregate proves that the Driver is no longer blocked.
+    /// Missing, mismatched or unrecognised latest state fails closed to the observed Driver.
+    /// </summary>
+    public static string? ResolveBlockingDriverIdAfterExpiry(
+        ActiveDriverRideProjection candidate,
+        global::DemoRide? latest,
+        string? exceptRideId)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+
+        if (string.Equals(candidate.RideId, exceptRideId, StringComparison.Ordinal))
+            return null;
+
+        if (latest is null ||
+            !string.Equals(latest.RideId, candidate.RideId, StringComparison.Ordinal))
+            return candidate.DriverId;
+
+        if (RideLifecycle.IsTerminal(latest.Status))
+            return null;
+
+        if (RideLifecycle.IsActive(latest.Status) &&
+            !string.IsNullOrWhiteSpace(latest.DriverId))
+            return latest.DriverId;
+
+        return candidate.DriverId;
+    }
+
 }
