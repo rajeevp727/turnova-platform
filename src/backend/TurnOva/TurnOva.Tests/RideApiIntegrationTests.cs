@@ -1303,6 +1303,28 @@ public sealed class RideApiIntegrationTests
             item.EventType == "SelfieRejectedByOperations" &&
             item.Actor == "ops-reviewer-after-union" &&
             item.OccurredAtUtc == operationsReviewedAt);
+
+        var firstOperationsEventId = auditEvents.Single(item =>
+            item.EventType == "SelfieRejectedByOperations").EventId;
+        using var unionApproval = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, unionApproval.StatusCode);
+        Assert.Null(profiles[driverId].ProfilePhotoOperationsReviewActorId);
+
+        await Task.Delay(10);
+        using var secondOperationsRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason });
+        Assert.Equal(HttpStatusCode.OK, secondOperationsRejection.StatusCode);
+
+        var operationsEvents = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            .Values.Where(item => item.DriverId == driverId && item.EventType == "SelfieRejectedByOperations")
+            .OrderBy(item => item.OccurredAtUtc).ToArray();
+        Assert.Equal(2, operationsEvents.Length);
+        Assert.Equal(firstOperationsEventId, operationsEvents[0].EventId);
+        Assert.NotEqual(operationsEvents[0].EventId, operationsEvents[1].EventId);
+        Assert.True(operationsEvents[1].OccurredAtUtc > operationsEvents[0].OccurredAtUtc);
     }
 
     [Fact]
