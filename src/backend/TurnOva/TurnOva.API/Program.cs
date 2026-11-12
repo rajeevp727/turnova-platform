@@ -736,11 +736,25 @@ async Task<IReadOnlyList<DriverUnionAssignment>> ListActiveUnionAssignmentsAsync
 
 async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string driverId, CancellationToken ct)
 {
-    // The current assignment retains the latest event snapshot so an audit write that
-    // failed after assignment persistence can be repaired before history is returned.
+    // Repair pending assignment and selfie-review snapshots before returning history.
+    // Completed/legacy records without a recovery snapshot are never synthesized.
     var currentAssignment = await FindUnionAssignmentAsync(driverId, ct);
     if (currentAssignment is not null)
         await EnsureUnionAssignmentAuditAsync(currentAssignment, ct);
+
+    var currentProfile = await FindDriverProfileAsync(driverId, ct);
+    if (currentProfile is not null)
+    {
+        if (DriverProfileReviewGuard.HasConflictingReviewMetadata(currentProfile))
+            throw new InvalidOperationException(
+                "The Driver profile contains conflicting Union selfie-review recovery metadata. Preserve the profile and resolve its audit state before returning history.");
+
+        if (DriverProfileReviewGuard.HasOperationsReviewMetadata(currentProfile))
+            await EnsureOperationsSelfieRejectionAuditAsync(currentProfile, ct);
+
+        if (DriverProfileReviewGuard.HasUnionReviewMetadata(currentProfile))
+            await EnsureUnionSelfieAuditAsync(currentProfile, ct);
+    }
 
     if (unionAuditContainer is null) return unionAudit.Values.Where(item => item.DriverId == driverId).OrderByDescending(item => item.OccurredAtUtc).ToArray();
     var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId").WithParameter("@driverId", driverId);
@@ -2336,7 +2350,19 @@ app.MapGet("/api/v1/ops/drivers/{driverId}/union-history", async (
     HttpContext context, string driverId, CancellationToken ct) =>
 {
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
-    return Results.Ok(await GetUnionAuditAsync(driverId, ct));
+    try
+    {
+        return Results.Ok(await GetUnionAuditAsync(driverId, ct));
+    }
+    catch (InvalidOperationException)
+    {
+        app.Logger.LogWarning(
+            "Union audit history read was blocked by an incomplete or inconsistent recovery snapshot.");
+        return Results.Conflict(new
+        {
+            message = "Union audit history cannot be returned until its pending recovery snapshot is reconciled."
+        });
+    }
 });
 
 
