@@ -598,8 +598,7 @@ async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
         AuditPreviousUnionId = null,
         AuditPreviousUnionName = null,
         AuditOccurredAtUtc = null,
-        LastAssignmentOperationKey = null,
-        AuditSnapshotPending = false
+        LastAssignmentOperationKey = null
     };
 
     if (unionAssignmentContainer is null)
