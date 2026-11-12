@@ -1404,7 +1404,7 @@ public sealed class RideApiIntegrationTests
         var rejectionAuditEvent = Assert.Single(rejectedAuditJson.RootElement.EnumerateArray(),
             item => item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
         Assert.Equal(expectedRejectionReason, rejectionAuditEvent.GetProperty("reason").GetString());
-        Assert.Equal("Operations", rejectionAuditEvent.GetProperty("actor").GetString());
+        Assert.Equal("union-review-ops", rejectionAuditEvent.GetProperty("actor").GetString());
 
         var originalEventId = rejectionAuditEvent.GetProperty("eventId").GetString()!;
         var originalReviewedAt = profiles[driverId].ProfilePhotoReviewedAtUtc;
