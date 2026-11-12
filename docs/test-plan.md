@@ -988,8 +988,12 @@ DRIVER-01 code/test audit (2026-11-07): `DriverOnboardingRequest` accepts Cab on
 | PLATFORM-HEALTH-002 | Storage dependency probe fails | Readiness returns generic HTTP 503 while liveness remains HTTP 200; response omits provider exception details | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
 | PLATFORM-HEALTH-003 | Storage probe exceeds its configured bound | Probe cancels after three seconds in production wiring; unit test verifies timeout maps to a readiness failure | `CheckAsyncMapsProbeTimeoutToReadinessFailure` | P0 |
 | PLATFORM-HEALTH-004 | Caller cancels the readiness request | Request cancellation propagates and is not misreported as a dependency timeout | `CheckAsyncPropagatesCallerCancellation` | P1 |
+| PLATFORM-AUDIT-015 | Numeric actor reference contains allowed separators | Phone-like actor references with at least eight digits and only numeric/separator characters are reduced to the System actor before persistence | `ReservationAuditRedactsPhoneLikeActorIdsWithAllowedSeparators` | P0 |
+| PLATFORM-AUDIT-016 | Opaque actor reference contains letters and digits | Opaque internal IDs containing letters remain intact; only phone-like numeric references are redacted | `ReservationAuditPreservesOpaqueActorIdsContainingLetters` | P1 |
+| PLATFORM-AUDIT-017 | Reservation audit event uses a declared event type | The four declared reservation event types are accepted unchanged | `ReservationAuditAcceptsOnlyTheFourDeclaredEventTypes` | P1 |
+| PLATFORM-AUDIT-018 | Reservation audit event uses an unknown or malformed event type | Factory rejects the event before an append-only audit fact can be created | `ReservationAuditRejectsUnknownEventTypesBeforeCreatingAnEvent` | P0 |
 
-The automated failure-path test uses a deterministic fake probe. It does not claim live Cosmos availability or Cosmos SDK timeout validation; those remain infrastructure gates.
+The readiness failure-path test uses a deterministic fake probe. Reservation-audit privacy and event-contract tests use deterministic domain fixtures and the in-memory reservation boundary. These tests do not claim live Cosmos transactional-batch, ETag, retention or telemetry-export validation; those remain infrastructure gates.
 
 
 ## PLATFORM-01 — ride/agreement/reconciliation audit trail

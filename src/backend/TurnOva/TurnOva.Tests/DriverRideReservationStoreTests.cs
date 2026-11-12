@@ -200,4 +200,82 @@ public sealed class DriverRideReservationStoreTests
         Assert.True(expired.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow);
     }
 
+    [Theory]
+    [InlineData("12345678")]
+    [InlineData("123-456-7890")]
+    [InlineData("123.456.7890")]
+    [InlineData("123:456:7890")]
+    [InlineData("123_456_7890")]
+    public void ReservationAuditRedactsPhoneLikeActorIdsWithAllowedSeparators(string actorId)
+    {
+        var reservation = new DriverRideReservation(
+            "driver-1", "ride-1", DateTimeOffset.UtcNow);
+
+        var audit = DriverRideReservationAuditEvent.Create(
+            reservation,
+            DriverRideReservationAuditEventTypes.Acquired,
+            new DriverRideReservationAuditContext(
+                actorId, "Driver", DriverRideReservationAuditReasons.SelectedCabBooking),
+            previousExpiresAtUtc: null,
+            expiresAtUtc: null);
+
+        Assert.Equal("system", audit.ActorId);
+        Assert.Equal("System", audit.ActorRole);
+    }
+
+    [Theory]
+    [InlineData("driver-123-456-7890")]
+    [InlineData("user.123.456.7890")]
+    [InlineData("union:driver_12345678")]
+    public void ReservationAuditPreservesOpaqueActorIdsContainingLetters(string actorId)
+    {
+        var reservation = new DriverRideReservation(
+            "driver-1", "ride-1", DateTimeOffset.UtcNow);
+
+        var audit = DriverRideReservationAuditEvent.Create(
+            reservation,
+            DriverRideReservationAuditEventTypes.Acquired,
+            new DriverRideReservationAuditContext(
+                actorId, "Driver", DriverRideReservationAuditReasons.SelectedCabBooking),
+            previousExpiresAtUtc: null,
+            expiresAtUtc: null);
+
+        Assert.Equal(actorId, audit.ActorId);
+        Assert.Equal("Driver", audit.ActorRole);
+    }
+
+    [Theory]
+    [InlineData(DriverRideReservationAuditEventTypes.Acquired)]
+    [InlineData(DriverRideReservationAuditEventTypes.MadePermanent)]
+    [InlineData(DriverRideReservationAuditEventTypes.ExpiryChanged)]
+    [InlineData(DriverRideReservationAuditEventTypes.Released)]
+    public void ReservationAuditAcceptsOnlyTheFourDeclaredEventTypes(string eventType)
+    {
+        var reservation = new DriverRideReservation(
+            "driver-1", "ride-1", DateTimeOffset.UtcNow);
+
+        var audit = DriverRideReservationAuditEvent.Create(
+            reservation, eventType, null,
+            previousExpiresAtUtc: null,
+            expiresAtUtc: null);
+
+        Assert.Equal(eventType, audit.EventType);
+    }
+
+    [Theory]
+    [InlineData("UnknownReservationEvent")]
+    [InlineData("")]
+    [InlineData("ReservationAcquired ")]
+    [InlineData(null)]
+    public void ReservationAuditRejectsUnknownEventTypesBeforeCreatingAnEvent(string? eventType)
+    {
+        var reservation = new DriverRideReservation(
+            "driver-1", "ride-1", DateTimeOffset.UtcNow);
+
+        Assert.Throws<ArgumentException>(() => DriverRideReservationAuditEvent.Create(
+            reservation, eventType!, null,
+            previousExpiresAtUtc: null,
+            expiresAtUtc: null));
+    }
+
 }

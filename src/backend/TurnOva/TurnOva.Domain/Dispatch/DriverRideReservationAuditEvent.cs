@@ -8,6 +8,9 @@ public static class DriverRideReservationAuditEventTypes
     public const string MadePermanent = "ReservationMadePermanent";
     public const string ExpiryChanged = "ReservationExpiryChanged";
     public const string Released = "ReservationReleased";
+
+    public static bool IsAllowed(string? eventType) => eventType is
+        Acquired or MadePermanent or ExpiryChanged or Released;
 }
 
 public static class DriverRideReservationAuditReasons
@@ -70,11 +73,19 @@ public sealed record DriverRideReservationAuditEvent(
         DateTimeOffset? previousExpiresAtUtc,
         DateTimeOffset? expiresAtUtc)
     {
+        if (!DriverRideReservationAuditEventTypes.IsAllowed(eventType))
+            throw new ArgumentException(
+                "Unsupported driver reservation audit event type.",
+                nameof(eventType));
+
         var supplied = context ?? DriverRideReservationAuditContext.ForSystem();
         var actorId = supplied.ActorId?.Trim();
         var containsNonIdentifierCharacters = actorId?.Any(character =>
             !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or ':')) ?? true;
-        var looksLikePhoneNumber = actorId is { Length: >= 8 } && actorId.All(char.IsDigit);
+        var containsOnlyPhoneCharacters = actorId is not null && actorId.All(character =>
+            char.IsDigit(character) || character is '-' or '_' or '.' or ':');
+        var phoneDigitCount = actorId?.Count(char.IsDigit) ?? 0;
+        var looksLikePhoneNumber = containsOnlyPhoneCharacters && phoneDigitCount >= 8;
         if (string.IsNullOrWhiteSpace(actorId) || actorId.Length > 128 ||
             actorId.Any(char.IsControl) || containsNonIdentifierCharacters || looksLikePhoneNumber)
             actorId = "system";
