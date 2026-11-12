@@ -1751,7 +1751,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var driver = factory.CreateClient("Driver", "transfer-selfie-driver");
         using var rider = factory.CreateClient("Rider", "transfer-selfie-rider");
-        using var ops = factory.CreateClient("Ops", "transfer-selfie-ops");
+        using var ops = factory.CreateClient("Ops", "transfer-selfie-ops@example.com");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
 
         const string driverId = "transfer-selfie-driver";
@@ -1791,7 +1791,7 @@ public sealed class RideApiIntegrationTests
         var auditStore = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
         var pendingAudit = auditStore.Values.Single(item =>
             item.DriverId == driverId && item.EventType == "SelfieRejectedByOperations");
-        Assert.Equal("transfer-selfie-ops", pendingAudit.Actor);
+        Assert.Equal("Operations", pendingAudit.Actor);
         Assert.Equal(oldUnionId, pendingOperationsReview.ProfilePhotoOperationsReviewUnionId);
         Assert.True(auditStore.TryRemove(driverId + "|" + pendingAudit.EventId, out _));
 
