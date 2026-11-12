@@ -126,6 +126,87 @@ public sealed class ExpiredNegotiationReconcilerTests
         Assert.Equal(0, readCount);
     }
 
+
+    [Fact]
+    public void MissingLatestAggregateAfterObservedExpiryCandidateKeepsDriverBlocked()
+    {
+        var candidate = new ActiveDriverRideProjection
+        {
+            RideId = "observed-expired-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+
+        Assert.Equal("observed-driver",
+            ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, null, null));
+    }
+
+    [Fact]
+    public void LatestTerminalAggregateAllowsDriverToBeReleased()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            RideId = "observed-terminal-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+
+        var latest = CreateRide(RideLifecycle.Expired, now, null);
+        Assert.Null(ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
+    }
+
+    [Fact]
+    public void LatestActiveAggregateUsesItsAuthoritativeDriverAssignment()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            RideId = "observed-active-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+
+        var latest = CreateRide(RideLifecycle.InProgress, now, null) with { DriverId = "current-driver" };
+        Assert.Equal("current-driver",
+            ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
+    }
+
+    [Fact]
+    public void MismatchedLatestAggregateFailsClosedToObservedDriver()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            RideId = "observed-expired-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+
+        var mismatched = CreateRide(RideLifecycle.Completed, now, null) with { RideId = "different-ride" };
+        Assert.Equal("observed-driver",
+            ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, mismatched, null));
+    }
+
+    [Fact]
+    public void SameIdempotentRideIsExcludedWhenLatestAggregateIsMissing()
+    {
+        var candidate = new ActiveDriverRideProjection
+        {
+            RideId = "idempotent-own-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+
+        Assert.Null(ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
+            candidate, null, candidate.RideId));
+    }
+
     private static DemoRide CreateRide(string status, DateTimeOffset now, DateTimeOffset? expiresAtUtc) =>
         new(
             "etag-conflict-ride", "KPHB", "HITEC City", 1, status, now.AddMinutes(-5), null,
