@@ -2071,7 +2071,7 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
         await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
             previous?.UnionId, previous?.UnionName, union.UnionId, union.Name,
             previous is null ? "Assigned" : "Transferred", request.Reason.Trim(),
-            context.User.Identity?.Name ?? "Operations", now), ct);
+            DriverUnionAuditActor.Resolve(context.User), now), ct);
         return Results.Ok(assignment);
     }
     finally
