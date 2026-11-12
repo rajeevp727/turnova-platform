@@ -27,7 +27,7 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     }
 
     [Fact]
-    public void SelfieRejectionEventIdentityChangesWhenPhotoOrReasonChanges()
+    public void SelfieRejectionEventIdentityChangesWhenPhotoOrReasonOrReviewTimestampChanges()
     {
         var capturedAt = DateTimeOffset.Parse("2026-11-12T10:30:00+05:30");
         var reviewedAt = DateTimeOffset.Parse("2026-11-12T11:00:00Z");
