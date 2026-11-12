@@ -207,6 +207,49 @@ public sealed class ExpiredNegotiationReconcilerTests
             candidate, null, candidate.RideId));
     }
 
+
+    [Fact]
+    public async Task EtagConflictWithMissingLatestAggregateDoesNotReleaseReservation()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide(RideLifecycle.Negotiating, now, now.AddMinutes(-1));
+        var releaseCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(null),
+            (_, _) => Task.FromResult<DemoRide?>(null),
+            (_, _) =>
+            {
+                releaseCount++;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Null(result.Ride);
+        Assert.Equal(0, releaseCount);
+    }
+
+    [Fact]
+    public void UnrecognisedLatestStatusFailsClosedToObservedDriver()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            RideId = "observed-unknown-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+
+        var latest = CreateRide("UnknownLegacyStatus", now, null) with { RideId = candidate.RideId };
+        Assert.Equal("observed-driver",
+            ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
+    }
+
     private static DemoRide CreateRide(string status, DateTimeOffset now, DateTimeOffset? expiresAtUtc) =>
         new(
             "etag-conflict-ride", "KPHB", "HITEC City", 1, status, now.AddMinutes(-5), null,
