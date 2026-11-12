@@ -28,16 +28,21 @@ public static class ExpiredNegotiationReconciler
             return new(current, false, false);
 
         var transitioned = await tryExpireAsync(current, cancellationToken);
-        if (transitioned is not null)
+        if (transitioned is not null &&
+            string.Equals(transitioned.RideId, current.RideId, StringComparison.Ordinal))
         {
             if (RideLifecycle.IsTerminal(transitioned.Status))
                 await releaseTerminalReservationAsync(transitioned, cancellationToken);
             return new(transitioned, true, RideLifecycle.IsTerminal(transitioned.Status));
         }
 
-        // A null compare-and-swap/ETag result is not proof of expiry. Re-read the
-        // aggregate and release only if the latest authoritative version is terminal.
+        // A null compare-and-swap/ETag result or mismatched aggregate identity is not
+        // proof of expiry. Re-read the requested aggregate and release only when its
+        // exact RideId matches and the latest authoritative version is terminal.
         var latest = await readLatestAsync(current.RideId, cancellationToken);
+        if (latest is not null &&
+            !string.Equals(latest.RideId, current.RideId, StringComparison.Ordinal))
+            latest = null;
         if (latest is not null && RideLifecycle.IsTerminal(latest.Status))
             await releaseTerminalReservationAsync(latest, cancellationToken);
 
