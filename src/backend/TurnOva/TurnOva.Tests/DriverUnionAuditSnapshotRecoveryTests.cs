@@ -20,6 +20,7 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
         Assert.Equal(64, first.Length);
         Assert.False(first.Contains("driver-private", StringComparison.OrdinalIgnoreCase));
         Assert.False(first.Contains("union-private", StringComparison.OrdinalIgnoreCase));
+        Assert.False(first.Contains("private-selfie-base64", StringComparison.Ordinal));
         Assert.False(first.Contains("Image is unclear", StringComparison.Ordinal));
     }
 
