@@ -172,6 +172,27 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         }
     }
 
+    public async Task<IReadOnlyList<DriverRideReservation>> GetActiveForDriversAsync(
+        IReadOnlyCollection<string> driverIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(driverIds);
+        cancellationToken.ThrowIfCancellationRequested();
+        var reservations = new List<DriverRideReservation>();
+        foreach (var batch in DriverIdBatching.Chunk(driverIds))
+        {
+            using var iterator = container.GetItemQueryIterator<DriverRideReservation>(
+                DriverRideReservationQuery.Create(batch));
+            while (iterator.HasMoreResults)
+            {
+                var page = await iterator.ReadNextAsync(cancellationToken);
+                reservations.AddRange(page);
+            }
+        }
+
+        return reservations;
+    }
+
     public async Task<bool> HasActiveAsync(
         string driverId,
         CancellationToken cancellationToken = default) =>

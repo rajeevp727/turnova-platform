@@ -151,6 +151,22 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
             _items.TryGetValue(driverId, out var state) ? state.Reservation : null);
     }
 
+    public Task<IReadOnlyList<DriverRideReservation>> GetActiveForDriversAsync(
+        IReadOnlyCollection<string> driverIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(driverIds);
+        cancellationToken.ThrowIfCancellationRequested();
+        var requestedDrivers = driverIds
+            .Where(driverId => !string.IsNullOrWhiteSpace(driverId))
+            .ToHashSet(StringComparer.Ordinal);
+        IReadOnlyList<DriverRideReservation> reservations = _items
+            .Where(item => requestedDrivers.Contains(item.Key) && item.Value.Reservation is not null)
+            .Select(item => item.Value.Reservation!)
+            .ToArray();
+        return Task.FromResult(reservations);
+    }
+
     public Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
         HasActiveCoreAsync(driverId, cancellationToken);
 
