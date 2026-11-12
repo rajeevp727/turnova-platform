@@ -1334,7 +1334,7 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
                 ProfilePhotoApprovedByUnionId = null,
                 ProfilePhotoReviewedAtUtc = null,
                 ProfilePhotoReviewReason = null,
-            ProfilePhotoOperationsReviewActorId = null
+                ProfilePhotoOperationsReviewActorId = null
             };
         }, ct);
 
@@ -1945,7 +1945,7 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
                     ProfilePhotoApprovedByUnionId = null,
                     ProfilePhotoReviewedAtUtc = null,
                     ProfilePhotoReviewReason = null,
-            ProfilePhotoOperationsReviewActorId = null
+                    ProfilePhotoOperationsReviewActorId = null
                 };
             }, ct);
             if (!profileReset)
