@@ -525,7 +525,9 @@ async Task EnsureOperationsSelfieRejectionAuditAsync(
     var reviewedAtUtc = reviewedProfile.ProfilePhotoReviewedAtUtc
         ?? throw new InvalidOperationException("A rejected selfie review must have an authoritative review timestamp.");
     var eventId = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-        reviewedProfile.DriverId, union.UnionId, reviewedProfile.ProfilePhotoCapturedAtUtc, reason);
+        reviewedProfile.DriverId, union.UnionId, reviewedProfile.ProfilePhotoCapturedAtUtc,
+        reviewedProfile.ProfilePhotoBase64
+            ?? throw new InvalidOperationException("A rejected selfie review must retain the reviewed selfie content."), reason);
     await SaveUnionAuditAsync(new DriverUnionAuditEvent(
         eventId, reviewedProfile.DriverId, union.UnionId, union.Name, union.UnionId, union.Name,
         "SelfieRejectedByOperations", reason, actor, reviewedAtUtc), ct);
