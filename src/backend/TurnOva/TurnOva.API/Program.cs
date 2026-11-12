@@ -733,10 +733,13 @@ async Task<DemoRide?> ReleaseTerminalSelectedRideReservationAsync(
     return ride;
 }
 
-async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
+async Task<DemoRide?> FindRideAsync(
+    string rideId,
+    CancellationToken ct,
+    Func<DemoRide, bool>? ownerGuard = null)
 {
     var ride = await ReadRideRawAsync(rideId, ct);
-    if (ride is null) return null;
+    if (ride is null || (ownerGuard is not null && !ownerGuard(ride))) return null;
 
     if (RideLifecycle.IsTerminal(ride.Status))
         return await ReleaseTerminalSelectedRideReservationAsync(ride, rideId, ct);
@@ -744,18 +747,26 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
     var reconciliation = await ExpiredNegotiationReconciler.ReconcileAsync(
         ride,
         DateTimeOffset.UtcNow,
-        (current, token) => TryTransitionAsync(current, "Expired", "system", "System", token),
+        (current, token) => ownerGuard is null || ownerGuard(current)
+            ? TryTransitionAsync(current, "Expired", "system", "System", token)
+            : Task.FromResult<DemoRide?>(null),
         ReadRideRawAsync,
         async (terminal, token) =>
         {
-            await ReleaseTerminalSelectedRideReservationAsync(terminal, rideId, token);
+            if (ownerGuard is null || ownerGuard(terminal))
+                await ReleaseTerminalSelectedRideReservationAsync(terminal, rideId, token);
         },
         ct);
 
-    if (reconciliation.Transitioned && reconciliation.Ride is { } expired)
+    if (reconciliation.Transitioned &&
+        reconciliation.Ride is { } expired &&
+        (ownerGuard is null || ownerGuard(expired)))
         await app.Services.GetRequiredService<IHubContext<RideTrackingHub>>().Clients.Group(rideId)
             .SendAsync("RideStatusChanged", new { rideId, status = expired.Status }, ct);
-    return reconciliation.Ride;
+
+    return reconciliation.Ride is { } resolved && ownerGuard is not null && !ownerGuard(resolved)
+        ? null
+        : reconciliation.Ride;
 }
 
 async Task<bool> HasActiveDriverRideAsync(
@@ -3158,7 +3169,9 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
         return Results.Conflict(new { message = "Only the driver at the front of the eligible FIFO queue can accept a ride." });
     if (rideContainer is null)
     {
-        if (!rides.TryGetValue(rideId, out var current) || current.Status != "Requested")
+        if (!rides.TryGetValue(rideId, out var current) ||
+            !string.Equals(current.RideId, rideId, StringComparison.Ordinal) ||
+            current.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
         if (!string.Equals(current.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(current.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
@@ -3197,6 +3210,8 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
     try
     {
         var response = await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct);
+        if (!string.Equals(response.Resource.RideId, rideId, StringComparison.Ordinal))
+            return Results.NotFound(new { message = "Ride not found." });
         if (response.Resource.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
         if (!string.Equals(response.Resource.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
@@ -3934,13 +3949,19 @@ app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, Cancellatio
             history.AddRange(await iterator.ReadNextAsync(ct));
     }
 
-    for (var index = 0; index < history.Count; index++)
+    var verifiedHistory = new List<DemoRide>(history.Count);
+    var seenRideIds = new HashSet<string>(StringComparer.Ordinal);
+    foreach (var candidate in history)
     {
-        var current = await FindRideAsync(history[index].RideId, ct);
-        if (current is not null) history[index] = current;
+        if (string.IsNullOrWhiteSpace(candidate.RideId)) continue;
+        var current = await FindRideAsync(
+            candidate.RideId, ct,
+            ride => string.Equals(ride.DriverId, driverId, StringComparison.Ordinal));
+        if (current is not null && seenRideIds.Add(current.RideId))
+            verifiedHistory.Add(current);
     }
 
-    var items = history
+    var items = verifiedHistory
         .OrderByDescending(ride => ride.RequestedAt)
         .Select(ride =>
         {
@@ -3986,13 +4007,19 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
             history.AddRange(await iterator.ReadNextAsync(ct));
     }
 
-    for (var index = 0; index < history.Count; index++)
+    var verifiedHistory = new List<DemoRide>(history.Count);
+    var seenRideIds = new HashSet<string>(StringComparer.Ordinal);
+    foreach (var candidate in history)
     {
-        var current = await FindRideAsync(history[index].RideId, ct);
-        if (current is not null) history[index] = current;
+        if (string.IsNullOrWhiteSpace(candidate.RideId)) continue;
+        var current = await FindRideAsync(
+            candidate.RideId, ct,
+            ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
+        if (current is not null && seenRideIds.Add(current.RideId))
+            verifiedHistory.Add(current);
     }
 
-    var items = history
+    var items = verifiedHistory
         .OrderByDescending(ride => ride.RequestedAt)
         .Select(ride => new RiderRideHistoryItem(
             ride.RideId,
@@ -4011,13 +4038,10 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
 app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
 {
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
-    var ownedRide = await ReadRideRawAsync(rideId, ct);
-    if (ownedRide is null || ownedRide.RiderId != riderId)
-        return Results.NotFound(new { message = "Ride not found." });
-
-    // Verify ownership before FindRideAsync can reconcile expiry or release a reservation.
-    var ride = await FindRideAsync(rideId, ct);
-    return ride is not null && ride.RiderId == riderId
+    var ride = await FindRideAsync(
+        rideId, ct,
+        candidate => string.Equals(candidate.RiderId, riderId, StringComparison.Ordinal));
+    return ride is not null
         ? Results.Ok(ride)
         : Results.NotFound(new { message = "Ride not found." });
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
