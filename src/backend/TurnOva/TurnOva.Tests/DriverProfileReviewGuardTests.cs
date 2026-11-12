@@ -127,6 +127,10 @@ public sealed class DriverProfileReviewGuardTests
         Assert.True(DriverProfileReviewGuard.HasOperationsReviewMetadata(incomplete));
         Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(incomplete));
         Assert.True(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(complete));
+
+        var blankMarker = CreateProfile() with { ProfilePhotoOperationsReviewActorId = string.Empty };
+        Assert.True(DriverProfileReviewGuard.HasOperationsReviewMetadata(blankMarker));
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(blankMarker));
     }
 
     [Fact]

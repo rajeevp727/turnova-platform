@@ -13,9 +13,9 @@ public static class DriverProfileReviewGuard
     }
 
     public static bool HasOperationsReviewMetadata(DriverOnboardingProfile profile) =>
-        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId) ||
-        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionId) ||
-        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionName);
+        profile.ProfilePhotoOperationsReviewActorId is not null ||
+        profile.ProfilePhotoOperationsReviewUnionId is not null ||
+        profile.ProfilePhotoOperationsReviewUnionName is not null;
 
     public static bool HasCompleteOperationsReviewSnapshot(DriverOnboardingProfile profile) =>
         profile.ProfilePhotoApprovalStatus == "Rejected" &&
