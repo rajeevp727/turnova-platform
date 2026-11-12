@@ -54,6 +54,46 @@ public static class DriverUnionAuditIdentity
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
     }
 
+    public static string CreateAssignmentEventId(
+        string driverId,
+        string? previousUnionId,
+        string? previousUnionName,
+        string newUnionId,
+        string newUnionName,
+        string eventType,
+        string reason,
+        string actor,
+        DateTimeOffset occurredAtUtc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newUnionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newUnionName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        if (reason.Length > 300)
+            throw new ArgumentOutOfRangeException(nameof(reason), "Union assignment reasons cannot exceed 300 characters.");
+        if (eventType is not ("Assigned" or "Transferred"))
+            throw new ArgumentOutOfRangeException(nameof(eventType), "Only Union assignment and transfer events have this identity.");
+        if (!DriverUnionAuditActor.IsSafeOpaqueActor(actor))
+            throw new ArgumentException("Union assignment audit actors must be safe opaque identifiers.", nameof(actor));
+        if (eventType == "Assigned" && (previousUnionId is not null || previousUnionName is not null))
+            throw new ArgumentException("An initial assignment cannot include a previous Union.", nameof(previousUnionId));
+        if (eventType == "Transferred" &&
+            (string.IsNullOrWhiteSpace(previousUnionId) || string.IsNullOrWhiteSpace(previousUnionName)))
+            throw new ArgumentException("A transfer must include the previous Union identity.", nameof(previousUnionId));
+
+        var material = new StringBuilder("turnova-union-assignment-v1;");
+        AppendField(material, driverId);
+        AppendField(material, previousUnionId ?? "");
+        AppendField(material, previousUnionName ?? "");
+        AppendField(material, newUnionId);
+        AppendField(material, newUnionName);
+        AppendField(material, eventType);
+        AppendField(material, reason);
+        AppendField(material, actor);
+        AppendField(material, occurredAtUtc.UtcDateTime.Ticks.ToString(CultureInfo.InvariantCulture));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
+    }
+
     private static void AppendField(StringBuilder target, string value) =>
         target.Append(value.Length.ToString(CultureInfo.InvariantCulture))
             .Append(':')
@@ -69,14 +109,10 @@ public static class DriverUnionAuditActor
     public static string ResolveUnionManager(ClaimsPrincipal? principal) =>
         ResolveForRole(principal, "UnionManager", "UnionManager");
 
-    private static string ResolveForRole(ClaimsPrincipal? principal, string requiredRole, string fallback)
+    public static bool IsSafeOpaqueActor(string? subject)
     {
-        if (principal?.Identity?.IsAuthenticated != true || !principal.IsInRole(requiredRole))
-            return fallback;
-
-        var subject = principal.FindFirst("sub")?.Value?.Trim();
         if (string.IsNullOrWhiteSpace(subject) || subject.Length > 128 || subject.Any(char.IsControl))
-            return fallback;
+            return false;
 
         var containsNonIdentifierCharacters = subject.Any(character =>
             !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or ':'));
@@ -84,9 +120,88 @@ public static class DriverUnionAuditActor
             char.IsDigit(character) || character is '-' or '_' or '.' or ':');
         var phoneDigitCount = subject.Count(char.IsDigit);
         var looksLikePhoneNumber = containsOnlyPhoneCharacters && phoneDigitCount >= 8;
-        return containsNonIdentifierCharacters || looksLikePhoneNumber
-            ? fallback
-            : subject;
+        return !containsNonIdentifierCharacters && !looksLikePhoneNumber;
+    }
+
+    private static string ResolveForRole(ClaimsPrincipal? principal, string requiredRole, string fallback)
+    {
+        if (principal?.Identity?.IsAuthenticated != true || !principal.IsInRole(requiredRole))
+            return fallback;
+
+        var subject = principal.FindFirst("sub")?.Value?.Trim();
+        return IsSafeOpaqueActor(subject) ? subject! : fallback;
+    }
+}
+
+public static class DriverUnionAssignmentAuditSnapshot
+{
+    public static DriverUnionAuditEvent? CreateExpectedEvent(DriverUnionAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+        var hasSnapshot = assignment.AuditEventId is not null ||
+            assignment.AuditEventType is not null ||
+            assignment.AuditActor is not null ||
+            assignment.AuditPreviousUnionId is not null ||
+            assignment.AuditPreviousUnionName is not null ||
+            assignment.AuditOccurredAtUtc is not null;
+        if (!hasSnapshot) return null;
+
+        if (string.IsNullOrWhiteSpace(assignment.AuditEventId) ||
+            string.IsNullOrWhiteSpace(assignment.AuditEventType) ||
+            !DriverUnionAuditActor.IsSafeOpaqueActor(assignment.AuditActor) ||
+            string.IsNullOrWhiteSpace(assignment.UnionId) ||
+            string.IsNullOrWhiteSpace(assignment.UnionName) ||
+            string.IsNullOrWhiteSpace(assignment.AssignmentReason) ||
+            assignment.AssignmentReason.Length > 300 ||
+            assignment.AuditOccurredAtUtc is null)
+            throw new InvalidOperationException(
+                "The Union assignment audit snapshot is incomplete or contains an unsafe actor. Preserve the assignment and resolve its audit metadata before continuing.");
+
+        if (assignment.AuditEventType == "Assigned" &&
+            (assignment.AuditPreviousUnionId is not null || assignment.AuditPreviousUnionName is not null))
+            throw new InvalidOperationException("An initial Union assignment audit snapshot cannot contain a previous Union.");
+        if (assignment.AuditEventType == "Transferred" &&
+            (string.IsNullOrWhiteSpace(assignment.AuditPreviousUnionId) ||
+             string.IsNullOrWhiteSpace(assignment.AuditPreviousUnionName)))
+            throw new InvalidOperationException("A Union transfer audit snapshot must retain its previous Union identity.");
+
+        var expectedEventId = DriverUnionAuditIdentity.CreateAssignmentEventId(
+            assignment.DriverId,
+            assignment.AuditPreviousUnionId,
+            assignment.AuditPreviousUnionName,
+            assignment.UnionId,
+            assignment.UnionName,
+            assignment.AuditEventType,
+            assignment.AssignmentReason,
+            assignment.AuditActor!,
+            assignment.AuditOccurredAtUtc.Value);
+        if (!string.Equals(assignment.AuditEventId, expectedEventId, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "The Union assignment audit snapshot identity does not match its canonical fields. Refusing to reconstruct the event.");
+
+        return new DriverUnionAuditEvent(
+            assignment.AuditEventId,
+            assignment.DriverId,
+            assignment.AuditPreviousUnionId,
+            assignment.AuditPreviousUnionName,
+            assignment.UnionId,
+            assignment.UnionName,
+            assignment.AuditEventType,
+            assignment.AssignmentReason,
+            assignment.AuditActor!,
+            assignment.AuditOccurredAtUtc.Value);
+    }
+
+    public static bool IsIdempotentRetry(
+        DriverUnionAssignment assignment,
+        string unionId,
+        string reason)
+    {
+        var expected = CreateExpectedEvent(assignment);
+        return expected is not null &&
+            string.Equals(assignment.Status, "Active", StringComparison.Ordinal) &&
+            string.Equals(assignment.UnionId, unionId, StringComparison.Ordinal) &&
+            string.Equals(assignment.AssignmentReason, reason, StringComparison.Ordinal);
     }
 }
 

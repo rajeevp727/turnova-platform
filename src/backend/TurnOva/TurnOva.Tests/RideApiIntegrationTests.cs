@@ -1793,6 +1793,66 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionTransferRetryAndHistoryReadRepairMissingAssignmentAuditWithoutExposingSnapshotToDriver()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "assignment-audit-recovery-driver";
+        const string oldUnionId = "assignment-audit-recovery-old";
+        const string newUnionId = "assignment-audit-recovery-new";
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var ops = factory.CreateClient("Ops", "assignment-audit-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        SeedBookableDriver(factory, driverId, oldUnionId);
+        SeedTransferTargetUnion(factory, newUnionId);
+
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        const string reason = "Approved membership transfer";
+
+        using var firstTransfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason });
+        Assert.Equal(HttpStatusCode.OK, firstTransfer.StatusCode);
+
+        var originalAssignment = assignments[driverId];
+        var expectedEvent = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(originalAssignment);
+        Assert.NotNull(expectedEvent);
+        Assert.Equal(oldUnionId, originalAssignment.AuditPreviousUnionId);
+        Assert.Equal("assignment-audit-ops", originalAssignment.AuditActor);
+        var originalEvent = Assert.Single(audit.Values, item => item.EventId == originalAssignment.AuditEventId);
+        Assert.Equal(expectedEvent, originalEvent);
+
+        Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
+        using var retryTransfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason });
+        Assert.Equal(HttpStatusCode.OK, retryTransfer.StatusCode);
+        var retryAssignment = await retryTransfer.Content.ReadFromJsonAsync<DriverUnionAssignment>();
+        Assert.NotNull(retryAssignment);
+        Assert.Equal(originalAssignment.AuditEventId, retryAssignment.AuditEventId);
+        Assert.Equal(originalAssignment.AuditOccurredAtUtc, retryAssignment.AuditOccurredAtUtc);
+
+        var retryEvent = Assert.Single(audit.Values, item => item.EventId == originalAssignment.AuditEventId);
+        Assert.Equal(originalEvent, retryEvent);
+
+        Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
+        var history = await ops.GetFromJsonAsync<DriverUnionAuditEvent[]>(
+            $"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.NotNull(history);
+        var historyEvent = Assert.Single(history, item => item.EventId == originalAssignment.AuditEventId);
+        Assert.Equal(originalEvent, historyEvent);
+
+        var driverAssignment = await driver.GetFromJsonAsync<DriverUnionAssignment>("/api/v1/driver/union");
+        Assert.NotNull(driverAssignment);
+        Assert.Null(driverAssignment.AuditEventId);
+        Assert.Null(driverAssignment.AuditEventType);
+        Assert.Null(driverAssignment.AuditActor);
+        Assert.Null(driverAssignment.AuditPreviousUnionId);
+        Assert.Null(driverAssignment.AuditPreviousUnionName);
+        Assert.Null(driverAssignment.AuditOccurredAtUtc);
+    }
+
+    [Fact]
     public async Task UnionManagerSelfieReviewReconcilesExpiredOrphanReservationBeforeAcquiringReviewLease()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);

@@ -520,6 +520,8 @@ async Task EnsureUnionSelfieAuditAsync(DriverOnboardingProfile reviewedProfile, 
         ?? throw new InvalidOperationException("A UnionManager selfie review must retain its original Union name.");
     var actor = reviewedProfile.ProfilePhotoUnionReviewActorId
         ?? throw new InvalidOperationException("A UnionManager selfie review must retain its original actor.");
+    if (!DriverUnionAuditActor.IsSafeOpaqueActor(actor))
+        throw new InvalidOperationException("The UnionManager selfie review actor snapshot is not a safe opaque identifier.");
     var reviewedAtUtc = reviewedProfile.ProfilePhotoReviewedAtUtc
         ?? throw new InvalidOperationException("A UnionManager selfie review must retain its original review timestamp.");
     var status = reviewedProfile.ProfilePhotoApprovalStatus;
@@ -546,6 +548,8 @@ async Task EnsureOperationsSelfieRejectionAuditAsync(
         ?? throw new InvalidOperationException("A rejected selfie review must have an authoritative review timestamp.");
     var actor = reviewedProfile.ProfilePhotoOperationsReviewActorId
         ?? throw new InvalidOperationException("A rejected Operations selfie review must retain its original actor.");
+    if (!DriverUnionAuditActor.IsSafeOpaqueActor(actor))
+        throw new InvalidOperationException("The Operations selfie review actor snapshot is not a safe opaque identifier.");
     var unionId = reviewedProfile.ProfilePhotoOperationsReviewUnionId
         ?? throw new InvalidOperationException("A rejected Operations selfie review must retain its original Union ID.");
     var unionName = reviewedProfile.ProfilePhotoOperationsReviewUnionName
@@ -560,6 +564,24 @@ async Task EnsureOperationsSelfieRejectionAuditAsync(
         eventId, reviewedProfile.DriverId, unionId, unionName, unionId, unionName,
         "SelfieRejectedByOperations", reason, actor, reviewedAtUtc), ct);
 }
+
+async Task EnsureUnionAssignmentAuditAsync(DriverUnionAssignment assignment, CancellationToken ct)
+{
+    var expected = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment);
+    if (expected is not null)
+        await SaveUnionAuditAsync(expected, ct);
+}
+
+DriverUnionAssignment ToDriverUnionAssignmentResponse(DriverUnionAssignment assignment) =>
+    assignment with
+    {
+        AuditEventId = null,
+        AuditEventType = null,
+        AuditActor = null,
+        AuditPreviousUnionId = null,
+        AuditPreviousUnionName = null,
+        AuditOccurredAtUtc = null
+    };
 
 async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
 {
@@ -602,6 +624,12 @@ async Task<IReadOnlyList<DriverUnionAssignment>> ListActiveUnionAssignmentsAsync
 
 async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string driverId, CancellationToken ct)
 {
+    // The current assignment retains the latest event snapshot so an audit write that
+    // failed after assignment persistence can be repaired before history is returned.
+    var currentAssignment = await FindUnionAssignmentAsync(driverId, ct);
+    if (currentAssignment is not null)
+        await EnsureUnionAssignmentAuditAsync(currentAssignment, ct);
+
     if (unionAuditContainer is null) return unionAudit.Values.Where(item => item.DriverId == driverId).OrderByDescending(item => item.OccurredAtUtc).ToArray();
     var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId").WithParameter("@driverId", driverId);
     var results = new List<DriverUnionAuditEvent>();
@@ -2097,6 +2125,9 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             return Results.Conflict(new { message = "The union does not support this driver's approved zone and service class." });
 
         var previous = await FindUnionAssignmentAsync(driverId, ct);
+        if (previous is not null)
+            await EnsureUnionAssignmentAuditAsync(previous, ct);
+
         if (DriverProfileReviewGuard.HasConflictingReviewMetadata(profile))
             return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before transfer." });
         if (DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(profile))
@@ -2120,8 +2151,13 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             await EnsureUnionSelfieAuditAsync(profile, ct);
         }
 
+        var assignmentReason = request.Reason.Trim();
         if (previous?.UnionId == union.UnionId && previous.Status == "Active")
+        {
+            if (DriverUnionAssignmentAuditSnapshot.IsIdempotentRetry(previous, union.UnionId, assignmentReason))
+                return Results.Ok(previous);
             return Results.Conflict(new { message = "The driver is already assigned to this union." });
+        }
 
         var now = DateTimeOffset.UtcNow;
         if (!string.Equals(profile.ProfilePhotoApprovedByUnionId, union.UnionId, StringComparison.Ordinal))
@@ -2158,13 +2194,17 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
                 return Results.Conflict(new { message = "Driver onboarding or selfie data changed during Union transfer. Refresh and retry." });
         }
 
-        var assignment = new DriverUnionAssignment(driverId, union.UnionId, union.Name, "Active",
-            previous?.AssignedAtUtc ?? now, now, request.Reason.Trim());
+        var eventType = previous is null ? "Assigned" : "Transferred";
+        var actor = DriverUnionAuditActor.Resolve(context.User);
+        var eventId = DriverUnionAuditIdentity.CreateAssignmentEventId(
+            driverId, previous?.UnionId, previous?.UnionName, union.UnionId, union.Name,
+            eventType, assignmentReason, actor, now);
+        var assignment = new DriverUnionAssignment(
+            driverId, union.UnionId, union.Name, "Active",
+            previous?.AssignedAtUtc ?? now, now, assignmentReason,
+            eventId, eventType, actor, previous?.UnionId, previous?.UnionName, now);
         await SaveUnionAssignmentAsync(assignment, ct);
-        await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
-            previous?.UnionId, previous?.UnionName, union.UnionId, union.Name,
-            previous is null ? "Assigned" : "Transferred", request.Reason.Trim(),
-            DriverUnionAuditActor.Resolve(context.User), now), ct);
+        await EnsureUnionAssignmentAuditAsync(assignment, ct);
         return Results.Ok(assignment);
     }
     finally
@@ -2498,7 +2538,9 @@ app.MapGet("/api/v1/driver/union", async (ClaimsPrincipal user, CancellationToke
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var assignment = await FindUnionAssignmentAsync(driverId, ct);
-    return assignment is null || assignment.Status != "Active" ? Results.NoContent() : Results.Ok(assignment);
+    return assignment is null || assignment.Status != "Active"
+        ? Results.NoContent()
+        : Results.Ok(ToDriverUnionAssignmentResponse(assignment));
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
 app.MapGet("/api/v1/zones", () => Results.Ok(new[]
