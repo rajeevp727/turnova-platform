@@ -1459,6 +1459,7 @@ public sealed class RideApiIntegrationTests
         };
 
         using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-review");
+        using var retryManager = factory.CreateUnionManagerClient(unionId, "union-manager-review-retry");
         using var otherManager = factory.CreateUnionManagerClient("another-union", "other-union-manager");
         using var managerWithoutUnion = factory.CreateClient("UnionManager", "manager-without-union");
 
@@ -1547,11 +1548,15 @@ public sealed class RideApiIntegrationTests
         using var approval = await manager.PutAsJsonAsync(
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
         Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
-        using var repeatedApproval = await manager.PutAsJsonAsync(
+        using var repeatedApproval = await retryManager.PutAsJsonAsync(
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
         Assert.Equal(HttpStatusCode.OK, repeatedApproval.StatusCode);
         Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
         Assert.Equal(unionId, profiles[driverId].ProfilePhotoApprovedByUnionId);
+        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var approvalAudit = Assert.Single(unionAudit.Values.Where(item =>
+            item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion"));
+        Assert.Equal("union-manager-review", approvalAudit.Actor);
 
         using var discoveryAfterApproval = await rider.GetAsync(
             "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
