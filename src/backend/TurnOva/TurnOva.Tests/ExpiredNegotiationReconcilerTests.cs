@@ -250,6 +250,76 @@ public sealed class ExpiredNegotiationReconcilerTests
             ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
     }
 
+
+    [Fact]
+    public async Task EtagConflictWithMismatchedLatestAggregateDoesNotReleaseReservation()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide(RideLifecycle.Negotiating, now, now.AddMinutes(-1));
+        var mismatchedTerminal = current with
+        {
+            RideId = "different-ride",
+            Status = RideLifecycle.Expired,
+            NegotiationExpiresAtUtc = null
+        };
+        var releaseCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(null),
+            (_, _) => Task.FromResult<DemoRide?>(mismatchedTerminal),
+            (_, _) =>
+            {
+                releaseCount++;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Null(result.Ride);
+        Assert.Equal(0, releaseCount);
+    }
+
+    [Fact]
+    public async Task MismatchedExpiryTransitionResultIsRereadWithoutReleasingReservation()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide(RideLifecycle.Negotiating, now, now.AddMinutes(-1));
+        var mismatchedTerminal = current with
+        {
+            RideId = "different-ride",
+            Status = RideLifecycle.Expired,
+            NegotiationExpiresAtUtc = null
+        };
+        var latestCurrent = current with { NegotiationExpiresAtUtc = now.AddMinutes(1) };
+        var releaseCount = 0;
+        var readCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(mismatchedTerminal),
+            (_, _) =>
+            {
+                readCount++;
+                return Task.FromResult<DemoRide?>(latestCurrent);
+            },
+            (_, _) =>
+            {
+                releaseCount++;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Equal(latestCurrent, result.Ride);
+        Assert.Equal(1, readCount);
+        Assert.Equal(0, releaseCount);
+    }
+
     private static DemoRide CreateRide(string status, DateTimeOffset now, DateTimeOffset? expiresAtUtc) =>
         new(
             "etag-conflict-ride", "KPHB", "HITEC City", 1, status, now.AddMinutes(-5), null,
