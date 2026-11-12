@@ -82,10 +82,11 @@
 
 ## Highest-priority next work
 
-1. **Between runs — #19 RELEASE-01 remains Blocked:** PR #102 and PR #103 CI prove Android debug APK and unsigned iOS Simulator compilation, not signed AAB/IPA or physical-device/pilot acceptance.
-2. The final end-to-end audit of all 19 acceptance rows and approved supplemental requirements is complete on main after PR #103. The audit found documentation drift in supplemental discovery/agreement evidence and the architecture provider diagram; this PR reconciles those records. No new code-only feature gap was found.
-3. **Next planned action:** re-audit main and resume the first acceptance item whose product/provider/device blocker is cleared, or implement a newly evidenced code/test gap. Do not invent defaults or create speculative work.
-4. External gates remain: signing/store inputs and physical devices; approved pickup radius/zone, Driver location-freshness age and negotiation lifetime; Driver/Rider support process; live Cosmos, TriSend, maps/routing, Call/Chat, push and telemetry; private document storage/retention; legal partnership/T&C review; production API hosting and load testing.
+1. **Current P0: DISPATCH-04 PR #154** implements the historical active-ride fallback and eight deterministic cases; code-bearing exact-head CI #1330 / 43178946882 passed 12/12 (backend 477/477, shared 179/179, Python 46/46). The documentation-only sync is on the same PR; use its final Checks tab state before merge. No self-approval or bypass.
+2. **Next after DISPATCH-04 integration: #18 PLATFORM-01.** Re-audit API storage/telemetry/health and privacy-safe operational readiness for any remaining deterministic code/test gap, while retaining live Cosmos and production observability gates separately.
+3. **#6 DISPATCH-01 remains Blocked:** Product must approve positive production pickup radius, non-overlapping zones and location-freshness threshold; live Cosmos query/index and Android/iOS pickup-zone acceptance remain. Keep fail-closed behaviour.
+4. **#15 DRIVER-04 and #17 SUPPORT-01 remain Blocked:** Product/Operations must approve issue categories, required intake fields, priority/severity, escalation owner/channel, hours/targets, attachment handling, privacy/retention and handoff. Do not invent a workflow.
+5. **#19 RELEASE-01 remains Blocked:** production-signed Android AAB/iOS IPA, approved iOS bundle/EAS/build-number configuration, production HTTPS API, secure signing, physical-device/pilot acceptance and store approval require named external owners/inputs.
 
 ## Deployment constraint
 
