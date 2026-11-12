@@ -55,6 +55,18 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
         Assert.Equal("ops-actor-opaque-42", DriverUnionAuditActor.Resolve(principal));
     }
 
+    [Theory]
+    [InlineData("operator@example.com")]
+    [InlineData("123-456-7890")]
+    [InlineData("123456789012")]
+    public void AuditActorFallsBackWhenSubjectLooksLikePersonalContactData(string subject)
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", subject)], "test"));
+
+        Assert.Equal("Operations", DriverUnionAuditActor.Resolve(principal));
+    }
+
     [Fact]
     public void AuditActorFallsBackWhenOnlyEmailLikeNameIsAvailable()
     {
