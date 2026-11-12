@@ -7,7 +7,7 @@ namespace TurnOva.API;
 public static class DriverActiveRideQuery
 {
     public static string Sql { get; } =
-        "SELECT VALUE { rideId: c.rideId, driverId: c.driverId, status: c.status, negotiationExpiresAtUtc: c.negotiationExpiresAtUtc } " +
+        "SELECT VALUE { itemId: c.id, rideId: c.rideId, driverId: c.driverId, status: c.status, negotiationExpiresAtUtc: c.negotiationExpiresAtUtc } " +
         "FROM c WHERE ARRAY_CONTAINS(@driverIds, c.driverId) AND c.status IN (" +
         string.Join(", ", RideLifecycle.ActiveStatuses.Select(status => $"'{status}'")) + ")";
 
@@ -28,6 +28,7 @@ public static class DriverActiveRideQuery
 
 public sealed class ActiveDriverRideProjection
 {
+    public string ItemId { get; set; } = string.Empty;
     public string RideId { get; set; } = string.Empty;
     public string DriverId { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
