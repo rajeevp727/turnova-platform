@@ -85,6 +85,40 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     }
 
     [Fact]
+    public async Task ConflictRecoveryReadsByExactEventIdAndDriverPartition()
+    {
+        var expected = CreateEvent();
+        string? readDriverId = null;
+        string? readEventId = null;
+
+        await DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
+            expected,
+            (driverId, eventId, _) =>
+            {
+                readDriverId = driverId;
+                readEventId = eventId;
+                return Task.FromResult<DriverUnionAuditEvent?>(expected);
+            },
+            static (_, _) => Task.CompletedTask);
+
+        Assert.Equal(expected.DriverId, readDriverId);
+        Assert.Equal(expected.EventId, readEventId);
+    }
+
+    [Fact]
+    public async Task ConflictRecoveryFailsClosedWhenCanonicalActorDiffers()
+    {
+        var expected = CreateEvent();
+        var mismatched = expected with { Actor = "different-operator-subject" };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
+                expected,
+                (_, _, _) => Task.FromResult<DriverUnionAuditEvent?>(mismatched),
+                static (_, _) => Task.CompletedTask));
+    }
+
+    [Fact]
     public async Task ConflictRecoveryRetriesPointReadUntilCanonicalEventAppears()
     {
         var expected = CreateEvent();
