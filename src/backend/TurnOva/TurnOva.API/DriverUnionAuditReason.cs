@@ -16,7 +16,7 @@ public static class DriverUnionAuditReason
         TimeSpan.FromMilliseconds(50));
 
     private static readonly Regex PhonePattern = new(
-        @"(?<![\p{L}\p{N}])\+?[0-9](?:[0-9\s().-]{7,}[0-9])(?![\p{L}\p{N}])",
+        @"(?<![\p{L}\p{N}])\+?\p{Nd}(?:[\p{Nd}\s()./-]{7,}\p{Nd})(?![\p{L}\p{N}])",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(50));
 
@@ -57,7 +57,7 @@ public static class DriverUnionAuditReason
 
                 foreach (var character in match.Value)
                 {
-                    if (char.IsAsciiDigit(character))
+                    if (char.IsDigit(character))
                     {
                         digitCount++;
                         currentGroupDigits++;
@@ -83,7 +83,7 @@ public static class DriverUnionAuditReason
                 }
 
                 // Keep common ISO date/time text such as 2026-11-13 10:30 valid,
-                // while rejecting a long contiguous number or phone-like grouped number.
+                // while rejecting ASCII or Unicode decimal-digit phone-like groups.
                 if (digitCount >= 9 &&
                     (groupCount == 1 || significantGroups >= 2 || maximumGroupDigits >= 10))
                     return false;
