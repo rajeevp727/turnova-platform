@@ -132,6 +132,7 @@ public sealed class ExpiredNegotiationReconcilerTests
     {
         var candidate = new ActiveDriverRideProjection
         {
+            ItemId = "observed-expired-ride",
             RideId = "observed-expired-ride",
             DriverId = "observed-driver",
             Status = RideLifecycle.Negotiating,
@@ -148,6 +149,7 @@ public sealed class ExpiredNegotiationReconcilerTests
         var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
         var candidate = new ActiveDriverRideProjection
         {
+            ItemId = "observed-terminal-ride",
             RideId = "observed-terminal-ride",
             DriverId = "observed-driver",
             Status = RideLifecycle.Negotiating,
@@ -164,6 +166,7 @@ public sealed class ExpiredNegotiationReconcilerTests
         var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
         var candidate = new ActiveDriverRideProjection
         {
+            ItemId = "observed-active-ride",
             RideId = "observed-active-ride",
             DriverId = "observed-driver",
             Status = RideLifecycle.Negotiating,
@@ -197,13 +200,14 @@ public sealed class ExpiredNegotiationReconcilerTests
     {
         var candidate = new ActiveDriverRideProjection
         {
+            ItemId = "idempotent-own-ride",
             RideId = "idempotent-own-ride",
             DriverId = "observed-driver",
             Status = RideLifecycle.Negotiating,
             NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
         };
 
-        Assert.Null(ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
+        Assert.Equal("observed-driver", ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
             candidate, null, candidate.RideId));
     }
 
@@ -239,6 +243,7 @@ public sealed class ExpiredNegotiationReconcilerTests
         var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
         var candidate = new ActiveDriverRideProjection
         {
+            ItemId = "observed-unknown-ride",
             RideId = "observed-unknown-ride",
             DriverId = "observed-driver",
             Status = RideLifecycle.Negotiating,
@@ -318,6 +323,45 @@ public sealed class ExpiredNegotiationReconcilerTests
         Assert.Equal(latestCurrent, result.Ride);
         Assert.Equal(1, readCount);
         Assert.Equal(0, releaseCount);
+    }
+
+
+    [Fact]
+    public void SameIdempotentRideIsExcludedOnlyWhenLatestAggregateIdentityIsConfirmed()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "idempotent-own-ride",
+            RideId = "idempotent-own-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+        var latest = CreateRide(RideLifecycle.Negotiating, now, now.AddMinutes(1)) with
+        {
+            RideId = candidate.RideId,
+            DriverId = candidate.DriverId
+        };
+
+        Assert.Null(ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
+            candidate, latest, candidate.RideId));
+    }
+
+    [Fact]
+    public void MismatchedStoredItemIdentityFailsClosedEvenForSameIdempotentRide()
+    {
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "different-item-id",
+            RideId = "idempotent-own-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+
+        Assert.Equal("observed-driver", ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
+            candidate, null, candidate.RideId));
     }
 
     private static DemoRide CreateRide(string status, DateTimeOffset now, DateTimeOffset? expiresAtUtc) =>
