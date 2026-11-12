@@ -2576,6 +2576,34 @@ public sealed class RideApiIntegrationTests
         Assert.False(body.Contains("queuePosition", StringComparison.OrdinalIgnoreCase));
     }
 
+
+    [Theory]
+    [InlineData("Completed")]
+    [InlineData("Negotiating")]
+    public async Task RideReadRejectsMismatchedStoredAggregateWithoutReleasingReservation(string status)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string riderId = "mismatched-aggregate-rider";
+        const string driverId = "mismatched-aggregate-driver";
+        const string requestedRideId = "requested-ride-alias";
+        using var rider = factory.CreateClient("Rider", riderId);
+
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.True(await reservations.TryAcquireAsync(driverId, requestedRideId));
+
+        var mismatched = CreateHistoricalRide(
+            "different-stored-ride", riderId, driverId, status, "cab", "mismatched-aggregate-union",
+            DateTimeOffset.UtcNow.AddMinutes(5));
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[requestedRideId] = mismatched;
+
+        using var response = await rider.GetAsync($"/api/v1/rides/{requestedRideId}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(mismatched, rides[requestedRideId]);
+        Assert.Equal(requestedRideId, (await reservations.GetActiveAsync(driverId))?.RideId);
+    }
+
     [Fact]
     public async Task RiderDiscoveryFiltersHistoricalActiveDriversAndKeepsTerminalOnlyAndEligibleDrivers()
     {
