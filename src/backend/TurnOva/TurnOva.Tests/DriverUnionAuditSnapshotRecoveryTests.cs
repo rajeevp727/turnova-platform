@@ -18,9 +18,9 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
 
         Assert.Equal(first, retry);
         Assert.Equal(64, first.Length);
-        Assert.DoesNotContain("driver-private", first, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("union-private", first, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Image is unclear", first, StringComparison.Ordinal);
+        Assert.False(first.Contains("driver-private", StringComparison.OrdinalIgnoreCase));
+        Assert.False(first.Contains("union-private", StringComparison.OrdinalIgnoreCase));
+        Assert.False(first.Contains("Image is unclear", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
                 (_, _, _) => Task.FromResult<DriverUnionAuditEvent?>(mismatched),
                 static (_, _) => Task.CompletedTask));
 
-        Assert.Contains("content differs", error.Message, StringComparison.Ordinal);
+        Assert.Contains("content differs", error.Message);
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
 
         Assert.Equal(3, reads);
         Assert.Equal(2, delays);
-        Assert.Contains("could not be read", error.Message, StringComparison.Ordinal);
+        Assert.Contains("could not be read", error.Message);
     }
 
     [Fact]
