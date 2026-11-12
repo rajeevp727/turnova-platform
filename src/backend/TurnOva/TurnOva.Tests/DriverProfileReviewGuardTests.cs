@@ -158,6 +158,37 @@ public sealed class DriverProfileReviewGuardTests
         Assert.True(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(complete));
     }
 
+    [Theory]
+    [InlineData("operator@example.com")]
+    [InlineData("+91 98765 43210")]
+    public void ReviewRecoverySnapshotsRejectContactLikeActorIdentifiers(string actor)
+    {
+        var reviewedAt = DateTimeOffset.Parse("2026-11-13T10:00:00Z");
+        var operations = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = actor,
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+        var unionManager = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Approved",
+            ProfilePhotoApprovedByUnionId = "union-1",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoUnionReviewActorId = actor,
+            ProfilePhotoUnionReviewUnionId = "union-1",
+            ProfilePhotoUnionReviewUnionName = "Test Union"
+        };
+
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(operations));
+        Assert.False(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(unionManager));
+    }
+
     [Fact]
     public void UnionReviewSnapshotRequiresOriginalActorUnionAndReviewTimestamp()
     {

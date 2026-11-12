@@ -20,7 +20,7 @@ public static class DriverProfileReviewGuard
         profile.ProfilePhotoReviewedAtUtc is not null &&
         DriverUnionAuditReason.IsNormalizedSafe(profile.ProfilePhotoReviewReason) &&
         !string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64) &&
-        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId) &&
+        DriverUnionAuditActor.IsSafeOpaqueActor(profile.ProfilePhotoOperationsReviewActorId) &&
         !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionId) &&
         !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionName);
 
@@ -43,7 +43,7 @@ public static class DriverProfileReviewGuard
         if (profile.ProfilePhotoApprovalStatus is not ("Approved" or "Rejected") ||
             profile.ProfilePhotoReviewedAtUtc is null ||
             string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64) ||
-            string.IsNullOrWhiteSpace(profile.ProfilePhotoUnionReviewActorId) ||
+            !DriverUnionAuditActor.IsSafeOpaqueActor(profile.ProfilePhotoUnionReviewActorId) ||
             string.IsNullOrWhiteSpace(profile.ProfilePhotoUnionReviewUnionId) ||
             string.IsNullOrWhiteSpace(profile.ProfilePhotoUnionReviewUnionName) ||
             profile.ProfilePhotoOperationsReviewActorId is not null ||
