@@ -12,9 +12,9 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
         var capturedAt = new DateTimeOffset(2026, 11, 12, 10, 30, 0, TimeSpan.FromHours(5.5));
 
         var first = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-private-123", "union-private-456", capturedAt, "Image is unclear");
+            "driver-private-123", "union-private-456", capturedAt, "private-selfie-base64", "Image is unclear");
         var retry = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-private-123", "union-private-456", capturedAt.ToUniversalTime(), "Image is unclear");
+            "driver-private-123", "union-private-456", capturedAt.ToUniversalTime(), "private-selfie-base64", "Image is unclear");
 
         Assert.Equal(first, retry);
         Assert.Equal(64, first.Length);
@@ -28,14 +28,17 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     {
         var capturedAt = DateTimeOffset.Parse("2026-11-12T10:30:00+05:30");
         var original = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-1", "union-1", capturedAt, "Image is unclear");
+            "driver-1", "union-1", capturedAt, "selfie-a", "Image is unclear");
         var differentPhoto = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-1", "union-1", capturedAt.AddSeconds(1), "Image is unclear");
+            "driver-1", "union-1", capturedAt.AddSeconds(1), "selfie-a", "Image is unclear");
         var differentReason = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-1", "union-1", capturedAt, "Registration is not visible");
+            "driver-1", "union-1", capturedAt, "selfie-a", "Registration is not visible");
 
         Assert.NotEqual(original, differentPhoto);
         Assert.NotEqual(original, differentReason);
+        var differentSelfie = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
+            "driver-1", "union-1", capturedAt, "selfie-b", "Image is unclear");
+        Assert.NotEqual(original, differentSelfie);
     }
 
     [Fact]
