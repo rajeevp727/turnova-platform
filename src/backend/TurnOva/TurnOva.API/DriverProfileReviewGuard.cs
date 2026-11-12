@@ -25,7 +25,9 @@ public static class DriverProfileReviewGuard
             current.ProfilePhotoApprovedByUnionId is null &&
             string.Equals(current.ProfilePhotoReviewReason, reason, StringComparison.Ordinal) &&
             current.ProfilePhotoReviewedAtUtc is not null &&
-            !string.IsNullOrWhiteSpace(current.ProfilePhotoOperationsReviewActorId);
+            !string.IsNullOrWhiteSpace(current.ProfilePhotoOperationsReviewActorId) &&
+            !string.IsNullOrWhiteSpace(current.ProfilePhotoOperationsReviewUnionId) &&
+            !string.IsNullOrWhiteSpace(current.ProfilePhotoOperationsReviewUnionName);
     }
 
     public static bool Matches(DriverOnboardingProfile current, DriverOnboardingProfile reviewedSnapshot)
