@@ -81,7 +81,7 @@ def verify_ios_app_bundle(app_bundle: Path, expected_id: str) -> str:
         framework_binary = app_bundle / relative_path
         if not framework_binary.is_file() or framework_binary.stat().st_size == 0:
             raise ValueError(
-                f"iOS Simulator app is missing required framework binary: {relative_path.as_posix()}."
+                f"iOS Simulator app is missing or empty required framework binary: {relative_path.as_posix()}."
             )
     return actual
 
