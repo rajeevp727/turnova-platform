@@ -9,7 +9,7 @@ public sealed class DriverActiveRideQueryTests
     public void QueryUsesMinimalProjectionAndIncludesEveryActiveLifecycleState()
     {
         Assert.Contains(
-            "SELECT VALUE { rideId: c.rideId, driverId: c.driverId, status: c.status, negotiationExpiresAtUtc: c.negotiationExpiresAtUtc }",
+            "SELECT VALUE { itemId: c.id, rideId: c.rideId, driverId: c.driverId, status: c.status, negotiationExpiresAtUtc: c.negotiationExpiresAtUtc }",
             DriverActiveRideQuery.Sql);
         Assert.Contains("ARRAY_CONTAINS(@driverIds, c.driverId)", DriverActiveRideQuery.Sql);
         Assert.DoesNotContain("SELECT *", DriverActiveRideQuery.Sql, StringComparison.OrdinalIgnoreCase);
