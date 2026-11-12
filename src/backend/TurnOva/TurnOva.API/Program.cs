@@ -738,6 +738,7 @@ async Task<DemoRide?> FindRideAsync(string rideId, CancellationToken ct)
             .SendAsync("RideStatusChanged", new { rideId, status = expired.Status }, ct);
     return reconciliation.Ride;
 }
+
 async Task<bool> HasActiveDriverRideAsync(
     string driverId,
     CancellationToken ct,

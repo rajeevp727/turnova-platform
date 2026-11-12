@@ -28,7 +28,7 @@ public sealed class ExpiredNegotiationReconcilerTests
         Assert.True(result.Attempted);
         Assert.False(result.Transitioned);
         Assert.Equal(latest, result.Ride);
-        Assert.Equal([current.RideId], releasedRideIds);
+        Assert.Equal(new[] { current.RideId }, releasedRideIds);
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class ExpiredNegotiationReconcilerTests
         Assert.True(result.Attempted);
         Assert.True(result.Transitioned);
         Assert.Equal(expired, result.Ride);
-        Assert.Equal([current.RideId], releasedRideIds);
+        Assert.Equal(new[] { current.RideId }, releasedRideIds);
         Assert.Equal(0, readCount);
     }
 
