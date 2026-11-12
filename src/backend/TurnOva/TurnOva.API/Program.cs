@@ -2422,7 +2422,9 @@ app.MapPost("/api/v1/rider/bookings", async (
         var priorRide = await FindRideAsync(prior.rideId, ct);
         if (priorRide is not null)
         {
-            if (priorRide.Status is "Negotiating" or "AgreementConfirmed")
+            if (!string.IsNullOrWhiteSpace(priorRide.UnionId) &&
+                string.Equals(priorRide.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
+                (priorRide.Status is "Negotiating" or "AgreementConfirmed"))
             {
                 if (!string.IsNullOrWhiteSpace(priorRide.DriverId) &&
                     await HasActiveDriverRideAsync(priorRide.DriverId, ct, priorRide.RideId))
