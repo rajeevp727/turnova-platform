@@ -86,13 +86,15 @@ public sealed record DriverRideReservationAuditEvent(
             char.IsDigit(character) || character is '-' or '_' or '.' or ':');
         var phoneDigitCount = actorId?.Count(char.IsDigit) ?? 0;
         var looksLikePhoneNumber = containsOnlyPhoneCharacters && phoneDigitCount >= 8;
-        if (string.IsNullOrWhiteSpace(actorId) || actorId.Length > 128 ||
-            actorId.Any(char.IsControl) || containsNonIdentifierCharacters || looksLikePhoneNumber)
+        var actorIdIsInvalid = string.IsNullOrWhiteSpace(actorId) || actorId.Length > 128 ||
+            actorId.Any(char.IsControl) || containsNonIdentifierCharacters || looksLikePhoneNumber;
+        if (actorIdIsInvalid)
             actorId = "system";
 
-        var actorRole = supplied.ActorRole is "Rider" or "Driver" or "UnionManager" or "Ops" or "System"
-            ? supplied.ActorRole
-            : "System";
+        var actorRole = !actorIdIsInvalid &&
+            supplied.ActorRole is "Rider" or "Driver" or "UnionManager" or "Ops" or "System"
+                ? supplied.ActorRole
+                : "System";
         var reason = DriverRideReservationAuditReasons.IsAllowed(supplied.ReasonCategory)
             ? supplied.ReasonCategory
             : DriverRideReservationAuditReasons.Other;
