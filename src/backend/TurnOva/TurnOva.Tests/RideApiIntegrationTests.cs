@@ -1433,6 +1433,59 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionAuditReasonsRejectContactDetailsAndRedactLegacyContactTextFromUnionMembers()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "union-audit-reason-privacy-driver";
+        const string unionId = "union-audit-reason-privacy-union";
+        const string newUnionId = "union-audit-reason-privacy-new-union";
+        using var ops = factory.CreateClient("Ops", "union-audit-reason-privacy-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-audit-reason-privacy-manager");
+
+        SeedBookableDriver(factory, driverId, unionId);
+        SeedTransferTargetUnion(factory, newUnionId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var originalProfile = profiles[driverId];
+        var originalAssignment = assignments[driverId];
+
+        using var operationsRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Call 123-456-7890 for follow-up" });
+        Assert.Equal(HttpStatusCode.BadRequest, operationsRejection.StatusCode);
+        Assert.Equal(originalProfile, profiles[driverId]);
+
+        using var unionRejection = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Contact operator@example.com" });
+        Assert.Equal(HttpStatusCode.BadRequest, unionRejection.StatusCode);
+        Assert.Equal(originalProfile, profiles[driverId]);
+
+        using var transfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason = "Contact operator@example.com" });
+        Assert.Equal(HttpStatusCode.BadRequest, transfer.StatusCode);
+        Assert.Equal(originalAssignment, assignments[driverId]);
+        Assert.Empty(audit.Values.Where(item => item.DriverId == driverId));
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>().HasActiveAsync(driverId));
+
+        // Older stored free text is not echoed to UnionManager member projections.
+        profiles[driverId] = originalProfile with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoReviewReason = "Call 123-456-7890"
+        };
+        var members = await manager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers");
+        var member = Assert.Single(members!);
+        Assert.Equal(JsonValueKind.Null,
+            member.GetProperty("driver").GetProperty("profilePhotoReviewReason").ValueKind);
+    }
+
+    [Fact]
     public async Task UnionManagerCanReviewOnlyCurrentAssignedCabDriverSelfiesAndReceivesMinimalData()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
