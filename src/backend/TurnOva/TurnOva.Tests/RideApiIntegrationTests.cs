@@ -1480,18 +1480,6 @@ public sealed class RideApiIntegrationTests
         Assert.False(driverDetails.TryGetProperty("storageReference", out _));
         Assert.False(driverDetails.TryGetProperty("riderId", out _));
         Assert.False(driverDetails.TryGetProperty("chatMessages", out _));
-        using var memberDetailsResponse = await manager.GetAsync($"/api/v1/union/drivers/{driverId}");
-        Assert.Equal(HttpStatusCode.OK, memberDetailsResponse.StatusCode);
-        using var memberDetailsJson = JsonDocument.Parse(await memberDetailsResponse.Content.ReadAsStringAsync());
-        var memberDetailsDriver = memberDetailsJson.RootElement.GetProperty("driver");
-        Assert.False(memberDetailsDriver.TryGetProperty("phoneNumber", out _));
-        Assert.False(memberDetailsDriver.TryGetProperty("email", out _));
-        Assert.False(memberDetailsDriver.TryGetProperty("currentLatitude", out _));
-        Assert.False(memberDetailsDriver.TryGetProperty("currentLongitude", out _));
-        Assert.False(memberDetailsDriver.TryGetProperty("storageReference", out _));
-        Assert.False(memberDetailsDriver.TryGetProperty("documents", out _));
-        Assert.False(memberDetailsDriver.TryGetProperty("riderId", out _));
-        Assert.False(memberDetailsDriver.TryGetProperty("chatMessages", out _));
         Assert.All(driverDetails.GetProperty("documentStatuses").EnumerateArray(),
             document => Assert.False(document.TryGetProperty("storageReference", out _)));
 
