@@ -184,6 +184,7 @@ public sealed class ExpiredNegotiationReconcilerTests
         var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
         var candidate = new ActiveDriverRideProjection
         {
+            ItemId = "observed-expired-ride",
             RideId = "observed-expired-ride",
             DriverId = "observed-driver",
             Status = RideLifecycle.Negotiating,
