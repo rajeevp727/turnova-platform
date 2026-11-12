@@ -96,7 +96,9 @@ public sealed class DriverProfileReviewGuardTests
         };
         var operationsRejection = unionManagerRejection with
         {
-            ProfilePhotoOperationsReviewActorId = "ops-actor-42"
+            ProfilePhotoOperationsReviewActorId = "ops-actor-42",
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
         };
 
         Assert.False(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
