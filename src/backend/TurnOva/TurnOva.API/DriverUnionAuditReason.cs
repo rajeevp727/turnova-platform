@@ -48,7 +48,14 @@ public static class DriverUnionAuditReason
 
             foreach (Match match in PhonePattern.Matches(reason))
             {
-                if (match.Value.Count(char.IsAsciiDigit) >= 10)
+                var digitCount = 0;
+                foreach (var character in match.Value)
+                {
+                    if (char.IsAsciiDigit(character))
+                        digitCount++;
+                }
+
+                if (digitCount >= 10)
                     return false;
             }
 
