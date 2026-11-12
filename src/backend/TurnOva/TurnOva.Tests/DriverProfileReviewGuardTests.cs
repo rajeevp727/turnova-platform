@@ -81,6 +81,23 @@ public sealed class DriverProfileReviewGuardTests
             DriverProfileReviewGuard.NormalizeRejectionReason(new string('x', 300)));
     }
 
+    [Theory]
+    [InlineData("Contact operator@example.com for details")]
+    [InlineData("Call 123-456-7890 for follow-up")]
+    [InlineData("Use +91 98765 43210 for clarification")]
+    public void UnionAuditReasonsRejectObviousContactDetails(string supplied)
+    {
+        Assert.Null(DriverProfileReviewGuard.NormalizeRejectionReason(supplied));
+        Assert.Null(DriverUnionAuditReason.Normalize(supplied));
+    }
+
+    [Fact]
+    public void UnionAuditReasonAllowsOrdinaryDatesAndNonContactText()
+    {
+        Assert.Equal("Reviewed on 2026-11-13",
+            DriverUnionAuditReason.Normalize(" Reviewed on 2026-11-13 "));
+    }
+
     [Fact]
     public void OperationsRetryRequiresAnOperationsReviewMarker()
     {
