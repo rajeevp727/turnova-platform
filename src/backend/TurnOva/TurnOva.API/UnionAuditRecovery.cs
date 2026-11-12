@@ -44,9 +44,18 @@ public static class DriverUnionAuditActor
     public static string Resolve(ClaimsPrincipal? principal)
     {
         var subject = principal?.FindFirst("sub")?.Value?.Trim();
-        return !string.IsNullOrWhiteSpace(subject) && subject.Length <= 128
-            ? subject
-            : "Operations";
+        if (string.IsNullOrWhiteSpace(subject) || subject.Length > 128 || subject.Any(char.IsControl))
+            return "Operations";
+
+        var containsNonIdentifierCharacters = subject.Any(character =>
+            !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or ':'));
+        var containsOnlyPhoneCharacters = subject.All(character =>
+            char.IsDigit(character) || character is '-' or '_' or '.' or ':');
+        var phoneDigitCount = subject.Count(char.IsDigit);
+        var looksLikePhoneNumber = containsOnlyPhoneCharacters && phoneDigitCount >= 8;
+        return containsNonIdentifierCharacters || looksLikePhoneNumber
+            ? "Operations"
+            : subject;
     }
 }
 
