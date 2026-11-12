@@ -12,6 +12,21 @@ public static class DriverProfileReviewGuard
             : normalized;
     }
 
+    public static bool IsSameRejectedSelfieReview(
+        DriverOnboardingProfile current,
+        DriverOnboardingProfile reviewedSnapshot,
+        string reason)
+    {
+        return current.Id == reviewedSnapshot.Id &&
+            current.DriverId == reviewedSnapshot.DriverId &&
+            current.ProfilePhotoBase64 == reviewedSnapshot.ProfilePhotoBase64 &&
+            current.ProfilePhotoCapturedAtUtc == reviewedSnapshot.ProfilePhotoCapturedAtUtc &&
+            current.ProfilePhotoApprovalStatus == "Rejected" &&
+            current.ProfilePhotoApprovedByUnionId is null &&
+            string.Equals(current.ProfilePhotoReviewReason, reason, StringComparison.Ordinal) &&
+            current.ProfilePhotoReviewedAtUtc is not null;
+    }
+
     public static bool Matches(DriverOnboardingProfile current, DriverOnboardingProfile reviewedSnapshot)
     {
         return current.Id == reviewedSnapshot.Id &&
