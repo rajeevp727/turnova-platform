@@ -12,18 +12,22 @@ public static class DriverUnionAuditIdentity
         string driverId,
         string unionId,
         DateTimeOffset? selfieCapturedAtUtc,
+        string selfieContent,
         string reason)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
         ArgumentException.ThrowIfNullOrWhiteSpace(unionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selfieContent);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
         var capturedAt = selfieCapturedAtUtc?.UtcDateTime.Ticks.ToString(CultureInfo.InvariantCulture)
             ?? "legacy";
+        var selfieDigest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(selfieContent)));
         var material = new StringBuilder("turnova-union-selfie-rejection-v1;");
         AppendField(material, driverId);
         AppendField(material, unionId);
         AppendField(material, capturedAt);
+        AppendField(material, selfieDigest);
         AppendField(material, reason);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
     }
