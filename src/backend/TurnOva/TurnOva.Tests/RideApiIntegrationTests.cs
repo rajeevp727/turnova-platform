@@ -1404,6 +1404,41 @@ public sealed class RideApiIntegrationTests
         var rejectionAuditEvent = Assert.Single(rejectedAuditJson.RootElement.EnumerateArray(),
             item => item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
         Assert.Equal(expectedRejectionReason, rejectionAuditEvent.GetProperty("reason").GetString());
+        Assert.Equal("Operations", rejectionAuditEvent.GetProperty("actor").GetString());
+
+        var originalEventId = rejectionAuditEvent.GetProperty("eventId").GetString()!;
+        var originalReviewedAt = profiles[driverId].ProfilePhotoReviewedAtUtc;
+        Assert.NotNull(originalReviewedAt);
+        var auditStore = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        Assert.True(auditStore.TryRemove($"{driverId}|{originalEventId}", out _));
+
+        // The profile commit succeeded but the audit write is missing. An identical
+        // retry must restore the deterministic event without changing the review time.
+        using var recoveredRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "  Vehicle image requires a clearer review photo.  " });
+        Assert.Equal(HttpStatusCode.OK, recoveredRejection.StatusCode);
+        Assert.Equal(originalReviewedAt, profiles[driverId].ProfilePhotoReviewedAtUtc);
+
+        using var recoveredAuditResponse = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+        using var recoveredAuditJson = JsonDocument.Parse(await recoveredAuditResponse.Content.ReadAsStringAsync());
+        var recoveredAuditEvent = Assert.Single(recoveredAuditJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
+        Assert.Equal(originalEventId, recoveredAuditEvent.GetProperty("eventId").GetString());
+        Assert.Equal(originalReviewedAt.Value, recoveredAuditEvent.GetProperty("occurredAtUtc").GetDateTimeOffset());
+
+        // A further identical retry must verify the canonical event rather than
+        // append a duplicate or move the authoritative review timestamp.
+        using var duplicateRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = expectedRejectionReason });
+        Assert.Equal(HttpStatusCode.OK, duplicateRejection.StatusCode);
+        Assert.Equal(originalReviewedAt, profiles[driverId].ProfilePhotoReviewedAtUtc);
+        var finalAudit = await ops.GetFromJsonAsync<List<JsonElement>>(
+            $"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.Single(finalAudit!, item =>
+            item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations" &&
+            item.GetProperty("eventId").GetString() == originalEventId);
     }
 
     [Fact]
