@@ -1340,8 +1340,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
                 ProfilePhotoReviewedAtUtc = null,
                 ProfilePhotoReviewReason = null,
                 ProfilePhotoOperationsReviewActorId = null,
-            ProfilePhotoOperationsReviewUnionId = null,
-            ProfilePhotoOperationsReviewUnionName = null
+                ProfilePhotoOperationsReviewUnionId = null,
+                ProfilePhotoOperationsReviewUnionName = null
             };
         }, ct);
 
@@ -1876,8 +1876,8 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
                     ProfilePhotoReviewedAtUtc = reviewedAtUtc,
                     ProfilePhotoReviewReason = reason,
                     ProfilePhotoOperationsReviewActorId = null,
-            ProfilePhotoOperationsReviewUnionId = null,
-            ProfilePhotoOperationsReviewUnionName = null
+                    ProfilePhotoOperationsReviewUnionId = null,
+                    ProfilePhotoOperationsReviewUnionName = null
                 };
             }, ct);
             if (!saved)
@@ -1986,8 +1986,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
                     ProfilePhotoReviewedAtUtc = null,
                     ProfilePhotoReviewReason = null,
                     ProfilePhotoOperationsReviewActorId = null,
-            ProfilePhotoOperationsReviewUnionId = null,
-            ProfilePhotoOperationsReviewUnionName = null
+                    ProfilePhotoOperationsReviewUnionId = null,
+                    ProfilePhotoOperationsReviewUnionName = null
                 };
             }, ct);
             if (!profileReset)
