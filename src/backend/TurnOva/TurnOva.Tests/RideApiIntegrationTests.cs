@@ -1769,6 +1769,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string unionId = "unsafe-history-assignment-union";
         const string driverId = "unsafe-history-assignment-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         const string reason = "Initial assignment";
