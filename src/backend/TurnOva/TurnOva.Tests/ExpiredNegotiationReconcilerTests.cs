@@ -196,7 +196,7 @@ public sealed class ExpiredNegotiationReconcilerTests
     }
 
     [Fact]
-    public void SameIdempotentRideIsExcludedWhenLatestAggregateIsMissing()
+    public void SameIdempotentRideIsNotExcludedWhenLatestAggregateIsMissing()
     {
         var candidate = new ActiveDriverRideProjection
         {
