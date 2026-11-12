@@ -48,6 +48,22 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
         Assert.NotEqual(original, differentReviewTimestamp);
     }
 
+    [Theory]
+    [InlineData("Contact operator@example.com")]
+    [InlineData("Call 123-456-7890")]
+    [InlineData("Use +91 98765 43210")]
+    public void AuditIdentityFactoriesRejectContactLikeReasons(string reason)
+    {
+        var reviewedAt = DateTimeOffset.Parse("2026-11-12T11:00:00Z");
+        Assert.Throws<ArgumentException>(() => DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
+            "driver-1", "union-1", reviewedAt, reviewedAt, "selfie", reason));
+        Assert.Throws<ArgumentException>(() => DriverUnionAuditIdentity.CreateAssignmentEventId(
+            "driver-1", "old-union", "Old Union", "new-union", "New Union",
+            "Transferred", reason, "ops-transfer-subject", reviewedAt));
+        Assert.Throws<ArgumentException>(() =>
+            DriverUnionAuditIdentity.CreateAssignmentOperationKey("driver-1", "new-union", reason));
+    }
+
     [Fact]
     public void UnionSelfieReviewEventIdentityIsStableAndDoesNotExposeReviewInputs()
     {
