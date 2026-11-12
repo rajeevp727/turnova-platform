@@ -1539,7 +1539,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         return Results.Conflict(new { message = "A Driver with an active negotiation or ride cannot have Union selfie membership changed." });
 
     var reviewLeaseId = $"OPS-SELFIE-REVIEW-{Guid.NewGuid():N}";
-    var reviewAuditContext = DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.UnionSelfieReview);
+    var reviewAuditContext = DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.DriverProfileReview);
     if (!await driverRideReservations.TryAcquireTemporaryAsync(
         driverId, reviewLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct, reviewAuditContext))
         return Results.Conflict(new { message = "The Driver is already reserved by a booking, ride or Union membership change. Retry after it is resolved." });
