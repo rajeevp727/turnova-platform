@@ -410,21 +410,24 @@ while true; do
 
   # Give a known, non-TurnOva system process one bounded chance to recover.
   # If it remains blocked, close only the explicitly allow-listed system app.
-  if wait_coordinates="$(button_coordinates "android:id/aerr_wait" "Wait" 2>/dev/null)"; then
-    if [[ ! "$wait_coordinates" =~ ^[0-9]+[[:space:]][0-9]+$ ]]; then
-      echo "Android system ANR Wait control returned invalid coordinates." >&2
-      exit 1
-    fi
-    read -r wait_x wait_y <<< "$wait_coordinates"
-    system_anr_wait_attempts=$((system_anr_wait_attempts + 1))
-    if [[ "$system_package" == "com.google.android.apps.nexuslauncher" ]]; then
-      pixel_launcher_anr_wait_attempts=$((pixel_launcher_anr_wait_attempts + 1))
-    fi
-    echo "Known Android system ANR ($system_package); selecting Wait at ($wait_x,$wait_y)." | tee -a "$OUTPUT_DIR/system-ui-recovery.txt"
-    "$ADB_BIN" shell input tap "$wait_x" "$wait_y"
-    sleep 5
-    capture_ui_hierarchy
+  if ! wait_coordinates="$(button_coordinates "android:id/aerr_wait" "Wait" 2>/dev/null)"; then
+    echo "Known Android system ANR ($system_package) has no safe enabled Wait control; refusing recovery." >&2
+    cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+    exit 1
   fi
+  if [[ ! "$wait_coordinates" =~ ^[0-9]+[[:space:]][0-9]+$ ]]; then
+    echo "Android system ANR Wait control returned invalid coordinates." >&2
+    exit 1
+  fi
+  read -r wait_x wait_y <<< "$wait_coordinates"
+  system_anr_wait_attempts=$((system_anr_wait_attempts + 1))
+  if [[ "$system_package" == "com.google.android.apps.nexuslauncher" ]]; then
+    pixel_launcher_anr_wait_attempts=$((pixel_launcher_anr_wait_attempts + 1))
+  fi
+  echo "Known Android system ANR ($system_package); selecting Wait at ($wait_x,$wait_y)." | tee -a "$OUTPUT_DIR/system-ui-recovery.txt"
+  "$ADB_BIN" shell input tap "$wait_x" "$wait_y"
+  sleep 5
+  capture_ui_hierarchy
 
   next_anr_title="$(read_anr_title)"
   if [[ "$next_anr_title" == "$anr_title" ]]; then
