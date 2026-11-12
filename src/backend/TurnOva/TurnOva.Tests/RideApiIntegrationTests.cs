@@ -1778,7 +1778,7 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("union-manager-transfer-original", originalEvent.Actor);
         Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
 
-        using var transfer = await ops.PutAsJsonAsync(
+        using var transfer = await ops.PostAsJsonAsync(
             $"/api/v1/ops/drivers/{driverId}/union-assignment",
             new { unionId = newUnionId, reason = "Approved membership transfer" });
         Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
