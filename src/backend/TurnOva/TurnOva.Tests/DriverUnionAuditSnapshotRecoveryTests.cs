@@ -151,12 +151,12 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     }
 
     [Fact]
-    public async Task UnionManagerReviewRetryPreservesFirstCanonicalActor()
+    public async Task UnionManagerReviewRetryUsesStoredOriginalActorForCanonicalMatch()
     {
         var expected = CreateEvent() with
         {
             EventType = "SelfieApprovedByUnion",
-            Actor = "retrying-manager"
+            Actor = "original-manager"
         };
         var canonical = expected with { Actor = "original-manager" };
 
@@ -167,21 +167,24 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     }
 
     [Fact]
-    public void UnionManagerReviewActorVariationDoesNotHideOtherCanonicalMismatches()
+    public async Task UnionManagerReviewCanonicalMatchFailsClosedWhenActorChanges()
     {
         var expected = CreateEvent() with
         {
             EventType = "SelfieRejectedByUnion",
-            Actor = "retrying-manager"
+            Actor = "original-manager"
         };
-        var canonical = expected with { Actor = "original-manager" };
+        var canonical = expected with { Actor = "retrying-manager" };
 
-        Assert.True(DriverUnionAuditSnapshotRecovery.Matches(expected, canonical));
+        Assert.False(DriverUnionAuditSnapshotRecovery.Matches(expected, canonical));
         Assert.False(DriverUnionAuditSnapshotRecovery.Matches(
             expected, canonical with { Reason = "Different reason" }));
-        Assert.False(DriverUnionAuditSnapshotRecovery.Matches(
-            CreateEvent() with { Actor = "retrying-operator" },
-            CreateEvent() with { Actor = "original-operator" }));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
+                expected,
+                (_, _, _) => Task.FromResult<DriverUnionAuditEvent?>(canonical),
+                static (_, _) => Task.CompletedTask));
     }
 
     [Fact]

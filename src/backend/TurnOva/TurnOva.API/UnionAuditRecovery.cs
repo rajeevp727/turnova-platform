@@ -107,11 +107,8 @@ public static class DriverUnionAuditSnapshotRecovery
             expected.OccurredAtUtc == actual.OccurredAtUtc;
         if (!sameEvent) return false;
 
-        // UnionManager review identity is the review itself, not the manager who retries it.
-        // Preserve the first committed actor when another authorised manager repeats the same review.
-        if (expected.EventType is "SelfieApprovedByUnion" or "SelfieRejectedByUnion")
-            return !string.IsNullOrWhiteSpace(actual.Actor);
-
+        // The profile's private review snapshot carries the original actor across retries.
+        // A canonical event with any different actor is therefore a mismatch and must fail closed.
         return string.Equals(expected.Actor, actual.Actor, StringComparison.Ordinal);
     }
 
