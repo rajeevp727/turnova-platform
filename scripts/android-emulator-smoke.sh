@@ -268,19 +268,15 @@ capture_ui_hierarchy() {
 }
 
 capture_ui_hierarchy
+"$ADB_BIN" exec-out screencap -p > "$OUTPUT_DIR/initial.png" || true
+system_anr_wait_attempts=0
 pixel_launcher_anr_wait_attempts=0
-while grep -Fq "Pixel Launcher isn't responding" "$OUTPUT_DIR/ui-hierarchy.xml"; do
-  if (( pixel_launcher_anr_wait_attempts >= 2 )); then
-    echo "Pixel Launcher ANR dialog persisted after two bounded Wait attempts." >&2
-    cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
-    exit 1
-  fi
+: > "$OUTPUT_DIR/system-anr-packages-recovered.txt"
+: > "$OUTPUT_DIR/system-anr-packages-closed.txt"
+: > "$OUTPUT_DIR/system-anr-titles-recovered.txt"
 
-  pixel_launcher_anr_wait_attempts=$((pixel_launcher_anr_wait_attempts + 1))
-  cp "$OUTPUT_DIR/ui-hierarchy.xml" "$OUTPUT_DIR/pixel-launcher-anr-$pixel_launcher_anr_wait_attempts.xml"
-
-  if ! wait_coordinates="$(python3 - "$OUTPUT_DIR/ui-hierarchy.xml" <<'PY'
-import re
+read_anr_title() {
+  python3 - "$OUTPUT_DIR/ui-hierarchy.xml" <<'PY'
 import sys
 import xml.etree.ElementTree as ET
 
@@ -291,59 +287,174 @@ except (OSError, ET.ParseError):
 
 title = next(
     (
-        node.attrib.get("text")
+        node.attrib.get("text", "")
         for node in root.iter("node")
         if node.attrib.get("resource-id") == "android:id/alertTitle"
     ),
-    None,
+    "",
 )
-if title != "Pixel Launcher isn't responding":
-    sys.exit(3)
+print(title if "isn't responding" in title else "")
+PY
+}
 
-wait_button = next(
+button_coordinates() {
+  python3 - "$OUTPUT_DIR/ui-hierarchy.xml" "$1" "$2" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except (OSError, ET.ParseError):
+    sys.exit(2)
+
+resource_id, expected_text = sys.argv[2:]
+button = next(
     (
         node
         for node in root.iter("node")
-        if node.attrib.get("resource-id") == "android:id/aerr_wait"
-        and node.attrib.get("text") == "Wait"
+        if node.attrib.get("resource-id") == resource_id
+        and node.attrib.get("text") == expected_text
     ),
     None,
 )
-if wait_button is None:
+if button is None:
+    sys.exit(3)
+if button.attrib.get("clickable") != "true" or button.attrib.get("enabled") != "true":
     sys.exit(4)
-if wait_button.attrib.get("clickable") != "true" or wait_button.attrib.get("enabled") != "true":
-    sys.exit(6)
 
-match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", wait_button.attrib.get("bounds", ""))
+match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", button.attrib.get("bounds", ""))
 if match is None:
     sys.exit(5)
 
 left, top, right, bottom = map(int, match.groups())
 print((left + right) // 2, (top + bottom) // 2)
 PY
-  )"; then
-    echo "Pixel Launcher ANR was detected but its safe Wait control could not be resolved." >&2
+}
+
+assert_target_app_foreground() {
+  local current_pid resumed_line
+  current_pid="$("$ADB_BIN" shell pidof "$EXPECTED_ID" 2>/dev/null | tr -d '\r' | awk '{ print $1 }')"
+  if [[ -z "$current_pid" || "$current_pid" != "$pid_before" ]]; then
+    echo "Target app process is not stable during Android system-UI recovery (before=$pid_before, after=$current_pid)." >&2
+    exit 1
+  fi
+
+  "$ADB_BIN" shell dumpsys activity activities | tr -d '\r' > "$OUTPUT_DIR/activities-current.txt"
+  resumed_line="$(awk '/topResumedActivity=|mResumedActivity:/ { line = $0 } END { print line }' "$OUTPUT_DIR/activities-current.txt")"
+  if [[ "$resumed_line" != *"$EXPECTED_ID/"* ]]; then
+    echo "Target app is not the resumed foreground activity during Android system-UI recovery." >&2
+    printf '%s\n' "$resumed_line" >&2
+    exit 1
+  fi
+}
+
+capture_app_runtime_logcat() {
+  "$ADB_BIN" logcat -d -v threadtime > "$OUTPUT_DIR/logcat.txt"
+
+  if grep -Fq "ANR in $EXPECTED_ID" "$OUTPUT_DIR/logcat.txt"; then
+    echo "Android runtime recorded an ANR for the TurnOva app $EXPECTED_ID." >&2
+    exit 1
+  fi
+  if awk -v package="$EXPECTED_ID" '
+    /FATAL EXCEPTION/ { in_fatal = 1; scanned = 0; next }
+    in_fatal {
+      if (index($0, "Process: " package ",") > 0 || index($0, "Process: " package " ") > 0) found = 1
+      scanned++
+      if (scanned > 40) in_fatal = 0
+    }
+    END { exit found ? 0 : 1 }
+  ' "$OUTPUT_DIR/logcat.txt"; then
+    echo "Android runtime recorded a fatal exception for $EXPECTED_ID." >&2
+    exit 1
+  fi
+  if awk -v pid="$pid_before" '$3 == pid && /Unhandled JS Exception|Invariant Violation:|Unable to load script/ { found = 1 } END { exit found ? 0 : 1 }' "$OUTPUT_DIR/logcat.txt"; then
+    echo "React Native reported an unhandled startup exception in $EXPECTED_ID (PID $pid_before)." >&2
+    exit 1
+  fi
+}
+
+# The app must be the resumed foreground activity before any system-dialog
+# recovery. This prevents a launcher recovery from masking an app launch failure.
+assert_target_app_foreground
+capture_app_runtime_logcat
+
+while true; do
+  anr_title="$(read_anr_title)"
+  [[ -z "$anr_title" ]] && break
+
+  case "$anr_title" in
+    "Pixel Launcher isn't responding")
+      system_package="com.google.android.apps.nexuslauncher"
+      ;;
+    "com.google.android.googlesdksetup isn't responding")
+      system_package="com.google.android.googlesdksetup"
+      ;;
+    *)
+      echo "Unexpected Android app/system ANR dialog: $anr_title" >&2
+      cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+      exit 1
+      ;;
+  esac
+
+  if grep -Fxq "$system_package" "$OUTPUT_DIR/system-anr-packages-recovered.txt"; then
+    echo "Android system ANR dialog for $system_package persisted after bounded recovery." >&2
     cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
     exit 1
   fi
 
-  if [[ ! "$wait_coordinates" =~ ^[0-9]+[[:space:]][0-9]+$ ]]; then
-    echo "Pixel Launcher ANR Wait control returned invalid coordinates." >&2
-    exit 1
+  assert_target_app_foreground
+  cp "$OUTPUT_DIR/ui-hierarchy.xml" "$OUTPUT_DIR/system-anr-$system_anr_wait_attempts.xml"
+
+  # Give a known, non-TurnOva system process one bounded chance to recover.
+  # If it remains blocked, close only the explicitly allow-listed system app.
+  if wait_coordinates="$(button_coordinates "android:id/aerr_wait" "Wait" 2>/dev/null)"; then
+    if [[ ! "$wait_coordinates" =~ ^[0-9]+[[:space:]][0-9]+$ ]]; then
+      echo "Android system ANR Wait control returned invalid coordinates." >&2
+      exit 1
+    fi
+    read -r wait_x wait_y <<< "$wait_coordinates"
+    system_anr_wait_attempts=$((system_anr_wait_attempts + 1))
+    if [[ "$system_package" == "com.google.android.apps.nexuslauncher" ]]; then
+      pixel_launcher_anr_wait_attempts=$((pixel_launcher_anr_wait_attempts + 1))
+    fi
+    echo "Known Android system ANR ($system_package); selecting Wait at ($wait_x,$wait_y)." | tee -a "$OUTPUT_DIR/system-ui-recovery.txt"
+    "$ADB_BIN" shell input tap "$wait_x" "$wait_y"
+    sleep 5
+    capture_ui_hierarchy
   fi
 
-  read -r wait_x wait_y <<< "$wait_coordinates"
-  echo "Pixel Launcher ANR detected; selecting Wait at ($wait_x,$wait_y), attempt $pixel_launcher_anr_wait_attempts/2." | tee -a "$OUTPUT_DIR/system-ui-recovery.txt"
-  "$ADB_BIN" shell input tap "$wait_x" "$wait_y"
-  sleep 5
-  capture_ui_hierarchy
-done
+  next_anr_title="$(read_anr_title)"
+  if [[ "$next_anr_title" == "$anr_title" ]]; then
+    if ! close_coordinates="$(button_coordinates "android:id/aerr_close" "Close app" 2>/dev/null)"; then
+      echo "Known Android system ANR ($system_package) persisted, but its safe Close app control could not be resolved." >&2
+      cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+      exit 1
+    fi
+    if [[ ! "$close_coordinates" =~ ^[0-9]+[[:space:]][0-9]+$ ]]; then
+      echo "Android system ANR Close app control returned invalid coordinates." >&2
+      exit 1
+    fi
 
-if grep -Fq "isn't responding" "$OUTPUT_DIR/ui-hierarchy.xml"; then
-  echo "Unexpected Android app/system ANR dialog remains after Pixel Launcher recovery." >&2
-  cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
-  exit 1
-fi
+    read -r close_x close_y <<< "$close_coordinates"
+    echo "Known Android system ANR ($system_package) persisted; closing only that allow-listed system process at ($close_x,$close_y)." | tee -a "$OUTPUT_DIR/system-ui-recovery.txt"
+    "$ADB_BIN" shell input tap "$close_x" "$close_y"
+    printf '%s\n' "$system_package" >> "$OUTPUT_DIR/system-anr-packages-closed.txt"
+    sleep 3
+    capture_ui_hierarchy
+    next_anr_title="$(read_anr_title)"
+    if [[ "$next_anr_title" == "$anr_title" ]]; then
+      echo "Android system ANR dialog for $system_package remained after bounded Wait/Close recovery." >&2
+      cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+      exit 1
+    fi
+  fi
+
+  printf '%s\n' "$system_package" >> "$OUTPUT_DIR/system-anr-packages-recovered.txt"
+  printf '%s\n' "$anr_title" >> "$OUTPUT_DIR/system-anr-titles-recovered.txt"
+  assert_target_app_foreground
+  capture_app_runtime_logcat
+done
 
 for expected_text in "Welcome back" "Email address" "Password" "Sign in"; do
   if ! grep -Fq "$expected_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
@@ -359,23 +470,7 @@ for forbidden_text in "Unable to restore your session" "Unable to restore sessio
   fi
 done
 
-"$ADB_BIN" logcat -d -v threadtime > "$OUTPUT_DIR/logcat.txt"
-if awk -v package="$EXPECTED_ID" '
-  /FATAL EXCEPTION/ { in_fatal = 1; scanned = 0; next }
-  in_fatal {
-    if (index($0, "Process: " package ",") > 0 || index($0, "Process: " package " ") > 0) found = 1
-    scanned++
-    if (scanned > 40) in_fatal = 0
-  }
-  END { exit found ? 0 : 1 }
-' "$OUTPUT_DIR/logcat.txt"; then
-  echo "Android runtime recorded a fatal exception for $EXPECTED_ID." >&2
-  exit 1
-fi
-if awk -v pid="$pid_before" '$3 == pid && /Unhandled JS Exception|Invariant Violation:|Unable to load script/ { found = 1 } END { exit found ? 0 : 1 }' "$OUTPUT_DIR/logcat.txt"; then
-  echo "React Native reported an unhandled startup exception in $EXPECTED_ID (PID $pid_before)." >&2
-  exit 1
-fi
+capture_app_runtime_logcat
 
 sleep 5
 pid_after="$("$ADB_BIN" shell pidof "$EXPECTED_ID" 2>/dev/null | tr -d '\r' | awk '{ print $1 }')"
@@ -390,11 +485,27 @@ if [[ ! -s "$OUTPUT_DIR/launch.png" ]]; then
   exit 1
 fi
 
-python3 - "$EXPECTED_ID" "$activity" "$pid_after" "$SYSTEM_IMAGE" "$pixel_launcher_anr_wait_attempts" "$OUTPUT_DIR/result.json" <<'PY'
+python3 - "$EXPECTED_ID" "$activity" "$pid_after" "$SYSTEM_IMAGE" "$pixel_launcher_anr_wait_attempts" "$system_anr_wait_attempts" "$OUTPUT_DIR/system-anr-packages-recovered.txt" "$OUTPUT_DIR/system-anr-packages-closed.txt" "$OUTPUT_DIR/system-anr-titles-recovered.txt" "$OUTPUT_DIR/result.json" <<'PY'
 import json
 import sys
 
-package_id, activity, pid, system_image, anr_wait_attempts, output = sys.argv[1:]
+(
+    package_id,
+    activity,
+    pid,
+    system_image,
+    pixel_launcher_wait_attempts,
+    system_anr_wait_attempts,
+    recovered_path,
+    closed_path,
+    titles_path,
+    output,
+) = sys.argv[1:]
+
+def read_lines(path):
+    with open(path, encoding="utf-8") as stream:
+        return [line.strip() for line in stream if line.strip()]
+
 with open(output, "w", encoding="utf-8") as stream:
     json.dump({
         "platform": "android-emulator",
@@ -408,8 +519,13 @@ with open(output, "w", encoding="utf-8") as stream:
         "loginScreenTextVerified": True,
         "staleSessionErrorAbsent": True,
         "systemUiRecovery": {
-            "pixelLauncherAnrWaitAttempts": int(anr_wait_attempts),
-            "pixelLauncherAnrRecovered": int(anr_wait_attempts) > 0
+            "pixelLauncherAnrWaitAttempts": int(pixel_launcher_wait_attempts),
+            "pixelLauncherAnrRecovered": "com.google.android.apps.nexuslauncher" in read_lines(recovered_path),
+            "waitAttempts": int(system_anr_wait_attempts),
+            "systemAnrPackagesRecovered": read_lines(recovered_path),
+            "systemAnrPackagesClosed": read_lines(closed_path),
+            "systemAnrTitlesRecovered": read_lines(titles_path),
+            "targetAppRemainedForegroundAndStable": True
         },
         "screenshot": "launch.png",
         "productionApiOrAuthentication": "not exercised"
