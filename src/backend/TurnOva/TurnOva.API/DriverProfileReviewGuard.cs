@@ -24,7 +24,8 @@ public static class DriverProfileReviewGuard
             current.ProfilePhotoApprovalStatus == "Rejected" &&
             current.ProfilePhotoApprovedByUnionId is null &&
             string.Equals(current.ProfilePhotoReviewReason, reason, StringComparison.Ordinal) &&
-            current.ProfilePhotoReviewedAtUtc is not null;
+            current.ProfilePhotoReviewedAtUtc is not null &&
+            !string.IsNullOrWhiteSpace(current.ProfilePhotoOperationsReviewActorId);
     }
 
     public static bool Matches(DriverOnboardingProfile current, DriverOnboardingProfile reviewedSnapshot)
