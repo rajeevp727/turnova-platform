@@ -362,7 +362,8 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
             driverId, null, null, unionId, unionName, "Assigned", reason, actor, occurredAt);
         var assignment = new DriverUnionAssignment(
             driverId, unionId, unionName, "Active", occurredAt, occurredAt, reason,
-            eventId, "Assigned", actor, null, null, occurredAt);
+            eventId, "Assigned", actor, null, null, occurredAt,
+            DriverUnionAuditIdentity.CreateAssignmentOperationKey(driverId, unionId, reason), true);
 
         var expected = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment);
 
@@ -392,6 +393,8 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
         Assert.Equal("Approved membership transfer", expected.Reason);
         Assert.Equal("ops-transfer-subject", expected.Actor);
         Assert.Equal(assignment.AuditOccurredAtUtc, expected.OccurredAtUtc);
+        Assert.True(assignment.AuditSnapshotPending);
+        Assert.NotNull(assignment.LastAssignmentOperationKey);
 
         Assert.True(DriverUnionAssignmentAuditSnapshot.IsIdempotentRetry(
             assignment, "new-union", "Approved membership transfer"));
@@ -427,6 +430,35 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
             DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment with { AuditEventId = "different-event-id" }));
         Assert.Throws<InvalidOperationException>(() =>
             DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment with { AuditOccurredAtUtc = null }));
+        Assert.Throws<InvalidOperationException>(() =>
+            DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment with { LastAssignmentOperationKey = null }));
+        Assert.Throws<InvalidOperationException>(() =>
+            DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment with { LastAssignmentOperationKey = "wrong-operation-key" }));
+    }
+
+    [Fact]
+    public void CompletedAssignmentSnapshotKeepsIdempotencyHashButDoesNotRecreateAfterRetention()
+    {
+        var pending = CreateAssignmentSnapshot();
+        var completed = pending with
+        {
+            AuditSnapshotPending = false,
+            AuditEventType = null,
+            AuditActor = null,
+            AuditPreviousUnionId = null,
+            AuditPreviousUnionName = null,
+            AuditOccurredAtUtc = null
+        };
+
+        Assert.Null(DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(completed));
+        Assert.True(DriverUnionAssignmentAuditSnapshot.IsIdempotentRetry(
+            completed, "new-union", "Approved membership transfer"));
+        Assert.False(DriverUnionAssignmentAuditSnapshot.IsIdempotentRetry(
+            completed, "new-union", "Different reason"));
+        Assert.Throws<InvalidOperationException>(() =>
+            DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(completed with { AuditActor = "ops-transfer-subject" }));
+        Assert.Throws<InvalidOperationException>(() =>
+            DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(completed with { LastAssignmentOperationKey = "different-key" }));
     }
 
     private static DriverUnionAssignment CreateAssignmentSnapshot()
@@ -443,9 +475,11 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
         var eventId = DriverUnionAuditIdentity.CreateAssignmentEventId(
             driverId, previousUnionId, previousUnionName, newUnionId, newUnionName,
             eventType, reason, actor, occurredAt);
+        var operationKey = DriverUnionAuditIdentity.CreateAssignmentOperationKey(driverId, newUnionId, reason);
         return new DriverUnionAssignment(
             driverId, newUnionId, newUnionName, "Active", occurredAt.AddDays(-5), occurredAt, reason,
-            eventId, eventType, actor, previousUnionId, previousUnionName, occurredAt);
+            eventId, eventType, actor, previousUnionId, previousUnionName, occurredAt,
+            operationKey, true);
     }
 
     private static DriverUnionAuditEvent CreateEvent() => new(

@@ -570,18 +570,118 @@ async Task EnsureUnionAssignmentAuditAsync(DriverUnionAssignment assignment, Can
     var expected = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment);
     if (expected is null) return;
 
-    // Avoid a duplicate create/409 on every history read. A missing point-read falls
-    // through to create; SaveUnionAuditAsync handles a concurrent create with canonical read-back.
+    // Only pending snapshots may repair an event. Completed snapshots retain hashes only,
+    // so a later retention deletion is not undone by a history read.
     var canonical = await FindUnionAuditEventAsync(expected.DriverId, expected.EventId, ct);
     if (canonical is not null)
     {
         if (!DriverUnionAuditSnapshotRecovery.Matches(expected, canonical))
             throw new InvalidOperationException(
-                "The persisted Union assignment audit differs from its private assignment snapshot. Refusing to return history or overwrite the event.");
+                "The persisted Union assignment audit differs from its pending snapshot. Refusing to return history or overwrite the event.");
+    }
+    else
+    {
+        await SaveUnionAuditAsync(expected, ct);
+    }
+
+    await TryCompleteUnionAssignmentAuditSnapshotAsync(assignment, expected, ct);
+}
+
+async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
+    DriverUnionAssignment assignment, DriverUnionAuditEvent expected, CancellationToken ct)
+{
+    static DriverUnionAssignment Complete(DriverUnionAssignment current) => current with
+    {
+        AuditSnapshotPending = false,
+        AuditEventType = null,
+        AuditActor = null,
+        AuditPreviousUnionId = null,
+        AuditPreviousUnionName = null,
+        AuditOccurredAtUtc = null,
+        LastAssignmentOperationKey = null,
+        AuditSnapshotPending = false
+    };
+
+    if (unionAssignmentContainer is null)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (!unionAssignments.TryGetValue(assignment.DriverId, out var current))
+                throw new InvalidOperationException("The Union assignment disappeared before its audit snapshot could be completed.");
+            if (!string.Equals(current.AuditEventId, expected.EventId, StringComparison.Ordinal))
+                return;
+            if (!current.AuditSnapshotPending)
+            {
+                _ = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(current);
+                return;
+            }
+
+            var currentExpected = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(current)
+                ?? throw new InvalidOperationException("The pending Union assignment audit snapshot disappeared before completion.");
+            if (!DriverUnionAuditSnapshotRecovery.Matches(expected, currentExpected))
+                throw new InvalidOperationException("The Union assignment audit snapshot changed before completion. Refusing to clear it.");
+
+            if (unionAssignments.TryUpdate(assignment.DriverId, Complete(current), current))
+                return;
+        }
+
+        if (!unionAssignments.TryGetValue(assignment.DriverId, out var latest))
+            throw new InvalidOperationException("The Union assignment disappeared before its audit snapshot could be completed.");
+        if (latest.AuditSnapshotPending && string.Equals(latest.AuditEventId, expected.EventId, StringComparison.Ordinal))
+            throw new InvalidOperationException("The Union assignment audit snapshot could not be completed after bounded in-memory retries.");
         return;
     }
 
-    await SaveUnionAuditAsync(expected, ct);
+    for (var attempt = 0; attempt < 3; attempt++)
+    {
+        ItemResponse<DriverUnionAssignment> response;
+        try
+        {
+            response = await unionAssignmentContainer.ReadItemAsync<DriverUnionAssignment>(
+                assignment.DriverId, new PartitionKey(assignment.DriverId), cancellationToken: ct);
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            throw new InvalidOperationException("The Union assignment disappeared before its audit snapshot could be completed.");
+        }
+
+        var current = response.Resource;
+        if (!string.Equals(current.AuditEventId, expected.EventId, StringComparison.Ordinal))
+            return;
+        if (!current.AuditSnapshotPending)
+        {
+            _ = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(current);
+            return;
+        }
+
+        var currentExpected = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(current)
+            ?? throw new InvalidOperationException("The pending Union assignment audit snapshot disappeared before completion.");
+        if (!DriverUnionAuditSnapshotRecovery.Matches(expected, currentExpected))
+            throw new InvalidOperationException("The Union assignment audit snapshot changed before completion. Refusing to clear it.");
+
+        try
+        {
+            await unionAssignmentContainer.ReplaceItemAsync(
+                Complete(current), current.id, new PartitionKey(current.DriverId),
+                new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+            return;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+        {
+            // Retry against the latest assignment; never clear a newer transfer's snapshot.
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            throw new InvalidOperationException("The Union assignment disappeared before its audit snapshot could be completed.");
+        }
+    }
+
+    var latestAssignment = await FindUnionAssignmentAsync(assignment.DriverId, ct);
+    if (latestAssignment is null)
+        throw new InvalidOperationException("The Union assignment disappeared before its audit snapshot could be completed.");
+    if (latestAssignment.AuditSnapshotPending &&
+        string.Equals(latestAssignment.AuditEventId, expected.EventId, StringComparison.Ordinal))
+        throw new InvalidOperationException("The Union assignment audit snapshot could not be completed after bounded Cosmos ETag retries.");
 }
 
 DriverUnionAssignment ToDriverUnionAssignmentResponse(DriverUnionAssignment assignment) =>
@@ -2166,8 +2266,9 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
         var assignmentReason = request.Reason.Trim();
         if (previous?.UnionId == union.UnionId && previous.Status == "Active")
         {
-            if (DriverUnionAssignmentAuditSnapshot.IsIdempotentRetry(previous, union.UnionId, assignmentReason))
-                return Results.Ok(previous);
+            var latestAssignment = await FindUnionAssignmentAsync(driverId, ct) ?? previous;
+            if (DriverUnionAssignmentAuditSnapshot.IsIdempotentRetry(latestAssignment, union.UnionId, assignmentReason))
+                return Results.Ok(latestAssignment);
             return Results.Conflict(new { message = "The driver is already assigned to this union." });
         }
 
@@ -2211,13 +2312,16 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
         var eventId = DriverUnionAuditIdentity.CreateAssignmentEventId(
             driverId, previous?.UnionId, previous?.UnionName, union.UnionId, union.Name,
             eventType, assignmentReason, actor, now);
+        var operationKey = DriverUnionAuditIdentity.CreateAssignmentOperationKey(
+            driverId, union.UnionId, assignmentReason);
         var assignment = new DriverUnionAssignment(
             driverId, union.UnionId, union.Name, "Active",
             previous?.AssignedAtUtc ?? now, now, assignmentReason,
-            eventId, eventType, actor, previous?.UnionId, previous?.UnionName, now);
+            eventId, eventType, actor, previous?.UnionId, previous?.UnionName, now,
+            operationKey, true);
         await SaveUnionAssignmentAsync(assignment, ct);
         await EnsureUnionAssignmentAuditAsync(assignment, ct);
-        return Results.Ok(assignment);
+        return Results.Ok(await FindUnionAssignmentAsync(driverId, ct) ?? assignment);
     }
     finally
     {

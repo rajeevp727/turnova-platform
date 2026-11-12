@@ -94,6 +94,21 @@ public static class DriverUnionAuditIdentity
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
     }
 
+    public static string CreateAssignmentOperationKey(string driverId, string newUnionId, string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newUnionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        if (reason.Length > 300)
+            throw new ArgumentOutOfRangeException(nameof(reason), "Union assignment reasons cannot exceed 300 characters.");
+
+        var material = new StringBuilder("turnova-union-assignment-operation-v1;");
+        AppendField(material, driverId);
+        AppendField(material, newUnionId);
+        AppendField(material, reason);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
+    }
+
     private static void AppendField(StringBuilder target, string value) =>
         target.Append(value.Length.ToString(CultureInfo.InvariantCulture))
             .Append(':')
@@ -138,24 +153,52 @@ public static class DriverUnionAssignmentAuditSnapshot
     public static DriverUnionAuditEvent? CreateExpectedEvent(DriverUnionAssignment assignment)
     {
         ArgumentNullException.ThrowIfNull(assignment);
-        var hasSnapshot = assignment.AuditEventId is not null ||
+        var hasRecoveryMetadata = assignment.AuditEventId is not null ||
+            assignment.LastAssignmentOperationKey is not null ||
+            assignment.AuditSnapshotPending ||
             assignment.AuditEventType is not null ||
             assignment.AuditActor is not null ||
             assignment.AuditPreviousUnionId is not null ||
             assignment.AuditPreviousUnionName is not null ||
             assignment.AuditOccurredAtUtc is not null;
-        if (!hasSnapshot) return null;
+        if (!hasRecoveryMetadata) return null;
 
-        if (string.IsNullOrWhiteSpace(assignment.AuditEventId) ||
-            string.IsNullOrWhiteSpace(assignment.AuditEventType) ||
-            !DriverUnionAuditActor.IsSafeOpaqueActor(assignment.AuditActor) ||
+        if (string.IsNullOrWhiteSpace(assignment.DriverId) ||
             string.IsNullOrWhiteSpace(assignment.UnionId) ||
-            string.IsNullOrWhiteSpace(assignment.UnionName) ||
             string.IsNullOrWhiteSpace(assignment.AssignmentReason) ||
             assignment.AssignmentReason.Length > 300 ||
+            string.IsNullOrWhiteSpace(assignment.AuditEventId) ||
+            assignment.AuditEventId.Length != 64 ||
+            assignment.AuditEventId.Any(character => !char.IsAsciiHexDigit(character)) ||
+            string.IsNullOrWhiteSpace(assignment.LastAssignmentOperationKey) ||
+            !string.Equals(
+                assignment.LastAssignmentOperationKey,
+                DriverUnionAuditIdentity.CreateAssignmentOperationKey(
+                    assignment.DriverId, assignment.UnionId, assignment.AssignmentReason),
+                StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "The Union assignment operation identity is incomplete or does not match the canonical assignment fields.");
+
+        var hasPrivateSnapshotFields = assignment.AuditEventType is not null ||
+            assignment.AuditActor is not null ||
+            assignment.AuditPreviousUnionId is not null ||
+            assignment.AuditPreviousUnionName is not null ||
+            assignment.AuditOccurredAtUtc is not null;
+
+        if (!assignment.AuditSnapshotPending)
+        {
+            if (hasPrivateSnapshotFields)
+                throw new InvalidOperationException(
+                    "A completed Union assignment audit snapshot must not retain private recovery fields.");
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(assignment.AuditEventType) ||
+            !DriverUnionAuditActor.IsSafeOpaqueActor(assignment.AuditActor) ||
+            string.IsNullOrWhiteSpace(assignment.UnionName) ||
             assignment.AuditOccurredAtUtc is null)
             throw new InvalidOperationException(
-                "The Union assignment audit snapshot is incomplete or contains an unsafe actor. Preserve the assignment and resolve its audit metadata before continuing.");
+                "The pending Union assignment audit snapshot is incomplete or contains an unsafe actor. Preserve the assignment and resolve its audit metadata before continuing.");
 
         if (assignment.AuditEventType == "Assigned" &&
             (assignment.AuditPreviousUnionId is not null || assignment.AuditPreviousUnionName is not null))
@@ -192,19 +235,18 @@ public static class DriverUnionAssignmentAuditSnapshot
             assignment.AuditOccurredAtUtc.Value);
     }
 
-    public static bool IsIdempotentRetry(
-        DriverUnionAssignment assignment,
-        string unionId,
-        string reason)
+    public static bool IsIdempotentRetry(DriverUnionAssignment assignment, string unionId, string reason)
     {
-        var expected = CreateExpectedEvent(assignment);
-        return expected is not null &&
-            string.Equals(assignment.Status, "Active", StringComparison.Ordinal) &&
+        _ = CreateExpectedEvent(assignment);
+        return string.Equals(assignment.Status, "Active", StringComparison.Ordinal) &&
             string.Equals(assignment.UnionId, unionId, StringComparison.Ordinal) &&
-            string.Equals(assignment.AssignmentReason, reason, StringComparison.Ordinal);
+            string.Equals(assignment.AssignmentReason, reason, StringComparison.Ordinal) &&
+            string.Equals(
+                assignment.LastAssignmentOperationKey,
+                DriverUnionAuditIdentity.CreateAssignmentOperationKey(assignment.DriverId, unionId, reason),
+                StringComparison.Ordinal);
     }
 }
-
 public static class DriverUnionAuditSnapshotRecovery
 {
     private const int MaximumReadAttempts = 3;

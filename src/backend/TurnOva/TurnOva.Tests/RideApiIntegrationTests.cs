@@ -1793,7 +1793,7 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
-    public async Task UnionTransferRetryAndHistoryReadRepairMissingAssignmentAuditWithoutExposingSnapshotToDriver()
+    public async Task UnionTransferRetryAndHistoryReadRepairPendingAuditWithoutResurrectingRetainedEvents()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string driverId = "assignment-audit-recovery-driver";
@@ -1814,14 +1814,54 @@ public sealed class RideApiIntegrationTests
             new { unionId = newUnionId, reason });
         Assert.Equal(HttpStatusCode.OK, firstTransfer.StatusCode);
 
-        var originalAssignment = assignments[driverId];
-        var expectedEvent = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(originalAssignment);
-        Assert.NotNull(expectedEvent);
-        Assert.Equal(oldUnionId, originalAssignment.AuditPreviousUnionId);
-        Assert.Equal("assignment-audit-ops", originalAssignment.AuditActor);
-        var originalEvent = Assert.Single(audit.Values, item => item.EventId == originalAssignment.AuditEventId);
-        Assert.Equal(expectedEvent, originalEvent);
+        var completedAssignment = assignments[driverId];
+        Assert.False(completedAssignment.AuditSnapshotPending);
+        Assert.NotNull(completedAssignment.AuditEventId);
+        Assert.NotNull(completedAssignment.LastAssignmentOperationKey);
+        Assert.Null(completedAssignment.AuditActor);
+        Assert.Null(completedAssignment.AuditPreviousUnionId);
+        Assert.Null(completedAssignment.AuditPreviousUnionName);
+        Assert.Null(completedAssignment.AuditOccurredAtUtc);
+        var originalEvent = Assert.Single(audit.Values, item => item.EventId == completedAssignment.AuditEventId);
+        Assert.Equal("assignment-audit-ops", originalEvent.Actor);
+        Assert.Equal(oldUnionId, originalEvent.PreviousUnionId);
+        Assert.Equal(newUnionId, originalEvent.NewUnionId);
+        Assert.Equal(reason, originalEvent.Reason);
 
+        var pendingSnapshot = completedAssignment with
+        {
+            AuditSnapshotPending = true,
+            AuditEventType = originalEvent.EventType,
+            AuditActor = originalEvent.Actor,
+            AuditPreviousUnionId = originalEvent.PreviousUnionId,
+            AuditPreviousUnionName = originalEvent.PreviousUnionName,
+            AuditOccurredAtUtc = originalEvent.OccurredAtUtc
+        };
+        assignments[driverId] = pendingSnapshot;
+        Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
+
+        var history = await ops.GetFromJsonAsync<DriverUnionAuditEvent[]>(
+            $"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.NotNull(history);
+        var historyEvent = Assert.Single(history, item => item.EventId == completedAssignment.AuditEventId);
+        Assert.Equal(originalEvent, historyEvent);
+        var completedAfterHistory = assignments[driverId];
+        Assert.False(completedAfterHistory.AuditSnapshotPending);
+        Assert.Null(completedAfterHistory.AuditActor);
+        Assert.Null(completedAfterHistory.AuditPreviousUnionId);
+        Assert.Null(completedAfterHistory.AuditPreviousUnionName);
+        Assert.Null(completedAfterHistory.AuditOccurredAtUtc);
+
+        var pendingAgain = completedAfterHistory with
+        {
+            AuditSnapshotPending = true,
+            AuditEventType = originalEvent.EventType,
+            AuditActor = originalEvent.Actor,
+            AuditPreviousUnionId = originalEvent.PreviousUnionId,
+            AuditPreviousUnionName = originalEvent.PreviousUnionName,
+            AuditOccurredAtUtc = originalEvent.OccurredAtUtc
+        };
+        assignments[driverId] = pendingAgain;
         Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
         using var retryTransfer = await ops.PostAsJsonAsync(
             $"/api/v1/ops/drivers/{driverId}/union-assignment",
@@ -1829,18 +1869,23 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, retryTransfer.StatusCode);
         var retryAssignment = await retryTransfer.Content.ReadFromJsonAsync<DriverUnionAssignment>();
         Assert.NotNull(retryAssignment);
-        Assert.Equal(originalAssignment.AuditEventId, retryAssignment.AuditEventId);
-        Assert.Equal(originalAssignment.AuditOccurredAtUtc, retryAssignment.AuditOccurredAtUtc);
-
-        var retryEvent = Assert.Single(audit.Values, item => item.EventId == originalAssignment.AuditEventId);
+        Assert.Equal(completedAssignment.AuditEventId, retryAssignment.AuditEventId);
+        Assert.False(retryAssignment.AuditSnapshotPending);
+        var retryEvent = Assert.Single(audit.Values, item => item.EventId == completedAssignment.AuditEventId);
         Assert.Equal(originalEvent, retryEvent);
 
         Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
-        var history = await ops.GetFromJsonAsync<DriverUnionAuditEvent[]>(
+        var historyAfterRetention = await ops.GetFromJsonAsync<DriverUnionAuditEvent[]>(
             $"/api/v1/ops/drivers/{driverId}/union-history");
-        Assert.NotNull(history);
-        var historyEvent = Assert.Single(history, item => item.EventId == originalAssignment.AuditEventId);
-        Assert.Equal(originalEvent, historyEvent);
+        Assert.NotNull(historyAfterRetention);
+        Assert.DoesNotContain(historyAfterRetention, item => item.EventId == completedAssignment.AuditEventId);
+        Assert.False(audit.ContainsKey($"{driverId}|{originalEvent.EventId}"));
+
+        using var idempotentRetryAfterRetention = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason });
+        Assert.Equal(HttpStatusCode.OK, idempotentRetryAfterRetention.StatusCode);
+        Assert.False(audit.ContainsKey($"{driverId}|{originalEvent.EventId}"));
 
         var driverAssignment = await driver.GetFromJsonAsync<DriverUnionAssignment>("/api/v1/driver/union");
         Assert.NotNull(driverAssignment);
@@ -1850,8 +1895,9 @@ public sealed class RideApiIntegrationTests
         Assert.Null(driverAssignment.AuditPreviousUnionId);
         Assert.Null(driverAssignment.AuditPreviousUnionName);
         Assert.Null(driverAssignment.AuditOccurredAtUtc);
+        Assert.Null(driverAssignment.LastAssignmentOperationKey);
+        Assert.False(driverAssignment.AuditSnapshotPending);
     }
-
     [Fact]
     public async Task UnionManagerSelfieReviewReconcilesExpiredOrphanReservationBeforeAcquiringReviewLease()
     {
