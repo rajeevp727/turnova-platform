@@ -20,6 +20,8 @@ public static class DriverUnionAuditIdentity
         ArgumentException.ThrowIfNullOrWhiteSpace(unionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(selfieContent);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        if (!DriverUnionAuditReason.IsNormalizedSafe(reason))
+            throw new ArgumentException("Union audit reasons must be normalized and must not contain contact details.", nameof(reason));
 
         var capturedAt = selfieCapturedAtUtc?.UtcDateTime.Ticks.ToString(CultureInfo.InvariantCulture)
             ?? "legacy";
@@ -69,8 +71,8 @@ public static class DriverUnionAuditIdentity
         ArgumentException.ThrowIfNullOrWhiteSpace(newUnionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(newUnionName);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
-        if (reason.Length > 300)
-            throw new ArgumentOutOfRangeException(nameof(reason), "Union assignment reasons cannot exceed 300 characters.");
+        if (!DriverUnionAuditReason.IsNormalizedSafe(reason))
+            throw new ArgumentException("Union assignment reasons must be normalized and must not contain contact details.", nameof(reason));
         if (eventType is not ("Assigned" or "Transferred"))
             throw new ArgumentOutOfRangeException(nameof(eventType), "Only Union assignment and transfer events have this identity.");
         if (!DriverUnionAuditActor.IsSafeOpaqueActor(actor))
@@ -99,8 +101,8 @@ public static class DriverUnionAuditIdentity
         ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
         ArgumentException.ThrowIfNullOrWhiteSpace(newUnionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
-        if (reason.Length > 300)
-            throw new ArgumentOutOfRangeException(nameof(reason), "Union assignment reasons cannot exceed 300 characters.");
+        if (!DriverUnionAuditReason.IsNormalizedSafe(reason))
+            throw new ArgumentException("Union assignment reasons must be normalized and must not contain contact details.", nameof(reason));
 
         var material = new StringBuilder("turnova-union-assignment-operation-v1;");
         AppendField(material, driverId);
