@@ -4736,6 +4736,13 @@ public sealed class RideApiIntegrationTests
         using var oldBookingJson = JsonDocument.Parse(await oldBooking.Content.ReadAsStringAsync());
         var oldRideId = oldBookingJson.RootElement.GetProperty("rideId").GetString()!;
         Assert.True(await reservations.TryReleaseAsync(driverId, oldRideId));
+        // The old aggregate must be terminal before the new booking: the new historical-ride
+        // guard correctly blocks a reservation-less active Negotiating ride.
+        rides[oldRideId] = rides[oldRideId] with
+        {
+            Status = "Completed",
+            NegotiationExpiresAtUtc = null
+        };
 
         using var newerRequest = CreateSelectedBookingRequest("newer-active-read-key", driverId, unionId,
             "KPHB", "Madhapur", []);
@@ -4744,12 +4751,6 @@ public sealed class RideApiIntegrationTests
         using var newerBookingJson = JsonDocument.Parse(await newerBooking.Content.ReadAsStringAsync());
         var newerRideId = newerBookingJson.RootElement.GetProperty("rideId").GetString()!;
         Assert.NotEqual(oldRideId, newerRideId);
-
-        rides[oldRideId] = rides[oldRideId] with
-        {
-            Status = "Completed",
-            NegotiationExpiresAtUtc = null
-        };
 
         using var oldRideRead = await rider.GetAsync($"/api/v1/rides/{oldRideId}");
         Assert.Equal(HttpStatusCode.OK, oldRideRead.StatusCode);
