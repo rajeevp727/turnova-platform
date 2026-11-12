@@ -1787,6 +1787,9 @@ public sealed class RideApiIntegrationTests
             $"/api/v1/ops/drivers/{driverId}/union-assignment",
             new { unionId = newUnionId, reason = "Driver moved to the new Cab union." });
         Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
+        var transferAudit = Assert.Single(auditStore.Values.Where(item =>
+            item.DriverId == driverId && item.EventType == "Transferred"));
+        Assert.Equal("Operations", transferAudit.Actor);
 
         var transferredProfile = profiles[driverId];
         Assert.Equal("Pending", transferredProfile.ProfilePhotoApprovalStatus);
