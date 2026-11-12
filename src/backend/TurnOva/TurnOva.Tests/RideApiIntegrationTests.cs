@@ -414,7 +414,11 @@ public sealed class RideApiIntegrationTests
             AvailabilityStatus = "Offline",
             CurrentLatitude = 17.401,
             CurrentLongitude = 78.402,
-            LocationUpdatedAtUtc = locationUpdatedAtUtc
+            LocationUpdatedAtUtc = locationUpdatedAtUtc,
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = locationUpdatedAtUtc,
+            ProfilePhotoReviewReason = "Previous Operations rejection",
+            ProfilePhotoOperationsReviewActorId = "ops-actor-before-new-selfie"
         };
 
         var response = await driver.PutAsJsonAsync("/api/v1/driver/onboarding/selfie",
@@ -428,6 +432,9 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(17.401, updated.CurrentLatitude);
         Assert.Equal(78.402, updated.CurrentLongitude);
         Assert.Equal(locationUpdatedAtUtc, updated.LocationUpdatedAtUtc);
+        Assert.Null(updated.ProfilePhotoReviewedAtUtc);
+        Assert.Null(updated.ProfilePhotoReviewReason);
+        Assert.Null(updated.ProfilePhotoOperationsReviewActorId);
     }
 
     [Fact]
@@ -1251,7 +1258,6 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string driverId = "union-then-operations-review-driver";
         const string unionId = "union-then-operations-review-union";
-        using var driver = factory.CreateClient("Driver", driverId);
         using var ops = factory.CreateClient("Rider", "ops-reviewer-after-union");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-rejector");
@@ -1283,7 +1289,7 @@ public sealed class RideApiIntegrationTests
 
         var operationsReviewedAt = profiles[driverId].ProfilePhotoReviewedAtUtc;
         Assert.NotNull(operationsReviewedAt);
-        Assert.True(operationsReviewedAt > unionReviewedAt);
+        Assert.True(operationsReviewedAt.Value > unionReviewedAt.Value);
         Assert.Equal("ops-reviewer-after-union", profiles[driverId].ProfilePhotoOperationsReviewActorId);
 
         var auditEvents = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
