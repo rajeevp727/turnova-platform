@@ -1223,37 +1223,63 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
         return Results.BadRequest(new { message = "Provide a valid JPEG selfie no larger than 300 KB." });
-    var profile = await FindDriverProfileAsync(driverId, ct);
-    if (profile is null) return Results.NotFound(new { message = "Complete driver onboarding before adding a profile selfie." });
-    if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
-        return Results.Conflict(new { message = "Legacy non-Cab profiles cannot update a selfie for new MVP eligibility." });
-    var capturedAtUtc = DateTimeOffset.UtcNow;
-    var saved = await TryUpdateDriverProfileAsync(driverId, current =>
+    if (await HasActiveDriverRideAsync(driverId, ct))
+        return Results.Conflict(new { message = "A Driver with an active negotiation or ride cannot replace the discovery selfie." });
+
+    var selfieLeaseId = $"DRIVER-SELFIE-UPDATE-{Guid.NewGuid():N}";
+    var selfieAuditContext = DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.DriverProfileReview);
+    if (!await driverRideReservations.TryAcquireTemporaryAsync(
+        driverId, selfieLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct, selfieAuditContext))
+        return Results.Conflict(new { message = "The Driver is reserved by a booking, ride or Union membership change. Retry after it is resolved." });
+
+    try
     {
-        if (!string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
-            return null;
+        var profile = await FindDriverProfileAsync(driverId, ct);
+        if (profile is null) return Results.NotFound(new { message = "Complete driver onboarding before adding a profile selfie." });
+        if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "Legacy non-Cab profiles cannot update a selfie for new MVP eligibility." });
 
-        return current with
+        if (!string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId))
+            await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
+
+        var capturedAtUtc = DateTimeOffset.UtcNow;
+        var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         {
-            ProfilePhotoBase64 = request.ProfilePhotoBase64,
-            ProfilePhotoContentType = "image/jpeg",
-            ProfilePhotoCapturedAtUtc = capturedAtUtc,
-            ProfilePhotoApprovalStatus = "Pending",
-            ProfilePhotoApprovedByUnionId = null,
-            ProfilePhotoReviewedAtUtc = null,
-            ProfilePhotoReviewReason = null,
-            ProfilePhotoOperationsReviewActorId = null,
-            ProfilePhotoOperationsReviewUnionId = null,
-            ProfilePhotoOperationsReviewUnionName = null
-        };
-    }, ct);
-    if (!saved)
-        return Results.Conflict(new { message = "Driver profile changed during selfie update. Refresh the profile and retry." });
+            if (!string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+                return null;
 
-    var updated = await FindDriverProfileAsync(driverId, ct);
-    return updated is null
-        ? Results.NotFound(new { message = "Driver profile no longer exists." })
-        : Results.Ok(updated with { ProfilePhotoOperationsReviewActorId = null, ProfilePhotoOperationsReviewUnionId = null, ProfilePhotoOperationsReviewUnionName = null });
+            return current with
+            {
+                ProfilePhotoBase64 = request.ProfilePhotoBase64,
+                ProfilePhotoContentType = "image/jpeg",
+                ProfilePhotoCapturedAtUtc = capturedAtUtc,
+                ProfilePhotoApprovalStatus = "Pending",
+                ProfilePhotoApprovedByUnionId = null,
+                ProfilePhotoReviewedAtUtc = null,
+                ProfilePhotoReviewReason = null,
+                ProfilePhotoOperationsReviewActorId = null,
+                ProfilePhotoOperationsReviewUnionId = null,
+                ProfilePhotoOperationsReviewUnionName = null
+            };
+        }, ct);
+        if (!saved)
+            return Results.Conflict(new { message = "Driver profile changed during selfie update. Refresh the profile and retry." });
+
+        var updated = await FindDriverProfileAsync(driverId, ct);
+        return updated is null
+            ? Results.NotFound(new { message = "Driver profile no longer exists." })
+            : Results.Ok(updated with
+            {
+                ProfilePhotoOperationsReviewActorId = null,
+                ProfilePhotoOperationsReviewUnionId = null,
+                ProfilePhotoOperationsReviewUnionName = null
+            });
+    }
+    finally
+    {
+        await driverRideReservations.TryReleaseAsync(
+            driverId, selfieLeaseId, CancellationToken.None, selfieAuditContext);
+    }
 });
 
 onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest request, CancellationToken ct) =>
@@ -1277,7 +1303,18 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
             document.StorageReference.Contains("..", StringComparison.Ordinal) ||
             Uri.TryCreate(document.StorageReference, UriKind.Absolute, out _)))
         return Results.BadRequest(new { message = "Provide valid driver, vehicle and document metadata. Upload files to private object storage and submit opaque storage references only." });
+    
+    if (await HasActiveDriverRideAsync(driverId, ct))
+        return Results.Conflict(new { message = "A Driver with an active negotiation or ride cannot replace onboarding data." });
 
+    var onboardingLeaseId = $"DRIVER-ONBOARDING-{Guid.NewGuid():N}";
+    var onboardingAuditContext = DriverRideReservationAuditContext.ForSystem(DriverRideReservationAuditReasons.DriverProfileReview);
+    if (!await driverRideReservations.TryAcquireTemporaryAsync(
+        driverId, onboardingLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct, onboardingAuditContext))
+        return Results.Conflict(new { message = "The Driver is reserved by a booking, ride or Union membership change. Retry after it is resolved." });
+
+    try
+    {
     var submittedAtUtc = DateTimeOffset.UtcNow;
     var profilePhotoCapturedAtUtc = submittedAtUtc;
     var documents = request.Documents
@@ -1308,6 +1345,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
             return Results.Conflict(new { message = "This legacy non-Cab profile is retained for historical records and cannot be converted through onboarding. Cab vehicle verification must be completed through the union workflow." });
         if (existing.Status is "Approved" or "Suspended")
             return Results.Conflict(new { message = "An approved or suspended driver profile cannot be replaced through onboarding." });
+        if (!string.IsNullOrWhiteSpace(existing.ProfilePhotoOperationsReviewActorId))
+            await EnsureOperationsSelfieRejectionAuditAsync(existing, ct);
 
         var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         {
@@ -1364,6 +1403,12 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
     }
 
     return Results.Conflict(new { message = "Driver profile could not be created because another onboarding update is in progress. Refresh the profile and retry." });
+    }
+    finally
+    {
+        await driverRideReservations.TryReleaseAsync(
+            driverId, onboardingLeaseId, CancellationToken.None, onboardingAuditContext);
+    }
 });
 
 app.MapGet("/api/v1/ops/drivers/{driverId}", async (HttpContext context, string driverId, CancellationToken ct) =>
@@ -1844,7 +1889,15 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             return Results.Conflict(new { message = "The active union, Cab driver profile and required licence/vehicle documents must be approved before selfie review." });
 
         var reason = request.Status == "Rejected" ? request.Reason!.Trim() : null;
+        if (!string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId))
+        {
+            if (!string.Equals(profile.ProfilePhotoOperationsReviewUnionId, union.UnionId, StringComparison.Ordinal))
+                return Results.Conflict(new { message = "Pending Operations selfie audit metadata does not match the current Union. Resolve the audit before review." });
+            await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
+        }
+
         var sameReview =
+            string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId) &&
             profile.ProfilePhotoApprovalStatus == request.Status &&
             profile.ProfilePhotoApprovedByUnionId == (request.Status == "Approved" ? assignment.UnionId : null) &&
             profile.ProfilePhotoReviewReason == reason;
