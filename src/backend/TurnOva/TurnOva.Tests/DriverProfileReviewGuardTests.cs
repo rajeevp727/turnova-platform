@@ -96,6 +96,8 @@ public sealed class DriverProfileReviewGuardTests
     {
         Assert.Equal("Reviewed on 2026-11-13",
             DriverUnionAuditReason.Normalize(" Reviewed on 2026-11-13 "));
+        Assert.Equal("Reviewed on 2026-11-13 at 10:30",
+            DriverUnionAuditReason.Normalize("Reviewed on 2026-11-13 at 10:30"));
     }
 
     [Fact]
