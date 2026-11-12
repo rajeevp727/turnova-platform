@@ -35,4 +35,7 @@ public sealed record DriverOnboardingProfile(
     // Monotonic GPS capture watermark; retained while Offline to reject delayed fixes.
     DateTimeOffset? LocationCapturedAtUtc = null,
     // Private recovery metadata; API driver responses explicitly redact this actor identity.
-    string? ProfilePhotoOperationsReviewActorId = null);
+    string? ProfilePhotoOperationsReviewActorId = null,
+    // Private canonical audit context, cleared whenever the reviewed selfie/membership changes.
+    string? ProfilePhotoOperationsReviewUnionId = null,
+    string? ProfilePhotoOperationsReviewUnionName = null);
