@@ -1258,7 +1258,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string driverId = "union-then-operations-review-driver";
         const string unionId = "union-then-operations-review-union";
-        using var ops = factory.CreateClient("Rider", "ops-reviewer-after-union");
+        using var ops = factory.CreateClient("Ops", "ops-reviewer-after-union");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-rejector");
 
@@ -1310,7 +1310,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var driver = factory.CreateClient("Driver", "union-review-driver");
         using var rider = factory.CreateClient("Rider", "union-review-rider");
-        using var ops = factory.CreateClient("Rider", "union-review-ops");
+        using var ops = factory.CreateClient("Ops", "union-review-ops");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
 
         const string unionId = "union-review-union";
@@ -1480,7 +1480,7 @@ public sealed class RideApiIntegrationTests
 
         // The profile commit succeeded but the audit write is missing. An identical
         // retry must restore the deterministic event without changing the review time.
-        using var retryingOps = factory.CreateClient("Rider", "union-review-ops-retry");
+        using var retryingOps = factory.CreateClient("Ops", "union-review-ops-retry");
         retryingOps.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         using var recoveredRejection = await retryingOps.PutAsJsonAsync(
             $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
