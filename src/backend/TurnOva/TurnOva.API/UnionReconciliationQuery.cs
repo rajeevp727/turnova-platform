@@ -19,6 +19,7 @@ public static class UnionReconciliationQuery
         "FROM c WHERE c.unionId = @unionId " +
         "AND IS_DEFINED(c.paymentReconciliation) " +
         "AND c.paymentReconciliation.unionId = @unionId " +
+        "AND c.rideId = c.paymentReconciliation.rideId " +
         "AND LOWER(c.serviceClass) = 'cab'";
 }
 

@@ -234,3 +234,90 @@ test("Driver logout storage cleanup failure releases loading only for the same l
   assert.match(catchBlock, /finishLoadingIfSessionCurrent\(setLoading, \(\) => sessionEpoch\.current === logoutEpoch\)/);
   assert.match(catchBlock, /if \(sessionEpoch\.current === logoutEpoch\) setError/);
 });
+
+
+
+test("stale Driver payment-report completion cannot refresh or mutate a newer authenticated session", async () => {
+  let sessionEpoch = 21;
+  const requestEpoch = sessionEpoch;
+  const isSessionCurrent = () => sessionEpoch === requestEpoch;
+  let loading = true;
+  let historyRefreshes = 0;
+  let notice = "";
+  let error = "";
+  let paymentAmounts = { "ride-account-a": "450" };
+  let completePost;
+  const post = new Promise(resolve => { completePost = resolve; });
+
+  const operation = (async () => {
+    try {
+      await post;
+      if (!isSessionCurrent()) return;
+      historyRefreshes += 1;
+      if (!isSessionCurrent()) return;
+      paymentAmounts = {};
+      notice = "reported";
+    } catch (failure) {
+      if (isSessionCurrent()) error = String(failure);
+    } finally {
+      finishLoadingIfSessionCurrent(value => { loading = value; }, isSessionCurrent);
+    }
+  })();
+
+  // Account B starts authenticating before Account A's payment report completes.
+  sessionEpoch += 1;
+  loading = true;
+  notice = "Account B state";
+  paymentAmounts = { "ride-account-b": "900" };
+  completePost();
+  await operation;
+
+  assert.equal(historyRefreshes, 0);
+  assert.equal(loading, true);
+  assert.equal(notice, "Account B state");
+  assert.equal(error, "");
+  assert.deepEqual(paymentAmounts, { "ride-account-b": "900" });
+});
+
+test("current Driver payment-report completion refreshes history and clears only its own input", async () => {
+  const sessionEpoch = { current: 31 };
+  const requestEpoch = sessionEpoch.current;
+  const isSessionCurrent = () => sessionEpoch.current === requestEpoch;
+  let loading = true;
+  let historyRefreshes = 0;
+  let notice = "";
+  let paymentAmounts = { "ride-current": "450", "ride-other": "300" };
+
+  try {
+    await Promise.resolve();
+    if (isSessionCurrent()) historyRefreshes += 1;
+    if (isSessionCurrent()) {
+      paymentAmounts = Object.fromEntries(Object.entries(paymentAmounts).filter(([id]) => id !== "ride-current"));
+      notice = "reported";
+    }
+  } finally {
+    finishLoadingIfSessionCurrent(value => { loading = value; }, isSessionCurrent);
+  }
+
+  assert.equal(historyRefreshes, 1);
+  assert.equal(loading, false);
+  assert.equal(notice, "reported");
+  assert.deepEqual(paymentAmounts, { "ride-other": "300" });
+});
+
+test("Driver payment-report handler fences response, history refresh, errors and loading by its captured session", () => {
+  const app = fs.readFileSync(path.join(__dirname, "../driver-app/App.tsx"), "utf8");
+  const start = app.indexOf("const reportPaymentReceived = async");
+  const end = app.indexOf("useEffect", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const handler = app.slice(start, end);
+
+  assert.match(handler, /const requestEpoch = sessionEpoch\.current/);
+  assert.match(handler, /const isSessionCurrent = \(\) => sessionEpoch\.current === requestEpoch/);
+  assert.match(handler, /await loadDriverRideHistory\(isSessionCurrent\)/);
+  assert.match(handler, /if \(isSessionCurrent\(\)\)\s*setError/);
+  assert.match(handler, /finishLoadingIfSessionCurrent\(setLoading, isSessionCurrent\)/);
+  assert.doesNotMatch(handler, /loadDriverRideHistory\(\(\) => true\)/);
+  assert.doesNotMatch(handler, /finally\s*\{\s*setLoading\(false\)/);
+});

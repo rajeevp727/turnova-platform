@@ -27,6 +27,7 @@ public sealed class UnionReconciliationProjectionTests
             selectClause);
         Assert.Contains("c.unionId = @unionId", sql, StringComparison.Ordinal);
         Assert.Contains("c.paymentReconciliation.unionId = @unionId", sql, StringComparison.Ordinal);
+        Assert.Contains("AND c.rideId = c.paymentReconciliation.rideId", sql, StringComparison.Ordinal);
         Assert.Contains("AND LOWER(c.serviceClass) = 'cab'", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("SELECT *", sql, StringComparison.OrdinalIgnoreCase);
 

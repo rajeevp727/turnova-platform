@@ -126,6 +126,9 @@ case "$1" in
       input)
         if [[ "${2:-}" == "tap" ]]; then
           printf '%s %s\n' "${3:-}" "${4:-}" >> "$FAKE_INPUT_LOG"
+          if [[ "${3:-} ${4:-}" == "540 961" && -n "${FAKE_SYSTEM_ANR_CLOSED_FILE:-}" ]]; then
+            printf 'closed\n' > "$FAKE_SYSTEM_ANR_CLOSED_FILE"
+          fi
         fi
         ;;
       uiautomator) echo "UI hierarchy dumped to: /sdcard/turnova-ui-hierarchy.xml" ;;
@@ -136,15 +139,34 @@ case "$1" in
         fi
         dump_count=$((dump_count + 1))
         printf '%s\n' "$dump_count" > "$FAKE_UI_DUMP_COUNT_FILE"
+        closed=false
+        if [[ -n "${FAKE_SYSTEM_ANR_CLOSED_FILE:-}" && -f "$FAKE_SYSTEM_ANR_CLOSED_FILE" ]]; then closed=true; fi
+        title=""
         if [[ "${FAKE_OTHER_ANR_ALWAYS:-0}" == "1" ]]; then
-          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"TurnOva Rider isn't responding\"/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" clickable=\"true\" enabled=\"true\"/></hierarchy>"
-        elif [[ "${FAKE_PIXEL_LAUNCHER_ANR_ALWAYS:-0}" == "1" || ( "${FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP:-0}" == "1" && "$dump_count" == "1" ) ]]; then
+          title="TurnOva Rider isn't responding"
+        elif [[ "${FAKE_UNKNOWN_SYSTEM_ANR_ALWAYS:-0}" == "1" ]]; then
+          title="Android System isn't responding"
+        elif [[ "${FAKE_GOOGLE_SETUP_ANR_WAIT_THEN_CLOSE:-0}" == "1" && "$closed" != true && "$dump_count" -le 2 ]]; then
+          title="com.google.android.googlesdksetup isn't responding"
+        elif [[ "${FAKE_PIXEL_LAUNCHER_ANR_ALWAYS:-0}" == "1" ]]; then
+          title="Pixel Launcher isn't responding"
+        elif [[ "${FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE:-0}" == "1" && "$closed" != true && "$dump_count" -le 2 ]]; then
+          title="Pixel Launcher isn't responding"
+        elif [[ "${FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP:-0}" == "1" && "$dump_count" == "1" ]]; then
+          title="Pixel Launcher isn't responding"
+        fi
+        if [[ -n "$title" ]]; then
           if [[ "${FAKE_PIXEL_LAUNCHER_WAIT_DISABLED:-0}" == "1" ]]; then
             wait_state='clickable="false" enabled="false"'
           else
             wait_state='clickable="true" enabled="true"'
           fi
-          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"Pixel Launcher isn't responding\"/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" ${wait_state}/></hierarchy>"
+          if [[ "${FAKE_SYSTEM_ANR_CLOSE_DISABLED:-0}" == "1" ]]; then
+            close_state='clickable="false" enabled="false"'
+          else
+            close_state='clickable="true" enabled="true"'
+          fi
+          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"$title\"/><node resource-id=\"android:id/aerr_close\" text=\"Close app\" bounds=\"[70,898][1010,1024]\" ${close_state}/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" ${wait_state}/></hierarchy>"
         elif [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
           printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
         else
@@ -155,12 +177,20 @@ case "$1" in
       cmd) echo "com.turnova.rider/.MainActivity" ;;
       am) printf 'Status: ok\nActivity: com.turnova.rider/.MainActivity\n' ;;
       pidof) echo "4242" ;;
-      dumpsys) echo "mResumedActivity: ActivityRecord { com.turnova.rider/.MainActivity }" ;;
+      dumpsys)
+        if [[ "${FAKE_APP_NOT_FOREGROUND:-0}" == "1" ]]; then
+          printf 'mResumedActivity: ActivityRecord { com.google.android.apps.nexuslauncher/.NexusLauncherActivity }\n* Hist #0: com.turnova.rider/.MainActivity\n'
+        else
+          echo "mResumedActivity: ActivityRecord { com.turnova.rider/.MainActivity }"
+        fi
+        ;;
       *) echo "unexpected adb shell arguments: $*" >&2; exit 2 ;;
     esac
     ;;
   logcat)
-    if [[ "$FAKE_TARGET_EXCEPTION" == "1" ]]; then
+    if [[ "${FAKE_TARGET_ANR:-0}" == "1" ]]; then
+      printf '2026-11-09 11:00:00.000 4242 4242 E ActivityManager: ANR in com.turnova.rider\n'
+    elif [[ "$FAKE_TARGET_EXCEPTION" == "1" ]]; then
       printf '2026-11-09 11:00:00.000 4242 4242 E ReactNativeJS: Unhandled JS Exception: target fixture\n'
     else
       printf '2026-11-09 11:00:00.000 1111 1111 E ReactNativeJS: Unhandled JS Exception: unrelated fixture\n'
@@ -197,8 +227,15 @@ exit 0
                     "FAKE_RESTORE_ERROR": "0",
                     "FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP": "0",
                     "FAKE_PIXEL_LAUNCHER_ANR_ALWAYS": "0",
+                    "FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE": "0",
+                    "FAKE_GOOGLE_SETUP_ANR_WAIT_THEN_CLOSE": "0",
                     "FAKE_PIXEL_LAUNCHER_WAIT_DISABLED": "0",
+                    "FAKE_SYSTEM_ANR_CLOSE_DISABLED": "0",
+                    "FAKE_UNKNOWN_SYSTEM_ANR_ALWAYS": "0",
+                    "FAKE_APP_NOT_FOREGROUND": "0",
                     "FAKE_OTHER_ANR_ALWAYS": "0",
+                    "FAKE_TARGET_ANR": "0",
+                    "FAKE_SYSTEM_ANR_CLOSED_FILE": str(output / "system-anr-closed"),
                     "FAKE_UI_DUMP_COUNT_FILE": str(output / "ui-dump-count"),
                     "FAKE_INPUT_LOG": str(output / "input-taps.txt"),
                     "FAKE_ADB_EMU_KILL_LOG": str(output / "global-adb-emu-kill.txt"),
@@ -360,110 +397,181 @@ exit 0
             environment["FAKE_UI_DUMP_COUNT_FILE"] = str(output / "ui-dump-count")
             environment["FAKE_INPUT_LOG"] = str(output / "input-taps.txt")
 
-            # A transient Pixel Launcher ANR is handled only through its explicit Wait
-            # control; the app must still render the login surface and produce evidence.
+            # A transient allow-listed Pixel Launcher ANR is handled through one bounded Wait.
             recovered_output = root / "anr-recovered-output"
             environment["FAKE_UI_DUMP_COUNT_FILE"] = str(recovered_output / "ui-dump-count")
             environment["FAKE_INPUT_LOG"] = str(recovered_output / "input-taps.txt")
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(recovered_output / "system-anr-closed")
             environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "1"
             recovered_command = command[:-1] + [str(recovered_output)]
             recovered_anr = subprocess.run(
-                recovered_command,
-                cwd=REPO_ROOT,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
+                recovered_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
             )
-            self.assertEqual(
-                recovered_anr.returncode,
-                0,
-                msg=f"stdout:\n{recovered_anr.stdout}\nstderr:\n{recovered_anr.stderr}",
-            )
+            self.assertEqual(recovered_anr.returncode, 0, msg=f"stdout:\n{recovered_anr.stdout}\nstderr:\n{recovered_anr.stderr}")
             recovered_report = json.loads((recovered_output / "result.json").read_text(encoding="utf-8"))
             self.assertEqual(recovered_report["systemUiRecovery"]["pixelLauncherAnrWaitAttempts"], 1)
             self.assertTrue(recovered_report["systemUiRecovery"]["pixelLauncherAnrRecovered"])
+            self.assertIn("com.google.android.apps.nexuslauncher", recovered_report["systemUiRecovery"]["systemAnrPackagesRecovered"])
             self.assertIn("540 1087", (recovered_output / "input-taps.txt").read_text(encoding="utf-8"))
-            self.assertTrue((recovered_output / "pixel-launcher-anr-1.xml").is_file())
+            self.assertTrue((recovered_output / "system-anr-1.xml").is_file())
             recovered_ui = (recovered_output / "ui-hierarchy.xml").read_text(encoding="utf-8")
             for expected_text in ("Welcome back", "Email address", "Password", "Sign in"):
                 self.assertIn(expected_text, recovered_ui)
 
-            # A persistent launcher ANR fails closed after two Wait attempts and
-            # cannot leave a success result behind.
+            # A persistent launcher ANR is closed only while the target app remains
+            # foreground and stable, then the login surface is verified.
+            close_output = root / "anr-close-recovered-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(close_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(close_output / "input-taps.txt")
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(close_output / "system-anr-closed")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE"] = "1"
+            close_command = command[:-1] + [str(close_output)]
+            close_recovered = subprocess.run(
+                close_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(close_recovered.returncode, 0, msg=f"stdout:\n{close_recovered.stdout}\nstderr:\n{close_recovered.stderr}")
+            close_report = json.loads((close_output / "result.json").read_text(encoding="utf-8"))
+            self.assertEqual(close_report["systemUiRecovery"]["systemAnrPackagesClosed"], ["com.google.android.apps.nexuslauncher"])
+            self.assertTrue(close_report["systemUiRecovery"]["targetAppRemainedForegroundAndStable"])
+            self.assertEqual(
+                (close_output / "input-taps.txt").read_text(encoding="utf-8").splitlines(),
+                ["540 1087", "540 961"],
+            )
+
+            # The second observed system ANR is Google SDK Setup. It receives the same
+            # bounded Wait/Close treatment only while TurnOva remains foreground.
+            google_output = root / "google-setup-anr-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(google_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(google_output / "input-taps.txt")
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(google_output / "system-anr-closed")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE"] = "0"
+            environment["FAKE_GOOGLE_SETUP_ANR_WAIT_THEN_CLOSE"] = "1"
+            google_command = command[:-1] + [str(google_output)]
+            google_recovered = subprocess.run(
+                google_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(google_recovered.returncode, 0, msg=f"stdout:\n{google_recovered.stdout}\nstderr:\n{google_recovered.stderr}")
+            google_report = json.loads((google_output / "result.json").read_text(encoding="utf-8"))
+            self.assertEqual(google_report["systemUiRecovery"]["systemAnrPackagesClosed"], ["com.google.android.googlesdksetup"])
+            self.assertIn("com.google.android.googlesdksetup isn't responding", google_report["systemUiRecovery"]["systemAnrTitlesRecovered"])
+
+            # A system ANR that persists after bounded Wait and Close fails closed.
             persistent_output = root / "anr-persistent-output"
             environment["FAKE_UI_DUMP_COUNT_FILE"] = str(persistent_output / "ui-dump-count")
             environment["FAKE_INPUT_LOG"] = str(persistent_output / "input-taps.txt")
-            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(persistent_output / "system-anr-closed")
+            environment["FAKE_GOOGLE_SETUP_ANR_WAIT_THEN_CLOSE"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "1"
             persistent_command = command[:-1] + [str(persistent_output)]
             persistent_anr = subprocess.run(
-                persistent_command,
-                cwd=REPO_ROOT,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
+                persistent_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
             )
             self.assertEqual(persistent_anr.returncode, 1)
-            self.assertIn("persisted after two bounded Wait attempts", persistent_anr.stderr)
+            self.assertIn("remained after bounded Wait/Close recovery", persistent_anr.stderr)
             self.assertEqual(
                 (persistent_output / "input-taps.txt").read_text(encoding="utf-8").splitlines(),
-                ["540 1087", "540 1087"],
+                ["540 1087", "540 961"],
             )
             self.assertFalse((persistent_output / "result.json").exists())
 
-            # Never tap a system dialog control unless the hierarchy proves it is
-            # enabled and clickable; fail closed without interacting with a disabled control.
+            # A disabled Close control is never tapped after the bounded Wait.
+            disabled_close_output = root / "anr-disabled-close-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(disabled_close_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(disabled_close_output / "input-taps.txt")
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(disabled_close_output / "system-anr-closed")
+            environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE"] = "1"
+            environment["FAKE_SYSTEM_ANR_CLOSE_DISABLED"] = "1"
+            disabled_close_command = command[:-1] + [str(disabled_close_output)]
+            disabled_close = subprocess.run(
+                disabled_close_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(disabled_close.returncode, 1)
+            self.assertIn("safe Close app control could not be resolved", disabled_close.stderr)
+            self.assertEqual(
+                (disabled_close_output / "input-taps.txt").read_text(encoding="utf-8").splitlines(),
+                ["540 1087"],
+            )
+            self.assertFalse((disabled_close_output / "result.json").exists())
+
+            # A disabled Wait control must fail closed before Close is considered.
             disabled_wait_output = root / "anr-disabled-wait-output"
             environment["FAKE_UI_DUMP_COUNT_FILE"] = str(disabled_wait_output / "ui-dump-count")
             environment["FAKE_INPUT_LOG"] = str(disabled_wait_output / "input-taps.txt")
-            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "1"
-            environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(disabled_wait_output / "system-anr-closed")
+            environment["FAKE_SYSTEM_ANR_CLOSE_DISABLED"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "1"
             disabled_wait_command = command[:-1] + [str(disabled_wait_output)]
             disabled_wait = subprocess.run(
-                disabled_wait_command,
-                cwd=REPO_ROOT,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
+                disabled_wait_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
             )
             self.assertEqual(disabled_wait.returncode, 1)
-            self.assertIn("safe Wait control could not be resolved", disabled_wait.stderr)
+            self.assertIn("no safe enabled Wait control", disabled_wait.stderr)
             self.assertFalse((disabled_wait_output / "input-taps.txt").exists())
             self.assertFalse((disabled_wait_output / "result.json").exists())
-
-            # A different app/system ANR must never be dismissed as a launcher issue.
-            other_anr_output = root / "other-anr-output"
-            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(other_anr_output / "ui-dump-count")
-            environment["FAKE_INPUT_LOG"] = str(other_anr_output / "input-taps.txt")
             environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "0"
-            environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
-            environment["FAKE_OTHER_ANR_ALWAYS"] = "1"
-            other_anr_command = command[:-1] + [str(other_anr_output)]
-            other_anr = subprocess.run(
-                other_anr_command,
-                cwd=REPO_ROOT,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
+
+            # A target-app ANR and an unknown system ANR are never dismissed.
+            for scenario, target_flag, unknown_flag, expected in (
+                ("app-anr-output", "1", "0", "TurnOva Rider isn't responding"),
+                ("unknown-system-anr-output", "0", "1", "Android System isn't responding"),
+            ):
+                other_output = root / scenario
+                environment["FAKE_UI_DUMP_COUNT_FILE"] = str(other_output / "ui-dump-count")
+                environment["FAKE_INPUT_LOG"] = str(other_output / "input-taps.txt")
+                environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(other_output / "system-anr-closed")
+                environment["FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE"] = "0"
+                environment["FAKE_GOOGLE_SETUP_ANR_WAIT_THEN_CLOSE"] = "0"
+                environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
+                environment["FAKE_SYSTEM_ANR_CLOSE_DISABLED"] = "0"
+                environment["FAKE_OTHER_ANR_ALWAYS"] = target_flag
+                environment["FAKE_UNKNOWN_SYSTEM_ANR_ALWAYS"] = unknown_flag
+                other_command = command[:-1] + [str(other_output)]
+                other_anr = subprocess.run(
+                    other_command, cwd=REPO_ROOT, env=environment,
+                    capture_output=True, text=True, timeout=30, check=False,
+                )
+                self.assertEqual(other_anr.returncode, 1)
+                self.assertIn(f"Unexpected Android app/system ANR dialog: {expected}", other_anr.stderr)
+                self.assertFalse((other_output / "input-taps.txt").exists())
+                self.assertFalse((other_output / "result.json").exists())
+
+            # System UI recovery is forbidden unless TurnOva remains the resumed
+            # foreground activity with the same process ID.
+            foreground_output = root / "app-not-foreground-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(foreground_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(foreground_output / "input-taps.txt")
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(foreground_output / "system-anr-closed")
+            environment["FAKE_APP_NOT_FOREGROUND"] = "1"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE"] = "1"
+            foreground_command = command[:-1] + [str(foreground_output)]
+            foreground_result = subprocess.run(
+                foreground_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
             )
-            self.assertEqual(other_anr.returncode, 1)
-            self.assertIn("Unexpected Android app/system ANR dialog remains", other_anr.stderr)
-            self.assertFalse((other_anr_output / "input-taps.txt").exists())
-            self.assertFalse((other_anr_output / "result.json").exists())
+            self.assertEqual(foreground_result.returncode, 1)
+            self.assertIn("Target app is not the resumed foreground activity", foreground_result.stderr)
+            self.assertFalse((foreground_output / "input-taps.txt").exists())
+            self.assertFalse((foreground_output / "result.json").exists())
+            environment["FAKE_APP_NOT_FOREGROUND"] = "0"
 
             environment["FAKE_OTHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_UNKNOWN_SYSTEM_ANR_ALWAYS"] = "0"
+            environment["FAKE_SYSTEM_ANR_CLOSE_DISABLED"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_ANR_FIRST_DUMP"] = "0"
             environment["FAKE_PIXEL_LAUNCHER_ANR_ALWAYS"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_ANR_WAIT_THEN_CLOSE"] = "0"
+            environment["FAKE_GOOGLE_SETUP_ANR_WAIT_THEN_CLOSE"] = "0"
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(output / "system-anr-closed")
             environment["FAKE_UI_DUMP_COUNT_FILE"] = str(output / "ui-dump-count")
             environment["FAKE_INPUT_LOG"] = str(output / "input-taps.txt")
             environment["FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS"] = "0"
@@ -483,16 +591,21 @@ exit 0
             environment["FAKE_RESTORE_ERROR"] = "0"
             environment["FAKE_TARGET_EXCEPTION"] = "1"
             target_exception = subprocess.run(
-                command,
-                cwd=REPO_ROOT,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
+                command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
             )
             self.assertEqual(target_exception.returncode, 1)
             self.assertIn("React Native reported an unhandled startup exception", target_exception.stderr)
+
+            environment["FAKE_TARGET_EXCEPTION"] = "0"
+            environment["FAKE_TARGET_ANR"] = "1"
+            target_anr = subprocess.run(
+                command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(target_anr.returncode, 1)
+            self.assertIn("Android runtime recorded an ANR for the TurnOva app", target_anr.stderr)
+            environment["FAKE_TARGET_ANR"] = "0"
 
             # A permanently corrupt SDK archive created by this invocation must stop
             # before AVD creation or app install after cleaning only its own partial files.

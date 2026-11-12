@@ -60,6 +60,32 @@ def verify_ios_info_plist(info_plist_path: Path, expected_id: str) -> str:
     return actual
 
 
+def verify_ios_app_bundle(app_bundle: Path, expected_id: str) -> str:
+    if not app_bundle.is_dir():
+        raise ValueError("iOS Simulator app bundle is missing.")
+    actual = verify_ios_info_plist(app_bundle / "Info.plist", expected_id)
+    with (app_bundle / "Info.plist").open("rb") as stream:
+        metadata = plistlib.load(stream)
+    executable = metadata.get("CFBundleExecutable") if isinstance(metadata, dict) else None
+    if not isinstance(executable, str) or not executable or Path(executable).name != executable:
+        raise ValueError("iOS Info.plist does not contain a safe CFBundleExecutable name.")
+    executable_path = app_bundle / executable
+    if not executable_path.is_file() or executable_path.stat().st_size == 0:
+        raise ValueError("iOS Simulator app executable is missing or empty.")
+
+    required_framework_binaries = (
+        Path("Frameworks/React.framework/React"),
+        Path("Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies"),
+    )
+    for relative_path in required_framework_binaries:
+        framework_binary = app_bundle / relative_path
+        if not framework_binary.is_file() or framework_binary.stat().st_size == 0:
+            raise ValueError(
+                f"iOS Simulator app is missing or empty required framework binary: {relative_path.as_posix()}."
+            )
+    return actual
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="platform", required=True)
@@ -67,8 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     android.add_argument("--apk", required=True, type=Path)
     android.add_argument("--expected-id", required=True)
     android.add_argument("--aapt", required=True)
-    ios = commands.add_parser("ios", help="Verify CFBundleIdentifier in a built Simulator app.")
-    ios.add_argument("--info-plist", required=True, type=Path)
+    ios = commands.add_parser("ios", help="Verify identity and required frameworks in a Simulator app.")
+    ios_input = ios.add_mutually_exclusive_group(required=True)
+    ios_input.add_argument("--app-bundle", type=Path)
+    ios_input.add_argument("--info-plist", type=Path)
     ios.add_argument("--expected-id", required=True)
     return parser
 
@@ -80,11 +108,19 @@ def main(argv: list[str] | None = None) -> int:
             actual = verify_android_apk(args.apk, args.expected_id, args.aapt)
             print(f"Verified Android APK application ID: {actual}")
         else:
-            actual = verify_ios_info_plist(args.info_plist, args.expected_id)
-            print(
-                f"Verified iOS Simulator CFBundleIdentifier: {actual} "
-                "(CI build identity only; Apple registration and production approval remain external)."
-            )
+            if args.app_bundle is not None:
+                actual = verify_ios_app_bundle(args.app_bundle, args.expected_id)
+                print(
+                    f"Verified iOS Simulator app bundle: {actual}; main executable, "
+                    "React.framework and ReactNativeDependencies.framework are present "
+                    "(CI artifact integrity only; signing and production approval remain external)."
+                )
+            else:
+                actual = verify_ios_info_plist(args.info_plist, args.expected_id)
+                print(
+                    f"Verified iOS Simulator CFBundleIdentifier: {actual} "
+                    "(identity-only check; framework completeness was not requested)."
+                )
         return 0
     except (OSError, ValueError, RuntimeError, plistlib.InvalidFileException) as error:
         print(f"Native artifact identity verification failed: {error}", file=sys.stderr)

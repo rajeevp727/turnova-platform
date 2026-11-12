@@ -5371,6 +5371,38 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionReconciliationExcludesReportWhoseRideIdDoesNotMatchAggregate()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "payment-aggregate-identity-driver";
+        const string unionId = "payment-aggregate-identity-union";
+        using var rider = factory.CreateClient("Rider", "payment-aggregate-identity-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "payment-aggregate-identity", 500m);
+        using var reportRequest = CreatePaymentReportRequest(
+            rideId, "payment-aggregate-identity-report", 450m);
+        using var reportResponse = await driver.SendAsync(reportRequest);
+        Assert.Equal(HttpStatusCode.OK, reportResponse.StatusCode);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var mismatchedAggregateId = "aggregate-mismatch-" + rideId;
+        rides[mismatchedAggregateId] = rides[rideId] with { RideId = mismatchedAggregateId };
+        Assert.Equal(rideId, rides[mismatchedAggregateId].PaymentReconciliation!.RideId);
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "payment-aggregate-identity-manager");
+        using var response = await manager.GetAsync("/api/v1/union/reconciliation");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var record = Assert.Single(json.RootElement.EnumerateArray());
+        Assert.Equal(rideId, record.GetProperty("rideId").GetString());
+        Assert.NotEqual(mismatchedAggregateId, record.GetProperty("rideId").GetString());
+        Assert.Equal(rideId, rides[mismatchedAggregateId].PaymentReconciliation!.RideId);
+    }
+
+
+    [Fact]
     public async Task UnionReconciliationRemainsLinkedToOriginalRideUnionAfterDriverTransfer()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
