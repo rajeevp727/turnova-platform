@@ -180,4 +180,24 @@ public sealed class DriverRideReservationStoreTests
         Assert.Equal("System", audit.ActorRole);
         Assert.Equal(DriverRideReservationAuditReasons.Other, audit.ReasonCategory);
     }
+    [Fact]
+    public async Task BatchReadReturnsOnlyRequestedReservationsAndRetainsExpiredLeaseUntilReconciliation()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+        Assert.True(await store.TryAcquireAsync("driver-a", "ride-a"));
+        Assert.True(await store.TryAcquireTemporaryAsync(
+            "driver-b", "ride-b", DateTimeOffset.UtcNow.AddMilliseconds(150)));
+        await Task.Delay(250);
+
+        var reservations = await store.GetActiveForDriversAsync(
+            ["driver-a", "driver-b", "missing-driver", "driver-a"]);
+
+        Assert.Equal(2, reservations.Count);
+        Assert.Contains(reservations, reservation =>
+            reservation.DriverId == "driver-a" && reservation.RideId == "ride-a");
+        var expired = Assert.Single(reservations, reservation => reservation.DriverId == "driver-b");
+        Assert.Equal("ride-b", expired.RideId);
+        Assert.True(expired.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow);
+    }
+
 }
