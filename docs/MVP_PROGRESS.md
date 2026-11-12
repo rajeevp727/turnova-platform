@@ -87,11 +87,12 @@
 
 ## 7. Next steps
 
-1. **Current sequential #7 DISPATCH-02:** complete PR #110's fresh selected-booking GPS capture and stable idempotency retry; wait for all exact-head backend/mobile/native CI and review before merge.
-2. **Next #8 DISPATCH-03:** re-audit lazy expiry, reservation lease release/recovery, history-triggered reconciliation and no-automatic-FIFO advancement; implement concrete deterministic gaps.
-3. **#6 DISPATCH-01 remains Blocked:** Product must approve positive pickup radius and non-overlapping production zone boundaries; live Cosmos query/index and Android/iOS pickup-zone acceptance remain. Keep fail-closed behavior.
-4. **#15 DRIVER-04 and #17 SUPPORT-01 remain Blocked:** Product must approve Driver/Rider support categories, escalation owner and operating process. Do not invent a support workflow.
-5. **#19 RELEASE-01 remains Blocked:** production-signed Android AAB/iOS IPA, final iOS store identifier/certificate/profile and physical-device/pilot acceptance require external signing/device inputs.
+1. **Current P0 — DISPATCH-04 PR #154:** source/test head CI #1330 passed 12/12 (backend 477/477, shared 179/179, Python 46/46). Complete the documentation-head CI and COMMENT-only final review; mark ready and merge only if the latest SHA, all required checks and repository policy permit. Never self-approve or bypass.
+2. **Next sequential item after DISPATCH-04 integration — #18 PLATFORM-01:** re-audit persistence, API hosting-neutral publish, health/readiness, telemetry and privacy-safe operational evidence; implement any deterministic code/test gaps before asking for infrastructure values.
+3. **#6 DISPATCH-01 remains Blocked:** Product must approve positive production radius, non-overlapping zone boundaries and Driver location freshness; live Cosmos query/index and Android/iOS pickup-zone acceptance remain. Keep fail-closed behaviour.
+4. **#15 DRIVER-04 and #17 SUPPORT-01 remain Blocked:** Product/Operations must approve categories, intake fields, priority/severity, escalation owner/channel, hours/targets, attachments, privacy/retention and operational handoff. Do not invent support workflows.
+5. **#19 RELEASE-01 remains Blocked:** approved app identifiers/EAS/build-number policy, production HTTPS API/DNS/TLS/CORS/readiness, secure signing, signed AAB/IPA, physical-device/pilot acceptance and store/legal approval require external owners/inputs.
+6. Preserve explicit external gates: live Cosmos multi-instance/ETag/restart, TriSend auth/provider, maps/routing, SignalR/Call/Chat/push, private document storage/scanning/consent/retention, legal terms and reconciliation-policy decisions. Do not add Docker/container builds or deployments.
 
 ## 8. DISPATCH-03 audit handoff (2026-11-06)
 
