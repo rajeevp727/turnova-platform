@@ -48,8 +48,9 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
         var identity = new ClaimsIdentity(
         [
             new Claim(ClaimTypes.Name, "operator@example.com"),
-            new Claim("sub", "ops-actor-opaque-42")
-        ], "test");
+            new Claim("sub", "ops-actor-opaque-42"),
+            new Claim("role", "Ops")
+        ], "test", ClaimTypes.Name, "role");
         var principal = new ClaimsPrincipal(identity);
 
         Assert.Equal("ops-actor-opaque-42", DriverUnionAuditActor.Resolve(principal));
@@ -62,7 +63,17 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     public void AuditActorFallsBackWhenSubjectLooksLikePersonalContactData(string subject)
     {
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim("sub", subject)], "test"));
+            [new Claim("sub", subject), new Claim("role", "Ops")], "test", ClaimTypes.Name, "role"));
+
+        Assert.Equal("Operations", DriverUnionAuditActor.Resolve(principal));
+    }
+
+    [Fact]
+    public void AuditActorFallsBackWhenSubjectPrincipalIsNotOperations()
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", "rider-actor-42"), new Claim("role", "Rider")],
+            "test", ClaimTypes.Name, "role"));
 
         Assert.Equal("Operations", DriverUnionAuditActor.Resolve(principal));
     }
