@@ -446,6 +446,7 @@ public sealed class RideApiIntegrationTests
         const string driverId = "driver-selfie-incomplete-ops-review";
         using var driver = factory.CreateClient("Driver", driverId);
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
 
         Assert.Equal(HttpStatusCode.Accepted,
             (await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())).StatusCode);
@@ -476,6 +477,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string driverId = "ops-selfie-stale-union-driver";
         const string currentUnionId = "ops-selfie-current-union";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, currentUnionId);
         using var ops = factory.CreateClient("Ops", "ops-selfie-stale-union-operator");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
