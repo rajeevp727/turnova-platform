@@ -11,10 +11,12 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     {
         var capturedAt = new DateTimeOffset(2026, 11, 12, 10, 30, 0, TimeSpan.FromHours(5.5));
 
+        var reviewedAt = new DateTimeOffset(2026, 11, 12, 11, 0, 0, TimeSpan.FromHours(5.5));
         var first = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-private-123", "union-private-456", capturedAt, "private-selfie-base64", "Image is unclear");
+            "driver-private-123", "union-private-456", capturedAt, reviewedAt, "private-selfie-base64", "Image is unclear");
         var retry = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-private-123", "union-private-456", capturedAt.ToUniversalTime(), "private-selfie-base64", "Image is unclear");
+            "driver-private-123", "union-private-456", capturedAt.ToUniversalTime(), reviewedAt.ToUniversalTime(),
+            "private-selfie-base64", "Image is unclear");
 
         Assert.Equal(first, retry);
         Assert.Equal(64, first.Length);
@@ -28,18 +30,22 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     public void SelfieRejectionEventIdentityChangesWhenPhotoOrReasonChanges()
     {
         var capturedAt = DateTimeOffset.Parse("2026-11-12T10:30:00+05:30");
+        var reviewedAt = DateTimeOffset.Parse("2026-11-12T11:00:00Z");
         var original = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-1", "union-1", capturedAt, "selfie-a", "Image is unclear");
+            "driver-1", "union-1", capturedAt, reviewedAt, "selfie-a", "Image is unclear");
         var differentPhoto = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-1", "union-1", capturedAt.AddSeconds(1), "selfie-a", "Image is unclear");
+            "driver-1", "union-1", capturedAt.AddSeconds(1), reviewedAt, "selfie-a", "Image is unclear");
         var differentReason = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-1", "union-1", capturedAt, "selfie-a", "Registration is not visible");
+            "driver-1", "union-1", capturedAt, reviewedAt, "selfie-a", "Registration is not visible");
+        var differentSelfie = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
+            "driver-1", "union-1", capturedAt, reviewedAt, "selfie-b", "Image is unclear");
+        var differentReviewTimestamp = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
+            "driver-1", "union-1", capturedAt, reviewedAt.AddSeconds(1), "selfie-a", "Image is unclear");
 
         Assert.NotEqual(original, differentPhoto);
         Assert.NotEqual(original, differentReason);
-        var differentSelfie = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
-            "driver-1", "union-1", capturedAt, "selfie-b", "Image is unclear");
         Assert.NotEqual(original, differentSelfie);
+        Assert.NotEqual(original, differentReviewTimestamp);
     }
 
     [Fact]
