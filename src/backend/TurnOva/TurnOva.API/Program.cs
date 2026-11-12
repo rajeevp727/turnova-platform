@@ -2422,18 +2422,25 @@ app.MapPost("/api/v1/rider/bookings", async (
         var priorRide = await FindRideAsync(prior.rideId, ct);
         if (priorRide is not null)
         {
-            if (!string.IsNullOrWhiteSpace(priorRide.UnionId) &&
-                string.Equals(priorRide.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
-                (priorRide.Status is "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+            if (priorRide.Status is "Negotiating" or "AgreementConfirmed")
             {
-                if ((priorRide.Status is "Negotiating" or "AgreementConfirmed") &&
-                    !string.IsNullOrWhiteSpace(priorRide.DriverId) &&
+                if (!string.IsNullOrWhiteSpace(priorRide.DriverId) &&
                     await HasActiveDriverRideAsync(priorRide.DriverId, ct, priorRide.RideId))
                     return Results.Conflict(new
                     {
                         message = "The selected Driver has another active ride. Refresh discovery before retrying this booking."
                     });
 
+                // The overlap check can reconcile an expired negotiation. Re-read before
+                // restoring the Rider reservation or replaying a Driver notification.
+                priorRide = await FindRideAsync(priorRide.RideId, ct);
+            }
+
+            if (priorRide is not null &&
+                !string.IsNullOrWhiteSpace(priorRide.UnionId) &&
+                string.Equals(priorRide.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
+                (priorRide.Status is "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+            {
                 if (await HasActiveRiderBookingAsync(riderId, priorRide.RideId, requestFingerprint, ct))
                     return Results.Problem(
                         "The existing selected booking could not safely restore its Rider reservation.",
