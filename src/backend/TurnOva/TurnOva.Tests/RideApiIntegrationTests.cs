@@ -1439,6 +1439,7 @@ public sealed class RideApiIntegrationTests
         const string driverId = "union-audit-reason-privacy-driver";
         const string unionId = "union-audit-reason-privacy-union";
         const string newUnionId = "union-audit-reason-privacy-new-union";
+        using var driver = factory.CreateClient("Driver", driverId);
         using var ops = factory.CreateClient("Ops", "union-audit-reason-privacy-ops");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         using var manager = factory.CreateUnionManagerClient(unionId, "union-audit-reason-privacy-manager");
