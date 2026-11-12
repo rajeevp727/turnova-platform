@@ -597,8 +597,7 @@ async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
         AuditActor = null,
         AuditPreviousUnionId = null,
         AuditPreviousUnionName = null,
-        AuditOccurredAtUtc = null,
-        LastAssignmentOperationKey = null
+        AuditOccurredAtUtc = null
     };
 
     if (unionAssignmentContainer is null)
@@ -691,7 +690,9 @@ DriverUnionAssignment ToDriverUnionAssignmentResponse(DriverUnionAssignment assi
         AuditActor = null,
         AuditPreviousUnionId = null,
         AuditPreviousUnionName = null,
-        AuditOccurredAtUtc = null
+        AuditOccurredAtUtc = null,
+        LastAssignmentOperationKey = null,
+        AuditSnapshotPending = false
     };
 
 async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
