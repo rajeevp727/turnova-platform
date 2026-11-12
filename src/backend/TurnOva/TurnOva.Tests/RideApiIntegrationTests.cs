@@ -3239,9 +3239,12 @@ public sealed class RideApiIntegrationTests
     }
 
     [Theory]
+    [InlineData("Requested")]
+    [InlineData("Matching")]
+    [InlineData("Offered")]
     [InlineData("Negotiating")]
     [InlineData("AgreementConfirmed")]
-    public async Task HistoricalActiveCabNegotiationWithoutReservationBlocksSelectedBooking(string status)
+    public async Task HistoricalActiveCabRideWithoutReservationBlocksSelectedBooking(string status)
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         var suffix = status.ToLowerInvariant();
