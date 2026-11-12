@@ -711,7 +711,7 @@ async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
     // Cosmos item/partition identity and the embedded aggregate identity must agree.
     // Fail closed so a stale or malformed document cannot be returned or reconciled through
     // another ride's route key, nor release that ride's Driver/Rider reservations.
-    return string.Equals(item.RideId, rideId, StringComparison.Ordinal) ? item : null;
+    return item is not null && string.Equals(item.RideId, rideId, StringComparison.Ordinal) ? item : null;
 }
 
 async Task<DemoRide?> ReleaseTerminalSelectedRideReservationAsync(
