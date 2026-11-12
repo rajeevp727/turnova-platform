@@ -44,14 +44,20 @@ public static class DriverUnionAuditIdentity
 
 public static class DriverUnionAuditActor
 {
-    public static string Resolve(ClaimsPrincipal? principal)
+    public static string Resolve(ClaimsPrincipal? principal) =>
+        ResolveForRole(principal, "Ops", "Operations");
+
+    public static string ResolveUnionManager(ClaimsPrincipal? principal) =>
+        ResolveForRole(principal, "UnionManager", "UnionManager");
+
+    private static string ResolveForRole(ClaimsPrincipal? principal, string requiredRole, string fallback)
     {
-        if (principal?.Identity?.IsAuthenticated != true || !principal.IsInRole("Ops"))
-            return "Operations";
+        if (principal?.Identity?.IsAuthenticated != true || !principal.IsInRole(requiredRole))
+            return fallback;
 
         var subject = principal.FindFirst("sub")?.Value?.Trim();
         if (string.IsNullOrWhiteSpace(subject) || subject.Length > 128 || subject.Any(char.IsControl))
-            return "Operations";
+            return fallback;
 
         var containsNonIdentifierCharacters = subject.Any(character =>
             !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' or ':'));
@@ -60,7 +66,7 @@ public static class DriverUnionAuditActor
         var phoneDigitCount = subject.Count(char.IsDigit);
         var looksLikePhoneNumber = containsOnlyPhoneCharacters && phoneDigitCount >= 8;
         return containsNonIdentifierCharacters || looksLikePhoneNumber
-            ? "Operations"
+            ? fallback
             : subject;
     }
 }
@@ -69,17 +75,26 @@ public static class DriverUnionAuditSnapshotRecovery
 {
     private const int MaximumReadAttempts = 3;
 
-    public static bool Matches(DriverUnionAuditEvent expected, DriverUnionAuditEvent actual) =>
-        string.Equals(expected.EventId, actual.EventId, StringComparison.Ordinal) &&
-        string.Equals(expected.DriverId, actual.DriverId, StringComparison.Ordinal) &&
-        string.Equals(expected.PreviousUnionId, actual.PreviousUnionId, StringComparison.Ordinal) &&
-        string.Equals(expected.PreviousUnionName, actual.PreviousUnionName, StringComparison.Ordinal) &&
-        string.Equals(expected.NewUnionId, actual.NewUnionId, StringComparison.Ordinal) &&
-        string.Equals(expected.NewUnionName, actual.NewUnionName, StringComparison.Ordinal) &&
-        string.Equals(expected.EventType, actual.EventType, StringComparison.Ordinal) &&
-        string.Equals(expected.Reason, actual.Reason, StringComparison.Ordinal) &&
-        string.Equals(expected.Actor, actual.Actor, StringComparison.Ordinal) &&
-        expected.OccurredAtUtc == actual.OccurredAtUtc;
+    public static bool Matches(DriverUnionAuditEvent expected, DriverUnionAuditEvent actual)
+    {
+        var sameEvent = string.Equals(expected.EventId, actual.EventId, StringComparison.Ordinal) &&
+            string.Equals(expected.DriverId, actual.DriverId, StringComparison.Ordinal) &&
+            string.Equals(expected.PreviousUnionId, actual.PreviousUnionId, StringComparison.Ordinal) &&
+            string.Equals(expected.PreviousUnionName, actual.PreviousUnionName, StringComparison.Ordinal) &&
+            string.Equals(expected.NewUnionId, actual.NewUnionId, StringComparison.Ordinal) &&
+            string.Equals(expected.NewUnionName, actual.NewUnionName, StringComparison.Ordinal) &&
+            string.Equals(expected.EventType, actual.EventType, StringComparison.Ordinal) &&
+            string.Equals(expected.Reason, actual.Reason, StringComparison.Ordinal) &&
+            expected.OccurredAtUtc == actual.OccurredAtUtc;
+        if (!sameEvent) return false;
+
+        // UnionManager review identity is the review itself, not the manager who retries it.
+        // Preserve the first committed actor when another authorised manager repeats the same review.
+        if (expected.EventType is "SelfieApprovedByUnion" or "SelfieRejectedByUnion")
+            return !string.IsNullOrWhiteSpace(actual.Actor);
+
+        return string.Equals(expected.Actor, actual.Actor, StringComparison.Ordinal);
+    }
 
     public static async Task EnsureCanonicalAsync(
         DriverUnionAuditEvent expected,
