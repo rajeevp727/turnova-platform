@@ -737,14 +737,16 @@ async Task<IReadOnlyList<DriverUnionAssignment>> ListActiveUnionAssignmentsAsync
 async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(
     string driverId, CancellationToken ct, bool repairSelfieReviewSnapshots = false)
 {
-    // Repair pending assignment and selfie-review snapshots before returning history.
-    // Completed/legacy records without a recovery snapshot are never synthesized.
+    // The assignment retains the latest event snapshot so an audit write that failed
+    // after assignment persistence can be repaired before history or membership periods are read.
     var currentAssignment = await FindUnionAssignmentAsync(driverId, ct);
     if (currentAssignment is not null)
         await EnsureUnionAssignmentAuditAsync(currentAssignment, ct);
 
     if (repairSelfieReviewSnapshots)
     {
+        // Only the privileged Operations history view repairs pending selfie-review snapshots.
+        // Payslip membership calculations do not depend on selfie-review recovery metadata.
         var currentProfile = await FindDriverProfileAsync(driverId, ct);
         if (currentProfile is not null)
         {
