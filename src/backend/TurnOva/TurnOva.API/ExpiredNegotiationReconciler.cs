@@ -60,12 +60,16 @@ public static class ExpiredNegotiationReconciler
     {
         ArgumentNullException.ThrowIfNull(candidate);
 
-        if (string.Equals(candidate.RideId, exceptRideId, StringComparison.Ordinal))
-            return null;
+        if (string.IsNullOrWhiteSpace(candidate.RideId) ||
+            !string.Equals(candidate.ItemId, candidate.RideId, StringComparison.Ordinal))
+            return candidate.DriverId;
 
         if (latest is null ||
             !string.Equals(latest.RideId, candidate.RideId, StringComparison.Ordinal))
             return candidate.DriverId;
+
+        if (string.Equals(candidate.RideId, exceptRideId, StringComparison.Ordinal))
+            return null;
 
         if (RideLifecycle.IsTerminal(latest.Status))
             return null;
