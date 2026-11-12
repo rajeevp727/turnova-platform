@@ -2577,6 +2577,49 @@ public sealed class RideApiIntegrationTests
     }
 
 
+
+    [Fact]
+    public async Task RiderHistoryDoesNotFollowMismatchedRideIdIntoAnotherRidersAggregate()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string riderId = "history-owner-rider";
+        var victim = CreateHistoricalRide(
+            "victim-history-ride", "different-rider", "victim-history-driver",
+            "InProgress", "cab", "victim-history-union");
+        var mismatchedHistory = victim with { RiderId = riderId };
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[victim.RideId] = victim;
+        rides["rider-history-alias"] = mismatchedHistory;
+        using var rider = factory.CreateClient("Rider", riderId);
+
+        using var response = await rider.GetAsync("/api/v1/rides/mine");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Empty(json.RootElement.EnumerateArray());
+    }
+
+    [Fact]
+    public async Task DriverHistoryDoesNotFollowMismatchedRideIdIntoAnotherDriversAggregate()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "history-owner-driver";
+        var victim = CreateHistoricalRide(
+            "victim-history-ride", "victim-history-rider", "different-driver",
+            "InProgress", "cab", "victim-history-union");
+        var mismatchedHistory = victim with { DriverId = driverId };
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        rides[victim.RideId] = victim;
+        rides["driver-history-alias"] = mismatchedHistory;
+        using var driver = factory.CreateClient("Driver", driverId);
+
+        using var response = await driver.GetAsync("/api/v1/driver/rides/mine");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Empty(json.RootElement.EnumerateArray());
+    }
+
     [Theory]
     [InlineData("Completed")]
     [InlineData("Negotiating")]
