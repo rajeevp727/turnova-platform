@@ -3238,6 +3238,53 @@ public sealed class RideApiIntegrationTests
             .HasActiveAsync("selected-booking-driver"));
     }
 
+    [Fact]
+    public async Task IdempotentRetryDoesNotRestoreRiderReservationAfterConcurrentNegotiationExpiry()
+    {
+        const string riderId = "idempotent-expiry-rider";
+        const string driverId = "idempotent-expiry-driver";
+        const string unionId = "idempotent-expiry-union";
+        const string bookingKey = "idempotent-expiry-key";
+        var reservations = new ReservationMakePermanentFailureStore(new InMemoryDriverRideReservationStore());
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            reservationStore: reservations);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var originalRequest = CreateSelectedBookingRequest(
+            bookingKey, driverId, unionId, "KPHB", "HITEC City", []);
+        using var originalResponse = await rider.SendAsync(originalRequest);
+        Assert.Equal(HttpStatusCode.Created, originalResponse.StatusCode);
+        using var originalJson = JsonDocument.Parse(await originalResponse.Content.ReadAsStringAsync());
+        var rideId = originalJson.RootElement.GetProperty("rideId").GetString()!;
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+
+        Assert.True(await reservations.TryReleaseAsync(driverId, rideId));
+        reservations.BeforeNextGetActive(() =>
+        {
+            rides[rideId] = rides[rideId] with
+            {
+                NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1)
+            };
+        });
+
+        using var retryRequest = CreateSelectedBookingRequest(
+            bookingKey, driverId, unionId, "KPHB", "HITEC City", []);
+        using var retryResponse = await rider.SendAsync(retryRequest);
+
+        Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
+        using var retryJson = JsonDocument.Parse(await retryResponse.Content.ReadAsStringAsync());
+        Assert.Equal("Expired", retryJson.RootElement.GetProperty("status").GetString());
+        Assert.Equal("Expired", rides[rideId].Status);
+        Assert.Null(await reservations.GetActiveAsync(driverId));
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync(riderId));
+        Assert.Contains(rides[rideId].AuditEvents!, item =>
+            item.EventType == "RideStatusChanged" && item.NewStatus == "Expired");
+    }
+
     [Theory]
     [InlineData("Requested")]
     [InlineData("Matching")]
@@ -6345,9 +6392,17 @@ public sealed class RideApiIntegrationTests
             DriverRideReservationAuditContext? auditContext = null) =>
             inner.TrySetExpiryAsync(driverId, rideId, expiresAtUtc, cancellationToken, auditContext);
 
+        private Action? _beforeNextGetActive;
+
+        public void BeforeNextGetActive(Action callback) =>
+            Interlocked.Exchange(ref _beforeNextGetActive, callback);
+
         public Task<DriverRideReservation?> GetActiveAsync(
-            string driverId, CancellationToken cancellationToken = default) =>
-            inner.GetActiveAsync(driverId, cancellationToken);
+            string driverId, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Exchange(ref _beforeNextGetActive, null)?.Invoke();
+            return inner.GetActiveAsync(driverId, cancellationToken);
+        }
 
         public Task<IReadOnlyList<DriverRideReservation>> GetActiveForDriversAsync(
             IReadOnlyCollection<string> driverIds,
