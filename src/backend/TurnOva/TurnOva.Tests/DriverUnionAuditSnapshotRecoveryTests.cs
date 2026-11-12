@@ -343,6 +343,36 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
             "driver-private-123", "union-old-private", "Old Private Union",
             "union-new-private", "New Private Union", "Transferred",
             "Different reason", "ops-private-subject", occurredAt));
+        Assert.NotEqual(first, DriverUnionAuditIdentity.CreateAssignmentEventId(
+            "driver-private-123", "union-old-private", "Old Private Union",
+            "union-new-private", "New Private Union", "Transferred",
+            "Approved membership transfer", "different-ops-subject", occurredAt));
+    }
+
+    [Fact]
+    public void InitialAssignmentSnapshotReconstructsAssignedEventWithoutPreviousUnion()
+    {
+        var occurredAt = DateTimeOffset.Parse("2026-11-13T05:00:00Z");
+        const string driverId = "driver-initial-assignment";
+        const string unionId = "union-initial";
+        const string unionName = "Initial Union";
+        const string reason = "Approved initial assignment";
+        const string actor = "ops-initial-subject";
+        var eventId = DriverUnionAuditIdentity.CreateAssignmentEventId(
+            driverId, null, null, unionId, unionName, "Assigned", reason, actor, occurredAt);
+        var assignment = new DriverUnionAssignment(
+            driverId, unionId, unionName, "Active", occurredAt, occurredAt, reason,
+            eventId, "Assigned", actor, null, null, occurredAt);
+
+        var expected = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment);
+
+        Assert.NotNull(expected);
+        Assert.Equal("Assigned", expected.EventType);
+        Assert.Null(expected.PreviousUnionId);
+        Assert.Null(expected.PreviousUnionName);
+        Assert.Equal(unionId, expected.NewUnionId);
+        Assert.Equal(actor, expected.Actor);
+        Assert.True(DriverUnionAssignmentAuditSnapshot.IsIdempotentRetry(assignment, unionId, reason));
     }
 
     [Fact]

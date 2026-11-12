@@ -568,8 +568,20 @@ async Task EnsureOperationsSelfieRejectionAuditAsync(
 async Task EnsureUnionAssignmentAuditAsync(DriverUnionAssignment assignment, CancellationToken ct)
 {
     var expected = DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment);
-    if (expected is not null)
-        await SaveUnionAuditAsync(expected, ct);
+    if (expected is null) return;
+
+    // Avoid a duplicate create/409 on every history read. A missing point-read falls
+    // through to create; SaveUnionAuditAsync handles a concurrent create with canonical read-back.
+    var canonical = await FindUnionAuditEventAsync(expected.DriverId, expected.EventId, ct);
+    if (canonical is not null)
+    {
+        if (!DriverUnionAuditSnapshotRecovery.Matches(expected, canonical))
+            throw new InvalidOperationException(
+                "The persisted Union assignment audit differs from its private assignment snapshot. Refusing to return history or overwrite the event.");
+        return;
+    }
+
+    await SaveUnionAuditAsync(expected, ct);
 }
 
 DriverUnionAssignment ToDriverUnionAssignmentResponse(DriverUnionAssignment assignment) =>
