@@ -466,10 +466,45 @@ async Task SaveUnionAssignmentAsync(DriverUnionAssignment assignment, Cancellati
     await unionAssignmentContainer.UpsertItemAsync(assignment, new PartitionKey(assignment.DriverId), cancellationToken: ct);
 }
 
+async Task<DriverUnionAuditEvent?> FindUnionAuditEventAsync(string driverId, string eventId, CancellationToken ct)
+{
+    if (unionAuditContainer is null)
+        return unionAudit.TryGetValue(driverId + "|" + eventId, out var value) ? value : null;
+
+    try
+    {
+        return (await unionAuditContainer.ReadItemAsync<DriverUnionAuditEvent>(
+            eventId, new PartitionKey(driverId), cancellationToken: ct)).Resource;
+    }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+    {
+        return null;
+    }
+}
+
 async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct)
 {
-    if (unionAuditContainer is null) { unionAudit[audit.DriverId + "|" + audit.EventId] = audit; return; }
-    await unionAuditContainer.CreateItemAsync(audit, new PartitionKey(audit.DriverId), cancellationToken: ct);
+    if (unionAuditContainer is null)
+    {
+        var key = audit.DriverId + "|" + audit.EventId;
+        if (unionAudit.TryAdd(key, audit))
+            return;
+
+        await DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
+            audit, FindUnionAuditEventAsync,
+            static (_, _) => Task.CompletedTask, ct);
+        return;
+    }
+
+    try
+    {
+        await unionAuditContainer.CreateItemAsync(audit, new PartitionKey(audit.DriverId), cancellationToken: ct);
+    }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+    {
+        await DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
+            audit, FindUnionAuditEventAsync, cancellationToken: ct);
+    }
 }
 
 async Task EnsureUnionSelfieAuditAsync(
@@ -479,19 +514,21 @@ async Task EnsureUnionSelfieAuditAsync(
     var eventType = status == "Approved" ? "SelfieApprovedByUnion" : "SelfieRejectedByUnion";
     var auditKey = $"{driverId}|{unionId}|{eventType}|{reviewedAtUtc.UtcDateTime.Ticks}";
     var eventId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(auditKey)));
-    if ((await GetUnionAuditAsync(driverId, ct)).Any(item => item.EventId == eventId))
-        return;
+    await SaveUnionAuditAsync(new DriverUnionAuditEvent(
+        eventId, driverId, unionId, unionName, unionId, unionName, eventType,
+        reason ?? "Approved by the currently assigned union.", actor, reviewedAtUtc), ct);
+}
 
-    try
-    {
-        await SaveUnionAuditAsync(new DriverUnionAuditEvent(
-            eventId, driverId, unionId, unionName, unionId, unionName, eventType,
-            reason ?? "Approved by the currently assigned union.", actor, reviewedAtUtc), ct);
-    }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-    {
-        // A previous request may have committed the same deterministic audit event before its response was lost.
-    }
+async Task EnsureOperationsSelfieRejectionAuditAsync(
+    DriverOnboardingProfile reviewedProfile, DriverUnion union, string reason, string actor, CancellationToken ct)
+{
+    var reviewedAtUtc = reviewedProfile.ProfilePhotoReviewedAtUtc
+        ?? throw new InvalidOperationException("A rejected selfie review must have an authoritative review timestamp.");
+    var eventId = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
+        reviewedProfile.DriverId, union.UnionId, reviewedProfile.ProfilePhotoCapturedAtUtc, reason);
+    await SaveUnionAuditAsync(new DriverUnionAuditEvent(
+        eventId, reviewedProfile.DriverId, union.UnionId, union.Name, union.UnionId, union.Name,
+        "SelfieRejectedByOperations", reason, actor, reviewedAtUtc), ct);
 }
 
 async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
@@ -1495,6 +1532,21 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
 
     var reason = rejectionReason
         ?? throw new InvalidOperationException("Rejected selfie review requires a valid reason.");
+    var actor = DriverUnionAuditActor.Resolve(context.User);
+
+    if (DriverProfileReviewGuard.IsSameRejectedSelfieReview(profile, profile, reason))
+    {
+        await EnsureOperationsSelfieRejectionAuditAsync(profile, union, reason, actor, ct);
+        return Results.Ok(new
+        {
+            driverId,
+            unionId,
+            status = profile.ProfilePhotoApprovalStatus,
+            reviewedAtUtc = profile.ProfilePhotoReviewedAtUtc,
+            reason = profile.ProfilePhotoReviewReason
+        });
+    }
+
     var now = DateTimeOffset.UtcNow;
     var saved = await TryUpdateDriverProfileAsync(driverId, current =>
     {
@@ -1513,14 +1565,27 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
             ProfilePhotoReviewReason = reason
         };
     }, ct);
+
     if (!saved)
-        return Results.Conflict(new { message = "Driver selfie changed during operations review. Refresh the member record and retry." });
+    {
+        var latest = await FindDriverProfileAsync(driverId, ct);
+        if (latest is null || !DriverProfileReviewGuard.IsSameRejectedSelfieReview(latest, profile, reason))
+            return Results.Conflict(new { message = "Driver selfie changed during operations review. Refresh the member record and retry." });
+
+        await EnsureOperationsSelfieRejectionAuditAsync(latest, union, reason, actor, ct);
+        return Results.Ok(new
+        {
+            driverId,
+            unionId,
+            status = latest.ProfilePhotoApprovalStatus,
+            reviewedAtUtc = latest.ProfilePhotoReviewedAtUtc,
+            reason = latest.ProfilePhotoReviewReason
+        });
+    }
 
     var updated = await FindDriverProfileAsync(driverId, ct)
         ?? throw new InvalidOperationException("The rejected driver profile could not be reloaded.");
-    await SaveUnionAuditAsync(new DriverUnionAuditEvent(Guid.NewGuid().ToString("N"), driverId,
-        unionId, union.Name, unionId, union.Name, "SelfieRejectedByOperations",
-        reason, context.User.Identity?.Name ?? "Operations", now), ct);
+    await EnsureOperationsSelfieRejectionAuditAsync(updated, union, reason, actor, ct);
     return Results.Ok(new
     {
         driverId,
