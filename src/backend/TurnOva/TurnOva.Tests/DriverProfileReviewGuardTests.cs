@@ -87,6 +87,9 @@ public sealed class DriverProfileReviewGuardTests
     [InlineData("Call 123-456-7890 for follow-up")]
     [InlineData("Use +91 98765 43210 for clarification")]
     [InlineData("Call 123-456-789 for clarification")]
+    [InlineData("Call 123/456/7890 for follow-up")]
+    [InlineData("Call ९८७६५ ४३२१० for follow-up")]
+    [InlineData("Call ٩٨٧٦٥ ٤٣٢١٠ for follow-up")]
     public void UnionAuditReasonsRejectObviousContactDetails(string supplied)
     {
         Assert.Null(DriverProfileReviewGuard.NormalizeRejectionReason(supplied));
@@ -108,6 +111,8 @@ public sealed class DriverProfileReviewGuardTests
             DriverUnionAuditReason.Normalize(" Reviewed on 2026-11-13 "));
         Assert.Equal("Reviewed on 2026-11-13 at 10:30",
             DriverUnionAuditReason.Normalize("Reviewed on 2026-11-13 at 10:30"));
+        Assert.Equal("Reviewed on २०२६-११-१३ at १०:३०",
+            DriverUnionAuditReason.Normalize("Reviewed on २०२६-११-१३ at १०:३०"));
     }
 
     [Fact]
