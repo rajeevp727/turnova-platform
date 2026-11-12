@@ -11,12 +11,12 @@ public static class DriverUnionAuditReason
     private const int MaximumLength = 300;
 
     private static readonly Regex EmailPattern = new(
-        @"(?<![\\p{L}\\p{N}._%+-])[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}.-]+\\.[\\p{L}]{2,}(?![\\p{L}\\p{N}.-])",
+        @"(?<![\p{L}\p{N}._%+-])[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}(?![\p{L}\p{N}.-])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(50));
 
     private static readonly Regex PhonePattern = new(
-        @"(?<![\\p{L}\\p{N}])\\+?[0-9](?:[0-9\\s().-]{7,}[0-9])(?![\\p{L}\\p{N}])",
+        @"(?<![\p{L}\p{N}])\+?[0-9](?:[0-9\s().-]{7,}[0-9])(?![\p{L}\p{N}])",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(50));
 
