@@ -399,7 +399,7 @@ jobs:
           APP_BUNDLE="$(find "$DERIVED_DATA/Build/Products/Release-iphonesimulator" -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_BUNDLE"
           test -d "$APP_BUNDLE"
-          python3 ../../../scripts/verify_native_app_identity.py ios --info-plist "$APP_BUNDLE/Info.plist" --expected-id "$BUNDLE_ID"
+          python3 ../../../scripts/verify_native_app_identity.py ios --app-bundle "$APP_BUNDLE" --expected-id "$BUNDLE_ID"
           echo "Unsigned simulator build produced and identity-verified: $APP_BUNDLE"
       - uses: actions/upload-artifact@v6
         with:

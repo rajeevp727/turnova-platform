@@ -12,6 +12,7 @@ from verify_native_app_identity import (
     parse_aapt_package_id,
     validate_expected_id,
     verify_android_apk,
+    verify_ios_app_bundle,
     verify_ios_info_plist,
 )
 
@@ -116,6 +117,58 @@ targetSdkVersion:'35'
                 plistlib.dump({"CFBundleIdentifier": "not-a-bundle-id"}, stream)
             with self.assertRaisesRegex(ValueError, "reverse-DNS"):
                 verify_ios_info_plist(info, "com.turnova.rider")
+
+    def _create_ios_app_bundle(self, root: Path, *, missing_framework: str | None = None,
+                               empty_framework: str | None = None,
+                               include_executable: bool = True) -> Path:
+        app = root / "TurnOvaDriver.app"
+        frameworks = {
+            "React": app / "Frameworks/React.framework/React",
+            "ReactNativeDependencies": app / "Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies",
+        }
+        for name, path in frameworks.items():
+            if name == missing_framework:
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"" if name == empty_framework else b"framework binary fixture")
+        if include_executable:
+            (app / "TurnOvaDriver").write_bytes(b"main executable fixture")
+        app.mkdir(parents=True, exist_ok=True)
+        with (app / "Info.plist").open("wb") as stream:
+            plistlib.dump(
+                {"CFBundleIdentifier": "com.turnova.driver", "CFBundleExecutable": "TurnOvaDriver"},
+                stream,
+            )
+        return app
+
+    def test_ios_app_bundle_verifies_identity_executable_and_required_frameworks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = self._create_ios_app_bundle(Path(directory))
+            self.assertEqual("com.turnova.driver", verify_ios_app_bundle(app, "com.turnova.driver"))
+
+    def test_ios_app_bundle_fails_closed_when_react_native_dependencies_are_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = self._create_ios_app_bundle(Path(directory), missing_framework="ReactNativeDependencies")
+            with self.assertRaisesRegex(ValueError, "ReactNativeDependencies.framework"):
+                verify_ios_app_bundle(app, "com.turnova.driver")
+
+    def test_ios_app_bundle_fails_closed_when_react_framework_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = self._create_ios_app_bundle(Path(directory), missing_framework="React")
+            with self.assertRaisesRegex(ValueError, "React.framework"):
+                verify_ios_app_bundle(app, "com.turnova.driver")
+
+    def test_ios_app_bundle_fails_closed_when_framework_binary_is_empty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = self._create_ios_app_bundle(Path(directory), empty_framework="ReactNativeDependencies")
+            with self.assertRaisesRegex(ValueError, "missing or empty"):
+                verify_ios_app_bundle(app, "com.turnova.driver")
+
+    def test_ios_app_bundle_fails_closed_when_main_executable_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = self._create_ios_app_bundle(Path(directory), include_executable=False)
+            with self.assertRaisesRegex(ValueError, "app executable is missing or empty"):
+                verify_ios_app_bundle(app, "com.turnova.driver")
 
     def test_ios_verifier_rejects_malformed_plist_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
