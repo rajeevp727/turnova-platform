@@ -3,6 +3,8 @@ namespace TurnOva.Domain.Dispatch;
 public static class RideLifecycle
 {
     public const string Requested = "Requested";
+    public const string Matching = "Matching";
+    public const string Offered = "Offered";
     public const string Negotiating = "Negotiating";
     public const string AgreementConfirmed = "AgreementConfirmed";
     public const string Accepted = "Accepted";
@@ -11,6 +13,18 @@ public static class RideLifecycle
     public const string Completed = "Completed";
     public const string Cancelled = "Cancelled";
     public const string Expired = "Expired";
+
+    public static IReadOnlyList<string> ActiveStatuses { get; } =
+        Array.AsReadOnly(new[] { Requested, Matching, Offered, Negotiating, AgreementConfirmed, Accepted, Arrived, InProgress });
+
+    public static IReadOnlyList<string> TerminalStatuses { get; } =
+        Array.AsReadOnly(new[] { Completed, Cancelled, Expired });
+
+    public static bool IsActive(string status) =>
+        status is Requested or Matching or Offered or Negotiating or AgreementConfirmed or Accepted or Arrived or InProgress;
+
+    public static bool IsTerminal(string status) =>
+        status is Completed or Cancelled or Expired;
 
     public static bool AreCoordinatesValid(double latitude, double longitude) =>
         double.IsFinite(latitude) && latitude >= -90 && latitude <= 90 &&
