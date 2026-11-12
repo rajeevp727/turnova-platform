@@ -838,16 +838,17 @@ async Task<HashSet<string>> FindActiveDriverIdsAsync(
 
         if (rideContainer is null)
         {
-            candidates.AddRange(rides.Values
-                .Where(ride => ride.DriverId is not null &&
-                    batchDriverIds.Contains(ride.DriverId) &&
-                    RideLifecycle.IsActive(ride.Status))
-                .Select(ride => new ActiveDriverRideProjection
+            candidates.AddRange(rides
+                .Where(entry => entry.Value.DriverId is not null &&
+                    batchDriverIds.Contains(entry.Value.DriverId) &&
+                    RideLifecycle.IsActive(entry.Value.Status))
+                .Select(entry => new ActiveDriverRideProjection
                 {
-                    RideId = ride.RideId,
-                    DriverId = ride.DriverId!,
-                    Status = ride.Status,
-                    NegotiationExpiresAtUtc = ride.NegotiationExpiresAtUtc
+                    ItemId = entry.Key,
+                    RideId = entry.Value.RideId,
+                    DriverId = entry.Value.DriverId!,
+                    Status = entry.Value.Status,
+                    NegotiationExpiresAtUtc = entry.Value.NegotiationExpiresAtUtc
                 }));
         }
         else
@@ -860,11 +861,21 @@ async Task<HashSet<string>> FindActiveDriverIdsAsync(
 
         foreach (var candidate in candidates)
         {
-            if (string.IsNullOrWhiteSpace(candidate.RideId) ||
-                string.IsNullOrWhiteSpace(candidate.DriverId) ||
+            if (string.IsNullOrWhiteSpace(candidate.DriverId) ||
                 !batchDriverIds.Contains(candidate.DriverId) ||
-                !RideLifecycle.IsActive(candidate.Status) ||
-                !processedRideIds.Add(candidate.RideId))
+                !RideLifecycle.IsActive(candidate.Status))
+                continue;
+
+            // A malformed stored item identity is still an active Driver hold. Do not
+            // reconcile it or exempt it for same-ride idempotency without exact identity.
+            if (string.IsNullOrWhiteSpace(candidate.RideId) ||
+                !string.Equals(candidate.ItemId, candidate.RideId, StringComparison.Ordinal))
+            {
+                activeDriverIds.Add(candidate.DriverId);
+                continue;
+            }
+
+            if (!processedRideIds.Add(candidate.RideId))
                 continue;
 
             if (candidate.Status is RideLifecycle.Negotiating or RideLifecycle.AgreementConfirmed &&
