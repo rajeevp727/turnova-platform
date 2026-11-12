@@ -1488,6 +1488,9 @@ public sealed class RideApiIntegrationTests
         Assert.False(memberDetailsDriver.TryGetProperty("currentLatitude", out _));
         Assert.False(memberDetailsDriver.TryGetProperty("currentLongitude", out _));
         Assert.False(memberDetailsDriver.TryGetProperty("storageReference", out _));
+        Assert.False(memberDetailsDriver.TryGetProperty("documents", out _));
+        Assert.False(memberDetailsDriver.TryGetProperty("riderId", out _));
+        Assert.False(memberDetailsDriver.TryGetProperty("chatMessages", out _));
         Assert.All(driverDetails.GetProperty("documentStatuses").EnumerateArray(),
             document => Assert.False(document.TryGetProperty("storageReference", out _)));
 
