@@ -1783,7 +1783,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         return Results.BadRequest(new { message = "Selfie review status must be Approved or Rejected." });
     var rejectionReason = DriverProfileReviewGuard.NormalizeRejectionReason(request.Reason);
     if (request.Status == "Rejected" && rejectionReason is null)
-        return Results.BadRequest(new { message = "A rejection reason of 1–300 characters is required." });
+        return Results.BadRequest(new { message = "A normalized rejection reason of 1–300 characters without contact details is required." });
 
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "A Driver with an active negotiation or ride cannot have Union selfie membership changed." });
