@@ -43,7 +43,10 @@ public static class DriverUnionAuditActor
 {
     public static string Resolve(ClaimsPrincipal? principal)
     {
-        var subject = principal?.FindFirst("sub")?.Value?.Trim();
+        if (principal?.Identity?.IsAuthenticated != true || !principal.IsInRole("Ops"))
+            return "Operations";
+
+        var subject = principal.FindFirst("sub")?.Value?.Trim();
         if (string.IsNullOrWhiteSpace(subject) || subject.Length > 128 || subject.Any(char.IsControl))
             return "Operations";
 
