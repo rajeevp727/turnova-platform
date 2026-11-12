@@ -450,6 +450,19 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
             DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment with { LastAssignmentOperationKey = null }));
         Assert.Throws<InvalidOperationException>(() =>
             DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment with { LastAssignmentOperationKey = "wrong-operation-key" }));
+        // History reads translate invalid pending snapshots to HTTP 409. Unsafe or
+        // unnormalized stored reasons must therefore fail with the same domain error,
+        // not leak an ArgumentException into the generic 500 handler.
+        Assert.Throws<InvalidOperationException>(() =>
+            DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment with
+            {
+                AssignmentReason = "Contact operator@example.com"
+            }));
+        Assert.Throws<InvalidOperationException>(() =>
+            DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent(assignment with
+            {
+                AssignmentReason = " Approved membership transfer "
+            }));
     }
 
     [Fact]
