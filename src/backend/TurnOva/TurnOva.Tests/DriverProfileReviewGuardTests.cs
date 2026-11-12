@@ -96,9 +96,9 @@ public sealed class DriverProfileReviewGuardTests
     [Fact]
     public void UnionAuditReasonRejectsControlAndLineSeparatorCharacters()
     {
-        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\\nwith an embedded newline"));
-        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\\twith an embedded tab"));
-        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\\u2028with a Unicode line separator"));
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\nwith an embedded newline"));
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\twith an embedded tab"));
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\u2028with a Unicode line separator"));
     }
 
     [Fact]
