@@ -501,6 +501,24 @@ exit 0
             )
             self.assertFalse((disabled_close_output / "result.json").exists())
 
+            # A disabled Wait control must fail closed before Close is considered.
+            disabled_wait_output = root / "anr-disabled-wait-output"
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(disabled_wait_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(disabled_wait_output / "input-taps.txt")
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(disabled_wait_output / "system-anr-closed")
+            environment["FAKE_SYSTEM_ANR_CLOSE_DISABLED"] = "0"
+            environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "1"
+            disabled_wait_command = command[:-1] + [str(disabled_wait_output)]
+            disabled_wait = subprocess.run(
+                disabled_wait_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(disabled_wait.returncode, 1)
+            self.assertIn("no safe enabled Wait control", disabled_wait.stderr)
+            self.assertFalse((disabled_wait_output / "input-taps.txt").exists())
+            self.assertFalse((disabled_wait_output / "result.json").exists())
+            environment["FAKE_PIXEL_LAUNCHER_WAIT_DISABLED"] = "0"
+
             # A target-app ANR and an unknown system ANR are never dismissed.
             for scenario, target_flag, unknown_flag, expected in (
                 ("app-anr-output", "1", "0", "TurnOva Rider isn't responding"),
@@ -557,7 +575,6 @@ exit 0
             environment["FAKE_UI_DUMP_COUNT_FILE"] = str(output / "ui-dump-count")
             environment["FAKE_INPUT_LOG"] = str(output / "input-taps.txt")
             environment["FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS"] = "0"
-            environment["FAKE_RESTORE_ERROR"] = "1"
             environment["FAKE_RESTORE_ERROR"] = "1"
             stale_session_error = subprocess.run(
                 command,
