@@ -271,6 +271,7 @@ capture_ui_hierarchy
 "$ADB_BIN" exec-out screencap -p > "$OUTPUT_DIR/initial.png" || true
 system_anr_wait_attempts=0
 pixel_launcher_anr_wait_attempts=0
+system_anr_dialog_count=0
 : > "$OUTPUT_DIR/system-anr-packages-recovered.txt"
 : > "$OUTPUT_DIR/system-anr-packages-closed.txt"
 : > "$OUTPUT_DIR/system-anr-titles-recovered.txt"
@@ -404,7 +405,8 @@ while true; do
   fi
 
   assert_target_app_foreground
-  cp "$OUTPUT_DIR/ui-hierarchy.xml" "$OUTPUT_DIR/system-anr-$system_anr_wait_attempts.xml"
+  system_anr_dialog_count=$((system_anr_dialog_count + 1))
+  cp "$OUTPUT_DIR/ui-hierarchy.xml" "$OUTPUT_DIR/system-anr-$system_anr_dialog_count.xml"
 
   # Give a known, non-TurnOva system process one bounded chance to recover.
   # If it remains blocked, close only the explicitly allow-listed system app.
