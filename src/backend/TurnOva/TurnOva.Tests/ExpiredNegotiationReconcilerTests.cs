@@ -154,7 +154,7 @@ public sealed class ExpiredNegotiationReconcilerTests
             NegotiationExpiresAtUtc = now.AddMinutes(-1)
         };
 
-        var latest = CreateRide(RideLifecycle.Expired, now, null);
+        var latest = CreateRide(RideLifecycle.Expired, now, null) with { RideId = candidate.RideId };
         Assert.Null(ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
     }
 
@@ -170,7 +170,7 @@ public sealed class ExpiredNegotiationReconcilerTests
             NegotiationExpiresAtUtc = now.AddMinutes(-1)
         };
 
-        var latest = CreateRide(RideLifecycle.InProgress, now, null) with { DriverId = "current-driver" };
+        var latest = CreateRide(RideLifecycle.InProgress, now, null) with { RideId = candidate.RideId, DriverId = "current-driver" };
         Assert.Equal("current-driver",
             ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
     }
