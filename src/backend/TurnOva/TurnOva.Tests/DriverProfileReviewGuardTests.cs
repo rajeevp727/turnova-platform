@@ -172,6 +172,35 @@ public sealed class DriverProfileReviewGuardTests
     }
 
     [Fact]
+    public void ContactLikeReviewReasonsMakePrivateRecoverySnapshotsIncomplete()
+    {
+        var reviewedAt = DateTimeOffset.Parse("2026-11-12T10:00:00Z");
+        var operations = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Call 123-456-7890",
+            ProfilePhotoOperationsReviewActorId = "ops-actor",
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+        var union = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Contact operator@example.com",
+            ProfilePhotoUnionReviewActorId = "union-manager-actor",
+            ProfilePhotoUnionReviewUnionId = "union-1",
+            ProfilePhotoUnionReviewUnionName = "Test Union"
+        };
+
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(operations));
+        Assert.False(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(union));
+    }
+
+    [Fact]
     public void LegacyReviewedSelfieWithoutRecoverySnapshotIsDetected()
     {
         var legacy = CreateProfile() with
