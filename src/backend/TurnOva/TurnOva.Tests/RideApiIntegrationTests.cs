@@ -418,7 +418,9 @@ public sealed class RideApiIntegrationTests
             ProfilePhotoApprovalStatus = "Rejected",
             ProfilePhotoReviewedAtUtc = locationUpdatedAtUtc,
             ProfilePhotoReviewReason = "Previous Operations rejection",
-            ProfilePhotoOperationsReviewActorId = "ops-actor-before-new-selfie"
+            ProfilePhotoOperationsReviewActorId = "ops-actor-before-new-selfie",
+            ProfilePhotoOperationsReviewUnionId = "legacy-review-union",
+            ProfilePhotoOperationsReviewUnionName = "Legacy Review Union"
         };
 
         var response = await driver.PutAsJsonAsync("/api/v1/driver/onboarding/selfie",
@@ -435,6 +437,72 @@ public sealed class RideApiIntegrationTests
         Assert.Null(updated.ProfilePhotoReviewedAtUtc);
         Assert.Null(updated.ProfilePhotoReviewReason);
         Assert.Null(updated.ProfilePhotoOperationsReviewActorId);
+    }
+
+    [Fact]
+    public async Task DriverSelfieReplacementFailsClosedWhenOperationsReviewMetadataIsIncomplete()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-selfie-incomplete-ops-review";
+        using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+
+        Assert.Equal(HttpStatusCode.Accepted,
+            (await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())).StatusCode);
+        var reviewedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var incomplete = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Previous Operations rejection",
+            ProfilePhotoOperationsReviewActorId = "ops-actor-without-union-context"
+        };
+        profiles[driverId] = incomplete;
+
+        using var response = await driver.PutAsJsonAsync("/api/v1/driver/onboarding/selfie",
+            new { profilePhotoBase64 = "/9j/4AAQSkZJRg==" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(incomplete, profiles[driverId]);
+        Assert.DoesNotContain(
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>().Values,
+            item => item.DriverId == driverId);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>().HasActiveAsync(driverId));
+    }
+
+    [Fact]
+    public async Task OperationsSelfieRetryFailsClosedWhenReviewMarkerBelongsToAnotherUnion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "ops-selfie-stale-union-driver";
+        const string currentUnionId = "ops-selfie-current-union";
+        SeedBookableDriver(factory, driverId, currentUnionId);
+        using var ops = factory.CreateClient("Ops", "ops-selfie-stale-union-operator");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var original = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = "original-ops-actor",
+            ProfilePhotoOperationsReviewUnionId = "previous-union",
+            ProfilePhotoOperationsReviewUnionName = "Previous Union"
+        };
+        profiles[driverId] = original;
+
+        using var response = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{currentUnionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Image is unclear" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(original, profiles[driverId]);
+        Assert.DoesNotContain(
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>().Values,
+            item => item.DriverId == driverId);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>().HasActiveAsync(driverId));
     }
 
     [Fact]
@@ -1372,6 +1440,10 @@ public sealed class RideApiIntegrationTests
         const string unionId = "union-review-union";
         const string driverId = "union-review-driver";
         SeedBookableDriver(factory, driverId, unionId);
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        unions[unionId] = unions[unionId] with { Name = "Union Review Union" };
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        assignments[driverId] = assignments[driverId] with { UnionName = "Union Review Union" };
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         profiles[driverId] = profiles[driverId] with

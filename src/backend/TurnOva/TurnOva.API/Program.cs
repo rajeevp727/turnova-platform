@@ -522,6 +522,10 @@ async Task EnsureUnionSelfieAuditAsync(
 async Task EnsureOperationsSelfieRejectionAuditAsync(
     DriverOnboardingProfile reviewedProfile, CancellationToken ct)
 {
+    if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(reviewedProfile))
+        throw new InvalidOperationException(
+            "The Operations selfie review snapshot is incomplete. Preserve the profile and resolve its audit metadata before continuing.");
+
     var reviewedAtUtc = reviewedProfile.ProfilePhotoReviewedAtUtc
         ?? throw new InvalidOperationException("A rejected selfie review must have an authoritative review timestamp.");
     var actor = reviewedProfile.ProfilePhotoOperationsReviewActorId
@@ -1239,8 +1243,12 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "Legacy non-Cab profiles cannot update a selfie for new MVP eligibility." });
 
-        if (!string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId))
+        if (DriverProfileReviewGuard.HasOperationsReviewMetadata(profile))
+        {
+            if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile))
+                return Results.Conflict(new { message = "The previous Operations selfie review has incomplete audit metadata. Resolve it before replacing the selfie." });
             await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
+        }
 
         var capturedAtUtc = DateTimeOffset.UtcNow;
         var saved = await TryUpdateDriverProfileAsync(driverId, current =>
@@ -1345,8 +1353,12 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
             return Results.Conflict(new { message = "This legacy non-Cab profile is retained for historical records and cannot be converted through onboarding. Cab vehicle verification must be completed through the union workflow." });
         if (existing.Status is "Approved" or "Suspended")
             return Results.Conflict(new { message = "An approved or suspended driver profile cannot be replaced through onboarding." });
-        if (!string.IsNullOrWhiteSpace(existing.ProfilePhotoOperationsReviewActorId))
+        if (DriverProfileReviewGuard.HasOperationsReviewMetadata(existing))
+        {
+            if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(existing))
+                return Results.Conflict(new { message = "The previous Operations selfie review has incomplete audit metadata. Resolve it before replacing onboarding data." });
             await EnsureOperationsSelfieRejectionAuditAsync(existing, ct);
+        }
 
         var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         {
@@ -1610,7 +1622,12 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
             ?? throw new InvalidOperationException("Rejected selfie review requires a valid reason.");
         var actor = DriverUnionAuditActor.Resolve(context.User);
 
-        if (DriverProfileReviewGuard.IsSameRejectedSelfieReview(profile, profile, reason))
+        if (DriverProfileReviewGuard.HasOperationsReviewMetadata(profile) &&
+            (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile) ||
+                !string.Equals(profile.ProfilePhotoOperationsReviewUnionId, union.UnionId, StringComparison.Ordinal)))
+            return Results.Conflict(new { message = "The existing Operations selfie review belongs to a different or incomplete audit snapshot. Resolve it before reviewing again." });
+
+        if (DriverProfileReviewGuard.IsSameRejectedSelfieReview(profile, profile, reason, union.UnionId))
         {
             await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
             return Results.Ok(new
@@ -1648,7 +1665,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         if (!saved)
         {
             var latest = await FindDriverProfileAsync(driverId, ct);
-            if (latest is null || !DriverProfileReviewGuard.IsSameRejectedSelfieReview(latest, profile, reason))
+            if (latest is null || !DriverProfileReviewGuard.IsSameRejectedSelfieReview(latest, profile, reason, union.UnionId))
                 return Results.Conflict(new { message = "Driver selfie changed during operations review. Refresh the member record and retry." });
 
             await EnsureOperationsSelfieRejectionAuditAsync(latest, ct);
@@ -1889,10 +1906,11 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             return Results.Conflict(new { message = "The active union, Cab driver profile and required licence/vehicle documents must be approved before selfie review." });
 
         var reason = request.Status == "Rejected" ? request.Reason!.Trim() : null;
-        if (!string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId))
+        if (DriverProfileReviewGuard.HasOperationsReviewMetadata(profile))
         {
-            if (!string.Equals(profile.ProfilePhotoOperationsReviewUnionId, union.UnionId, StringComparison.Ordinal))
-                return Results.Conflict(new { message = "Pending Operations selfie audit metadata does not match the current Union. Resolve the audit before review." });
+            if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile) ||
+                !string.Equals(profile.ProfilePhotoOperationsReviewUnionId, union.UnionId, StringComparison.Ordinal))
+                return Results.Conflict(new { message = "Pending Operations selfie audit metadata does not match the current Union or is incomplete. Resolve the audit before review." });
             await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
         }
 
@@ -2002,12 +2020,12 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             return Results.Conflict(new { message = "The union does not support this driver's approved zone and service class." });
 
         var previous = await FindUnionAssignmentAsync(driverId, ct);
-        if (!string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId))
+        if (DriverProfileReviewGuard.HasOperationsReviewMetadata(profile))
         {
-            if (previous is null ||
-                profile.ProfilePhotoApprovalStatus != "Rejected" ||
+            if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile) ||
+                previous is null ||
                 !string.Equals(profile.ProfilePhotoOperationsReviewUnionId, previous.UnionId, StringComparison.Ordinal))
-                return Results.Conflict(new { message = "Pending Operations selfie audit metadata does not match the current Union assignment. Resolve the audit before transfer." });
+                return Results.Conflict(new { message = "Pending Operations selfie audit metadata does not match the current Union assignment or is incomplete. Resolve the audit before transfer." });
 
             await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
         }

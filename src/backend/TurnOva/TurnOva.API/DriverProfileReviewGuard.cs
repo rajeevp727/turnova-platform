@@ -12,22 +12,35 @@ public static class DriverProfileReviewGuard
             : normalized;
     }
 
+    public static bool HasOperationsReviewMetadata(DriverOnboardingProfile profile) =>
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId) ||
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionId) ||
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionName);
+
+    public static bool HasCompleteOperationsReviewSnapshot(DriverOnboardingProfile profile) =>
+        profile.ProfilePhotoApprovalStatus == "Rejected" &&
+        profile.ProfilePhotoApprovedByUnionId is null &&
+        profile.ProfilePhotoReviewedAtUtc is not null &&
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoReviewReason) &&
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64) &&
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId) &&
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionId) &&
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionName);
+
     public static bool IsSameRejectedSelfieReview(
         DriverOnboardingProfile current,
         DriverOnboardingProfile reviewedSnapshot,
-        string reason)
+        string reason,
+        string? expectedUnionId = null)
     {
-        return current.Id == reviewedSnapshot.Id &&
+        return HasCompleteOperationsReviewSnapshot(current) &&
+            current.Id == reviewedSnapshot.Id &&
             current.DriverId == reviewedSnapshot.DriverId &&
             current.ProfilePhotoBase64 == reviewedSnapshot.ProfilePhotoBase64 &&
             current.ProfilePhotoCapturedAtUtc == reviewedSnapshot.ProfilePhotoCapturedAtUtc &&
-            current.ProfilePhotoApprovalStatus == "Rejected" &&
-            current.ProfilePhotoApprovedByUnionId is null &&
             string.Equals(current.ProfilePhotoReviewReason, reason, StringComparison.Ordinal) &&
-            current.ProfilePhotoReviewedAtUtc is not null &&
-            !string.IsNullOrWhiteSpace(current.ProfilePhotoOperationsReviewActorId) &&
-            !string.IsNullOrWhiteSpace(current.ProfilePhotoOperationsReviewUnionId) &&
-            !string.IsNullOrWhiteSpace(current.ProfilePhotoOperationsReviewUnionName);
+            (expectedUnionId is null ||
+                string.Equals(current.ProfilePhotoOperationsReviewUnionId, expectedUnionId, StringComparison.Ordinal));
     }
 
     public static bool Matches(DriverOnboardingProfile current, DriverOnboardingProfile reviewedSnapshot)

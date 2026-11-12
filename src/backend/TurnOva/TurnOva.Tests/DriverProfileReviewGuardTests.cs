@@ -107,6 +107,49 @@ public sealed class DriverProfileReviewGuardTests
             operationsRejection, operationsRejection, reason));
     }
 
+    [Fact]
+    public void OperationsReviewRecoveryRequiresCompletePrivateSnapshot()
+    {
+        var incomplete = CreateProfile() with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = "ops-actor"
+        };
+        var complete = incomplete with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+
+        Assert.True(DriverProfileReviewGuard.HasOperationsReviewMetadata(incomplete));
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(incomplete));
+        Assert.True(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(complete));
+    }
+
+    [Fact]
+    public void SameOperationsRetryMustBelongToTheExpectedCurrentUnion()
+    {
+        var reviewed = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoCapturedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2),
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = "ops-actor-42",
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+
+        Assert.True(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
+            reviewed, reviewed, "Image is unclear", "union-1"));
+        Assert.False(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
+            reviewed, reviewed, "Image is unclear", "another-union"));
+    }
+
     private static DriverOnboardingProfile CreateProfile() => new(
         "driver-1", "driver-1", "zone-1", "Test Driver", "+919876543210",
         "Maruti", "Dzire", "TS09AB1234", "cab", 3,
