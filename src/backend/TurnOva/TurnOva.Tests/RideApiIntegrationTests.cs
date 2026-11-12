@@ -1390,6 +1390,13 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(expectedRejectionReason, rejectionResponseJson.RootElement.GetProperty("reason").GetString());
         Assert.Equal("Rejected", profiles[driverId].ProfilePhotoApprovalStatus);
         Assert.Equal(expectedRejectionReason, profiles[driverId].ProfilePhotoReviewReason);
+        Assert.Equal("union-review-ops", profiles[driverId].ProfilePhotoOperationsReviewActorId);
+
+        using var driverProfileResponse = await driver.GetAsync("/api/v1/driver/onboarding/me");
+        Assert.Equal(HttpStatusCode.OK, driverProfileResponse.StatusCode);
+        using var driverProfileJson = JsonDocument.Parse(await driverProfileResponse.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null,
+            driverProfileJson.RootElement.GetProperty("profilePhotoOperationsReviewActorId").ValueKind);
 
         using var discoveryAfterRejection = await rider.GetAsync(
             "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
@@ -1414,7 +1421,9 @@ public sealed class RideApiIntegrationTests
 
         // The profile commit succeeded but the audit write is missing. An identical
         // retry must restore the deterministic event without changing the review time.
-        using var recoveredRejection = await ops.PutAsJsonAsync(
+        using var retryingOps = factory.CreateClient("Rider", "union-review-ops-retry");
+        retryingOps.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var recoveredRejection = await retryingOps.PutAsJsonAsync(
             $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
             new { status = "Rejected", reason = "  Vehicle image requires a clearer review photo.  " });
         Assert.Equal(HttpStatusCode.OK, recoveredRejection.StatusCode);
@@ -1426,6 +1435,7 @@ public sealed class RideApiIntegrationTests
             item => item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
         Assert.Equal(originalEventId, recoveredAuditEvent.GetProperty("eventId").GetString());
         Assert.Equal(originalReviewedAt.Value, recoveredAuditEvent.GetProperty("occurredAtUtc").GetDateTimeOffset());
+        Assert.Equal("union-review-ops", recoveredAuditEvent.GetProperty("actor").GetString());
 
         // A further identical retry must verify the canonical event rather than
         // append a duplicate or move the authoritative review timestamp.
