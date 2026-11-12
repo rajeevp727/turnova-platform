@@ -2436,11 +2436,12 @@ app.MapPost("/api/v1/rider/bookings", async (
                 priorRide = await FindRideAsync(priorRide.RideId, ct);
             }
 
-            if (priorRide is not null &&
-                !string.IsNullOrWhiteSpace(priorRide.UnionId) &&
-                string.Equals(priorRide.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
-                (priorRide.Status is "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+            if (priorRide is not null)
             {
+                if (!string.IsNullOrWhiteSpace(priorRide.UnionId) &&
+                    string.Equals(priorRide.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) &&
+                    (priorRide.Status is "Negotiating" or "AgreementConfirmed" or "Accepted" or "Arrived" or "InProgress"))
+                {
                 if (await HasActiveRiderBookingAsync(riderId, priorRide.RideId, requestFingerprint, ct))
                     return Results.Problem(
                         "The existing selected booking could not safely restore its Rider reservation.",
@@ -2494,8 +2495,9 @@ app.MapPost("/api/v1/rider/bookings", async (
                     passengers = priorRide.Passengers,
                     expiresAtUtc = priorRide.NegotiationExpiresAtUtc
                 }, ct);
+                }
+                return Results.Ok(priorRide);
             }
-            return Results.Ok(priorRide);
         }
 
         // A deterministic ride ID lets a retry recover a process interrupted after the
