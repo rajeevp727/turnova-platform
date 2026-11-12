@@ -1367,11 +1367,30 @@ public sealed class RideApiIntegrationTests
         Assert.Single(auditJson.RootElement.EnumerateArray(),
             item => item.GetProperty("eventType").GetString() == "SelfieApprovedByUnion");
 
+        var auditBeforeInvalidRejections = await ops.GetFromJsonAsync<List<JsonElement>>(
+            $"/api/v1/ops/drivers/{driverId}/union-history");
+        foreach (var invalidReason in new string?[] { null, "   ", new string('x', 301) })
+        {
+            using var invalidRejection = await ops.PutAsJsonAsync(
+                $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+                new { status = "Rejected", reason = invalidReason });
+            Assert.Equal(HttpStatusCode.BadRequest, invalidRejection.StatusCode);
+        }
+        Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
+        var auditAfterInvalidRejections = await ops.GetFromJsonAsync<List<JsonElement>>(
+            $"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.Equal(auditBeforeInvalidRejections!.Count, auditAfterInvalidRejections!.Count);
+
+        const string expectedRejectionReason = "Vehicle image requires a clearer review photo.";
         using var operationsRejection = await ops.PutAsJsonAsync(
             $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
-            new { status = "Rejected", reason = "Vehicle image requires a clearer review photo." });
+            new { status = "Rejected", reason = "  Vehicle image requires a clearer review photo.  " });
         Assert.Equal(HttpStatusCode.OK, operationsRejection.StatusCode);
+        using var rejectionResponseJson = JsonDocument.Parse(await operationsRejection.Content.ReadAsStringAsync());
+        Assert.Equal(expectedRejectionReason, rejectionResponseJson.RootElement.GetProperty("reason").GetString());
         Assert.Equal("Rejected", profiles[driverId].ProfilePhotoApprovalStatus);
+        Assert.Equal(expectedRejectionReason, profiles[driverId].ProfilePhotoReviewReason);
+
         using var discoveryAfterRejection = await rider.GetAsync(
             "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
         using var rejectedJson = JsonDocument.Parse(await discoveryAfterRejection.Content.ReadAsStringAsync());
@@ -1382,8 +1401,9 @@ public sealed class RideApiIntegrationTests
 
         using var rejectedAuditResponse = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
         using var rejectedAuditJson = JsonDocument.Parse(await rejectedAuditResponse.Content.ReadAsStringAsync());
-        Assert.Contains(rejectedAuditJson.RootElement.EnumerateArray(), item =>
-            item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
+        var rejectionAuditEvent = Assert.Single(rejectedAuditJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
+        Assert.Equal(expectedRejectionReason, rejectionAuditEvent.GetProperty("reason").GetString());
     }
 
     [Fact]
