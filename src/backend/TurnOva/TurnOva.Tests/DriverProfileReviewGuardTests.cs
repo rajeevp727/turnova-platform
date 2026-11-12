@@ -86,10 +86,19 @@ public sealed class DriverProfileReviewGuardTests
     [InlineData("Contact operator@example.com.")]
     [InlineData("Call 123-456-7890 for follow-up")]
     [InlineData("Use +91 98765 43210 for clarification")]
+    [InlineData("Call 123-456-789 for clarification")]
     public void UnionAuditReasonsRejectObviousContactDetails(string supplied)
     {
         Assert.Null(DriverProfileReviewGuard.NormalizeRejectionReason(supplied));
         Assert.Null(DriverUnionAuditReason.Normalize(supplied));
+    }
+
+    [Fact]
+    public void UnionAuditReasonRejectsControlAndLineSeparatorCharacters()
+    {
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\\nwith an embedded newline"));
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\\twith an embedded tab"));
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\\u2028with a Unicode line separator"));
     }
 
     [Fact]

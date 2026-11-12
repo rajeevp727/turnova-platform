@@ -38,7 +38,8 @@ public static class DriverUnionAuditReason
 
     public static bool IsSafe(string? reason)
     {
-        if (string.IsNullOrWhiteSpace(reason))
+        if (string.IsNullOrWhiteSpace(reason) ||
+            reason.Any(character => char.IsControl(character) || character is '\u2028' or '\u2029'))
             return false;
 
         try
@@ -83,7 +84,7 @@ public static class DriverUnionAuditReason
 
                 // Keep common ISO date/time text such as 2026-11-13 10:30 valid,
                 // while rejecting a long contiguous number or phone-like grouped number.
-                if (digitCount >= 10 &&
+                if (digitCount >= 9 &&
                     (groupCount == 1 || significantGroups >= 2 || maximumGroupDigits >= 10))
                     return false;
             }
