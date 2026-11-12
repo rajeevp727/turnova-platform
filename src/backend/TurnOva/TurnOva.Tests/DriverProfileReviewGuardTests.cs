@@ -130,6 +130,24 @@ public sealed class DriverProfileReviewGuardTests
     }
 
     [Fact]
+    public void BlankButPresentOperationsReviewMarkersAreTreatedAsIncompleteMetadata()
+    {
+        var profile = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = "",
+            ProfilePhotoOperationsReviewUnionId = "",
+            ProfilePhotoOperationsReviewUnionName = ""
+        };
+
+        Assert.True(DriverProfileReviewGuard.HasOperationsReviewMetadata(profile));
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile));
+    }
+
+    [Fact]
     public void SameOperationsRetryMustBelongToTheExpectedCurrentUnion()
     {
         var reviewed = CreateProfile() with
