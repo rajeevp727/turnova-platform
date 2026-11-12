@@ -138,6 +138,13 @@ Store identity documents in protected object storage rather than large Cosmos DB
 - The API rejects non-finite and out-of-range coordinates for availability, pickup and active-trip location inputs. Active-trip updates are accepted only from the assigned Driver while server-owned location sharing is active, then persisted and broadcast to the owning Rider group. Rider reads remain owner-scoped and reconnect restores authoritative state.
 - Availability discovery still uses only server-authoritative Online state, current location freshness and the existing union/vehicle eligibility filters; `Dispatch:NearbyLocationMaxAgeSeconds` must be explicitly configured to a positive product-approved value. There is no checked-in production default; discovery and selected booking fail closed with 503 when it is missing or non-positive. The 120-second value used by API integration tests is test-fixture-only. Exact Driver coordinates are not returned in discovery. The Rider discovery endpoint receives foreground device GPS as the pickup coordinate; the free-text pickup value is a landmark/Driver instruction and is not geocoded. Custom pickup pin/geocoding and route-distance calculation remain blocked on a configured maps/routing provider, so `journeyDistanceKm` stays null until then. Call/Chat controls remain disabled until their providers are configured. The approved production radius and zone coverage must be supplied; discovery fails closed when the radius is missing or invalid.
 
+### Driver reservation audit metadata contract
+
+- Driver reservation audit facts use exactly four event types: `ReservationAcquired`, `ReservationMadePermanent`, `ReservationExpiryChanged` and `ReservationReleased`. The domain factory rejects any other or malformed event type before creating an append-only fact.
+- Actor roles and reason categories remain allow-listed. Actor identifiers containing only digits and the permitted separators (`-`, `_`, `.`, `:`) are treated as phone-like when they contain at least eight digits and are replaced with the System actor. Opaque internal identifiers containing letters remain unchanged.
+- Null/blank actor IDs also fall back to System. Operations selfie-rejection reasons are trimmed once, limited to 1–300 characters and the same normalized value is persisted in both the Driver profile and append-only Union audit event.
+- Audit facts remain limited to reservation/actor/reason/time metadata; ride routes, precise location, contact details, credentials and payment values do not belong in this event contract.
+
 ## 8. Initial API resource groups
 
 - /api/v1/auth — registration, login, refresh and logout.

@@ -56,6 +56,31 @@ public sealed class DriverProfileReviewGuardTests
         Assert.True(DriverProfileReviewGuard.Matches(latest, snapshot));
     }
 
+    [Theory]
+    [InlineData("  selfie does not meet policy  ", "selfie does not meet policy")]
+    [InlineData("Reason", "Reason")]
+    public void RejectionReasonIsTrimmedToOneStableValue(string supplied, string expected)
+    {
+        Assert.Equal(expected, DriverProfileReviewGuard.NormalizeRejectionReason(supplied));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void RejectionReasonRejectsNullOrWhitespace(string? supplied)
+    {
+        Assert.Null(DriverProfileReviewGuard.NormalizeRejectionReason(supplied));
+    }
+
+    [Fact]
+    public void RejectionReasonRejectsMoreThanThreeHundredCharactersAndAcceptsTheLimit()
+    {
+        Assert.Null(DriverProfileReviewGuard.NormalizeRejectionReason(new string('x', 301)));
+        Assert.Equal(new string('x', 300),
+            DriverProfileReviewGuard.NormalizeRejectionReason(new string('x', 300)));
+    }
+
     private static DriverOnboardingProfile CreateProfile() => new(
         "driver-1", "driver-1", "zone-1", "Test Driver", "+919876543210",
         "Maruti", "Dzire", "TS09AB1234", "cab", 3,
