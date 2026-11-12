@@ -734,33 +734,13 @@ async Task<IReadOnlyList<DriverUnionAssignment>> ListActiveUnionAssignmentsAsync
     return results;
 }
 
-async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(
-    string driverId, CancellationToken ct, bool repairSelfieReviewSnapshots = false)
+async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string driverId, CancellationToken ct)
 {
-    // The assignment retains the latest event snapshot so an audit write that failed
-    // after assignment persistence can be repaired before history or membership periods are read.
+    // The current assignment retains the latest event snapshot so an audit write that
+    // failed after assignment persistence can be repaired before history is returned.
     var currentAssignment = await FindUnionAssignmentAsync(driverId, ct);
     if (currentAssignment is not null)
         await EnsureUnionAssignmentAuditAsync(currentAssignment, ct);
-
-    if (repairSelfieReviewSnapshots)
-    {
-        // Only the privileged Operations history view repairs pending selfie-review snapshots.
-        // Payslip membership calculations do not depend on selfie-review recovery metadata.
-        var currentProfile = await FindDriverProfileAsync(driverId, ct);
-        if (currentProfile is not null)
-        {
-            if (DriverProfileReviewGuard.HasConflictingReviewMetadata(currentProfile))
-                throw new InvalidOperationException(
-                    "The Driver profile contains conflicting Union selfie-review recovery metadata. Preserve the profile and resolve its audit state before returning history.");
-
-            if (DriverProfileReviewGuard.HasOperationsReviewMetadata(currentProfile))
-                await EnsureOperationsSelfieRejectionAuditAsync(currentProfile, ct);
-
-            if (DriverProfileReviewGuard.HasUnionReviewMetadata(currentProfile))
-                await EnsureUnionSelfieAuditAsync(currentProfile, ct);
-        }
-    }
 
     if (unionAuditContainer is null) return unionAudit.Values.Where(item => item.DriverId == driverId).OrderByDescending(item => item.OccurredAtUtc).ToArray();
     var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId").WithParameter("@driverId", driverId);
@@ -2358,7 +2338,7 @@ app.MapGet("/api/v1/ops/drivers/{driverId}/union-history", async (
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
     try
     {
-        return Results.Ok(await GetUnionAuditAsync(driverId, ct, repairSelfieReviewSnapshots: true));
+        return Results.Ok(await GetUnionAuditAsync(driverId, ct));
     }
     catch (InvalidOperationException)
     {
