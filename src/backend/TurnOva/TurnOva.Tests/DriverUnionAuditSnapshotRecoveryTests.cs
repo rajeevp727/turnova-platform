@@ -96,6 +96,67 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     }
 
     [Fact]
+    public void AuditActorUsesOpaqueSubjectForUnionManager()
+    {
+        var identity = new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Name, "manager@example.com"),
+            new Claim("sub", "union-manager-opaque-42"),
+            new Claim("role", "UnionManager")
+        ], "test", ClaimTypes.Name, "role");
+
+        Assert.Equal("union-manager-opaque-42",
+            DriverUnionAuditActor.ResolveUnionManager(new ClaimsPrincipal(identity)));
+    }
+
+    [Theory]
+    [InlineData("manager@example.com")]
+    [InlineData("123-456-7890")]
+    [InlineData("123456789012")]
+    public void UnionManagerAuditActorFallsBackForContactLikeSubjects(string subject)
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", subject), new Claim("role", "UnionManager")],
+            "test", ClaimTypes.Name, "role"));
+
+        Assert.Equal("UnionManager", DriverUnionAuditActor.ResolveUnionManager(principal));
+    }
+
+    [Fact]
+    public async Task UnionManagerReviewRetryPreservesFirstCanonicalActor()
+    {
+        var expected = CreateEvent() with
+        {
+            EventType = "SelfieApprovedByUnion",
+            Actor = "retrying-manager"
+        };
+        var canonical = expected with { Actor = "original-manager" };
+
+        await DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
+            expected,
+            (_, _, _) => Task.FromResult<DriverUnionAuditEvent?>(canonical),
+            static (_, _) => Task.CompletedTask);
+    }
+
+    [Fact]
+    public void UnionManagerReviewActorVariationDoesNotHideOtherCanonicalMismatches()
+    {
+        var expected = CreateEvent() with
+        {
+            EventType = "SelfieRejectedByUnion",
+            Actor = "retrying-manager"
+        };
+        var canonical = expected with { Actor = "original-manager" };
+
+        Assert.True(DriverUnionAuditSnapshotRecovery.Matches(expected, canonical));
+        Assert.False(DriverUnionAuditSnapshotRecovery.Matches(
+            expected, canonical with { Reason = "Different reason" }));
+        Assert.False(DriverUnionAuditSnapshotRecovery.Matches(
+            CreateEvent() with { Actor = "retrying-operator" },
+            CreateEvent() with { Actor = "original-operator" }));
+    }
+
+    [Fact]
     public async Task ConflictRecoveryAcceptsAnExactCanonicalEvent()
     {
         var expected = CreateEvent();
