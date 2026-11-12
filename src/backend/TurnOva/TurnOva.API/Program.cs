@@ -690,9 +690,28 @@ async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
 }
 async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
 {
-    if (rideContainer is null) return rides.TryGetValue(rideId, out var item) ? item : null;
-    try { return (await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource; }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+    DemoRide? item;
+    if (rideContainer is null)
+    {
+        if (!rides.TryGetValue(rideId, out item)) return null;
+    }
+    else
+    {
+        try
+        {
+            item = (await rideContainer.ReadItemAsync<DemoRide>(
+                rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    // Cosmos item/partition identity and the embedded aggregate identity must agree.
+    // Fail closed so a stale or malformed document cannot be returned or reconciled through
+    // another ride's route key, nor release that ride's Driver/Rider reservations.
+    return string.Equals(item.RideId, rideId, StringComparison.Ordinal) ? item : null;
 }
 
 async Task<DemoRide?> ReleaseTerminalSelectedRideReservationAsync(
