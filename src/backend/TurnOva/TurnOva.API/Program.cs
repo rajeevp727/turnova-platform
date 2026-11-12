@@ -844,11 +844,10 @@ async Task<HashSet<string>> FindActiveDriverIdsAsync(
                 // Reconcile expired negotiations through the aggregate/ETag boundary.
                 // A losing transition re-reads the latest document and fails closed if it remains active.
                 var latest = await FindRideAsync(candidate.RideId, ct);
-                if (latest is not null && RideLifecycle.IsActive(latest.Status) &&
-                    latest.DriverId is { } latestDriverId &&
-                    batchDriverIds.Contains(latestDriverId) &&
-                    !string.Equals(latest.RideId, exceptRideId, StringComparison.Ordinal))
-                    activeDriverIds.Add(latestDriverId);
+                var blockingDriverId = ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
+                    candidate, latest, exceptRideId);
+                if (blockingDriverId is not null && batchDriverIds.Contains(blockingDriverId))
+                    activeDriverIds.Add(blockingDriverId);
                 continue;
             }
 
