@@ -130,6 +130,63 @@ public sealed class DriverProfileReviewGuardTests
     }
 
     [Fact]
+    public void UnionReviewSnapshotRequiresOriginalActorUnionAndReviewTimestamp()
+    {
+        var incomplete = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.Parse("2026-11-12T10:00:00Z"),
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoUnionReviewActorId = "manager-original",
+            ProfilePhotoUnionReviewUnionId = "union-1"
+        };
+        var complete = incomplete with { ProfilePhotoUnionReviewUnionName = "Test Union" };
+
+        Assert.True(DriverProfileReviewGuard.HasUnionReviewMetadata(incomplete));
+        Assert.False(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(incomplete));
+        Assert.True(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(complete));
+        Assert.True(DriverProfileReviewGuard.IsSameUnionSelfieReview(
+            complete, "Rejected", "union-1", "Image is unclear"));
+        Assert.False(DriverProfileReviewGuard.IsSameUnionSelfieReview(
+            complete, "Rejected", "another-union", "Image is unclear"));
+        Assert.False(DriverProfileReviewGuard.IsSameUnionSelfieReview(
+            complete, "Rejected", "union-1", "Different reason"));
+    }
+
+    [Fact]
+    public void LegacyReviewedSelfieWithoutRecoverySnapshotIsDetected()
+    {
+        var legacy = CreateProfile() with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.Parse("2026-11-12T10:00:00Z"),
+            ProfilePhotoReviewReason = "Image is unclear"
+        };
+
+        Assert.True(DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(legacy));
+        Assert.False(DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(
+            legacy with { ProfilePhotoUnionReviewActorId = "manager-original" }));
+    }
+
+    [Fact]
+    public void BlankButPresentUnionReviewMarkersAreTreatedAsIncompleteMetadata()
+    {
+        var profile = CreateProfile() with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoUnionReviewActorId = "",
+            ProfilePhotoUnionReviewUnionId = "",
+            ProfilePhotoUnionReviewUnionName = ""
+        };
+
+        Assert.True(DriverProfileReviewGuard.HasUnionReviewMetadata(profile));
+        Assert.False(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(profile));
+    }
+
+    [Fact]
     public void BlankButPresentOperationsReviewMarkersAreTreatedAsIncompleteMetadata()
     {
         var profile = CreateProfile() with

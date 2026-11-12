@@ -507,16 +507,32 @@ async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct
     }
 }
 
-async Task EnsureUnionSelfieAuditAsync(
-    string driverId, string unionId, string unionName, string status, string? reason,
-    string actor, DateTimeOffset reviewedAtUtc, CancellationToken ct)
+async Task EnsureUnionSelfieAuditAsync(DriverOnboardingProfile reviewedProfile, CancellationToken ct)
 {
+    if (!DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(reviewedProfile))
+        throw new InvalidOperationException(
+            "The UnionManager selfie review snapshot is incomplete. Preserve the profile and resolve its audit metadata before continuing.");
+
+    var driverId = reviewedProfile.DriverId;
+    var unionId = reviewedProfile.ProfilePhotoUnionReviewUnionId
+        ?? throw new InvalidOperationException("A UnionManager selfie review must retain its original Union ID.");
+    var unionName = reviewedProfile.ProfilePhotoUnionReviewUnionName
+        ?? throw new InvalidOperationException("A UnionManager selfie review must retain its original Union name.");
+    var actor = reviewedProfile.ProfilePhotoUnionReviewActorId
+        ?? throw new InvalidOperationException("A UnionManager selfie review must retain its original actor.");
+    var reviewedAtUtc = reviewedProfile.ProfilePhotoReviewedAtUtc
+        ?? throw new InvalidOperationException("A UnionManager selfie review must retain its original review timestamp.");
+    var status = reviewedProfile.ProfilePhotoApprovalStatus;
     var eventType = status == "Approved" ? "SelfieApprovedByUnion" : "SelfieRejectedByUnion";
-    var auditKey = $"{driverId}|{unionId}|{eventType}|{reviewedAtUtc.UtcDateTime.Ticks}";
-    var eventId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(auditKey)));
+    var reason = status == "Approved"
+        ? "Approved by the currently assigned union."
+        : reviewedProfile.ProfilePhotoReviewReason
+            ?? throw new InvalidOperationException("A rejected UnionManager selfie review must retain its reason.");
+    var eventId = DriverUnionAuditIdentity.CreateUnionSelfieReviewEventId(
+        driverId, unionId, eventType, reviewedAtUtc);
     await SaveUnionAuditAsync(new DriverUnionAuditEvent(
-        eventId, driverId, unionId, unionName, unionId, unionName, eventType,
-        reason ?? "Approved by the currently assigned union.", actor, reviewedAtUtc), ct);
+        eventId, driverId, unionId, unionName, unionId, unionName,
+        eventType, reason, actor, reviewedAtUtc), ct);
 }
 
 async Task EnsureOperationsSelfieRejectionAuditAsync(
@@ -1219,7 +1235,15 @@ onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
     var profile = await FindDriverProfileAsync(driverId, ct);
     return profile is null
         ? Results.NoContent()
-        : Results.Ok(profile with { ProfilePhotoOperationsReviewActorId = null, ProfilePhotoOperationsReviewUnionId = null, ProfilePhotoOperationsReviewUnionName = null });
+        : Results.Ok(profile with
+        {
+            ProfilePhotoOperationsReviewActorId = null,
+            ProfilePhotoOperationsReviewUnionId = null,
+            ProfilePhotoOperationsReviewUnionName = null,
+            ProfilePhotoUnionReviewActorId = null,
+            ProfilePhotoUnionReviewUnionId = null,
+            ProfilePhotoUnionReviewUnionName = null
+        });
 });
 onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest request, CancellationToken ct) =>
 {
@@ -1243,11 +1267,21 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         if (!string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "Legacy non-Cab profiles cannot update a selfie for new MVP eligibility." });
 
+        if (DriverProfileReviewGuard.HasConflictingReviewMetadata(profile))
+            return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before replacing the selfie." });
+        if (DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(profile))
+            return Results.Conflict(new { message = "The existing reviewed selfie has no recoverable audit actor snapshot. Preserve it and resolve the historical audit before replacing the selfie." });
         if (DriverProfileReviewGuard.HasOperationsReviewMetadata(profile))
         {
             if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile))
                 return Results.Conflict(new { message = "The previous Operations selfie review has incomplete audit metadata. Resolve it before replacing the selfie." });
             await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
+        }
+        if (DriverProfileReviewGuard.HasUnionReviewMetadata(profile))
+        {
+            if (!DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(profile))
+                return Results.Conflict(new { message = "The previous UnionManager selfie review has incomplete audit metadata. Resolve it before replacing the selfie." });
+            await EnsureUnionSelfieAuditAsync(profile, ct);
         }
 
         var capturedAtUtc = DateTimeOffset.UtcNow;
@@ -1267,7 +1301,10 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
                 ProfilePhotoReviewReason = null,
                 ProfilePhotoOperationsReviewActorId = null,
                 ProfilePhotoOperationsReviewUnionId = null,
-                ProfilePhotoOperationsReviewUnionName = null
+                ProfilePhotoOperationsReviewUnionName = null,
+                ProfilePhotoUnionReviewActorId = null,
+                ProfilePhotoUnionReviewUnionId = null,
+                ProfilePhotoUnionReviewUnionName = null
             };
         }, ct);
         if (!saved)
@@ -1280,7 +1317,10 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
             {
                 ProfilePhotoOperationsReviewActorId = null,
                 ProfilePhotoOperationsReviewUnionId = null,
-                ProfilePhotoOperationsReviewUnionName = null
+                ProfilePhotoOperationsReviewUnionName = null,
+                ProfilePhotoUnionReviewActorId = null,
+                ProfilePhotoUnionReviewUnionId = null,
+                ProfilePhotoUnionReviewUnionName = null
             });
     }
     finally
@@ -1353,11 +1393,21 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
             return Results.Conflict(new { message = "This legacy non-Cab profile is retained for historical records and cannot be converted through onboarding. Cab vehicle verification must be completed through the union workflow." });
         if (existing.Status is "Approved" or "Suspended")
             return Results.Conflict(new { message = "An approved or suspended driver profile cannot be replaced through onboarding." });
+        if (DriverProfileReviewGuard.HasConflictingReviewMetadata(existing))
+            return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before replacing onboarding data." });
+        if (DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(existing))
+            return Results.Conflict(new { message = "The existing reviewed selfie has no recoverable audit actor snapshot. Preserve it and resolve the historical audit before replacing onboarding data." });
         if (DriverProfileReviewGuard.HasOperationsReviewMetadata(existing))
         {
             if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(existing))
                 return Results.Conflict(new { message = "The previous Operations selfie review has incomplete audit metadata. Resolve it before replacing onboarding data." });
             await EnsureOperationsSelfieRejectionAuditAsync(existing, ct);
+        }
+        if (DriverProfileReviewGuard.HasUnionReviewMetadata(existing))
+        {
+            if (!DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(existing))
+                return Results.Conflict(new { message = "The previous UnionManager selfie review has incomplete audit metadata. Resolve it before replacing onboarding data." });
+            await EnsureUnionSelfieAuditAsync(existing, ct);
         }
 
         var saved = await TryUpdateDriverProfileAsync(driverId, current =>
@@ -1392,7 +1442,10 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
                 ProfilePhotoReviewReason = null,
                 ProfilePhotoOperationsReviewActorId = null,
                 ProfilePhotoOperationsReviewUnionId = null,
-                ProfilePhotoOperationsReviewUnionName = null
+                ProfilePhotoOperationsReviewUnionName = null,
+                ProfilePhotoUnionReviewActorId = null,
+                ProfilePhotoUnionReviewUnionId = null,
+                ProfilePhotoUnionReviewUnionName = null
             };
         }, ct);
 
@@ -1622,10 +1675,21 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
             ?? throw new InvalidOperationException("Rejected selfie review requires a valid reason.");
         var actor = DriverUnionAuditActor.Resolve(context.User);
 
+        if (DriverProfileReviewGuard.HasConflictingReviewMetadata(profile))
+            return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before Operations review." });
+        if (DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(profile))
+            return Results.Conflict(new { message = "The existing reviewed selfie has no recoverable audit actor snapshot. Preserve it and resolve the historical audit before Operations review." });
         if (DriverProfileReviewGuard.HasOperationsReviewMetadata(profile) &&
             (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile) ||
                 !string.Equals(profile.ProfilePhotoOperationsReviewUnionId, union.UnionId, StringComparison.Ordinal)))
             return Results.Conflict(new { message = "The existing Operations selfie review belongs to a different or incomplete audit snapshot. Resolve it before reviewing again." });
+        if (DriverProfileReviewGuard.HasUnionReviewMetadata(profile))
+        {
+            if (!DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(profile) ||
+                !string.Equals(profile.ProfilePhotoUnionReviewUnionId, union.UnionId, StringComparison.Ordinal))
+                return Results.Conflict(new { message = "The existing UnionManager selfie review belongs to a different or incomplete audit snapshot. Resolve it before Operations review." });
+            await EnsureUnionSelfieAuditAsync(profile, ct);
+        }
 
         if (DriverProfileReviewGuard.IsSameRejectedSelfieReview(profile, profile, reason, union.UnionId))
         {
@@ -1658,7 +1722,10 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
                 ProfilePhotoReviewReason = reason,
                 ProfilePhotoOperationsReviewActorId = actor,
                 ProfilePhotoOperationsReviewUnionId = union.UnionId,
-                ProfilePhotoOperationsReviewUnionName = union.Name
+                ProfilePhotoOperationsReviewUnionName = union.Name,
+                ProfilePhotoUnionReviewActorId = null,
+                ProfilePhotoUnionReviewUnionId = null,
+                ProfilePhotoUnionReviewUnionName = null
             };
         }, ct);
 
@@ -1906,19 +1973,28 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             return Results.Conflict(new { message = "The active union, Cab driver profile and required licence/vehicle documents must be approved before selfie review." });
 
         var reason = request.Status == "Rejected" ? request.Reason!.Trim() : null;
+        if (DriverProfileReviewGuard.HasConflictingReviewMetadata(profile))
+            return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before UnionManager review." });
+        if (DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(profile))
+            return Results.Conflict(new { message = "The existing reviewed selfie has no recoverable audit actor snapshot. Preserve it and resolve the historical audit before UnionManager review." });
         if (DriverProfileReviewGuard.HasOperationsReviewMetadata(profile))
         {
             if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile) ||
                 !string.Equals(profile.ProfilePhotoOperationsReviewUnionId, union.UnionId, StringComparison.Ordinal))
-                return Results.Conflict(new { message = "Pending Operations selfie audit metadata does not match the current Union or is incomplete. Resolve the audit before review." });
+                return Results.Conflict(new { message = "Pending Operations selfie audit metadata does not match the current Union or is incomplete. Resolve it before review." });
             await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
         }
+        if (DriverProfileReviewGuard.HasUnionReviewMetadata(profile))
+        {
+            if (!DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(profile) ||
+                !string.Equals(profile.ProfilePhotoUnionReviewUnionId, union.UnionId, StringComparison.Ordinal))
+                return Results.Conflict(new { message = "Pending UnionManager selfie audit metadata does not match the current Union or is incomplete. Resolve it before review." });
+            await EnsureUnionSelfieAuditAsync(profile, ct);
+        }
 
-        var sameReview =
-            string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId) &&
-            profile.ProfilePhotoApprovalStatus == request.Status &&
-            profile.ProfilePhotoApprovedByUnionId == (request.Status == "Approved" ? assignment.UnionId : null) &&
-            profile.ProfilePhotoReviewReason == reason;
+        var actor = DriverUnionAuditActor.ResolveUnionManager(user);
+        var sameReview = DriverProfileReviewGuard.IsSameUnionSelfieReview(
+            profile, request.Status, assignment.UnionId, reason);
 
         var reviewedAtUtc = profile.ProfilePhotoReviewedAtUtc;
         if (!sameReview || reviewedAtUtc is null)
@@ -1948,7 +2024,10 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
                     ProfilePhotoReviewReason = reason,
                     ProfilePhotoOperationsReviewActorId = null,
                     ProfilePhotoOperationsReviewUnionId = null,
-                    ProfilePhotoOperationsReviewUnionName = null
+                    ProfilePhotoOperationsReviewUnionName = null,
+                    ProfilePhotoUnionReviewActorId = actor,
+                    ProfilePhotoUnionReviewUnionId = assignment.UnionId,
+                    ProfilePhotoUnionReviewUnionName = union.Name
                 };
             }, ct);
             if (!saved)
@@ -1958,9 +2037,7 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
                 ?? throw new InvalidOperationException("The reviewed driver profile could not be reloaded.");
         }
 
-        await EnsureUnionSelfieAuditAsync(
-            driverId, assignment.UnionId, union.Name, request.Status, reason,
-            DriverUnionAuditActor.ResolveUnionManager(user), reviewedAtUtc.Value, ct);
+        await EnsureUnionSelfieAuditAsync(profile, ct);
 
         return Results.Ok(new
         {
@@ -2020,6 +2097,10 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             return Results.Conflict(new { message = "The union does not support this driver's approved zone and service class." });
 
         var previous = await FindUnionAssignmentAsync(driverId, ct);
+        if (DriverProfileReviewGuard.HasConflictingReviewMetadata(profile))
+            return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before transfer." });
+        if (DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(profile))
+            return Results.Conflict(new { message = "The existing reviewed selfie has no recoverable audit actor snapshot. Preserve it and resolve the historical audit before transfer." });
         if (DriverProfileReviewGuard.HasOperationsReviewMetadata(profile))
         {
             if (!DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile) ||
@@ -2028,6 +2109,15 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
                 return Results.Conflict(new { message = "Pending Operations selfie audit metadata does not match the current Union assignment or is incomplete. Resolve the audit before transfer." });
 
             await EnsureOperationsSelfieRejectionAuditAsync(profile, ct);
+        }
+        if (DriverProfileReviewGuard.HasUnionReviewMetadata(profile))
+        {
+            if (!DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(profile) ||
+                previous is null ||
+                !string.Equals(profile.ProfilePhotoUnionReviewUnionId, previous.UnionId, StringComparison.Ordinal))
+                return Results.Conflict(new { message = "Pending UnionManager selfie audit metadata does not match the current Union assignment or is incomplete. Resolve it before transfer." });
+
+            await EnsureUnionSelfieAuditAsync(profile, ct);
         }
 
         if (previous?.UnionId == union.UnionId && previous.Status == "Active")
@@ -2058,7 +2148,10 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
                     ProfilePhotoReviewReason = null,
                     ProfilePhotoOperationsReviewActorId = null,
                     ProfilePhotoOperationsReviewUnionId = null,
-                    ProfilePhotoOperationsReviewUnionName = null
+                    ProfilePhotoOperationsReviewUnionName = null,
+                    ProfilePhotoUnionReviewActorId = null,
+                    ProfilePhotoUnionReviewUnionId = null,
+                    ProfilePhotoUnionReviewUnionName = null
                 };
             }, ct);
             if (!profileReset)

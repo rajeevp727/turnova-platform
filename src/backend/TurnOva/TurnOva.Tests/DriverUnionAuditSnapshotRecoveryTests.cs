@@ -49,6 +49,34 @@ public sealed class DriverUnionAuditSnapshotRecoveryTests
     }
 
     [Fact]
+    public void UnionSelfieReviewEventIdentityIsStableAndDoesNotExposeReviewInputs()
+    {
+        var reviewedAt = DateTimeOffset.Parse("2026-11-12T11:00:00+05:30");
+        var first = DriverUnionAuditIdentity.CreateUnionSelfieReviewEventId(
+            "driver-private-123", "union-private-456", "SelfieRejectedByUnion", reviewedAt);
+        var retry = DriverUnionAuditIdentity.CreateUnionSelfieReviewEventId(
+            "driver-private-123", "union-private-456", "SelfieRejectedByUnion", reviewedAt.ToUniversalTime());
+
+        Assert.Equal(first, retry);
+        Assert.Equal(64, first.Length);
+        Assert.False(first.Contains("driver-private", StringComparison.OrdinalIgnoreCase));
+        Assert.False(first.Contains("union-private", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void UnionSelfieReviewEventIdentityChangesForNewReviewOrStatus()
+    {
+        var reviewedAt = DateTimeOffset.Parse("2026-11-12T11:00:00Z");
+        var original = DriverUnionAuditIdentity.CreateUnionSelfieReviewEventId(
+            "driver-1", "union-1", "SelfieRejectedByUnion", reviewedAt);
+
+        Assert.NotEqual(original, DriverUnionAuditIdentity.CreateUnionSelfieReviewEventId(
+            "driver-1", "union-1", "SelfieApprovedByUnion", reviewedAt));
+        Assert.NotEqual(original, DriverUnionAuditIdentity.CreateUnionSelfieReviewEventId(
+            "driver-1", "union-1", "SelfieRejectedByUnion", reviewedAt.AddSeconds(1)));
+    }
+
+    [Fact]
     public void AuditActorUsesOpaqueSubjectInsteadOfEmailLikeIdentityName()
     {
         var identity = new ClaimsIdentity(

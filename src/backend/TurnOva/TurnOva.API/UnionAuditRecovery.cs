@@ -35,6 +35,25 @@ public static class DriverUnionAuditIdentity
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
     }
 
+    public static string CreateUnionSelfieReviewEventId(
+        string driverId,
+        string unionId,
+        string eventType,
+        DateTimeOffset reviewedAtUtc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(unionId);
+        if (eventType is not ("SelfieApprovedByUnion" or "SelfieRejectedByUnion"))
+            throw new ArgumentOutOfRangeException(nameof(eventType), "Only Union selfie review events have this identity.");
+
+        var material = new StringBuilder("turnova-union-selfie-review-v1;");
+        AppendField(material, driverId);
+        AppendField(material, unionId);
+        AppendField(material, eventType);
+        AppendField(material, reviewedAtUtc.UtcDateTime.Ticks.ToString(CultureInfo.InvariantCulture));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
+    }
+
     private static void AppendField(StringBuilder target, string value) =>
         target.Append(value.Length.ToString(CultureInfo.InvariantCulture))
             .Append(':')

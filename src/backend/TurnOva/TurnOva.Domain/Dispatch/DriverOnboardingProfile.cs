@@ -38,4 +38,8 @@ public sealed record DriverOnboardingProfile(
     string? ProfilePhotoOperationsReviewActorId = null,
     // Private canonical audit context, cleared whenever the reviewed selfie/membership changes.
     string? ProfilePhotoOperationsReviewUnionId = null,
-    string? ProfilePhotoOperationsReviewUnionName = null);
+    string? ProfilePhotoOperationsReviewUnionName = null,
+    // Private UnionManager review snapshot used only to recover the original audit actor after a partial write.
+    string? ProfilePhotoUnionReviewActorId = null,
+    string? ProfilePhotoUnionReviewUnionId = null,
+    string? ProfilePhotoUnionReviewUnionName = null);
