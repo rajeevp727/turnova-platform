@@ -83,6 +83,7 @@ public sealed class DriverProfileReviewGuardTests
 
     [Theory]
     [InlineData("Contact operator@example.com for details")]
+    [InlineData("Contact operator@example.com.")]
     [InlineData("Call 123-456-7890 for follow-up")]
     [InlineData("Use +91 98765 43210 for clarification")]
     public void UnionAuditReasonsRejectObviousContactDetails(string supplied)
