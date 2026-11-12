@@ -4,13 +4,8 @@ using TurnOva.Domain.Dispatch;
 
 public static class DriverProfileReviewGuard
 {
-    public static string? NormalizeRejectionReason(string? reason)
-    {
-        var normalized = reason?.Trim();
-        return string.IsNullOrWhiteSpace(normalized) || normalized.Length > 300
-            ? null
-            : normalized;
-    }
+    public static string? NormalizeRejectionReason(string? reason) =>
+        DriverUnionAuditReason.Normalize(reason);
 
     public static bool HasOperationsReviewMetadata(DriverOnboardingProfile profile) =>
         // Presence, not non-whitespace content, marks an attempted Operations review.
@@ -23,7 +18,7 @@ public static class DriverProfileReviewGuard
         profile.ProfilePhotoApprovalStatus == "Rejected" &&
         profile.ProfilePhotoApprovedByUnionId is null &&
         profile.ProfilePhotoReviewedAtUtc is not null &&
-        !string.IsNullOrWhiteSpace(profile.ProfilePhotoReviewReason) &&
+        DriverUnionAuditReason.IsNormalizedSafe(profile.ProfilePhotoReviewReason) &&
         !string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64) &&
         !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewActorId) &&
         !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionId) &&
@@ -60,7 +55,7 @@ public static class DriverProfileReviewGuard
             ? string.Equals(profile.ProfilePhotoApprovedByUnionId, profile.ProfilePhotoUnionReviewUnionId, StringComparison.Ordinal) &&
               profile.ProfilePhotoReviewReason is null
             : profile.ProfilePhotoApprovedByUnionId is null &&
-              !string.IsNullOrWhiteSpace(profile.ProfilePhotoReviewReason);
+              DriverUnionAuditReason.IsNormalizedSafe(profile.ProfilePhotoReviewReason);
     }
 
     public static bool IsSameUnionSelfieReview(
