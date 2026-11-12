@@ -166,7 +166,7 @@ case "$1" in
           else
             close_state='clickable="true" enabled="true"'
           fi
-          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"$title\"/><node resource-id=\"android:id/aerr_close\" text=\"Close app\" bounds=\"[70,898][1010,1024]\" ${close_state/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" ${wait_state/></hierarchy>"
+          printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"$title\"/><node resource-id=\"android:id/aerr_close\" text=\"Close app\" bounds=\"[70,898][1010,1024]\" ${close_state}/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" ${wait_state}/></hierarchy>"
         elif [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
           printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
         else
