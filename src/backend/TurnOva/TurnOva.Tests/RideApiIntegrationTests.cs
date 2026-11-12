@@ -1798,6 +1798,50 @@ public sealed class RideApiIntegrationTests
         Assert.DoesNotContain(audit.Values, item => item.DriverId == driverId);
     }
 
+    [Theory]
+    [InlineData("Contact operator@example.com")]
+    [InlineData(" Approved membership transfer ")]
+    public async Task OperationsUnionHistoryReadReturnsConflictForUnsafePendingAssignmentReason(string storedReason)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "unsafe-history-reason-union";
+        const string driverId = "unsafe-history-reason-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var assignment = assignments[driverId];
+        const string canonicalReason = "Initial assignment";
+        const string actor = "ops-history-reason-subject";
+        var occurredAt = DateTimeOffset.Parse("2026-11-13T00:45:00Z");
+        var eventId = DriverUnionAuditIdentity.CreateAssignmentEventId(
+            driverId, null, null, assignment.UnionId, assignment.UnionName,
+            "Assigned", canonicalReason, actor, occurredAt);
+        var operationKey = DriverUnionAuditIdentity.CreateAssignmentOperationKey(
+            driverId, assignment.UnionId, canonicalReason);
+        assignments[driverId] = assignment with
+        {
+            AssignmentReason = storedReason,
+            AuditEventId = eventId,
+            AuditEventType = "Assigned",
+            AuditActor = actor,
+            AuditPreviousUnionId = null,
+            AuditPreviousUnionName = null,
+            AuditOccurredAtUtc = occurredAt,
+            LastAssignmentOperationKey = operationKey,
+            AuditSnapshotPending = true
+        };
+
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        using var ops = factory.CreateClient("Ops", "unsafe-history-assignment-reason-read");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        using var response = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.DoesNotContain(audit.Values, item => item.DriverId == driverId);
+    }
+
     [Fact]
     public async Task UnionManagerReviewFailsClosedForLegacyReviewedProfileWithoutActorSnapshot()
     {
