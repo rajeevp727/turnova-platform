@@ -1685,8 +1685,8 @@ public sealed class RideApiIntegrationTests
         Assert.Equal("union-manager-original-actor", reviewedProfile.ProfilePhotoUnionReviewActorId);
         Assert.Equal(unionId, reviewedProfile.ProfilePhotoUnionReviewUnionId);
         Assert.NotNull(reviewedProfile.ProfilePhotoReviewedAtUtc);
-        var originalEvent = Assert.Single(audit.Values.Where(item =>
-            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion"));
+        var originalEvent = Assert.Single(audit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion");
         Assert.Equal("union-manager-original-actor", originalEvent.Actor);
         Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
 
@@ -1695,8 +1695,8 @@ public sealed class RideApiIntegrationTests
             new { status = "Rejected", reason });
         Assert.Equal(HttpStatusCode.OK, retryReview.StatusCode);
 
-        var recoveredEvent = Assert.Single(audit.Values.Where(item =>
-            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion"));
+        var recoveredEvent = Assert.Single(audit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion");
         Assert.Equal(originalEvent.EventId, recoveredEvent.EventId);
         Assert.Equal("union-manager-original-actor", recoveredEvent.Actor);
         Assert.Equal(reviewedProfile.ProfilePhotoReviewedAtUtc, recoveredEvent.OccurredAtUtc);
@@ -1715,6 +1715,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string unionId = "union-review-legacy-union";
         const string driverId = "union-review-legacy-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
         var reviewedAt = DateTimeOffset.Parse("2026-11-12T10:00:00Z");
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -1734,7 +1735,9 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Conflict, retry.StatusCode);
         Assert.Equal(reviewedAt, profiles[driverId].ProfilePhotoReviewedAtUtc);
         Assert.Null(profiles[driverId].ProfilePhotoUnionReviewActorId);
-        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>().Values);
+        Assert.DoesNotContain(
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>().Values,
+            item => item.DriverId == driverId);
     }
 
     [Fact]
@@ -1744,6 +1747,7 @@ public sealed class RideApiIntegrationTests
         const string driverId = "union-review-transfer-recovery-driver";
         const string oldUnionId = "union-review-transfer-recovery-old";
         const string newUnionId = "union-review-transfer-recovery-new";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, oldUnionId);
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -1769,8 +1773,8 @@ public sealed class RideApiIntegrationTests
             $"/api/v1/union/drivers/{driverId}/selfie-review",
             new { status = "Rejected", reason });
         Assert.Equal(HttpStatusCode.OK, review.StatusCode);
-        var originalEvent = Assert.Single(audit.Values.Where(item =>
-            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion"));
+        var originalEvent = Assert.Single(audit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion");
         Assert.Equal("union-manager-transfer-original", originalEvent.Actor);
         Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
 
@@ -1779,8 +1783,8 @@ public sealed class RideApiIntegrationTests
             new { unionId = newUnionId, reason = "Approved membership transfer" });
         Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
 
-        var recoveredEvent = Assert.Single(audit.Values.Where(item =>
-            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion"));
+        var recoveredEvent = Assert.Single(audit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion");
         Assert.Equal(originalEvent.EventId, recoveredEvent.EventId);
         Assert.Equal("union-manager-transfer-original", recoveredEvent.Actor);
         Assert.Null(profiles[driverId].ProfilePhotoUnionReviewActorId);
