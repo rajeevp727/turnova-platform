@@ -49,13 +49,42 @@ public static class DriverUnionAuditReason
             foreach (Match match in PhonePattern.Matches(reason))
             {
                 var digitCount = 0;
+                var currentGroupDigits = 0;
+                var significantGroups = 0;
+                var groupCount = 0;
+                var maximumGroupDigits = 0;
+
                 foreach (var character in match.Value)
                 {
                     if (char.IsAsciiDigit(character))
+                    {
                         digitCount++;
+                        currentGroupDigits++;
+                        continue;
+                    }
+
+                    if (currentGroupDigits == 0)
+                        continue;
+
+                    groupCount++;
+                    if (currentGroupDigits >= 3)
+                        significantGroups++;
+                    maximumGroupDigits = Math.Max(maximumGroupDigits, currentGroupDigits);
+                    currentGroupDigits = 0;
                 }
 
-                if (digitCount >= 10)
+                if (currentGroupDigits > 0)
+                {
+                    groupCount++;
+                    if (currentGroupDigits >= 3)
+                        significantGroups++;
+                    maximumGroupDigits = Math.Max(maximumGroupDigits, currentGroupDigits);
+                }
+
+                // Keep common ISO date/time text such as 2026-11-13 10:30 valid,
+                // while rejecting a long contiguous number or phone-like grouped number.
+                if (digitCount >= 10 &&
+                    (groupCount == 1 || significantGroups >= 2 || maximumGroupDigits >= 10))
                     return false;
             }
 
