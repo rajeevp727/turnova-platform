@@ -1888,3 +1888,10 @@ Exact code-bearing head 02fbfa9121b62acf5ef8ec20287cc9dc0ea94db5 passed GitHub A
 - **PLATFORM-AUDIT-048:** Operations union-history returns HTTP 409 and no partial history when a pending assignment-audit snapshot contains an unsafe actor or otherwise cannot be reconciled; it does not synthesize or persist an event from invalid metadata.
 - **PLATFORM-AUDIT-049:** Union audit reasons reject slash-separated phone-like groups and Unicode decimal-digit phone sequences (Devanagari and Arabic-Indic) while preserving ordinary ASCII and Devanagari ISO date/time text. Regex execution remains bounded and fails closed on timeout.
 - Latest source/test head `559dcb2e32263ded9fd5c2bd3ee4e1c24cd6440d` adds four net backend tests over the previous verified 558; expected total **562**, pending exact-head CI. Prior documentation-head CI [#1455 / 43315443267](https://github.com/rajeevp727/turnova-platform/actions/runs/43315443267) passed 12/12 on `9e68c258c2a02d6f0172380020e07ce6d22b92dd`, including backend 558/558 and all four simulator/emulator smoke jobs. No production API/authentication, live Cosmos or signed-device validation is claimed.
+
+
+## PLATFORM-01 audit recovery — additional regression (2026-11-13)
+
+| Test ID | Criterion | Deterministic evidence | Priority |
+|---|---|---|---|
+| PLATFORM-AUDIT-050 | A pending assignment snapshot with a contact-like or unnormalized stored reason fails closed through the Operations history HTTP 409 path; it must not throw `ArgumentException` into the generic 500 handler. | `IncompleteUnsafeOrTamperedAssignmentSnapshotFailsClosed` additionally asserts `InvalidOperationException` for an email-like reason and a whitespace-padded reason. `DriverUnionAssignmentAuditSnapshot.CreateExpectedEvent` now calls `DriverUnionAuditReason.IsNormalizedSafe` before operation-key reconstruction. | P0 |
