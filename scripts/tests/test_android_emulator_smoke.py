@@ -348,7 +348,7 @@ exit 0
                 screenshot_retry_command, cwd=REPO_ROOT, env=environment,
                 capture_output=True, text=True, timeout=30, check=False,
             )
-            self.assertEqual(screenshot_retry.returncode, 0, msg=f"stdout:\n{screenshot_retry.stdout}\\nstderr:\n{screenshot_retry.stderr}")
+            self.assertEqual(screenshot_retry.returncode, 0, msg=f"stdout:\n{screenshot_retry.stdout}\nstderr:\n{screenshot_retry.stderr}")
             self.assertIn("screenshot attempt 1/3 failed", screenshot_retry.stderr.lower())
             self.assertEqual((screenshot_retry_output / "exec-out-count").read_text(encoding="utf-8").strip(), "3")
             self.assertTrue((screenshot_retry_output / "launch.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
@@ -393,7 +393,7 @@ exit 0
             self.assertEqual(
                 reused_existing_image.returncode,
                 0,
-                msg=f"stdout:\\n{reused_existing_image.stdout}\\nstderr:\n{reused_existing_image.stderr}",
+                msg=f"stdout:\n{reused_existing_image.stdout}\nstderr:\n{reused_existing_image.stderr}",
             )
             self.assertIn("pre-existing Android API 35 system image", reused_existing_image.stdout)
             self.assertEqual(int(attempts_file.read_text(encoding="utf-8").strip()), attempts_before_reuse)
