@@ -432,5 +432,12 @@ The tested source head includes the late-provider-fault completion-race correcti
 - Prior exact-head CI #1523 remains historical evidence for head `48474830f0c4a2d14733ee738f9109179dd07def`; it passed 12/12. It does not verify subsequent commits.
 - CI #1527 / run 43488094224 completed 11/12. The Rider Android emulator job installed/launched the APK, confirmed the Rider activity was resumed and found the expected login UI, then exited 255 before the final screenshot and success JSON. The artifact contains the initial screenshot, activity snapshots, UI hierarchy and logcat. The previous script did not record the exact post-launch ADB command failure; this is not classified as an observed app crash.
 - Follow-up changes add up to three attempts for final screenshot capture, capture ADB stderr/exit status, validate the PNG signature and emit device/emulator diagnostics on persistent failure. Deterministic harness cases cover a transient transport failure recovering and persistent failures remaining non-zero with no success report.
-- Code/test head before documentation synchronization: `4e561c65a95d102d1c35d518e2469e065f883563`. CI #1532 was pending on that head and is superseded by the documentation commit. Fresh exact-head CI on the new documentation head must pass all 12 jobs before PR #158 can be considered merge-ready.
+- Code/test head before documentation synchronization: `182102a217dad3ba9e5378eefd0b28d22556c180`. CI #1532 was pending on that head and is superseded by the documentation commit. Fresh exact-head CI on the new documentation head must pass all 12 jobs before PR #158 can be considered merge-ready.
 - Release readiness remains **not established**. These checks are CI emulator/simulator evidence only; they do not prove physical-device acceptance, signed Android/iOS artifacts, signed iOS Keychain persistence, production API/authentication, live Cosmos behavior, end-to-end ride acceptance or production readiness.
+
+
+## Latest smoke harness source/test handoff — 2026-11-14
+
+- Latest code/test head before this documentation update: `182102a217dad3ba9e5378eefd0b28d22556c180`; the last commit only normalizes deterministic test assertion diagnostics.
+- CI #1538 / run 43497853938 was queued on that pre-documentation head and is superseded by this docs commit. A new exact-head CI must pass all 12 jobs before PR #158 is merge-ready.
+- The CI #1527 Rider Android smoke failure and the bounded screenshot retry follow-up remain documented above. Physical-device, signing, production API/authentication and live Cosmos acceptance are still outstanding.
