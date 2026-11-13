@@ -40,6 +40,10 @@ public sealed class RideApiIntegrationTests
 
         using var root = await client.GetAsync("/");
         Assert.Equal(HttpStatusCode.OK, root.StatusCode);
+        using var rootHeadRequest = new HttpRequestMessage(HttpMethod.Head, "/");
+        using var rootHead = await client.SendAsync(rootHeadRequest);
+        Assert.Equal(HttpStatusCode.OK, rootHead.StatusCode);
+
         using var rootJson = JsonDocument.Parse(await root.Content.ReadAsStringAsync());
         Assert.Equal("TurnOva API", rootJson.RootElement.GetProperty("name").GetString());
         Assert.Equal("v1", rootJson.RootElement.GetProperty("version").GetString());
