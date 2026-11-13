@@ -31,7 +31,7 @@ class AndroidEmulatorSmokeHarnessTests(unittest.TestCase):
         self.assertIn('if [[ "$launch_output" != *"Status: ok"* ]]; then', script)
         self.assertNotRegex(
             script,
-            r'printf\\s+[^\\n]*"\\$launch_output"[^\\n]*\\|\\s*grep\\s+-Fq\\s+"Status: ok"',
+            r'printf\s+[^\n]*"\$launch_output"[^\n]*\|\s*grep\s+-Fq\s+"Status: ok"',
         )
 
     def test_avd_home_install_launch_and_diagnostics_with_fake_sdk(self) -> None:
