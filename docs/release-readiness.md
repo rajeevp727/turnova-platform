@@ -321,3 +321,29 @@ These are CI build and emulator/simulator install/launch/login-screen results, n
 
 - Documentation-head CI #1502 / 43398973091 completed 11/12. Driver Android smoke job `131801620220` failed after APK installation and successful ActivityManager launch (`Status: ok`); the shell harness's `printf ... | grep -Fq` pipeline raised `Broken pipe` under `set -euo pipefail`. No application crash or ANR was observed. Artifact `14024159021` preserves the launch output.
 - Corrected the launch-status assertion to use a Bash substring check and added a deterministic Python regression invariant plus test-plan case `PLATFORM-NATIVE-ANDROID-001`. The corrected branch requires fresh exact-head CI before any merge. This is a CI harness reliability correction; it does not change the release-readiness limitations below.
+
+
+## Latest exact-head verification — PR #158 / CI #1508 (2026-11-13)
+
+- Main/base HEAD: `b6564c7dc2959883c2910f5b6f13134f7052566f`. PR #158 branch `fix/platform-01-storage-readiness-failure-mapping`; exact tested HEAD `115d1914cb19e0c7a13df6765409521d31a4024b`.
+- GitHub Actions [CI #1508 / run 43406713092](https://github.com/rajeevp727/turnova-platform/actions/runs/43406713092) completed successfully: **12/12 jobs passed**. Backend **570/570** (0 failed, 0 skipped); shared mobile/auth **179/179**; deterministic Python harness **47/47**, including `test_launch_status_check_avoids_pipefail_sigpipe_false_failure`; Rider/Driver Expo configuration, typechecks and production JavaScript bundles; native non-container .NET API publish; both Android debug and standalone release APKs; both unsigned iOS Simulator apps; all four same-run emulator/simulator smoke jobs.
+- Driver iOS smoke initially hit a 300-second `xcrun simctl list devices available -j` timeout before app installation. Only that job was retried as job `131837472857`; the retry completed successfully. This is transient Simulator infrastructure failure followed by a successful targeted retry, not an application failure.
+- Same-run smoke artifacts: Rider Android `14027824488`, Driver Android `14027884362`, Rider iOS `14029062725`, Driver iOS retry `14030386392`. Job logs confirm successful install/launch and role-specific login UI; unsigned iOS reports the expected SecureStore-unavailable recovery banner and does not claim Keychain success. Android release APKs: Rider `14028800834`, Driver `14028640774`; unsigned iOS app artifacts: Rider `14029435192`, Driver `14028438409`.
+- The Android smoke harness correction is covered by the 47/47 Python suite: use a Bash substring check instead of `printf | grep -Fq` under `set -euo pipefail`, preventing a SIGPIPE false negative after successful ActivityManager launch. Test-plan case `PLATFORM-NATIVE-ANDROID-001`.
+- This verifies CI builds plus emulator/simulator install, launch and login-screen presentation only. It does not establish production API/authentication, live Cosmos, signed iOS Keychain persistence, physical-device acceptance, store signing or end-to-end ride acceptance.
+- This evidence-documentation commit creates a new PR head and requires its own exact-head CI. Keep PR #158 Draft until all required jobs pass on that exact new head and the latest base/head, review threads and GitHub merge enforcement are rechecked. No self-approval or bypass.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation score. Production readiness is not established.
+
+
+## Exact-head release build and smoke evidence — CI #1508 (2026-11-13)
+
+[CI #1508 / run 43406713092](https://github.com/rajeevp727/turnova-platform/actions/runs/43406713092) passed **12/12 jobs** on PR #158 head `115d1914cb19e0c7a13df6765409521d31a4024b`. It produced Rider/Driver Android debug and standalone release APKs, both unsigned iOS Simulator apps, Rider/Driver production JavaScript bundles and native non-container .NET API publish. Backend 570/570, shared mobile/auth 179/179 and Python harness 47/47 passed.
+
+| Artifact | App/platform | Result |
+|---|---|---|
+| `14027824488` | Rider Android emulator smoke | Standalone release APK installed/launched; ActivityManager status OK; Rider login screen asserted |
+| `14027884362` | Driver Android emulator smoke | Standalone release APK installed/launched; ActivityManager status OK; Driver login screen asserted |
+| `14029062725` | Rider iOS Simulator smoke | Unsigned app installed/launched; Rider login screen; SecureStore-unavailable recovery banner |
+| `14030386392` | Driver iOS Simulator smoke (targeted retry) | Unsigned app installed/launched; Driver login screen; SecureStore-unavailable recovery banner |
+
+The initial Driver iOS smoke attempt timed out while enumerating available Simulator devices before app installation. Only that failed smoke job was retried; the retry passed. This is transient runner/Simulator infrastructure evidence, not an application failure. Unsigned iOS artifacts do not establish signed Keychain persistence. CI smoke tests do not establish physical-device acceptance, production API/authentication, live Cosmos or end-to-end ride acceptance. Production readiness remains blocked on signed AAB/IPA, store identifiers/EAS linkage, certificates/profiles, physical-device testing, approved API hosting/configuration and pilot/store acceptance.

@@ -1990,3 +1990,21 @@ Exact code-bearing head 02fbfa9121b62acf5ef8ec20287cc9dc0ea94db5 passed GitHub A
 - The launch check now uses a Bash substring test rather than an early-exit grep pipeline. `scripts/tests/test_android_emulator_smoke.py` contains a regression invariant to prevent reintroducing that unsafe pipeline. The existing end-to-end fake-SDK smoke harness continues to exercise successful launch, process stability and UI checks.
 - Source changes: `2ba1a20ce31baefa65a76a5b1cadb9a2554f8fa0` (script) and `fe193763adca3633e0cc202142f323f0188bf1bf` (test). CI #1502's Driver Android smoke artifact `14024159021` confirms the APK installed and ActivityManager reported `Status: ok`; the failure was the shell pipeline, not an observed app crash.
 - The new source/test head requires fresh exact-head CI. No successful result is inferred from the failed #1502 attempt.
+
+
+## Latest exact-head verification — PR #158 / CI #1508 (2026-11-13)
+
+- Main/base HEAD: `b6564c7dc2959883c2910f5b6f13134f7052566f`. PR #158 branch `fix/platform-01-storage-readiness-failure-mapping`; exact tested HEAD `115d1914cb19e0c7a13df6765409521d31a4024b`.
+- GitHub Actions [CI #1508 / run 43406713092](https://github.com/rajeevp727/turnova-platform/actions/runs/43406713092) completed successfully: **12/12 jobs passed**. Backend **570/570** (0 failed, 0 skipped); shared mobile/auth **179/179**; deterministic Python harness **47/47**, including `test_launch_status_check_avoids_pipefail_sigpipe_false_failure`; Rider/Driver Expo configuration, typechecks and production JavaScript bundles; native non-container .NET API publish; both Android debug and standalone release APKs; both unsigned iOS Simulator apps; all four same-run emulator/simulator smoke jobs.
+- Driver iOS smoke initially hit a 300-second `xcrun simctl list devices available -j` timeout before app installation. Only that job was retried as job `131837472857`; the retry completed successfully. This is transient Simulator infrastructure failure followed by a successful targeted retry, not an application failure.
+- Same-run smoke artifacts: Rider Android `14027824488`, Driver Android `14027884362`, Rider iOS `14029062725`, Driver iOS retry `14030386392`. Job logs confirm successful install/launch and role-specific login UI; unsigned iOS reports the expected SecureStore-unavailable recovery banner and does not claim Keychain success. Android release APKs: Rider `14028800834`, Driver `14028640774`; unsigned iOS app artifacts: Rider `14029435192`, Driver `14028438409`.
+- The Android smoke harness correction is covered by the 47/47 Python suite: use a Bash substring check instead of `printf | grep -Fq` under `set -euo pipefail`, preventing a SIGPIPE false negative after successful ActivityManager launch. Test-plan case `PLATFORM-NATIVE-ANDROID-001`.
+- This verifies CI builds plus emulator/simulator install, launch and login-screen presentation only. It does not establish production API/authentication, live Cosmos, signed iOS Keychain persistence, physical-device acceptance, store signing or end-to-end ride acceptance.
+- This evidence-documentation commit creates a new PR head and requires its own exact-head CI. Keep PR #158 Draft until all required jobs pass on that exact new head and the latest base/head, review threads and GitHub merge enforcement are rechecked. No self-approval or bypass.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation score. Production readiness is not established.
+
+
+## CI harness regression evidence — PLATFORM-NATIVE-ANDROID-001
+
+- Exact-head CI #1508 passed the Python harness **47/47**, including `test_launch_status_check_avoids_pipefail_sigpipe_false_failure`.
+- The Android launch-status assertion uses a Bash substring condition, avoiding an early-exit `grep -Fq` pipeline under `set -euo pipefail`. The deterministic Python invariant prevents reintroduction of the pipe/SIGPIPE false negative. CI #1508 then passed both Rider and Driver Android emulator smoke jobs.
