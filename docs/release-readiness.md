@@ -441,3 +441,14 @@ The tested source head includes the late-provider-fault completion-race correcti
 - Latest code/test head before this documentation update: `182102a217dad3ba9e5378eefd0b28d22556c180`; the last commit only normalizes deterministic test assertion diagnostics.
 - CI #1538 / run 43497853938 was queued on that pre-documentation head and is superseded by this docs commit. A new exact-head CI must pass all 12 jobs before PR #158 is merge-ready.
 - The CI #1527 Rider Android smoke failure and the bounded screenshot retry follow-up remain documented above. Physical-device, signing, production API/authentication and live Cosmos acceptance are still outstanding.
+
+## Latest exact-head CI and smoke evidence — CI #1541 (2026-11-14)
+
+GitHub Actions [CI #1541 / run 43498668217](https://github.com/rajeevp727/turnova-platform/actions/runs/43498668217) passed **12/12 jobs** on PR #158 head `447edbc4ce3dddab8edb762576da80d87f4db0a3` (main/base `9df406897b4a50edaacbac3b80764e3840285993`).
+
+- Backend tests: **570/570**; shared mobile/auth: **179/179**; deterministic Python harness: **47/47**.
+- Rider/Driver Expo validation, TypeScript checks, production JS bundles, native non-container .NET API publish, Android debug and standalone release APKs, and unsigned iOS Simulator apps all passed.
+- Same-run emulator/simulator smoke jobs passed: Rider Android `14072964819`, Driver Android `14073164593`, Rider iOS Simulator `14074508560`, Driver iOS Simulator `14073634165`. Android logs show successful install/launch and final screenshot capture on attempt 1. iOS logs verify the expected SecureStore-unavailable banner on unsigned simulator builds.
+- Native artifacts: Rider Android debug `14072503429`, Driver Android debug `14072603532`, Rider release APK `14073422670`, Driver release APK `14073961063`, Rider unsigned iOS Simulator app `14073936965`, Driver unsigned iOS Simulator app `14074925523`, API publish `14072358215`.
+- These are build and emulator/simulator install-launch/login-screen results only. They do not establish signed-device Keychain persistence, physical-device acceptance, production API/authentication, live Cosmos, end-to-end ride acceptance, signed store release, pilot or production readiness.
+- PR #158 remains open pending a new exact-head CI run after this evidence-only documentation synchronization and a final GitHub-enforced merge check. No self-approval or bypass.

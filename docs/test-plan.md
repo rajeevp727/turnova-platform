@@ -2118,3 +2118,11 @@ Exact code-bearing head 02fbfa9121b62acf5ef8ec20287cc9dc0ea94db5 passed GitHub A
 - Final assertion-diagnostic formatting cleanup commit: `182102a217dad3ba9e5378eefd0b28d22556c180`. It changes only deterministic Python harness failure-message formatting; no production/runtime behavior changes.
 - CI #1538 / run 43497853938 was queued on that code/test head and is superseded by this documentation commit. No passing result is claimed. A fresh exact-head CI run must complete after documentation synchronization.
 - PLATFORM-NATIVE-ANDROID-002 remains implemented in the deterministic harness: one transient final-screenshot ADB failure retries to a valid PNG and success report; three failures remain non-zero with ADB/emulator diagnostics and no success report.
+
+## PLATFORM-NATIVE-ANDROID-002 execution evidence — CI #1541 (2026-11-14)
+
+- Exact tested PR #158 head `447edbc4ce3dddab8edb762576da80d87f4db0a3`; GitHub Actions [CI #1541 / run 43498668217](https://github.com/rajeevp727/turnova-platform/actions/runs/43498668217) passed **12/12 jobs**.
+- Backend 570/570, shared mobile/auth 179/179 and deterministic Python harness 47/47 passed. Rider/Driver Expo validation, typechecks and production JS bundles, native non-container .NET API publish, Android debug/release APK builds and unsigned iOS Simulator builds passed.
+- Rider and Driver Android emulator smoke logs both show ActivityManager `Status: ok`, final screenshot capture on attempt 1 and successful install/launch. The harness cases for transient screenshot failure recovery and persistent failure fail-closed behavior ran in the 47/47 Python suite.
+- Rider and Driver iOS Simulator smoke logs show the role-specific login surface and expected SecureStore-unavailable banner for unsigned simulator builds. They do not establish signed-device Keychain persistence.
+- This is automated CI emulator/simulator evidence only. Physical-device, signed-store, production authentication, live Cosmos and end-to-end ride acceptance remain external.
