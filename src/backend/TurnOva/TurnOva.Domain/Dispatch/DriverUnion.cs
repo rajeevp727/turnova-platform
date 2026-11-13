@@ -23,7 +23,15 @@ public sealed record DriverUnionAssignment(
     string Status,
     DateTimeOffset AssignedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    string AssignmentReason)
+    string AssignmentReason,
+    string? AuditEventId = null,
+    string? AuditEventType = null,
+    string? AuditActor = null,
+    string? AuditPreviousUnionId = null,
+    string? AuditPreviousUnionName = null,
+    DateTimeOffset? AuditOccurredAtUtc = null,
+    string? LastAssignmentOperationKey = null,
+    bool AuditSnapshotPending = false)
 {
     public string id => DriverId;
 }

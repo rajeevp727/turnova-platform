@@ -414,7 +414,13 @@ public sealed class RideApiIntegrationTests
             AvailabilityStatus = "Offline",
             CurrentLatitude = 17.401,
             CurrentLongitude = 78.402,
-            LocationUpdatedAtUtc = locationUpdatedAtUtc
+            LocationUpdatedAtUtc = locationUpdatedAtUtc,
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = locationUpdatedAtUtc,
+            ProfilePhotoReviewReason = "Previous Operations rejection",
+            ProfilePhotoOperationsReviewActorId = "ops-actor-before-new-selfie",
+            ProfilePhotoOperationsReviewUnionId = "legacy-review-union",
+            ProfilePhotoOperationsReviewUnionName = "Legacy Review Union"
         };
 
         var response = await driver.PutAsJsonAsync("/api/v1/driver/onboarding/selfie",
@@ -428,6 +434,79 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(17.401, updated.CurrentLatitude);
         Assert.Equal(78.402, updated.CurrentLongitude);
         Assert.Equal(locationUpdatedAtUtc, updated.LocationUpdatedAtUtc);
+        Assert.Null(updated.ProfilePhotoReviewedAtUtc);
+        Assert.Null(updated.ProfilePhotoReviewReason);
+        Assert.Null(updated.ProfilePhotoOperationsReviewActorId);
+    }
+
+    [Fact]
+    public async Task DriverSelfieReplacementFailsClosedWhenOperationsReviewMetadataIsIncomplete()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-selfie-incomplete-ops-review";
+        using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
+
+        Assert.Equal(HttpStatusCode.Accepted,
+            (await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest())).StatusCode);
+        var reviewedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var incomplete = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Previous Operations rejection",
+            ProfilePhotoOperationsReviewActorId = "",
+            ProfilePhotoOperationsReviewUnionId = "",
+            ProfilePhotoOperationsReviewUnionName = ""
+        };
+        profiles[driverId] = incomplete;
+
+        using var response = await driver.PutAsJsonAsync("/api/v1/driver/onboarding/selfie",
+            new { profilePhotoBase64 = "/9j/4AAQSkZJRg==" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(incomplete, profiles[driverId]);
+        Assert.DoesNotContain(
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>().Values,
+            item => item.DriverId == driverId);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>().HasActiveAsync(driverId));
+    }
+
+    [Fact]
+    public async Task OperationsSelfieRetryFailsClosedWhenReviewMarkerBelongsToAnotherUnion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "ops-selfie-stale-union-driver";
+        const string currentUnionId = "ops-selfie-current-union";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, currentUnionId);
+        using var ops = factory.CreateClient("Ops", "ops-selfie-stale-union-operator");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var original = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = "original-ops-actor",
+            ProfilePhotoOperationsReviewUnionId = "previous-union",
+            ProfilePhotoOperationsReviewUnionName = "Previous Union"
+        };
+        profiles[driverId] = original;
+
+        using var response = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{currentUnionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Image is unclear" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(original, profiles[driverId]);
+        Assert.DoesNotContain(
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>().Values,
+            item => item.DriverId == driverId);
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>().HasActiveAsync(driverId));
     }
 
     [Fact]
@@ -1246,17 +1325,183 @@ public sealed class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task OperationsRejectionAfterUnionManagerRejectionCreatesItsOwnReviewAndAudit()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "union-then-operations-review-driver";
+        const string unionId = "union-then-operations-review-union";
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var ops = factory.CreateClient("Ops", "ops-reviewer-after-union");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-rejector");
+
+        SeedBookableDriver(factory, driverId, unionId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null,
+            ProfilePhotoOperationsReviewActorId = null
+        };
+
+        const string reason = "Image is unclear";
+        using var unionRejection = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason });
+        Assert.Equal(HttpStatusCode.OK, unionRejection.StatusCode);
+        var unionReviewedAt = profiles[driverId].ProfilePhotoReviewedAtUtc;
+        Assert.NotNull(unionReviewedAt);
+        Assert.Null(profiles[driverId].ProfilePhotoOperationsReviewActorId);
+
+        using var operationsRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason });
+        Assert.Equal(HttpStatusCode.OK, operationsRejection.StatusCode);
+
+        var operationsReviewedAt = profiles[driverId].ProfilePhotoReviewedAtUtc;
+        Assert.NotNull(operationsReviewedAt);
+        Assert.True(operationsReviewedAt.Value > unionReviewedAt.Value);
+        Assert.Equal("ops-reviewer-after-union", profiles[driverId].ProfilePhotoOperationsReviewActorId);
+
+        var auditEvents = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            .Values.Where(item => item.DriverId == driverId).ToArray();
+        Assert.Contains(auditEvents, item =>
+            item.EventType == "SelfieRejectedByUnion" &&
+            item.Actor == "union-manager-rejector" &&
+            item.OccurredAtUtc == unionReviewedAt);
+        Assert.Contains(auditEvents, item =>
+            item.EventType == "SelfieRejectedByOperations" &&
+            item.Actor == "ops-reviewer-after-union" &&
+            item.OccurredAtUtc == operationsReviewedAt);
+
+        var firstOperationsEventId = auditEvents.Single(item =>
+            item.EventType == "SelfieRejectedByOperations").EventId;
+        using var unionApproval = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, unionApproval.StatusCode);
+        Assert.Null(profiles[driverId].ProfilePhotoOperationsReviewActorId);
+
+        await Task.Delay(10);
+        using var secondOperationsRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason });
+        Assert.Equal(HttpStatusCode.OK, secondOperationsRejection.StatusCode);
+
+        var operationsEvents = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            .Values.Where(item => item.DriverId == driverId && item.EventType == "SelfieRejectedByOperations")
+            .OrderBy(item => item.OccurredAtUtc).ToArray();
+        Assert.Equal(2, operationsEvents.Length);
+        Assert.Equal(firstOperationsEventId, operationsEvents[0].EventId);
+        Assert.NotEqual(operationsEvents[0].EventId, operationsEvents[1].EventId);
+        Assert.True(operationsEvents[1].OccurredAtUtc > operationsEvents[0].OccurredAtUtc);
+    }
+
+    [Fact]
+    public async Task OperationsSelfieReviewRespectsAnExistingDriverReservationLease()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "ops-selfie-lease-driver";
+        const string unionId = "ops-selfie-lease-union";
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var ops = factory.CreateClient("Ops", "ops-selfie-lease-operator");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        Assert.True(await reservations.TryAcquireTemporaryAsync(
+            driverId, "ops-selfie-review-existing-lease", DateTimeOffset.UtcNow.AddMinutes(5), CancellationToken.None));
+
+        using var blockedReview = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Image is unclear" });
+        Assert.Equal(HttpStatusCode.Conflict, blockedReview.StatusCode);
+        Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
+        Assert.Null(profiles[driverId].ProfilePhotoOperationsReviewActorId);
+
+        Assert.True(await reservations.TryReleaseAsync(
+            driverId, "ops-selfie-review-existing-lease", CancellationToken.None));
+        using var review = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Image is unclear" });
+        Assert.Equal(HttpStatusCode.OK, review.StatusCode);
+        Assert.Equal("Rejected", profiles[driverId].ProfilePhotoApprovalStatus);
+        Assert.Equal("ops-selfie-lease-operator", profiles[driverId].ProfilePhotoOperationsReviewActorId);
+    }
+
+    [Fact]
+    public async Task UnionAuditReasonsRejectContactDetailsAndRedactLegacyContactTextFromUnionMembers()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "union-audit-reason-privacy-driver";
+        const string unionId = "union-audit-reason-privacy-union";
+        const string newUnionId = "union-audit-reason-privacy-new-union";
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var ops = factory.CreateClient("Ops", "union-audit-reason-privacy-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-audit-reason-privacy-manager");
+
+        SeedBookableDriver(factory, driverId, unionId);
+        SeedTransferTargetUnion(factory, newUnionId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var originalProfile = profiles[driverId];
+        var originalAssignment = assignments[driverId];
+
+        using var operationsRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Call 123-456-7890 for follow-up" });
+        Assert.Equal(HttpStatusCode.BadRequest, operationsRejection.StatusCode);
+        Assert.Equal(originalProfile, profiles[driverId]);
+
+        using var unionRejection = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Contact operator@example.com" });
+        Assert.Equal(HttpStatusCode.BadRequest, unionRejection.StatusCode);
+        Assert.Equal(originalProfile, profiles[driverId]);
+
+        using var transfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason = "Contact operator@example.com" });
+        Assert.Equal(HttpStatusCode.BadRequest, transfer.StatusCode);
+        Assert.Equal(originalAssignment, assignments[driverId]);
+        Assert.Empty(audit.Values.Where(item => item.DriverId == driverId));
+        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>().HasActiveAsync(driverId));
+
+        // Older stored free text is not echoed to UnionManager member projections.
+        profiles[driverId] = originalProfile with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoReviewReason = "Call 123-456-7890"
+        };
+        var members = await manager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers");
+        var member = Assert.Single(members!);
+        Assert.Equal(JsonValueKind.Null,
+            member.GetProperty("driver").GetProperty("profilePhotoReviewReason").ValueKind);
+    }
+
+    [Fact]
     public async Task UnionManagerCanReviewOnlyCurrentAssignedCabDriverSelfiesAndReceivesMinimalData()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var driver = factory.CreateClient("Driver", "union-review-driver");
         using var rider = factory.CreateClient("Rider", "union-review-rider");
-        using var ops = factory.CreateClient("Rider", "union-review-ops");
+        using var ops = factory.CreateClient("Ops", "union-review-ops");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
 
         const string unionId = "union-review-union";
         const string driverId = "union-review-driver";
         SeedBookableDriver(factory, driverId, unionId);
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        unions[unionId] = unions[unionId] with { Name = "Union Review Union" };
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        assignments[driverId] = assignments[driverId] with { UnionName = "Union Review Union" };
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         profiles[driverId] = profiles[driverId] with
@@ -1268,6 +1513,7 @@ public sealed class RideApiIntegrationTests
         };
 
         using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-review");
+        using var retryManager = factory.CreateUnionManagerClient(unionId, "union-manager-review-retry");
         using var otherManager = factory.CreateUnionManagerClient("another-union", "other-union-manager");
         using var managerWithoutUnion = factory.CreateClient("UnionManager", "manager-without-union");
 
@@ -1344,11 +1590,15 @@ public sealed class RideApiIntegrationTests
         using var approval = await manager.PutAsJsonAsync(
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
         Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
-        using var repeatedApproval = await manager.PutAsJsonAsync(
+        using var repeatedApproval = await retryManager.PutAsJsonAsync(
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
         Assert.Equal(HttpStatusCode.OK, repeatedApproval.StatusCode);
         Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
         Assert.Equal(unionId, profiles[driverId].ProfilePhotoApprovedByUnionId);
+        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var approvalAudit = Assert.Single(unionAudit.Values.Where(item =>
+            item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion"));
+        Assert.Equal("union-manager-review", approvalAudit.Actor);
 
         using var discoveryAfterApproval = await rider.GetAsync(
             "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
@@ -1390,6 +1640,19 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(expectedRejectionReason, rejectionResponseJson.RootElement.GetProperty("reason").GetString());
         Assert.Equal("Rejected", profiles[driverId].ProfilePhotoApprovalStatus);
         Assert.Equal(expectedRejectionReason, profiles[driverId].ProfilePhotoReviewReason);
+        Assert.Equal("union-review-ops", profiles[driverId].ProfilePhotoOperationsReviewActorId);
+        Assert.Equal(unionId, profiles[driverId].ProfilePhotoOperationsReviewUnionId);
+        Assert.Equal("Union Review Union", profiles[driverId].ProfilePhotoOperationsReviewUnionName);
+
+        using var driverProfileResponse = await driver.GetAsync("/api/v1/driver/onboarding/me");
+        Assert.Equal(HttpStatusCode.OK, driverProfileResponse.StatusCode);
+        using var driverProfileJson = JsonDocument.Parse(await driverProfileResponse.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null,
+            driverProfileJson.RootElement.GetProperty("profilePhotoOperationsReviewActorId").ValueKind);
+        Assert.Equal(JsonValueKind.Null,
+            driverProfileJson.RootElement.GetProperty("profilePhotoOperationsReviewUnionId").ValueKind);
+        Assert.Equal(JsonValueKind.Null,
+            driverProfileJson.RootElement.GetProperty("profilePhotoOperationsReviewUnionName").ValueKind);
 
         using var discoveryAfterRejection = await rider.GetAsync(
             "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
@@ -1404,8 +1667,370 @@ public sealed class RideApiIntegrationTests
         var rejectionAuditEvent = Assert.Single(rejectedAuditJson.RootElement.EnumerateArray(),
             item => item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
         Assert.Equal(expectedRejectionReason, rejectionAuditEvent.GetProperty("reason").GetString());
+        Assert.Equal("union-review-ops", rejectionAuditEvent.GetProperty("actor").GetString());
+
+        var originalEventId = rejectionAuditEvent.GetProperty("eventId").GetString()!;
+        var originalReviewedAt = profiles[driverId].ProfilePhotoReviewedAtUtc;
+        Assert.NotNull(originalReviewedAt);
+        var auditStore = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        Assert.True(auditStore.TryRemove($"{driverId}|{originalEventId}", out _));
+
+        // The profile commit succeeded but the audit write is missing. An identical
+        // retry must restore the deterministic event without changing the review time.
+        using var retryingOps = factory.CreateClient("Ops", "union-review-ops-retry");
+        retryingOps.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var recoveredRejection = await retryingOps.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "  Vehicle image requires a clearer review photo.  " });
+        Assert.Equal(HttpStatusCode.OK, recoveredRejection.StatusCode);
+        Assert.Equal(originalReviewedAt, profiles[driverId].ProfilePhotoReviewedAtUtc);
+
+        using var recoveredAuditResponse = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+        using var recoveredAuditJson = JsonDocument.Parse(await recoveredAuditResponse.Content.ReadAsStringAsync());
+        var recoveredAuditEvent = Assert.Single(recoveredAuditJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations");
+        Assert.Equal(originalEventId, recoveredAuditEvent.GetProperty("eventId").GetString());
+        Assert.Equal(originalReviewedAt.Value, recoveredAuditEvent.GetProperty("occurredAtUtc").GetDateTimeOffset());
+        Assert.Equal("union-review-ops", recoveredAuditEvent.GetProperty("actor").GetString());
+
+        // A further identical retry must verify the canonical event rather than
+        // append a duplicate or move the authoritative review timestamp.
+        using var duplicateRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = expectedRejectionReason });
+        Assert.Equal(HttpStatusCode.OK, duplicateRejection.StatusCode);
+        Assert.Equal(originalReviewedAt, profiles[driverId].ProfilePhotoReviewedAtUtc);
+        var finalAudit = await ops.GetFromJsonAsync<List<JsonElement>>(
+            $"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.Single(finalAudit!, item =>
+            item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations" &&
+            item.GetProperty("eventId").GetString() == originalEventId);
     }
 
+    [Fact]
+    public async Task UnionManagerSelfieAuditRetryReconstructsMissingEventWithOriginalActor()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "union-review-recovery-union";
+        const string driverId = "union-review-recovery-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null
+        };
+
+        using var originalManager = factory.CreateUnionManagerClient(unionId, "union-manager-original-actor");
+        using var retryManager = factory.CreateUnionManagerClient(unionId, "union-manager-retry-actor");
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        const string reason = "Image is unclear";
+
+        using var firstReview = await originalManager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason });
+        Assert.Equal(HttpStatusCode.OK, firstReview.StatusCode);
+
+        var reviewedProfile = profiles[driverId];
+        Assert.Equal("union-manager-original-actor", reviewedProfile.ProfilePhotoUnionReviewActorId);
+        Assert.Equal(unionId, reviewedProfile.ProfilePhotoUnionReviewUnionId);
+        Assert.NotNull(reviewedProfile.ProfilePhotoReviewedAtUtc);
+        var originalEvent = Assert.Single(audit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion");
+        Assert.Equal("union-manager-original-actor", originalEvent.Actor);
+        Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
+
+        using var retryReview = await retryManager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason });
+        Assert.Equal(HttpStatusCode.OK, retryReview.StatusCode);
+
+        var recoveredEvent = Assert.Single(audit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion");
+        Assert.Equal(originalEvent.EventId, recoveredEvent.EventId);
+        Assert.Equal("union-manager-original-actor", recoveredEvent.Actor);
+        Assert.Equal(reviewedProfile.ProfilePhotoReviewedAtUtc, recoveredEvent.OccurredAtUtc);
+        Assert.Equal(reviewedProfile.ProfilePhotoReviewedAtUtc, profiles[driverId].ProfilePhotoReviewedAtUtc);
+
+        var driverProfile = await driver.GetFromJsonAsync<DriverOnboardingProfile>("/api/v1/driver/onboarding/me");
+        Assert.NotNull(driverProfile);
+        Assert.Null(driverProfile.ProfilePhotoUnionReviewActorId);
+        Assert.Null(driverProfile.ProfilePhotoUnionReviewUnionId);
+        Assert.Null(driverProfile.ProfilePhotoUnionReviewUnionName);
+    }
+
+    [Fact]
+    public async Task OperationsUnionHistoryReadReturnsConflictForUnsafePendingAssignmentSnapshot()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "unsafe-history-assignment-union";
+        const string driverId = "unsafe-history-assignment-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        const string reason = "Initial assignment";
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var assignment = assignments[driverId];
+        assignments[driverId] = assignment with
+        {
+            AssignmentReason = reason,
+            AuditEventId = new string('A', 64),
+            AuditEventType = "Assigned",
+            AuditActor = "ops@example.com",
+            AuditPreviousUnionId = null,
+            AuditPreviousUnionName = null,
+            AuditOccurredAtUtc = DateTimeOffset.Parse("2026-11-13T00:30:00Z"),
+            LastAssignmentOperationKey = DriverUnionAuditIdentity.CreateAssignmentOperationKey(
+                driverId, unionId, reason),
+            AuditSnapshotPending = true
+        };
+
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        using var ops = factory.CreateClient("Ops", "unsafe-history-assignment-read");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        using var response = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.DoesNotContain(audit.Values, item => item.DriverId == driverId);
+    }
+
+    [Theory]
+    [InlineData("Contact operator@example.com")]
+    [InlineData(" Approved membership transfer ")]
+    public async Task OperationsUnionHistoryReadReturnsConflictForUnsafePendingAssignmentReason(string storedReason)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "unsafe-history-reason-union";
+        const string driverId = "unsafe-history-reason-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var assignment = assignments[driverId];
+        const string canonicalReason = "Initial assignment";
+        const string actor = "ops-history-reason-subject";
+        var occurredAt = DateTimeOffset.Parse("2026-11-13T00:45:00Z");
+        var eventId = DriverUnionAuditIdentity.CreateAssignmentEventId(
+            driverId, null, null, assignment.UnionId, assignment.UnionName,
+            "Assigned", canonicalReason, actor, occurredAt);
+        var operationKey = DriverUnionAuditIdentity.CreateAssignmentOperationKey(
+            driverId, assignment.UnionId, canonicalReason);
+        assignments[driverId] = assignment with
+        {
+            AssignmentReason = storedReason,
+            AuditEventId = eventId,
+            AuditEventType = "Assigned",
+            AuditActor = actor,
+            AuditPreviousUnionId = null,
+            AuditPreviousUnionName = null,
+            AuditOccurredAtUtc = occurredAt,
+            LastAssignmentOperationKey = operationKey,
+            AuditSnapshotPending = true
+        };
+
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        using var ops = factory.CreateClient("Ops", "unsafe-history-assignment-reason-read");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        using var response = await ops.GetAsync($"/api/v1/ops/drivers/{driverId}/union-history");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.DoesNotContain(audit.Values, item => item.DriverId == driverId);
+    }
+
+    [Fact]
+    public async Task UnionManagerReviewFailsClosedForLegacyReviewedProfileWithoutActorSnapshot()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "union-review-legacy-union";
+        const string driverId = "union-review-legacy-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+        var reviewedAt = DateTimeOffset.Parse("2026-11-12T10:00:00Z");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Image is unclear"
+        };
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-legacy-retry");
+        using var retry = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Image is unclear" });
+
+        Assert.Equal(HttpStatusCode.Conflict, retry.StatusCode);
+        Assert.Equal(reviewedAt, profiles[driverId].ProfilePhotoReviewedAtUtc);
+        Assert.Null(profiles[driverId].ProfilePhotoUnionReviewActorId);
+        Assert.DoesNotContain(
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>().Values,
+            item => item.DriverId == driverId);
+    }
+
+    [Fact]
+    public async Task UnionTransferRepairsMissingUnionManagerSelfieAuditBeforeClearingReviewSnapshot()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "union-review-transfer-recovery-driver";
+        const string oldUnionId = "union-review-transfer-recovery-old";
+        const string newUnionId = "union-review-transfer-recovery-new";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, oldUnionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null
+        };
+        var now = DateTimeOffset.UtcNow;
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>()[newUnionId] =
+            new DriverUnion(newUnionId, "New Recovery Union", "UNION-REVIEW-RECOVERY-NEW",
+                "Hyderabad", null, null, ["hyderabad-central"], ["cab"], "Active", now, now);
+
+        using var manager = factory.CreateUnionManagerClient(oldUnionId, "union-manager-transfer-original");
+        using var ops = factory.CreateClient("Ops", "ops-transfer-recovery");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        const string reason = "Image is unclear";
+
+        using var review = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason });
+        Assert.Equal(HttpStatusCode.OK, review.StatusCode);
+        var originalEvent = Assert.Single(audit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion");
+        Assert.Equal("union-manager-transfer-original", originalEvent.Actor);
+        Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
+
+        using var transfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason = "Approved membership transfer" });
+        Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
+
+        var recoveredEvent = Assert.Single(audit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByUnion");
+        Assert.Equal(originalEvent.EventId, recoveredEvent.EventId);
+        Assert.Equal("union-manager-transfer-original", recoveredEvent.Actor);
+        Assert.Null(profiles[driverId].ProfilePhotoUnionReviewActorId);
+        Assert.Null(profiles[driverId].ProfilePhotoUnionReviewUnionId);
+        Assert.Null(profiles[driverId].ProfilePhotoUnionReviewUnionName);
+    }
+
+    [Fact]
+    public async Task UnionTransferRetryAndHistoryReadRepairPendingAuditWithoutResurrectingRetainedEvents()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "assignment-audit-recovery-driver";
+        const string oldUnionId = "assignment-audit-recovery-old";
+        const string newUnionId = "assignment-audit-recovery-new";
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var ops = factory.CreateClient("Ops", "assignment-audit-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        SeedBookableDriver(factory, driverId, oldUnionId);
+        SeedTransferTargetUnion(factory, newUnionId);
+
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var audit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        const string reason = "Approved membership transfer";
+
+        using var firstTransfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason });
+        Assert.Equal(HttpStatusCode.OK, firstTransfer.StatusCode);
+
+        var completedAssignment = assignments[driverId];
+        Assert.False(completedAssignment.AuditSnapshotPending);
+        Assert.NotNull(completedAssignment.AuditEventId);
+        Assert.NotNull(completedAssignment.LastAssignmentOperationKey);
+        Assert.Null(completedAssignment.AuditActor);
+        Assert.Null(completedAssignment.AuditPreviousUnionId);
+        Assert.Null(completedAssignment.AuditPreviousUnionName);
+        Assert.Null(completedAssignment.AuditOccurredAtUtc);
+        var originalEvent = Assert.Single(audit.Values, item => item.EventId == completedAssignment.AuditEventId);
+        Assert.Equal("assignment-audit-ops", originalEvent.Actor);
+        Assert.Equal(oldUnionId, originalEvent.PreviousUnionId);
+        Assert.Equal(newUnionId, originalEvent.NewUnionId);
+        Assert.Equal(reason, originalEvent.Reason);
+
+        var pendingSnapshot = completedAssignment with
+        {
+            AuditSnapshotPending = true,
+            AuditEventType = originalEvent.EventType,
+            AuditActor = originalEvent.Actor,
+            AuditPreviousUnionId = originalEvent.PreviousUnionId,
+            AuditPreviousUnionName = originalEvent.PreviousUnionName,
+            AuditOccurredAtUtc = originalEvent.OccurredAtUtc
+        };
+        assignments[driverId] = pendingSnapshot;
+        Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
+
+        var history = await ops.GetFromJsonAsync<DriverUnionAuditEvent[]>(
+            $"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.NotNull(history);
+        var historyEvent = Assert.Single(history, item => item.EventId == completedAssignment.AuditEventId);
+        Assert.Equal(originalEvent, historyEvent);
+        var completedAfterHistory = assignments[driverId];
+        Assert.False(completedAfterHistory.AuditSnapshotPending);
+        Assert.Null(completedAfterHistory.AuditActor);
+        Assert.Null(completedAfterHistory.AuditPreviousUnionId);
+        Assert.Null(completedAfterHistory.AuditPreviousUnionName);
+        Assert.Null(completedAfterHistory.AuditOccurredAtUtc);
+
+        var pendingAgain = completedAfterHistory with
+        {
+            AuditSnapshotPending = true,
+            AuditEventType = originalEvent.EventType,
+            AuditActor = originalEvent.Actor,
+            AuditPreviousUnionId = originalEvent.PreviousUnionId,
+            AuditPreviousUnionName = originalEvent.PreviousUnionName,
+            AuditOccurredAtUtc = originalEvent.OccurredAtUtc
+        };
+        assignments[driverId] = pendingAgain;
+        Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
+        using var retryTransfer = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason });
+        Assert.Equal(HttpStatusCode.OK, retryTransfer.StatusCode);
+        var retryAssignment = await retryTransfer.Content.ReadFromJsonAsync<DriverUnionAssignment>();
+        Assert.NotNull(retryAssignment);
+        Assert.Equal(completedAssignment.AuditEventId, retryAssignment.AuditEventId);
+        Assert.False(retryAssignment.AuditSnapshotPending);
+        var retryEvent = Assert.Single(audit.Values, item => item.EventId == completedAssignment.AuditEventId);
+        Assert.Equal(originalEvent, retryEvent);
+
+        Assert.True(audit.TryRemove($"{driverId}|{originalEvent.EventId}", out _));
+        var historyAfterRetention = await ops.GetFromJsonAsync<DriverUnionAuditEvent[]>(
+            $"/api/v1/ops/drivers/{driverId}/union-history");
+        Assert.NotNull(historyAfterRetention);
+        Assert.DoesNotContain(historyAfterRetention, item => item.EventId == completedAssignment.AuditEventId);
+        Assert.False(audit.ContainsKey($"{driverId}|{originalEvent.EventId}"));
+
+        using var idempotentRetryAfterRetention = await ops.PostAsJsonAsync(
+            $"/api/v1/ops/drivers/{driverId}/union-assignment",
+            new { unionId = newUnionId, reason });
+        Assert.Equal(HttpStatusCode.OK, idempotentRetryAfterRetention.StatusCode);
+        Assert.False(audit.ContainsKey($"{driverId}|{originalEvent.EventId}"));
+
+        var driverAssignment = await driver.GetFromJsonAsync<DriverUnionAssignment>("/api/v1/driver/union");
+        Assert.NotNull(driverAssignment);
+        Assert.Null(driverAssignment.AuditEventId);
+        Assert.Null(driverAssignment.AuditEventType);
+        Assert.Null(driverAssignment.AuditActor);
+        Assert.Null(driverAssignment.AuditPreviousUnionId);
+        Assert.Null(driverAssignment.AuditPreviousUnionName);
+        Assert.Null(driverAssignment.AuditOccurredAtUtc);
+        Assert.Null(driverAssignment.LastAssignmentOperationKey);
+        Assert.False(driverAssignment.AuditSnapshotPending);
+    }
     [Fact]
     public async Task UnionManagerSelfieReviewReconcilesExpiredOrphanReservationBeforeAcquiringReviewLease()
     {
@@ -1492,7 +2117,7 @@ public sealed class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var driver = factory.CreateClient("Driver", "transfer-selfie-driver");
         using var rider = factory.CreateClient("Rider", "transfer-selfie-rider");
-        using var ops = factory.CreateClient("Rider", "transfer-selfie-ops");
+        using var ops = factory.CreateClient("Ops", "transfer-selfie-ops@example.com");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
 
         const string driverId = "transfer-selfie-driver";
@@ -1524,16 +2149,38 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Conflict, unverifiedTransfer.StatusCode);
         profiles[driverId] = profiles[driverId] with { Documents = approvedDocuments };
 
+        using var operationsRejection = await ops.PutAsJsonAsync(
+            $"/api/v1/ops/unions/{oldUnionId}/drivers/{driverId}/selfie-review",
+            new { status = "Rejected", reason = "Operations review before transfer" });
+        Assert.Equal(HttpStatusCode.OK, operationsRejection.StatusCode);
+        var pendingOperationsReview = profiles[driverId];
+        var auditStore = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var pendingAudit = auditStore.Values.Single(item =>
+            item.DriverId == driverId && item.EventType == "SelfieRejectedByOperations");
+        Assert.Equal("Operations", pendingAudit.Actor);
+        Assert.Equal(oldUnionId, pendingOperationsReview.ProfilePhotoOperationsReviewUnionId);
+        Assert.True(auditStore.TryRemove(driverId + "|" + pendingAudit.EventId, out _));
+
         using var transfer = await ops.PostAsJsonAsync(
             $"/api/v1/ops/drivers/{driverId}/union-assignment",
             new { unionId = newUnionId, reason = "Driver moved to the new Cab union." });
         Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
+        var transferAudit = Assert.Single(auditStore.Values.Where(item =>
+            item.DriverId == driverId && item.EventType == "Transferred"));
+        Assert.Equal("Operations", transferAudit.Actor);
 
         var transferredProfile = profiles[driverId];
         Assert.Equal("Pending", transferredProfile.ProfilePhotoApprovalStatus);
         Assert.Null(transferredProfile.ProfilePhotoApprovedByUnionId);
         Assert.Null(transferredProfile.ProfilePhotoReviewedAtUtc);
         Assert.Null(transferredProfile.ProfilePhotoReviewReason);
+        Assert.Null(transferredProfile.ProfilePhotoOperationsReviewActorId);
+        Assert.Null(transferredProfile.ProfilePhotoOperationsReviewUnionId);
+        Assert.Null(transferredProfile.ProfilePhotoOperationsReviewUnionName);
+        var recoveredTransferAudit = Assert.Single(auditStore.Values, item =>
+            item.DriverId == driverId && item.EventId == pendingAudit.EventId);
+        Assert.Equal(pendingAudit.Actor, recoveredTransferAudit.Actor);
+        Assert.Equal(pendingAudit.OccurredAtUtc, recoveredTransferAudit.OccurredAtUtc);
 
         Assert.Empty(await oldManager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers") ?? []);
         using var oldUnionApproval = await oldManager.PutAsJsonAsync(

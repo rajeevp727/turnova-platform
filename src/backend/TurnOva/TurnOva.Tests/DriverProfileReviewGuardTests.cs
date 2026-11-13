@@ -81,6 +81,244 @@ public sealed class DriverProfileReviewGuardTests
             DriverProfileReviewGuard.NormalizeRejectionReason(new string('x', 300)));
     }
 
+    [Theory]
+    [InlineData("Contact operator@example.com for details")]
+    [InlineData("Contact operator@example.com.")]
+    [InlineData("Call 123-456-7890 for follow-up")]
+    [InlineData("Use +91 98765 43210 for clarification")]
+    [InlineData("Call 123-456-789 for clarification")]
+    [InlineData("Call 123/456/7890 for follow-up")]
+    [InlineData("Call ९८७६५ ४३२१० for follow-up")]
+    [InlineData("Call ٩٨٧٦٥ ٤٣٢١٠ for follow-up")]
+    public void UnionAuditReasonsRejectObviousContactDetails(string supplied)
+    {
+        Assert.Null(DriverProfileReviewGuard.NormalizeRejectionReason(supplied));
+        Assert.Null(DriverUnionAuditReason.Normalize(supplied));
+    }
+
+    [Fact]
+    public void UnionAuditReasonRejectsControlAndLineSeparatorCharacters()
+    {
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\nwith an embedded newline"));
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\twith an embedded tab"));
+        Assert.Null(DriverUnionAuditReason.Normalize("Reviewed\u2028with a Unicode line separator"));
+    }
+
+    [Fact]
+    public void UnionAuditReasonAllowsOrdinaryDatesAndNonContactText()
+    {
+        Assert.Equal("Reviewed on 2026-11-13",
+            DriverUnionAuditReason.Normalize(" Reviewed on 2026-11-13 "));
+        Assert.Equal("Reviewed on 2026-11-13 at 10:30",
+            DriverUnionAuditReason.Normalize("Reviewed on 2026-11-13 at 10:30"));
+        Assert.Equal("Reviewed on २०२६-११-१३ at १०:३०",
+            DriverUnionAuditReason.Normalize("Reviewed on २०२६-११-१३ at १०:३०"));
+    }
+
+    [Fact]
+    public void OperationsRetryRequiresAnOperationsReviewMarker()
+    {
+        const string reason = "Image is unclear";
+        var unionManagerRejection = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoCapturedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2),
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ProfilePhotoReviewReason = reason,
+            ProfilePhotoOperationsReviewActorId = null
+        };
+        var operationsRejection = unionManagerRejection with
+        {
+            ProfilePhotoOperationsReviewActorId = "ops-actor-42",
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+
+        Assert.False(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
+            unionManagerRejection, unionManagerRejection, reason));
+        Assert.True(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
+            operationsRejection, operationsRejection, reason));
+    }
+
+    [Fact]
+    public void OperationsReviewRecoveryRequiresCompletePrivateSnapshot()
+    {
+        var incomplete = CreateProfile() with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = "ops-actor"
+        };
+        var complete = incomplete with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+
+        Assert.True(DriverProfileReviewGuard.HasOperationsReviewMetadata(incomplete));
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(incomplete));
+        Assert.True(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(complete));
+    }
+
+    [Theory]
+    [InlineData("operator@example.com")]
+    [InlineData("+91 98765 43210")]
+    public void ReviewRecoverySnapshotsRejectContactLikeActorIdentifiers(string actor)
+    {
+        var reviewedAt = DateTimeOffset.Parse("2026-11-13T10:00:00Z");
+        var operations = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = actor,
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+        var unionManager = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Approved",
+            ProfilePhotoApprovedByUnionId = "union-1",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoUnionReviewActorId = actor,
+            ProfilePhotoUnionReviewUnionId = "union-1",
+            ProfilePhotoUnionReviewUnionName = "Test Union"
+        };
+
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(operations));
+        Assert.False(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(unionManager));
+    }
+
+    [Fact]
+    public void UnionReviewSnapshotRequiresOriginalActorUnionAndReviewTimestamp()
+    {
+        var incomplete = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.Parse("2026-11-12T10:00:00Z"),
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoUnionReviewActorId = "manager-original",
+            ProfilePhotoUnionReviewUnionId = "union-1"
+        };
+        var complete = incomplete with { ProfilePhotoUnionReviewUnionName = "Test Union" };
+
+        Assert.True(DriverProfileReviewGuard.HasUnionReviewMetadata(incomplete));
+        Assert.False(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(incomplete));
+        Assert.True(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(complete));
+        Assert.True(DriverProfileReviewGuard.IsSameUnionSelfieReview(
+            complete, "Rejected", "union-1", "Image is unclear"));
+        Assert.False(DriverProfileReviewGuard.IsSameUnionSelfieReview(
+            complete, "Rejected", "another-union", "Image is unclear"));
+        Assert.False(DriverProfileReviewGuard.IsSameUnionSelfieReview(
+            complete, "Rejected", "union-1", "Different reason"));
+    }
+
+    [Fact]
+    public void ContactLikeReviewReasonsMakePrivateRecoverySnapshotsIncomplete()
+    {
+        var reviewedAt = DateTimeOffset.Parse("2026-11-12T10:00:00Z");
+        var operations = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Call 123-456-7890",
+            ProfilePhotoOperationsReviewActorId = "ops-actor",
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+        var union = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = reviewedAt,
+            ProfilePhotoReviewReason = "Contact operator@example.com",
+            ProfilePhotoUnionReviewActorId = "union-manager-actor",
+            ProfilePhotoUnionReviewUnionId = "union-1",
+            ProfilePhotoUnionReviewUnionName = "Test Union"
+        };
+
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(operations));
+        Assert.False(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(union));
+    }
+
+    [Fact]
+    public void LegacyReviewedSelfieWithoutRecoverySnapshotIsDetected()
+    {
+        var legacy = CreateProfile() with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.Parse("2026-11-12T10:00:00Z"),
+            ProfilePhotoReviewReason = "Image is unclear"
+        };
+
+        Assert.True(DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(legacy));
+        Assert.False(DriverProfileReviewGuard.HasLegacyReviewedSelfieWithoutRecoverySnapshot(
+            legacy with { ProfilePhotoUnionReviewActorId = "manager-original" }));
+    }
+
+    [Fact]
+    public void BlankButPresentUnionReviewMarkersAreTreatedAsIncompleteMetadata()
+    {
+        var profile = CreateProfile() with
+        {
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoUnionReviewActorId = "",
+            ProfilePhotoUnionReviewUnionId = "",
+            ProfilePhotoUnionReviewUnionName = ""
+        };
+
+        Assert.True(DriverProfileReviewGuard.HasUnionReviewMetadata(profile));
+        Assert.False(DriverProfileReviewGuard.HasCompleteUnionReviewSnapshot(profile));
+    }
+
+    [Fact]
+    public void BlankButPresentOperationsReviewMarkersAreTreatedAsIncompleteMetadata()
+    {
+        var profile = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow,
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = "",
+            ProfilePhotoOperationsReviewUnionId = "",
+            ProfilePhotoOperationsReviewUnionName = ""
+        };
+
+        Assert.True(DriverProfileReviewGuard.HasOperationsReviewMetadata(profile));
+        Assert.False(DriverProfileReviewGuard.HasCompleteOperationsReviewSnapshot(profile));
+    }
+
+    [Fact]
+    public void SameOperationsRetryMustBelongToTheExpectedCurrentUnion()
+    {
+        var reviewed = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoCapturedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2),
+            ProfilePhotoApprovalStatus = "Rejected",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ProfilePhotoReviewReason = "Image is unclear",
+            ProfilePhotoOperationsReviewActorId = "ops-actor-42",
+            ProfilePhotoOperationsReviewUnionId = "union-1",
+            ProfilePhotoOperationsReviewUnionName = "Test Union"
+        };
+
+        Assert.True(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
+            reviewed, reviewed, "Image is unclear", "union-1"));
+        Assert.False(DriverProfileReviewGuard.IsSameRejectedSelfieReview(
+            reviewed, reviewed, "Image is unclear", "another-union"));
+    }
+
     private static DriverOnboardingProfile CreateProfile() => new(
         "driver-1", "driver-1", "zone-1", "Test Driver", "+919876543210",
         "Maruti", "Dzire", "TS09AB1234", "cab", 3,
