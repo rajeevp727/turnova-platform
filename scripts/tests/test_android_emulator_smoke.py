@@ -23,6 +23,17 @@ def write_executable(path: Path, content: str) -> None:
 
 
 class AndroidEmulatorSmokeHarnessTests(unittest.TestCase):
+    def test_launch_status_check_avoids_pipefail_sigpipe_false_failure(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        # grep -q may close a pipe as soon as it finds the match. With pipefail,
+        # printf can then fail with SIGPIPE even though the expected text exists.
+        self.assertIn('if [[ "$launch_output" != *"Status: ok"* ]]; then', script)
+        self.assertNotRegex(
+            script,
+            r'printf\\s+[^\\n]*"\\$launch_output"[^\\n]*\\|\\s*grep\\s+-Fq\\s+"Status: ok"',
+        )
+
     def test_avd_home_install_launch_and_diagnostics_with_fake_sdk(self) -> None:
         with tempfile.TemporaryDirectory(prefix="turnova-android-smoke-") as temporary:
             root = Path(temporary)
