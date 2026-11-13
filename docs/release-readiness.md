@@ -303,3 +303,16 @@ The initial Driver Android attempt artifact `14018592304` showed successful inst
 The same run verified backend **570/570**, shared mobile/auth **179/179**, deterministic Python harness **46/46**, Rider/Driver Expo validation and production JS bundles, native non-container API publish, both Android debug and standalone release APKs, and both unsigned iOS Simulator builds.
 
 These artifacts establish CI build and emulator/simulator install/launch/login-screen evidence only. They do not prove production API/authentication, live Cosmos, signed iOS Keychain persistence, production-signed Android AAB/iOS IPA, physical-device acceptance or store approval. The current release-readiness row remains Blocked until those external inputs and acceptance tests are supplied.
+
+## PLATFORM-01 exact-head native build and smoke evidence — CI #1498 (2026-11-13)
+
+Exact documentation HEAD `6c67c98b192df5ea8210dd47640eee76816ea578` passed [GitHub Actions #1498 / 43391119590](https://github.com/rajeevp727/turnova-platform/actions/runs/43391119590) **12/12 jobs**: backend **570/570**, shared mobile/auth **179/179**, Python harness **46/46**, Rider/Driver Expo validation/typechecks/production JS bundles, native non-container API publish, both Android debug and standalone release APKs, both unsigned iOS Simulator builds and all four emulator/simulator smoke jobs.
+
+| Artifact | App/platform | Verified result |
+|---|---|---|
+| `14021706924` | Rider Android emulator | APK installed/launched; stable foreground process; Rider login screen verified; no stale-session error or system-UI recovery |
+| `14020793191` | Driver Android emulator | APK installed/launched; stable foreground process; Driver login screen verified; no stale-session error or system-UI recovery |
+| `14022022857` | Rider iOS Simulator | Unsigned app installed/launched; stable process; Rider login screen verified; expected SecureStore-unavailable recovery banner |
+| `14022750045` | Driver iOS Simulator | Unsigned app installed/launched; stable process; Driver login screen verified; expected SecureStore-unavailable recovery banner |
+
+These are CI build and emulator/simulator install/launch/login-screen results, not production release acceptance. Android APK signing/store readiness, signed iOS IPA and Keychain access group, physical-device testing, production API/authentication, live Cosmos and end-to-end ride flows remain external or unverified. No production deployment was performed.
