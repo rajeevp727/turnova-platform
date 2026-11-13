@@ -263,8 +263,8 @@ app.UseRateLimiter();
 app.MapHealthChecks("/health/live");
 
 // Render may probe the service root with HEAD. Return a lightweight success
-// response for both GET and HEAD without exposing application or storage details.
-app.MapMethods("/", ["GET", "HEAD"], () => Results.Ok(new { status = "healthy" }));
+// response for HEAD only without exposing application or storage details.
+app.MapMethods("/", ["HEAD"], () => Results.Ok(new { status = "healthy" }));
 if (app.Environment.IsEnvironment("Testing"))
 {
     app.MapGet("/__test/throw", () =>

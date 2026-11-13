@@ -66,7 +66,7 @@ public sealed class StorageReadinessProbeTests
     }
 
     [Fact]
-    public async Task CheckAsyncPropagatesCallerCancellation()
+    public async Task CheckAsyncPropagatesCallerCancellationDuringProbe()
     {
         var outcomes = new ConcurrentBag<string>();
         using var meterListener = new MeterListener();
@@ -82,15 +82,111 @@ public sealed class StorageReadinessProbeTests
         });
         meterListener.Start();
 
-        using var cancellation = new CancellationTokenSource();
-        cancellation.Cancel();
+        var probeStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var probe = new StorageReadinessProbe(
-            ct => Task.FromCanceled(ct),
+            async ct =>
+            {
+                probeStarted.TrySetResult(true);
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            },
+            TimeSpan.FromSeconds(10));
+        using var cancellation = new CancellationTokenSource();
+
+        var check = probe.CheckAsync(cancellation.Token);
+        await probeStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => check);
+        Assert.Contains("cancelled", outcomes);
+    }
+
+    [Fact]
+    public async Task CheckAsyncMapsUnexpectedProviderExceptionToUnavailableReadinessFailure()
+    {
+        const string failureMessage = "private-storage-provider-detail";
+        var probe = new StorageReadinessProbe(
+            _ => Task.FromException(new InvalidOperationException(failureMessage)),
             TimeSpan.FromSeconds(1));
 
+        var exception = await Assert.ThrowsAsync<StorageReadinessException>(
+            () => probe.CheckAsync(CancellationToken.None));
+
+        Assert.Equal("unavailable", exception.FailureKind);
+        Assert.Equal(failureMessage, exception.InnerException?.Message);
+    }
+
+    [Fact]
+    public async Task CheckAsyncMapsSpontaneousProviderCancellationToUnavailableNotTimeout()
+    {
+        var probe = new StorageReadinessProbe(
+            _ => Task.FromException(new OperationCanceledException("provider-cancelled")),
+            TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAsync<StorageReadinessException>(
+            () => probe.CheckAsync(CancellationToken.None));
+
+        Assert.Equal("unavailable", exception.FailureKind);
+        Assert.IsType<OperationCanceledException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task CheckAsyncMapsProviderTimeoutExceptionToUnavailableNotProbeTimeout()
+    {
+        var probe = new StorageReadinessProbe(
+            _ => Task.FromException(new TimeoutException("provider-timeout")),
+            TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAsync<StorageReadinessException>(
+            () => probe.CheckAsync(CancellationToken.None));
+
+        Assert.Equal("unavailable", exception.FailureKind);
+        Assert.IsType<TimeoutException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task CheckAsyncEnforcesProbeDeadlineWhenProviderIgnoresCancellation()
+    {
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probe = new StorageReadinessProbe(
+            _ =>
+            {
+                started.TrySetResult(true);
+                return completion.Task;
+            },
+            TimeSpan.FromMilliseconds(30));
+
+        var check = probe.CheckAsync(CancellationToken.None);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAsync<StorageReadinessException>(
+            () => check.WaitAsync(TimeSpan.FromSeconds(1)));
+
+        Assert.Equal("timeout", exception.FailureKind);
+        completion.TrySetException(new InvalidOperationException("late-provider-failure"));
+    }
+
+    [Fact]
+    public async Task CheckAsyncPropagatesCallerCancellationWhenProviderIgnoresCancellation()
+    {
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probe = new StorageReadinessProbe(
+            _ =>
+            {
+                started.TrySetResult(true);
+                return completion.Task;
+            },
+            TimeSpan.FromSeconds(10));
+        using var cancellation = new CancellationTokenSource();
+
+        var check = probe.CheckAsync(cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        cancellation.Cancel();
+
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => probe.CheckAsync(cancellation.Token));
-        Assert.Contains("cancelled", outcomes);
+            () => check.WaitAsync(TimeSpan.FromSeconds(1)));
+        completion.TrySetException(new InvalidOperationException("late-provider-failure"));
     }
     [Fact]
     public async Task ReadinessProbeEmitsBoundedMetricsAndTraceWithoutDependencyDetails()

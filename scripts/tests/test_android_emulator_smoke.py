@@ -23,6 +23,17 @@ def write_executable(path: Path, content: str) -> None:
 
 
 class AndroidEmulatorSmokeHarnessTests(unittest.TestCase):
+    def test_launch_status_check_avoids_pipefail_sigpipe_false_failure(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        # grep -q may close a pipe as soon as it finds the match. With pipefail,
+        # printf can then fail with SIGPIPE even though the expected text exists.
+        self.assertIn('if [[ "$launch_output" != *"Status: ok"* ]]; then', script)
+        self.assertNotRegex(
+            script,
+            r'printf\s+[^\n]*"\$launch_output"[^\n]*\|\s*grep\s+-Fq\s+"Status: ok"',
+        )
+
     def test_avd_home_install_launch_and_diagnostics_with_fake_sdk(self) -> None:
         with tempfile.TemporaryDirectory(prefix="turnova-android-smoke-") as temporary:
             root = Path(temporary)
@@ -197,6 +208,20 @@ case "$1" in
     fi
     ;;
   exec-out)
+    count=0
+    if [[ -n "${FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE:-}" && -f "$FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE" ]]; then
+      read -r count < "$FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE"
+    fi
+    count=$((count + 1))
+    if [[ -n "${FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE:-}" ]]; then
+      mkdir -p "$(dirname "$FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE")"
+      printf '%s\n' "$count" > "$FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE"
+    fi
+    fail_attempts="${FAKE_SCREENSHOT_FAIL_FINAL_ATTEMPTS:-0}"
+    if (( count > 1 && count <= 1 + fail_attempts )); then
+      echo "error: device offline during screenshot capture" >&2
+      exit 255
+    fi
     printf '\211PNG\r\n\032\n'
     ;;
   *)
@@ -240,6 +265,8 @@ exit 0
                     "FAKE_INPUT_LOG": str(output / "input-taps.txt"),
                     "FAKE_ADB_EMU_KILL_LOG": str(output / "global-adb-emu-kill.txt"),
                     "FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS": "1",
+                    "FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE": str(output / "screenshot-exec-out-count"),
+                    "FAKE_SCREENSHOT_FAIL_FINAL_ATTEMPTS": "0",
                     "TURNOVA_ANDROID_SYSTEM_IMAGE_RETRY_DELAY_SECONDS": "0",
                 }
             )
@@ -310,6 +337,39 @@ exit 0
             self.assertTrue(report["staleSessionErrorAbsent"])
             self.assertEqual(report["systemUiRecovery"]["pixelLauncherAnrWaitAttempts"], 0)
             self.assertFalse((output / "global-adb-emu-kill.txt").exists())
+
+            # A transient ADB transport failure during the final screenshot is retried
+            # without weakening the preceding install, launch, foreground, UI or logcat checks.
+            screenshot_retry_output = root / "screenshot-retry-output"
+            environment["FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE"] = str(screenshot_retry_output / "exec-out-count")
+            environment["FAKE_SCREENSHOT_FAIL_FINAL_ATTEMPTS"] = "1"
+            screenshot_retry_command = command[:-1] + [str(screenshot_retry_output)]
+            screenshot_retry = subprocess.run(
+                screenshot_retry_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(screenshot_retry.returncode, 0, msg=f"stdout:\n{screenshot_retry.stdout}\nstderr:\n{screenshot_retry.stderr}")
+            self.assertIn("screenshot attempt 1/3 failed", screenshot_retry.stderr.lower())
+            self.assertEqual((screenshot_retry_output / "exec-out-count").read_text(encoding="utf-8").strip(), "3")
+            self.assertTrue((screenshot_retry_output / "launch.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
+            self.assertTrue((screenshot_retry_output / "result.json").is_file())
+
+            # Repeated screenshot transport failures remain a hard failure and include
+            # ADB/emulator diagnostics; they never produce a success result.
+            screenshot_failure_output = root / "screenshot-failure-output"
+            environment["FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE"] = str(screenshot_failure_output / "exec-out-count")
+            environment["FAKE_SCREENSHOT_FAIL_FINAL_ATTEMPTS"] = "3"
+            screenshot_failure_command = command[:-1] + [str(screenshot_failure_output)]
+            screenshot_failure = subprocess.run(
+                screenshot_failure_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(screenshot_failure.returncode, 1)
+            self.assertIn("screenshot capture failed after 3 attempts", screenshot_failure.stderr.lower())
+            self.assertIn("List of devices attached", screenshot_failure.stderr)
+            self.assertFalse((screenshot_failure_output / "result.json").exists())
+            environment["FAKE_SCREENSHOT_FAIL_FINAL_ATTEMPTS"] = "0"
+            environment["FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE"] = str(output / "screenshot-exec-out-count")
             self.assertTrue(user_avd_ini.is_file())
             self.assertEqual(user_avd_sentinel.read_text(encoding="utf-8"), "preserve")
 
@@ -333,7 +393,7 @@ exit 0
             self.assertEqual(
                 reused_existing_image.returncode,
                 0,
-                msg=f"stdout:\\n{reused_existing_image.stdout}\\nstderr:\\n{reused_existing_image.stderr}",
+                msg=f"stdout:\n{reused_existing_image.stdout}\nstderr:\n{reused_existing_image.stderr}",
             )
             self.assertIn("pre-existing Android API 35 system image", reused_existing_image.stdout)
             self.assertEqual(int(attempts_file.read_text(encoding="utf-8").strip()), attempts_before_reuse)
