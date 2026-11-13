@@ -1944,3 +1944,12 @@ Exact code-bearing head 02fbfa9121b62acf5ef8ec20287cc9dc0ea94db5 passed GitHub A
 - Both Android debug APKs and standalone release APKs passed verification; both unsigned iOS Simulator builds passed. All four same-run install/launch smokes passed: Rider Android artifact `14011503947`, Driver Android `14012825007`, Rider iOS `14013400018`, Driver iOS `14012094464`. Job logs confirm the expected package IDs launched; both iOS logs explicitly verified the unsigned SecureStore-unavailable recovery banner.
 - This does not prove signed-device Keychain persistence, physical-device acceptance, production API/authentication, live Cosmos or production hosting.
 - The next evidence-only documentation synchronization creates a new PR head and requires its own exact-head CI. PR #158 remains Draft/unmerged until that run and final expected-head/review checks pass.
+
+
+## PLATFORM-01 hard storage probe deadline regressions — 2026-11-13
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| PLATFORM-HEALTH-010 | Provider-originated timeout exception | Provider throws `TimeoutException` before the probe-owned deadline and without caller cancellation | Classify as dependency `unavailable`, not probe `timeout`; public readiness remains generic HTTP 503 | Unit | P1 |
+| PLATFORM-HEALTH-011 | Provider ignores cancellation token | Provider returns a task that remains incomplete after the probe deadline and does not observe the token | `CheckAsync` still returns the probe-owned `timeout` at its fixed upper bound; any later provider fault is observed without logging its detail | Unit | P0 |
+| PLATFORM-HEALTH-012 | Caller cancels while provider ignores cancellation | Provider returns an incomplete task that ignores its token; cancel the request token while the probe is pending | Caller cancellation propagates promptly and records `cancelled`; it is not relabeled as timeout or unavailable | Unit | P0 |
