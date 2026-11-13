@@ -698,7 +698,7 @@ The automated API tests use the in-memory ride store. Cosmos cross-partition que
 | PLATFORM-CORS-001 | Browser preflight uses an origin configured in `Cors:AllowedOrigins` | API returns the matching `Access-Control-Allow-Origin` header and allows the requested method | API integration/security | P0 |
 | PLATFORM-CORS-002 | Browser preflight uses an origin not in the configured allow-list | API does not emit `Access-Control-Allow-Origin` for that origin | API integration/security | P0 |
 | PLATFORM-HEALTH-001 | Liveness probe calls `/health/live` | HTTP 200 while the API process is running | API integration | P0 |
-| PLATFORM-HEALTH-002 | Readiness probe calls `/health/ready` in demo/in-memory mode | HTTP 200 with `status: ready` and the explicit demo storage mode | API integration | P0 |
+| PLATFORM-HEALTH-002 | Readiness probe calls `/health/ready` in demo/in-memory mode | HTTP 200 with `status: ready`; public response does not disclose the storage mode or database name | API integration | P0 |
 | PLATFORM-HEALTH-003 | Readiness probe calls `/health/ready` in Cosmos mode while the database is unavailable | HTTP 503; readiness does not report healthy when the configured persistent store is unreachable | Cosmos integration/failure injection | P0 |
 
 `Cors:AllowedOrigins` accepts explicit HTTPS origins; HTTP origins are allowed only in Development. Wildcards, URL paths, credentials and query strings are rejected. An empty allow-list emits no browser CORS permission; native Android/iOS clients do not depend on CORS. Cosmos-mode readiness failure and production origin configuration remain infrastructure-backed validation.
@@ -984,10 +984,12 @@ DRIVER-01 code/test audit (2026-11-07): `DriverOnboardingRequest` accepts Cab on
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
 |---|---|---|---|---|
-| PLATFORM-HEALTH-001 | API runs in demo in-memory mode | Liveness and readiness return HTTP 200; readiness identifies demo storage mode | `HealthEndpointsExposeLivenessAndCosmosAwareReadiness` | P0 |
-| PLATFORM-HEALTH-002 | Storage dependency probe fails | Readiness returns generic HTTP 503 while liveness remains HTTP 200; response omits provider exception details | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
+| PLATFORM-HEALTH-001 | API runs in demo in-memory mode | Liveness and readiness return HTTP 200; readiness returns only service/status and does not identify the storage provider | `PublicHealthEndpointsExposeOnlyGenericStatusMetadata` | P0 |
+| PLATFORM-HEALTH-002 | Storage dependency probe fails | Readiness returns generic HTTP 503 while liveness remains HTTP 200; response omits provider exception and infrastructure metadata | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
 | PLATFORM-HEALTH-003 | Storage probe exceeds its configured bound | Probe cancels after three seconds in production wiring; unit test verifies timeout maps to a readiness failure | `CheckAsyncMapsProbeTimeoutToReadinessFailure` | P0 |
 | PLATFORM-HEALTH-004 | Caller cancels the readiness request | Request cancellation propagates and is not misreported as a dependency timeout | `CheckAsyncPropagatesCallerCancellation` | P1 |
+| PLATFORM-HEALTH-005 | Unauthenticated root and health endpoints are queried | `/` exposes only name/version/message; `/health` and `/health/ready` expose only service/status; storage mode, database name, environment and provider metadata are absent | `PublicHealthEndpointsExposeOnlyGenericStatusMetadata` | P0 |
+| PLATFORM-HEALTH-006 | Storage readiness fails | Generic HTTP 503 problem details contain no storage mode, database, environment, endpoint, connection-string or raw provider exception metadata | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
 | PLATFORM-AUDIT-015 | Numeric actor reference contains allowed separators | Phone-like actor references with at least eight digits and only numeric/separator characters are reduced to the System actor before persistence | `ReservationAuditRedactsPhoneLikeActorIdsWithAllowedSeparators` | P0 |
 | PLATFORM-AUDIT-016 | Opaque actor reference contains letters and digits | Opaque internal IDs containing letters remain intact; only phone-like numeric references are redacted | `ReservationAuditPreservesOpaqueActorIdsContainingLetters` | P1 |
 | PLATFORM-AUDIT-017 | Reservation audit event uses a declared event type | The four declared reservation event types are accepted unchanged | `ReservationAuditAcceptsOnlyTheFourDeclaredEventTypes` | P1 |

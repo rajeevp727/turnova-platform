@@ -1229,24 +1229,17 @@ double CalculateDistanceKm(double firstLatitude, double firstLongitude, double s
     return earthRadiusKm * 2 * Math.Asin(Math.Min(1, Math.Sqrt(haversine)));
 }
 
-var storageMode = useCosmos ? "cosmos-db" : "demo-in-memory";
-
 app.MapGet("/", () => Results.Ok(new
 {
     name = "TurnOva API",
     version = "v1",
-    mode = storageMode,
-    database = useCosmos ? databaseName : null,
     message = "Everyone's Turn Matters."
 }));
 
 app.MapGet("/health", () => Results.Ok(new
 {
     service = "TurnOva.API",
-    status = "healthy",
-    environment = app.Environment.EnvironmentName,
-    storage = storageMode,
-    database = useCosmos ? databaseName : null
+    status = "healthy"
 }));
 
 app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, CancellationToken ct) =>
@@ -1254,14 +1247,11 @@ app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, Cance
     try
     {
         await storageReadiness.CheckAsync(ct);
-        if (!useCosmos)
-            return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode });
-
-        return Results.Ok(new { service = "TurnOva.API", status = "ready", storage = storageMode, database = databaseName });
+        return Results.Ok(new { service = "TurnOva.API", status = "ready" });
     }
     catch (StorageReadinessException ex)
     {
-        // Keep diagnostics useful without exposing Cosmos endpoints or SDK diagnostics.
+        // Keep diagnostics useful without exposing provider, database or SDK details.
         app.Logger.LogWarning(
             "Storage readiness check failed. FailureKind {FailureKind}",
             ex.FailureKind);

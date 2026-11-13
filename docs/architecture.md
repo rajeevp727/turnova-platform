@@ -401,7 +401,8 @@ The legacy Rider GET /api/v1/rides/nearby endpoint returns 410 Gone so the app c
 
 - `/health/live` is a process-liveness endpoint and does not query Cosmos DB.
 - `/health/ready` uses a storage readiness probe. In in-memory Development/Testing mode the probe completes locally; in Cosmos mode it performs a database metadata read.
-- The probe has a fixed three-second upper bound and propagates caller cancellation. A dependency exception or the probe's own timeout is translated to a generic HTTP 503 readiness response; internal SDK diagnostics and endpoint details are not returned or logged.
+- The probe has a fixed three-second upper bound and propagates caller cancellation. A dependency exception or the probe's own timeout is translated to a generic HTTP 503 readiness response; internal SDK diagnostics, storage mode, database name and endpoint details are not returned.
+- Public `/` and `/health` projections expose only service identity/version/message and generic health status. `/health/ready` exposes only service/status after the real configured storage probe; its response is identical in shape for demo and Cosmos modes. The bounded failure kind remains server-side and does not include provider exception text.
 - This is a bounded health probe, not proof of live Cosmos transactional-batch, ETag, multi-instance or restart recovery. Those remain separate infrastructure validation gates.
 
 
