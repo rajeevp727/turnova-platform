@@ -50,20 +50,27 @@ public sealed class StorageReadinessProbe
             outcome = "timeout";
             throw new StorageReadinessException("timeout", ex);
         }
-        catch (OperationCanceledException ex) when (!requestCancellationToken.IsCancellationRequested)
-        {
-            outcome = "timeout";
-            throw new StorageReadinessException("timeout", ex);
-        }
         catch (OperationCanceledException) when (requestCancellationToken.IsCancellationRequested)
         {
             outcome = "cancelled";
             throw;
         }
-        catch
+        catch (OperationCanceledException ex) when (timeoutSource.IsCancellationRequested)
+        {
+            outcome = "timeout";
+            throw new StorageReadinessException("timeout", ex);
+        }
+        catch (OperationCanceledException ex)
+        {
+            // A provider may cancel independently of this request and the probe's own deadline.
+            // That is a dependency failure, not proof that our readiness timeout elapsed.
+            outcome = "unavailable";
+            throw new StorageReadinessException("unavailable", ex);
+        }
+        catch (Exception ex)
         {
             outcome = "unavailable";
-            throw;
+            throw new StorageReadinessException("unavailable", ex);
         }
         finally
         {

@@ -1917,3 +1917,12 @@ Exact code-bearing head 02fbfa9121b62acf5ef8ec20287cc9dc0ea94db5 passed GitHub A
 - PR #157 remains Draft while this final evidence synchronization is committed. The new documentation head must receive a separate exact-head CI run before the PR is marked ready or merged. The final review is COMMENT-only, not an approval; no self-approval, bypass or force-push is used.
 - Next sequential code task after merge: re-read main and verify/fix `StorageReadinessProbe` unexpected provider exception and cancellation classification; preserve generic HTTP 503 for unavailable storage, distinguish actual probe timeout from spontaneous provider cancellation, and propagate caller cancellation. Then continue remaining #18 diagnostics/CORS/native-publish/audit-path work before #19 RELEASE-01.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked), based on complete acceptance evidence including external gates. Production readiness is not established.
+
+
+## PLATFORM-01 storage readiness failure classification — 2026-11-13
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| PLATFORM-HEALTH-007 | Unexpected provider exception | Inject a non-Cosmos/non-HTTP provider exception into the readiness probe and request `/health/ready` | Probe maps it to typed `unavailable`; API returns generic HTTP 503; exception details and infrastructure metadata are absent from Problem Details; liveness remains HTTP 200 | Unit + API integration | P0 |
+| PLATFORM-HEALTH-008 | Provider cancellation unrelated to request/deadline | Probe delegate returns a faulted task containing `OperationCanceledException` while neither caller token nor probe timeout has fired | Failure kind is `unavailable`, not `timeout`; no raw provider detail is exposed | Unit | P1 |
+| PLATFORM-HEALTH-009 | Distinguish caller cancellation from probe deadline | Cancel the caller token while the probe is actively waiting; separately allow the probe-owned deadline to expire | Caller cancellation propagates and records `cancelled`; probe-owned cancellation maps to typed `timeout` | Unit | P0 |

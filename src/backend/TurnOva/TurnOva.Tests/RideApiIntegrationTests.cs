@@ -89,6 +89,27 @@ public sealed class RideApiIntegrationTests
         AssertNoInfrastructureMetadata(problem.RootElement);
     }
 
+    [Fact]
+    public async Task ReadinessReturns503ForUnexpectedStorageProbeExceptionWithoutExposingDetails()
+    {
+        const string failureMessage = "private-unexpected-storage-provider-detail";
+        using var factory = new TurnOvaApiFactory(
+            storageReadinessException: new InvalidOperationException(failureMessage));
+        using var client = factory.CreateClient("Rider", "rider-unexpected-storage-failure");
+
+        using var live = await client.GetAsync("/health/live");
+        Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+
+        using var ready = await client.GetAsync("/health/ready");
+        var body = await ready.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
+        Assert.Contains("Storage dependency unavailable", body);
+        Assert.DoesNotContain(failureMessage, body);
+        using var problem = JsonDocument.Parse(body);
+        AssertNoInfrastructureMetadata(problem.RootElement);
+    }
+
     private static void AssertNoInfrastructureMetadata(JsonElement response)
     {
         foreach (var property in new[]
@@ -7200,6 +7221,7 @@ public sealed class RideApiIntegrationTests
         private readonly int? _nearbyLocationMaxAgeSeconds;
         private readonly int? _selectedDriverNegotiationLifetimeMinutes;
         private readonly bool _storageReadinessUnavailable;
+        private readonly Exception? _storageReadinessException;
         private readonly IRideOfferAdvancer? _rideOfferAdvancer;
         private readonly IReadOnlyList<DispatchZoneConfig>? _dispatchZones;
         private readonly IQueueStore? _queueStore;
@@ -7210,13 +7232,15 @@ public sealed class RideApiIntegrationTests
             int? nearbyLocationMaxAgeSeconds = 120, IRideOfferAdvancer? rideOfferAdvancer = null,
             IReadOnlyList<DispatchZoneConfig>? dispatchZones = null,
             IQueueStore? queueStore = null,
-            IDriverRideReservationStore? reservationStore = null)
+            IDriverRideReservationStore? reservationStore = null,
+            Exception? storageReadinessException = null)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
             _nearbyLocationMaxAgeSeconds = nearbyLocationMaxAgeSeconds;
             _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
             _storageReadinessUnavailable = storageReadinessUnavailable;
+            _storageReadinessException = storageReadinessException;
             _rideOfferAdvancer = rideOfferAdvancer;
             _dispatchZones = dispatchZones;
             _queueStore = queueStore;
@@ -7266,8 +7290,8 @@ public sealed class RideApiIntegrationTests
             var rideOfferAdvancer = _rideOfferAdvancer;
             var queueStore = _queueStore;
             var reservationStore = _reservationStore;
-            if (_storageReadinessUnavailable || rideOfferAdvancer is not null ||
-                queueStore is not null || reservationStore is not null)
+            if (_storageReadinessUnavailable || _storageReadinessException is not null ||
+                rideOfferAdvancer is not null || queueStore is not null || reservationStore is not null)
             {
                 builder.ConfigureTestServices(services =>
                 {
@@ -7283,11 +7307,13 @@ public sealed class RideApiIntegrationTests
                         services.AddSingleton<IDriverRideReservationStore>(reservationStore);
                     }
 
-                    if (_storageReadinessUnavailable)
+                    if (_storageReadinessUnavailable || _storageReadinessException is not null)
                     {
                         services.RemoveAll<StorageReadinessProbe>();
+                        var failure = _storageReadinessException ??
+                            new HttpRequestException("test-only-storage-failure");
                         services.AddSingleton(new StorageReadinessProbe(
-                            _ => Task.FromException(new HttpRequestException("test-only-storage-failure")),
+                            _ => Task.FromException(failure),
                             TimeSpan.FromSeconds(3)));
                     }
 
