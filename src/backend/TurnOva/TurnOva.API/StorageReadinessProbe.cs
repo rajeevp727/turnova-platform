@@ -31,9 +31,12 @@ public sealed class StorageReadinessProbe
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(requestCancellationToken);
         timeoutSource.CancelAfter(_timeout);
 
+        Task? probeTask = null;
         try
         {
-            await _probe(timeoutSource.Token);
+            probeTask = _probe(timeoutSource.Token);
+            // Enforce the deadline even if a provider implementation ignores its token.
+            await probeTask.WaitAsync(timeoutSource.Token);
         }
         catch (CosmosException ex)
         {
@@ -45,18 +48,15 @@ public sealed class StorageReadinessProbe
             outcome = "unavailable";
             throw new StorageReadinessException("unavailable", ex);
         }
-        catch (TimeoutException ex)
-        {
-            outcome = "timeout";
-            throw new StorageReadinessException("timeout", ex);
-        }
         catch (OperationCanceledException) when (requestCancellationToken.IsCancellationRequested)
         {
+            ObserveLateProbeFailure(probeTask);
             outcome = "cancelled";
             throw;
         }
         catch (OperationCanceledException ex) when (timeoutSource.IsCancellationRequested)
         {
+            ObserveLateProbeFailure(probeTask);
             outcome = "timeout";
             throw new StorageReadinessException("timeout", ex);
         }
@@ -79,6 +79,19 @@ public sealed class StorageReadinessProbe
                 activity?.SetStatus(ActivityStatusCode.Error);
             TurnOvaDiagnostics.RecordStorageReadiness(outcome, Stopwatch.GetElapsedTime(startedAt));
         }
+    }
+
+    private static void ObserveLateProbeFailure(Task? probeTask)
+    {
+        if (probeTask is null || probeTask.IsCompleted) return;
+
+        // A provider may ignore cancellation and fault after the bounded wait has returned.
+        // Observe that late fault without logging or exposing provider details.
+        _ = probeTask.ContinueWith(
+            static completed => _ = completed.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 }
 
