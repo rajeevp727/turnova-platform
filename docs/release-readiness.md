@@ -316,3 +316,8 @@ Exact documentation HEAD `6c67c98b192df5ea8210dd47640eee76816ea578` passed [GitH
 | `14022750045` | Driver iOS Simulator | Unsigned app installed/launched; stable process; Driver login screen verified; expected SecureStore-unavailable recovery banner |
 
 These are CI build and emulator/simulator install/launch/login-screen results, not production release acceptance. Android APK signing/store readiness, signed iOS IPA and Keychain access group, physical-device testing, production API/authentication, live Cosmos and end-to-end ride flows remain external or unverified. No production deployment was performed.
+
+## CI #1502 Android smoke harness correction — 2026-11-13
+
+- Documentation-head CI #1502 / 43398973091 completed 11/12. Driver Android smoke job `131801620220` failed after APK installation and successful ActivityManager launch (`Status: ok`); the shell harness's `printf ... | grep -Fq` pipeline raised `Broken pipe` under `set -euo pipefail`. No application crash or ANR was observed. Artifact `14024159021` preserves the launch output.
+- Corrected the launch-status assertion to use a Bash substring check and added a deterministic Python regression invariant plus test-plan case `PLATFORM-NATIVE-ANDROID-001`. The corrected branch requires fresh exact-head CI before any merge. This is a CI harness reliability correction; it does not change the release-readiness limitations below.
