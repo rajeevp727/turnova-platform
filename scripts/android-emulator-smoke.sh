@@ -484,11 +484,53 @@ if [[ -z "$pid_after" || "$pid_after" != "$pid_before" ]]; then
   exit 1
 fi
 
-"$ADB_BIN" exec-out screencap -p > "$OUTPUT_DIR/launch.png"
-if [[ ! -s "$OUTPUT_DIR/launch.png" ]]; then
-  echo "Android emulator screenshot was not produced." >&2
-  exit 1
-fi
+capture_launch_screenshot() {
+  local attempt=1 max_attempts=3 attempt_png attempt_error status
+
+  while (( attempt <= max_attempts )); do
+    attempt_png="$OUTPUT_DIR/launch-attempt-$attempt.png"
+    attempt_error="$OUTPUT_DIR/launch-attempt-$attempt.stderr"
+    rm -f "$attempt_png" "$attempt_error"
+
+    if "$ADB_BIN" exec-out screencap -p > "$attempt_png" 2> "$attempt_error"; then
+      if [[ -s "$attempt_png" ]] && python3 - "$attempt_png" <<'PY'
+import sys
+
+with open(sys.argv[1], "rb") as stream:
+    if stream.read(8) != b"\x89PNG\r\n\x1a\n":
+        raise SystemExit("Screenshot does not contain a valid PNG signature.")
+PY
+      then
+        mv "$attempt_png" "$OUTPUT_DIR/launch.png"
+        echo "Android emulator screenshot captured on attempt $attempt."
+        return 0
+      fi
+
+      echo "Android screenshot attempt $attempt/$max_attempts returned an invalid PNG." >&2
+    else
+      status=$?
+      echo "Android screenshot attempt $attempt/$max_attempts failed (adb exit $status)." >&2
+      if [[ -s "$attempt_error" ]]; then
+        cat "$attempt_error" >&2
+      fi
+    fi
+
+    if (( attempt < max_attempts )); then
+      echo "Retrying final screenshot capture after a short emulator transport wait." >&2
+      sleep 2
+      "$ADB_BIN" devices > "$OUTPUT_DIR/screenshot-adb-devices-$attempt.txt" 2>&1 || true
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  echo "Android emulator screenshot capture failed after $max_attempts attempts." >&2
+  "$ADB_BIN" devices >&2 || true
+  tail -n 80 "$OUTPUT_DIR/emulator.log" >&2 || true
+  return 1
+}
+
+echo "Capturing final Android emulator screenshot."
+capture_launch_screenshot
 
 python3 - "$EXPECTED_ID" "$activity" "$pid_after" "$SYSTEM_IMAGE" "$pixel_launcher_anr_wait_attempts" "$system_anr_wait_attempts" "$OUTPUT_DIR/system-anr-packages-recovered.txt" "$OUTPUT_DIR/system-anr-packages-closed.txt" "$OUTPUT_DIR/system-anr-titles-recovered.txt" "$OUTPUT_DIR/result.json" <<'PY'
 import json
