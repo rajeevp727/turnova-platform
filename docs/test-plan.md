@@ -701,6 +701,12 @@ The automated API tests use the in-memory ride store. Cosmos cross-partition que
 | PLATFORM-HEALTH-002 | Readiness probe calls `/health/ready` in demo/in-memory mode | HTTP 200 with `status: ready`; public response does not disclose the storage mode or database name | API integration | P0 |
 | PLATFORM-HEALTH-003 | Readiness probe calls `/health/ready` in Cosmos mode while the database is unavailable | HTTP 503; readiness does not report healthy when the configured persistent store is unreachable | Cosmos integration/failure injection | P0 |
 
+| PLATFORM-CORS-003 | Configured origin contains a wildcard hostname such as `https://*.turnova.test` | Startup validation rejects the origin before it is added to the CORS policy | Unit |
+| PLATFORM-CORS-004 | Configured origin contains a wildcard character elsewhere in the origin string | Startup validation rejects the origin; no wildcard matching is enabled | Unit |
+| PLATFORM-CORS-005 | Configured origin is an explicit HTTPS origin with no path, user info, query or fragment | Validation accepts the origin | Unit |
+| PLATFORM-CORS-006 | Configured origin uses HTTP | Validation accepts HTTP only when the host environment is Development and rejects it otherwise | Unit |
+| PLATFORM-CORS-007 | Configured origin is blank, malformed, has a URL path, user info, query or fragment | Validation rejects the origin with a generic configuration error | Unit |
+
 `Cors:AllowedOrigins` accepts explicit HTTPS origins; HTTP origins are allowed only in Development. Wildcards, URL paths, credentials and query strings are rejected. An empty allow-list emits no browser CORS permission; native Android/iOS clients do not depend on CORS. Cosmos-mode readiness failure and production origin configuration remain infrastructure-backed validation.
 
 

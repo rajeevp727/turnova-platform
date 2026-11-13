@@ -184,7 +184,7 @@ Authenticate hub connections, scope groups, rate-limit events and protect locati
 - Role- and resource-based authorization for rider, driver, fleet and operations.
 - Rate limiting, input validation, abuse detection and audit logging.
 - Managed secret storage; no secrets in Git.
-- Browser CORS is deny-by-default and uses explicit origins from `Cors:AllowedOrigins`; wildcard origins are rejected. Native Android/iOS clients do not require CORS.
+- Browser CORS is deny-by-default and uses explicit origins from `Cors:AllowedOrigins`; `CorsOriginValidator` rejects any `*` wildcard character before URI validation, along with paths, credentials, queries and fragments. Only HTTPS origins are accepted outside Development; HTTP is allowed only in Development. Native Android/iOS clients do not require CORS.
 - Unhandled API exceptions return generic Problem Details with a traceId; structured error logs contain traceId and exception type only, not request bodies, tokens or exception messages.
 - Minimize location/identity data and obtain appropriate consent.
 - Define retention, deletion, export and incident-response procedures.
