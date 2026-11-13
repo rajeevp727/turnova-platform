@@ -1979,3 +1979,14 @@ Exact code-bearing head 02fbfa9121b62acf5ef8ec20287cc9dc0ea94db5 passed GitHub A
 - Both Android debug and standalone release APKs and both unsigned iOS Simulator builds passed. All four same-run smoke artifacts were downloaded and inspected: Rider Android `14021706924`, Driver Android `14020793191`, Rider iOS `14022022857`, Driver iOS `14022750045`.
 - Android result JSON and screenshots confirm install/launch, stable foreground process, Rider/Driver login-screen text, no stale-session error and no system-UI recovery. iOS result JSON and screenshots confirm install/launch, stable process, role-specific login screen and expected SecureStore-unavailable recovery banner. iOS builds are unsigned simulator artifacts with no Keychain access group; signed-device Keychain validation remains external.
 - These smoke tests verify installation, launch and login-screen presentation only. They do not exercise production API/authentication, live Cosmos, signed-device storage, physical devices or end-to-end ride flows. PR #158 remains unmerged pending a new exact-head CI for this documentation synchronization.
+
+## CI harness regression — Android launch-status pipefail safety (2026-11-13)
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| PLATFORM-NATIVE-ANDROID-001 | Launch-status check under `set -o pipefail` | Run the deterministic Android smoke harness and assert the launch-status check does not pipe `printf` into early-exit `grep -q` | A valid `Status: ok` launch response is accepted without a SIGPIPE/Broken-pipe false failure; invalid launch output still fails the smoke | Python harness + Android emulator smoke | P1 |
+
+- Exact-head CI #1502 exposed a harness false-negative: the Driver Android emulator launched successfully (`Status: ok`, expected activity), but `printf ... | grep -Fq` caused Bash `printf: write error: Broken pipe` under `set -euo pipefail`, and the script incorrectly reported launch failure.
+- The launch check now uses a Bash substring test rather than an early-exit grep pipeline. `scripts/tests/test_android_emulator_smoke.py` contains a regression invariant to prevent reintroducing that unsafe pipeline. The existing end-to-end fake-SDK smoke harness continues to exercise successful launch, process stability and UI checks.
+- Source changes: `2ba1a20ce31baefa65a76a5b1cadb9a2554f8fa0` (script) and `fe193763adca3633e0cc202142f323f0188bf1bf` (test). CI #1502's Driver Android smoke artifact `14024159021` confirms the APK installed and ActivityManager reported `Status: ok`; the failure was the shell pipeline, not an observed app crash.
+- The new source/test head requires fresh exact-head CI. No successful result is inferred from the failed #1502 attempt.
