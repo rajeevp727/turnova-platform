@@ -239,7 +239,7 @@ fi
 
 launch_output="$("$ADB_BIN" shell am start -W -n "$activity" 2>&1 | tr -d '\r')"
 printf '%s\n' "$launch_output" | tee "$OUTPUT_DIR/launch.txt"
-if ! printf '%s\n' "$launch_output" | grep -Fq "Status: ok"; then
+if [[ "$launch_output" != *"Status: ok"* ]]; then
   echo "Android ActivityManager did not report a successful launch." >&2
   exit 1
 fi
