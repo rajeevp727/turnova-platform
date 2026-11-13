@@ -284,7 +284,7 @@ Same-run artifacts were downloaded and inspected:
 - Rider iOS app bundle: 13778820239 — embedded identifier com.turnova.rider.
 - Driver iOS app bundle: 13778236148 — embedded identifier com.turnova.driver.
 
-Both iOS artifacts are unsigned simulator builds without a Keychain access group. These checks do not establish signed-device SecureStore/Keychain persistence, production authentication, physical-device acceptance, signing, hosting, pilot or store readiness. The latest AUTH-02 source/test follow-up (auth form and Rider pickup-cache reset) postdates CI #1159; fresh exact-head CI is required before merge. No production readiness is claimed.
+Both iOS artifacts are unsigned simulator builds without a Keychain access group. These checks do not establish signed-device SecureStore/Keychain persistence, production authentication, physical-device acceptance, signing, hosting, pilot or store readiness. Latest exact-head CI and artifact evidence is recorded below; production readiness is not claimed.
 
 
 ## Exact-head build and smoke evidence — CI #1493 (2026-11-13)
