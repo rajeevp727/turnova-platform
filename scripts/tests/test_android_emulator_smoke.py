@@ -393,7 +393,7 @@ exit 0
             self.assertEqual(
                 reused_existing_image.returncode,
                 0,
-                msg=f"stdout:\\n{reused_existing_image.stdout}\\nstderr:\\n{reused_existing_image.stderr}",
+                msg=f"stdout:\\n{reused_existing_image.stdout}\\nstderr:\n{reused_existing_image.stderr}",
             )
             self.assertIn("pre-existing Android API 35 system image", reused_existing_image.stdout)
             self.assertEqual(int(attempts_file.read_text(encoding="utf-8").strip()), attempts_before_reuse)
