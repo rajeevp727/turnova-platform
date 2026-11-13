@@ -411,3 +411,17 @@ The initial Driver iOS smoke attempt timed out while enumerating available Simul
 - Review state at this checkpoint: PR #158 is marked ready for review; the latest COMMENT-only review covers the exact parent evidence head, and the review-thread list returned zero unresolved threads. This is not an approval or a claim that an independent approval exists. The base is not behind the tested head. Recheck live main/base, exact head, review threads and GitHub merge policy after the next documentation synchronization; merge only with exact-head CI green and no bypass.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). CI build/test evidence does not satisfy the remaining physical-device, live-provider, product-policy or legal acceptance gates. Production readiness is not established.
 - Next sequential engineering: after PR #158 is safely merged, re-read main and continue #18 PLATFORM-01 with explicit CORS wildcard-origin rejection and deterministic startup/configuration tests, then privacy-safe Union audit metrics/ActivitySource tracing and remaining diagnostics/native-publish/audit-path work before #19 RELEASE-01. This documentation update creates a new PR head and requires its own exact-head CI.
+
+
+## Exact-head build and smoke evidence — CI #1523 (2026-11-13)
+
+[CI #1523 / run 43459668928](https://github.com/rajeevp727/turnova-platform/actions/runs/43459668928) passed **12/12 jobs** on PR #158 head `48474830f0c4a2d14733ee738f9109179dd07def` (main/base `b6564c7dc2959883c2910f5b6f13134f7052566f`). Backend **570/570**, shared mobile/auth **179/179**, and deterministic Python harness **47/47** passed. Rider/Driver Expo validation, typechecks, production JavaScript bundles, native non-container .NET API publish, Android debug/release APK builds, unsigned iOS Simulator builds and all four same-run emulator/simulator install-launch smoke jobs passed.
+
+| Smoke artifact | App/platform | Evidence |
+|---|---|---|
+| `14057030887` | Rider Android emulator | ActivityManager `Status: ok`; install/launch passed |
+| `14056906435` | Driver Android emulator | ActivityManager `Status: ok`; install/launch passed |
+| `14059827183` | Rider iOS Simulator | Install/launch passed; login UI observed; expected unsigned SecureStore-unavailable banner |
+| `14058624906` | Driver iOS Simulator | Install/launch passed; login UI observed; expected unsigned SecureStore-unavailable banner |
+
+The tested source head includes the late-provider-fault completion-race correction and its deterministic regression coverage. These results establish CI build/publish and emulator/simulator install-launch evidence only. Unsigned iOS does not establish signed Keychain persistence. Production API/authentication, live Cosmos, physical-device acceptance, signed-store release, end-to-end ride acceptance and production readiness remain unverified. The release-readiness status remains blocked on the external gates above.
