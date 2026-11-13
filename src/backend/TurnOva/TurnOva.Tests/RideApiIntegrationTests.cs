@@ -33,20 +33,41 @@ public sealed class RideApiIntegrationTests
     private const string SigningKey = "turnova-integration-test-signing-key-32-bytes-minimum";
 
     [Fact]
-    public async Task HealthEndpointsExposeLivenessAndCosmosAwareReadiness()
+    public async Task PublicHealthEndpointsExposeOnlyGenericStatusMetadata()
     {
         using var factory = new TurnOvaApiFactory();
         using var client = factory.CreateClient("Rider", "rider-health");
+
+        using var root = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.OK, root.StatusCode);
+        using var rootJson = JsonDocument.Parse(await root.Content.ReadAsStringAsync());
+        Assert.Equal("TurnOva API", rootJson.RootElement.GetProperty("name").GetString());
+        Assert.Equal("v1", rootJson.RootElement.GetProperty("version").GetString());
+        Assert.Equal("Everyone's Turn Matters.", rootJson.RootElement.GetProperty("message").GetString());
+        Assert.Equal(new[] { "name", "version", "message" },
+            rootJson.RootElement.EnumerateObject().Select(property => property.Name));
+
+        using var health = await client.GetAsync("/health");
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        using var healthJson = JsonDocument.Parse(await health.Content.ReadAsStringAsync());
+        Assert.Equal("TurnOva.API", healthJson.RootElement.GetProperty("service").GetString());
+        Assert.Equal("healthy", healthJson.RootElement.GetProperty("status").GetString());
+        Assert.Equal(new[] { "service", "status" },
+            healthJson.RootElement.EnumerateObject().Select(property => property.Name));
 
         using var live = await client.GetAsync("/health/live");
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
 
         using var ready = await client.GetAsync("/health/ready");
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
-        using var json = JsonDocument.Parse(await ready.Content.ReadAsStringAsync());
-        Assert.Equal("ready", json.RootElement.GetProperty("status").GetString());
-        Assert.Equal("demo-in-memory", json.RootElement.GetProperty("storage").GetString());
-        Assert.False(json.RootElement.TryGetProperty("database", out _));
+        using var readyJson = JsonDocument.Parse(await ready.Content.ReadAsStringAsync());
+        Assert.Equal("TurnOva.API", readyJson.RootElement.GetProperty("service").GetString());
+        Assert.Equal("ready", readyJson.RootElement.GetProperty("status").GetString());
+        Assert.Equal(new[] { "service", "status" },
+            readyJson.RootElement.EnumerateObject().Select(property => property.Name));
+        AssertNoInfrastructureMetadata(rootJson.RootElement);
+        AssertNoInfrastructureMetadata(healthJson.RootElement);
+        AssertNoInfrastructureMetadata(readyJson.RootElement);
     }
 
     [Fact]
@@ -64,6 +85,21 @@ public sealed class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
         Assert.Contains("Storage dependency unavailable", body);
         Assert.DoesNotContain("test-only-storage-failure", body);
+        using var problem = JsonDocument.Parse(body);
+        AssertNoInfrastructureMetadata(problem.RootElement);
+    }
+
+    private static void AssertNoInfrastructureMetadata(JsonElement response)
+    {
+        foreach (var property in new[]
+        {
+            "mode", "storage", "database", "environment", "endpoint",
+            "connectionString", "account", "container", "region"
+        })
+        {
+            Assert.False(response.TryGetProperty(property, out _),
+                $"Public health response must not expose '{property}'.");
+        }
     }
 
     [Fact]
