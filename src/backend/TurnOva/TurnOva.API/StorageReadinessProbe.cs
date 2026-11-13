@@ -83,7 +83,7 @@ public sealed class StorageReadinessProbe
 
     private static void ObserveLateProbeFailure(Task? probeTask)
     {
-        if (probeTask is null || probeTask.IsCompleted) return;
+        if (probeTask is null) return;
 
         // A provider may ignore cancellation and fault after the bounded wait has returned.
         // Observe that late fault without logging or exposing provider details.
