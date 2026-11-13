@@ -215,14 +215,14 @@ case "$1" in
     count=$((count + 1))
     if [[ -n "${FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE:-}" ]]; then
       mkdir -p "$(dirname "$FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE")"
-      printf '%s\\n' "$count" > "$FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE"
+      printf '%s\n' "$count" > "$FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE"
     fi
     fail_attempts="${FAKE_SCREENSHOT_FAIL_FINAL_ATTEMPTS:-0}"
     if (( count > 1 && count <= 1 + fail_attempts )); then
       echo "error: device offline during screenshot capture" >&2
       exit 255
     fi
-    printf '\\211PNG\\r\\n\\032\\n'
+    printf '\211PNG\r\n\032\n'
     ;;
   *)
     echo "unexpected adb arguments: $*" >&2
@@ -348,10 +348,10 @@ exit 0
                 screenshot_retry_command, cwd=REPO_ROOT, env=environment,
                 capture_output=True, text=True, timeout=30, check=False,
             )
-            self.assertEqual(screenshot_retry.returncode, 0, msg=f"stdout:\\n{screenshot_retry.stdout}\\nstderr:\\n{screenshot_retry.stderr}")
+            self.assertEqual(screenshot_retry.returncode, 0, msg=f"stdout:\n{screenshot_retry.stdout}\\nstderr:\n{screenshot_retry.stderr}")
             self.assertIn("screenshot attempt 1/3 failed", screenshot_retry.stderr.lower())
             self.assertEqual((screenshot_retry_output / "exec-out-count").read_text(encoding="utf-8").strip(), "3")
-            self.assertTrue((screenshot_retry_output / "launch.png").read_bytes().startswith(b"\\x89PNG\\r\\n\\x1a\\n"))
+            self.assertTrue((screenshot_retry_output / "launch.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
             self.assertTrue((screenshot_retry_output / "result.json").is_file())
 
             # Repeated screenshot transport failures remain a hard failure and include
