@@ -1,6 +1,6 @@
 # TurnOva Rider/Driver release readiness
 
-**Last audited:** 2026-11-10  
+**Last audited:** 2026-11-13  
 **Scope:** Rider and Driver Android/iOS MVP only. Fleet/Ops Phase 2 is excluded.
 
 ## Engineering preflight
@@ -285,3 +285,21 @@ Same-run artifacts were downloaded and inspected:
 - Driver iOS app bundle: 13778236148 — embedded identifier com.turnova.driver.
 
 Both iOS artifacts are unsigned simulator builds without a Keychain access group. These checks do not establish signed-device SecureStore/Keychain persistence, production authentication, physical-device acceptance, signing, hosting, pilot or store readiness. The latest AUTH-02 source/test follow-up (auth form and Rider pickup-cache reset) postdates CI #1159; fresh exact-head CI is required before merge. No production readiness is claimed.
+
+
+## Exact-head build and smoke evidence — CI #1493 (2026-11-13)
+
+The pre-synchronization documentation head `c9695ea97d299db8cedea54600f8befcdab11884` passed [GitHub Actions #1493 / 43384473766](https://github.com/rajeevp727/turnova-platform/actions/runs/43384473766) **12/12 jobs** after retrying only the initial Driver Android emulator smoke job.
+
+| Artifact | App/platform | Verified result |
+|---|---|---|
+| `14018841676` | Rider Android emulator | Standalone release APK installed/launched; stable foreground process; expected login text; no stale-session error or system UI recovery |
+| `14020282957` | Driver Android emulator (targeted retry) | Standalone release APK installed/launched; stable foreground process; expected login text; no stale-session error or system UI recovery |
+| `14019186476` | Rider iOS Simulator | Unsigned app installed/launched; stable process; expected login text; SecureStore-unavailable recovery banner verified |
+| `14019121356` | Driver iOS Simulator | Unsigned app installed/launched; stable process; expected login text; SecureStore-unavailable recovery banner verified |
+
+The initial Driver Android attempt artifact `14018592304` showed successful installation, ActivityManager launch and the expected login screen but exited 255 before writing its final result JSON. Inspection found no Driver fatal exception, ANR or React Native startup exception. The exact failing ADB command is not known; a targeted retry passed. The retry is the accepted smoke evidence for this CI run.
+
+The same run verified backend **570/570**, shared mobile/auth **179/179**, deterministic Python harness **46/46**, Rider/Driver Expo validation and production JS bundles, native non-container API publish, both Android debug and standalone release APKs, and both unsigned iOS Simulator builds.
+
+These artifacts establish CI build and emulator/simulator install/launch/login-screen evidence only. They do not prove production API/authentication, live Cosmos, signed iOS Keychain persistence, production-signed Android AAB/iOS IPA, physical-device acceptance or store approval. The current release-readiness row remains Blocked until those external inputs and acceptance tests are supplied.
