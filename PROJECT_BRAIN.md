@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Main HEAD:** `d4cb3f79ad623e5db516c6d08b34982758b76ad0`. Sole active feature PR [#159](https://github.com/rajeevp727/turnova-platform/pull/159), branch `fix/platform-01-cors-wildcard-validation`. CORS source/test head `397087cff2a8ec27a07b35ad32ac6ed928170766` passed exact-head CI [#1549 / run 43531632281](https://github.com/rajeevp727/turnova-platform/actions/runs/43531632281) **12/12**: backend 585/585, shared mobile/auth 179/179, deterministic Python harness 48/48, Rider/Driver Expo validation, both Android debug/release APKs, both unsigned iOS Simulator builds, native non-container .NET API publish, production JS bundles and all four same-run emulator/simulator smoke jobs. Android RELEASE-SMOKE-023 remains unchanged; the new iOS delayed-foreground case is RELEASE-SMOKE-027. PR #159 is Ready for review; four reviews are COMMENT-only, zero unresolved inline threads, and no approval is claimed. The evidence-document synchronization requires fresh exact-head CI before merge.  
+**Main HEAD:** `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after PR #159 merged with final-head CI #1553 / run 43537688618 passing 12/12. Sole active feature PR [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`, source/test commit `8563ff8e28de25c4121a373aa77e1eb8313d2bb1`; exact-head CI pending. It adds privacy-safe Union audit write metrics/spans and deterministic assignment/transfer/selfie/canonical-recovery tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2037,3 +2037,15 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - No live production CORS origin/load, Cosmos, production auth, signed-device Keychain, physical-device, legal or end-to-end ride validation is claimed.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation score. Production readiness is not established.
 - Next after PR #159 safely merges: re-read main and implement privacy-safe Union audit metrics plus `ActivitySource` spans and deterministic `MeterListener`/`ActivityListener` tests; then continue remaining PLATFORM-01 diagnostics, native-publish and audit-path work before #19 RELEASE-01.
+
+
+## Latest sequential handoff — PR #160 Union audit observability (2026-11-14)
+
+- PR #159 merged to main at `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after exact final-head CI #1553 / run 43537688618 passed 12/12. PR #158 remains merged at `d4cb3f79ad623e5db516c6d08b34982758b76ad0`.
+- Sole active feature PR: [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`. Source/test commit: `8563ff8e28de25c4121a373aa77e1eb8313d2bb1`.
+- `TurnOvaDiagnostics` now exposes a Union audit write counter and activity. Event types are allow-listed and normalized; outcomes are success, verified canonical conflict recovery or failure. Tags contain only normalized event category and outcome.
+- `SaveUnionAuditAsync` instrumentation wraps the existing in-memory/Cosmos create-if-absent and canonical-recovery paths. It does not change persistence, audit identity, authorization or recovery semantics.
+- Deterministic integration coverage exercises initial assignment, transfer, Union selfie approval/rejection, duplicate canonical conflict recovery and a mismatched canonical actor that must fail closed. Unknown metric values collapse to other/failure.
+- Exact-head CI is pending. Do not claim the new tests pass until CI completes. No live Cosmos validation or telemetry exporter is claimed.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). Engineering implementation/evidence is substantial; production readiness is not established.
+- Next: finish exact-head CI and review PR #160, synchronize final documentation and rerun exact-head CI, merge only if GitHub permits without bypass; then re-read main and continue remaining PLATFORM-01 diagnostics/native-publish/audit-path work before RELEASE-01.
