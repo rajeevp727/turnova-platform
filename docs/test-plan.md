@@ -2249,12 +2249,16 @@ PR #163 exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [GitHub Act
 | RELEASE-PREFLIGHT-007 | CLI records invalid metadata and exits non-zero | Run the real CLI with a leading-zero app version and an output path | Failure report is written, `app-version` is present, and exit code is one | Node CLI integration | P1 |
 | RELEASE-PREFLIGHT-008 | CLI rejects missing, duplicate and unknown arguments | Exercise absent app directory, missing values, an option used as another option's value, duplicate flags and unknown flags | CLI emits a deterministic diagnostic and exits non-zero before reading app files | Node CLI integration | P1 |
 
-### RELEASE-01 — release preflight source/test execution evidence (2026-11-14)
+### RELEASE-01 — final exact-head CI evidence (PR #164 / CI #1618, 2026-11-14)
 
-PR #164 (`test/release-preflight-strict-validation`) adds strict SemVer 2.0.0, strict EAS CLI `>= MAJOR.MINOR.PATCH` (16+), development/preview/production profile boundary, production API URL credential/query/fragment/whitespace, reserved IPv4/IPv6/internal-hostname, and real CLI JSON/exit/argument regression coverage (eight new Node tests). On source/test head `662ebfd4b706b00bdec834da9910f0fb47a65772`, CI #1615 / run 43593467798 observed backend 594/594, shared Node tests 187/187, Python harness 48/48, and Rider/Driver Expo preflight/validation passed. Four native Android/iOS builds were still running when this evidence was synchronized; downstream smoke jobs had not started. No full 12-job pass is claimed. Both actual Rider and Driver release preflight outputs report engineering checks passed and seven external release gates; production readiness remains blocked.
+PR #164 head `467400c65b99094b6714e9b23846f4507f41b438` passed [GitHub Actions CI #1618 / run 43594209819](https://github.com/rajeevp727/turnova-platform/actions/runs/43594209819) with **12/12 jobs successful**.
 
-- The shared Node suite reported **187/187 passed**, including all eight new release-preflight tests. The deterministic Python harness reported **48/48 passed**; backend Release tests reported **594/594 passed**, 0 failed and 0 skipped.
-- Actual Rider and Driver Expo validation each reported `engineering checks passed; 7 external release gates; production readiness blocked`.
-- Node 22 targeted SemVer/EAS boundary expressions were also executed independently; this was a focused expression check, not a replacement for the repository suite.
-- The native builds and downstream smoke jobs remained pending at the time of this documentation update. The final documentation sync is on PR #164; final documentation-head CI on that commit is required before merge.
-- No signing credential, production API URL, EAS project, paid provider, deployment or store submission is invented. The seven external release gates remain explicit.
+- Backend Release build/tests: **594/594 passed**, 0 failed, 0 skipped.
+- Shared mobile/auth Node tests: **187/187 passed**, including all eight RELEASE-PREFLIGHT-001..008 cases.
+- Deterministic Python CI harness: **48/48 passed**.
+- Rider and Driver Expo validation, typecheck, Metro shared-module visibility, production Android/iOS JavaScript bundles and release preflight passed.
+- Rider/Driver Android debug and standalone release APK builds passed; both unsigned iOS Simulator app builds passed; native non-container .NET API Release publish and publish-artifact verifier passed.
+- Rider/Driver Android emulator install/launch smoke and Rider/Driver iOS Simulator install/launch smoke all passed. Android screenshots were captured on attempt 1. Both unsigned iOS apps reached their role-specific login surfaces and verified the SecureStore-unavailable banner; signed-device Keychain success is not claimed.
+- Native API publish artifact: `14113468588`. Same-run smoke artifacts: Rider Android `14114280288`, Driver Android `14113828820`, Rider iOS Simulator `14114755885`, Driver iOS Simulator `14114186408`. Other native build, production JS bundle, release-readiness and dependency-audit artifacts are retained on the same workflow run.
+- Both app release preflight reports continue to identify seven external gates. No signed Android AAB, signed iOS IPA, production API endpoint, EAS project linkage, signing credential or store submission is claimed.
+- This CI evidence validates deterministic code/build/emulator/simulator workflows only. It does not establish production authentication, live Cosmos, signed-device Keychain, physical-device pilot acceptance, production API hosting or store approval. RELEASE-01 remains Blocked and strict acceptance remains 0/19 (15 In Progress, 4 Blocked).
