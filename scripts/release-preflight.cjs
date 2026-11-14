@@ -267,6 +267,27 @@ function parseArguments(argv) {
   return options;
 }
 
+function assertOutputDoesNotOverwriteAppConfig(outputPath, appDirectory) {
+  const resolvedOutput = path.resolve(outputPath);
+  let realOutput = resolvedOutput;
+  try { realOutput = fs.realpathSync(resolvedOutput); } catch { /* A new output file has no real path yet. */ }
+
+  for (const fileName of ["app.json", "eas.json"]) {
+    const configPath = path.resolve(appDirectory, fileName);
+    const realConfigPath = fs.realpathSync(configPath);
+    let sameFile = false;
+    try {
+      const outputStat = fs.statSync(resolvedOutput);
+      const configStat = fs.statSync(configPath);
+      sameFile = outputStat.dev === configStat.dev && outputStat.ino === configStat.ino;
+    } catch { /* A non-existing output path cannot alias an existing config file. */ }
+
+    if (resolvedOutput === configPath || realOutput === realConfigPath || sameFile) {
+      throw new Error("--output must not overwrite app.json or eas.json.");
+    }
+  }
+}
+
 function main() {
   try {
     const options = parseArguments(process.argv.slice(2));
@@ -286,6 +307,7 @@ function main() {
       report.engineeringChecks.status + "; " + report.externalGates.length +
       " external release gates; production readiness " + report.productionReadiness + ".";
     if (options.output) {
+      assertOutputDoesNotOverwriteAppConfig(options.output, appDirectory);
       fs.writeFileSync(path.resolve(options.output), output, { encoding: "utf8", flag: "w" });
       process.stdout.write(summary + "\n");
     } else {
