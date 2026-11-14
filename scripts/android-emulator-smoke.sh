@@ -244,8 +244,54 @@ if [[ "$launch_output" != *"Status: ok"* ]]; then
   exit 1
 fi
 
+read_target_app_pid() {
+  local attempt=1 max_attempts=3 pid_output status stderr_file reconnect_file wait_file
+
+  while (( attempt <= max_attempts )); do
+    stderr_file="$OUTPUT_DIR/pidof-attempt-$attempt.stderr"
+    if pid_output="$("$ADB_BIN" shell pidof "$EXPECTED_ID" 2>"$stderr_file")"; then
+      printf '%s\n' "$pid_output" | tr -d '\r' | awk '{ print $1 }'
+      return 0
+    else
+      status=$?
+    fi
+
+    # Android pidof returns 1 when the process is absent. Preserve the caller's
+    # explicit process-stability diagnostic instead of treating that as transport.
+    if [[ "$status" -eq 1 ]]; then
+      printf '\n'
+      return 0
+    fi
+
+    if [[ "$status" -ne 255 ]]; then
+      echo "Android emulator PID probe failed with adb exit $status." >&2
+      cat "$stderr_file" >&2 || true
+      return "$status"
+    fi
+
+    echo "Android PID probe encountered transient ADB exit 255 (attempt $attempt/$max_attempts); waiting for device recovery." >&2
+    reconnect_file="$OUTPUT_DIR/pidof-reconnect-$attempt.txt"
+    timeout 10 "$ADB_BIN" reconnect offline > "$reconnect_file" 2>&1 || true
+
+    wait_file="$OUTPUT_DIR/pidof-wait-$attempt.txt"
+    if ! timeout 30 "$ADB_BIN" wait-for-device > "$wait_file" 2>&1; then
+      echo "Android emulator did not return to device state after the PID probe." >&2
+      cat "$stderr_file" "$reconnect_file" "$wait_file" >&2 || true
+      return 1
+    fi
+
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+
+  echo "Android emulator PID probe failed after $max_attempts ADB transport retries." >&2
+  "$ADB_BIN" devices > "$OUTPUT_DIR/pidof-adb-devices.txt" 2>&1 || true
+  cat "$OUTPUT_DIR/pidof-adb-devices.txt" >&2 || true
+  return 1
+}
+
 sleep 8
-pid_before="$("$ADB_BIN" shell pidof "$EXPECTED_ID" 2>/dev/null | tr -d '\r' | awk '{ print $1 }')"
+pid_before="$(read_target_app_pid)"
 if [[ -z "$pid_before" ]]; then
   echo "App process exited after launch: $EXPECTED_ID" >&2
   exit 1
@@ -335,7 +381,7 @@ PY
 
 assert_target_app_foreground() {
   local current_pid resumed_line
-  current_pid="$("$ADB_BIN" shell pidof "$EXPECTED_ID" 2>/dev/null | tr -d '\r' | awk '{ print $1 }')"
+  current_pid="$(read_target_app_pid)"
   if [[ -z "$current_pid" || "$current_pid" != "$pid_before" ]]; then
     echo "Target app process is not stable during Android system-UI recovery (before=$pid_before, after=$current_pid)." >&2
     exit 1
@@ -478,7 +524,7 @@ done
 capture_app_runtime_logcat
 
 sleep 5
-pid_after="$("$ADB_BIN" shell pidof "$EXPECTED_ID" 2>/dev/null | tr -d '\r' | awk '{ print $1 }')"
+pid_after="$(read_target_app_pid)"
 if [[ -z "$pid_after" || "$pid_after" != "$pid_before" ]]; then
   echo "App process did not remain stable after startup (before=$pid_before, after=$pid_after)." >&2
   exit 1
