@@ -281,14 +281,17 @@ function main() {
       ...validateReleaseConfig({ appJson, easJson, appDirectory })
     };
     const output = JSON.stringify(report, null, 2) + "\n";
-    if (options.output) fs.writeFileSync(path.resolve(options.output), output, { encoding: "utf8", flag: "w" });
-    else process.stdout.write(output);
-
-    console.log(
+    const summary =
       "Release preflight " + report.app.slug + ": engineering checks " +
       report.engineeringChecks.status + "; " + report.externalGates.length +
-      " external release gates; production readiness " + report.productionReadiness + "."
-    );
+      " external release gates; production readiness " + report.productionReadiness + ".";
+    if (options.output) {
+      fs.writeFileSync(path.resolve(options.output), output, { encoding: "utf8", flag: "w" });
+      process.stdout.write(summary + "\n");
+    } else {
+      process.stdout.write(output);
+      process.stderr.write(summary + "\n");
+    }
     if (report.engineeringChecks.status !== "passed") process.exitCode = 1;
   } catch (error) {
     console.error(error instanceof Error ? error.message : "Release preflight failed.");
