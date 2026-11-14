@@ -18,6 +18,9 @@ public static class TurnOvaDiagnostics
     private static readonly Counter<long> RideAuditWriteAttempts =
         Meter.CreateCounter<long>("turnova.ride.audit.write_attempts", "{attempt}");
 
+    private static readonly Counter<long> UnionAuditWriteAttempts =
+        Meter.CreateCounter<long>("turnova.union.audit.write_attempts", "{attempt}");
+
     private static readonly Counter<long> StorageReadinessChecks =
         Meter.CreateCounter<long>("turnova.storage.readiness.checks", "{check}");
 
@@ -29,6 +32,33 @@ public static class TurnOvaDiagnostics
         var activity = ActivitySource.StartActivity("ride.audit.write");
         activity?.SetTag("turnova.audit.event_type", NormalizeEventType(eventType));
         return activity;
+    }
+
+    public static Activity? StartUnionAuditWrite(string? eventType)
+    {
+        try
+        {
+            var activity = ActivitySource.StartActivity("union.audit.write");
+            activity?.SetTag("turnova.union.audit.event_type", NormalizeUnionAuditEventType(eventType));
+            return activity;
+        }
+        catch
+        {
+            // Optional telemetry must never block the authoritative Union audit write.
+            return null;
+        }
+    }
+
+    public static void StopUnionAuditWrite(Activity? activity)
+    {
+        try
+        {
+            activity?.Dispose();
+        }
+        catch
+        {
+            // A listener failure must not turn a persisted audit event into an API failure.
+        }
     }
 
     public static Activity? StartStorageReadinessCheck() =>
@@ -46,6 +76,27 @@ public static class TurnOvaDiagnostics
             1,
             new KeyValuePair<string, object?>("event_type", NormalizeEventType(eventType)),
             new KeyValuePair<string, object?>("outcome", safeOutcome));
+    }
+
+    public static void RecordUnionAuditWrite(string? eventType, string outcome)
+    {
+        var safeOutcome = outcome switch
+        {
+            "success" => "success",
+            "conflict" => "conflict",
+            _ => "failure"
+        };
+        try
+        {
+            UnionAuditWriteAttempts.Add(
+                1,
+                new KeyValuePair<string, object?>("event_type", NormalizeUnionAuditEventType(eventType)),
+                new KeyValuePair<string, object?>("outcome", safeOutcome));
+        }
+        catch
+        {
+            // Metrics are best-effort and must not alter audit persistence semantics.
+        }
     }
 
     public static void RecordStorageReadiness(string outcome, TimeSpan elapsed)
@@ -69,6 +120,15 @@ public static class TurnOvaDiagnostics
         "AgreementPartyConfirmed" => "agreement_party_confirmed",
         "RideStatusChanged" => "ride_status_changed",
         "PaymentReportedUnverified" => "payment_reported_unverified",
+        _ => "other"
+    };
+
+    private static string NormalizeUnionAuditEventType(string? eventType) => eventType switch
+    {
+        "Assigned" => "assigned",
+        "Transferred" => "transferred",
+        "SelfieApprovedByUnion" => "selfie_approved",
+        "SelfieRejectedByUnion" or "SelfieRejectedByOperations" => "selfie_rejected",
         _ => "other"
     };
 }
