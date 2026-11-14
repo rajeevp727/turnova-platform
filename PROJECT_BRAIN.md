@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Main HEAD:** `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0`. Sole active feature PR [#161](https://github.com/rajeevp727/turnova-platform/pull/161), branch `fix/platform-01-telemetry-listener-isolation`, source/test head `8496b27f8925ab0ed88889eb6d286304f3177a50`; exact-head CI pending. PR #160 Union audit observability merged at `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0` after CI #1583 passed 12/12 (backend 590/590, shared 179/179, Python 48/48, native builds/publish and four same-run smoke jobs). Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0`. Sole active feature PR [#161](https://github.com/rajeevp727/turnova-platform/pull/161), branch `fix/platform-01-telemetry-listener-isolation`, corrected source/test head `e5f865e0da32185e41b3d9f848d9e48c6a96cd1d`; fresh exact-head CI pending. The first CI found a missing `System.Collections.Concurrent` import in the new integration test; corrected in this commit. PR #160 Union audit observability merged at `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0` after CI #1583 passed 12/12 (backend 590/590, shared 179/179, Python 48/48, native builds/publish and four same-run smoke jobs). Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2090,4 +2090,12 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - PR #160 merged at `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0` after exact-head CI #1583 / run 43554962928 passed 12/12. Backend 590/590, shared mobile/auth 179/179, deterministic harness 48/48, native Android/iOS builds and four emulator/simulator smoke jobs passed. Unsigned iOS simulator evidence does not establish signed-device Keychain or physical-device acceptance.
 - Sole active PR #161: `fix/platform-01-telemetry-listener-isolation`, current source/test head `8496b27f8925ab0ed88889eb6d286304f3177a50`. The increment makes ride-audit and storage-readiness telemetry strictly best-effort, preserving authoritative ride persistence and original readiness exception classification when ActivitySource/MeterListener callbacks throw.
 - Deterministic tests added: RIDE-OBS-001/002 and STORAGE-OBS-001/002. Exact-head CI is pending; do not claim results until it completes.
+- Next: finish PR #161 CI/review/merge, re-read main, then continue remaining PLATFORM-01 native-publish/audit-path reliability work before RELEASE-01. Correct stale README product wording in a separate documentation-focused increment.
+
+
+## Latest engineering handoff — PR #161 corrected source/test head (2026-11-14)
+
+- PR #160 merged at `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0` after exact-head CI #1583 / run 43554962928 passed 12/12. Backend 590/590, shared mobile/auth 179/179, deterministic harness 48/48, Rider/Driver Expo validation, native Android/iOS builds, native non-container API publish and four same-run smoke jobs passed. Unsigned iOS simulator evidence does not establish signed-device Keychain or physical-device acceptance.
+- Sole active PR #161: `fix/platform-01-telemetry-listener-isolation`, corrected source/test head `e5f865e0da32185e41b3d9f848d9e48c6a96cd1d`. Initial CI #43559532134 exposed a missing `System.Collections.Concurrent` import in the new integration test; the import is corrected. Fresh exact-head CI is pending.
+- The increment makes ride-audit and storage-readiness telemetry strictly best-effort, preserving authoritative ride persistence and original readiness exception classification when ActivitySource/MeterListener callbacks throw. Deterministic tests RIDE-OBS-001/002 and STORAGE-OBS-001/002 are added.
 - Next: finish PR #161 CI/review/merge, re-read main, then continue remaining PLATFORM-01 native-publish/audit-path reliability work before RELEASE-01. Correct stale README product wording in a separate documentation-focused increment.
