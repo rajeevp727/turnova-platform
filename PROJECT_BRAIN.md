@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Main HEAD:** `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after PR #159 merged with final-head CI #1553 / run 43537688618 passing 12/12. Sole active feature PR [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`, source/test commit `8fa32ee64f9550eaa73f7d1c529aef33d83223cb`; exact-head CI pending. It adds privacy-safe Union audit write metrics/spans and deterministic assignment/transfer/selfie/canonical-recovery tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after PR #159 merged with final-head CI #1553 / run 43537688618 passing 12/12. Sole active feature PR [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`, source/test commit `8fa32ee64f9550eaa73f7d1c529aef33d83223cb`; final exact-head CI #1564 / run 43545249499 running on `ad04fd7d62512b989a22a096fa50bc2956f24cd1`. It adds privacy-safe Union audit write metrics/spans and deterministic assignment/transfer/selfie/canonical-recovery tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2045,7 +2045,7 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - Sole active feature PR: [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`. Source/test commit: `8fa32ee64f9550eaa73f7d1c529aef33d83223cb`.
 - `TurnOvaDiagnostics` now exposes a Union audit write counter and activity. Event types are allow-listed and normalized; outcomes are success, verified canonical conflict recovery or failure. Tags contain only normalized event category and outcome.
 - `SaveUnionAuditAsync` instrumentation wraps the existing in-memory/Cosmos create-if-absent and canonical-recovery paths. It does not change persistence, audit identity, authorization or recovery semantics.
-- Deterministic integration coverage exercises initial assignment, transfer, Union selfie approval/rejection, duplicate canonical conflict recovery and a mismatched canonical actor that must fail closed. Unknown metric values collapse to other/failure.
-- Exact-head CI is pending. Do not claim the new tests pass until CI completes. No live Cosmos validation or telemetry exporter is claimed.
+- Deterministic integration coverage exercises initial assignment, transfer, Union selfie approval/rejection, duplicate canonical conflict recovery and a mismatched canonical actor that must fail closed. Unknown metric values collapse to other/failure; telemetry listener failures are isolated from audit persistence.
+- Final exact-head CI #1564 / run 43545249499 is running. Do not claim the new tests pass until CI completes. No live Cosmos validation or telemetry exporter is claimed.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). Engineering implementation/evidence is substantial; production readiness is not established.
 - Next: finish exact-head CI and review PR #160, synchronize final documentation and rerun exact-head CI, merge only if GitHub permits without bypass; then re-read main and continue remaining PLATFORM-01 diagnostics/native-publish/audit-path work before RELEASE-01.
