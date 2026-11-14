@@ -3,10 +3,9 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-14  
-**Repository:** https://github.com/rajeevp727/turnova-platform  
+**Last verified:** 2026-11-14
+**Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `51b4dffcc5834e77a84a51c4505a68f1db1c49b8`. PR #161 ride-audit/storage-readiness telemetry listener isolation merged after final documentation-head [CI #1592 / run 43568925573](https://github.com/rajeevp727/turnova-platform/actions/runs/43568925573) passed 12/12 (backend 594/594, shared 179/179, harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native non-container API publish and four smoke jobs). No active feature PR remains. Strict acceptance is 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
-**Repository:** https://github.com/rajeevp727/turnova-platform  
 **Main HEAD:** `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0`. Sole active feature PR [#161](https://github.com/rajeevp727/turnova-platform/pull/161), branch `fix/platform-01-telemetry-listener-isolation`, source/test head `e625693c697c3903639c1135dd66075895643926`; [CI #1589 / run 43564291551](https://github.com/rajeevp727/turnova-platform/actions/runs/43564291551) passed 12/12 (backend 594/594, shared 179/179, harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native non-container API publish and four smoke jobs). Documentation synchronization now requires a new exact-head CI. PR #160 Union audit observability merged at `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0`. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
