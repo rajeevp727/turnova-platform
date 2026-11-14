@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `a40007dcfc3e36f96f2f81e4a69b1ecdaa32cf78`. PR #162 Cab-only documentation alignment is merged after exact-head CI #1604 / run 43578934493 passed 12/12. Sole active PR #163 (`fix/platform-01-native-publish-verifier`) adds non-empty API publish metadata/native asset checks and recursive forbidden-font rejection; local Bash fixtures passed one valid and 11 negative cases, with exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `a40007dcfc3e36f96f2f81e4a69b1ecdaa32cf78`. PR #162 Cab-only documentation alignment is merged after CI #1604 / run 43578934493 passed 12/12. Sole active PR #163 (`fix/platform-01-native-publish-verifier`) exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [CI #1608 / run 43583820733](https://github.com/rajeevp727/turnova-platform/actions/runs/43583820733) 12/12: backend 594/594, shared mobile/auth 179/179, Python harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native API publish and four same-run smoke jobs. The native publish verifier passed one valid plus 11 negative fixtures and validated the actual 43,111,979-byte Linux x64 publish artifact. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2147,3 +2147,15 @@ PRD.md §11 cost guidance was aligned with the explicit no-payment-provider MVP 
 - The deterministic fixture harness verifies one valid artifact and 11 negative cases using exact diagnostic assertions. Local Bash fixture run passed all 12 cases; exact-head GitHub Actions is pending.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established.
 - Next: finish evidence docs, open/review the focused publish-verifier PR, run exact-head CI and merge only if GitHub permits without bypass. Then re-read main and proceed to RELEASE-01 release-preflight deterministic tests.
+
+
+## Latest exact-head handoff — PR #163 / CI #1608 (2026-11-14)
+
+- Main/base: `a40007dcfc3e36f96f2f81e4a69b1ecdaa32cf78`. Sole active PR #163, branch `fix/platform-01-native-publish-verifier`, exact tested head `77cf39ff10268901e6a2229f3b65f21fdce34bb3`; [CI #1608 / run 43583820733](https://github.com/rajeevp727/turnova-platform/actions/runs/43583820733) passed **12/12 jobs**.
+- Backend Release build/tests **594/594**, 0 failed/0 skipped; shared mobile/auth **179/179**; Python CI harness **48/48**. Rider/Driver Expo validation, Android debug/release APKs, unsigned iOS Simulator builds, native non-container .NET API publish and all four same-run smoke jobs passed.
+- Native publish verifier requires non-empty API assembly, `.deps.json`, `.runtimeconfig.json`, SkiaSharp and HarfBuzz libraries; recursively rejects `PdfSharp.WPFonts.dll`; retains the Linux x64 runtime allow-list and 120 MiB cap. Fixture suite passed one valid and 11 negative cases with exact diagnostic assertions.
+- Actual CI publish directory was 43,111,979 bytes; required metadata/native assets were present and non-empty; forbidden font assembly was absent. Publish artifact `14109034542`.
+- Smoke artifacts: Rider Android `14110196137`, Driver Android `14109384830`, Rider iOS Simulator `14109792158`, Driver iOS Simulator `14109599886`. Android install/launch/screenshots passed on attempt 1. Unsigned iOS apps reached role-specific login surfaces and verified SecureStore-unavailable banners; this does not establish signed-device Keychain or physical-device acceptance.
+- PR #163 has COMMENT-only review and zero unresolved inline threads. Do not self-approve or bypass. Evidence documentation now requires a fresh exact-head CI before ready/merge.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. External gates remain live Cosmos ETag/partition/multi-instance/restart/retention, production auth/UnionManager identity, product-approved dispatch radius/zones/location freshness, maps/realtime, private documents/scanning/consent/retention, support/reconciliation policies, Union legal terms, telemetry export/alerts, signed Android/iOS releases, physical-device acceptance and production hosting.
+- Next after PR #163 merges: re-read main and continue #19 RELEASE-01 deterministic release-preflight regression tests (semver, EAS CLI/build-profile boundaries, URL credentials/fragments, reserved IPv4/IPv6 and internal-host variants, CLI reporting). Keep signing/store/provider/physical-device gates external; no Docker/container builds or deployments.
