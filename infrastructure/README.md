@@ -60,7 +60,8 @@ The MVP UI consists of native Expo Android/iOS applications, not browser SPAs. S
 - TriSend auth: `<TRISEND_AUTH_BASE_URL>` and matching issuer/audience/signing key.
 - Maps/geocoding: `<MAPS_PROVIDER>` / `<MAPS_API_KEY>` (restricted platform keys only).
 - Push notifications: `<PUSH_PROVIDER>` / credentials stored server-side.
-- Payments: `<PAYMENT_PROVIDER>` / sandbox credentials first; provider selection and legal/commercial onboarding remain explicit owner decisions.
+- Call/Chat: provider placeholders only if Product approves these channels for the MVP; keep credentials server-side.
+- Direct payments: no payment provider is required or permitted for this MVP. The Rider pays the Driver directly; TurnOva records only the Driver-reported/unverified amount and signed reconciliation delta. Do not configure a gateway, escrow or in-app collection.
 
 ## Post-coding infrastructure gates
 
@@ -68,4 +69,4 @@ The MVP UI consists of native Expo Android/iOS applications, not browser SPAs. S
 2. Provision Cosmos and confirm migration/partition/index behaviour.
 3. Configure Expo EAS project/build credentials and app signing.
 4. Run Rider/Driver builds and test on physical Android and iOS devices.
-5. Configure only the external providers required by the MVP and run their sandbox checks.
+5. Validate only the external providers approved for the MVP (authentication, maps/routing, and any approved call/chat/push/realtime integration). No payment provider, gateway or escrow is part of the MVP.
