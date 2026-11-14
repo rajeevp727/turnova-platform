@@ -1,10 +1,13 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-14; main HEAD `51b4dffcc5834e77a84a51c4505a68f1db1c49b8`. Sole active PR #162 (`docs/cab-mvp-readme-alignment`) exact head `378b47c0aa13c3bcff5d48a149661abeecfe8e11`; [CI #1601 / run 43574604361](https://github.com/rajeevp727/turnova-platform/actions/runs/43574604361) passed **12/12 jobs**: backend **594/594**, shared mobile/auth **179/179**, deterministic Python harness **48/48**, Rider/Driver Expo validation, Android debug/release APKs, unsigned iOS Simulator builds, native non-container .NET API publish and all four same-run emulator/simulator smoke jobs. Native API publish verifier fixture tests passed; published Linux-x64 framework-dependent artifact was 43,111,967 bytes with SkiaSharp/HarfBuzz assets present. This evidence is for `378b47c0aa13c3bcff5d48a149661abeecfe8e11`; this documentation synchronization creates a new PR head and requires fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last updated:** 2026-11-14; main HEAD `a40007dcfc3e36f96f2f81e4a69b1ecdaa32cf78`. PR #162 merged after exact-head CI #1604 / run 43578934493 passed 12/12. Sole active PR #163 (`fix/platform-01-native-publish-verifier`) hardens native API publish artifact validation; local Bash fixtures passed one valid and 11 negative cases. Exact-head CI is pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
 
 ## 1. Current step
 
-**Current sequential engineering item: #18 PLATFORM-01 —** PR #161 merged at `51b4dffcc5834e77a84a51c4505a68f1db1c49b8`; ride-audit and storage-readiness ActivitySource/MeterListener failure isolation passed RIDE-OBS-001/002 and STORAGE-OBS-001/002 in backend 594/594. Sole active PR #162 is a documentation-only Cab MVP scope correction; exact head `378b47c0aa13c3bcff5d48a149661abeecfe8e11` passed CI #1601 12/12. The README, PRD cost guidance and infrastructure placeholders now align with Cab-only Rider-selected discovery, direct negotiation/reconciliation, Union eligibility and no payment provider. No runtime behavior or historical queue records changed. After #162 merges, continue native-publish verifier hardening and then RELEASE-01 signing-independent preflight tests.
+**Current sequential engineering item: #18 PLATFORM-01 —** PR #162 merged at `a40007dcfc3e36f96f2f81e4a69b1ecdaa32cf78`, aligning README/PRD/infrastructure guidance with the Cab-only, Union-connected, Rider-selected and direct-payment MVP. Sole active PR #163 adds required non-empty .NET publish metadata/native libraries and recursive forbidden-font rejection, with exact-message deterministic Bash fixtures. Local fixture run passed; exact-head CI is pending. After safe merge, continue #19 RELEASE-01 release-preflight deterministic tests.
+
 
 ## 2. Overall MVP completion
 
