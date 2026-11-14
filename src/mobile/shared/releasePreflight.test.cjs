@@ -409,7 +409,7 @@ test("release preflight CLI refuses output paths that alias app configuration", 
     const result = runReleasePreflightCli(["--app-dir", appDirectory, "--output", outputPath]);
     assert.equal(result.status, 1, outputPath);
     assert.equal(result.stdout, "");
-    assert.equal(result.stderr, "--output must not overwrite app.json or eas.json.\\n");
+    assert.equal(result.stderr, "--output must not overwrite app.json or eas.json.\n");
     assert.deepEqual(fs.readFileSync(appJsonPath), originalAppJson);
     assert.deepEqual(fs.readFileSync(easJsonPath), originalEasJson);
   }
