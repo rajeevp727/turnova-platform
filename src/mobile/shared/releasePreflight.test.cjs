@@ -225,7 +225,7 @@ test("Expo app version enforces SemVer 2.0.0 core and identifier rules", () => {
 
   const invalidVersions = [
     "01.2.3", "1.02.3", "1.2.03", "1.2.3-01", "1.2.3-00",
-    "1.2.3-alpha..1", "1.2.3+build..1", "1.2.3-", "1.2.3+", "1.2.3\n"
+    "1.2.3-alpha..1", "1.2.3+build..1", "1.2.3-", "1.2.3+", "1.2.3\n", "1.2.3\u2028", "1.2.3\u2029"
   ];
   for (const version of invalidVersions) {
     const report = validateReleaseConfig(fixture({ appJson: { version } }));
@@ -241,7 +241,7 @@ test("EAS CLI minimum accepts only a strict >= SemVer range at version 16 or new
 
   for (const version of [
     ">= 15.9.9", ">= 16", ">= 16.0", ">= 016.0.0",
-    ">= 16.0.0-beta.1", ">= 16.0.0junk", ">= 16.0.0\n", ">= 16.0.0 || >= 17.0.0", "^16.0.0"
+    ">= 16.0.0-beta.1", ">= 16.0.0junk", ">= 16.0.0\n", ">= 16.0.0\u2028", ">= 16.0.0\u2029", ">= 16.0.0 || >= 17.0.0", "^16.0.0"
   ]) {
     const report = validateReleaseConfig(fixture({ easJson: { cli: { version } } }));
     assert.ok(report.engineeringChecks.errors.some(item => item.id === "eas-cli-version"), version);
