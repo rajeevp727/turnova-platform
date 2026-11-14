@@ -123,7 +123,7 @@ case "$1" in
     echo "device ready"
     ;;
   reconnect)
-    printf 'reconnect %s\\n' "$*" >> "${FAKE_ADB_RECONNECT_LOG:-/dev/null}"
+    printf 'reconnect %s\n' "$*" >> "${FAKE_ADB_RECONNECT_LOG:-/dev/null}"
     ;;
   devices)
     printf 'List of devices attached\nemulator-5554 device\n'
@@ -202,7 +202,7 @@ case "$1" in
         count=$((count + 1))
         if [[ -n "$count_file" ]]; then
           mkdir -p "$(dirname "$count_file")"
-          printf '%s\\n' "$count" > "$count_file"
+          printf '%s\n' "$count" > "$count_file"
         fi
         if [[ "${FAKE_PIDOF_ALWAYS_FAIL:-0}" == "1" || "$count" == "${FAKE_PIDOF_FAIL_ON_CALL:-}" ]]; then
           echo "error: device offline" >&2
@@ -736,7 +736,7 @@ exit 0
             )
             self.assertEqual(
                 transient_pidof.returncode, 0,
-                msg=f"stdout:\\n{transient_pidof.stdout}\\nstderr:\\n{transient_pidof.stderr}",
+                msg=f"stdout:\n{transient_pidof.stdout}\nstderr:\n{transient_pidof.stderr}",
             )
             self.assertIn("transient ADB exit 255", transient_pidof.stderr)
             self.assertEqual((transient_output / "pidof-count").read_text(encoding="utf-8").strip(), "4")
