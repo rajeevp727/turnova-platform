@@ -4,8 +4,9 @@
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
 **Last verified:** 2026-11-15
+**Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) source/test head `35687a394c9a89dd0225be79b66a5be25389f149` passed CI #1643 12/12; exact documentation head `a3d16f36945ae3643c0ca6d1aaee6f27db14b50c` passed [CI #1651 / run 43630690831](https://github.com/rajeevp727/turnova-platform/actions/runs/43630690831) 12/12: backend 594/594, shared Node 189/189, Python 48/48, Rider/Driver Expo, four native builds, native API publish and four same-run smoke jobs. The current evidence-only documentation commit must pass its own exact-head CI before PR readiness/merge. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
-**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) source/test head `35687a394c9a89dd0225be79b66a5be25389f149` passed [CI #1643 / run 43623967660](https://github.com/rajeevp727/turnova-platform/actions/runs/43623967660) 12/12: backend 594/594, shared Node 189/189, Python 48/48, both Expo checks, four native builds, native API publish and all four same-run smoke jobs. The latest documentation synchronization requires a fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
 
 ## Current execution handoff — 2026-11-15
 
