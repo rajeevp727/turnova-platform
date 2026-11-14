@@ -2176,3 +2176,16 @@ The Union audit writer retains create-if-absent persistence and canonical recove
 The Union audit observability implementation and deterministic integration cases UNION-OBS-001 through UNION-OBS-005 passed source/test CI #1572 and final documentation-head CI #1573. CI #1573 / run 43549944262 passed 12/12 jobs on PR head `d9632792494742f132dd21b6146e6de615f3591e`: backend 589/589, shared mobile/auth 179/179, deterministic Python harness 48/48, Rider/Driver Expo validation, Android debug/release APKs, unsigned iOS Simulator builds, native non-container .NET API Release publish, production JS bundles and four same-run emulator/simulator smoke jobs.
 
 Smoke artifacts: Rider Android `14095977137`, Driver Android `14096095895`, Rider iOS Simulator `14096398079`, Driver iOS Simulator `14096323884`. Android logs confirm installation, launch and screenshot capture on attempt 1. Unsigned iOS Simulator logs confirm role-specific login surfaces and the SecureStore-unavailable banner. These are automated CI results only; no signed-device Keychain, physical-device, live Cosmos, production telemetry exporter or production readiness is claimed.
+
+
+## PLATFORM-01 — ride and storage telemetry listener-failure isolation (2026-11-14)
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| RIDE-OBS-001 | Ride creation remains authoritative when ActivityStarted and MeterListener callbacks throw | Register throwing callbacks only for `ride.audit.write` and `turnova.ride.audit.write_attempts`, then create a Rider ride through the API | HTTP create succeeds and the immutable RideCreated audit event is persisted; telemetry callback exceptions do not escape or alter the write result | API integration | P1 |
+| RIDE-OBS-002 | Ride creation and cancellation remain authoritative when ActivityStopped and MeterListener callbacks throw | Register throwing stop/metric callbacks, create a ride, then cancel it as the owning Rider | Both create and state replacement succeed; the ride is Cancelled with exactly the expected append-only audit events | API integration | P1 |
+| STORAGE-OBS-001 | Readiness succeeds when ActivityStarted and metric listeners throw | Execute a successful deterministic storage probe with throwing start and metric callbacks | CheckAsync completes successfully; listener exceptions do not become storage failures | Unit/integration | P1 |
+| STORAGE-OBS-002 | Original storage failure classification survives ActivityStopped and metric listener exceptions | Execute a probe that fails with HttpRequestException while stop/metric callbacks throw | CheckAsync still throws StorageReadinessException with FailureKind unavailable and preserves the original exception type | Unit/integration | P1 |
+
+- Telemetry is optional and best-effort. Activity creation, outcome tagging/status, disposal, counters and histograms must be isolated independently from ride persistence and storage readiness.
+- Tests use deterministic in-process ActivityListener and MeterListener callbacks; they do not claim live exporter, live Cosmos, multi-instance or production readiness validation.

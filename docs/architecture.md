@@ -447,3 +447,11 @@ The MVP AI boundary lives in `TurnOva.Application.Assistance` and is exposed thr
 ### Union audit telemetry verification (2026-11-14)
 
 PR #160 instruments the existing Union audit create/canonical-recovery boundary without changing persistence, authorization, partitioning, immutability or idempotency. The counter `turnova.union.audit.write_attempts` and `union.audit.write` activity expose only normalized event type and outcome. Deterministic MeterListener/ActivityListener integration tests cover assignment, transfer, selfie approval/rejection, canonical conflict recovery, mismatched canonical actor failure and telemetry-listener exceptions. CI #1573 / run 43549944262 passed 12/12 on PR documentation head `d9632792494742f132dd21b6146e6de615f3591e`; live Cosmos and production exporter/alert validation remain external.
+
+
+### PLATFORM-01 telemetry listener failure isolation (2026-11-14)
+
+- Ride-audit and storage-readiness diagnostics are strictly best-effort. ActivitySource start, outcome tagging/status, Activity disposal, Counter.Add and Histogram.Record are isolated so a host-provided listener callback cannot change an authoritative ride write or replace a storage readiness success/failure classification.
+- Ride create and ETag/in-memory replacement paths retain their existing persistence, idempotency, append-only audit and conflict semantics. The telemetry changes only protect the optional diagnostic boundary.
+- Storage readiness still propagates caller cancellation, maps the probe's own deadline to `timeout`, and maps dependency failures to `unavailable`; listener exceptions do not alter those classifications.
+- Deterministic API/Unit tests inject throwing ActivityStarted, ActivityStopped and MeterListener callbacks. Live telemetry exporter behavior and Cosmos multi-instance/ETag/restart validation remain external gates.
