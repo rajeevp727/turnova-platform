@@ -73,12 +73,16 @@ if [[ ! "$SIMULATOR_BOOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
   exit 2
 fi
 
-LOGIN_READY_TIMEOUT_SECONDS="${TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS:-90}"
+# On hosted iOS 26.2 runners, simctl can return a live PID while SpringBoard remains
+# visible; a captured run showed the app foreground transition after the former 90s
+# OCR deadline. Keep waiting bounded while allowing that cold-start transition.
+LOGIN_READY_TIMEOUT_SECONDS="${TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS:-240}"
 if [[ ! "$LOGIN_READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]{0,2}$ ]] ||
    (( LOGIN_READY_TIMEOUT_SECONDS > 300 )); then
   echo "TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS must be an integer from 1 to 300." >&2
   exit 2
 fi
+echo "Using bounded iOS login readiness timeout: ${LOGIN_READY_TIMEOUT_SECONDS} seconds."
 
 LOGIN_READY_POLL_INTERVAL_SECONDS="${TURNOVA_IOS_LOGIN_READY_POLL_INTERVAL_SECONDS:-5}"
 if [[ ! "$LOGIN_READY_POLL_INTERVAL_SECONDS" =~ ^[1-9][0-9]?$ ]] ||

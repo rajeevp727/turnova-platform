@@ -367,6 +367,29 @@ chmod +x "$output"
         report = json.loads((output / "result.json").read_text(encoding="utf-8"))
         self.assertTrue(report["loginScreenTextVerified"])
 
+    def test_default_login_readiness_budget_covers_delayed_springboard_foreground_transition(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('TURNOVA_IOS_LOGIN_READY_TIMEOUT_SECONDS:-240', script)
+
+        # Simulate several screenshots that still show SpringBoard before the app
+        # becomes foreground. The default timeout is used; only the poll interval
+        # is shortened so this deterministic harness remains fast.
+        result, output, commands = self.run_smoke(
+            ocr_not_ready_attempts=5,
+            login_ready_poll_interval_seconds=1,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=f"stdout:\\n{result.stdout}\\nstderr:\\n{result.stderr}")
+        self.assertIn("Using bounded iOS login readiness timeout: 240 seconds.", result.stdout)
+        self.assertEqual((output / "ocr-count.txt").read_text(encoding="utf-8").strip(), "6")
+        self.assertEqual(
+            len([item for item in commands if item.startswith("io TEST-DEVICE screenshot ")]),
+            6,
+        )
+        report = json.loads((output / "result.json").read_text(encoding="utf-8"))
+        self.assertTrue(report["loginScreenTextVerified"])
+        self.assertTrue(report["secureStoreUnavailableBannerVerified"])
+
     def test_ocr_checker_compilation_failure_stops_before_simulator_access(self) -> None:
         result, output, commands = self.run_smoke(ocr_compile_fail=True)
 

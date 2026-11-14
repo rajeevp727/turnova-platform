@@ -33,17 +33,7 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     // overrides visible and validates the exact origins used by the running application.
     var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
     foreach (var origin in corsAllowedOrigins)
-    {
-        if (!Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin) ||
-            (parsedOrigin.Scheme != Uri.UriSchemeHttps &&
-             !(builder.Environment.IsDevelopment() && parsedOrigin.Scheme == Uri.UriSchemeHttp)) ||
-            parsedOrigin.AbsolutePath != "/" ||
-            !string.IsNullOrEmpty(parsedOrigin.UserInfo) ||
-            !string.IsNullOrEmpty(parsedOrigin.Query) ||
-            !string.IsNullOrEmpty(parsedOrigin.Fragment))
-            throw new InvalidOperationException(
-                "Cors:AllowedOrigins must contain explicit HTTPS origins (HTTP is allowed only in Development); wildcards and URL paths are not allowed.");
-    }
+        CorsOriginValidator.ValidateOrigin(origin, builder.Environment.IsDevelopment());
 
     policy.AllowAnyHeader().AllowAnyMethod();
     if (corsAllowedOrigins.Length > 0)
