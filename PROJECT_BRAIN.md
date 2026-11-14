@@ -3,18 +3,19 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-14
+**Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) remains Draft. The most recent fully verified PR head is `42719ba88a12613e8df5974d26746dff04709ea8`; [CI #1638 / run 43614000396](https://github.com/rajeevp727/turnova-platform/actions/runs/43614000396) passed 12/12: backend 594/594, shared Node 189/189, Python 48/48, both Expo checks, four native builds, native API publish and four same-run smoke jobs. Android Rider/Driver PIDs 2569/2303; iOS Rider/Driver Simulator PIDs 14368/12840; both iOS apps reached login and verified the expected unsigned SecureStore-unavailable banner. ADB transient/persistent recovery fixtures passed. Two subsequent documentation-only handoff commits require fresh exact-head CI. The app-config output-path data-loss thread is resolved; reviews are COMMENT-only and no approval is claimed. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) source/test head `35687a394c9a89dd0225be79b66a5be25389f149` passed [CI #1643 / run 43623967660](https://github.com/rajeevp727/turnova-platform/actions/runs/43623967660) 12/12: backend 594/594, shared Node 189/189, Python 48/48, both Expo checks, four native builds, native API publish and all four same-run smoke jobs. The latest documentation synchronization requires a fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
-## Current execution handoff — 2026-11-14
+## Current execution handoff — 2026-11-15
 
-- Sequential item: #19 RELEASE-01. PR #164 is the sole open PR on `test/release-preflight-strict-validation`, based on main HEAD `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`, Draft, eight changed files, mergeable, one resolved data-loss thread and zero unresolved review threads.
-- Exact-head [CI #1638 / run 43614000396](https://github.com/rajeevp727/turnova-platform/actions/runs/43614000396) passed 12/12 on parent head `42719ba88a12613e8df5974d26746dff04709ea8`: backend 594/594, shared Node 189/189, Python 48/48, both Expo checks, four native builds, native API publish and all four same-run smoke jobs.
-- The current documentation-only handoff synchronization is newer than the tested parent and requires fresh exact-head CI before PR readiness/merge.
-- Both app release reports retain seven external gates. No signed AAB/IPA, approved identifiers/EAS linkage, production API URL, signing credentials, physical-device acceptance or store submission is claimed.
-- Reviews are COMMENT-only; no approval/self-approval or protection bypass is claimed. After safe merge, re-read main and continue supplemental AI-01 provider endpoint URL/options validation. AI-01 remains outside the 19-row denominator.
-
+- Sequential item: #19 RELEASE-01. Main HEAD `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`; PR #163 native API publish hardening is merged. PR #164 is the sole open PR on `test/release-preflight-strict-validation`, based on main, eight changed files, Draft and mergeable.
+- Exact source/test-head [CI #1643 / run 43623967660](https://github.com/rajeevp727/turnova-platform/actions/runs/43623967660) passed **12/12 jobs** on `35687a394c9a89dd0225be79b66a5be25389f149`: backend 594/594, shared Node 189/189, Python 48/48, Rider/Driver Expo, four Android/iOS native builds, native non-container API publish and all four same-run emulator/Simulator smoke jobs.
+- CI #1643 artifacts: API publish `14124578905`; Android debug APKs `14125537058` / `14125293349`; Android standalone release APKs `14124784541` / `14125048771`; unsigned iOS Simulator apps `14124929431` / `14125643977`; Android smoke `14125723039` / `14125887585`; iOS smoke `14126148142` / `14126072066`.
+- ADB exit-255 recovery is bounded to read-only/idempotent post-launch probes, preserves strict process/foreground/login/ANR checks and fails closed; deterministic transient and persistent-failure fixtures passed. No signed-device Keychain or physical-device acceptance is claimed.
+- Both app release reports retain seven external gates. No signed AAB/IPA, approved identifiers/EAS linkage, production API URL, signing credentials or store submission is claimed.
+- The output-path data-loss review thread is resolved; zero unresolved inline threads; reviews are COMMENT-only. This documentation synchronization is newer than the tested source/test head and requires fresh exact-head CI before ready/merge. Do not self-approve or bypass.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. After safe merge, re-read main and continue supplemental AI-01 provider endpoint URL/options validation. AI-01 remains outside the 19-row denominator.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
