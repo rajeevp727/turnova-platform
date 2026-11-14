@@ -15,7 +15,7 @@ The authoritative requirements are in [PRD.md](./PRD.md). This README summarizes
 | TurnOva Fleet | Fleet owners/managers | Phase 2 — excluded |
 | TurnOva Ops | Internal operations | Phase 2 — excluded |
 
-The MVP consists of native Android and iOS Rider and Driver apps plus the shared API. Passenger/Driver web apps, Fleet/Ops apps and Fleet/Ops workflows are not part of this delivery.
+The MVP consists of native Android and iOS Rider and Driver apps plus the shared API. Rider/Driver web apps, Fleet/Ops apps and Fleet/Ops workflows are not part of this delivery.
 
 New onboarding, discovery and ride workflows are **Cab-only**. Existing Scooty, Bike and Auto records must remain safely readable as historical data; they must not be destructively migrated or silently converted.
 
