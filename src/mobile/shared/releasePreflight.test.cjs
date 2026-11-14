@@ -388,6 +388,6 @@ test("release preflight CLI keeps stdout valid JSON when no output file is speci
   assert.equal(report.externalGates.length, 7);
   assert.equal(
     result.stderr,
-    "Release preflight turnova-rider: engineering checks passed; 7 external release gates; production readiness blocked.\\n"
+    "Release preflight turnova-rider: engineering checks passed; 7 external release gates; production readiness blocked.\n"
   );
 });
