@@ -391,3 +391,26 @@ test("release preflight CLI keeps stdout valid JSON when no output file is speci
     "Release preflight turnova-rider: engineering checks passed; 7 external release gates; production readiness blocked.\n"
   );
 });
+
+test("release preflight CLI refuses output paths that alias app configuration", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "turnova-release-preflight-output-collision-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const appDirectory = createCliFixture(root);
+  const appJsonPath = path.join(appDirectory, "app.json");
+  const easJsonPath = path.join(appDirectory, "eas.json");
+  const symlinkPath = path.join(root, "app-json-symlink.json");
+  const hardlinkPath = path.join(root, "app-json-hardlink.json");
+  fs.symlinkSync(appJsonPath, symlinkPath);
+  fs.linkSync(appJsonPath, hardlinkPath);
+
+  const originalAppJson = fs.readFileSync(appJsonPath);
+  const originalEasJson = fs.readFileSync(easJsonPath);
+  for (const outputPath of [appJsonPath, easJsonPath, symlinkPath, hardlinkPath]) {
+    const result = runReleasePreflightCli(["--app-dir", appDirectory, "--output", outputPath]);
+    assert.equal(result.status, 1, outputPath);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "--output must not overwrite app.json or eas.json.\\n");
+    assert.deepEqual(fs.readFileSync(appJsonPath), originalAppJson);
+    assert.deepEqual(fs.readFileSync(easJsonPath), originalEasJson);
+  }
+});
