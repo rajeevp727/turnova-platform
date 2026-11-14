@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening merged. Sole active PR #164 (`test/release-preflight-strict-validation`) adds RELEASE-PREFLIGHT-009: without `--output`, CLI stdout is JSON-only and the human summary goes to stderr. Previous exact-head [CI #1618 / run 43594209819](https://github.com/rajeevp727/turnova-platform/actions/runs/43594209819) passed 12/12 on parent head `467400c65b99094b6714e9b23846f4507f41b438`; the stdout correction and current evidence-doc sync require fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) exact head `cd30bbea9d05ef72e5cc487427ff045688d0102d` passed [CI #1626 / run 43597630108](https://github.com/rajeevp727/turnova-platform/actions/runs/43597630108) passed **12/12 jobs on exact PR head cd30bbea9d05ef72e5cc487427ff045688d0102d**. Backend Release tests **594/594** (0 failed, 0 skipped); shared mobile/auth Node tests **188/188** (including RELEASE-PREFLIGHT-001..009); deterministic Python harness **48/48**; Rider/Driver Expo validation; Rider/Driver Android debug and standalone release APKs; unsigned iOS Simulator builds; native non-container .NET 10 API publish; and all four same-run Android emulator/iOS Simulator install-launch smoke jobs passed. RELEASE-PREFLIGHT-009 verifies JSON-only stdout when `--output` is omitted. The current evidence-document synchronization requires another exact-head CI before ready/merge. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2171,7 +2171,7 @@ PRD.md §11 cost guidance was aligned with the explicit no-payment-provider MVP 
 - Live provider/model/credential selection and provider validation remain external. Optional Driver offer explanation is not required for the 19-row denominator. AI-01 is supplemental and is not counted as an acceptance row.
 
 
-PR #164 source/test head `341600c943a9239fbb96b2c2869749082762cff8` includes RELEASE-PREFLIGHT-009, which keeps stdout machine-readable when `--output` is omitted. CI #1618 passed 12/12 on the parent head `467400c65b99094b6714e9b23846f4507f41b438`; fresh exact-head CI is required after this correction and evidence-doc synchronization.
+PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includes RELEASE-PREFLIGHT-009. Exact-head CI #1626 / run 43597630108 passed 12/12; backend 594/594, shared Node 188/188, Python 48/48, Rider/Driver Expo, four native builds, native API publish and four same-run smoke jobs. Current evidence-document synchronization requires fresh exact-head CI.
 
 
 ## RELEASE-01 final exact-head evidence — PR #164 / CI #1618 (2026-11-14)
@@ -2186,3 +2186,15 @@ PR #164 source/test head `341600c943a9239fbb96b2c2869749082762cff8` includes REL
 - The no-`--output` CLI path previously mixed JSON and a human-readable summary on stdout. It now emits JSON only to stdout and writes the human summary to stderr. With `--output`, it writes the JSON file and prints the summary to stdout.
 - RELEASE-PREFLIGHT-009 invokes the real CLI without `--output`, parses stdout as JSON, verifies engineering success/seven external gates/blocked readiness and asserts the exact stderr summary.
 - CI #1618 / run 43594209819 passed 12/12 on parent head `467400c65b99094b6714e9b23846f4507f41b438`; the stdout correction and current evidence-doc sync require fresh exact-head CI. No production readiness or signed-device acceptance is claimed.
+
+## Latest exact-head handoff — PR #164 / CI #1626 (2026-11-14)
+
+- Main HEAD `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`; PR #163 merged. Sole active PR #164 is `test/release-preflight-strict-validation`, exact tested head `cd30bbea9d05ef72e5cc487427ff045688d0102d`, 0 commits behind main.
+- [CI #1626 / run 43597630108](https://github.com/rajeevp727/turnova-platform/actions/runs/43597630108) passed **12/12 jobs on exact PR head cd30bbea9d05ef72e5cc487427ff045688d0102d**. Backend Release tests **594/594** (0 failed, 0 skipped); shared mobile/auth Node tests **188/188** (including RELEASE-PREFLIGHT-001..009); deterministic Python harness **48/48**; Rider/Driver Expo validation; Rider/Driver Android debug and standalone release APKs; unsigned iOS Simulator builds; native non-container .NET 10 API publish; and all four same-run Android emulator/iOS Simulator install-launch smoke jobs passed.
+- CI artifacts: native API publish `14115173145`; Rider/Driver Android standalone release APKs `14115164625` / `14114959706`; Rider/Driver unsigned iOS Simulator apps `14114583999` / `14116300073`; smoke artifacts Rider Android `14114309761`, Driver Android `14115635244`, Rider iOS Simulator `14115673658`, Driver iOS Simulator `14115712691`.
+- Android Rider/Driver install-launch passed and screenshots were captured on attempt 1. Both unsigned iOS Simulator apps reached their role-specific login surfaces and verified the SecureStore-unavailable banner; this does not establish signed-device Keychain or physical-device acceptance.
+- Both Rider and Driver release-preflight reports identify seven external release gates each. No signed Android AAB, signed iOS IPA, approved production API URL, EAS project linkage, signing credential, physical-device acceptance or store submission is claimed. Production readiness remains blocked.
+- The nine RELEASE-PREFLIGHT tests cover strict SemVer/EAS CLI validation, build-profile boundaries, production URL and network destination checks, CLI argument handling, JSON/file output, exit codes and machine-readable stdout.
+- Reviews are COMMENT-only; zero unresolved inline threads. No approval or protection bypass is claimed. Fresh exact-head CI is required after this documentation synchronization. Do not merge a stale head.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). Engineering implementation/evidence is substantial across the matrix; 0/19 is strict complete-evidence accounting, not an implementation score. Production readiness is not established.
+- Next after PR #164 merges: re-read main and continue supplemental AI-01 provider-endpoint URL/options validation with deterministic tests; AI-01 remains outside the 19-row denominator.
