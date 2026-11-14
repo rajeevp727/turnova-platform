@@ -26,7 +26,7 @@ using TurnOva.Infrastructure.Dispatch;
 
 namespace TurnOva.Tests;
 
-public sealed class RideApiIntegrationTests
+public sealed partial class RideApiIntegrationTests
 {
     private const string Issuer = "turnova-integration-tests";
     private const string Audience = "turnova-api";

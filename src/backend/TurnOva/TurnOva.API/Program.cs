@@ -479,28 +479,56 @@ async Task<DriverUnionAuditEvent?> FindUnionAuditEventAsync(string driverId, str
     }
 }
 
+void RecordUnionAuditOutcome(Activity? activity, string? eventType, string outcome)
+{
+    var safeOutcome = outcome switch
+    {
+        "success" => "success",
+        "conflict" => "conflict",
+        _ => "failure"
+    };
+    TurnOvaDiagnostics.RecordUnionAuditWrite(eventType, safeOutcome);
+    activity?.SetTag("turnova.union.audit.outcome", safeOutcome);
+    activity?.SetStatus(safeOutcome == "failure" ? ActivityStatusCode.Error : ActivityStatusCode.Ok);
+}
+
 async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct)
 {
-    if (unionAuditContainer is null)
-    {
-        var key = audit.DriverId + "|" + audit.EventId;
-        if (unionAudit.TryAdd(key, audit))
-            return;
-
-        await DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
-            audit, FindUnionAuditEventAsync,
-            static (_, _) => Task.CompletedTask, ct);
-        return;
-    }
-
+    using var activity = TurnOvaDiagnostics.StartUnionAuditWrite(audit.EventType);
     try
     {
-        await unionAuditContainer.CreateItemAsync(audit, new PartitionKey(audit.DriverId), cancellationToken: ct);
+        if (unionAuditContainer is null)
+        {
+            var key = audit.DriverId + "|" + audit.EventId;
+            if (unionAudit.TryAdd(key, audit))
+            {
+                RecordUnionAuditOutcome(activity, audit.EventType, "success");
+                return;
+            }
+
+            await DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
+                audit, FindUnionAuditEventAsync,
+                static (_, _) => Task.CompletedTask, ct);
+            RecordUnionAuditOutcome(activity, audit.EventType, "conflict");
+            return;
+        }
+
+        try
+        {
+            await unionAuditContainer.CreateItemAsync(audit, new PartitionKey(audit.DriverId), cancellationToken: ct);
+            RecordUnionAuditOutcome(activity, audit.EventType, "success");
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            await DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
+                audit, FindUnionAuditEventAsync, cancellationToken: ct);
+            RecordUnionAuditOutcome(activity, audit.EventType, "conflict");
+        }
     }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+    catch
     {
-        await DriverUnionAuditSnapshotRecovery.EnsureCanonicalAsync(
-            audit, FindUnionAuditEventAsync, cancellationToken: ct);
+        RecordUnionAuditOutcome(activity, audit.EventType, "failure");
+        throw;
     }
 }
 
