@@ -2313,3 +2313,24 @@ The retry is limited to the Android `pidof` transport boundary. A successful emp
 | Driver iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed | `14120316789` |
 
 The Android transient ADB exit-255 recovery and persistent-failure fail-closed paths passed in deterministic fixtures; the real Android smoke jobs did not require recovery. The output-path collision review finding is fixed and its inline review thread is resolved. These CI artifacts do not establish signed AAB/IPA, signed-device Keychain, physical-device acceptance, store submission, production hosting or production readiness. Both release-preflight reports retain seven external gates each.
+
+
+## RELEASE-01 — exact documentation-head verification (2026-11-14)
+
+[CI #1638 / run 43614000396](https://github.com/rajeevp727/turnova-platform/actions/runs/43614000396) passed **12/12 jobs** on PR #164 documentation head `42719ba88a12613e8df5974d26746dff04709ea8`.
+
+| Evidence | Result | Artifact |
+|---|---|---:|
+| Native .NET 10 backend Release tests | 594/594; zero failures/skips | API publish `14121258004` |
+| Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..010 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001/002 | CI job log |
+| Rider/Driver Expo validation | Both passed | Production JS bundles `14121700169` / `14121377487` |
+| Rider/Driver Android debug APKs | Both built and identity-verified | `14121865052` / `14121487902` |
+| Rider/Driver Android standalone release APKs | Both built and identity-verified | `14121324172` / `14121104543` |
+| Rider/Driver unsigned iOS Simulator apps | Both built and identity-verified | `14122040984` / `14121726358` |
+| Rider Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2569 | `14121314493` |
+| Driver Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2303 | `14121254841` |
+| Rider iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 14368 | `14121798900` |
+| Driver iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 12840 | `14122695742` |
+
+Backend CI log confirms 594 passed, 0 failed, 0 skipped. Shared Node log confirms 189 passed, 0 failed, 0 skipped. The Python harness ran 48 tests and reported OK. All 12 workflow jobs completed successfully. The ADB transient exit-255 recovery and persistent-failure fail-closed paths passed in deterministic fixtures; the real Android smoke jobs did not require recovery. The output-path collision review finding is fixed and its inline review thread is resolved. These CI artifacts do not establish signed AAB/IPA, signed-device Keychain, physical-device acceptance, store submission, production hosting or production readiness. Both release-preflight reports retain seven external gates each. The documentation synchronization requires a new exact-head CI before PR readiness/merge.

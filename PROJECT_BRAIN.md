@@ -2221,3 +2221,11 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - The data-loss review finding is fixed in code/test but remains an unresolved inline thread until exact-head CI passes. No self-approval or protection bypass.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established.
 - Next after PR #164 merges: re-read main and implement AI-01 provider-endpoint validation for HTTPS URLs, rejecting userinfo, query/fragment delimiters and whitespace, with deterministic options-validation tests. AI-01 remains supplemental and outside the 19-row denominator.
+
+
+## Latest exact-head handoff — PR #164 / CI #1638 (2026-11-14)
+
+- [CI #1638 / run 43614000396](https://github.com/rajeevp727/turnova-platform/actions/runs/43614000396) passed 12/12 on exact head `42719ba88a12613e8df5974d26746dff04709ea8`; backend 594/594, shared Node 189/189, Python 48/48, both Expo checks, four native builds, native API publish and all four same-run smoke jobs passed.
+- Android Rider/Driver PIDs 2569/2303; iOS Rider/Driver Simulator PIDs 14368/12840. Both iOS apps verified the expected unsigned SecureStore-unavailable banner. Artifact IDs are in docs/MVP_PROGRESS.md and docs/test-plan.md.
+- PR #164 remains Draft pending fresh exact-head CI after this evidence synchronization. The data-loss review thread is resolved; all reviews are COMMENT-only. No signed release or production readiness is claimed.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). Next after merge: re-read main and continue supplemental AI-01 provider endpoint URL/options validation; AI-01 is outside the 19-row denominator.
