@@ -140,7 +140,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   checkAsset("android-adaptive-icon", expo.android?.adaptiveIcon?.foregroundImage);
 
   const productionApiBaseUrlConfiguredInCi = (() => {
-    if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0) return false;
+    if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0 || apiBaseUrl !== apiBaseUrl.trim() || /[?#]/.test(apiBaseUrl)) return false;
     try {
       const parsed = new URL(apiBaseUrl);
       const host = parsed.hostname.toLowerCase();
