@@ -161,6 +161,7 @@ public sealed partial class RideApiIntegrationTests
         const string unionId = "union-audit-failure-union";
         const string originalActor = "union-audit-original-actor";
         const string unionName = "Selected Booking Union";
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
         var reviewedAtUtc = new DateTimeOffset(2026, 11, 14, 0, 0, 0, TimeSpan.Zero);
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
