@@ -198,8 +198,8 @@ public sealed partial class RideApiIntegrationTests
         var preservedCanonical = factory.Services
             .GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
             .Values.Single(item => item.EventId == eventId);
-        Assert.Equal("different-safe-actor", preservedCanonical.ActorId);
-        var failedActivity = Assert.Single(activities.Where(item => item.OperationName == "union.audit.write"));
+        Assert.Equal("different-safe-actor", preservedCanonical.Actor);
+        var failedActivity = Assert.Single(activities, item => item.OperationName == "union.audit.write");
         Assert.Equal(ActivityStatusCode.Error, failedActivity.Status);
         Assert.Equal("selfie_approved", failedActivity.GetTagItem("turnova.union.audit.event_type"));
         Assert.Equal("failure", failedActivity.GetTagItem("turnova.union.audit.outcome"));
