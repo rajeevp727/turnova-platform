@@ -229,8 +229,10 @@ public sealed partial class RideApiIntegrationTests
         using (var failingSampleListener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
-                throw new InvalidOperationException("sample listener failure")
+            Sample = (ref ActivityCreationOptions<ActivityContext> options) =>
+                options.Name == "union.audit.write"
+                    ? throw new InvalidOperationException("sample listener failure")
+                    : ActivitySamplingResult.None
         })
         {
             ActivitySource.AddActivityListener(failingSampleListener);
@@ -241,7 +243,11 @@ public sealed partial class RideApiIntegrationTests
         {
             ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
-            ActivityStopped = _ => throw new InvalidOperationException("stop listener failure")
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName == "union.audit.write")
+                    throw new InvalidOperationException("stop listener failure");
+            }
         })
         {
             ActivitySource.AddActivityListener(failingStopListener);
@@ -307,8 +313,10 @@ public sealed partial class RideApiIntegrationTests
             using var activityListener = new ActivityListener
             {
                 ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
-                Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
-                    throw new InvalidOperationException("Union audit activity start listener failure")
+                Sample = (ref ActivityCreationOptions<ActivityContext> options) =>
+                    options.Name == "union.audit.write"
+                        ? throw new InvalidOperationException("Union audit activity start listener failure")
+                        : ActivitySamplingResult.None
             };
             ActivitySource.AddActivityListener(activityListener);
 
@@ -334,7 +342,11 @@ public sealed partial class RideApiIntegrationTests
             {
                 ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
                 Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
-                ActivityStopped = _ => throw new InvalidOperationException("Union audit activity stop listener failure")
+                ActivityStopped = activity =>
+                {
+                    if (activity.OperationName == "union.audit.write")
+                        throw new InvalidOperationException("Union audit activity stop listener failure");
+                }
             };
             ActivitySource.AddActivityListener(activityListener);
 
