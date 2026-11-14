@@ -201,6 +201,49 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public void UnionAuditTelemetryListenerFailuresDoNotEscapeTheAuditBoundary()
+    {
+        using (var meterListener = new MeterListener())
+        {
+            meterListener.InstrumentPublished = (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                    instrument.Name == "turnova.union.audit.write_attempts")
+                    listener.EnableMeasurementEvents(instrument);
+            };
+            meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+                throw new InvalidOperationException("listener failure"));
+            meterListener.Start();
+
+            Assert.Null(Record.Exception(() => TurnOvaDiagnostics.RecordUnionAuditWrite("Assigned", "success")));
+        }
+
+        using (var failingSampleListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                throw new InvalidOperationException("sample listener failure")
+        })
+        {
+            ActivitySource.AddActivityListener(failingSampleListener);
+            Assert.Null(Record.Exception(() => TurnOvaDiagnostics.StartUnionAuditWrite("Assigned")));
+        }
+
+        using (var failingStopListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = _ => throw new InvalidOperationException("stop listener failure")
+        })
+        {
+            ActivitySource.AddActivityListener(failingStopListener);
+            var activity = TurnOvaDiagnostics.StartUnionAuditWrite("Assigned");
+            Assert.NotNull(activity);
+            Assert.Null(Record.Exception(() => TurnOvaDiagnostics.StopUnionAuditWrite(activity)));
+        }
+    }
+
+    [Fact]
     public void UnionAuditTelemetryCollapsesUnrecognizedEventAndOutcomeValues()
     {
         var measurements = new ConcurrentBag<(string EventType, string Outcome, string[] TagKeys)>();

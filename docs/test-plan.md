@@ -2155,3 +2155,6 @@ Exact code-bearing head 02fbfa9121b62acf5ef8ec20287cc9dc0ea94db5 passed GitHub A
 | UNION-OBS-004 | Unknown Union audit telemetry values collapse to safe defaults | Call the diagnostic recorder with an unknown event category and outcome | Metric emits event_type=other and outcome=failure; arbitrary caller values are never emitted | Unit | P1 |
 
 The Union audit writer retains create-if-absent persistence and canonical recovery. A conflict is classified only after the stored event is read and matches the expected immutable event; a mismatched or unavailable canonical event is a failure. The metrics use framework Meter/ActivitySource APIs only; no exporter, vendor, endpoint or credentials are added. Live Cosmos conflict/partition/multi-instance/restart behaviour and production telemetry export/alert configuration remain external validation gates.
+
+
+| UNION-OBS-005 | Telemetry listener callbacks fail | Register deterministic MeterListener/ActivityListener callbacks that throw during metric, activity start and activity stop | Diagnostics failures are isolated; the telemetry boundary does not throw into the authoritative Union audit persistence path | Unit | P1 |

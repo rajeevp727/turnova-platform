@@ -36,9 +36,29 @@ public static class TurnOvaDiagnostics
 
     public static Activity? StartUnionAuditWrite(string? eventType)
     {
-        var activity = ActivitySource.StartActivity("union.audit.write");
-        activity?.SetTag("turnova.union.audit.event_type", NormalizeUnionAuditEventType(eventType));
-        return activity;
+        try
+        {
+            var activity = ActivitySource.StartActivity("union.audit.write");
+            activity?.SetTag("turnova.union.audit.event_type", NormalizeUnionAuditEventType(eventType));
+            return activity;
+        }
+        catch
+        {
+            // Optional telemetry must never block the authoritative Union audit write.
+            return null;
+        }
+    }
+
+    public static void StopUnionAuditWrite(Activity? activity)
+    {
+        try
+        {
+            activity?.Dispose();
+        }
+        catch
+        {
+            // A listener failure must not turn a persisted audit event into an API failure.
+        }
     }
 
     public static Activity? StartStorageReadinessCheck() =>
@@ -66,10 +86,17 @@ public static class TurnOvaDiagnostics
             "conflict" => "conflict",
             _ => "failure"
         };
-        UnionAuditWriteAttempts.Add(
-            1,
-            new KeyValuePair<string, object?>("event_type", NormalizeUnionAuditEventType(eventType)),
-            new KeyValuePair<string, object?>("outcome", safeOutcome));
+        try
+        {
+            UnionAuditWriteAttempts.Add(
+                1,
+                new KeyValuePair<string, object?>("event_type", NormalizeUnionAuditEventType(eventType)),
+                new KeyValuePair<string, object?>("outcome", safeOutcome));
+        }
+        catch
+        {
+            // Metrics are best-effort and must not alter audit persistence semantics.
+        }
     }
 
     public static void RecordStorageReadiness(string outcome, TimeSpan elapsed)

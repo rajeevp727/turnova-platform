@@ -494,7 +494,7 @@ void RecordUnionAuditOutcome(Activity? activity, string? eventType, string outco
 
 async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct)
 {
-    using var activity = TurnOvaDiagnostics.StartUnionAuditWrite(audit.EventType);
+    var activity = TurnOvaDiagnostics.StartUnionAuditWrite(audit.EventType);
     try
     {
         if (unionAuditContainer is null)
@@ -529,6 +529,10 @@ async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct
     {
         RecordUnionAuditOutcome(activity, audit.EventType, "failure");
         throw;
+    }
+    finally
+    {
+        TurnOvaDiagnostics.StopUnionAuditWrite(activity);
     }
 }
 
