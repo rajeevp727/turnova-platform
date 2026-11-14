@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-validator="\${1:-scripts/verify-api-publish.sh}"
+validator="${1:-scripts/verify-api-publish.sh}"
 if [[ ! -f "$validator" ]]; then
   echo "Verifier script not found: $validator" >&2
   exit 1
