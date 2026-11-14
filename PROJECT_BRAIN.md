@@ -2024,7 +2024,7 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation score. CI build/test and emulator/simulator evidence do not establish signed-device Keychain, physical-device, live Cosmos, production authentication, legal/product approval, end-to-end ride or production readiness.
 - Next sequential work after safe PR #158 merge: re-read main and continue #18 PLATFORM-01 with explicit CORS wildcard-origin rejection and deterministic startup/configuration tests, then privacy-safe Union audit metrics/ActivitySource tracing and remaining diagnostics/native-publish/audit-path work before #19 RELEASE-01.
 
-## Latest exact-source verification — PR #159 / CI #1549 (2026-11-14)
+## Previous exact-source verification — PR #159 / CI #1549 (2026-11-14)
 
 - Main/base at this checkpoint: `d4cb3f79ad623e5db516c6d08b34982758b76ad0`. The CORS source/test head `397087cff2a8ec27a07b35ad32ac6ed928170766` completed GitHub Actions [CI #1549 / run 43531632281](https://github.com/rajeevp727/turnova-platform/actions/runs/43531632281) with **12/12 jobs passed**.
 - Backend: **585/585** tests passed (0 failed, 0 skipped). Shared mobile/auth: **179/179** passed. Deterministic native/CI Python harness: **48/48** passed, including the unique RELEASE-SMOKE ID guard and delayed SpringBoard foreground regression.
@@ -2032,11 +2032,11 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - All four same-run install/launch smoke jobs passed. Android Rider/Driver screenshots were captured on attempt 1. Rider/Driver iOS Simulator smoke reported successful install/launch and role-specific login readiness. Unsigned iOS explicitly reports SecureStore unavailable; this is not signed-device Keychain evidence.
 - Smoke artifact IDs: Rider Android `14088725589`; Driver Android `14088121911`; Rider iOS Simulator `14089181656`; Driver iOS Simulator `14089087153`. Native API publish `14086994299`; Rider/Driver Android debug APKs `14087673180` / `14087523485`; Rider/Driver standalone release APKs `14087937041` / `14088665127`; Rider/Driver unsigned iOS apps `14088700999` / `14088985168`; production JS bundles `14087098827` / `14087966437`.
 - The exact 10-file PR diff was inspected. CORS rejects any literal wildcard before URI parsing and preserves HTTPS-only production, Development-only HTTP, root-origin, no-user-info/query/fragment validation and the existing deny-by-default allow-list. Tests cover wildcard host/embedded/path forms and valid/invalid origin cases. The iOS smoke readiness increase remains bounded to 240 seconds (maximum 300); OCR, session-error and SecureStore fail-closed assertions remain mandatory.
-- Review state: four COMMENT-only reviews, latest anchored to the documentation-synchronized PR head; no approval is claimed. Inline review threads: **0 unresolved**. PR #159 is Ready for review. No self-approval or bypass.
+- Review state at this checkpoint: four COMMENT-only reviews and zero unresolved inline threads; no approval was claimed. PR #159 was subsequently merged at `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after final-head CI #1553 passed 12/12. PR #160 is now the sole active feature PR. No self-approval or bypass.
 - The three evidence documents have been synchronized to CI #1549. That documentation-only update requires a fresh exact-head CI before merge; the latest branch SHA and workflow run are recorded in the PR.
 - No live production CORS origin/load, Cosmos, production auth, signed-device Keychain, physical-device, legal or end-to-end ride validation is claimed.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation score. Production readiness is not established.
-- Next after PR #159 safely merges: re-read main and implement privacy-safe Union audit metrics plus `ActivitySource` spans and deterministic `MeterListener`/`ActivityListener` tests; then continue remaining PLATFORM-01 diagnostics, native-publish and audit-path work before #19 RELEASE-01.
+- PR #159 subsequently merged at `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357`; the next sequential increment is PR #160 Union audit observability. See the latest handoff below.
 
 
 ## Latest sequential handoff — PR #160 Union audit observability (2026-11-14)
@@ -2046,6 +2046,6 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - `TurnOvaDiagnostics` now exposes a Union audit write counter and activity. Event types are allow-listed and normalized; outcomes are success, verified canonical conflict recovery or failure. Tags contain only normalized event category and outcome.
 - `SaveUnionAuditAsync` instrumentation wraps the existing in-memory/Cosmos create-if-absent and canonical-recovery paths. It does not change persistence, audit identity, authorization or recovery semantics.
 - Deterministic integration coverage exercises initial assignment, transfer, Union selfie approval/rejection, duplicate canonical conflict recovery and a mismatched canonical actor that must fail closed. Unknown metric values collapse to other/failure; telemetry listener failures are isolated from audit persistence.
-- Final exact-head CI #1564 / run 43545249499 is running. Do not claim the new tests pass until CI completes. No live Cosmos validation or telemetry exporter is claimed.
+- Final exact-head CI is running on the current PR head; see PR #160 checks. Do not claim the new tests pass until CI completes. No live Cosmos validation or telemetry exporter is claimed.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). Engineering implementation/evidence is substantial; production readiness is not established.
 - Next: finish exact-head CI and review PR #160, synchronize final documentation and rerun exact-head CI, merge only if GitHub permits without bypass; then re-read main and continue remaining PLATFORM-01 diagnostics/native-publish/audit-path work before RELEASE-01.
