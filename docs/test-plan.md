@@ -2208,17 +2208,17 @@ RIDE-OBS-001/002 and STORAGE-OBS-001/002 passed exact source/test CI #1589 / run
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |
 |---|---|---|---|---|---|
-| PLATFORM-PUBLISH-001 | Complete framework-dependent publish fixture is accepted | Provide non-empty API assembly, \`.deps.json\`, \`.runtimeconfig.json\`, Linux x64 SkiaSharp/HarfBuzz native assets and an artifact below 120 MiB | Verifier succeeds and reports both native assets | Bash fixture | P1 |
-| PLATFORM-PUBLISH-002 | Missing dependency metadata is rejected | Remove \`TurnOva.API.deps.json\` | Verifier exits non-zero with the exact missing/empty metadata diagnostic | Bash fixture | P1 |
-| PLATFORM-PUBLISH-003 | Empty runtime configuration is rejected | Truncate \`TurnOva.API.runtimeconfig.json\` to zero bytes | Verifier exits non-zero with the exact missing/empty metadata diagnostic | Bash fixture | P1 |
-| PLATFORM-PUBLISH-004 | Empty API assembly is rejected | Truncate \`TurnOva.API.dll\` to zero bytes | Verifier exits non-zero with the exact missing/empty API assembly diagnostic | Bash fixture | P1 |
-| PLATFORM-PUBLISH-005 | Missing SkiaSharp native asset is rejected | Remove \`libSkiaSharp.so\` | Verifier identifies the missing SkiaSharp asset | Bash fixture | P1 |
-| PLATFORM-PUBLISH-006 | Empty SkiaSharp native asset is rejected | Truncate \`libSkiaSharp.so\` to zero bytes | Verifier identifies the empty SkiaSharp asset | Bash fixture | P1 |
-| PLATFORM-PUBLISH-007 | Missing HarfBuzz native asset is rejected | Remove \`libHarfBuzzSharp.so\` | Verifier identifies the missing HarfBuzz asset | Bash fixture | P1 |
-| PLATFORM-PUBLISH-008 | Empty HarfBuzz native asset is rejected | Truncate \`libHarfBuzzSharp.so\` to zero bytes | Verifier identifies the empty HarfBuzz asset | Bash fixture | P1 |
-| PLATFORM-PUBLISH-009 | Nested forbidden font assembly is rejected | Place \`PdfSharp.WPFonts.dll\` under a nested runtime asset directory | Verifier rejects the forbidden assembly regardless of nesting depth | Bash fixture | P1 |
-| PLATFORM-PUBLISH-010 | Unsupported runtime assets are rejected | Add an \`osx-x64\` runtime directory to the Linux x64 artifact | Verifier identifies the unsupported runtime directory | Bash fixture | P1 |
+| PLATFORM-PUBLISH-001 | Complete framework-dependent publish fixture is accepted | Provide non-empty API assembly, `.deps.json`, `.runtimeconfig.json`, Linux x64 SkiaSharp/HarfBuzz native assets and an artifact below 120 MiB | Verifier succeeds and reports both native assets | Bash fixture | P1 |
+| PLATFORM-PUBLISH-002 | Missing dependency metadata is rejected | Remove `TurnOva.API.deps.json` | Verifier exits non-zero with the exact missing/empty metadata diagnostic | Bash fixture | P1 |
+| PLATFORM-PUBLISH-003 | Empty runtime configuration is rejected | Truncate `TurnOva.API.runtimeconfig.json` to zero bytes | Verifier exits non-zero with the exact missing/empty metadata diagnostic | Bash fixture | P1 |
+| PLATFORM-PUBLISH-004 | Empty API assembly is rejected | Truncate `TurnOva.API.dll` to zero bytes | Verifier exits non-zero with the exact missing/empty API assembly diagnostic | Bash fixture | P1 |
+| PLATFORM-PUBLISH-005 | Missing SkiaSharp native asset is rejected | Remove `libSkiaSharp.so` | Verifier identifies the missing SkiaSharp asset | Bash fixture | P1 |
+| PLATFORM-PUBLISH-006 | Empty SkiaSharp native asset is rejected | Truncate `libSkiaSharp.so` to zero bytes | Verifier identifies the empty SkiaSharp asset | Bash fixture | P1 |
+| PLATFORM-PUBLISH-007 | Missing HarfBuzz native asset is rejected | Remove `libHarfBuzzSharp.so` | Verifier identifies the missing HarfBuzz asset | Bash fixture | P1 |
+| PLATFORM-PUBLISH-008 | Empty HarfBuzz native asset is rejected | Truncate `libHarfBuzzSharp.so` to zero bytes | Verifier identifies the empty HarfBuzz asset | Bash fixture | P1 |
+| PLATFORM-PUBLISH-009 | Nested forbidden font assembly is rejected | Place `PdfSharp.WPFonts.dll` under a nested runtime asset directory | Verifier rejects the forbidden assembly regardless of nesting depth | Bash fixture | P1 |
+| PLATFORM-PUBLISH-010 | Unsupported runtime assets are rejected | Add an `osx-x64` runtime directory to the Linux x64 artifact | Verifier identifies the unsupported runtime directory | Bash fixture | P1 |
 | PLATFORM-PUBLISH-011 | Oversized artifact is rejected | Make the fixture exceed the configured 120 MiB limit | Verifier reports the size-limit failure | Bash fixture | P1 |
-| PLATFORM-PUBLISH-012 | Missing API assembly is rejected | Remove \`TurnOva.API.dll\` | Verifier exits non-zero with the exact missing/empty API assembly diagnostic | Bash fixture | P1 |
+| PLATFORM-PUBLISH-012 | Missing API assembly is rejected | Remove `TurnOva.API.dll` | Verifier exits non-zero with the exact missing/empty API assembly diagnostic | Bash fixture | P1 |
 
 The fixture harness asserts the expected diagnostic for each negative case; a generic non-zero exit is not sufficient evidence. The local Bash fixture run passed the valid fixture and all 11 negative cases. Exact-head GitHub Actions evidence is pending. This validates the publish directory contract only; it does not establish production hosting, live Cosmos, signed release or production readiness.
