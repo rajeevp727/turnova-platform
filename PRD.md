@@ -116,7 +116,7 @@ Terminal alternatives include Cancelled and Expired. All state transitions are v
 - API documentation: OpenAPI/Swagger.
 - Source control: GitHub.
 
-A free-tier-first approach is intended for development. Production hosting, maps, geocoding, OTP/SMS, payments, push notifications, realtime services and app-store publishing may incur costs or quotas.
+A free-tier-first approach is intended for development. Production hosting, maps/geocoding, OTP/SMS, push notifications, realtime services and app-store publishing may incur costs or quotas. Rider-to-Driver payment is direct and outside TurnOva; no payment provider, gateway, escrow or in-app collection is part of the MVP.
 
 ## 12. MVP acceptance criteria
 
