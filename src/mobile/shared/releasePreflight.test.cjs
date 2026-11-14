@@ -241,7 +241,7 @@ test("EAS CLI minimum accepts only a strict >= SemVer range at version 16 or new
 
   for (const version of [
     ">= 15.9.9", ">= 16", ">= 16.0", ">= 016.0.0",
-    ">= 16.0.0-beta.1", ">= 16.0.0junk", ">= 16.0.0 || >= 17.0.0", "^16.0.0"
+    ">= 16.0.0-beta.1", ">= 16.0.0junk", ">= 16.0.0\\n", ">= 16.0.0 || >= 17.0.0", "^16.0.0"
   ]) {
     const report = validateReleaseConfig(fixture({ easJson: { cli: { version } } }));
     assert.ok(report.engineeringChecks.errors.some(item => item.id === "eas-cli-version"), version);
@@ -334,7 +334,7 @@ test("release preflight CLI writes a machine-readable report and summarizes exte
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stderr, "");
-  assert.match(result.stdout, /Release preflight turnova-rider: engineering checks passed; 7 external release gates; production readiness blocked\\./);
+  assert.match(result.stdout, /Release preflight turnova-rider: engineering checks passed; 7 external release gates; production readiness blocked\./);
   const report = JSON.parse(fs.readFileSync(outputPath, "utf8"));
   assert.equal(report.engineeringChecks.status, "passed");
   assert.equal(report.productionReadiness, "blocked");
