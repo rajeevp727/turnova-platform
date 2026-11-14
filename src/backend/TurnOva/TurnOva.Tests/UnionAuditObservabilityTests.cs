@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using TurnOva.API;
 using TurnOva.API.Observability;
 using TurnOva.Domain.Dispatch;
@@ -110,6 +109,9 @@ public sealed partial class RideApiIntegrationTests
         Assert.Contains(unionActivities, item =>
             Equals(item.GetTagItem("turnova.union.audit.event_type"), "transferred") &&
             Equals(item.GetTagItem("turnova.union.audit.outcome"), "success"));
+        Assert.Contains(unionActivities, item =>
+            Equals(item.GetTagItem("turnova.union.audit.event_type"), "selfie_rejected") &&
+            Equals(item.GetTagItem("turnova.union.audit.outcome"), "success"));
         Assert.All(unionActivities, item =>
             Assert.Equal(
                 new[] { "turnova.union.audit.event_type", "turnova.union.audit.outcome" },
@@ -176,7 +178,7 @@ public sealed partial class RideApiIntegrationTests
             driverId, unionId, "SelfieApprovedByUnion", reviewedAtUtc);
         factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
             [$"{driverId}|{eventId}"] = new DriverUnionAuditEvent(
-                eventId, driverId, null, null, unionId, unionName,
+                eventId, driverId, unionId, unionName, unionId, unionName,
                 "SelfieApprovedByUnion", "Approved by the currently assigned union.",
                 "different-safe-actor", reviewedAtUtc);
 
