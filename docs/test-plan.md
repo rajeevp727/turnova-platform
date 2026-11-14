@@ -2292,3 +2292,24 @@ RELEASE-PREFLIGHT-010 prevents `--output` from overwriting `app.json` or `eas.js
 | RELEASE-SMOKE-ANDROID-002 | Persistent ADB transport loss fails closed with diagnostics | Fake all three PID probes to return exit 255 while device recovery commands succeed | Smoke exits non-zero after exactly three bounded attempts, records per-attempt stderr and `adb devices`, and does not emit a success result | Python/Bash deterministic harness | P1 |
 
 The retry is limited to the Android `pidof` transport boundary. A successful empty PID result remains a process-stability failure; app ANR, foreground, process-identity and login-screen checks are not relaxed. A persistent transport failure remains a hard failure. This is CI harness resilience only and does not establish physical-device acceptance.
+
+
+## RELEASE-01 — exact-head release and smoke verification (2026-11-14)
+
+[CI #1637 / run 43608815719](https://github.com/rajeevp727/turnova-platform/actions/runs/43608815719) passed all 12 jobs on PR #164 head `571fae288644f1f603d758d51164a2a283bedf67`.
+
+| Evidence | Result | Artifact |
+|---|---|---:|
+| Native .NET 10 backend Release tests | 594/594; zero failures/skips | API publish `14119588471` |
+| Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..010 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001/002 | CI job log |
+| Rider/Driver Expo validation | Both passed | Production JS bundles `14119775383` / `14119701240` |
+| Rider/Driver Android debug APKs | Both built and identity-verified | `14119444500` / `14119073259` |
+| Rider/Driver Android standalone release APKs | Both built and identity-verified | `14119707599` / `14119980661` |
+| Rider/Driver unsigned iOS Simulator apps | Both built and identity-verified | `14120295613` / `14120420157` |
+| Rider Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2867 | `14120415180` |
+| Driver Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2850 | `14120240837` |
+| Rider iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed | `14120002716` |
+| Driver iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed | `14120316789` |
+
+The Android transient ADB exit-255 recovery and persistent-failure fail-closed paths passed in deterministic fixtures; the real Android smoke jobs did not require recovery. The output-path collision review finding is fixed and its inline review thread is resolved. These CI artifacts do not establish signed AAB/IPA, signed-device Keychain, physical-device acceptance, store submission, production hosting or production readiness. Both release-preflight reports retain seven external gates each.
