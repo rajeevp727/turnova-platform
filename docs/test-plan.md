@@ -2202,3 +2202,35 @@ RIDE-OBS-001/002 and STORAGE-OBS-001/002 passed exact source/test CI #1589 / run
 - iOS Simulator smoke logs verified role-specific login surfaces and the expected unsigned-Simulator SecureStore-unavailable banner. Android smoke jobs verified install/launch and screenshot capture on attempt 1. No signed-device Keychain or physical-device acceptance is claimed.
 - CI run: [#1589 / 43564291551](https://github.com/rajeevp727/turnova-platform/actions/runs/43564291551). This evidence is for the source/test head; documentation updates create a new head and require fresh exact-head CI before merge.
 - Optional telemetry is best-effort. No live Cosmos, exporter, production host, signed release or physical-device validation is claimed.
+
+
+## PLATFORM-01 — native API publish verifier hardening (2026-11-14)
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| PLATFORM-PUBLISH-001 | Complete framework-dependent publish fixture is accepted | Provide non-empty API assembly, `.deps.json`, `.runtimeconfig.json`, Linux x64 SkiaSharp/HarfBuzz native assets and an artifact below 120 MiB | Verifier succeeds and reports both native assets | Bash fixture | P1 |
+| PLATFORM-PUBLISH-002 | Missing dependency metadata is rejected | Remove `TurnOva.API.deps.json` | Verifier exits non-zero with the exact missing/empty metadata diagnostic | Bash fixture | P1 |
+| PLATFORM-PUBLISH-003 | Empty runtime configuration is rejected | Truncate `TurnOva.API.runtimeconfig.json` to zero bytes | Verifier exits non-zero with the exact missing/empty metadata diagnostic | Bash fixture | P1 |
+| PLATFORM-PUBLISH-004 | Empty API assembly is rejected | Truncate `TurnOva.API.dll` to zero bytes | Verifier exits non-zero with the exact missing/empty API assembly diagnostic | Bash fixture | P1 |
+| PLATFORM-PUBLISH-005 | Missing SkiaSharp native asset is rejected | Remove `libSkiaSharp.so` | Verifier identifies the missing SkiaSharp asset | Bash fixture | P1 |
+| PLATFORM-PUBLISH-006 | Empty SkiaSharp native asset is rejected | Truncate `libSkiaSharp.so` to zero bytes | Verifier identifies the empty SkiaSharp asset | Bash fixture | P1 |
+| PLATFORM-PUBLISH-007 | Missing HarfBuzz native asset is rejected | Remove `libHarfBuzzSharp.so` | Verifier identifies the missing HarfBuzz asset | Bash fixture | P1 |
+| PLATFORM-PUBLISH-008 | Empty HarfBuzz native asset is rejected | Truncate `libHarfBuzzSharp.so` to zero bytes | Verifier identifies the empty HarfBuzz asset | Bash fixture | P1 |
+| PLATFORM-PUBLISH-009 | Nested forbidden font assembly is rejected | Place `PdfSharp.WPFonts.dll` under a nested runtime asset directory | Verifier rejects the forbidden assembly regardless of nesting depth | Bash fixture | P1 |
+| PLATFORM-PUBLISH-010 | Unsupported runtime assets are rejected | Add an `osx-x64` runtime directory to the Linux x64 artifact | Verifier identifies the unsupported runtime directory | Bash fixture | P1 |
+| PLATFORM-PUBLISH-011 | Oversized artifact is rejected | Make the fixture exceed the configured 120 MiB limit | Verifier reports the size-limit failure | Bash fixture | P1 |
+| PLATFORM-PUBLISH-012 | Missing API assembly is rejected | Remove `TurnOva.API.dll` | Verifier exits non-zero with the exact missing/empty API assembly diagnostic | Bash fixture | P1 |
+
+The fixture harness asserts the expected diagnostic for each negative case; a generic non-zero exit is not sufficient evidence. The local Bash fixture run passed the valid fixture and all 11 negative cases. Exact-head GitHub Actions evidence is pending. This validates the publish directory contract only; it does not establish production hosting, live Cosmos, signed release or production readiness.
+
+
+## PLATFORM-01 — native API publish verifier exact-head execution evidence (2026-11-14)
+
+PR #163 exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [GitHub Actions CI #1608 / run 43583820733](https://github.com/rajeevp727/turnova-platform/actions/runs/43583820733) **12/12 jobs**.
+
+- Backend Release build and tests: **594/594 passed**, 0 failed, 0 skipped. Shared mobile/auth Node tests: **179/179 passed**. Deterministic Python CI harness: **48/48 passed**.
+- Rider/Driver Expo validation, Android debug and standalone release APK builds, unsigned iOS Simulator builds, native non-container .NET API Release publish and all four same-run emulator/simulator smoke jobs passed.
+- `scripts/test-api-publish-verifier.sh` passed one valid fixture plus 11 negative cases; negative cases assert the expected diagnostic. `scripts/verify-api-publish.sh` validated the actual CI publish directory at **43,111,979 bytes** against the 125,829,120-byte limit.
+- Actual publish artifact `14109034542` contained non-empty `TurnOva.API.dll`, `TurnOva.API.deps.json`, `TurnOva.API.runtimeconfig.json`, `libSkiaSharp.so` and `libHarfBuzzSharp.so`; `PdfSharp.WPFonts.dll` was absent. The runtime directory allow-list remained Linux x64 plus the existing `unix` compatibility entry.
+- Same-run smoke artifacts: Rider Android `14110196137`, Driver Android `14109384830`, Rider iOS Simulator `14109792158`, Driver iOS Simulator `14109599886`. Android apps installed/launched and screenshots were captured on attempt 1. Both unsigned iOS Simulator apps reached their role-specific login surface and verified the SecureStore-unavailable banner. No signed-device Keychain or physical-device acceptance is claimed.
+- This evidence verifies CI build artifacts and deterministic verifier behavior only; it does not establish production API hosting, live Cosmos, signed releases or production readiness.
