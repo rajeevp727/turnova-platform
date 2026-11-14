@@ -279,4 +279,77 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal("failure", measurement.Outcome);
         Assert.Equal(new[] { "event_type", "outcome" }, measurement.TagKeys);
     }
+
+    [Fact]
+    public async Task UnionAuditPersistenceSurvivesThrowingTelemetryListeners()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "union-audit-listener-failure-driver";
+        const string firstUnionId = "union-audit-listener-failure-first";
+        const string nextUnionId = "union-audit-listener-failure-next";
+        using var ops = factory.CreateClient("Ops", "union-audit-listener-failure-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        SeedTransferTargetUnion(factory, firstUnionId);
+        SeedTransferTargetUnion(factory, nextUnionId);
+
+        using (var meterListener = new MeterListener())
+        {
+            meterListener.InstrumentPublished = (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                    instrument.Name == "turnova.union.audit.write_attempts")
+                    listener.EnableMeasurementEvents(instrument);
+            };
+            meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+                throw new InvalidOperationException("Union audit metric listener failure"));
+            meterListener.Start();
+
+            using var activityListener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                    throw new InvalidOperationException("Union audit activity start listener failure")
+            };
+            ActivitySource.AddActivityListener(activityListener);
+
+            using var assignment = await ops.PostAsJsonAsync(
+                $"/api/v1/ops/drivers/{driverId}/union-assignment",
+                new { unionId = firstUnionId, reason = "Initial Cab membership assignment" });
+            Assert.Equal(HttpStatusCode.OK, assignment.StatusCode);
+        }
+
+        using (var meterListener = new MeterListener())
+        {
+            meterListener.InstrumentPublished = (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                    instrument.Name == "turnova.union.audit.write_attempts")
+                    listener.EnableMeasurementEvents(instrument);
+            };
+            meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
+                throw new InvalidOperationException("Union audit metric listener failure"));
+            meterListener.Start();
+
+            using var activityListener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+                ActivityStopped = _ => throw new InvalidOperationException("Union audit activity stop listener failure")
+            };
+            ActivitySource.AddActivityListener(activityListener);
+
+            using var transfer = await ops.PostAsJsonAsync(
+                $"/api/v1/ops/drivers/{driverId}/union-assignment",
+                new { unionId = nextUnionId, reason = "Approved membership transfer" });
+            Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
+        }
+
+        var persisted = factory.Services
+            .GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            .Values.Where(item => item.DriverId == driverId).ToArray();
+        Assert.Equal(2, persisted.Length);
+        Assert.Contains(persisted, item => item.EventType == "Assigned" && item.UnionId == firstUnionId);
+        Assert.Contains(persisted, item => item.EventType == "Transferred" && item.UnionId == nextUnionId);
+    }
+
 }
