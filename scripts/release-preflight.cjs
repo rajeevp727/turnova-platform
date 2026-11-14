@@ -7,10 +7,21 @@ const APP_CONTRACTS = Object.freeze({
   "turnova-rider": Object.freeze({ name: "TurnOva Rider", androidPackage: "com.turnova.rider" }),
   "turnova-driver": Object.freeze({ name: "TurnOva Driver", androidPackage: "com.turnova.driver" })
 });
-const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const ANDROID_PACKAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/;
 const IOS_BUNDLE_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidSemanticVersion(value) {
+  return typeof value === "string" && SEMVER_PATTERN.test(value) && !/[\r\n]/.test(value);
+}
+
+function supportsEasCli16OrNewer(range) {
+  const match = typeof range === "string"
+    ? /^>=\s*(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\s*$/.exec(range)
+    : null;
+  return Boolean(match) && BigInt(match[1]) >= 16n;
+}
 
 function isNonPublicIpv4(host) {
   if (net.isIP(host) !== 4) return false;
@@ -92,7 +103,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   if (!contract) error("app-slug", "expo.slug must be turnova-rider or turnova-driver.");
   else if (expo.name !== contract.name) error("app-name", "expo.name does not match the Rider/Driver app identity for this slug.");
 
-  if (typeof expo.version !== "string" || !SEMVER_PATTERN.test(expo.version)) {
+  if (!isValidSemanticVersion(expo.version)) {
     error("app-version", "expo.version must be a valid semantic version.");
   }
 
@@ -168,8 +179,8 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
     blocker("eas-project-linkage", "Release Engineering", "Verify that the configured UUID resolves to the approved EAS project and this app is linked; UUID syntax alone is not linkage evidence.");
   }
 
-    const cliVersion = easJson?.cli?.version;
-  if (typeof cliVersion !== "string" || !/^>=\s*16(?:\.|$)/.test(cliVersion)) {
+  const cliVersion = easJson?.cli?.version;
+  if (!supportsEasCli16OrNewer(cliVersion)) {
     error("eas-cli-version", "eas.json must require EAS CLI 16 or newer.");
   }
 
@@ -238,11 +249,21 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
 
 function parseArguments(argv) {
   const options = {};
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
-    if (key === "--app-dir") options.appDirectory = argv[++index];
-    else if (key === "--output") options.output = argv[++index];
-    else throw new Error("Unknown argument: " + key);
+    const optionName = key === "--app-dir" ? "appDirectory" : key === "--output" ? "output" : null;
+    if (!optionName) throw new Error("Unknown argument: " + key);
+    if (seen.has(key)) throw new Error("Argument may only be provided once: " + key);
+
+    const value = argv[index + 1];
+    if (typeof value !== "string" || value.trim().length === 0 || value.startsWith("--")) {
+      throw new Error(key + " requires a value.");
+    }
+
+    options[optionName] = value;
+    seen.add(key);
+    index += 1;
   }
   return options;
 }
