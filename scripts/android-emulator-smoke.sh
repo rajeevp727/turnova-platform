@@ -167,6 +167,49 @@ if [[ ! -x "$EMULATOR_BIN" || ! -x "$ADB_BIN" ]]; then
   exit 1
 fi
 
+run_adb_readonly_with_retry() {
+  local label="$1"
+  shift
+  local attempt=1 max_attempts=3 status stdout_file stderr_file reconnect_file wait_file
+
+  while (( attempt <= max_attempts )); do
+    stdout_file="$OUTPUT_DIR/adb-$label-attempt-$attempt.stdout"
+    stderr_file="$OUTPUT_DIR/adb-$label-attempt-$attempt.stderr"
+
+    if "$ADB_BIN" "$@" >"$stdout_file" 2>"$stderr_file"; then
+      cat "$stdout_file"
+      return 0
+    else
+      status=$?
+    fi
+
+    if [[ "$status" -ne 255 ]]; then
+      echo "Android read-only ADB command '$label' failed with exit $status." >&2
+      cat "$stderr_file" >&2 || true
+      return "$status"
+    fi
+
+    echo "Android read-only ADB command '$label' encountered transient exit 255 (attempt $attempt/$max_attempts)." >&2
+    reconnect_file="$OUTPUT_DIR/adb-$label-reconnect-$attempt.txt"
+    timeout 10 "$ADB_BIN" reconnect offline >"$reconnect_file" 2>&1 || true
+
+    wait_file="$OUTPUT_DIR/adb-$label-wait-$attempt.txt"
+    if ! timeout 30 "$ADB_BIN" wait-for-device >"$wait_file" 2>&1; then
+      echo "Android emulator did not return to device state during '$label' recovery." >&2
+      cat "$stderr_file" "$reconnect_file" "$wait_file" >&2 || true
+      return 1
+    fi
+
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+
+  echo "Android read-only ADB command '$label' failed after $max_attempts transport retries." >&2
+  "$ADB_BIN" devices >"$OUTPUT_DIR/adb-$label-devices.txt" 2>&1 || true
+  cat "$OUTPUT_DIR/adb-$label-devices.txt" >&2 || true
+  return 1
+}
+
 mkdir -p "$ANDROID_AVD_HOME"
 if [[ -e "$AVD_INI" || -e "$AVD_DIR" ]]; then
   echo "Refusing to replace an existing Android AVD at $AVD_INI or $AVD_DIR." >&2
@@ -223,13 +266,13 @@ fi
 "$ADB_BIN" shell input keyevent 82 >/dev/null 2>&1 || true
 
 "$ADB_BIN" install -r "$APK_PATH" | tee "$OUTPUT_DIR/install.txt"
-installed_path="$("$ADB_BIN" shell pm path "$EXPECTED_ID" | tr -d '\r')"
+installed_path="$(run_adb_readonly_with_retry "package-path" shell pm path "$EXPECTED_ID" | tr -d '\r')"
 if [[ -z "$installed_path" || "$installed_path" != package:* ]]; then
   echo "Expected package was not installed: $EXPECTED_ID" >&2
   exit 1
 fi
 
-resolution="$("$ADB_BIN" shell cmd package resolve-activity --brief "$EXPECTED_ID" | tr -d '\r')"
+resolution="$(run_adb_readonly_with_retry "resolve-activity" shell cmd package resolve-activity --brief "$EXPECTED_ID" | tr -d '\r')"
 activity="$(printf '%s\n' "$resolution" | awk -v prefix="$EXPECTED_ID/" 'index($0, prefix) == 1 { resolved = $0 } END { print resolved }')"
 if [[ -z "$activity" ]]; then
   echo "No launchable activity resolved for $EXPECTED_ID." >&2
@@ -297,15 +340,15 @@ if [[ -z "$pid_before" ]]; then
   exit 1
 fi
 
-"$ADB_BIN" shell dumpsys activity activities | tr -d '\r' > "$OUTPUT_DIR/activities.txt"
+run_adb_readonly_with_retry "activity-stack" shell dumpsys activity activities | tr -d '\r' > "$OUTPUT_DIR/activities.txt"
 if ! grep -Fq "$EXPECTED_ID/" "$OUTPUT_DIR/activities.txt"; then
   echo "Launched activity is not present in the emulator activity stack." >&2
   exit 1
 fi
 
 capture_ui_hierarchy() {
-  "$ADB_BIN" shell uiautomator dump /sdcard/turnova-ui-hierarchy.xml > "$OUTPUT_DIR/uiautomator-dump.txt" 2>&1
-  "$ADB_BIN" shell cat /sdcard/turnova-ui-hierarchy.xml | tr -d '\r' > "$OUTPUT_DIR/ui-hierarchy.xml"
+  run_adb_readonly_with_retry "ui-dump" shell uiautomator dump /sdcard/turnova-ui-hierarchy.xml > "$OUTPUT_DIR/uiautomator-dump.txt"
+  run_adb_readonly_with_retry "ui-hierarchy" shell cat /sdcard/turnova-ui-hierarchy.xml | tr -d '\r' > "$OUTPUT_DIR/ui-hierarchy.xml"
   if [[ ! -s "$OUTPUT_DIR/ui-hierarchy.xml" ]]; then
     echo "Android UI hierarchy dump is missing or empty." >&2
     cat "$OUTPUT_DIR/uiautomator-dump.txt" >&2 || true
@@ -387,7 +430,7 @@ assert_target_app_foreground() {
     exit 1
   fi
 
-  "$ADB_BIN" shell dumpsys activity activities | tr -d '\r' > "$OUTPUT_DIR/activities-current.txt"
+  run_adb_readonly_with_retry "activity-stack-current" shell dumpsys activity activities | tr -d '\r' > "$OUTPUT_DIR/activities-current.txt"
   resumed_line="$(awk '/topResumedActivity=|mResumedActivity:/ { line = $0 } END { print line }' "$OUTPUT_DIR/activities-current.txt")"
   if [[ "$resumed_line" != *"$EXPECTED_ID/"* ]]; then
     echo "Target app is not the resumed foreground activity during Android system-UI recovery." >&2
@@ -397,7 +440,7 @@ assert_target_app_foreground() {
 }
 
 capture_app_runtime_logcat() {
-  "$ADB_BIN" logcat -d -v threadtime > "$OUTPUT_DIR/logcat.txt"
+  run_adb_readonly_with_retry "logcat" logcat -d -v threadtime > "$OUTPUT_DIR/logcat.txt"
 
   if grep -Fq "ANR in $EXPECTED_ID" "$OUTPUT_DIR/logcat.txt"; then
     echo "Android runtime recorded an ANR for the TurnOva app $EXPECTED_ID." >&2
