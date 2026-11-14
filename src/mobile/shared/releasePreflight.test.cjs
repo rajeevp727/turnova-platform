@@ -373,3 +373,21 @@ test("release preflight CLI rejects missing, duplicate and unknown arguments", (
     assert.ok(result.stderr.includes(scenario.message), result.stderr);
   }
 });
+
+
+test("release preflight CLI keeps stdout valid JSON when no output file is specified", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "turnova-release-preflight-stdout-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const appDirectory = createCliFixture(root);
+  const result = runReleasePreflightCli(["--app-dir", appDirectory]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.engineeringChecks.status, "passed");
+  assert.equal(report.productionReadiness, "blocked");
+  assert.equal(report.externalGates.length, 7);
+  assert.equal(
+    result.stderr,
+    "Release preflight turnova-rider: engineering checks passed; 7 external release gates; production readiness blocked.\\n"
+  );
+});
