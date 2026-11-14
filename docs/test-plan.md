@@ -2248,6 +2248,7 @@ PR #163 exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [GitHub Act
 | RELEASE-PREFLIGHT-006 | CLI writes a machine-readable readiness report | Run the real CLI against an isolated temporary Rider app fixture with `--app-dir` and `--output` | JSON report is parseable, engineering checks pass, seven external gates are listed, production readiness remains blocked, and exit code is zero | Node CLI integration | P1 |
 | RELEASE-PREFLIGHT-007 | CLI records invalid metadata and exits non-zero | Run the real CLI with a leading-zero app version and an output path | Failure report is written, `app-version` is present, and exit code is one | Node CLI integration | P1 |
 | RELEASE-PREFLIGHT-008 | CLI rejects missing, duplicate and unknown arguments | Exercise absent app directory, missing values, an option used as another option's value, duplicate flags and unknown flags | CLI emits a deterministic diagnostic and exits non-zero before reading app files | Node CLI integration | P1 |
+| RELEASE-PREFLIGHT-009 | CLI stdout remains valid JSON without an output file | Run the real CLI with `--app-dir` and omit `--output` | Stdout contains only a parseable readiness JSON document; stderr contains the human summary; seven external gates and blocked readiness are reported | Node CLI integration | P1 |
 
 ### RELEASE-01 — final exact-head CI and follow-up stdout correction (2026-11-14)
 
