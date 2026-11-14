@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-publish_dir="\${1:?Usage: verify-api-publish.sh <publish-directory>}"
+publish_dir="${1:?Usage: verify-api-publish.sh <publish-directory>}"
 if [[ ! -d "$publish_dir" ]]; then
   echo "Publish directory does not exist: $publish_dir" >&2
   exit 1
@@ -12,7 +12,7 @@ required_files=(
   "TurnOva.API.deps.json"
   "TurnOva.API.runtimeconfig.json"
 )
-for relative_path in "\${required_files[@]}"; do
+for relative_path in "${required_files[@]}"; do
   if [[ ! -s "$publish_dir/$relative_path" ]]; then
     echo "$relative_path is missing or empty from the publish output." >&2
     exit 1
@@ -23,7 +23,7 @@ required_native_assets=(
   "libSkiaSharp.so"
   "libHarfBuzzSharp.so"
 )
-for asset_name in "\${required_native_assets[@]}"; do
+for asset_name in "${required_native_assets[@]}"; do
   asset_path="$(find "$publish_dir" -type f -name "$asset_name" -print -quit)"
   if [[ -z "$asset_path" ]]; then
     echo "Required Linux x64 native rendering asset is missing: $asset_name" >&2
@@ -33,12 +33,12 @@ for asset_name in "\${required_native_assets[@]}"; do
     echo "Required Linux x64 native rendering asset is empty: $asset_name" >&2
     exit 1
   fi
-  printf 'Verified Linux native rendering asset: %s\n' "\${asset_path#"$publish_dir"/}"
+  printf 'Verified Linux native rendering asset: %s\n' "${asset_path#"$publish_dir"/}"
 done
 
 forbidden_font="$(find "$publish_dir" -type f -iname 'PdfSharp.WPFonts.dll' -print -quit)"
 if [[ -n "$forbidden_font" ]]; then
-  echo "PdfSharp.WPFonts.dll contains optional Segoe WP font resources and must not be redistributed: \${forbidden_font#"$publish_dir"/}" >&2
+  echo "PdfSharp.WPFonts.dll contains optional Segoe WP font resources and must not be redistributed: ${forbidden_font#"$publish_dir"/}" >&2
   exit 1
 fi
 
