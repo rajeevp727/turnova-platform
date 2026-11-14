@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Main HEAD:** `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357`. Sole active feature PR [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`, current code/test head `d1e709d228e4bd6c16d6a7f6b0f4f31767f64791`. CI #1572 passed 12/12 on source/test head; CI #1573 passed 12/12 on preceding documentation head `d9632792494742f132dd21b6146e6de615f3591e`. Exact-head [CI #1579 / run 43554689795](https://github.com/rajeevp727/turnova-platform/actions/runs/43554689795) is pending and includes UNION-OBS-006, which proves Union assignment/transfer persistence survives throwing ActivitySource and MeterListener callbacks. PR #160 remains Draft pending final-head CI; reviews are COMMENT-only and no approval is claimed.  
+**Main HEAD:** `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0`. Sole active feature PR [#161](https://github.com/rajeevp727/turnova-platform/pull/161), branch `fix/platform-01-telemetry-listener-isolation`, source/test head `8496b27f8925ab0ed88889eb6d286304f3177a50`; exact-head CI pending. PR #160 Union audit observability merged at `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0` after CI #1583 passed 12/12 (backend 590/590, shared 179/179, Python 48/48, native builds/publish and four same-run smoke jobs). Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2083,3 +2083,11 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - After the final documentation-head CI passes, recheck exact head/base/reviews and GitHub merge enforcement. Do not self-approve or bypass protections.
 - Next sequential PLATFORM-01 task: best-effort isolation for ride-audit and storage-readiness metric/activity listener failures. Preserve authoritative persistence and original readiness exceptions; add deterministic throwing-listener unit and API integration tests. Then continue native-publish/audit-path work before RELEASE-01.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. Live Cosmos, telemetry exporter/alerts, production auth/CORS, dispatch policy, private documents, legal terms, support/reconciliation, signing, physical-device and hosting gates remain external.
+
+
+## Latest engineering handoff — PR #161 (2026-11-14)
+
+- PR #160 merged at `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0` after exact-head CI #1583 / run 43554962928 passed 12/12. Backend 590/590, shared mobile/auth 179/179, deterministic harness 48/48, native Android/iOS builds and four emulator/simulator smoke jobs passed. Unsigned iOS simulator evidence does not establish signed-device Keychain or physical-device acceptance.
+- Sole active PR #161: `fix/platform-01-telemetry-listener-isolation`, current source/test head `8496b27f8925ab0ed88889eb6d286304f3177a50`. The increment makes ride-audit and storage-readiness telemetry strictly best-effort, preserving authoritative ride persistence and original readiness exception classification when ActivitySource/MeterListener callbacks throw.
+- Deterministic tests added: RIDE-OBS-001/002 and STORAGE-OBS-001/002. Exact-head CI is pending; do not claim results until it completes.
+- Next: finish PR #161 CI/review/merge, re-read main, then continue remaining PLATFORM-01 native-publish/audit-path reliability work before RELEASE-01. Correct stale README product wording in a separate documentation-focused increment.
