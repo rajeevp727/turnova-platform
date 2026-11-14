@@ -2255,7 +2255,7 @@ PR #163 exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [GitHub Act
 PR #164 head `467400c65b99094b6714e9b23846f4507f41b438` passed [GitHub Actions CI #1618 / run 43594209819](https://github.com/rajeevp727/turnova-platform/actions/runs/43594209819) with **12/12 jobs successful**.
 
 - Backend Release build/tests: **594/594 passed**, 0 failed, 0 skipped.
-- Shared mobile/auth Node tests: **187/187 passed**, including RELEASE-PREFLIGHT-001..008.
+- Shared mobile/auth Node tests: **188/188 passed**, including RELEASE-PREFLIGHT-001..009.
 - Deterministic Python CI harness: **48/48 passed**.
 - Rider and Driver Expo validation, typecheck, Metro shared-module visibility, production Android/iOS JavaScript bundles and release preflight passed.
 - Rider/Driver Android debug and standalone release APK builds passed; both unsigned iOS Simulator app builds passed; native non-container .NET API Release publish and publish-artifact verifier passed.
@@ -2267,4 +2267,12 @@ PR #164 head `467400c65b99094b6714e9b23846f4507f41b438` passed [GitHub Actions C
 
 Review found that when `--output` was omitted, the CLI wrote JSON and then a human-readable summary to stdout, so stdout was not valid standalone JSON. The CLI now writes the JSON report only to stdout and sends the human summary to stderr. When `--output` is supplied, the JSON report is written to that file and the summary remains on stdout. A real CLI test invokes the script without `--output`, parses stdout as JSON, checks engineering success, seven external gates and blocked production readiness, and asserts the exact stderr summary.
 
-The stdout correction was committed after CI #1618. The current code/documentation head therefore requires fresh exact-head CI; do not treat CI #1618 as evidence for RELEASE-PREFLIGHT-009. The 19-row matrix remains 0 Verified, 15 In Progress and 4 Blocked; RELEASE-01 remains Blocked by signing, production configuration, physical-device acceptance and store gates.
+The stdout correction is covered by exact-head CI #1626 / run 43597630108 on PR #164 head `cd30bbea9d05ef72e5cc487427ff045688d0102d`, which passed 12/12 jobs. Shared mobile/auth Node tests passed 188/188, including RELEASE-PREFLIGHT-009. The current evidence-document synchronization creates a new PR head and requires fresh exact-head CI before ready/merge. The 19-row matrix remains 0 Verified, 15 In Progress and 4 Blocked; RELEASE-01 remains Blocked by signing, production configuration, physical-device acceptance and store gates.
+
+
+### PR #164 exact-head verification — CI #1626 (2026-11-14)
+
+[CI #1626 / run 43597630108](https://github.com/rajeevp727/turnova-platform/actions/runs/43597630108) passed **12/12 jobs on exact PR head cd30bbea9d05ef72e5cc487427ff045688d0102d**. Backend Release tests **594/594** (0 failed, 0 skipped); shared mobile/auth Node tests **188/188** (including RELEASE-PREFLIGHT-001..009); deterministic Python harness **48/48**; Rider/Driver Expo validation; Rider/Driver Android debug and standalone release APKs; unsigned iOS Simulator builds; native non-container .NET 10 API publish; and all four same-run Android emulator/iOS Simulator install-launch smoke jobs passed.
+- CI artifacts: native API publish `14115173145`; Rider/Driver Android standalone release APKs `14115164625` / `14114959706`; Rider/Driver unsigned iOS Simulator apps `14114583999` / `14116300073`; smoke artifacts Rider Android `14114309761`, Driver Android `14115635244`, Rider iOS Simulator `14115673658`, Driver iOS Simulator `14115712691`.
+- Android Rider/Driver install-launch passed and screenshots were captured on attempt 1. Both unsigned iOS Simulator apps reached their role-specific login surfaces and verified the SecureStore-unavailable banner; this does not establish signed-device Keychain or physical-device acceptance.
+- Both Rider and Driver release-preflight reports identify seven external release gates each. No signed Android AAB, signed iOS IPA, approved production API URL, EAS project linkage, signing credential, physical-device acceptance or store submission is claimed. Production readiness remains blocked.
