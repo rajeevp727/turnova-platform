@@ -82,10 +82,10 @@ public sealed partial class RideApiIntegrationTests
         var persistedAudit = factory.Services
             .GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
             .Values.Where(item => item.DriverId == driverId).ToArray();
-        Assert.Contains(persistedAudit, item => item.EventType == "Assigned");
-        Assert.Contains(persistedAudit, item => item.EventType == "Transferred");
-        Assert.Contains(persistedAudit, item => item.EventType == "SelfieApprovedByUnion");
-        Assert.Contains(persistedAudit, item => item.EventType == "SelfieRejectedByUnion");
+        Assert.Equal(1, persistedAudit.Count(item => item.EventType == "Assigned"));
+        Assert.Equal(1, persistedAudit.Count(item => item.EventType == "Transferred"));
+        Assert.Equal(1, persistedAudit.Count(item => item.EventType == "SelfieApprovedByUnion"));
+        Assert.Equal(1, persistedAudit.Count(item => item.EventType == "SelfieRejectedByUnion"));
 
         Assert.Contains(measurements, item => item.EventType == "assigned" && item.Outcome == "success");
         Assert.Contains(measurements, item => item.EventType == "transferred" && item.Outcome == "success");
@@ -103,6 +103,9 @@ public sealed partial class RideApiIntegrationTests
         Assert.NotEmpty(unionActivities);
         Assert.Contains(unionActivities, item =>
             Equals(item.GetTagItem("turnova.union.audit.event_type"), "assigned") &&
+            Equals(item.GetTagItem("turnova.union.audit.outcome"), "success"));
+        Assert.Contains(unionActivities, item =>
+            Equals(item.GetTagItem("turnova.union.audit.event_type"), "selfie_approved") &&
             Equals(item.GetTagItem("turnova.union.audit.outcome"), "success"));
         Assert.Contains(unionActivities, item =>
             Equals(item.GetTagItem("turnova.union.audit.event_type"), "selfie_approved") &&
@@ -192,6 +195,10 @@ public sealed partial class RideApiIntegrationTests
 
         Assert.Contains(measurements, item => item.EventType == "selfie_approved" && item.Outcome == "failure");
         Assert.All(measurements, item => Assert.Equal(new[] { "event_type", "outcome" }, item.TagKeys));
+        var preservedCanonical = factory.Services
+            .GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            .Values.Single(item => item.EventId == eventId);
+        Assert.Equal("different-safe-actor", preservedCanonical.ActorId);
         var failedActivity = Assert.Single(activities.Where(item => item.OperationName == "union.audit.write"));
         Assert.Equal(ActivityStatusCode.Error, failedActivity.Status);
         Assert.Equal("selfie_approved", failedActivity.GetTagItem("turnova.union.audit.event_type"));
