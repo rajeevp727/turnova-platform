@@ -909,3 +909,11 @@ PRD.md §11 no longer implies a payment-provider cost/configuration gate; the Ri
 - PR #162 documentation aligns Cab-only Rider-selected Union discovery, direct negotiation and Driver-reported reconciliation, removes customer-facing FIFO/payment-provider claims, and explicitly excludes Fleet/Ops Phase 2. Runtime behavior and historical non-Cab data are unchanged.
 - This documentation evidence update creates a new PR head and requires fresh exact-head CI. Keep strict row statuses unchanged: **0 Verified, 15 In Progress, 4 Blocked**. PLATFORM-01 remains In Progress; RELEASE-01 remains Blocked by signed artifacts, physical-device acceptance and store/hosting gates. Production readiness is not established.
 - After #162 safely merges, continue PLATFORM-01 native API publish verifier fixture hardening, then RELEASE-01 release-preflight automated tests. External live Cosmos, auth/provider, dispatch policy, private document, legal/support/reconciliation, telemetry export, signing, physical-device and hosting gates remain explicit.
+
+
+## PLATFORM-01 — native API publish verifier hardening (2026-11-14)
+
+- \`scripts/verify-api-publish.sh\` now requires non-empty API assembly and framework-dependent metadata (\`TurnOva.API.deps.json\`, \`TurnOva.API.runtimeconfig.json\`), verifies both required Linux x64 rendering libraries are non-empty, and rejects \`PdfSharp.WPFonts.dll\` recursively rather than only at the publish root.
+- \`scripts/test-api-publish-verifier.sh\` adds a valid publish fixture and 11 negative fixtures with exact expected diagnostic assertions: missing dependency metadata, empty runtime configuration, empty API assembly, missing/empty SkiaSharp, missing/empty HarfBuzz, nested forbidden font assembly, unsupported runtime directory, size over 120 MiB and missing API assembly.
+- Local Bash fixture execution passed the valid fixture and all 11 negative cases. GitHub Actions exact-head evidence is pending; do not promote PLATFORM-01 based on local fixtures alone.
+- The official acceptance matrix remains **19 rows: 0 Verified, 15 In Progress, 4 Blocked**. PLATFORM-01 remains In Progress because production/live Cosmos, authentication, telemetry export and other external evidence remains; RELEASE-01 remains Blocked pending signed artifacts, physical-device acceptance and store/hosting gates.
