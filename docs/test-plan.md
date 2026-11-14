@@ -2357,3 +2357,25 @@ Backend CI log confirms 594 passed, 0 failed, 0 skipped. Shared Node log confirm
 The Android ADB retry helper applies to read-only/idempotent post-launch probes (package path, activity resolution/stack, UI hierarchy dump/read and logcat). Only exit 255 is retried; reconnect and device wait are bounded; persistent failures remain fail-closed. Install, launch and input side effects are not blindly retried. The PID probe separately preserves exit-1-as-process-absent semantics and same-PID checks. Deterministic Python cases cover transient/persistent PID-probe recovery, transient logcat recovery and persistent activity-stack failure. The real emulator/simulator smoke jobs passed; this does not establish signed-device Keychain, physical-device acceptance, production hosting or production readiness.
 
 Both release-preflight reports continue to identify seven external gates per app. No signed Android AAB, signed iOS IPA, approved bundle IDs/EAS linkage, production API URL, signing credentials, physical-device acceptance or store submission is claimed. The documentation synchronization containing this section requires a fresh exact-head CI before PR readiness/merge.
+
+## RELEASE-01 — final exact documentation-head verification (2026-11-15)
+
+[CI #1651 / run 43630690831](https://github.com/rajeevp727/turnova-platform/actions/runs/43630690831) passed **12/12 jobs** on PR #164 documentation head `a3d16f36945ae3643c0ca6d1aaee6f27db14b50c`.
+
+| Evidence | Result | Artifact |
+|---|---|---:|
+| Native .NET 10 backend Release build/tests/publish | 594/594 tests; zero failures/skips | API publish `14128221414` |
+| Shared mobile/auth Node tests | 189/189 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
+| Rider/Driver Expo validation and production JS bundles | Both passed | `14128360695` / `14127379172` |
+| Rider/Driver Android debug APKs | Both built and identity-verified | `14127529327` / `14127364982` |
+| Rider/Driver Android standalone release APKs | Both built and identity-verified | `14128153881` / `14128382917` |
+| Rider/Driver unsigned iOS Simulator apps | Both built and identity-verified | `14128706025` / `14129095173` |
+| Rider Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2731 | `14127948301` |
+| Driver Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2261 | `14127953216` |
+| Rider iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 8685 | `14128553606` |
+| Driver iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 9001 | `14128538749` |
+
+Backend CI log confirms 594 passed, 0 failed, 0 skipped. Shared Node log confirms 189 passed, 0 failed, 0 skipped. The Python harness ran 48 tests and reported OK. All 12 workflow jobs completed successfully. All four ADB recovery fixtures passed; the real Android smoke jobs did not require recovery. The iOS apps are unsigned Simulator builds and explicitly report SecureStore unavailable; this does not establish signed-device Keychain or physical-device acceptance. Both release-preflight reports retain seven external gates each. No signed AAB/IPA, production EAS linkage, approved bundle identifiers, production API URL, signing credentials, physical-device acceptance, store submission or production readiness is claimed.
+
+The subsequent commit updates only the four evidence documents to record this verified run; it does not change application/runtime code. The normal exact-head CI for that documentation-only commit remains the merge gate.
