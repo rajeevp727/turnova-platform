@@ -1,7 +1,11 @@
 "use strict";
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const RELEASE_PREFLIGHT_SCRIPT = path.resolve(__dirname, "../../../scripts/release-preflight.cjs");
 const { validateReleaseConfig } = require("../../../scripts/release-preflight.cjs");
 
 function fixture(overrides = {}) {
@@ -201,4 +205,239 @@ test("configured iOS icon path is checked independently from the general Expo ic
   }));
   assert.equal(report.engineeringChecks.status, "failed");
   assert.ok(report.engineeringChecks.errors.some(item => item.id === "ios-icon"));
+});
+
+
+test("Expo app version enforces SemVer 2.0.0 core and identifier rules", () => {
+  const validVersions = [
+    "0.0.0",
+    "1.2.3",
+    "1.2.3-alpha",
+    "1.2.3-alpha.1",
+    "1.2.3-0",
+    "1.2.3+build.007",
+    "1.2.3-rc.1+build.7"
+  ];
+  for (const version of validVersions) {
+    const report = validateReleaseConfig(fixture({ appJson: { version } }));
+    assert.ok(!report.engineeringChecks.errors.some(item => item.id === "app-version"), version);
+  }
+
+  const invalidVersions = [
+    "01.2.3", "1.02.3", "1.2.03", "1.2.3-01", "1.2.3-00",
+    "1.2.3-alpha..1", "1.2.3+build..1", "1.2.3-", "1.2.3+", "1.2.3\n", "1.2.3\u2028", "1.2.3\u2029"
+  ];
+  for (const version of invalidVersions) {
+    const report = validateReleaseConfig(fixture({ appJson: { version } }));
+    assert.ok(report.engineeringChecks.errors.some(item => item.id === "app-version"), version);
+  }
+});
+
+test("EAS CLI minimum accepts only a strict >= SemVer range at version 16 or newer", () => {
+  for (const version of [">= 16.0.0", ">=16.0.1", ">= 16.10.0", ">= 17.0.0"]) {
+    const report = validateReleaseConfig(fixture({ easJson: { cli: { version } } }));
+    assert.ok(!report.engineeringChecks.errors.some(item => item.id === "eas-cli-version"), version);
+  }
+
+  for (const version of [
+    ">= 15.9.9", ">= 16", ">= 16.0", ">= 016.0.0",
+    ">= 16.0.0-beta.1", ">= 16.0.0junk", ">= 16.0.0\n", ">= 16.0.0\u2028", ">= 16.0.0\u2029", ">= 16.0.0 || >= 17.0.0", "^16.0.0"
+  ]) {
+    const report = validateReleaseConfig(fixture({ easJson: { cli: { version } } }));
+    assert.ok(report.engineeringChecks.errors.some(item => item.id === "eas-cli-version"), version);
+  }
+});
+
+test("development, preview and production EAS profiles fail closed at their contract boundaries", () => {
+  const scenarios = [
+    { id: "development-profile", build: { development: { developmentClient: false, distribution: "internal" } } },
+    { id: "development-profile", build: { development: { developmentClient: true, distribution: "store" } } },
+    { id: "preview-profile", build: { preview: { distribution: "store", android: { buildType: "apk" } } } },
+    { id: "preview-profile", build: { preview: { distribution: "internal", android: { buildType: "app-bundle" } } } },
+    { id: "production-profile", build: { production: { android: { buildType: "apk" }, ios: { distribution: "store" } } } },
+    { id: "production-profile", build: { production: { android: { buildType: "app-bundle" }, ios: { distribution: "internal" } } } }
+  ];
+
+  for (const scenario of scenarios) {
+    const report = validateReleaseConfig(fixture({ easJson: { build: scenario.build } }));
+    assert.ok(report.engineeringChecks.errors.some(item => item.id === scenario.id), JSON.stringify(scenario));
+  }
+});
+
+test("production API URL rejects credentials, query strings and fragments", () => {
+  for (const apiBaseUrl of [
+    "https://user:secret@api.turnova.com",
+    "https://api.turnova.com?token=unsafe",
+    "https://api.turnova.com#release", "https://api.turnova.com?", "https://api.turnova.com#", " https://api.turnova.com ",
+    "https://user@api.turnova.com"
+  ]) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, false, apiBaseUrl);
+    assert.ok(report.externalGates.some(item => item.id === "production-api-base-url"));
+  }
+});
+
+test("production API URL rejects empty userinfo and raw embedded whitespace", () => {
+  const rejectedUrls = [
+    "https://@api.turnova.com",
+    "https://api.turnova.com/path with space",
+    "https://api.turnova.com/path\tsegment",
+    "https://api.turnova.com/path\u2028segment",
+    "https://api.turnova.com\\path",
+    "https://api.turnova.com/path\u0000segment",
+    "https://api.turnova.com/path\u0080segment",
+    "https://api.turnova.com/path\u0085segment",
+    "https://api.turnova.com/path\u009fsegment"
+  ];
+  for (const apiBaseUrl of rejectedUrls) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, false, apiBaseUrl);
+  }
+
+  const acceptedUrls = [
+    "https://api.turnova.com/v1/assistant",
+    "https://api.turnova.com/path%20with%20space"
+  ];
+  for (const apiBaseUrl of acceptedUrls) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, true, apiBaseUrl);
+  }
+});
+
+test("production API URL rejects reserved address and internal hostname boundaries", () => {
+  const rejectedHosts = [
+    "https://0.0.0.1", "https://127.0.0.1", "https://169.254.169.254",
+    "https://172.16.0.1", "https://172.31.255.255", "https://192.168.1.1",
+    "https://224.0.0.1", "https://240.0.0.1", "https://255.255.255.255",
+    "https://[::]", "https://[::1]", "https://[ff02::1]", "https://[2002::1]",
+    "https://api.localdomain", "https://api.lan", "https://api.home",
+    "https://api.home.arpa", "https://api.test", "https://api.invalid",
+    "https://api.intranet", "https://api.private", "https://api.onion",
+    "https://API.LOCAL."
+  ];
+  for (const apiBaseUrl of rejectedHosts) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, false, apiBaseUrl);
+  }
+
+  const acceptedHosts = [
+    "https://172.15.255.255",
+    "https://172.32.0.1",
+    "https://198.20.0.1",
+    "https://[2001:4860:4860::8888]",
+    "https://api.turnova.com"
+  ];
+  for (const apiBaseUrl of acceptedHosts) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, true, apiBaseUrl);
+  }
+});
+
+function createCliFixture(root, version = "0.1.0") {
+  const appDirectory = path.join(root, "app");
+  const assetsDirectory = path.join(appDirectory, "assets");
+  fs.mkdirSync(assetsDirectory, { recursive: true });
+  const input = fixture({ appJson: { version } });
+  fs.writeFileSync(path.join(appDirectory, "app.json"), JSON.stringify(input.appJson), "utf8");
+  fs.writeFileSync(path.join(appDirectory, "eas.json"), JSON.stringify(input.easJson), "utf8");
+  fs.writeFileSync(path.join(assetsDirectory, "icon.png"), "fixture", "utf8");
+  fs.writeFileSync(path.join(assetsDirectory, "adaptive-icon.png"), "fixture", "utf8");
+  return appDirectory;
+}
+
+function runReleasePreflightCli(args) {
+  return spawnSync(process.execPath, [RELEASE_PREFLIGHT_SCRIPT, ...args], {
+    encoding: "utf8",
+    env: { ...process.env, EXPO_PUBLIC_API_BASE_URL: "" }
+  });
+}
+
+test("release preflight CLI writes a machine-readable report and summarizes external gates", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "turnova-release-preflight-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const appDirectory = createCliFixture(root);
+  const outputPath = path.join(root, "release-readiness.json");
+  const result = runReleasePreflightCli(["--app-dir", appDirectory, "--output", outputPath]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.match(result.stdout, /Release preflight turnova-rider: engineering checks passed; 7 external release gates; production readiness blocked\./);
+  const report = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  assert.equal(report.engineeringChecks.status, "passed");
+  assert.equal(report.productionReadiness, "blocked");
+  assert.equal(report.externalGates.length, 7);
+  assert.ok(Number.isFinite(Date.parse(report.generatedAtUtc)));
+});
+
+test("release preflight CLI writes a failed report and exits non-zero for invalid app metadata", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "turnova-release-preflight-invalid-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const appDirectory = createCliFixture(root, "01.2.3");
+  const outputPath = path.join(root, "release-readiness.json");
+  const result = runReleasePreflightCli(["--app-dir", appDirectory, "--output", outputPath]);
+
+  assert.equal(result.status, 1, result.stderr);
+  const report = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  assert.equal(report.engineeringChecks.status, "failed");
+  assert.ok(report.engineeringChecks.errors.some(item => item.id === "app-version"));
+  assert.match(result.stdout, /engineering checks failed/);
+});
+
+test("release preflight CLI rejects missing, duplicate and unknown arguments", () => {
+  const scenarios = [
+    { args: [], message: "Usage: node scripts/release-preflight.cjs" },
+    { args: ["--app-dir"], message: "--app-dir requires a value." },
+    { args: ["--app-dir", "--output"], message: "--app-dir requires a value." },
+    { args: ["--output", "report.json"], message: "Usage: node scripts/release-preflight.cjs" },
+    { args: ["--unexpected"], message: "Unknown argument: --unexpected" },
+    { args: ["--app-dir", "/fixture", "--app-dir", "/fixture"], message: "Argument may only be provided once: --app-dir" },
+    { args: ["--app-dir", "/fixture", "--output"], message: "--output requires a value." }
+  ];
+
+  for (const scenario of scenarios) {
+    const result = runReleasePreflightCli(scenario.args);
+    assert.equal(result.status, 1, JSON.stringify(scenario));
+    assert.ok(result.stderr.includes(scenario.message), result.stderr);
+  }
+});
+
+
+test("release preflight CLI keeps stdout valid JSON when no output file is specified", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "turnova-release-preflight-stdout-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const appDirectory = createCliFixture(root);
+  const result = runReleasePreflightCli(["--app-dir", appDirectory]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.engineeringChecks.status, "passed");
+  assert.equal(report.productionReadiness, "blocked");
+  assert.equal(report.externalGates.length, 7);
+  assert.equal(
+    result.stderr,
+    "Release preflight turnova-rider: engineering checks passed; 7 external release gates; production readiness blocked.\n"
+  );
+});
+
+test("release preflight CLI refuses output paths that alias app configuration", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "turnova-release-preflight-output-collision-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const appDirectory = createCliFixture(root);
+  const appJsonPath = path.join(appDirectory, "app.json");
+  const easJsonPath = path.join(appDirectory, "eas.json");
+  const symlinkPath = path.join(root, "app-json-symlink.json");
+  const hardlinkPath = path.join(root, "app-json-hardlink.json");
+  fs.symlinkSync(appJsonPath, symlinkPath);
+  fs.linkSync(appJsonPath, hardlinkPath);
+
+  const originalAppJson = fs.readFileSync(appJsonPath);
+  const originalEasJson = fs.readFileSync(easJsonPath);
+  for (const outputPath of [appJsonPath, easJsonPath, symlinkPath, hardlinkPath]) {
+    const result = runReleasePreflightCli(["--app-dir", appDirectory, "--output", outputPath]);
+    assert.equal(result.status, 1, outputPath);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "--output must not overwrite app.json or eas.json.\n");
+    assert.deepEqual(fs.readFileSync(appJsonPath), originalAppJson);
+    assert.deepEqual(fs.readFileSync(easJsonPath), originalEasJson);
+  }
 });

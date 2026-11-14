@@ -7,10 +7,20 @@ const APP_CONTRACTS = Object.freeze({
   "turnova-rider": Object.freeze({ name: "TurnOva Rider", androidPackage: "com.turnova.rider" }),
   "turnova-driver": Object.freeze({ name: "TurnOva Driver", androidPackage: "com.turnova.driver" })
 });
-const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const ANDROID_PACKAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/;
 const IOS_BUNDLE_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidSemanticVersion(value) {
+  return typeof value === "string" && SEMVER_PATTERN.test(value) && !/[\r\n\u2028\u2029]/.test(value);
+}
+
+function supportsEasCli16OrNewer(range) {
+  if (typeof range !== "string" || /[\r\n\u2028\u2029]/.test(range)) return false;
+  const match = /^>=\s*(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\s*$/.exec(range);
+  return Boolean(match) && BigInt(match[1]) >= 16n;
+}
 
 function isNonPublicIpv4(host) {
   if (net.isIP(host) !== 4) return false;
@@ -92,7 +102,7 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   if (!contract) error("app-slug", "expo.slug must be turnova-rider or turnova-driver.");
   else if (expo.name !== contract.name) error("app-name", "expo.name does not match the Rider/Driver app identity for this slug.");
 
-  if (typeof expo.version !== "string" || !SEMVER_PATTERN.test(expo.version)) {
+  if (!isValidSemanticVersion(expo.version)) {
     error("app-version", "expo.version must be a valid semantic version.");
   }
 
@@ -130,16 +140,24 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   checkAsset("android-adaptive-icon", expo.android?.adaptiveIcon?.foregroundImage);
 
   const productionApiBaseUrlConfiguredInCi = (() => {
-    if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0) return false;
+    if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0 ||
+        apiBaseUrl !== apiBaseUrl.trim() || /\s/.test(apiBaseUrl) ||
+        /[\u0000-\u001f\u007f-\u009f]/.test(apiBaseUrl) || /[?#\\]/.test(apiBaseUrl)) return false;
     try {
       const parsed = new URL(apiBaseUrl);
+      const schemeSeparator = apiBaseUrl.indexOf("://");
+      if (schemeSeparator < 0) return false;
+      const authorityStart = schemeSeparator + 3;
+      const authorityEnd = apiBaseUrl.indexOf("/", authorityStart);
+      const authority = apiBaseUrl.slice(authorityStart, authorityEnd < 0 ? undefined : authorityEnd);
       const host = parsed.hostname.toLowerCase();
       const unbracketedHost = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
       const ipVersion = net.isIP(unbracketedHost);
       const nonPublicIp = ipVersion === 4 ? isNonPublicIpv4(unbracketedHost) : ipVersion === 6 ? isNonPublicIpv6(host) : false;
       const internalHost = ipVersion === 0 && isInternalHostname(unbracketedHost);
       return parsed.protocol === "https:" && host.length > 0 && !nonPublicIp && !internalHost &&
-        !host.includes("<") && !host.includes(">") && parsed.username.length === 0 && parsed.password.length === 0 &&
+        !host.includes("<") && !host.includes(">") && !authority.includes("@") &&
+        parsed.username.length === 0 && parsed.password.length === 0 &&
         parsed.search.length === 0 && parsed.hash.length === 0;
     } catch { return false; }
   })();
@@ -168,8 +186,8 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
     blocker("eas-project-linkage", "Release Engineering", "Verify that the configured UUID resolves to the approved EAS project and this app is linked; UUID syntax alone is not linkage evidence.");
   }
 
-    const cliVersion = easJson?.cli?.version;
-  if (typeof cliVersion !== "string" || !/^>=\s*16(?:\.|$)/.test(cliVersion)) {
+  const cliVersion = easJson?.cli?.version;
+  if (!supportsEasCli16OrNewer(cliVersion)) {
     error("eas-cli-version", "eas.json must require EAS CLI 16 or newer.");
   }
 
@@ -238,13 +256,44 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
 
 function parseArguments(argv) {
   const options = {};
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
-    if (key === "--app-dir") options.appDirectory = argv[++index];
-    else if (key === "--output") options.output = argv[++index];
-    else throw new Error("Unknown argument: " + key);
+    const optionName = key === "--app-dir" ? "appDirectory" : key === "--output" ? "output" : null;
+    if (!optionName) throw new Error("Unknown argument: " + key);
+    if (seen.has(key)) throw new Error("Argument may only be provided once: " + key);
+
+    const value = argv[index + 1];
+    if (typeof value !== "string" || value.trim().length === 0 || value.startsWith("--")) {
+      throw new Error(key + " requires a value.");
+    }
+
+    options[optionName] = value;
+    seen.add(key);
+    index += 1;
   }
   return options;
+}
+
+function assertOutputDoesNotOverwriteAppConfig(outputPath, appDirectory) {
+  const resolvedOutput = path.resolve(outputPath);
+  let realOutput = resolvedOutput;
+  try { realOutput = fs.realpathSync(resolvedOutput); } catch { /* A new output file has no real path yet. */ }
+
+  for (const fileName of ["app.json", "eas.json"]) {
+    const configPath = path.resolve(appDirectory, fileName);
+    const realConfigPath = fs.realpathSync(configPath);
+    let sameFile = false;
+    try {
+      const outputStat = fs.statSync(resolvedOutput);
+      const configStat = fs.statSync(configPath);
+      sameFile = outputStat.dev === configStat.dev && outputStat.ino === configStat.ino;
+    } catch { /* A non-existing output path cannot alias an existing config file. */ }
+
+    if (resolvedOutput === configPath || realOutput === realConfigPath || sameFile) {
+      throw new Error("--output must not overwrite app.json or eas.json.");
+    }
+  }
 }
 
 function main() {
@@ -261,14 +310,18 @@ function main() {
       ...validateReleaseConfig({ appJson, easJson, appDirectory })
     };
     const output = JSON.stringify(report, null, 2) + "\n";
-    if (options.output) fs.writeFileSync(path.resolve(options.output), output, { encoding: "utf8", flag: "w" });
-    else process.stdout.write(output);
-
-    console.log(
+    const summary =
       "Release preflight " + report.app.slug + ": engineering checks " +
       report.engineeringChecks.status + "; " + report.externalGates.length +
-      " external release gates; production readiness " + report.productionReadiness + "."
-    );
+      " external release gates; production readiness " + report.productionReadiness + ".";
+    if (options.output) {
+      assertOutputDoesNotOverwriteAppConfig(options.output, appDirectory);
+      fs.writeFileSync(path.resolve(options.output), output, { encoding: "utf8", flag: "w" });
+      process.stdout.write(summary + "\n");
+    } else {
+      process.stdout.write(output);
+      process.stderr.write(summary + "\n");
+    }
     if (report.engineeringChecks.status !== "passed") process.exitCode = 1;
   } catch (error) {
     console.error(error instanceof Error ? error.message : "Release preflight failed.");

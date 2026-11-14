@@ -2234,3 +2234,173 @@ PR #163 exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [GitHub Act
 - Actual publish artifact `14109034542` contained non-empty `TurnOva.API.dll`, `TurnOva.API.deps.json`, `TurnOva.API.runtimeconfig.json`, `libSkiaSharp.so` and `libHarfBuzzSharp.so`; `PdfSharp.WPFonts.dll` was absent. The runtime directory allow-list remained Linux x64 plus the existing `unix` compatibility entry.
 - Same-run smoke artifacts: Rider Android `14110196137`, Driver Android `14109384830`, Rider iOS Simulator `14109792158`, Driver iOS Simulator `14109599886`. Android apps installed/launched and screenshots were captured on attempt 1. Both unsigned iOS Simulator apps reached their role-specific login surface and verified the SecureStore-unavailable banner. No signed-device Keychain or physical-device acceptance is claimed.
 - This evidence verifies CI build artifacts and deterministic verifier behavior only; it does not establish production API hosting, live Cosmos, signed releases or production readiness.
+
+
+## RELEASE-01 — release preflight validation and CLI boundaries (2026-11-14)
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| RELEASE-PREFLIGHT-001 | Expo version follows SemVer 2.0.0 | Exercise valid core/prerelease/build identifiers and invalid leading-zero core/numeric prerelease, empty identifiers and CR/LF/U+2028/U+2029 | Valid SemVer is accepted; malformed or line-terminated versions fail the `app-version` engineering check | Node unit | P1 |
+| RELEASE-PREFLIGHT-002 | EAS CLI minimum is a strict supported range | Exercise `>= MAJOR.MINOR.PATCH` at 16+, below 16, abbreviated, malformed, prerelease, compound and line-terminated ranges | Only a strict minimum range at major 16 or newer passes; all malformed/unsupported forms fail `eas-cli-version` | Node unit | P1 |
+| RELEASE-PREFLIGHT-003 | EAS development/preview/production profiles fail closed | Remove required development-client/internal distribution, preview APK/internal distribution, or production app-bundle/store distribution settings | Each invalid profile produces its corresponding engineering error | Node unit | P1 |
+| RELEASE-PREFLIGHT-004 | Production API URL rejects credentials and delimiters | Supply username/password, query, fragment, empty `?`/`#` delimiters and surrounding whitespace | API URL is not reported as configured; the production URL remains an external gate | Node unit | P1 |
+| RELEASE-PREFLIGHT-005 | Production API URL rejects reserved and internal destinations | Exercise loopback/private/link-local/CGNAT/reserved/multicast IPv4, non-global IPv6, internal suffixes, case and trailing-dot variants; include public boundary controls | Reserved/internal values fail closed; supported public-address syntax passes without claiming DNS reachability | Node unit | P1 |
+| RELEASE-PREFLIGHT-006 | CLI writes a machine-readable readiness report | Run the real CLI against an isolated temporary Rider app fixture with `--app-dir` and `--output` | JSON report is parseable, engineering checks pass, seven external gates are listed, production readiness remains blocked, and exit code is zero | Node CLI integration | P1 |
+| RELEASE-PREFLIGHT-007 | CLI records invalid metadata and exits non-zero | Run the real CLI with a leading-zero app version and an output path | Failure report is written, `app-version` is present, and exit code is one | Node CLI integration | P1 |
+| RELEASE-PREFLIGHT-008 | CLI rejects missing, duplicate and unknown arguments | Exercise absent app directory, missing values, an option used as another option's value, duplicate flags and unknown flags | CLI emits a deterministic diagnostic and exits non-zero before reading app files | Node CLI integration | P1 |
+| RELEASE-PREFLIGHT-009 | CLI stdout remains valid JSON without an output file | Run the real CLI with `--app-dir` and omit `--output` | Stdout contains only a parseable readiness JSON document; stderr contains the human summary; seven external gates and blocked readiness are reported | Node CLI integration | P1 |
+| RELEASE-PREFLIGHT-010 | CLI refuses output paths that alias app configuration | Run the real CLI with `--output` set to app.json, eas.json, a symlink to app.json and a hardlink to app.json | CLI exits non-zero before writing; stdout remains empty; stderr names the collision; app.json and eas.json remain byte-for-byte unchanged | Node CLI integration | P1 |
+| RELEASE-PREFLIGHT-011 | Production API URL rejects empty authority userinfo and raw whitespace/C0/C1 controls | Supply `https://@host`, raw spaces/tabs/Unicode line separators, C0 controls and C1 controls U+0080/U+0085/U+009F in a path, and backslash delimiters; include valid path and percent-encoded-space controls | Unsafe raw URL forms fail closed before WHATWG URL normalization; valid HTTPS paths and percent-encoded spaces remain accepted | Node unit | P1 |
+
+### RELEASE-01 — final exact-head CI and follow-up stdout correction (2026-11-14)
+
+PR #164 head `467400c65b99094b6714e9b23846f4507f41b438` passed [GitHub Actions CI #1618 / run 43594209819](https://github.com/rajeevp727/turnova-platform/actions/runs/43594209819) with **12/12 jobs successful**.
+
+- Backend Release build/tests: **594/594 passed**, 0 failed, 0 skipped.
+- Shared mobile/auth Node tests: **188/188 passed**, including RELEASE-PREFLIGHT-001..009.
+- Deterministic Python CI harness: **48/48 passed**.
+- Rider and Driver Expo validation, typecheck, Metro shared-module visibility, production Android/iOS JavaScript bundles and release preflight passed.
+- Rider/Driver Android debug and standalone release APK builds passed; both unsigned iOS Simulator app builds passed; native non-container .NET API Release publish and publish-artifact verifier passed.
+- Rider/Driver Android emulator install/launch smoke and Rider/Driver iOS Simulator install/launch smoke all passed. Android screenshots were captured on attempt 1. Both unsigned iOS apps reached their role-specific login surfaces and verified the SecureStore-unavailable banner; signed-device Keychain success is not claimed.
+- Native API publish artifact: `14113468588`. Same-run smoke artifacts: Rider Android `14114280288`, Driver Android `14113828820`, Rider iOS Simulator `14114755885`, Driver iOS Simulator `14114186408`.
+- Both app release preflight reports continue to identify seven external gates. No signed Android AAB, signed iOS IPA, production API endpoint, EAS project linkage, signing credential or store submission is claimed.
+
+### RELEASE-PREFLIGHT-009 — JSON-only CLI stdout regression (2026-11-14)
+
+Review found that when `--output` was omitted, the CLI wrote JSON and then a human-readable summary to stdout, so stdout was not valid standalone JSON. The CLI now writes the JSON report only to stdout and sends the human summary to stderr. When `--output` is supplied, the JSON report is written to that file and the summary remains on stdout. A real CLI test invokes the script without `--output`, parses stdout as JSON, checks engineering success, seven external gates and blocked production readiness, and asserts the exact stderr summary.
+
+The stdout correction is covered by exact-head CI #1626 / run 43597630108 on PR #164 head `cd30bbea9d05ef72e5cc487427ff045688d0102d`, which passed 12/12 jobs. Shared mobile/auth Node tests passed 188/188, including RELEASE-PREFLIGHT-009. The current evidence-document synchronization creates a new PR head and requires fresh exact-head CI before ready/merge. The 19-row matrix remains 0 Verified, 15 In Progress and 4 Blocked; RELEASE-01 remains Blocked by signing, production configuration, physical-device acceptance and store gates.
+
+
+### PR #164 exact-head verification — CI #1626 (2026-11-14)
+
+[CI #1626 / run 43597630108](https://github.com/rajeevp727/turnova-platform/actions/runs/43597630108) passed **12/12 jobs on exact PR head cd30bbea9d05ef72e5cc487427ff045688d0102d**. Backend Release tests **594/594** (0 failed, 0 skipped); shared mobile/auth Node tests **188/188** (including RELEASE-PREFLIGHT-001..009); deterministic Python harness **48/48**; Rider/Driver Expo validation; Rider/Driver Android debug and standalone release APKs; unsigned iOS Simulator builds; native non-container .NET 10 API publish; and all four same-run Android emulator/iOS Simulator install-launch smoke jobs passed.
+- CI artifacts: native API publish `14115173145`; Rider/Driver Android standalone release APKs `14115164625` / `14114959706`; Rider/Driver unsigned iOS Simulator apps `14114583999` / `14116300073`; smoke artifacts Rider Android `14114309761`, Driver Android `14115635244`, Rider iOS Simulator `14115673658`, Driver iOS Simulator `14115712691`.
+- Android Rider/Driver install-launch passed and screenshots were captured on attempt 1. Both unsigned iOS Simulator apps reached their role-specific login surfaces and verified the SecureStore-unavailable banner; this does not establish signed-device Keychain or physical-device acceptance.
+- Both Rider and Driver release-preflight reports identify seven external release gates each. No signed Android AAB, signed iOS IPA, approved production API URL, EAS project linkage, signing credential, physical-device acceptance or store submission is claimed. Production readiness remains blocked.
+
+
+### RELEASE-PREFLIGHT-010 — prevent output/config data loss (2026-11-14)
+
+RELEASE-PREFLIGHT-010 prevents `--output` from overwriting `app.json` or `eas.json` directly or through symlink/hardlink aliases. It resolves canonical paths and compares file identity before writing; the regression test asserts both source files remain byte-for-byte unchanged. The real CLI regression covers direct app.json/eas.json targets, a symlink alias and a hardlink alias, asserting both original config files remain byte-for-byte unchanged and a separate report output remains permitted. A local Node guard exercise passed for all four collision forms and the separate output path. Full repository CI for this new test is pending in [CI #1629 / run 43603772195](https://github.com/rajeevp727/turnova-platform/actions/runs/43603772195) on code/test head `a5dcbb9eaa6d5c36cf37da77afb28ffad1d4ca87`; a fresh exact-head run is required after the current documentation synchronization. [CI #1626 / run 43597630108](https://github.com/rajeevp727/turnova-platform/actions/runs/43597630108) passed **12/12 jobs** on parent source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d`: backend 594/594 (0 failed, 0 skipped), shared mobile/auth Node 188/188 (RELEASE-PREFLIGHT-001..009), Python harness 48/48, Rider/Driver Expo, both Android debug/release APK builds, unsigned iOS Simulator builds, native .NET 10 API publish and all four same-run smoke jobs.
+
+
+## RELEASE-01 — Android emulator ADB transport resilience (2026-11-14)
+
+| ID | Scenario | Steps / input | Expected result | Type | Priority |
+|---|---|---|---|---|---|
+| RELEASE-SMOKE-ANDROID-001 | Transient ADB transport loss during post-launch PID verification recovers safely | Fake `adb shell pidof` to return exit 255 once after initial launch/foreground checks; allow `adb reconnect offline` and bounded `adb wait-for-device` to recover | Smoke continues only after the same app PID is re-read; foreground identity remains enforced; final screenshot and success result are produced; reconnect attempt and stderr are retained as diagnostics | Python/Bash deterministic harness | P1 |
+| RELEASE-SMOKE-ANDROID-002 | Persistent ADB transport loss during PID verification fails closed with diagnostics | Fake all three PID probes to return exit 255 while device recovery commands succeed | Smoke exits non-zero after exactly three bounded attempts, records per-attempt stderr and `adb devices`, and does not emit a success result | Python/Bash deterministic harness | P1 |
+| RELEASE-SMOKE-ANDROID-003 | Transient ADB transport loss during a read-only logcat probe recovers safely | Fake `adb logcat -d -v threadtime` to return exit 255 once; allow `adb reconnect offline` and bounded `adb wait-for-device` to recover | The same logcat probe is retried after device recovery; command-labelled stderr and reconnect diagnostics are retained; the smoke completes only if all existing process, foreground, login, ANR and fatal-exception assertions pass | Python/Bash deterministic harness | P1 |
+| RELEASE-SMOKE-ANDROID-004 | Persistent ADB transport loss during activity-stack inspection fails closed | Fake `adb shell dumpsys activity activities` to return exit 255 on all three attempts while bounded recovery commands succeed | Smoke exits non-zero after exactly three bounded attempts, records command-labelled per-attempt stderr and `adb devices`, and does not emit a success result | Python/Bash deterministic harness | P1 |
+
+The bounded retry helper applies to read-only/idempotent post-launch probes: package path, activity resolution/stack, UI hierarchy dump/read and logcat. Only ADB exit 255 is retried; reconnect and device wait are bounded; persistent failures remain fail-closed. Install, launch and input side effects are not blindly retried. The PID probe separately preserves exit-1-as-process-absent semantics and same-PID checks. A successful empty PID result remains a process-stability failure; app ANR, foreground, process-identity and login-screen checks are not relaxed. This is CI harness resilience only and does not establish physical-device acceptance.
+
+
+## RELEASE-01 — exact-head release and smoke verification (2026-11-14)
+
+[CI #1637 / run 43608815719](https://github.com/rajeevp727/turnova-platform/actions/runs/43608815719) passed all 12 jobs on PR #164 head `571fae288644f1f603d758d51164a2a283bedf67`.
+
+| Evidence | Result | Artifact |
+|---|---|---:|
+| Native .NET 10 backend Release tests | 594/594; zero failures/skips | API publish `14119588471` |
+| Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..011 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
+| Rider/Driver Expo validation | Both passed | Production JS bundles `14119775383` / `14119701240` |
+| Rider/Driver Android debug APKs | Both built and identity-verified | `14119444500` / `14119073259` |
+| Rider/Driver Android standalone release APKs | Both built and identity-verified | `14119707599` / `14119980661` |
+| Rider/Driver unsigned iOS Simulator apps | Both built and identity-verified | `14120295613` / `14120420157` |
+| Rider Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2867 | `14120415180` |
+| Driver Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2850 | `14120240837` |
+| Rider iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed | `14120002716` |
+| Driver iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed | `14120316789` |
+
+The Android transient ADB exit-255 recovery and persistent-failure fail-closed paths passed in deterministic fixtures; the real Android smoke jobs did not require recovery. The output-path collision review finding is fixed and its inline review thread is resolved. These CI artifacts do not establish signed AAB/IPA, signed-device Keychain, physical-device acceptance, store submission, production hosting or production readiness. Both release-preflight reports retain seven external gates each.
+
+
+## RELEASE-01 — exact documentation-head verification (2026-11-14)
+
+[CI #1638 / run 43614000396](https://github.com/rajeevp727/turnova-platform/actions/runs/43614000396) passed **12/12 jobs** on PR #164 documentation head `42719ba88a12613e8df5974d26746dff04709ea8`.
+
+| Evidence | Result | Artifact |
+|---|---|---:|
+| Native .NET 10 backend Release tests | 594/594; zero failures/skips | API publish `14121258004` |
+| Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..011 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
+| Rider/Driver Expo validation | Both passed | Production JS bundles `14121700169` / `14121377487` |
+| Rider/Driver Android debug APKs | Both built and identity-verified | `14121865052` / `14121487902` |
+| Rider/Driver Android standalone release APKs | Both built and identity-verified | `14121324172` / `14121104543` |
+| Rider/Driver unsigned iOS Simulator apps | Both built and identity-verified | `14122040984` / `14121726358` |
+| Rider Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2569 | `14121314493` |
+| Driver Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2303 | `14121254841` |
+| Rider iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 14368 | `14121798900` |
+| Driver iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 12840 | `14122695742` |
+
+Backend CI log confirms 594 passed, 0 failed, 0 skipped. Shared Node log confirms 189 passed, 0 failed, 0 skipped. The Python harness ran 48 tests and reported OK. All 12 workflow jobs completed successfully. The ADB transient exit-255 recovery and persistent-failure fail-closed paths passed in deterministic fixtures; the real Android smoke jobs did not require recovery. The output-path collision review finding is fixed and its inline review thread is resolved. These CI artifacts do not establish signed AAB/IPA, signed-device Keychain, physical-device acceptance, store submission, production hosting or production readiness. Both release-preflight reports retain seven external gates each. The documentation synchronization requires a new exact-head CI before PR readiness/merge.
+
+
+## RELEASE-01 — final source/test-head verification (2026-11-15)
+
+[CI #1643 / run 43623967660](https://github.com/rajeevp727/turnova-platform/actions/runs/43623967660) passed **12/12 jobs** on PR #164 source/test head `35687a394c9a89dd0225be79b66a5be25389f149`.
+
+| Evidence | Result | Artifact |
+|---|---|---:|
+| Native .NET 10 backend Release build/tests/publish | 594/594 tests; zero failures/skips | API publish `14124578905` |
+| Shared mobile/auth Node tests | 189/189 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
+| Rider/Driver Expo validation and production JS bundles | Both passed | `14125352187` / `14125032649` |
+| Rider/Driver Android debug APKs | Both built and identity-verified | `14125537058` / `14125293349` |
+| Rider/Driver Android standalone release APKs | Both built and identity-verified | `14124784541` / `14125048771` |
+| Rider/Driver unsigned iOS Simulator apps | Both built and identity-verified | `14124929431` / `14125643977` |
+| Rider/Driver Android emulator smoke | Both install/launch/login smoke jobs passed | `14125723039` / `14125887585` |
+| Rider/Driver iOS Simulator smoke | Both install/launch/login smoke jobs passed; expected unsigned SecureStore-unavailable behavior retained | `14126148142` / `14126072066` |
+
+The Android ADB retry helper applies to read-only/idempotent post-launch probes (package path, activity resolution/stack, UI hierarchy dump/read and logcat). Only exit 255 is retried; reconnect and device wait are bounded; persistent failures remain fail-closed. Install, launch and input side effects are not blindly retried. The PID probe separately preserves exit-1-as-process-absent semantics and same-PID checks. Deterministic Python cases cover transient/persistent PID-probe recovery, transient logcat recovery and persistent activity-stack failure. The real emulator/simulator smoke jobs passed; this does not establish signed-device Keychain, physical-device acceptance, production hosting or production readiness.
+
+Both release-preflight reports continue to identify seven external gates per app. No signed Android AAB, signed iOS IPA, approved bundle IDs/EAS linkage, production API URL, signing credentials, physical-device acceptance or store submission is claimed. The documentation synchronization containing this section requires a fresh exact-head CI before PR readiness/merge.
+
+## RELEASE-01 — final exact documentation-head verification (2026-11-15)
+
+[CI #1651 / run 43630690831](https://github.com/rajeevp727/turnova-platform/actions/runs/43630690831) passed **12/12 jobs** on PR #164 documentation head `a3d16f36945ae3643c0ca6d1aaee6f27db14b50c`.
+
+| Evidence | Result | Artifact |
+|---|---|---:|
+| Native .NET 10 backend Release build/tests/publish | 594/594 tests; zero failures/skips | API publish `14128221414` |
+| Shared mobile/auth Node tests | 189/189 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
+| Rider/Driver Expo validation and production JS bundles | Both passed | `14128360695` / `14127379172` |
+| Rider/Driver Android debug APKs | Both built and identity-verified | `14127529327` / `14127364982` |
+| Rider/Driver Android standalone release APKs | Both built and identity-verified | `14128153881` / `14128382917` |
+| Rider/Driver unsigned iOS Simulator apps | Both built and identity-verified | `14128706025` / `14129095173` |
+| Rider Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2731 | `14127948301` |
+| Driver Android emulator smoke | Install/launch/login/screenshot passed on attempt 1; PID 2261 | `14127953216` |
+| Rider iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 8685 | `14128553606` |
+| Driver iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 9001 | `14128538749` |
+
+Backend CI log confirms 594 passed, 0 failed, 0 skipped. Shared Node log confirms 189 passed, 0 failed, 0 skipped. The Python harness ran 48 tests and reported OK. All 12 workflow jobs completed successfully. All four ADB recovery fixtures passed; the real Android smoke jobs did not require recovery. The iOS apps are unsigned Simulator builds and explicitly report SecureStore unavailable; this does not establish signed-device Keychain or physical-device acceptance. Both release-preflight reports retain seven external gates each. No signed AAB/IPA, production EAS linkage, approved bundle identifiers, production API URL, signing credentials, physical-device acceptance, store submission or production readiness is claimed.
+
+A subsequent source/test correction adds RELEASE-PREFLIGHT-011 for empty authority userinfo and raw whitespace/control/backslash URL boundaries, alongside the evidence-document synchronization. CI #1651 is parent-head evidence only; fresh exact-head CI for the updated source/test and docs is the merge gate.
+
+## RELEASE-01 — URL parser normalization boundary regression (2026-11-15)
+
+A review of WHATWG URL normalization identified that `https://@host` produces empty parsed username/password fields and raw path whitespace may be normalized by the parser. The validator now checks the raw URL before parsing: it rejects any authority `@` (including empty userinfo), raw whitespace/control characters, backslashes and query/fragment delimiters. It still accepts a valid HTTPS path and percent-encoded path spaces. `RELEASE-PREFLIGHT-011` exercises those negative and positive cases. Parent [CI #1651 / run 43630690831](https://github.com/rajeevp727/turnova-platform/actions/runs/43630690831) passed 12/12 on the previous PR head; the new source/test correction and documentation synchronization require fresh exact-head CI. Do not merge based on parent-head CI.
+
+
+## RELEASE-01 — final exact-head CI #1662 (2026-11-15)
+
+[CI #1662 / run 43638428929](https://github.com/rajeevp727/turnova-platform/actions/runs/43638428929) passed **12/12 jobs** on exact PR head `d8e757838cc3855613226108d738374bd3276428`: backend .NET 10 Release build/tests/native publish **594/594** (0 failed, 0 skipped), shared mobile/auth Node **190/190**, deterministic Python harness **48/48**, Rider/Driver Expo validation and production JS bundles, Rider/Driver Android debug and standalone release APK builds, both unsigned iOS Simulator builds, and all four same-run Android/iOS smoke jobs. Android smoke: Rider PID 2132 and Driver PID 2868; iOS Simulator: Rider PID 5798 and Driver PID 5610. Both unsigned iOS apps reached their role-specific login screens and verified the SecureStore-unavailable banner; signed-device Keychain is not claimed. API publish artifact `14130937828`; Rider/Driver Android release APKs `14131650405` / `14131033978`; unsigned iOS Simulator apps `14130874648` / `14131715327`; Android smoke `14130889538` / `14130919720`; iOS smoke `14132270127` / `14131168636`; production JS bundles `14131297076` / `14131312048`.
+
+The final PR head includes `RELEASE-PREFLIGHT-011` for raw URL C0/C1 controls (including U+0080/U+0085/U+009F), whitespace, empty authority userinfo, backslashes and query/fragment delimiters. Positive controls preserve valid HTTPS paths and percent-encoded path spaces. `RELEASE-SMOKE-ANDROID-001..004` cover transient/persistent PID, logcat and activity-stack ADB transport failures; only exit 255 on read-only/idempotent probes is retried, with bounded reconnect/wait and fail-closed diagnostics.
+
+All 12 jobs passed on the exact source/test head `d8e757838cc3855613226108d738374bd3276428`. The subsequent four-document evidence synchronization is the current documentation-only PR tip and requires its own exact-head CI before merge. The unsigned iOS Simulator smoke explicitly verifies the SecureStore-unavailable banner; it does not establish signed-device Keychain behavior or physical-device acceptance. Both apps' preflight reports still identify seven external release gates. PR #164 remains Draft/unmerged pending exact-head CI and final review/mergeability recheck. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## RELEASE-01 — exact documentation-head CI #1668 (2026-11-15)
+
+[CI #1668 / run 43640520192](https://github.com/rajeevp727/turnova-platform/actions/runs/43640520192) passed **12/12 jobs on exact PR head `f442dada472466ed18288e822f94f303669e9c59`**. Backend .NET 10 Release build/tests/native publish: **594/594** (0 failed, 0 skipped); shared mobile/auth Node: **190/190**; deterministic Python harness: **48/48**; Rider/Driver Expo validation and production JS bundles; Rider/Driver Android debug and standalone release APKs; both unsigned iOS Simulator builds; and all four same-run Android/iOS smoke jobs passed.
+
+- API publish artifact `14131064443`; Rider/Driver standalone Android release APKs `14132326572` / `14132172312`; Rider/Driver unsigned iOS Simulator apps `14132382884` / `14132507174`; Rider/Driver Android smoke `14132317280` / `14132650539`; Rider/Driver iOS smoke `14133236094` / `14133166444`; Rider/Driver production JS bundles `14131891732` / `14131831961`.
+- All 12 jobs and their steps completed successfully. The native builds are unsigned iOS Simulator builds and standalone Android APKs; this does not establish signed Android AAB/iOS IPA, signed-device Keychain, physical-device acceptance or store approval.
+- The four Android ADB recovery fixtures and RELEASE-PREFLIGHT-011 C0/C1 URL-boundary cases are included in the tested head. Only read-only/idempotent ADB probes retry exit 255; persistent failures remain fail-closed.
+- This run validates the documentation-only PR tip after the source/test head passed CI #1662. PR #164 remains Draft/unmerged until final current-head/review/mergeability checks and a normal GitHub merge are completed. Reviews remain COMMENT-only; the output-path data-loss thread is resolved; no self-approval or bypass.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). RELEASE-01 remains Blocked by approved app identifiers/EAS linkage, production API configuration, signing, signed-device Keychain, physical-device acceptance and store submission. Both app preflight reports retain seven external gates. Production readiness is not established.
