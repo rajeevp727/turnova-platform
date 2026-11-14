@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 is merged. Sole active PR #164 is #19 RELEASE-01; source/test head `d8e757838cc3855613226108d738374bd3276428` passed CI #1662 12/12 (backend 594/594, shared Node 190/190, Python 48/48, both Expo validations, four native builds, native API publish and four same-run smoke jobs). The four evidence documents were synchronized after CI #1662; the resulting documentation-only PR tip requires its own exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 is merged. Sole active PR #164 is #19 RELEASE-01; source/test head `d8e757838cc3855613226108d738374bd3276428` passed CI #1662 12/12; subsequent documentation-only tip `f442dada472466ed18288e822f94f303669e9c59` passed exact-head CI #1668 / run 43640520192 12/12 (backend 594/594, shared Node 190/190, Python 48/48, both Expo validations, four native builds, native API publish and four same-run smoke jobs). Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2248,3 +2248,15 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - PR #164 remains Draft and unmerged. Reviews are COMMENT-only, the output-path data-loss thread is resolved, and there are zero unresolved inline threads. No self-approval or protection bypass. Wait for exact-head CI on the current documentation-only tip, then recheck head/reviews/mergeability, mark ready, and use normal squash merge only if GitHub permits.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation score. RELEASE-01 remains externally blocked by approved app identifiers/EAS linkage, production API URL, signing, signed-device Keychain, physical-device acceptance and store submission. Both apps' preflight reports retain seven external gates. Production readiness is not established.
 - Next after merge: re-read main and continue supplemental AI-01 provider endpoint/options validation with deterministic .NET tests; AI-01 remains outside the 19-row denominator. Do not choose a provider/model or credentials.
+
+
+## RELEASE-01 — exact documentation-head CI #1668 (2026-11-15)
+
+[CI #1668 / run 43640520192](https://github.com/rajeevp727/turnova-platform/actions/runs/43640520192) passed **12/12 jobs on exact PR head `f442dada472466ed18288e822f94f303669e9c59`**. Backend .NET 10 Release build/tests/native publish: **594/594** (0 failed, 0 skipped); shared mobile/auth Node: **190/190**; deterministic Python harness: **48/48**; Rider/Driver Expo validation and production JS bundles; Rider/Driver Android debug and standalone release APKs; both unsigned iOS Simulator builds; and all four same-run Android/iOS smoke jobs passed.
+
+- API publish artifact `14131064443`; Rider/Driver standalone Android release APKs `14132326572` / `14132172312`; Rider/Driver unsigned iOS Simulator apps `14132382884` / `14132507174`; Rider/Driver Android smoke `14132317280` / `14132650539`; Rider/Driver iOS smoke `14133236094` / `14133166444`; Rider/Driver production JS bundles `14131891732` / `14131831961`.
+- All 12 jobs and their steps completed successfully. The native builds are unsigned iOS Simulator builds and standalone Android APKs; this does not establish signed Android AAB/iOS IPA, signed-device Keychain, physical-device acceptance or store approval.
+- The four Android ADB recovery fixtures and RELEASE-PREFLIGHT-011 C0/C1 URL-boundary cases are included in the tested head. Only read-only/idempotent ADB probes retry exit 255; persistent failures remain fail-closed.
+- This run validates the documentation-only PR tip after the source/test head passed CI #1662. PR #164 remains Draft/unmerged until final current-head/review/mergeability checks and a normal GitHub merge are completed. Reviews remain COMMENT-only; the output-path data-loss thread is resolved; no self-approval or bypass.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). RELEASE-01 remains Blocked by approved app identifiers/EAS linkage, production API configuration, signing, signed-device Keychain, physical-device acceptance and store submission. Both app preflight reports retain seven external gates. Production readiness is not established.
+
