@@ -13,11 +13,11 @@ const IOS_BUNDLE_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isValidSemanticVersion(value) {
-  return typeof value === "string" && SEMVER_PATTERN.test(value) && !/[\r\n]/.test(value);
+  return typeof value === "string" && SEMVER_PATTERN.test(value) && !/[\r\n\u2028\u2029]/.test(value);
 }
 
 function supportsEasCli16OrNewer(range) {
-  if (typeof range !== "string" || /[\r\n]/.test(range)) return false;
+  if (typeof range !== "string" || /[\r\n\u2028\u2029]/.test(range)) return false;
   const match = /^>=\s*(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\s*$/.exec(range);
   return Boolean(match) && BigInt(match[1]) >= 16n;
 }
