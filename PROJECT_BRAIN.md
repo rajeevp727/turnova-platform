@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Main HEAD:** `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after PR #159 merged with final-head CI #1553 / run 43537688618 passing 12/12. Sole active feature PR [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`, source/test commit `8fa32ee64f9550eaa73f7d1c529aef33d83223cb`; final exact-head CI #1564 / run 43545249499 running on `ad04fd7d62512b989a22a096fa50bc2956f24cd1`. It adds privacy-safe Union audit write metrics/spans and deterministic assignment/transfer/selfie/canonical-recovery tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after PR #159 merged with final-head CI #1553 / run 43537688618 passing 12/12. Sole active feature PR [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`, source/test commit `8fa32ee64f9550eaa73f7d1c529aef33d83223cb`; final exact-head CI is running on the current PR head; see PR #160 checks. It adds privacy-safe Union audit write metrics/spans and deterministic assignment/transfer/selfie/canonical-recovery tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line

@@ -293,7 +293,7 @@ The corrected CI path retains the original unsigned simulator artifact, requires
 
 ### RELEASE-01 latest handoff — SDK image retry and unsigned iOS boundary (2026-11-09)
 
-- Active PR #141 head: `88cec17039cec8c7da8f5cb965043d5ae96618b8`; exact-head CI pending. Preceding run [#1051 / 42652379009](https://github.com/rajeevp727/turnova-platform/actions/runs/42652379009) showed a Driver Android SDK system-image archive failure before AVD creation; Rider Android passed; both iOS smokes were still in progress at last poll.
+- Active PR #141 head: `88cec17039cec8c7da8f5cb965043d5ae96618b8`; final exact-head CI is running on the current PR head; see PR #160 checks. Preceding run [#1051 / 42652379009](https://github.com/rajeevp727/turnova-platform/actions/runs/42652379009) showed a Driver Android SDK system-image archive failure before AVD creation; Rider Android passed; both iOS smokes were still in progress at last poll.
 - The system-image installer now retries up to three times, verifies extracted package metadata/image before AVD creation, and has deterministic tests for one transient corrupt archive followed by success and permanent failure before AVD creation.
 - The unsigned iOS simulator path is intentional: ad-hoc signing without an Apple-issued TeamIdentifier was rejected by launchd with error 162. OCR now requires the expected SecureStore-unavailable banner while rejecting expired-session/token-cleanup errors. No Keychain persistence or signed-device behaviour is claimed.
 - Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); production readiness is not established.
