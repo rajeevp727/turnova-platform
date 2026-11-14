@@ -360,8 +360,11 @@ public sealed partial class RideApiIntegrationTests
             .GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
             .Values.Where(item => item.DriverId == driverId).ToArray();
         Assert.Equal(2, persisted.Length);
-        Assert.Contains(persisted, item => item.EventType == "Assigned" && item.UnionId == firstUnionId);
-        Assert.Contains(persisted, item => item.EventType == "Transferred" && item.UnionId == nextUnionId);
+        Assert.Contains(persisted, item => item.EventType == "Assigned" && item.NewUnionId == firstUnionId);
+        Assert.Contains(persisted, item =>
+            item.EventType == "Transferred" &&
+            item.PreviousUnionId == firstUnionId &&
+            item.NewUnionId == nextUnionId);
     }
 
 }
