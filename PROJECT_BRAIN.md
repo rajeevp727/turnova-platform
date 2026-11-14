@@ -2138,3 +2138,12 @@ PRD.md §11 cost guidance was aligned with the explicit no-payment-provider MVP 
 - The evidence synchronization itself creates a new branch head; fresh exact-head CI is required before ready/merge. Recheck base/head/reviews and let GitHub enforce merge policy. No self-approval, force-push or bypass.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation score. Production readiness is not established.
 - Next after #162 merges: re-read main; audit and strengthen native .NET publish verifier fixtures for required metadata/native assets/forbidden nested assemblies, then continue RELEASE-01 deterministic release-preflight tests. Fleet/Ops Phase 2 and Docker/container builds/deployments remain excluded.
+
+
+## Latest engineering handoff — native API publish verifier hardening (2026-11-14)
+
+- PR #162 merged at \`a40007dcfc3e36f96f2f81e4a69b1ecdaa32cf78\` after exact-head CI #1604 / run 43578934493 passed 12/12 jobs. Backend 594/594, shared mobile/auth 179/179, deterministic harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native non-container API publish and all four same-run smoke jobs passed. Unsigned iOS evidence does not establish signed-device Keychain or physical-device acceptance.
+- Current sole engineering branch: \`fix/platform-01-native-publish-verifier\`, based on the PR #162 merge commit. The verifier now requires non-empty API assembly, \`.deps.json\`, \`.runtimeconfig.json\`, SkiaSharp and HarfBuzz assets, rejects nested \`PdfSharp.WPFonts.dll\`, and retains the existing runtime allow-list and 120 MiB cap.
+- The deterministic fixture harness verifies one valid artifact and 11 negative cases using exact diagnostic assertions. Local Bash fixture run passed all 12 cases; exact-head GitHub Actions is pending.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established.
+- Next: finish evidence docs, open/review the focused publish-verifier PR, run exact-head CI and merge only if GitHub permits without bypass. Then re-read main and proceed to RELEASE-01 release-preflight deterministic tests.
