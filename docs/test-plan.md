@@ -2291,7 +2291,7 @@ RELEASE-PREFLIGHT-010 prevents `--output` from overwriting `app.json` or `eas.js
 | RELEASE-SMOKE-ANDROID-001 | Transient ADB transport loss during post-launch PID verification recovers safely | Fake `adb shell pidof` to return exit 255 once after initial launch/foreground checks; allow `adb reconnect offline` and bounded `adb wait-for-device` to recover | Smoke continues only after the same app PID is re-read; foreground identity remains enforced; final screenshot and success result are produced; reconnect attempt and stderr are retained as diagnostics | Python/Bash deterministic harness | P1 |
 | RELEASE-SMOKE-ANDROID-002 | Persistent ADB transport loss fails closed with diagnostics | Fake all three PID probes to return exit 255 while device recovery commands succeed | Smoke exits non-zero after exactly three bounded attempts, records per-attempt stderr and `adb devices`, and does not emit a success result | Python/Bash deterministic harness | P1 |
 
-The retry is limited to the Android `pidof` transport boundary. A successful empty PID result remains a process-stability failure; app ANR, foreground, process-identity and login-screen checks are not relaxed. A persistent transport failure remains a hard failure. This is CI harness resilience only and does not establish physical-device acceptance.
+The bounded retry helper applies to read-only/idempotent post-launch probes: package path, activity resolution/stack, UI hierarchy dump/read and logcat. Only ADB exit 255 is retried; reconnect and device wait are bounded; persistent failures remain fail-closed. Install, launch and input side effects are not blindly retried. The PID probe separately preserves exit-1-as-process-absent semantics and same-PID checks. A successful empty PID result remains a process-stability failure; app ANR, foreground, process-identity and login-screen checks are not relaxed. This is CI harness resilience only and does not establish physical-device acceptance.
 
 
 ## RELEASE-01 — exact-head release and smoke verification (2026-11-14)
@@ -2334,3 +2334,24 @@ The Android transient ADB exit-255 recovery and persistent-failure fail-closed p
 | Driver iOS Simulator smoke | Login surface and expected unsigned SecureStore-unavailable banner passed; PID 12840 | `14122695742` |
 
 Backend CI log confirms 594 passed, 0 failed, 0 skipped. Shared Node log confirms 189 passed, 0 failed, 0 skipped. The Python harness ran 48 tests and reported OK. All 12 workflow jobs completed successfully. The ADB transient exit-255 recovery and persistent-failure fail-closed paths passed in deterministic fixtures; the real Android smoke jobs did not require recovery. The output-path collision review finding is fixed and its inline review thread is resolved. These CI artifacts do not establish signed AAB/IPA, signed-device Keychain, physical-device acceptance, store submission, production hosting or production readiness. Both release-preflight reports retain seven external gates each. The documentation synchronization requires a new exact-head CI before PR readiness/merge.
+
+
+## RELEASE-01 — final source/test-head verification (2026-11-15)
+
+[CI #1643 / run 43623967660](https://github.com/rajeevp727/turnova-platform/actions/runs/43623967660) passed **12/12 jobs** on PR #164 source/test head `35687a394c9a89dd0225be79b66a5be25389f149`.
+
+| Evidence | Result | Artifact |
+|---|---|---:|
+| Native .NET 10 backend Release build/tests/publish | 594/594 tests; zero failures/skips | API publish `14124578905` |
+| Shared mobile/auth Node tests | 189/189 | CI job log |
+| Deterministic Python harness | 48/48, including Android ADB recovery scenarios | CI job log |
+| Rider/Driver Expo validation and production JS bundles | Both passed | `14125352187` / `14125032649` |
+| Rider/Driver Android debug APKs | Both built and identity-verified | `14125537058` / `14125293349` |
+| Rider/Driver Android standalone release APKs | Both built and identity-verified | `14124784541` / `14125048771` |
+| Rider/Driver unsigned iOS Simulator apps | Both built and identity-verified | `14124929431` / `14125643977` |
+| Rider/Driver Android emulator smoke | Both install/launch/login smoke jobs passed | `14125723039` / `14125887585` |
+| Rider/Driver iOS Simulator smoke | Both install/launch/login smoke jobs passed; expected unsigned SecureStore-unavailable behavior retained | `14126148142` / `14126072066` |
+
+The Android ADB retry helper applies to read-only/idempotent post-launch probes (package path, activity resolution/stack, UI hierarchy dump/read and logcat). Only exit 255 is retried; reconnect and device wait are bounded; persistent failures remain fail-closed. Install, launch and input side effects are not blindly retried. The PID probe separately preserves exit-1-as-process-absent semantics and same-PID checks. Deterministic Python cases cover transient logcat recovery and persistent activity-stack failure. The real emulator/simulator smoke jobs passed; this does not establish signed-device Keychain, physical-device acceptance, production hosting or production readiness.
+
+Both release-preflight reports continue to identify seven external gates per app. No signed Android AAB, signed iOS IPA, approved bundle IDs/EAS linkage, production API URL, signing credentials, physical-device acceptance or store submission is claimed. The documentation synchronization containing this section requires a fresh exact-head CI before PR readiness/merge.
