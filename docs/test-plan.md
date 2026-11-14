@@ -2250,6 +2250,7 @@ PR #163 exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [GitHub Act
 | RELEASE-PREFLIGHT-008 | CLI rejects missing, duplicate and unknown arguments | Exercise absent app directory, missing values, an option used as another option's value, duplicate flags and unknown flags | CLI emits a deterministic diagnostic and exits non-zero before reading app files | Node CLI integration | P1 |
 | RELEASE-PREFLIGHT-009 | CLI stdout remains valid JSON without an output file | Run the real CLI with `--app-dir` and omit `--output` | Stdout contains only a parseable readiness JSON document; stderr contains the human summary; seven external gates and blocked readiness are reported | Node CLI integration | P1 |
 | RELEASE-PREFLIGHT-010 | CLI refuses output paths that alias app configuration | Run the real CLI with `--output` set to app.json, eas.json, a symlink to app.json and a hardlink to app.json | CLI exits non-zero before writing; stdout remains empty; stderr names the collision; app.json and eas.json remain byte-for-byte unchanged | Node CLI integration | P1 |
+| RELEASE-PREFLIGHT-011 | Production API URL rejects empty authority userinfo and raw whitespace | Supply `https://@host`, raw spaces/tabs/Unicode line separators/control characters in a path, and backslash delimiters; include valid path and percent-encoded-space controls | Unsafe raw URL forms fail closed before WHATWG URL normalization; valid HTTPS paths and percent-encoded spaces remain accepted | Node unit | P1 |
 
 ### RELEASE-01 — final exact-head CI and follow-up stdout correction (2026-11-14)
 
@@ -2303,7 +2304,7 @@ The bounded retry helper applies to read-only/idempotent post-launch probes: pac
 | Evidence | Result | Artifact |
 |---|---|---:|
 | Native .NET 10 backend Release tests | 594/594; zero failures/skips | API publish `14119588471` |
-| Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..010 | CI job log |
+| Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..011 | CI job log |
 | Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
 | Rider/Driver Expo validation | Both passed | Production JS bundles `14119775383` / `14119701240` |
 | Rider/Driver Android debug APKs | Both built and identity-verified | `14119444500` / `14119073259` |
@@ -2324,7 +2325,7 @@ The Android transient ADB exit-255 recovery and persistent-failure fail-closed p
 | Evidence | Result | Artifact |
 |---|---|---:|
 | Native .NET 10 backend Release tests | 594/594; zero failures/skips | API publish `14121258004` |
-| Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..010 | CI job log |
+| Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..011 | CI job log |
 | Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
 | Rider/Driver Expo validation | Both passed | Production JS bundles `14121700169` / `14121377487` |
 | Rider/Driver Android debug APKs | Both built and identity-verified | `14121865052` / `14121487902` |
@@ -2378,4 +2379,8 @@ Both release-preflight reports continue to identify seven external gates per app
 
 Backend CI log confirms 594 passed, 0 failed, 0 skipped. Shared Node log confirms 189 passed, 0 failed, 0 skipped. The Python harness ran 48 tests and reported OK. All 12 workflow jobs completed successfully. All four ADB recovery fixtures passed; the real Android smoke jobs did not require recovery. The iOS apps are unsigned Simulator builds and explicitly report SecureStore unavailable; this does not establish signed-device Keychain or physical-device acceptance. Both release-preflight reports retain seven external gates each. No signed AAB/IPA, production EAS linkage, approved bundle identifiers, production API URL, signing credentials, physical-device acceptance, store submission or production readiness is claimed.
 
-The subsequent commit updates only the four evidence documents to record this verified run; it does not change application/runtime code. The normal exact-head CI for that documentation-only commit remains the merge gate.
+A subsequent source/test correction adds RELEASE-PREFLIGHT-011 for empty authority userinfo and raw whitespace/control/backslash URL boundaries, alongside the evidence-document synchronization. CI #1651 is parent-head evidence only; fresh exact-head CI for the updated source/test and docs is the merge gate.
+
+## RELEASE-01 — URL parser normalization boundary regression (2026-11-15)
+
+A review of WHATWG URL normalization identified that `https://@host` produces empty parsed username/password fields and raw path whitespace may be normalized by the parser. The validator now checks the raw URL before parsing: it rejects any authority `@` (including empty userinfo), raw whitespace/control characters, backslashes and query/fragment delimiters. It still accepts a valid HTTPS path and percent-encoded path spaces. `RELEASE-PREFLIGHT-011` exercises those negative and positive cases. Parent [CI #1651 / run 43630690831](https://github.com/rajeevp727/turnova-platform/actions/runs/43630690831) passed 12/12 on the previous PR head; the new source/test correction and documentation synchronization require fresh exact-head CI. Do not merge based on parent-head CI.

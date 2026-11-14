@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) source/test head `35687a394c9a89dd0225be79b66a5be25389f149` passed CI #1643 12/12; exact documentation head `a3d16f36945ae3643c0ca6d1aaee6f27db14b50c` passed [CI #1651 / run 43630690831](https://github.com/rajeevp727/turnova-platform/actions/runs/43630690831) 12/12: backend 594/594, shared Node 189/189, Python 48/48, Rider/Driver Expo, four native builds, native API publish and four same-run smoke jobs. The current evidence-only documentation commit must pass its own exact-head CI before PR readiness/merge. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) source/test head `35687a394c9a89dd0225be79b66a5be25389f149` passed CI #1643 12/12; exact documentation head `a3d16f36945ae3643c0ca6d1aaee6f27db14b50c` passed [CI #1651 / run 43630690831](https://github.com/rajeevp727/turnova-platform/actions/runs/43630690831) 12/12: backend 594/594, shared Node 189/189, Python 48/48, Rider/Driver Expo, four native builds, native API publish and four same-run smoke jobs. The new URL-boundary source/test correction and evidence-document synchronization require fresh exact-head CI; CI #1651 is parent-head evidence only. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
 ## Current execution handoff — 2026-11-15
@@ -2243,3 +2243,10 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - PR #164 remains the sole active PR. Reviews are COMMENT-only, the output-path data-loss thread is resolved, and there are zero unresolved inline threads. No approval/self-approval or protection bypass is claimed. A documentation-only evidence sync follows this verified head and must pass its own exact-head CI before readiness/merge.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation score. Production readiness is not established.
 - Next after safe merge: re-read main and continue supplemental AI-01 provider endpoint/options validation with deterministic .NET tests; AI-01 remains outside the 19-row denominator.
+
+## Latest RELEASE-01 URL-boundary handoff — PR #164 (2026-11-15)
+
+- Source review found two URL-normalization gaps in the production API preflight: empty userinfo delimiter `https://@host` and raw embedded path whitespace. The validator now rejects any raw authority `@`, whitespace/control characters, backslashes, and query/fragment delimiters before parsing; percent-encoded path spaces remain valid.
+- Added `RELEASE-PREFLIGHT-011` for empty userinfo, embedded space/tab/U+2028/NUL, backslash, and valid percent-encoded path controls. Test plan, progress, matrix and Project Brain were updated consistently.
+- Parent CI #1651 / run 43630690831 passed 12/12 on `a3d16f36945ae3643c0ca6d1aaee6f27db14b50c`; it does not verify the new source/test change. CI #1653 on the previous docs-only tip is superseded. Fresh exact-head CI is required before PR readiness/merge.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). RELEASE-01 remains externally blocked by approved identifiers/EAS linkage, production API configuration, signing, physical-device acceptance and store submission. After safe merge, re-read main and continue supplemental AI-01 endpoint options validation.

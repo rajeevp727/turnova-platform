@@ -277,6 +277,30 @@ test("production API URL rejects credentials, query strings and fragments", () =
   }
 });
 
+test("production API URL rejects empty userinfo and raw embedded whitespace", () => {
+  const rejectedUrls = [
+    "https://@api.turnova.com",
+    "https://api.turnova.com/path with space",
+    "https://api.turnova.com/path\\tsegment",
+    "https://api.turnova.com/path\\u2028segment",
+    "https://api.turnova.com\\\\path",
+    "https://api.turnova.com/path\\u0000segment"
+  ];
+  for (const apiBaseUrl of rejectedUrls) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, false, apiBaseUrl);
+  }
+
+  const acceptedUrls = [
+    "https://api.turnova.com/v1/assistant",
+    "https://api.turnova.com/path%20with%20space"
+  ];
+  for (const apiBaseUrl of acceptedUrls) {
+    const report = validateReleaseConfig(fixture({ apiBaseUrl }));
+    assert.equal(report.app.productionApiBaseUrlConfiguredInCi, true, apiBaseUrl);
+  }
+});
+
 test("production API URL rejects reserved address and internal hostname boundaries", () => {
   const rejectedHosts = [
     "https://0.0.0.1", "https://127.0.0.1", "https://169.254.169.254",

@@ -140,16 +140,24 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
   checkAsset("android-adaptive-icon", expo.android?.adaptiveIcon?.foregroundImage);
 
   const productionApiBaseUrlConfiguredInCi = (() => {
-    if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0 || apiBaseUrl !== apiBaseUrl.trim() || /[?#]/.test(apiBaseUrl)) return false;
+    if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0 ||
+        apiBaseUrl !== apiBaseUrl.trim() || /\\s/.test(apiBaseUrl) ||
+        /[\\u0000-\\u001f\\u007f]/.test(apiBaseUrl) || /[?#\\\\]/.test(apiBaseUrl)) return false;
     try {
       const parsed = new URL(apiBaseUrl);
+      const schemeSeparator = apiBaseUrl.indexOf("://");
+      if (schemeSeparator < 0) return false;
+      const authorityStart = schemeSeparator + 3;
+      const authorityEnd = apiBaseUrl.indexOf("/", authorityStart);
+      const authority = apiBaseUrl.slice(authorityStart, authorityEnd < 0 ? undefined : authorityEnd);
       const host = parsed.hostname.toLowerCase();
       const unbracketedHost = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
       const ipVersion = net.isIP(unbracketedHost);
       const nonPublicIp = ipVersion === 4 ? isNonPublicIpv4(unbracketedHost) : ipVersion === 6 ? isNonPublicIpv6(host) : false;
       const internalHost = ipVersion === 0 && isInternalHostname(unbracketedHost);
       return parsed.protocol === "https:" && host.length > 0 && !nonPublicIp && !internalHost &&
-        !host.includes("<") && !host.includes(">") && parsed.username.length === 0 && parsed.password.length === 0 &&
+        !host.includes("<") && !host.includes(">") && !authority.includes("@") &&
+        parsed.username.length === 0 && parsed.password.length === 0 &&
         parsed.search.length === 0 && parsed.hash.length === 0;
     } catch { return false; }
   })();
