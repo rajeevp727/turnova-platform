@@ -2127,3 +2127,5 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 - PR #162 exact-head CI is pending. After it passes and GitHub permits merge without bypass, re-read main and continue remaining PLATFORM-01 native-publish/audit-path work, then RELEASE-01 release-preflight deterministic tests.
 - External gates remain live Cosmos ETag/partition/multi-instance/restart/retention, production auth/UnionManager claims, product-approved dispatch radius/zones/location freshness and internal FIFO policy, maps/routing/realtime/call/chat/push, private document storage/scanning/consent/retention, support/reconciliation policies, Union legal terms, telemetry export/alerts, native API hosting, signed Android/iOS artifacts, physical-device acceptance and store submission.
+
+PRD.md §11 cost guidance was aligned with the explicit no-payment-provider MVP boundary. No payment gateway, escrow or in-app collection is required.
