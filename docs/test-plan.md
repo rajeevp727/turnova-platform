@@ -2304,7 +2304,7 @@ The bounded retry helper applies to read-only/idempotent post-launch probes: pac
 |---|---|---:|
 | Native .NET 10 backend Release tests | 594/594; zero failures/skips | API publish `14119588471` |
 | Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..010 | CI job log |
-| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001/002 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
 | Rider/Driver Expo validation | Both passed | Production JS bundles `14119775383` / `14119701240` |
 | Rider/Driver Android debug APKs | Both built and identity-verified | `14119444500` / `14119073259` |
 | Rider/Driver Android standalone release APKs | Both built and identity-verified | `14119707599` / `14119980661` |
@@ -2325,7 +2325,7 @@ The Android transient ADB exit-255 recovery and persistent-failure fail-closed p
 |---|---|---:|
 | Native .NET 10 backend Release tests | 594/594; zero failures/skips | API publish `14121258004` |
 | Shared mobile/auth Node tests | 189/189, including RELEASE-PREFLIGHT-001..010 | CI job log |
-| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001/002 | CI job log |
+| Deterministic Python harness | 48/48, including RELEASE-SMOKE-ANDROID-001..004 | CI job log |
 | Rider/Driver Expo validation | Both passed | Production JS bundles `14121700169` / `14121377487` |
 | Rider/Driver Android debug APKs | Both built and identity-verified | `14121865052` / `14121487902` |
 | Rider/Driver Android standalone release APKs | Both built and identity-verified | `14121324172` / `14121104543` |
