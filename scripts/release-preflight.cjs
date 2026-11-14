@@ -141,8 +141,8 @@ function validateReleaseConfig({ appJson, easJson, appDirectory, apiBaseUrl = pr
 
   const productionApiBaseUrlConfiguredInCi = (() => {
     if (typeof apiBaseUrl !== "string" || apiBaseUrl.trim().length === 0 ||
-        apiBaseUrl !== apiBaseUrl.trim() || /\\s/.test(apiBaseUrl) ||
-        /[\\u0000-\\u001f\\u007f]/.test(apiBaseUrl) || /[?#\\\\]/.test(apiBaseUrl)) return false;
+        apiBaseUrl !== apiBaseUrl.trim() || /\s/.test(apiBaseUrl) ||
+        /[\u0000-\u001f\u007f]/.test(apiBaseUrl) || /[?#\\]/.test(apiBaseUrl)) return false;
     try {
       const parsed = new URL(apiBaseUrl);
       const schemeSeparator = apiBaseUrl.indexOf("://");
