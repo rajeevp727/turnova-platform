@@ -43,9 +43,18 @@ public sealed partial class RideApiIntegrationTests
         };
         ActivitySource.AddActivityListener(activityListener);
 
-        using var factory = new TurnOvaApiFactory();
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "ride-audit-start-listener-driver";
+        const string unionId = "ride-audit-start-listener-union";
         using var rider = factory.CreateClient("Rider", "rider-ride-audit-start-listener");
-        var ride = await CreateRideAsync(rider, "ride-audit-start-listener-failure");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var bookingRequest = CreateSelectedBookingRequest(
+            "ride-audit-start-listener-failure", driverId, unionId, "KPHB", "HITEC City", []);
+        using var response = await rider.SendAsync(bookingRequest);
+        Assert.Equal(System.Net.HttpStatusCode.Created, response.StatusCode);
+        var ride = await ReadRideAsync(response);
 
         var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
         Assert.True(rides.TryGetValue(ride.RideId, out var persisted));
@@ -88,9 +97,18 @@ public sealed partial class RideApiIntegrationTests
         };
         ActivitySource.AddActivityListener(activityListener);
 
-        using var factory = new TurnOvaApiFactory();
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "ride-audit-stop-listener-driver";
+        const string unionId = "ride-audit-stop-listener-union";
         using var rider = factory.CreateClient("Rider", "rider-ride-audit-stop-listener");
-        var ride = await CreateRideAsync(rider, "ride-audit-stop-listener-failure");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var bookingRequest = CreateSelectedBookingRequest(
+            "ride-audit-stop-listener-failure", driverId, unionId, "KPHB", "HITEC City", []);
+        using var created = await rider.SendAsync(bookingRequest);
+        Assert.Equal(System.Net.HttpStatusCode.Created, created.StatusCode);
+        var ride = await ReadRideAsync(created);
 
         using var cancelled = await rider.PostAsync($"/api/v1/rides/{ride.RideId}/cancel", null);
         Assert.Equal(System.Net.HttpStatusCode.OK, cancelled.StatusCode);
