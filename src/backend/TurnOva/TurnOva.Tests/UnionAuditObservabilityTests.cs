@@ -293,6 +293,7 @@ public sealed partial class RideApiIntegrationTests
         const string driverId = "union-audit-listener-failure-driver";
         const string firstUnionId = "union-audit-listener-failure-first";
         const string nextUnionId = "union-audit-listener-failure-next";
+        using var driver = factory.CreateClient("Driver", driverId);
         using var ops = factory.CreateClient("Ops", "union-audit-listener-failure-ops");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
         SeedTransferTargetUnion(factory, firstUnionId);
