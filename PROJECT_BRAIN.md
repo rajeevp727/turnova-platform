@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `51b4dffcc5834e77a84a51c4505a68f1db1c49b8`. PR #161 ride-audit/storage-readiness telemetry listener isolation is merged after exact-head CI #1592 passed 12/12. Sole active PR #162 (`docs/cab-mvp-readme-alignment`) exact head `378b47c0aa13c3bcff5d48a149661abeecfe8e11` passed [CI #1601 / run 43574604361](https://github.com/rajeevp727/turnova-platform/actions/runs/43574604361) 12/12: backend 594/594, shared 179/179, Python harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native non-container API publish and four smoke jobs. This evidence-documentation commit creates a new PR head requiring fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `a40007dcfc3e36f96f2f81e4a69b1ecdaa32cf78`. PR #162 Cab-only documentation alignment is merged after exact-head CI #1604 / run 43578934493 passed 12/12. Sole active PR #163 (`fix/platform-01-native-publish-verifier`) adds non-empty API publish metadata/native asset checks and recursive forbidden-font rejection; local Bash fixtures passed one valid and 11 negative cases, with exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
