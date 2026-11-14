@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14  
 **Repository:** https://github.com/rajeevp727/turnova-platform  
-**Main HEAD:** `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after PR #159 merged with final-head CI #1553 / run 43537688618 passing 12/12. Sole active feature PR [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`, source/test commit `b8ffaf10b5723d1ca07e45596085cfc0834d7493`; final exact-head CI is running on the current PR head; see PR #160 checks. It adds privacy-safe Union audit write metrics/spans and deterministic assignment/transfer/selfie/canonical-recovery tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357` after PR #159 merged. Sole active feature PR [#160](https://github.com/rajeevp727/turnova-platform/pull/160), branch `feat/platform-01-union-audit-observability`. PR #160 head `b0e59014a3019a79c079f87dd9be52752bfbbd2a` passed exact-head CI [#1572 / run 43545955208](https://github.com/rajeevp727/turnova-platform/actions/runs/43545955208) **12/12**: backend 589/589, shared mobile/auth 179/179, deterministic Python harness 48/48, Rider/Driver Expo validation, both Android debug/release APKs, both unsigned iOS Simulator builds, native non-container .NET API Release publish, production JS bundles and all four same-run emulator/simulator smoke jobs. Rider/Driver Android install/launch and screenshot checks passed; both unsigned iOS simulators reached their login surfaces and explicitly reported SecureStore unavailable, so signed-device Keychain success is not claimed. PR #160 remains Draft while this documentation synchronization receives fresh exact-head CI. Reviews are COMMENT-only; no approval is claimed.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is a complete-evidence count, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2049,3 +2049,17 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - Final exact-head CI is running on the current PR head; see PR #160 checks. Do not claim the new tests pass until CI completes. No live Cosmos validation or telemetry exporter is claimed.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). Engineering implementation/evidence is substantial; production readiness is not established.
 - Next: finish exact-head CI and review PR #160, synchronize final documentation and rerun exact-head CI, merge only if GitHub permits without bypass; then re-read main and continue remaining PLATFORM-01 diagnostics/native-publish/audit-path work before RELEASE-01.
+
+
+## Latest exact-head verification — PR #160 / CI #1572 (2026-11-14)
+
+- Main HEAD is `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357`; PR #159 is merged. PR #160 is the sole active feature PR on `feat/platform-01-union-audit-observability`.
+- Exact tested PR head: `b0e59014a3019a79c079f87dd9be52752bfbbd2a`. GitHub Actions [CI #1572 / run 43545955208](https://github.com/rajeevp727/turnova-platform/actions/runs/43545955208) completed successfully with **12/12 jobs passed**.
+- Backend Release build and tests: **589/589 passed, 0 failed, 0 skipped**. Shared mobile/auth Node tests: **179/179 passed**. Deterministic Python native/CI harness: **48/48 passed**.
+- Rider/Driver Expo validation, typechecks, production Android/iOS JS bundle exports, Android debug and standalone release APK builds, unsigned iOS Simulator builds, native non-container .NET API Release publish and artifact verification all passed.
+- All four same-run install/launch smoke jobs passed. Rider Android artifact `14093669688`; Driver Android `14094635476`; Rider iOS Simulator `14095426971`; Driver iOS Simulator `14094922688`. Android smoke logs show successful install/launch and screenshot capture. iOS logs show role-specific login surfaces and the expected unsigned SecureStore-unavailable banner; no signed-device Keychain success is claimed.
+- Union audit observability adds the bounded `turnova.union.audit.write_attempts` metric and `union.audit.write` activity at the create/canonical-recovery boundary. Only normalized event type/outcome values are emitted. Deterministic API tests cover assignment, transfer, selfie approval/rejection, duplicate canonical recovery, fail-closed actor mismatch, unknown-value normalization and telemetry-listener failure isolation.
+- The complete nine-file diff was inspected. No authorization, audit identity, persistence, partition, ETag, recovery or retention semantics changed; no IDs/PII are telemetry dimensions. Reviews are COMMENT-only; zero unresolved inline threads; no approval is claimed.
+- This evidence synchronization creates a new PR head and requires fresh exact-head CI before the PR can be marked ready or merged. No live Cosmos or production telemetry-exporter validation is claimed.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation score. Production readiness is not established.
+- Next after PR #160 safely merges: re-read main and continue remaining #18 PLATFORM-01 diagnostics, ride-audit/storage-readiness telemetry isolation, native-publish and audit-path hardening before #19 RELEASE-01.

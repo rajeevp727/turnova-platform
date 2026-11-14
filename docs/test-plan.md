@@ -2157,3 +2157,14 @@ Exact code-bearing head 02fbfa9121b62acf5ef8ec20287cc9dc0ea94db5 passed GitHub A
 
 The Union audit writer retains create-if-absent persistence and canonical recovery. A conflict is classified only after the stored event is read and matches the expected immutable event; a mismatched or unavailable canonical event is a failure. The metrics use framework Meter/ActivitySource APIs only; no exporter, vendor, endpoint or credentials are added. Live Cosmos conflict/partition/multi-instance/restart behaviour and production telemetry export/alert configuration remain external validation gates.
 
+
+
+## PLATFORM-01 — Union audit observability exact-head CI #1572 (2026-11-14)
+
+- Exact tested PR #160 head: b0e59014a3019a79c079f87dd9be52752bfbbd2a; GitHub Actions [CI #1572 / run 43545955208](https://github.com/rajeevp727/turnova-platform/actions/runs/43545955208) completed **12/12 jobs passed**.
+- Backend .NET Release build and tests: **589/589 passed**, 0 failed and 0 skipped. Shared mobile/auth Node tests: **179/179 passed**. Deterministic Python native/CI harness: **48/48 passed**.
+- Rider/Driver Expo validation, typechecks and production JS bundles passed. Both Rider and Driver Android debug and standalone release APKs compiled and passed package-identity verification. Both unsigned iOS Simulator apps compiled. Native non-container .NET API Release publish and artifact verification passed.
+- All four same-run smoke jobs passed. Rider Android smoke artifact `14093669688`; Driver Android `14094635476`; Rider iOS Simulator `14095426971`; Driver iOS Simulator `14094922688`. Android logs show successful install/launch and screenshot capture. iOS logs show the role-specific login surface and expected SecureStore-unavailable banner for unsigned simulator builds; this is not signed-device Keychain evidence.
+- `UNION-OBS-001–005` exercise allow-listed low-cardinality metric/activity tags, initial assignment, transfer, selfie approval/rejection, duplicate canonical recovery (one persisted event), canonical actor mismatch fail-closed behavior, unknown-value normalization and telemetry listener failures. No IDs, reasons, selfie/document data or credentials are telemetry dimensions.
+- The complete nine-file diff was reviewed. No authorization, audit identity, partition, ETag, persistence or canonical-recovery semantics changed. The current documentation synchronization creates a new PR head and requires fresh exact-head CI before ready/merge.
+- Live Cosmos conflict/partition/multi-instance/restart validation, production telemetry exporter/alert configuration, signed mobile artifacts, physical-device acceptance and production hosting remain external gates. Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established.
