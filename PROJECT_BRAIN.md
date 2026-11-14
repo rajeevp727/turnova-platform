@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening merged. Sole active PR #164 (`test/release-preflight-strict-validation`) head `467400c65b99094b6714e9b23846f4507f41b438` passed final exact-head [CI #1618 / run 43594209819](https://github.com/rajeevp727/turnova-platform/actions/runs/43594209819) 12/12: backend 594/594, shared Node 187/187, Python 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, production JS bundles, native API publish and all four same-run smoke tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening merged. Sole active PR #164 (`test/release-preflight-strict-validation`) adds RELEASE-PREFLIGHT-009: without `--output`, CLI stdout is JSON-only and the human summary goes to stderr. Previous exact-head [CI #1618 / run 43594209819](https://github.com/rajeevp727/turnova-platform/actions/runs/43594209819) passed 12/12 on parent head `467400c65b99094b6714e9b23846f4507f41b438`; the stdout correction and current evidence-doc sync require fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2171,7 +2171,7 @@ PRD.md §11 cost guidance was aligned with the explicit no-payment-provider MVP 
 - Live provider/model/credential selection and provider validation remain external. Optional Driver offer explanation is not required for the 19-row denominator. AI-01 is supplemental and is not counted as an acceptance row.
 
 
-PR #164 head `467400c65b99094b6714e9b23846f4507f41b438` passed final exact-head CI #1618 / run 43594209819 12/12. All 12 jobs completed successfully; see the latest release evidence below.
+PR #164 source/test head `341600c943a9239fbb96b2c2869749082762cff8` includes RELEASE-PREFLIGHT-009, which keeps stdout machine-readable when `--output` is omitted. CI #1618 passed 12/12 on the parent head `467400c65b99094b6714e9b23846f4507f41b438`; fresh exact-head CI is required after this correction and evidence-doc synchronization.
 
 
 ## RELEASE-01 final exact-head evidence — PR #164 / CI #1618 (2026-11-14)
@@ -2180,3 +2180,9 @@ PR #164 head `467400c65b99094b6714e9b23846f4507f41b438` passed final exact-head 
 - Android Rider/Driver and iOS Simulator Rider/Driver same-run smoke tests all passed. Android screenshots were captured on attempt 1; iOS Simulator smoke explicitly verified the SecureStore-unavailable banner and does not claim signed-device Keychain success.
 - PR #164 remains the sole active PR until merged. Reviews are COMMENT-only, with zero unresolved inline threads; no self-approval or protection bypass. Recheck the exact head and repository merge enforcement before merging.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). RELEASE-01 remains Blocked by signed artifacts, approved app/store identifiers, EAS linkage, credentials, production HTTPS API configuration, physical-device acceptance and store submission. No production readiness is claimed.
+
+## RELEASE-01 CLI stdout contract correction (2026-11-14)
+
+- The no-`--output` CLI path previously mixed JSON and a human-readable summary on stdout. It now emits JSON only to stdout and writes the human summary to stderr. With `--output`, it writes the JSON file and prints the summary to stdout.
+- RELEASE-PREFLIGHT-009 invokes the real CLI without `--output`, parses stdout as JSON, verifies engineering success/seven external gates/blocked readiness and asserts the exact stderr summary.
+- CI #1618 / run 43594209819 passed 12/12 on parent head `467400c65b99094b6714e9b23846f4507f41b438`; the stdout correction and current evidence-doc sync require fresh exact-head CI. No production readiness or signed-device acceptance is claimed.
