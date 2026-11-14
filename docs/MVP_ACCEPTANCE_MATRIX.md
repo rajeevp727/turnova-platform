@@ -870,3 +870,11 @@ The current follow-up adds AUTH-LOGIN-060/061. Session reset clears old auth for
 - The current docs synchronization requires new exact-head CI. Do not merge until that run passes and GitHub permits the merge without bypass.
 - Acceptance remains **19 rows: 0 Verified, 15 In Progress, 4 Blocked**. PLATFORM-01 and RELEASE-01 receive implementation/build evidence only; neither is promoted to Verified. Production readiness is not established.
 - Next after safe merge: re-read main and continue remaining PLATFORM-01 diagnostics, ride-audit/storage-readiness telemetry isolation and native-publish/audit-path work before RELEASE-01.
+
+
+## Latest exact-head evidence — PR #160 / CI #1573 (2026-11-14)
+
+- PR #160 tested documentation head `d9632792494742f132dd21b6146e6de615f3591e`; main/base is `eb9c00fd6c97a75d5a33e0731f21fb2efb37f357`. GitHub Actions [CI #1573 / run 43549944262](https://github.com/rajeevp727/turnova-platform/actions/runs/43549944262) completed **12/12 jobs passed**. Backend Release tests 589/589; shared mobile/auth 179/179; deterministic Python harness 48/48; Rider/Driver Expo validation; Android debug and standalone release APKs; unsigned iOS Simulator builds; native non-container .NET API Release publish; production JS bundles; and all four same-run emulator/simulator smoke jobs passed.
+- Smoke artifacts: Rider Android `14095977137`; Driver Android `14096095895`; Rider iOS Simulator `14096398079`; Driver iOS Simulator `14096323884`. Android logs show install/launch and screenshot capture on attempt 1. iOS logs show role-specific login screens and the expected unsigned-Simulator SecureStore-unavailable banner; signed-device Keychain success is not claimed.
+- Review threads were empty at this checkpoint; reviews remain COMMENT-only. No independent approval is claimed. This evidence update creates a new PR head and therefore requires fresh exact-head CI before merge.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). No row is promoted by CI alone; live Cosmos, production telemetry export, signed-device/physical-device, product/legal and production-hosting evidence remain external.
