@@ -2256,5 +2256,5 @@ PR #164 (`test/release-preflight-strict-validation`) adds strict SemVer 2.0.0, s
 - The shared Node suite reported **187/187 passed**, including all eight new release-preflight tests. The deterministic Python harness reported **48/48 passed**; backend Release tests reported **594/594 passed**, 0 failed and 0 skipped.
 - Actual Rider and Driver Expo validation each reported `engineering checks passed; 7 external release gates; production readiness blocked`.
 - Node 22 targeted SemVer/EAS boundary expressions were also executed independently; this was a focused expression check, not a replacement for the repository suite.
-- The native builds and downstream smoke jobs remained pending at the time of this documentation update. A fresh final documentation-head CI is required before merge.
+- The native builds and downstream smoke jobs remained pending at the time of this documentation update. Documentation sync commit is `7110241342bd9bc059576c6b1f6ffd5dde2fd1f3`; final documentation-head CI on that commit is required before merge.
 - No signing credential, production API URL, EAS project, paid provider, deployment or store submission is invented. The seven external release gates remain explicit.

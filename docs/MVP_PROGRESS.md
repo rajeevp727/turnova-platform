@@ -1,12 +1,12 @@
 # TurnOva MVP Progress
 
-**Last updated:** 2026-11-14; main HEAD `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native publish hardening merged. Sole active PR #164 (`test/release-preflight-strict-validation`) head `662ebfd4b706b00bdec834da9910f0fb47a65772`; source/test jobs observed backend 594/594, shared Node 187/187, Python 48/48 and both Rider/Driver Expo validation passed. Four native Android/iOS builds were running; smoke jobs had not started. Final documentation-head CI is required before merge. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last updated:** 2026-11-14; main HEAD `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native publish hardening merged. Sole active PR #164 (`test/release-preflight-strict-validation`) current documentation head `7110241342bd9bc059576c6b1f6ffd5dde2fd1f3` (source/test head `662ebfd4b706b00bdec834da9910f0fb47a65772`); source/test jobs observed backend 594/594, shared Node 187/187, Python 48/48 and both Rider/Driver Expo validation passed. Four native Android/iOS builds were running; smoke jobs had not started. Final documentation-head CI is required before merge. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
 
 ## 1. Current step
 
-**Current sequential engineering item: #19 RELEASE-01 —** PR #163 native publish hardening merged at `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f` after CI #1608 passed 12/12. PR #164 adds strict SemVer 2.0.0/EAS CLI range validation, EAS profile boundaries, production API URL/network checks, and deterministic CLI report/argument tests. Source/test head #1615 observed backend 594/594, shared Node 187/187, Python 48/48 and Rider/Driver Expo validation passed; four native builds and downstream smokes were pending at documentation sync. Next: finish final-head CI, inspect all native artifacts/smokes, then merge only if all checks pass and GitHub permits.
+**Current sequential engineering item: #19 RELEASE-01 —** PR #163 native publish hardening merged at `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f` after CI #1608 passed 12/12. PR #164 adds strict SemVer 2.0.0/EAS CLI range validation, EAS profile boundaries, production API URL/network checks, and deterministic CLI report/argument tests. Source/test head #1615 observed backend 594/594, shared Node 187/187, Python 48/48 and Rider/Driver Expo validation passed; four native builds and downstream smokes were pending at documentation sync. Current docs head is `7110241342bd9bc059576c6b1f6ffd5dde2fd1f3`; finish its final-head CI, inspect all native artifacts/smokes, then merge only if all checks pass and GitHub permits.
 
 
 ## 2. Overall MVP completion
