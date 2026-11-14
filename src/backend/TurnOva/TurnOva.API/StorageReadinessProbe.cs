@@ -27,7 +27,7 @@ public sealed class StorageReadinessProbe
     {
         var startedAt = Stopwatch.GetTimestamp();
         var outcome = "success";
-        using var activity = TurnOvaDiagnostics.StartStorageReadinessCheck();
+        var activity = TurnOvaDiagnostics.StartStorageReadinessCheck();
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(requestCancellationToken);
         timeoutSource.CancelAfter(_timeout);
 
@@ -74,10 +74,9 @@ public sealed class StorageReadinessProbe
         }
         finally
         {
-            activity?.SetTag("turnova.storage.outcome", outcome);
-            if (outcome is "unavailable" or "timeout")
-                activity?.SetStatus(ActivityStatusCode.Error);
+            TurnOvaDiagnostics.SetStorageReadinessOutcome(activity, outcome);
             TurnOvaDiagnostics.RecordStorageReadiness(outcome, Stopwatch.GetElapsedTime(startedAt));
+            TurnOvaDiagnostics.StopStorageReadinessCheck(activity);
         }
     }
 

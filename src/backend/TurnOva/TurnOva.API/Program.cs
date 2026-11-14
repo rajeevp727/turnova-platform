@@ -883,7 +883,7 @@ async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
 async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
 {
     var auditEvent = (ride.AuditEvents ?? []).LastOrDefault();
-    using var activity = auditEvent is null ? null : TurnOvaDiagnostics.StartRideAuditWrite(auditEvent.EventType);
+    var activity = auditEvent is null ? null : TurnOvaDiagnostics.StartRideAuditWrite(auditEvent.EventType);
     try
     {
         bool created;
@@ -906,9 +906,9 @@ async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
 
         if (auditEvent is not null)
         {
-            TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, created ? "success" : "conflict");
-            activity?.SetTag("turnova.audit.outcome", created ? "success" : "conflict");
-            activity?.SetStatus(created ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
+            var outcome = created ? "success" : "conflict";
+            TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, outcome);
+            TurnOvaDiagnostics.SetRideAuditOutcome(activity, outcome);
         }
 
         return created;
@@ -918,10 +918,13 @@ async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
         if (auditEvent is not null)
         {
             TurnOvaDiagnostics.RecordRideAuditWrite(auditEvent.EventType, "failure");
-            activity?.SetTag("turnova.audit.outcome", "failure");
-            activity?.SetStatus(ActivityStatusCode.Error);
+            TurnOvaDiagnostics.SetRideAuditOutcome(activity, "failure");
         }
         throw;
+    }
+    finally
+    {
+        TurnOvaDiagnostics.StopRideAuditWrite(activity);
     }
 }
 async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
@@ -4369,7 +4372,7 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
     var previousAuditCount = (current.AuditEvents ?? []).Count;
     var appendedAuditEvents = (updated.AuditEvents ?? []).Skip(previousAuditCount).ToArray();
     var auditEvent = appendedAuditEvents.LastOrDefault();
-    using var activity = auditEvent is null ? null : TurnOvaDiagnostics.StartRideAuditWrite(auditEvent.EventType);
+    var activity = auditEvent is null ? null : TurnOvaDiagnostics.StartRideAuditWrite(auditEvent.EventType);
 
     try
     {
@@ -4395,10 +4398,10 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
             }
         }
 
+        var outcome = replaced ? "success" : "conflict";
         foreach (var item in appendedAuditEvents)
-            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, replaced ? "success" : "conflict");
-        activity?.SetTag("turnova.audit.outcome", replaced ? "success" : "conflict");
-        activity?.SetStatus(replaced ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
+            TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, outcome);
+        TurnOvaDiagnostics.SetRideAuditOutcome(activity, outcome);
         return replaced;
     }
     catch (CosmosException ex) when (
@@ -4406,17 +4409,19 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
     {
         foreach (var item in appendedAuditEvents)
             TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, "conflict");
-        activity?.SetTag("turnova.audit.outcome", "conflict");
-        activity?.SetStatus(ActivityStatusCode.Error);
+        TurnOvaDiagnostics.SetRideAuditOutcome(activity, "conflict");
         return false;
     }
     catch
     {
         foreach (var item in appendedAuditEvents)
             TurnOvaDiagnostics.RecordRideAuditWrite(item.EventType, "failure");
-        activity?.SetTag("turnova.audit.outcome", "failure");
-        activity?.SetStatus(ActivityStatusCode.Error);
+        TurnOvaDiagnostics.SetRideAuditOutcome(activity, "failure");
         throw;
+    }
+    finally
+    {
+        TurnOvaDiagnostics.StopRideAuditWrite(activity);
     }
 }
 app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, CancellationToken ct) =>

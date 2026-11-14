@@ -447,3 +447,16 @@ The MVP AI boundary lives in `TurnOva.Application.Assistance` and is exposed thr
 ### Union audit telemetry verification (2026-11-14)
 
 PR #160 instruments the existing Union audit create/canonical-recovery boundary without changing persistence, authorization, partitioning, immutability or idempotency. The counter `turnova.union.audit.write_attempts` and `union.audit.write` activity expose only normalized event type and outcome. Deterministic MeterListener/ActivityListener integration tests cover assignment, transfer, selfie approval/rejection, canonical conflict recovery, mismatched canonical actor failure and telemetry-listener exceptions. CI #1573 / run 43549944262 passed 12/12 on PR documentation head `d9632792494742f132dd21b6146e6de615f3591e`; live Cosmos and production exporter/alert validation remain external.
+
+
+### PLATFORM-01 telemetry listener failure isolation (2026-11-14)
+
+- Ride-audit and storage-readiness diagnostics are strictly best-effort. ActivitySource start, outcome tagging/status, Activity disposal, Counter.Add and Histogram.Record are isolated so a host-provided listener callback cannot change an authoritative ride write or replace a storage readiness success/failure classification.
+- Ride create and ETag/in-memory replacement paths retain their existing persistence, idempotency, append-only audit and conflict semantics. The telemetry changes only protect the optional diagnostic boundary.
+- Storage readiness still propagates caller cancellation, maps the probe's own deadline to `timeout`, and maps dependency failures to `unavailable`; listener exceptions do not alter those classifications.
+- Deterministic API/Unit tests inject throwing ActivityStarted, ActivityStopped and MeterListener callbacks. Live telemetry exporter behavior and Cosmos multi-instance/ETag/restart validation remain external gates.
+
+
+### Ride-audit and storage-readiness telemetry listener isolation (2026-11-14)
+
+PR #161 makes optional diagnostics best-effort across the authoritative ride-audit and storage-readiness paths. ActivitySource creation, outcome tagging/status, Activity disposal, Counter.Add and Histogram.Record are isolated independently. A host-provided listener exception cannot replace a ride create/replace result, append-only audit outcome, ETag/conflict behavior, caller cancellation, storage timeout or original dependency-failure classification. Deterministic RIDE-OBS-001/002 and STORAGE-OBS-001/002 passed CI #1589 / run 43564291551 (12/12; backend 594/594) on source/test head `e625693c697c3903639c1135dd66075895643926`. No exporter, vendor, credentials, endpoint or new package was introduced. Live Cosmos multi-instance/ETag/restart/retention and production telemetry export/alert validation remain external.

@@ -6,6 +6,7 @@ namespace TurnOva.API.Observability;
 /// <summary>
 /// Emits low-cardinality .NET diagnostic signals for host-provided metrics and trace listeners.
 /// No ride, user, union, route, contact, or credential identifiers are recorded.
+/// Diagnostic listeners are optional: callback failures must never alter authoritative API work.
 /// </summary>
 public static class TurnOvaDiagnostics
 {
@@ -29,9 +30,43 @@ public static class TurnOvaDiagnostics
 
     public static Activity? StartRideAuditWrite(string? eventType)
     {
-        var activity = ActivitySource.StartActivity("ride.audit.write");
-        activity?.SetTag("turnova.audit.event_type", NormalizeEventType(eventType));
-        return activity;
+        try
+        {
+            var activity = ActivitySource.StartActivity("ride.audit.write");
+            activity?.SetTag("turnova.audit.event_type", NormalizeEventType(eventType));
+            return activity;
+        }
+        catch
+        {
+            // Optional tracing must never block authoritative ride persistence.
+            return null;
+        }
+    }
+
+    public static void SetRideAuditOutcome(Activity? activity, string outcome)
+    {
+        try
+        {
+            var safeOutcome = NormalizeWriteOutcome(outcome);
+            activity?.SetTag("turnova.audit.outcome", safeOutcome);
+            activity?.SetStatus(safeOutcome == "success" ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
+        }
+        catch
+        {
+            // A listener or disposed activity must not change the ride write result.
+        }
+    }
+
+    public static void StopRideAuditWrite(Activity? activity)
+    {
+        try
+        {
+            activity?.Dispose();
+        }
+        catch
+        {
+            // ActivityStopped callbacks are optional and must not escape a ride write.
+        }
     }
 
     public static Activity? StartUnionAuditWrite(string? eventType)
@@ -61,37 +96,69 @@ public static class TurnOvaDiagnostics
         }
     }
 
-    public static Activity? StartStorageReadinessCheck() =>
-        ActivitySource.StartActivity("storage.readiness.check");
+    public static Activity? StartStorageReadinessCheck()
+    {
+        try
+        {
+            return ActivitySource.StartActivity("storage.readiness.check");
+        }
+        catch
+        {
+            // A tracing listener is not part of the storage dependency being probed.
+            return null;
+        }
+    }
+
+    public static void SetStorageReadinessOutcome(Activity? activity, string outcome)
+    {
+        try
+        {
+            var safeOutcome = NormalizeStorageOutcome(outcome);
+            activity?.SetTag("turnova.storage.outcome", safeOutcome);
+            if (safeOutcome is "unavailable" or "timeout")
+                activity?.SetStatus(ActivityStatusCode.Error);
+        }
+        catch
+        {
+            // Optional tracing must not replace the original readiness result.
+        }
+    }
+
+    public static void StopStorageReadinessCheck(Activity? activity)
+    {
+        try
+        {
+            activity?.Dispose();
+        }
+        catch
+        {
+            // ActivityStopped callbacks must not replace a readiness result or exception.
+        }
+    }
 
     public static void RecordRideAuditWrite(string? eventType, string outcome)
     {
-        var safeOutcome = outcome switch
+        try
         {
-            "success" => "success",
-            "conflict" => "conflict",
-            _ => "failure"
-        };
-        RideAuditWriteAttempts.Add(
-            1,
-            new KeyValuePair<string, object?>("event_type", NormalizeEventType(eventType)),
-            new KeyValuePair<string, object?>("outcome", safeOutcome));
+            RideAuditWriteAttempts.Add(
+                1,
+                new KeyValuePair<string, object?>("event_type", NormalizeEventType(eventType)),
+                new KeyValuePair<string, object?>("outcome", NormalizeWriteOutcome(outcome)));
+        }
+        catch
+        {
+            // Metrics are best-effort; persistence and its original failure remain authoritative.
+        }
     }
 
     public static void RecordUnionAuditWrite(string? eventType, string outcome)
     {
-        var safeOutcome = outcome switch
-        {
-            "success" => "success",
-            "conflict" => "conflict",
-            _ => "failure"
-        };
         try
         {
             UnionAuditWriteAttempts.Add(
                 1,
                 new KeyValuePair<string, object?>("event_type", NormalizeUnionAuditEventType(eventType)),
-                new KeyValuePair<string, object?>("outcome", safeOutcome));
+                new KeyValuePair<string, object?>("outcome", NormalizeWriteOutcome(outcome)));
         }
         catch
         {
@@ -101,17 +168,42 @@ public static class TurnOvaDiagnostics
 
     public static void RecordStorageReadiness(string outcome, TimeSpan elapsed)
     {
-        var safeOutcome = outcome switch
-        {
-            "success" => "success",
-            "timeout" => "timeout",
-            "cancelled" => "cancelled",
-            _ => "unavailable"
-        };
+        var safeOutcome = NormalizeStorageOutcome(outcome);
         var tags = new KeyValuePair<string, object?>("outcome", safeOutcome);
-        StorageReadinessChecks.Add(1, tags);
-        StorageReadinessDuration.Record(Math.Max(0, elapsed.TotalMilliseconds), tags);
+
+        try
+        {
+            StorageReadinessChecks.Add(1, tags);
+        }
+        catch
+        {
+            // A failing counter listener must not suppress the readiness result.
+        }
+
+        try
+        {
+            StorageReadinessDuration.Record(Math.Max(0, elapsed.TotalMilliseconds), tags);
+        }
+        catch
+        {
+            // A failing histogram listener must not suppress the readiness result.
+        }
     }
+
+    private static string NormalizeWriteOutcome(string outcome) => outcome switch
+    {
+        "success" => "success",
+        "conflict" => "conflict",
+        _ => "failure"
+    };
+
+    private static string NormalizeStorageOutcome(string outcome) => outcome switch
+    {
+        "success" => "success",
+        "timeout" => "timeout",
+        "cancelled" => "cancelled",
+        _ => "unavailable"
+    };
 
     private static string NormalizeEventType(string? eventType) => eventType switch
     {

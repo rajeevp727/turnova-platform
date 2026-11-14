@@ -271,4 +271,103 @@ public sealed class StorageReadinessProbeTests
             Assert.Equal(new[] { "event_type", "outcome" }, item.TagKeys));
     }
 
+
+    [Fact]
+    public async Task CheckAsyncSucceedsWhenActivityStartAndMetricListenersThrow()
+    {
+        var startedActivities = 0;
+        var measurementCallbacks = 0;
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                instrument.Name.StartsWith("turnova.storage.readiness.", StringComparison.Ordinal))
+                listener.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<long>((_, _, _, _) =>
+        {
+            Interlocked.Increment(ref measurementCallbacks);
+            throw new InvalidOperationException("optional-storage-metric-listener-failure");
+        });
+        meterListener.SetMeasurementEventCallback<double>((_, _, _, _) =>
+        {
+            Interlocked.Increment(ref measurementCallbacks);
+            throw new InvalidOperationException("optional-storage-duration-listener-failure");
+        });
+        meterListener.Start();
+
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStarted = activity =>
+            {
+                if (activity.OperationName == "storage.readiness.check")
+                {
+                    Interlocked.Increment(ref startedActivities);
+                    throw new InvalidOperationException("optional-storage-activity-start-listener-failure");
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(activityListener);
+
+        var probe = new StorageReadinessProbe(_ => Task.CompletedTask, TimeSpan.FromSeconds(1));
+
+        await probe.CheckAsync(CancellationToken.None);
+
+        Assert.True(Volatile.Read(ref startedActivities) >= 1);
+        Assert.True(Volatile.Read(ref measurementCallbacks) >= 1);
+    }
+
+    [Fact]
+    public async Task CheckAsyncPreservesUnavailableFailureWhenActivityStopAndMetricListenersThrow()
+    {
+        var stoppedActivities = 0;
+        var measurementCallbacks = 0;
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == TurnOvaDiagnostics.MeterName &&
+                instrument.Name.StartsWith("turnova.storage.readiness.", StringComparison.Ordinal))
+                listener.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<long>((_, _, _, _) =>
+        {
+            Interlocked.Increment(ref measurementCallbacks);
+            throw new InvalidOperationException("optional-storage-metric-listener-failure");
+        });
+        meterListener.SetMeasurementEventCallback<double>((_, _, _, _) =>
+        {
+            Interlocked.Increment(ref measurementCallbacks);
+            throw new InvalidOperationException("optional-storage-duration-listener-failure");
+        });
+        meterListener.Start();
+
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == TurnOvaDiagnostics.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName == "storage.readiness.check")
+                {
+                    Interlocked.Increment(ref stoppedActivities);
+                    throw new InvalidOperationException("optional-storage-activity-stop-listener-failure");
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(activityListener);
+
+        var probe = new StorageReadinessProbe(
+            _ => Task.FromException(new HttpRequestException("private-storage-provider-detail")),
+            TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAsync<StorageReadinessException>(
+            () => probe.CheckAsync(CancellationToken.None));
+
+        Assert.Equal("unavailable", exception.FailureKind);
+        Assert.IsType<HttpRequestException>(exception.InnerException);
+        Assert.True(Volatile.Read(ref stoppedActivities) >= 1);
+        Assert.True(Volatile.Read(ref measurementCallbacks) >= 1);
+    }
 }
