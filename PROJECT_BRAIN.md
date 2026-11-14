@@ -3,9 +3,9 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-14  
-**Repository:** https://github.com/rajeevp727/turnova-platform  
-**Main HEAD:** `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0`. Sole active feature PR [#161](https://github.com/rajeevp727/turnova-platform/pull/161), branch `fix/platform-01-telemetry-listener-isolation`, source/test head `e625693c697c3903639c1135dd66075895643926`; [CI #1589 / run 43564291551](https://github.com/rajeevp727/turnova-platform/actions/runs/43564291551) passed 12/12 (backend 594/594, shared 179/179, harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native non-container API publish and four smoke jobs). Documentation synchronization now requires a new exact-head CI. PR #160 Union audit observability merged at `f1ea5ed88b9ebb2704f5a6efb25f4af87dc1e8b0`. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Last verified:** 2026-11-14
+**Repository:** https://github.com/rajeevp727/turnova-platform
+**Main HEAD:** `51b4dffcc5834e77a84a51c4505a68f1db1c49b8`. PR #161 ride-audit/storage-readiness telemetry listener isolation is merged after exact-head CI #1592 passed 12/12. Sole active PR #162 (`docs/cab-mvp-readme-alignment`) exact head `378b47c0aa13c3bcff5d48a149661abeecfe8e11` passed [CI #1601 / run 43574604361](https://github.com/rajeevp727/turnova-platform/actions/runs/43574604361) 12/12: backend 594/594, shared 179/179, Python harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native non-container API publish and four smoke jobs. This evidence-documentation commit creates a new PR head requiring fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2109,3 +2109,32 @@ PR #146 was merged to main at `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`. Its CI
 - PR #161 remains Draft; two reviews are COMMENT-only and there are zero unresolved inline threads. No approval or merge is claimed. The docs commit requires fresh exact-head CI.
 - Next: complete documentation-head CI and merge only if GitHub permits without bypass. Then re-read main, continue remaining PLATFORM-01 native-publish/audit-path reliability work, and correct stale README customer-facing FIFO/payment wording in a separate PR before #19 RELEASE-01.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. Live Cosmos, production telemetry/auth/CORS, dispatch policy, private documents, legal terms, support/reconciliation, signed builds, physical-device and hosting gates remain external.
+
+
+## Latest engineering handoff — PR #161 merged; README scope alignment next (2026-11-14)
+
+- PR #161 merged to main at `51b4dffcc5834e77a84a51c4505a68f1db1c49b8` after exact documentation-head [CI #1592 / run 43568925573](https://github.com/rajeevp727/turnova-platform/actions/runs/43568925573) passed 12/12. Backend 594/594, shared mobile/auth 179/179, deterministic harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native non-container API publish and four same-run smoke jobs passed.
+- PR #161 adds best-effort isolation for ride-audit and storage-readiness ActivitySource/MeterListener callbacks. RIDE-OBS-001/002 and STORAGE-OBS-001/002 preserve selected-Cab ride persistence, append-only audit and original readiness classification when optional listeners throw.
+- Main was re-read after PR #161 merged. Sole active PR #162 is the focused documentation increment correcting README claims that FIFO is the customer-facing dispatch model, payment integration/gateway is planned, and Union membership is not a dispatch eligibility gate. It also removes the out-of-scope payment-provider placeholder from infrastructure documentation. Legacy queue data/code remains compatibility-only; no runtime behavior is changed.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
+- Next: finish exact-head CI/review/merge for PR #162 without bypass; then continue remaining PLATFORM-01 native-publish/audit-path work and RELEASE-01 signing-independent preflight tests. Do not mark RELEASE-01 Verified until signed builds, physical-device and store evidence pass.
+- External gates remain live Cosmos ETag/partition/multi-instance/restart/retention, production auth/UnionManager claims, product-approved dispatch radius/zones/location freshness and internal FIFO policy, maps/routing/realtime/call/chat/push, private document storage/scanning/consent/retention, support/reconciliation policies, Union legal terms, telemetry export/alerts, native API hosting, signed Android/iOS artifacts, physical-device acceptance and store submission.
+
+## Latest engineering handoff — PR #162 Cab MVP documentation alignment (2026-11-14)
+
+- Main HEAD is `51b4dffcc5834e77a84a51c4505a68f1db1c49b8`; PR #161 is merged. Sole active PR #162 (`docs/cab-mvp-readme-alignment`) aligns README and infrastructure documentation with the authoritative Cab-only, Union-connected, Rider-selected and direct-payment MVP. It removes stale customer-facing FIFO/payment-provider descriptions and corrects Union eligibility wording without changing runtime code or legacy queue behavior.
+- PR #161 exact documentation-head CI #1592 / run 43568925573 passed 12/12: backend 594/594, shared 179/179, harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native API publish and four smoke jobs.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
+- PR #162 exact-head CI is pending. After it passes and GitHub permits merge without bypass, re-read main and continue remaining PLATFORM-01 native-publish/audit-path work, then RELEASE-01 release-preflight deterministic tests.
+- External gates remain live Cosmos ETag/partition/multi-instance/restart/retention, production auth/UnionManager claims, product-approved dispatch radius/zones/location freshness and internal FIFO policy, maps/routing/realtime/call/chat/push, private document storage/scanning/consent/retention, support/reconciliation policies, Union legal terms, telemetry export/alerts, native API hosting, signed Android/iOS artifacts, physical-device acceptance and store submission.
+
+PRD.md §11 cost guidance was aligned with the explicit no-payment-provider MVP boundary. No payment gateway, escrow or in-app collection is required.
+
+## Latest engineering handoff — PR #162 CI #1601 passed (2026-11-14)
+
+- Main remains `51b4dffcc5834e77a84a51c4505a68f1db1c49b8`; PR #161 is merged. Sole active PR #162 (`docs/cab-mvp-readme-alignment`) exact head `378b47c0aa13c3bcff5d48a149661abeecfe8e11` passed [CI #1601 / run 43574604361](https://github.com/rajeevp727/turnova-platform/actions/runs/43574604361) 12/12. Backend 594/594 (0 failed, 0 skipped), shared mobile/auth 179/179, deterministic Python harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native .NET API publish and four same-run emulator/simulator smoke jobs all passed.
+- The native publish fixture suite passed. Linux-x64 framework-dependent artifact contained libHarfBuzzSharp.so and libSkiaSharp.so, size 43,111,967 bytes. This proves CI artifact integrity only, not production hosting. Unsigned iOS smoke verifies role-specific login surfaces and the expected SecureStore-unavailable banner; no signed-device Keychain or physical-device acceptance is claimed.
+- PR #162 is documentation-only and aligns README/PRD/infrastructure guidance with the approved Cab-only, Union-connected, Rider-selected and direct-payment MVP. It preserves legacy queue/history behavior and does not alter runtime code. Review threads are empty; reviews are COMMENT-only, not approvals.
+- The evidence synchronization itself creates a new branch head; fresh exact-head CI is required before ready/merge. Recheck base/head/reviews and let GitHub enforce merge policy. No self-approval, force-push or bypass.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation score. Production readiness is not established.
+- Next after #162 merges: re-read main; audit and strengthen native .NET publish verifier fixtures for required metadata/native assets/forbidden nested assemblies, then continue RELEASE-01 deterministic release-preflight tests. Fleet/Ops Phase 2 and Docker/container builds/deployments remain excluded.
