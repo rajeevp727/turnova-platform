@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) source/test head `35687a394c9a89dd0225be79b66a5be25389f149` passed CI #1643 12/12; exact documentation head `a3d16f36945ae3643c0ca6d1aaee6f27db14b50c` passed [CI #1651 / run 43630690831](https://github.com/rajeevp727/turnova-platform/actions/runs/43630690831) 12/12: backend 594/594, shared Node 189/189, Python 48/48, Rider/Driver Expo, four native builds, native API publish and four same-run smoke jobs. The new URL-boundary source/test correction and evidence-document synchronization require fresh exact-head CI; CI #1651 is parent-head evidence only. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 is merged. Sole active PR #164 (`test/release-preflight-strict-validation`) source/test head `e2c79e847efe85f5b63dda3d1e9b59168ed97ed3` passed [CI #1655 / run 43636173504](https://github.com/rajeevp727/turnova-platform/actions/runs/43636173504) 12/12: backend 594/594, shared Node 190/190, Python 48/48, both Expo validations, four native builds, native API publish and all four same-run smoke jobs. Follow-up test head `d85b2992f43955696297ea61b7b2338b28c34a4b` adds raw C1 URL-control rejection; exact-head CI after documentation synchronization is required. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
 ## Current execution handoff — 2026-11-15
@@ -2250,3 +2250,13 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - Added `RELEASE-PREFLIGHT-011` for empty userinfo, embedded space/tab/U+2028/NUL, backslash, and valid percent-encoded path controls. Test plan, progress, matrix and Project Brain were updated consistently.
 - Parent CI #1651 / run 43630690831 passed 12/12 on `a3d16f36945ae3643c0ca6d1aaee6f27db14b50c`; it does not verify the new source/test change. CI #1653 on the previous docs-only tip is superseded. Fresh exact-head CI is required before PR readiness/merge.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). RELEASE-01 remains externally blocked by approved identifiers/EAS linkage, production API configuration, signing, physical-device acceptance and store submission. After safe merge, re-read main and continue supplemental AI-01 endpoint options validation.
+
+
+## Latest exact-head handoff — PR #164 / CI #1655 (2026-11-15)
+
+- Main HEAD `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`; PR #163 merged. Sole active PR #164 is `test/release-preflight-strict-validation`.
+- [CI #1655 / run 43636173504](https://github.com/rajeevp727/turnova-platform/actions/runs/43636173504) passed **12/12 jobs** on source/test head `e2c79e847efe85f5b63dda3d1e9b59168ed97ed3`: backend 594/594 (zero failed/skipped), shared Node 190/190, Python 48/48, both Expo validation/bundles, four native Android/iOS builds, native non-container API publish and all four same-run smoke jobs.
+- Artifacts: API publish `14130470061`; Rider/Driver Android standalone APKs `14130397936` / `14130253944`; unsigned iOS Simulator apps `14130985252` / `14130650527`; Rider/Driver Android smoke `14130600817` / `14130770991`; Rider/Driver iOS smoke `14130528078` / `14130747062`. Android Rider/Driver PIDs 2600/2149; Driver iOS Simulator PID 10630; both iOS apps remain unsigned and report SecureStore unavailable. No signed-device Keychain or physical-device acceptance is claimed.
+- Follow-up test-only commit `d85b2992f43955696297ea61b7b2338b28c34a4b` expands RELEASE-PREFLIGHT-011 to reject raw C1 controls U+0080/U+0085/U+009F. A local Node guard exercise rejected six representative C0/C1 controls while retaining valid HTTPS and percent-encoded path controls. This source/test follow-up and current documentation synchronization require fresh exact-head CI.
+- PR #164 remains Draft/unmerged until all 12 required jobs pass on the final head and review/merge state is rechecked. The output-path data-loss thread is resolved; reviews are COMMENT-only; no self-approval or protection bypass.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established. Next after safe merge: re-read main and continue supplemental AI-01 provider endpoint/options validation with deterministic tests; AI-01 remains outside the 19-row denominator.
