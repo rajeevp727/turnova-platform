@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
 using TurnOva.API;
 using TurnOva.API.Observability;
 using TurnOva.Domain.Dispatch;
