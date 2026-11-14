@@ -128,7 +128,7 @@ if [[ "${FAKE_ADB_READONLY_FAIL_COMMAND:-}" == "$command_line" ]]; then
   count=$((count + 1))
   if [[ -n "$count_file" ]]; then
     mkdir -p "$(dirname "$count_file")"
-    printf '%s\\n' "$count" > "$count_file"
+    printf '%s\n' "$count" > "$count_file"
   fi
   if (( count <= ${FAKE_ADB_READONLY_FAIL_ATTEMPTS:-0} )); then
     echo "error: device offline during $command_line" >&2
