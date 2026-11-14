@@ -268,7 +268,7 @@ test("production API URL rejects credentials, query strings and fragments", () =
   for (const apiBaseUrl of [
     "https://user:secret@api.turnova.com",
     "https://api.turnova.com?token=unsafe",
-    "https://api.turnova.com#release",
+    "https://api.turnova.com#release", "https://api.turnova.com?", "https://api.turnova.com#", " https://api.turnova.com ",
     "https://user@api.turnova.com"
   ]) {
     const report = validateReleaseConfig(fixture({ apiBaseUrl }));
