@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-14
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `a40007dcfc3e36f96f2f81e4a69b1ecdaa32cf78`. PR #162 Cab-only documentation alignment is merged after CI #1604 / run 43578934493 passed 12/12. Sole active PR #163 (`fix/platform-01-native-publish-verifier`) exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [CI #1608 / run 43583820733](https://github.com/rajeevp727/turnova-platform/actions/runs/43583820733) 12/12: backend 594/594, shared mobile/auth 179/179, Python harness 48/48, Rider/Driver Expo, Android debug/release APKs, unsigned iOS Simulator builds, native API publish and four same-run smoke jobs. The native publish verifier passed one valid plus 11 negative fixtures and validated the actual 43,111,979-byte Linux x64 publish artifact. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `d27eec195769d3cd0ea05197b76a8ae1ecd8c67f`. PR #163 native API publish hardening merged after CI #1608 / run 43583820733 passed 12/12. Sole active PR #164 (`test/release-preflight-strict-validation`) head `662ebfd4b706b00bdec834da9910f0fb47a65772` adds strict SemVer 2.0.0/EAS CLI minimum validation, profile/URL/network boundaries and CLI report/argument tests. Source/test CI #1615 observed backend 594/594, shared Node 187/187, Python 48/48 and both Expo validations passed; four native builds/smokes remained pending. Final documentation-head CI is required before merge. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 **Strict acceptance:** 0/19 (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion score. Production readiness is not established.
 
 ## Product in one line
@@ -2159,3 +2159,13 @@ PRD.md §11 cost guidance was aligned with the explicit no-payment-provider MVP 
 - PR #163 has COMMENT-only review and zero unresolved inline threads. Do not self-approve or bypass. Evidence documentation now requires a fresh exact-head CI before ready/merge.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. External gates remain live Cosmos ETag/partition/multi-instance/restart/retention, production auth/UnionManager identity, product-approved dispatch radius/zones/location freshness, maps/realtime, private documents/scanning/consent/retention, support/reconciliation policies, Union legal terms, telemetry export/alerts, signed Android/iOS releases, physical-device acceptance and production hosting.
 - Next after PR #163 merges: re-read main and continue #19 RELEASE-01 deterministic release-preflight regression tests (semver, EAS CLI/build-profile boundaries, URL credentials/fragments, reserved IPv4/IPv6 and internal-host variants, CLI reporting). Keep signing/store/provider/physical-device gates external; no Docker/container builds or deployments.
+
+
+## Supplemental AI-01 source audit (2026-11-14)
+
+- `AiAssistanceEndpoints.cs` and `AiAssistanceService.cs` expose Rider trip-intent draft and Rider/Driver approved-content help only. The provider boundary remains an unavailable placeholder; no paid provider/model/credential is selected.
+- Options validate bounded timeout/input/output/rate limits and require an HTTPS endpoint plus managed credential reference if enabled. Endpoints require Rider/Driver roles and use a per-subject fixed-window rate limiter.
+- Trip-intent provider prompts remove the full route span and send only generic allow-listed words plus `[PICKUP]`/`[DROPOFF]` tokens. Locally parsed pickup/dropoff and passenger count remain authoritative; every draft requires user confirmation.
+- Help provider prompts contain only allow-listed keywords and approved source IDs; the service returns in-repository help content, never provider-authored answer text. Unknown/ambiguous questions escalate.
+- Service tests cover provider timeout, cancellation, late faults, HTTP/unexpected failures, redaction, allow-listed content, output/input bounds and deterministic fallback; API integration tests cover role authorization and per-subject rate limiting. The current backend suite includes these tests.
+- Live provider/model/credential selection and provider validation remain external. Optional Driver offer explanation is not required for the 19-row denominator. AI-01 is supplemental and is not counted as an acceptance row.
