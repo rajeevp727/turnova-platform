@@ -2189,3 +2189,16 @@ Smoke artifacts: Rider Android `14095977137`, Driver Android `14096095895`, Ride
 
 - Telemetry is optional and best-effort. Activity creation, outcome tagging/status, disposal, counters and histograms must be isolated independently from ride persistence and storage readiness.
 - Tests use deterministic in-process ActivityListener and MeterListener callbacks; they do not claim live exporter, live Cosmos, multi-instance or production readiness validation.
+
+
+## PLATFORM-01 — ride/storage telemetry listener isolation execution evidence (2026-11-14)
+
+RIDE-OBS-001/002 and STORAGE-OBS-001/002 passed exact source/test CI #1589 / run 43564291551 on PR #161 head `e625693c697c3903639c1135dd66075895643926`. The complete run passed 12/12 jobs: backend **594/594** (0 failed, 0 skipped), shared mobile/auth **179/179**, deterministic harness **48/48**, Rider/Driver Expo validation, Android debug/release APKs, unsigned iOS Simulator builds, native non-container .NET API Release publish/artifact verification and all four same-run smoke jobs.
+
+- RIDE-OBS-001: a Rider-selected Cab booking persists its RideCreated audit event when the ride ActivityStarted and metric callbacks throw.
+- RIDE-OBS-002: Rider-selected booking and owner cancellation both persist the expected append-only audit events when ActivityStopped and metric callbacks throw.
+- STORAGE-OBS-001: a successful deterministic readiness probe remains successful when ActivityStarted and metric callbacks throw.
+- STORAGE-OBS-002: an unavailable probe preserves StorageReadinessException FailureKind `unavailable` and the original HttpRequestException when ActivityStopped and metric callbacks throw.
+- iOS Simulator smoke logs verified role-specific login surfaces and the expected unsigned-Simulator SecureStore-unavailable banner. Android smoke jobs verified install/launch and screenshot capture on attempt 1. No signed-device Keychain or physical-device acceptance is claimed.
+- CI run: [#1589 / 43564291551](https://github.com/rajeevp727/turnova-platform/actions/runs/43564291551). This evidence is for the source/test head; documentation updates create a new head and require fresh exact-head CI before merge.
+- Optional telemetry is best-effort. No live Cosmos, exporter, production host, signed release or physical-device validation is claimed.
