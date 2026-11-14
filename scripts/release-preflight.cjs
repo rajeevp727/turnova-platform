@@ -17,9 +17,8 @@ function isValidSemanticVersion(value) {
 }
 
 function supportsEasCli16OrNewer(range) {
-  const match = typeof range === "string"
-    ? /^>=\s*(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\s*$/.exec(range)
-    : null;
+  if (typeof range !== "string" || /[\r\n]/.test(range)) return false;
+  const match = /^>=\s*(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\s*$/.exec(range);
   return Boolean(match) && BigInt(match[1]) >= 16n;
 }
 
