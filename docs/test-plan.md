@@ -2222,3 +2222,15 @@ RIDE-OBS-001/002 and STORAGE-OBS-001/002 passed exact source/test CI #1589 / run
 | PLATFORM-PUBLISH-012 | Missing API assembly is rejected | Remove `TurnOva.API.dll` | Verifier exits non-zero with the exact missing/empty API assembly diagnostic | Bash fixture | P1 |
 
 The fixture harness asserts the expected diagnostic for each negative case; a generic non-zero exit is not sufficient evidence. The local Bash fixture run passed the valid fixture and all 11 negative cases. Exact-head GitHub Actions evidence is pending. This validates the publish directory contract only; it does not establish production hosting, live Cosmos, signed release or production readiness.
+
+
+## PLATFORM-01 — native API publish verifier exact-head execution evidence (2026-11-14)
+
+PR #163 exact head `77cf39ff10268901e6a2229f3b65f21fdce34bb3` passed [GitHub Actions CI #1608 / run 43583820733](https://github.com/rajeevp727/turnova-platform/actions/runs/43583820733) **12/12 jobs**.
+
+- Backend Release build and tests: **594/594 passed**, 0 failed, 0 skipped. Shared mobile/auth Node tests: **179/179 passed**. Deterministic Python CI harness: **48/48 passed**.
+- Rider/Driver Expo validation, Android debug and standalone release APK builds, unsigned iOS Simulator builds, native non-container .NET API Release publish and all four same-run emulator/simulator smoke jobs passed.
+- `scripts/test-api-publish-verifier.sh` passed one valid fixture plus 11 negative cases; negative cases assert the expected diagnostic. `scripts/verify-api-publish.sh` validated the actual CI publish directory at **43,111,979 bytes** against the 125,829,120-byte limit.
+- Actual publish artifact `14109034542` contained non-empty `TurnOva.API.dll`, `TurnOva.API.deps.json`, `TurnOva.API.runtimeconfig.json`, `libSkiaSharp.so` and `libHarfBuzzSharp.so`; `PdfSharp.WPFonts.dll` was absent. The runtime directory allow-list remained Linux x64 plus the existing `unix` compatibility entry.
+- Same-run smoke artifacts: Rider Android `14110196137`, Driver Android `14109384830`, Rider iOS Simulator `14109792158`, Driver iOS Simulator `14109599886`. Android apps installed/launched and screenshots were captured on attempt 1. Both unsigned iOS Simulator apps reached their role-specific login surface and verified the SecureStore-unavailable banner. No signed-device Keychain or physical-device acceptance is claimed.
+- This evidence verifies CI build artifacts and deterministic verifier behavior only; it does not establish production API hosting, live Cosmos, signed releases or production readiness.
