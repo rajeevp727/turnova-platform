@@ -284,7 +284,10 @@ test("production API URL rejects empty userinfo and raw embedded whitespace", ()
     "https://api.turnova.com/path\tsegment",
     "https://api.turnova.com/path\u2028segment",
     "https://api.turnova.com\\path",
-    "https://api.turnova.com/path\u0000segment"
+    "https://api.turnova.com/path\u0000segment",
+    "https://api.turnova.com/path\u0080segment",
+    "https://api.turnova.com/path\u0085segment",
+    "https://api.turnova.com/path\u009fsegment"
   ];
   for (const apiBaseUrl of rejectedUrls) {
     const report = validateReleaseConfig(fixture({ apiBaseUrl }));
