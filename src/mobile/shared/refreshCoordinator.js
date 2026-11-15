@@ -16,7 +16,7 @@ function getFreshAccessToken(ref, rejectedAccessToken, readTokens, refresh) {
     if (tokens?.accessToken && tokens.accessToken !== rejectedAccessToken) {
       return tokens.accessToken;
     }
-    if (typeof tokens?.refreshToken !== "string" || tokens.refreshToken.length === 0) {
+    if (typeof tokens?.refreshToken !== "string" || tokens.refreshToken.trim().length === 0) {
       throw new Error("No refresh token available.");
     }
     return refresh(tokens.refreshToken);

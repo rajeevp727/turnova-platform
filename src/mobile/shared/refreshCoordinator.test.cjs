@@ -131,6 +131,46 @@ test("missing refresh token fails without calling the refresh endpoint", async (
   assert.equal(ref.current, null);
 });
 
+test("whitespace-only refresh tokens fail before calling the refresh endpoint", async () => {
+  let refreshCalls = 0;
+
+  for (const refreshToken of ["", " ", "\t\r\n", " \t\r\n "]) {
+    const ref = { current: null };
+    await assert.rejects(
+      getFreshAccessToken(
+        ref,
+        "old-access",
+        async () => ({ accessToken: "old-access", refreshToken }),
+        async () => { refreshCalls += 1; return "unexpected"; }
+      ),
+      /No refresh token available/
+    );
+    assert.equal(ref.current, null);
+  }
+
+  assert.equal(refreshCalls, 0);
+});
+
+test("nonblank opaque refresh tokens are forwarded unchanged", async () => {
+  const ref = { current: null };
+  const opaqueRefreshToken = " opaque-refresh-token ";
+  let forwardedToken = null;
+
+  const accessToken = await getFreshAccessToken(
+    ref,
+    "old-access",
+    async () => ({ accessToken: "old-access", refreshToken: opaqueRefreshToken }),
+    async token => {
+      forwardedToken = token;
+      return "new-access";
+    }
+  );
+
+  assert.equal(accessToken, "new-access");
+  assert.equal(forwardedToken, opaqueRefreshToken);
+  assert.equal(ref.current, null);
+});
+
 
 test("advancing the session epoch detaches an old refresh without clearing a newer in-flight refresh", async () => {
   const epoch = { current: 0 };
