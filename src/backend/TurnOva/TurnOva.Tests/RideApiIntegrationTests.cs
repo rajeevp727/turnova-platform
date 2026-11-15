@@ -3600,10 +3600,9 @@ public sealed partial class RideApiIntegrationTests
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
         Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
             .GetActiveAsync("rider-ambiguous-booking-zone"));
-        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
-            .GetActiveAsync("ambiguous-booking-driver"));
         var reservationStore = Assert.IsType<InMemoryDriverRideReservationStore>(
             factory.Services.GetRequiredService<IDriverRideReservationStore>());
+        Assert.Null(await reservationStore.GetActiveAsync("ambiguous-booking-driver"));
         Assert.Empty(reservationStore.GetAuditEvents("ambiguous-booking-driver"));
     }
     [Theory]
@@ -3720,6 +3719,8 @@ public sealed partial class RideApiIntegrationTests
             .GetActiveAsync(riderId));
         Assert.Empty(reservationStore.GetAuditEvents(driverId));
         Assert.Null(await reservationStore.GetActiveAsync(driverId));
+        Assert.Empty(reservationStore.GetAuditEvents("selected-driver"));
+        Assert.Null(await reservationStore.GetActiveAsync("selected-driver"));
     }
 
     [Fact]
