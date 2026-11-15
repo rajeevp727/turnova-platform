@@ -3557,11 +3557,6 @@ public sealed partial class RideApiIntegrationTests
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
     [InlineData(true, true)]
     public async Task RiderDiscoveryReturnsServiceUnavailableWhenConfiguredZonesOverlap(
         bool reverseZoneOrder, bool sharedBoundary)
@@ -3579,11 +3574,6 @@ public sealed partial class RideApiIntegrationTests
         Assert.Contains("configured dispatch zones are invalid or ambiguous",
             (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
     }
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
@@ -3613,11 +3603,6 @@ public sealed partial class RideApiIntegrationTests
         Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .GetActiveAsync("ambiguous-booking-driver"));
     }
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
