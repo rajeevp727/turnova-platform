@@ -18,7 +18,7 @@ public sealed class AiAssistantOptionsValidatorTests
     {
         var result = Validate(EnabledOptions(endpoint));
 
-        Assert.True(result.Succeeded, string.Join(Environment.NewLine, result.Failures));
+        Assert.True(result.Succeeded, FailureText(result));
     }
 
     [Theory]
@@ -28,7 +28,7 @@ public sealed class AiAssistantOptionsValidatorTests
         var result = Validate(EnabledOptions(endpoint));
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Failures, failure =>
+        Assert.Contains(result.Failures ?? Array.Empty<string>(), failure =>
             failure.Contains("AiAssistant:Endpoint", StringComparison.Ordinal));
     }
 
@@ -63,7 +63,7 @@ public sealed class AiAssistantOptionsValidatorTests
     {
         var result = Validate(new AiAssistantOptions { Enabled = false });
 
-        Assert.True(result.Succeeded, string.Join(Environment.NewLine, result.Failures));
+        Assert.True(result.Succeeded, FailureText(result));
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class AiAssistantOptionsValidatorTests
         var result = Validate(new AiAssistantOptions { Enabled = true });
 
         Assert.False(result.Succeeded);
-        var failures = string.Join(Environment.NewLine, result.Failures);
+        var failures = FailureText(result);
         Assert.Contains("AiAssistant:Provider", failures, StringComparison.Ordinal);
         Assert.Contains("AiAssistant:Model", failures, StringComparison.Ordinal);
         Assert.Contains("AiAssistant:Endpoint", failures, StringComparison.Ordinal);
@@ -87,7 +87,7 @@ public sealed class AiAssistantOptionsValidatorTests
             $"https://user:{secret}@api.example.com?token={secret}"));
 
         Assert.False(result.Succeeded);
-        Assert.DoesNotContain(secret, string.Join(Environment.NewLine, result.Failures), StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, FailureText(result), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -152,4 +152,7 @@ public sealed class AiAssistantOptionsValidatorTests
 
     private static ValidateOptionsResult Validate(AiAssistantOptions options) =>
         new AiAssistantOptionsValidator().Validate(Options.DefaultName, options);
+
+    private static string FailureText(ValidateOptionsResult result) =>
+        string.Join(Environment.NewLine, result.Failures ?? Array.Empty<string>());
 }
