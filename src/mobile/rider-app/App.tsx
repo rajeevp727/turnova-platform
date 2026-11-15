@@ -395,8 +395,6 @@ export default function App() {
      try{
        attempt=await getOrCreatePersistentProposalAttempt(SecureStore,proposalAttemptRef,{rideId,actor:"rider",userId:proposalUserId,amount,currency:"INR"},undefined,isProposalCurrent);
        if(proposalSubmissionInFlight.current!==pendingLock||!isProposalCurrent())return;
-       proposalSubmissionInFlight.current=attempt.key;
-       ownedSubmissionLock=attempt.key;
        try{
          await apiFetch(`/api/v1/rides/${rideId}/agreements`,{method:"POST",headers:{"Idempotency-Key":attempt.key},body:JSON.stringify({amount,currency:"INR"})});
        }catch(e){
