@@ -3014,6 +3014,23 @@ public sealed partial class RideApiIntegrationTests
             (await driver.SendAsync(driverRequest)).StatusCode);
     }
 
+    [Theory]
+    [InlineData("latitude=91&longitude=78.399&passengers=1")]
+    [InlineData("latitude=-91&longitude=78.399&passengers=1")]
+    [InlineData("latitude=17.493&longitude=181&passengers=1")]
+    [InlineData("latitude=17.493&longitude=-181&passengers=1")]
+    [InlineData("latitude=17.493&longitude=78.399&passengers=0")]
+    [InlineData("latitude=17.493&longitude=78.399&passengers=7")]
+    public async Task RiderDiscoveryRejectsInvalidPickupCoordinatesAndPassengerCounts(string query)
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-discovery-invalid-input");
+
+        using var response = await rider.GetAsync("/api/v1/rider/discovery?" + query);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task RiderDiscoveryFailsClosedWhenLocationFreshnessPolicyIsNotConfigured()
     {
@@ -3263,8 +3280,39 @@ public sealed partial class RideApiIntegrationTests
         var root = json.RootElement;
         Assert.Equal("hyderabad-central", root.GetProperty("pickupZoneId").GetString());
         Assert.Equal(JsonValueKind.Null, root.GetProperty("journeyDistanceKm").ValueKind);
+        Assert.Equal(
+            new[] { "journeyDistanceKm", "pickupZoneId", "unions" },
+            root.EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray());
 
         var groups = root.GetProperty("unions");
+        var expectedUnionFields = new[] { "drivers", "unionId", "unionName" };
+        var expectedDriverFields = new[]
+        {
+            "distanceToPickupKm", "driverId", "fullName", "passengerCapacity",
+            "profilePhotoBase64", "profilePhotoContentType", "serviceClass",
+            "vehicleMake", "vehicleModel"
+        };
+        foreach (var unionGroup in groups.EnumerateArray())
+        {
+            Assert.Equal(
+                expectedUnionFields,
+                unionGroup.EnumerateObject()
+                    .Select(property => property.Name)
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .ToArray());
+            foreach (var driver in unionGroup.GetProperty("drivers").EnumerateArray())
+            {
+                Assert.Equal(
+                    expectedDriverFields,
+                    driver.EnumerateObject()
+                        .Select(property => property.Name)
+                        .OrderBy(name => name, StringComparer.Ordinal)
+                        .ToArray());
+            }
+        }
         Assert.Equal(2, groups.GetArrayLength());
         Assert.DoesNotContain(groups.EnumerateArray(), group =>
             group.GetProperty("unionId").GetString() == northZone.UnionId);
