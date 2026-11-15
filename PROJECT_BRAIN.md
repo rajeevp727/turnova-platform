@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `fc86294903c12b3cb893a8754a66235944cafc05`. PR #164 RELEASE-01 merged after exact-head CI #1673 passed 12/12. Sole active PR #165 is supplemental AI-01 provider endpoint/options validation on `feat/ai-01-provider-endpoint-validation`, source/test head `d19873864f5d58f9c835c947c1dec9c35d259068`; exact-head CI #1681 / run 43661633891 passed 12/12 (backend 632/632, shared Node 190/190, Python 48/48, both Expo validations, four native builds, native API publish and four same-run smoke jobs). Four-document evidence synchronization requires fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** 364480308b2e07fdbdc63ca42d2f04f6a91dc132. PR #164 RELEASE-01 and supplemental PR #165 AI-01 are merged. PR #165 source/test CI #1681 passed 12/12 (backend 632/632, shared Node 190/190, Python 48/48); exact documentation-head CI #1682 passed 12/12 on b5e7e87bb9e0cf7e3bf5de42179e24e6d1b4553a. Sole active PR #166 is AUTH-01 on fix/auth-01-session-cleanup-and-login-contracts; code/test head before documentation synchronization 65aa8196d53fc35c942ec5319be38abf8e551207, exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2309,3 +2309,12 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - Next primary acceptance row is AUTH-01. Existing API coverage includes Rider/Driver registration, role-mismatch rejection/revocation and Rider `/auth/me`. Planned next tests are AUTH-API-010 successful Rider/Driver login symmetry and AUTH-API-011 Driver `/auth/me` bearer forwarding/profile response. No profile-update route/field contract is defined; do not invent one.
 - PR #165 remains Draft until this four-document evidence synchronization passes exact-head CI and final diff/review/mergeability checks. Three reviews are COMMENT-only; zero unresolved inline threads. No self-approval or bypass.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). DISPATCH-01 requires Product-approved radius/zones/location freshness; DRIVER-04 and SUPPORT-01 require Product/Operations support policies; RELEASE-01 remains externally blocked by approved identifiers/EAS linkage, production HTTPS API, signing, signed-device Keychain, physical-device acceptance and store submission. AI-01 is supplemental and outside the denominator. Production readiness is not established.
+
+## Latest engineering handoff — AUTH-01 PR #166 (2026-11-15)
+
+- PR #165 supplemental AI-01 merged at 364480308b2e07fdbdc63ca42d2f04f6a91dc132 after CI #1682 passed 12/12 on exact documentation head b5e7e87bb9e0cf7e3bf5de42179e24e6d1b4553a. AI-01 remains outside the 19-row denominator; no provider/model/credential selected.
+- Sole active feature PR [#166](https://github.com/rajeevp727/turnova-platform/pull/166), branch fix/auth-01-session-cleanup-and-login-contracts. Code/test head before documentation synchronization: 65aa8196d53fc35c942ec5319be38abf8e551207; CI pending.
+- AUTH-API-010 adds successful Rider/Driver login integration cases verifying normalized identity, appId=turnova, no client role forwarded, matching role/token pair and no logout. AUTH-API-011 verifies Driver /auth/me exact Bearer forwarding and profile response without token fields.
+- AUTH-LOGIN-063 fixes Rider replacement login/registration: await epoch-bound clearSessionTokensIfCurrent before network dispatch, return false if the session changes during deletion, fail closed on SecureStore delete errors and preserve a newer queued token pair. Shared tests cover current cleanup, stale epoch, in-flight account switch, failure and Rider source ordering.
+- Existing profile-update fields/provider route remain undefined. Physical-device SecureStore/Keychain, live TriSend refresh rotation/reuse and production auth remain external gates.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). Production readiness is not established.
