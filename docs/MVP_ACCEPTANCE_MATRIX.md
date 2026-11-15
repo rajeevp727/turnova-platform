@@ -1035,37 +1035,9 @@ The matrix remains exactly 19 primary rows: **0 Verified, 15 In Progress, 4 Bloc
 - Next: finish exact-head CI for this documentation correction, recheck PR head/reviews/mergeability, then squash-merge only if all required checks are green and GitHub permits. Re-read main after merge and continue supplemental AI-01 provider endpoint/options validation with deterministic .NET tests; AI-01 remains outside the 19-row denominator.
 
 
-## Latest handoff — AI-01 provider endpoint validation PR #165 (2026-11-15)
+## Supplemental AI-01 completed; AUTH-01 active — 2026-11-15
 
-- PR #164 RELEASE-01 merged at `fc86294903c12b3cb893a8754a66235944cafc05` after exact-head [CI #1673 / run 43655829696](https://github.com/rajeevp727/turnova-platform/actions/runs/43655829696) passed 12/12 on `820084563ecc0f4ea2cb30e42ba30031bdca16e5`. All 19 primary acceptance rows and their order remain unchanged; strict count remains 0/19 (15 In Progress, 4 Blocked).
-- Sole active PR [#165](https://github.com/rajeevp727/turnova-platform/pull/165) implements supplemental AI-01 provider endpoint/options validation. Current source/test head `51b82f20f310d0ed273a24490e73445cb1034d40`; CI run 43660988708 was running at handoff. AI-031..AI-036 cover endpoint parsing, disabled placeholders, enabled requirements, non-echoing errors, numeric limits and dependency-injection wiring.
-- Keep PR #165 Draft until exact-head backend and all repository-required checks pass. No provider/model/credential selected; live provider sandbox, managed-secret wiring and privacy/data-processing review remain external.
-
-
-## Latest AI-01 validation correction handoff (2026-11-15)
-
-- PR #165 current corrected source/test head `1289297e68297da2ab3629d820c3445bd39187cd`. The endpoint validator implementation and test scenarios are unchanged; the latest commit fixes only the test diagnostic helper so successful `ValidateOptionsResult` instances with null `Failures` no longer throw while constructing an assertion message.
-- Initial CI #1679 / run 43661345054: .NET restore and Release build passed; backend test project reported 627/632 passing. Five valid/disabled-options cases failed in the assertion message helper, not in endpoint validation. The correction uses a null-safe empty-array fallback and removes CS8604. No successful exact-head CI is claimed yet.
-- Keep PR #165 Draft until the fresh exact-head CI completes all backend, mobile, native and smoke checks. AI-01 remains outside the 19-row denominator.
-
-
-## AI-01 exact-head CI #1681 and next sequential handoff (2026-11-15)
-
-- PR [#165](https://github.com/rajeevp727/turnova-platform/pull/165) source/test head `d19873864f5d58f9c835c947c1dec9c35d259068` passed [CI #1681 / run 43661633891](https://github.com/rajeevp727/turnova-platform/actions/runs/43661633891) 12/12. Backend .NET 10 Release build/tests/native publish 632/632 (0 failed/0 skipped); shared mobile/auth 190/190; Python 48/48; Rider/Driver Expo, four native Android/iOS builds and all four same-run smoke jobs passed. Rider iOS smoke artifact upload recovered after a transient DNS failure; final artifact `14141209935` exists. Other same-run artifacts: API `14140496643`, Android release APKs `14140123738` / `14140133675`, iOS Simulator apps `14140971426` / `14140747139`, Android smoke `14140732615` / `14140697653`, Driver iOS smoke `14141216177`.
-- PR #165 remains Draft pending fresh CI on the evidence-synchronized documentation head. Three reviews are COMMENT-only and zero inline threads are unresolved. No provider/model/credential is selected; live provider sandbox, managed-secret wiring and privacy/data-processing review remain external.
-- Next primary acceptance row: AUTH-01. Planned deterministic additions AUTH-API-010 (successful Rider/Driver login symmetry: normalized email, appId, matching response role and token pair) and AUTH-API-011 (Driver `/auth/me` bearer forwarding and profile response). Existing profile-update contract is undefined and will not be invented.
-- Primary matrix remains exactly 19 rows: 0 Verified, 15 In Progress, 4 Blocked. Production readiness is not established; no signed-device, live provider, live Cosmos or production-hosting validation is claimed.
-
-## AUTH-01 implementation handoff — PR #166 (2026-11-15)
-
-- Main HEAD: 364480308b2e07fdbdc63ca42d2f04f6a91dc132; PR #165 AI-01 is merged after CI #1682 passed 12/12 on its exact documentation head. AI-01 remains supplemental.
-- Sole active feature PR: [#166](https://github.com/rajeevp727/turnova-platform/pull/166), branch fix/auth-01-session-cleanup-and-login-contracts. Code/test head before documentation synchronization: 65aa8196d53fc35c942ec5319be38abf8e551207; exact-head CI pending.
-- AUTH-API-010/011 add three executed API theory/fact cases across Rider/Driver successful login and Driver profile-read contracts. AUTH-LOGIN-063 adds shared epoch-aware token-cleanup tests and a Rider source-order contract. These are implementation additions, not strict acceptance promotion.
-- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). AUTH-01 remains In Progress pending exact-head CI and physical-device/production authentication evidence. AUTH-02 remains In Progress pending live TriSend refresh/reuse and signed-device token lifecycle evidence.
-### AUTH-01 initial CI #1684 correction
-
-- CI #1684 / run 43679276782 on initial PR head d9813c488adade7b6b0a292b3cf1e8b825735a1b executed 195 shared tests, 194 passed and one failed due solely to the pre-existing auth-form source-contract test searching for the old minified Rider authenticate declaration. The implementation now uses a multiline async function with explicit epoch-bound SecureStore cleanup; the test anchor was updated to match that declaration.
-- Correction commit 9c92670ec37952db0247ba9f35f15cde3edc10ad changes only the test source anchor. No runtime code or expected behavior was weakened. Fresh exact-head CI is pending; no pass is claimed.
-### AUTH-API-012/013 implementation
-
-- PR #166 adds four fake-TriSend integration theory cases for missing email/password on both Rider and Driver login routes (HTTP 400, no upstream call) and one unsupported-role case (HTTP 404, no upstream call). Together with AUTH-API-010's two theory cases and AUTH-API-011's Driver profile-read case, expected backend total is 640 from the 632 baseline. Exact-head CI pending.
+- PR #164 RELEASE-01 merged at fc86294903c12b3cb893a8754a66235944cafc05 after CI #1673 passed 12/12. PR #165 AI-01 merged at 364480308b2e07fdbdc63ca42d2f04f6a91dc132 after CI #1682 / run 43670984346 passed 12/12 on exact documentation head b5e7e87bb9e0cf7e3bf5de42179e24e6d1b4553a. AI-01 remains supplemental and outside the 19-row denominator.
+- Sole active feature PR [#166](https://github.com/rajeevp727/turnova-platform/pull/166) is AUTH-01, branch fix/auth-01-session-cleanup-and-login-contracts. Source/test code includes AUTH-API-010..013 and AUTH-LOGIN-063; current pre-final-documentation head ea23732e7f1066ec68a2097b5590347ebcbf2912. CI #1684 exposed one stale source-contract anchor (194/195 shared tests); correction 9c92670ec37952db0247ba9f35f15cde3edc10ad updates only that anchor. Expected backend 640, shared mobile 195. Exact final-head CI is pending.
+- AUTH-API-010/011 cover successful Rider/Driver login and Driver /auth/me; AUTH-API-012/013 cover missing credentials and unsupported login role without upstream calls. AUTH-LOGIN-063 makes Rider replacement login/register clear the prior SecureStore pair under the session epoch before network dispatch, fail closed on delete errors and preserve a newer queued token pair.
+- Strict acceptance remains 0/19: 15 In Progress, 4 Blocked. AUTH-01 and AUTH-02 remain In Progress. DISPATCH-01, DRIVER-04, SUPPORT-01 and RELEASE-01 remain Blocked. Production readiness is not established; no signed-device, live TriSend, live Cosmos or production-hosting validation is claimed.
