@@ -78,6 +78,7 @@
 | AUTH-LOGIN-046 | Startup refresh completes after account switch | Hold the startup refresh request, advance the session epoch and persist a replacement login pair, then release the old rotated pair | The stale startup refresh does not persist or publish its token pair | Shared mobile unit + Rider/Driver | P0 |
 | AUTH-LOGIN-047 | Stale startup 400/401 cannot clear a replacement login | Hold startup /auth/refresh, persist a replacement login pair after epoch advance, then reject the old refresh with 400/401 | The stale restore returns without deleting the replacement token pair | Shared mobile unit + Rider/Driver | P0 |
 | AUTH-LOGIN-048 | Partial token cleanup rechecks its observed pair | Pause a token-pair write after the access key, start a partial-pair read, then finish the refresh-key write before queued cleanup executes | Cleanup re-reads under the mutation queue, sees the complete replacement pair differs from the observed partial snapshot, and preserves it | Shared mobile unit + Rider/Driver | P0 |
+| AUTH-LOGIN-063 | Rider replacement login/register clears previous SecureStore pair | Start a replacement Rider login or registration while an older access/refresh pair is stored; also fail one delete and change the session epoch while deletion is pending | Both token keys are attempted before the auth request; cleanup failure prevents network dispatch and surfaces a recoverable error; stale epochs do not delete a newer pair or send a request; queued replacement credentials survive | Shared mobile unit + Rider source contract | P0 |
 
 ## 2A. Authentication API integration contracts
 
@@ -2456,3 +2457,11 @@ PR [#164](https://github.com/rajeevp727/turnova-platform/pull/164) merged at `fc
 - `AUTH-API-010`: add a theory for successful Rider and Driver login using deterministic fake-TriSend responses. Verify normalized email and `appId=turnova` are forwarded, returned profile role matches the route, access/refresh tokens are returned only for the matching role, and no logout is called.
 - `AUTH-API-011`: add Driver `/api/v1/auth/me` coverage proving the exact bearer token is forwarded to TriSend and the Driver profile is returned without token fields.
 - Existing tests already cover successful registration for both roles, wrong-role login rejection/revocation and Rider profile read. No editable profile/update API contract exists; do not invent one. These two tests are planned and have not yet been executed.
+
+## AUTH-01 implementation increment — PR #166 (2026-11-15)
+
+- PR #166, branch fix/auth-01-session-cleanup-and-login-contracts, implements AUTH-API-010, AUTH-API-011 and AUTH-LOGIN-063. The current code/test head before documentation synchronization is 65aa8196d53fc35c942ec5319be38abf8e551207; exact-head CI is pending.
+- AUTH-API-010 adds two deterministic API integration theory cases for successful Rider and Driver login. They verify normalized email, server-owned appId=turnova, no client-supplied role forwarded upstream, matching response role and access/refresh pair, and no unnecessary logout.
+- AUTH-API-011 verifies Driver /api/v1/auth/me forwards the exact Bearer token, returns the Driver profile, and does not add token fields to the profile response.
+- AUTH-LOGIN-063 makes Rider replacement login/registration await epoch-bound clearSessionTokensIfCurrent before network dispatch. Cleanup failure is fail-closed; an epoch change during cleanup aborts the stale request. The shared helper returns the post-cleanup epoch state and remains serialized with token-pair writes.
+- Deterministic shared tests cover successful cleanup, stale-before-start cleanup, epoch change during deletion with a queued replacement pair, cleanup failure and Rider App source ordering. No profile-update contract is defined. Physical-device SecureStore/Keychain and live TriSend validation remain external.
