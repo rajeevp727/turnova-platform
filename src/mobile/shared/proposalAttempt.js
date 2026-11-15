@@ -129,6 +129,10 @@ async function getOrCreatePersistentProposalAttempt(
     if (storedRecord.status === "invalid") {
       throw new Error("Stored proposal retry data is unreadable. No proposal was sent; refresh agreement history and resolve secure storage before retrying.");
     }
+    if (storedRecord.status === "valid" &&
+      (storedRecord.attempt.userId !== normalized.userId || storedRecord.attempt.actor !== normalized.actor)) {
+      throw new Error("Stored proposal retry data belongs to another account or actor. No proposal was sent.");
+    }
     if (storedRecord.status === "valid" && storedRecord.attempt.fingerprint === fingerprint) {
       ref.current = storedRecord.attempt;
       return storedRecord.attempt;
