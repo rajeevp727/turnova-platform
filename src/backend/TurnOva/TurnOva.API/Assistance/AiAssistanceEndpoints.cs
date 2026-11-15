@@ -14,9 +14,21 @@ public static class AiAssistanceEndpoints
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddSingleton<IValidateOptions<AiAssistantOptions>, AiAssistantOptionsValidator>();
         services.AddOptions<AiAssistantOptions>()
             .Bind(configuration.GetSection("AiAssistant"))
+            .Validate(options =>
+                options.RequestTimeoutSeconds is >= 1 and <= 10 &&
+                options.MaxInputCharacters is >= 64 and <= 2000 &&
+                options.MaxOutputCharacters is >= 100 and <= 1000 &&
+                options.MaxRequestsPerMinute is >= 1 and <= 60 &&
+                (!options.Enabled ||
+                    (!string.IsNullOrWhiteSpace(options.Provider) &&
+                     !string.IsNullOrWhiteSpace(options.Model) &&
+                     !string.IsNullOrWhiteSpace(options.Endpoint) &&
+                     Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var endpoint) &&
+                     endpoint.Scheme == Uri.UriSchemeHttps &&
+                     !string.IsNullOrWhiteSpace(options.CredentialReference))),
+                "AiAssistant settings are invalid. Enabled providers require an HTTPS endpoint and a managed credential reference.")
             .ValidateOnStart();
 
         services.AddSingleton<IAiAssistantProvider, UnavailableAiAssistantProvider>();
