@@ -118,7 +118,30 @@ exec /bin/sleep 300
                 platform_tools / "adb",
                 r"""#!/usr/bin/env bash
 set -euo pipefail
+command_line="$*"
+if [[ "${FAKE_ADB_READONLY_FAIL_COMMAND:-}" == "$command_line" ]]; then
+  count_file="${FAKE_ADB_READONLY_FAIL_COUNT_FILE:-}"
+  count=0
+  if [[ -n "$count_file" && -f "$count_file" ]]; then
+    read -r count < "$count_file"
+  fi
+  count=$((count + 1))
+  if [[ -n "$count_file" ]]; then
+    mkdir -p "$(dirname "$count_file")"
+    printf '%s\n' "$count" > "$count_file"
+  fi
+  if (( count <= ${FAKE_ADB_READONLY_FAIL_ATTEMPTS:-0} )); then
+    echo "error: device offline during $command_line" >&2
+    exit 255
+  fi
+fi
 case "$1" in
+  wait-for-device)
+    echo "device ready"
+    ;;
+  reconnect)
+    printf 'reconnect %s\n' "$*" >> "${FAKE_ADB_RECONNECT_LOG:-/dev/null}"
+    ;;
   devices)
     printf 'List of devices attached\nemulator-5554 device\n'
     ;;
@@ -187,7 +210,23 @@ case "$1" in
       pm) echo "package:/data/app/turnova/base.apk" ;;
       cmd) echo "com.turnova.rider/.MainActivity" ;;
       am) printf 'Status: ok\nActivity: com.turnova.rider/.MainActivity\n' ;;
-      pidof) echo "4242" ;;
+      pidof)
+        count=0
+        count_file="${FAKE_PIDOF_COUNT_FILE:-}"
+        if [[ -n "$count_file" && -f "$count_file" ]]; then
+          read -r count < "$count_file"
+        fi
+        count=$((count + 1))
+        if [[ -n "$count_file" ]]; then
+          mkdir -p "$(dirname "$count_file")"
+          printf '%s\n' "$count" > "$count_file"
+        fi
+        if [[ "${FAKE_PIDOF_ALWAYS_FAIL:-0}" == "1" || "$count" == "${FAKE_PIDOF_FAIL_ON_CALL:-}" ]]; then
+          echo "error: device offline" >&2
+          exit 255
+        fi
+        echo "4242"
+        ;;
       dumpsys)
         if [[ "${FAKE_APP_NOT_FOREGROUND:-0}" == "1" ]]; then
           printf 'mResumedActivity: ActivityRecord { com.google.android.apps.nexuslauncher/.NexusLauncherActivity }\n* Hist #0: com.turnova.rider/.MainActivity\n'
@@ -693,6 +732,101 @@ exit 0
             self.assertFalse(list(failed_avd_home.glob("turnova-release-smoke-*.avd")))
             self.assertFalse(system_image_dir.exists())
             self.assertFalse((failure_output / "result.json").exists())
+
+            # A transient ADB transport loss during the final process-stability
+            # probe is retried without weakening the foreground/process identity checks.
+            transient_output = root / "transient-pidof-output"
+            environment["ANDROID_AVD_HOME"] = str(avd_home)
+            environment["FAKE_SYSTEM_IMAGE_FAIL_ATTEMPTS"] = "0"
+            environment["FAKE_PIDOF_COUNT_FILE"] = str(transient_output / "pidof-count")
+            environment["FAKE_PIDOF_FAIL_ON_CALL"] = "3"
+            environment["FAKE_PIDOF_ALWAYS_FAIL"] = "0"
+            environment["FAKE_ADB_RECONNECT_LOG"] = str(transient_output / "adb-reconnect.log")
+            environment["FAKE_UI_DUMP_COUNT_FILE"] = str(transient_output / "ui-dump-count")
+            environment["FAKE_INPUT_LOG"] = str(transient_output / "input-taps.txt")
+            environment["FAKE_SYSTEM_ANR_CLOSED_FILE"] = str(transient_output / "system-anr-closed")
+            environment["FAKE_SCREENSHOT_EXEC_OUT_COUNT_FILE"] = str(transient_output / "screenshot-exec-out-count")
+            transient_command = command[:-1] + [str(transient_output)]
+            transient_pidof = subprocess.run(
+                transient_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(
+                transient_pidof.returncode, 0,
+                msg=f"stdout:\n{transient_pidof.stdout}\nstderr:\n{transient_pidof.stderr}",
+            )
+            self.assertIn("transient ADB exit 255", transient_pidof.stderr)
+            self.assertEqual((transient_output / "pidof-count").read_text(encoding="utf-8").strip(), "4")
+            self.assertIn("reconnect offline", (transient_output / "adb-reconnect.log").read_text(encoding="utf-8"))
+            transient_report = json.loads((transient_output / "result.json").read_text(encoding="utf-8"))
+            self.assertTrue(transient_report["processStableAfterStartup"])
+            self.assertTrue((transient_output / "launch.png").is_file())
+
+            # Persistent ADB transport failure must remain a hard failure with
+            # captured diagnostics; it must never be converted into a pass.
+            persistent_output = root / "persistent-pidof-output"
+            environment["FAKE_PIDOF_COUNT_FILE"] = str(persistent_output / "pidof-count")
+            environment["FAKE_PIDOF_FAIL_ON_CALL"] = ""
+            environment["FAKE_PIDOF_ALWAYS_FAIL"] = "1"
+            environment["FAKE_ADB_RECONNECT_LOG"] = str(persistent_output / "adb-reconnect.log")
+            persistent_command = command[:-1] + [str(persistent_output)]
+            persistent_pidof = subprocess.run(
+                persistent_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(persistent_pidof.returncode, 1)
+            self.assertIn("PID probe failed after 3 ADB transport retries", persistent_pidof.stderr)
+            self.assertEqual((persistent_output / "pidof-count").read_text(encoding="utf-8").strip(), "3")
+            self.assertTrue((persistent_output / "pidof-adb-devices.txt").is_file())
+            self.assertFalse((persistent_output / "result.json").exists())
+
+            # A transient transport failure during logcat collection is retried.
+            # The same command is used twice by the smoke, so one injected failure
+            # must be followed by two successful collections.
+            transient_logcat_output = root / "transient-readonly-logcat-output"
+            environment["FAKE_PIDOF_ALWAYS_FAIL"] = "0"
+            environment["FAKE_PIDOF_FAIL_ON_CALL"] = ""
+            environment["FAKE_ADB_READONLY_FAIL_COMMAND"] = "logcat -d -v threadtime"
+            environment["FAKE_ADB_READONLY_FAIL_ATTEMPTS"] = "1"
+            environment["FAKE_ADB_READONLY_FAIL_COUNT_FILE"] = str(transient_logcat_output / "readonly-command-count")
+            environment["FAKE_ADB_RECONNECT_LOG"] = str(transient_logcat_output / "adb-reconnect.log")
+            transient_logcat_command = command[:-1] + [str(transient_logcat_output)]
+            transient_logcat = subprocess.run(
+                transient_logcat_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(
+                transient_logcat.returncode, 0,
+                msg=f"stdout:\\n{transient_logcat.stdout}\\nstderr:\\n{transient_logcat.stderr}",
+            )
+            self.assertIn("transient exit 255", transient_logcat.stderr.lower())
+            self.assertIn("'logcat'", transient_logcat.stderr.lower())
+            self.assertEqual(
+                (transient_logcat_output / "readonly-command-count").read_text(encoding="utf-8").strip(),
+                "3",
+            )
+            self.assertIn("reconnect offline", (transient_logcat_output / "adb-reconnect.log").read_text(encoding="utf-8"))
+            self.assertTrue((transient_logcat_output / "result.json").is_file())
+
+            # Persistent transport loss during the initial activity-stack probe
+            # remains a hard failure and never emits a smoke success report.
+            persistent_dumpsys_output = root / "persistent-readonly-dumpsys-output"
+            environment["FAKE_ADB_READONLY_FAIL_COMMAND"] = "shell dumpsys activity activities"
+            environment["FAKE_ADB_READONLY_FAIL_ATTEMPTS"] = "3"
+            environment["FAKE_ADB_READONLY_FAIL_COUNT_FILE"] = str(persistent_dumpsys_output / "readonly-command-count")
+            persistent_dumpsys_command = command[:-1] + [str(persistent_dumpsys_output)]
+            persistent_dumpsys = subprocess.run(
+                persistent_dumpsys_command, cwd=REPO_ROOT, env=environment,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(persistent_dumpsys.returncode, 1)
+            self.assertIn("failed after 3 transport retries", persistent_dumpsys.stderr.lower())
+            self.assertIn("'activity-stack'", persistent_dumpsys.stderr.lower())
+            self.assertEqual(
+                (persistent_dumpsys_output / "readonly-command-count").read_text(encoding="utf-8").strip(),
+                "3",
+            )
+            self.assertFalse((persistent_dumpsys_output / "result.json").exists())
 
     def test_refuses_to_modify_an_android_sdk_outside_ci(self) -> None:
         with tempfile.TemporaryDirectory(prefix="turnova-android-non-ci-") as temporary:
