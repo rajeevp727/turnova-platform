@@ -5457,22 +5457,37 @@ public sealed partial class RideApiIntegrationTests
             .HasActiveAsync("too-many-stops-driver"));
     }
 
-    [Fact]
-    public async Task SelectedBookingFailsClosedWhenNegotiationLifetimeIsNotConfigured()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task SelectedBookingFailsClosedWhenNegotiationLifetimeIsMissingOrNonPositiveBeforeAnySideEffect(
+        int? lifetimeMinutes)
     {
+        const string riderId = "negotiation-lifetime-policy-rider";
+        const string driverId = "negotiation-lifetime-policy-driver";
+        const string unionId = "negotiation-lifetime-policy-union";
         using var factory = new TurnOvaApiFactory(
-            legacyFifoRiderRequestsEnabled: false, selectedDriverNegotiationLifetimeMinutes: null);
-        using var rider = factory.CreateClient("Rider", "missing-expiry-rider");
-        using var driver = factory.CreateClient("Driver", "missing-expiry-driver");
-        SeedBookableDriver(factory, "missing-expiry-driver", "missing-expiry-union");
+            legacyFifoRiderRequestsEnabled: false,
+            selectedDriverNegotiationLifetimeMinutes: lifetimeMinutes);
+        using var rider = factory.CreateClient("Rider", riderId);
+        SeedBookableDriver(factory, driverId, unionId);
 
-        using var request = CreateSelectedBookingRequest("missing-expiry-key", "missing-expiry-driver",
-            "missing-expiry-union", "KPHB", "HITEC City", []);
+        using var request = CreateSelectedBookingRequest(
+            "negotiation-lifetime-policy-key", driverId, unionId, "KPHB", "HITEC City", []);
         using var response = await rider.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
-            .HasActiveAsync("missing-expiry-driver"));
+        Assert.Contains("Selected-driver negotiation lifetime is not configured.",
+            await response.Content.ReadAsStringAsync());
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync(driverId));
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync(riderId));
+        Assert.Equal("Online", factory.Services
+            .GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>()[driverId].AvailabilityStatus);
     }
 
     [Fact]
