@@ -299,6 +299,54 @@ test("corrupt stored proposal retry data fails closed instead of generating a ne
 });
 
 
+test("unsupported or inconsistent stored proposal envelopes fail closed without writes or replacement keys", async () => {
+  const input = persistentInput();
+  const storageKey = createProposalAttemptStorageKey(input);
+  const seedStorage = createSecureStore();
+  const seeded = await getOrCreatePersistentProposalAttempt(
+    seedStorage,
+    createRef(),
+    input,
+    actor => actor + "-seed"
+  );
+  assert.ok(seeded.key);
+  const validEnvelope = JSON.parse(seedStorage.values.get(storageKey));
+  const invalidEnvelopes = [
+    ["unsupported version", { version: 2, attempt: validEnvelope.attempt }],
+    ["missing attempt", { version: 1 }],
+    ["unsupported actor", { version: 1, attempt: { ...validEnvelope.attempt, actor: "admin" } }],
+    ["invalid amount", { version: 1, attempt: { ...validEnvelope.attempt, amount: 0 } }],
+    ["inconsistent fingerprint", { version: 1, attempt: { ...validEnvelope.attempt, fingerprint: "mismatch" } }],
+    ["blank idempotency key", { version: 1, attempt: { ...validEnvelope.attempt, key: " " } }]
+  ];
+
+  for (const [label, envelope] of invalidEnvelopes) {
+    let writes = 0;
+    let generated = 0;
+    const storage = createSecureStore({ onWrite: () => { writes += 1; } });
+    const raw = JSON.stringify(envelope);
+    storage.values.set(storageKey, raw);
+
+    await assert.rejects(
+      getOrCreatePersistentProposalAttempt(
+        storage,
+        createRef(),
+        input,
+        actor => {
+          generated += 1;
+          return actor + "-must-not-replace";
+        }
+      ),
+      /No proposal was sent/,
+      label
+    );
+
+    assert.equal(generated, 0, label + ": no replacement key may be generated");
+    assert.equal(writes, 0, label + ": invalid stored data must not be overwritten");
+    assert.equal(storage.values.get(storageKey), raw, label + ": invalid record must remain available for safe recovery");
+  }
+});
+
 test("a session change during secure-store read stops before writing or sending", async () => {
   let current = true;
   let writes = 0;
