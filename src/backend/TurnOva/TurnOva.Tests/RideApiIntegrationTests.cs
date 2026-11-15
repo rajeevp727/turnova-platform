@@ -5471,6 +5471,8 @@ public sealed partial class RideApiIntegrationTests
             legacyFifoRiderRequestsEnabled: false,
             selectedDriverNegotiationLifetimeMinutes: lifetimeMinutes);
         using var rider = factory.CreateClient("Rider", riderId);
+        // Creating the authenticated Driver client seeds the onboarding profile used by SeedBookableDriver.
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         using var request = CreateSelectedBookingRequest(
