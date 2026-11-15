@@ -3694,6 +3694,14 @@ public sealed partial class RideApiIntegrationTests
             LocationCapturedAtUtc = capturedAt
         };
         var onlineProfile = profiles[driverId];
+        using var queueJoin = await driver.PostAsJsonAsync(
+            "/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "cab" });
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, queueJoin.StatusCode);
+        Assert.Equal(onlineProfile, profiles[driverId]);
+        Assert.Empty(await queueService.GetPositionedQueueAsync("hyderabad-central", "cab"));
+        Assert.Empty(reservationStore.GetAuditEvents(driverId));
+        Assert.Null(await reservationStore.GetActiveAsync(driverId));
+
         await queueService.JoinAsync(new DriverQueueEntry(driverId, "hyderabad-central", "cab", capturedAt, 0, true));
 
         using var location = await driver.PostAsJsonAsync(

@@ -2824,6 +2824,18 @@ app.MapPost("/api/v1/queues/join", async (
         if (!string.Equals(serviceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(request.ZoneId.Trim(), approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
             return Results.Forbid();
+        if (approvedProfile.CurrentLatitude is null || approvedProfile.CurrentLongitude is null ||
+            !RideLifecycle.AreCoordinatesValid(approvedProfile.CurrentLatitude.Value, approvedProfile.CurrentLongitude.Value))
+            return Results.Conflict(new { message = "A valid accepted Driver location is required before joining the queue." });
+
+        var zoneResolution = ResolveDispatchZone(
+            approvedProfile.CurrentLatitude.Value, approvedProfile.CurrentLongitude.Value);
+        if (zoneResolution.Kind == DispatchZoneResolutionKind.InvalidConfiguration)
+            return DispatchZoneConfigurationUnavailable();
+        if (zoneResolution.Kind != DispatchZoneResolutionKind.Matched ||
+            !string.Equals(zoneResolution.ZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "Driver location is outside the assigned service zone." });
+
         await service.JoinAsync(new DriverQueueEntry(
             driverId, request.ZoneId.Trim(), serviceClass,
             DateTimeOffset.UtcNow, 0, true), ct);
