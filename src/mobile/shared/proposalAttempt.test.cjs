@@ -283,3 +283,17 @@ test("failed secure-store deletion retains the current attempt for safe replay",
   const restored = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), () => "must-not-be-used");
   assert.equal(restored.key, attempt.key);
 });
+
+test("corrupt stored proposal retry data fails closed instead of generating a new key", async () => {
+  const storage = createSecureStore();
+  const input = persistentInput();
+  const storageKey = createProposalAttemptStorageKey(input);
+  storage.values.set(storageKey, "{");
+  let generated = 0;
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(storage, createRef(), input, actor => actor + "-corrupt-" + (++generated)),
+    /No proposal was sent/
+  );
+  assert.equal(generated, 0);
+  assert.equal(storage.values.get(storageKey), "{");
+});

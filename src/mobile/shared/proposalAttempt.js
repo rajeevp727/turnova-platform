@@ -80,19 +80,22 @@ function serializeProposalStorage(storage, operation) {
   return current;
 }
 
-function parseStoredProposalAttempt(raw, expectedFingerprint) {
-  if (typeof raw !== "string" || !raw) return null;
+function parseStoredProposalAttempt(raw) {
+  if (raw === null || raw === undefined) return { status: "missing", attempt: null };
+  if (typeof raw !== "string" || !raw.trim()) return { status: "invalid", attempt: null };
   try {
     const envelope = JSON.parse(raw);
-    if (envelope?.version !== 1 || !envelope.attempt || typeof envelope.attempt !== "object") return null;
+    if (envelope?.version !== 1 || !envelope.attempt || typeof envelope.attempt !== "object") {
+      return { status: "invalid", attempt: null };
+    }
     const attempt = envelope.attempt;
     const normalized = validateProposalAttemptInput(attempt, true);
-    if (typeof attempt.key !== "string" || !attempt.key.trim()) return null;
+    if (typeof attempt.key !== "string" || !attempt.key.trim()) return { status: "invalid", attempt: null };
     const fingerprint = proposalFingerprint(normalized);
-    if (attempt.fingerprint !== fingerprint || fingerprint !== expectedFingerprint) return null;
-    return { ...normalized, fingerprint, key: attempt.key };
+    if (attempt.fingerprint !== fingerprint) return { status: "invalid", attempt: null };
+    return { status: "valid", attempt: { ...normalized, fingerprint, key: attempt.key } };
   } catch {
-    return null;
+    return { status: "invalid", attempt: null };
   }
 }
 
@@ -122,10 +125,13 @@ async function getOrCreatePersistentProposalAttempt(
     }
     if (!isCurrent()) throw new Error("Session changed before the proposal retry key could be used.");
 
-    const restored = parseStoredProposalAttempt(raw, fingerprint);
-    if (restored) {
-      ref.current = restored;
-      return restored;
+    const storedRecord = parseStoredProposalAttempt(raw);
+    if (storedRecord.status === "invalid") {
+      throw new Error("Stored proposal retry data is unreadable. No proposal was sent; refresh agreement history and resolve secure storage before retrying.");
+    }
+    if (storedRecord.status === "valid" && storedRecord.attempt.fingerprint === fingerprint) {
+      ref.current = storedRecord.attempt;
+      return storedRecord.attempt;
     }
 
     const attempt = ref.current?.fingerprint === fingerprint
@@ -165,11 +171,16 @@ async function clearPersistentProposalAttempt(storage, ref, expectedAttempt) {
     } catch {
       throw new Error("Unable to securely read the completed proposal retry key.");
     }
-    const stored = parseStoredProposalAttempt(raw, fingerprint);
-    if (!stored || stored.key !== expectedAttempt.key) {
+    const storedRecord = parseStoredProposalAttempt(raw);
+    if (storedRecord.status === "missing") {
       if (ref.current?.key === expectedAttempt.key) ref.current = null;
       return false;
     }
+    if (storedRecord.status === "valid" &&
+      (storedRecord.attempt.fingerprint !== fingerprint || storedRecord.attempt.key !== expectedAttempt.key)) {
+      return false;
+    }
+    if (storedRecord.status === "invalid" && ref.current?.key !== expectedAttempt.key) return false;
 
     try {
       await storage.deleteItemAsync(storageKey);
