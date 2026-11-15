@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `b8113303a80094457493f737627bbbdd99cfbe2d`. PR #164 RELEASE-01, PR #165 supplemental AI-01, PR #166 AUTH-01 and PR #167 AUTH-02 are merged. Sole active PR #168 is RIDER-01 on `test/rider-01-discovery-response-privacy-allowlist`, source/test commit `c22821e8eb342c5b63808223e5edf77250b74d89`; final-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `33c863cec4155c116a2089cd9804e54ca6fad5a4`. PR #164 RELEASE-01, PR #165 supplemental AI-01, PR #166 AUTH-01, PR #167 AUTH-02 and PR #168 RIDER-01 are merged. Sole active feature PR #169 is RIDER-02 on `feat/rider-02-persistent-proposal-idempotency`; source/test head `2438a1e22aeb6073f8d57e6766deb890f263d417`; exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2355,3 +2355,13 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - External RIDER-01 gates: Product-approved positive radius, non-overlapping zone boundaries and Driver location freshness; live Cosmos SQL/index, ETag/multi-instance/restart; routing/geocoding/map provider and journey-distance calculation; Call/Chat provider configuration; Android/iOS physical-device permission, resume and discovery rendering. No live provider/Cosmos/device acceptance is claimed.
 - After PR #168 merges, re-read main and continue #4 RIDER-02. Inspect stable same-payload proposal Idempotency-Key behavior, actor/ride/amount/currency fingerprints, double-submit lock ownership, session reset and ambiguous response/history-refresh retry in both Rider and Driver apps. Keep one active feature PR.
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation score. Production readiness is not established.
+
+
+## Latest engineering handoff — RIDER-02 PR #169 (2026-11-15)
+
+- Main HEAD: `33c863cec4155c116a2089cd9804e54ca6fad5a4`. RIDER-01 PR #168 merged after exact-head CI #1713 / run 43712409000 passed 12/12.
+- Sole active PR: [#169](https://github.com/rajeevp727/turnova-platform/pull/169), branch `feat/rider-02-persistent-proposal-idempotency`; source/test head `2438a1e22aeb6073f8d57e6766deb890f263d417`; exact-head CI pending.
+- Both Rider and Driver persist a versioned proposal attempt in Expo SecureStore before POST. The slot is scoped by actor and authenticated user; the validated fingerprint includes ride ID, amount and currency. Same terms after process restart reuse the same Idempotency-Key; changed terms get a new key.
+- SecureStore read/write failure fails closed before proposal POST. Per-store mutation serialization prevents concurrent creation races. The attempt remains through ambiguous POST/history-refresh failure and is cleared only after successful history refresh. Matching-key cleanup cannot delete a newer attempt; failed deletion retains the key for safe replay. Session reset clears in-memory refs/locks but retains the durable user/actor record for same-account retry after re-authentication; other accounts cannot restore it. Ride changes clear the old matching record.
+- Eight deterministic persistent-store tests plus Rider/Driver source-integration assertions are included. CI must verify backend, shared mobile tests, both Expo apps, four native builds, API publish and four same-run smoke jobs on the exact final PR head before merge.
+- External: live Cosmos ETag/multi-instance/restart; signed-device SecureStore/Keychain; Android/iOS physical-device negotiation/confirmation/renegotiation/reconnect. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
