@@ -342,8 +342,10 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal("wrong-role-access-token", handler.Requests[1].AuthorizationParameter);
     }
 
-    [Fact]
-    public async Task RefreshForwardsRefreshTokenWithoutRewritingIt()
+    [Theory]
+    [InlineData("opaque-refresh-token")]
+    [InlineData(" opaque-refresh-token ")]
+    public async Task RefreshForwardsNonBlankOpaqueTokenWithoutRewritingIt(string refreshToken)
     {
         using var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK,
             """{"accessToken":"new-access","refreshToken":"new-refresh"}""")));
@@ -351,12 +353,31 @@ public sealed class AuthApiIntegrationTests
         using var client = factory.CreateClient();
 
         using var response = await client.PostAsJsonAsync("/api/v1/auth/refresh",
-            new { refreshToken = "opaque-refresh-token" });
+            new { refreshToken });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var request = Assert.Single(handler.Requests);
         Assert.Equal("/auth/refresh", request.Path);
-        Assert.Equal("opaque-refresh-token", request.Body.GetProperty("refreshToken").GetString());
+        Assert.Equal(refreshToken, request.Body.GetProperty("refreshToken").GetString());
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"refreshToken\":null}")]
+    [InlineData("{\"refreshToken\":\"\"}")]
+    [InlineData("{\"refreshToken\":\" \\t\\r\\n \"}")]
+    public async Task RefreshRejectsMissingOrWhitespaceTokenWithoutCallingTriSend(string payload)
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("TriSend must not be called for a missing refresh token."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsync("/api/v1/auth/refresh",
+            new StringContent(payload, Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(handler.Requests);
     }
 
     [Fact]

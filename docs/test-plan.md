@@ -79,6 +79,7 @@
 | AUTH-LOGIN-047 | Stale startup 400/401 cannot clear a replacement login | Hold startup /auth/refresh, persist a replacement login pair after epoch advance, then reject the old refresh with 400/401 | The stale restore returns without deleting the replacement token pair | Shared mobile unit + Rider/Driver | P0 |
 | AUTH-LOGIN-048 | Partial token cleanup rechecks its observed pair | Pause a token-pair write after the access key, start a partial-pair read, then finish the refresh-key write before queued cleanup executes | Cleanup re-reads under the mutation queue, sees the complete replacement pair differs from the observed partial snapshot, and preserves it | Shared mobile unit + Rider/Driver | P0 |
 | AUTH-LOGIN-063 | Rider replacement login/register clears previous SecureStore pair | Start a replacement Rider login or registration while an older access/refresh pair is stored; also fail one delete and change the session epoch while deletion is pending | Both token keys are attempted before the auth request; cleanup failure prevents network dispatch and surfaces a recoverable error; stale epochs do not delete a newer pair or send a request; queued replacement credentials survive | Shared mobile unit + Rider source contract | P0 |
+| AUTH-LOGIN-064 | Whitespace-only stored refresh token fails before provider call | Restore stored refresh-token values of empty string, spaces, tabs and CR/LF; also supply a nonblank opaque token with surrounding whitespace | Blank values reject before the refresh callback; nonblank opaque token is forwarded byte-for-byte without trimming; single-flight state is released after rejection | Shared mobile unit | P0 |
 
 ## 2A. Authentication API integration contracts
 
@@ -99,6 +100,7 @@ The API contract tests use a fake named TriSend HTTP handler; CI must never call
 | AUTH-API-011 | Driver profile read forwards bearer token | Call `/api/v1/auth/me` with a Driver bearer token and a deterministic Driver profile response from TriSend | HTTP 200; exact Bearer token is forwarded to `/auth/me`; Driver profile fields are returned; access/refresh token values are not included in the profile body | API integration | P0 |
 | AUTH-API-012 | Missing login credentials | Submit missing email and missing password to both Rider and Driver login routes | HTTP 400 for all four cases; fake TriSend handler receives no request | API integration | P0 |
 | AUTH-API-013 | Unsupported login role | Submit credentials to an unsupported role login route | HTTP 404; fake TriSend handler receives no request | API integration | P0 |
+| AUTH-API-014 | Missing or blank refresh token | Submit a missing property, explicit null, empty string and whitespace-only refresh token to POST /api/v1/auth/refresh; also submit a nonblank opaque token with surrounding whitespace | All four invalid payloads return HTTP 400 and the fake TriSend handler receives zero requests; valid opaque token is forwarded byte-for-byte without trimming | API integration | P0 |
 
 ## 3. JWT validation and authorization
 

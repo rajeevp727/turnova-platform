@@ -1335,9 +1335,14 @@ authGroup.MapPost("/{role}/login", async (
     return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/login", payload, null, role == "driver" ? "Driver" : "Rider", ct);
 });
 authGroup.MapPost("/refresh", async (
-    RefreshTokenRequest request, IHttpClientFactory clients, CancellationToken ct) =>
-    await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/refresh",
-        new { refreshToken = request.RefreshToken }, null, null, ct));
+    RefreshTokenRequest? request, IHttpClientFactory clients, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request?.RefreshToken))
+        return Results.BadRequest(new { message = "Refresh token is required." });
+
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/refresh",
+        new { refreshToken = request.RefreshToken }, null, null, ct);
+});
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
@@ -4570,7 +4575,7 @@ public sealed record RidePaymentReconciliationResponse(string RideId, int Agreem
 public sealed record RideIdempotencyRecord(string id, string riderId, string rideId, string? RequestHash = null, DateTimeOffset? CreatedAtUtc = null);
 public sealed record PasswordRegisterRequest(string Email, string Password, string? Name, bool ReplaceOldest = false);
 public sealed record PasswordLoginRequest(string Email, string Password, bool ReplaceOldest = false);
-public sealed record RefreshTokenRequest(string RefreshToken);
+public sealed record RefreshTokenRequest(string? RefreshToken);
 public sealed record DemoRide(
     string RideId, string Pickup, string Dropoff, int Passengers,
     string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, string RiderId, string? DriverId, double? PickupLatitude, double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt, DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive = false, string ServiceClass = "cab", string DispatchZoneId = "hyderabad-central",

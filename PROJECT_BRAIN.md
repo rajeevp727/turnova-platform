@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `364480308b2e07fdbdc63ca42d2f04f6a91dc132`. PR #164 RELEASE-01 and supplemental PR #165 AI-01 are merged. Sole active PR #166 is AUTH-01 on `fix/auth-01-session-cleanup-and-login-contracts`; code/test head `7c110b9591fe2f8090e58729a0638b0a978c1717` passed CI #1695 12/12, and exact documentation head `920f755d69fb00ec2722bd908cdd431c665b6bd4` passed CI #1696 / run 43684020490 12/12 (backend 640/640, shared 195/195, Python 48/48, both Expo apps, four native builds and four smoke jobs). Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `81fb076a4130b378c68e772ceb05492c9b2771d8`. PR #164 RELEASE-01, PR #165 supplemental AI-01 and PR #166 AUTH-01 are merged. Sole active PR #167 is AUTH-02 on `fix/auth-02-refresh-token-validation`, source/test head `23c16b94913ce717504c3274ca722350ddda489a`; exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2335,3 +2335,12 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA. No physical-device Keychain acceptance is claimed. Dependency audit baseline: 0 critical, 0 high, 11 moderate, 1 low in each app; no package manifest/lockfile changes in PR #166.
 - PR #166 was marked ready for review after CI #1698 passed on runtime evidence head `a11fe3ee83e59603e781947df64dc47c904a2f1d`; subsequent docs-only synchronization is validated separately; COMMENT-only reviews, zero unresolved threads, no self-approval. Normal squash merge is permitted only if GitHub accepts it without bypass.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. Next: merge PR #166 if policy permits, re-read main, then implement AUTH-02 / AUTH-API-014 and shared mobile whitespace-only refresh-token rejection.
+
+
+## Latest engineering handoff — AUTH-02 PR #167 (2026-11-15)
+
+- Main HEAD `81fb076a4130b378c68e772ceb05492c9b2771d8`; AUTH-01 PR #166 merged after exact-head CI #1704 / run 43702026320 passed 12/12. Sole active PR [#167](https://github.com/rajeevp727/turnova-platform/pull/167), branch `fix/auth-02-refresh-token-validation`, source/test head `23c16b94913ce717504c3274ca722350ddda489a`.
+- API refresh endpoint accepts a nullable request DTO and returns HTTP 400 for missing, null, empty and whitespace-only token values before calling TriSend. Nonblank opaque token values are forwarded unchanged.
+- Shared mobile getFreshAccessToken rejects whitespace-only stored tokens before provider invocation. AUTH-API-014 and AUTH-LOGIN-064 provide deterministic fake-provider/shared-helper coverage. No live TriSend rotation/reuse claim.
+- Exact-head CI is pending. Keep PR Draft until full backend/shared/mobile/native/smoke checks pass on the final documentation head. Review token privacy, stable errors and no-upstream-call behavior; no self-approval or bypass.
+- External: live TriSend rotation/reuse, production identity, signed-device SecureStore/Keychain and physical-device auth acceptance. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
