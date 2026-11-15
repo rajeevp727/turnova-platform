@@ -236,6 +236,40 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal(accessToken, upstreamRequest.AuthorizationParameter);
     }
 
+    [Theory]
+    [InlineData("/api/v1/auth/rider/login", "", "password")]
+    [InlineData("/api/v1/auth/rider/login", "rider@example.com", " ")]
+    [InlineData("/api/v1/auth/driver/login", "", "password")]
+    [InlineData("/api/v1/auth/driver/login", "driver@example.com", " ")]
+    public async Task LoginWithMissingCredentialsDoesNotCallTriSend(
+        string route,
+        string email,
+        string password)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("TriSend must not be called."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(route, new { email, password });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task UnsupportedLoginRoleDoesNotCallTriSend()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("TriSend must not be called."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/admin/login",
+            new { email = "admin@example.com", password = "password" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
     [Fact]
     public async Task RegistrationWithMissingCredentialsDoesNotCallTriSend()
     {
