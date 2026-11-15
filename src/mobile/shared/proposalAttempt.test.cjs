@@ -311,13 +311,23 @@ test("unsupported or inconsistent stored proposal envelopes fail closed without 
   );
   assert.ok(seeded.key);
   const validEnvelope = JSON.parse(seedStorage.values.get(storageKey));
+  const otherUserInput = persistentInput({ userId: "rider-2" });
+  const otherUserStorage = createSecureStore();
+  await getOrCreatePersistentProposalAttempt(otherUserStorage, createRef(), otherUserInput, actor => actor + "-other-user");
+  const otherUserEnvelope = JSON.parse(otherUserStorage.values.get(createProposalAttemptStorageKey(otherUserInput)));
+  const otherActorInput = persistentInput({ actor: "driver" });
+  const otherActorStorage = createSecureStore();
+  await getOrCreatePersistentProposalAttempt(otherActorStorage, createRef(), otherActorInput, actor => actor + "-other-actor");
+  const otherActorEnvelope = JSON.parse(otherActorStorage.values.get(createProposalAttemptStorageKey(otherActorInput)));
   const invalidEnvelopes = [
     ["unsupported version", { version: 2, attempt: validEnvelope.attempt }],
     ["missing attempt", { version: 1 }],
     ["unsupported actor", { version: 1, attempt: { ...validEnvelope.attempt, actor: "admin" } }],
     ["invalid amount", { version: 1, attempt: { ...validEnvelope.attempt, amount: 0 } }],
     ["inconsistent fingerprint", { version: 1, attempt: { ...validEnvelope.attempt, fingerprint: "mismatch" } }],
-    ["blank idempotency key", { version: 1, attempt: { ...validEnvelope.attempt, key: " " } }]
+    ["blank idempotency key", { version: 1, attempt: { ...validEnvelope.attempt, key: " " } }],
+    ["record from another account in this slot", otherUserEnvelope],
+    ["record from another actor in this slot", otherActorEnvelope]
   ];
 
   for (const [label, envelope] of invalidEnvelopes) {
