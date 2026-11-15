@@ -2301,7 +2301,7 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - Sole active feature PR [#166](https://github.com/rajeevp727/turnova-platform/pull/166), branch fix/auth-01-session-cleanup-and-login-contracts. Current code/test includes Rider epoch-bound SecureStore cleanup, AUTH-API-010..013 and AUTH-LOGIN-063. TypeScript declaration fix is commit 11ac80407601d14e7a54c0eb0a21d9063e500eb6; current final documentation head will be validated by fresh exact-head CI.
 - CI #1684 / run 43679276782 had 194/195 shared tests due a stale source-contract anchor; fixed in 9c92670ec37952db0247ba9f35f15cde3edc10ad. CI #1692 / run 43679561783 found TS2724 because clearSessionTokensIfCurrent lacked its sessionTokenStore.d.ts declaration; matching declaration added in 11ac80407601d14e7a54c0eb0a21d9063e500eb6. Expected backend 640 and shared mobile 195; fresh exact-head CI pending.
 - AUTH-API-010/011 verify successful Rider/Driver login and Driver /auth/me; AUTH-API-012/013 verify missing credentials and unsupported login role fail before TriSend. AUTH-LOGIN-063 makes Rider replacement login/register await epoch-bound token deletion before network dispatch, aborts stale epochs, fails closed on delete errors and preserves a newer queued pair.
-- Next: finish final-head CI, inspect native and same-run smoke artifacts, re-review the full diff and merge only if all checks pass and GitHub permits. Re-read main and continue #2 AUTH-02, then proceed in the agreed 19-row order.
+- Next: CI #1698 passed 12/12 on exact head `a11fe3ee83e59603e781947df64dc47c904a2f1d`; all four same-run Android/iOS smoke jobs and artifacts are verified. PR #166 is marked ready for review; recheck exact head/reviews and attempt normal squash merge only if GitHub permits without self-approval/bypass. Re-read main and continue #2 AUTH-02 with AUTH-API-014 and shared mobile whitespace-only refresh-token validation.
 - Profile-update fields/provider route remain undefined. Physical-device SecureStore/Keychain, live TriSend refresh rotation/reuse, production authentication and store acceptance remain external gates. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness not established.
 
 ## Latest engineering handoff — AUTH-01 PR #166 (2026-11-15)
@@ -2324,3 +2324,14 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - AUTH-01 code/test head `7c110b9591fe2f8090e58729a0638b0a978c1717` remains covered by CI #1695. CI #1696 verifies the four-document evidence head `920f755d69fb00ec2722bd908cdd431c665b6bd4`.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). AUTH-01/AUTH-02 remain In Progress pending physical-device and live TriSend evidence; production readiness is not established.
 - Next sequential implementation after PR #166 merges: AUTH-02 / AUTH-API-014 — reject missing, null, empty and whitespace-only refresh-token input with HTTP 400 before invoking fake TriSend. This is planned, not yet implemented.
+
+
+## AUTH-01 exact-head completion — CI #1698 (2026-11-15)
+
+[CI #1698 / run 43692874382](https://github.com/rajeevp727/turnova-platform/actions/runs/43692874382) passed **12/12** on exact head `a11fe3ee83e59603e781947df64dc47c904a2f1d`: backend 640/640 (0 failed/0 skipped), shared mobile/auth 195/195, Python 48/48, both Expo validations, four native Android/iOS builds, native API publish and all four same-run smoke jobs.
+
+- Driver iOS native retry job `132759201336` passed after the first artifact upload encountered transient `ENOTFOUND`; both iOS Simulator smoke jobs then passed and uploaded artifacts. Rider PID 14283; Driver PID 6897. Both verified the unsigned SecureStore-unavailable banner.
+- Artifacts (unexpired): API `14153435866`; Rider/Driver Android release APKs `14153561765` / `14153940748`; Rider/Driver iOS Simulator apps `14154085997` / `14154772560`; Rider/Driver Android smoke `14153048004` / `14153547247`; Rider/Driver iOS smoke `14155930330` / `14154863252`.
+- Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA. No physical-device Keychain acceptance is claimed. Dependency audit baseline: 0 critical, 0 high, 11 moderate, 1 low in each app; no package manifest/lockfile changes in PR #166.
+- PR #166 was marked ready for review at exact head `a11fe3ee83e59603e781947df64dc47c904a2f1d`; three COMMENT-only reviews, zero unresolved threads, no self-approval. Normal squash merge is permitted only if GitHub accepts it without bypass.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. Next: merge PR #166 if policy permits, re-read main, then implement AUTH-02 / AUTH-API-014 and shared mobile whitespace-only refresh-token rejection.
