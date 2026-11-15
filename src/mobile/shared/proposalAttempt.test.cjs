@@ -297,3 +297,62 @@ test("corrupt stored proposal retry data fails closed instead of generating a ne
   assert.equal(generated, 0);
   assert.equal(storage.values.get(storageKey), "{");
 });
+
+
+test("a session change during secure-store read stops before writing or sending", async () => {
+  let current = true;
+  let writes = 0;
+  const storage = createSecureStore({
+    onRead: () => { current = false; },
+    onWrite: () => { writes += 1; }
+  });
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), undefined, () => current),
+    /Session changed/
+  );
+  assert.equal(writes, 0);
+  assert.equal(storage.values.size, 0);
+});
+
+test("a session change during secure-store write stops POST while retaining the same key for safe replay", async () => {
+  let current = true;
+  let generated = 0;
+  const storage = createSecureStore({ onWrite: () => { current = false; } });
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(
+      storage,
+      createRef(),
+      persistentInput(),
+      actor => actor + "-write-race-" + (++generated),
+      () => current
+    ),
+    /Session changed/
+  );
+  assert.equal(storage.values.size, 1);
+  const restored = await getOrCreatePersistentProposalAttempt(
+    storage,
+    createRef(),
+    persistentInput(),
+    () => "must-not-be-used",
+    () => true
+  );
+  assert.equal(restored.key, "rider-write-race-1");
+  assert.equal(generated, 1);
+});
+
+test("a corrupt record is deleted only when the completed in-memory attempt still owns its key", async () => {
+  const storage = createSecureStore();
+  const ref = createRef();
+  const attempt = await getOrCreatePersistentProposalAttempt(
+    storage, ref, persistentInput(), actor => actor + "-corrupt-cleanup"
+  );
+  const storageKey = createProposalAttemptStorageKey(persistentInput());
+  storage.values.set(storageKey, "{");
+  assert.equal(await clearPersistentProposalAttempt(storage, ref, attempt), true);
+  assert.equal(ref.current, null);
+  assert.equal(storage.values.has(storageKey), false);
+
+  storage.values.set(storageKey, "{");
+  assert.equal(await clearPersistentProposalAttempt(storage, createRef(), attempt), false);
+  assert.equal(storage.values.get(storageKey), "{");
+});
