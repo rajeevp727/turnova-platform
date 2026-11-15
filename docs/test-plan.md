@@ -2504,3 +2504,14 @@ After PR #166 merges, add deterministic fake-TriSend integration coverage for `P
 
 Each case must return HTTP 400 before the TriSend handler is invoked; assert zero recorded upstream requests. Preserve the existing valid-token forwarding and upstream refresh-token rotation/reuse contract. Do not claim live TriSend rotation/reuse validation from fake-provider tests.
 
+
+
+## AUTH-01 exact-head completion — CI #1698 (2026-11-15)
+
+[CI #1698 / run 43692874382](https://github.com/rajeevp727/turnova-platform/actions/runs/43692874382) passed **12/12** on exact head `a11fe3ee83e59603e781947df64dc47c904a2f1d`: backend 640/640 (0 failed/0 skipped), shared mobile/auth 195/195, Python 48/48, both Expo validations, four native Android/iOS builds, native API publish and all four same-run smoke jobs.
+
+- Driver iOS native retry job `132759201336` passed after the first artifact upload encountered transient `ENOTFOUND`; both iOS Simulator smoke jobs then passed and uploaded artifacts. Rider PID 14283; Driver PID 6897. Both verified the unsigned SecureStore-unavailable banner.
+- Artifacts (unexpired): API `14153435866`; Rider/Driver Android release APKs `14153561765` / `14153940748`; Rider/Driver iOS Simulator apps `14154085997` / `14154772560`; Rider/Driver Android smoke `14153048004` / `14153547247`; Rider/Driver iOS smoke `14155930330` / `14154863252`.
+- Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA. No physical-device Keychain acceptance is claimed. Dependency audit baseline: 0 critical, 0 high, 11 moderate, 1 low in each app; no package manifest/lockfile changes in PR #166.
+- PR #166 was marked ready for review at exact head `a11fe3ee83e59603e781947df64dc47c904a2f1d`; three COMMENT-only reviews, zero unresolved threads, no self-approval. Normal squash merge is permitted only if GitHub accepts it without bypass.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. Next: merge PR #166 if policy permits, re-read main, then implement AUTH-02 / AUTH-API-014 and shared mobile whitespace-only refresh-token rejection.
