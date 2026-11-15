@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** 364480308b2e07fdbdc63ca42d2f04f6a91dc132. PR #164 RELEASE-01 and supplemental PR #165 AI-01 are merged. PR #165 source/test CI #1681 and exact documentation-head CI #1682 both passed 12/12. Sole active PR #166 is AUTH-01 on fix/auth-01-session-cleanup-and-login-contracts; current correction head 9c92670ec37952db0247ba9f35f15cde3edc10ad. Initial CI #1684 / run 43679276782 had one stale mobile source-contract failure (194/195 shared tests passed); the test anchor is corrected and fresh exact-head CI is pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** 364480308b2e07fdbdc63ca42d2f04f6a91dc132. PR #164 RELEASE-01 and supplemental PR #165 AI-01 are merged. PR #165 source/test CI #1681 and exact documentation-head CI #1682 both passed 12/12. Sole active PR #166 is AUTH-01 on fix/auth-01-session-cleanup-and-login-contracts; current code/test head 2c9d45fbaa61520a72d4a875291f76a83a122b74. Initial CI #1684 / run 43679276782 had one stale mobile source-contract failure (194/195 shared tests passed); the test anchor is corrected. AUTH-API-012/013 add five missing-credential/unsupported-role cases; expected backend 640, shared mobile 195, fresh exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2322,3 +2322,8 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 
 - Initial PR #166 head d9813c488adade7b6b0a292b3cf1e8b825735a1b ran CI #1684 / run 43679276782. Shared mobile-auth executed 195 tests: 194 passed, one failed because the pre-existing auth-form source-contract test searched for the old minified Rider authenticate declaration.
 - Correction commit 9c92670ec37952db0247ba9f35f15cde3edc10ad updates the source-contract anchor to the multiline async declaration. Runtime code, epoch-bound cleanup behavior and AUTH-LOGIN-063 assertions are unchanged. Fresh exact-head CI is pending.
+### AUTH-API-012/013
+
+- AUTH-API-012 verifies missing email/password on both Rider and Driver login routes returns HTTP 400 without calling fake TriSend (four theory cases).
+- AUTH-API-013 verifies an unsupported login role returns HTTP 404 without calling fake TriSend.
+- Expected backend count is 640 (632 baseline + eight AUTH-API-010..013 cases); shared mobile count is 195 (190 baseline + five AUTH-LOGIN-063 tests). Exact-head CI pending.
