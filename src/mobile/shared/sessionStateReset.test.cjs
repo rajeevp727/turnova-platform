@@ -119,7 +119,7 @@ test("Rider session reset invalidates cached pickup coordinates without releasin
 test("Rider and Driver session reset clears auth form secrets and successful login drops the password", () => {
   const rider = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   const driver = fs.readFileSync(path.join(__dirname, "../driver-app/App.tsx"), "utf8");
-  const riderAuthStart = rider.indexOf("const authenticate=async()=>");
+  const riderAuthStart = rider.indexOf("const authenticate = async");
   const riderAuthEnd = rider.indexOf("const draftTripIntent", riderAuthStart);
   const driverAuthStart = driver.indexOf("const authenticate = async");
   const driverAuthEnd = driver.indexOf("const loadAvailability", driverAuthStart);
