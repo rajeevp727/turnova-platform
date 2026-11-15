@@ -3602,6 +3602,9 @@ public sealed partial class RideApiIntegrationTests
             .GetActiveAsync("rider-ambiguous-booking-zone"));
         Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .GetActiveAsync("ambiguous-booking-driver"));
+        var reservationStore = Assert.IsType<InMemoryDriverRideReservationStore>(
+            factory.Services.GetRequiredService<IDriverRideReservationStore>());
+        Assert.Empty(reservationStore.GetAuditEvents("ambiguous-booking-driver"));
     }
     [Theory]
     [InlineData(false, false)]
@@ -3671,12 +3674,17 @@ public sealed partial class RideApiIntegrationTests
         SeedActiveCabUnion(factory, driverId);
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         var offlineProfile = profiles[driverId];
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        var reservationStore = Assert.IsType<InMemoryDriverRideReservationStore>(
+            factory.Services.GetRequiredService<IDriverRideReservationStore>());
 
         using var goOnline = await driver.PostAsJsonAsync(
             "/api/v1/driver/availability",
             new { isOnline = true, latitude = 17.493, longitude = 78.399 });
         Assert.Equal(HttpStatusCode.ServiceUnavailable, goOnline.StatusCode);
         Assert.Equal(offlineProfile, profiles[driverId]);
+        Assert.Empty(await queueService.GetPositionedQueueAsync("hyderabad-central", "cab"));
+        Assert.Empty(reservationStore.GetAuditEvents(driverId));
 
         var capturedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
         profiles[driverId] = offlineProfile with
@@ -3688,7 +3696,6 @@ public sealed partial class RideApiIntegrationTests
             LocationCapturedAtUtc = capturedAt
         };
         var onlineProfile = profiles[driverId];
-        var queueService = factory.Services.GetRequiredService<QueueService>();
         await queueService.JoinAsync(new DriverQueueEntry(driverId, "hyderabad-central", "cab", capturedAt, 0, true));
 
         using var location = await driver.PostAsJsonAsync(
@@ -3711,9 +3718,8 @@ public sealed partial class RideApiIntegrationTests
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
         Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
             .GetActiveAsync(riderId));
-        var reservationStore = Assert.IsType<InMemoryDriverRideReservationStore>(
-            factory.Services.GetRequiredService<IDriverRideReservationStore>());
         Assert.Empty(reservationStore.GetAuditEvents(driverId));
+        Assert.Null(await reservationStore.GetActiveAsync(driverId));
     }
 
     [Fact]

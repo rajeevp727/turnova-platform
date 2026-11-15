@@ -1282,7 +1282,7 @@ DispatchZoneResolution ResolveDispatchZone(double latitude, double longitude)
 }
 
 IResult DispatchZoneConfigurationUnavailable() => Results.Problem(
-    "The configured dispatch zones are invalid or ambiguous. Rider discovery and Driver availability are temporarily unavailable.",
+    "The configured dispatch zones are invalid or ambiguous. Rider discovery/booking and Driver availability/location updates are temporarily unavailable.",
     statusCode: StatusCodes.Status503ServiceUnavailable,
     title: "Dispatch configuration unavailable");
 
@@ -2496,6 +2496,9 @@ app.MapPost("/api/v1/driver/availability", async (
     if (initialProfile is null)
         return Results.Conflict(new { message = "Only an approved driver can change availability." });
 
+    if (await HasActiveDriverRideAsync(driverId, ct))
+        return Results.Conflict(new { message = "Resolve or complete the active selected booking/ride before changing availability." });
+
     DispatchZoneResolution? requestedZone = null;
     if (request.IsOnline)
     {
@@ -2512,9 +2515,6 @@ app.MapPost("/api/v1/driver/availability", async (
             !string.Equals(requestedZone.ZoneId, initialProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "Your current location is outside your assigned service zone." });
     }
-
-    if (await HasActiveDriverRideAsync(driverId, ct))
-        return Results.Conflict(new { message = "Resolve or complete the active selected booking/ride before changing availability." });
 
     // Serialize availability changes with selected bookings and Union transfers.
     // This is a short technical lease, not a Rider/Driver negotiation-lifetime policy.
