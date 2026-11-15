@@ -177,21 +177,22 @@ async function clearPersistentProposalAttempt(storage, ref, expectedAttempt) {
     }
     const storedRecord = parseStoredProposalAttempt(raw);
     if (storedRecord.status === "missing") {
-      if (ref.current?.key === expectedAttempt.key) ref.current = null;
+      if (ref.current?.key === expectedAttempt.key && ref.current?.fingerprint === fingerprint) ref.current = null;
       return false;
     }
     if (storedRecord.status === "valid" &&
       (storedRecord.attempt.fingerprint !== fingerprint || storedRecord.attempt.key !== expectedAttempt.key)) {
       return false;
     }
-    if (storedRecord.status === "invalid" && ref.current?.key !== expectedAttempt.key) return false;
+    if (storedRecord.status === "invalid" &&
+      (ref.current?.key !== expectedAttempt.key || ref.current?.fingerprint !== fingerprint)) return false;
 
     try {
       await storage.deleteItemAsync(storageKey);
     } catch {
       throw new Error("Unable to securely clear the completed proposal retry key.");
     }
-    if (ref.current?.key === expectedAttempt.key) ref.current = null;
+    if (ref.current?.key === expectedAttempt.key && ref.current?.fingerprint === fingerprint) ref.current = null;
     return true;
   });
 }
