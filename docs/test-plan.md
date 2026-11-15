@@ -2480,3 +2480,27 @@ PR [#164](https://github.com/rajeevp727/turnova-platform/pull/164) merged at `fc
 - The initial source-contract and TypeScript declaration failures were corrected without weakening runtime assertions. CI #1695 confirms all 195 shared tests and Rider/Driver Expo typechecks pass.
 - Limitation: unsigned iOS Simulator smoke is not signed-device Keychain evidence; live TriSend refresh rotation/reuse and production auth remain external. No profile-update route or editable profile field contract is invented.
 - Next sequential test: AUTH-API-014 — missing, empty and whitespace-only refresh-token payloads must return HTTP 400 before invoking fake TriSend. This remains planned until implemented and executed.
+
+
+## AUTH-01 exact documentation-head verification — CI #1696 (2026-11-15)
+
+[CI #1696 / run 43684020490](https://github.com/rajeevp727/turnova-platform/actions/runs/43684020490) passed all **12/12 jobs** on exact PR documentation head `920f755d69fb00ec2722bd908cdd431c665b6bd4`. Backend .NET 10 Release build/tests/native publish: **640/640** (0 failed, 0 skipped); shared mobile/auth: **195/195**; deterministic Python harness: **48/48**; Rider and Driver Expo validation/production JS bundles; both Android native builds; both unsigned iOS Simulator builds; native API publish/verifier; and all four same-run Android/iOS smoke jobs passed.
+
+- Same-run artifacts: API publish `14149453571`; Rider/Driver Android debug APKs `14149194640` / `14149219548`; standalone release APKs `14149399426` / `14149414569`; unsigned iOS Simulator apps `14149739778` / `14150415816`; Rider/Driver Android smoke `14149084098` / `14150100081`; Rider/Driver iOS smoke `14151402724` / `14150511783`; production JS bundles `14149722534` / `14149920198`.
+- Android smoke: Rider PID 2849 and Driver PID 2797; both installed, launched and captured screenshots on attempt 1. iOS smoke: Rider PID 15698 and Driver PID 6038; both reached their role-specific login screens, captured screenshots and explicitly verified the unsigned SecureStore-unavailable banner. Rider iOS retry job `132733292609` passed after clean-runner simulator startup/install delay; screenshot/log artifact upload succeeded (artifact `14151402724`).
+- All 12 latest-attempt jobs are completed/success. Artifacts are unexpired. Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA; no physical-device SecureStore/Keychain acceptance is claimed.
+- AUTH-01 code/test head `7c110b9591fe2f8090e58729a0638b0a978c1717` remains covered by CI #1695. CI #1696 verifies the four-document evidence head `920f755d69fb00ec2722bd908cdd431c665b6bd4`.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). AUTH-01/AUTH-02 remain In Progress pending physical-device and live TriSend evidence; production readiness is not established.
+- Next sequential implementation after PR #166 merges: AUTH-02 / AUTH-API-014 — reject missing, null, empty and whitespace-only refresh-token input with HTTP 400 before invoking fake TriSend. This is planned, not yet implemented.
+
+
+## AUTH-02 planned regression — AUTH-API-014 (not yet implemented)
+
+After PR #166 merges, add deterministic fake-TriSend integration coverage for `POST /api/v1/auth/refresh`:
+- Missing `refreshToken` property.
+- Explicit JSON null.
+- Empty string.
+- Whitespace-only string.
+
+Each case must return HTTP 400 before the TriSend handler is invoked; assert zero recorded upstream requests. Preserve the existing valid-token forwarding and upstream refresh-token rotation/reuse contract. Do not claim live TriSend rotation/reuse validation from fake-provider tests.
+
