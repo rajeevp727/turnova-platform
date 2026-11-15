@@ -1,7 +1,7 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
-**Last audited:** 2026-11-15; main HEAD `3e040770f05f380d1ef2670b45f497c5bd936cae`. PRs #164 RELEASE-01, supplemental #165 AI-01, #166 AUTH-01, #167 AUTH-02, #168 RIDER-01 and #169 RIDER-02 are merged. Sole active PR [#170](https://github.com/rajeevp727/turnova-platform/pull/170) is RIDER-03 / CAB-BOOK-007 on `test/rider-03-negotiation-lifetime-side-effect-guards`; source/test commit `1e80c9501c0cad1aad65a82b6f880623f58f8efe`, fixture correction `fbd3b43da34ac06942b34aaeef3e4cfccaea82a2`, documentation head `6a800f1faf028cb27bccfcbdccad6467a3b186d7`. Exact-head CI [#1741 / run 43734359368](https://github.com/rajeevp727/turnova-platform/actions/runs/43734359368) passed **12/12**: backend 653/653, shared mobile/auth 211/211, Python 48/48, both Expo validations, four native Android/iOS builds, native API publish and four same-run smoke jobs. All same-run artifacts are unexpired.
+**Last audited:** 2026-11-15; main HEAD `3e040770f05f380d1ef2670b45f497c5bd936cae`. PRs #164 RELEASE-01, supplemental #165 AI-01, #166 AUTH-01, #167 AUTH-02, #168 RIDER-01 and #169 RIDER-02 are merged. Sole active PR [#170](https://github.com/rajeevp727/turnova-platform/pull/170) is RIDER-03 / CAB-BOOK-007 on `test/rider-03-negotiation-lifetime-side-effect-guards`; source/test commit `1e80c9501c0cad1aad65a82b6f880623f58f8efe`, fixture correction `fbd3b43da34ac06942b34aaeef3e4cfccaea82a2`, documentation head `6a800f1faf028cb27bccfcbdccad6467a3b186d7`. Exact-head CI [#1741 / run 43734359368](https://github.com/rajeevp727/turnova-platform/actions/runs/43734359368) passed **12/12**: backend 653/653, shared mobile/auth 211/211, Python 48/48, both Expo validations, four native Android/iOS builds, native API publish and four same-run smoke jobs. All same-run artifacts are unexpired. The four project documents were subsequently synchronized in commits `7b898c550faee4616a983a45fdc8f4a4de3c2cb3`, `9ea62e7e8604b4274e50d0c29a0e1e88d328b197`, `a88003fc60dbad812be4c5a16f3a1c966cdf9c5f` and `8c1f679f050f91f0c26a724cb048654c59326558`; a fresh exact-head CI is required for the final documentation branch tip.
 **Latest sequential handoff:** RIDER-03 / CAB-BOOK-007 automated evidence is complete for this increment. Next is DISPATCH-01 zone-configuration validation; product-approved radius, zones and location freshness remain external gates. Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Status definitions
@@ -11,7 +11,7 @@
 - **Verified:** implementation and all evidence listed for the row have passed and links/results are recorded.
 - **Blocked:** progress requires a named product decision, credential, external provider, legal approval or physical-device action.
 
-## Acceptance matrix## Acceptance matrix
+## Acceptance matrix
 
 | ID | In-scope acceptance criterion | Implementation evidence currently known | Evidence still required | Status |
 |---|---|---|---|---|
