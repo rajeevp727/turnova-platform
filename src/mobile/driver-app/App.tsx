@@ -605,8 +605,6 @@ export default function App() {
         isProposalCurrent
       );
       if (proposalSubmissionInFlight.current !== pendingLock || !isProposalCurrent()) return;
-      proposalSubmissionInFlight.current = attempt.key;
-      ownedSubmissionLock = attempt.key;
       try {
         await apiFetch(`/api/v1/rides/${rideId}/agreements`, {
           method: "POST",
