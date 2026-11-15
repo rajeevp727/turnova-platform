@@ -1188,3 +1188,12 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 - DISPATCH-01 still requires Product approval of positive pickup radius, Driver location freshness and whether global zone non-overlap is required. Current code rejects overlap only where the requested coordinate matches multiple zones; overlap elsewhere does not disable an unrelated valid coordinate. Live Cosmos ETag/multi-instance/restart and physical-device acceptance remain external. Checked-in radius 0 intentionally fails closed.
 - Full exact-head merge gate: after this documentation sync, require all 12 CI jobs on the exact final head, inspect all four same-run native smoke jobs/artifacts, recheck reviews and mergeability, then mark ready and squash-merge only through normal GitHub policy. Re-read main and continue to DISPATCH-02.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); this is not an implementation-completion percentage. Production readiness is not established.
+
+
+## DISPATCH-01 evidence update — CI #1773 passed (2026-11-16)
+
+The DISPATCH-01 engineering implementation and deterministic regression coverage are complete in PR #171. Exact documentation head `49b30f6060eb4eaffd022e6495617ceacd6c0a88` passed [CI #1773 / run 43773171101](https://github.com/rajeevp727/turnova-platform/actions/runs/43773171101), **12/12 jobs**: backend 665/665, shared mobile/auth 212/212, Python 48/48, both Expo apps, native API publish, four native builds and four same-run Android/iOS install-launch smoke tests. Four smoke and native artifacts are recorded in the progress/test-plan documents.
+
+**Status remains Blocked for strict acceptance**, not because implementation is absent, but because Product must approve positive pickup radius, Driver location freshness and global zone non-overlap policy, and live Cosmos ETag/transactional-batch/multi-instance/restart plus physical-device evidence must pass. Checked-in radius 0 remains fail-closed. No strict Verified status is assigned.
+
+The new documentation head requires exact-head CI #1774 before normal squash merge. The 19-row matrix remains 15 In Progress, 4 Blocked, 0 Strictly Verified.
