@@ -183,20 +183,27 @@ test("persistent proposal attempt restores the same key after an app-process res
   assert.equal(storage.values.size, 1);
 });
 
-test("persistent proposal storage isolates user, ride and actor identities", async () => {
+test("persistent proposal storage isolates users and actors while fingerprinting rides", async () => {
   const storage = createSecureStore();
   let generated = 0;
   const keyFactory = actor => actor + "-isolated-" + (++generated);
   const riderOne = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), keyFactory);
   const riderTwo = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ userId: "rider-2" }), keyFactory);
   const driverOne = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ actor: "driver" }), keyFactory);
+  const riderOtherRide = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ rideId: "ride-2" }), keyFactory);
   assert.notEqual(riderOne.key, riderTwo.key);
   assert.notEqual(riderOne.key, driverOne.key);
+  assert.notEqual(riderOne.key, riderOtherRide.key);
   assert.equal(createProposalAttemptStorageKey(persistentInput({ userId: "rider-1" })), createProposalAttemptStorageKey(persistentInput()));
+  assert.equal(
+    createProposalAttemptStorageKey(persistentInput({ rideId: "ride-2" })),
+    createProposalAttemptStorageKey(persistentInput()),
+    "one active attempt slot per user/actor avoids unbounded per-ride SecureStore records"
+  );
   assert.equal(storage.values.size, 3);
-  const riderOneRestored = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), keyFactory);
-  assert.equal(riderOneRestored.key, riderOne.key);
-  assert.equal(generated, 3);
+  const riderOtherRideRestored = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ rideId: "ride-2" }), keyFactory);
+  assert.equal(riderOtherRideRestored.key, riderOtherRide.key);
+  assert.equal(generated, 4);
 });
 
 test("changed proposal terms replace the persisted key and stale cleanup cannot delete the replacement", async () => {

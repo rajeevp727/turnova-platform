@@ -41,7 +41,7 @@ function proposalFingerprint(input) {
 function createProposalAttemptStorageKey(input) {
   const normalized = validateProposalAttemptInput(input, true);
   return PROPOSAL_ATTEMPT_STORAGE_PREFIX + "." + normalized.actor + "." +
-    encodeURIComponent(normalized.userId) + "." + encodeURIComponent(normalized.rideId);
+    encodeURIComponent(normalized.userId);
 }
 
 function getOrCreateProposalAttempt(ref, input, keyFactory = createProposalIdempotencyKey) {
