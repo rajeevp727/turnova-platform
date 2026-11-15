@@ -149,6 +149,127 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal(accessToken, request.AuthorizationParameter);
     }
 
+
+    [Theory]
+    [InlineData("/api/v1/auth/rider/login", "RIDER@example.com", "rider@example.com", "Rider", "rider-access-token", "rider-refresh-token")]
+    [InlineData("/api/v1/auth/driver/login", "DRIVER@example.com", "driver@example.com", "Driver", "driver-access-token", "driver-refresh-token")]
+    public async Task SuccessfulRiderAndDriverLoginForwardsNormalizedIdentityAndReturnsMatchingSession(
+        string route,
+        string submittedEmail,
+        string normalizedEmail,
+        string expectedRole,
+        string accessToken,
+        string refreshToken)
+    {
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/auth/login", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new
+            {
+                accessToken,
+                refreshToken,
+                user = new
+                {
+                    id = $"{expectedRole.ToLowerInvariant()}-1",
+                    email = normalizedEmail,
+                    name = $"Test {expectedRole}",
+                    role = expectedRole
+                }
+            })));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(route, new
+        {
+            email = $"  {submittedEmail}  ",
+            password = "StrongPassword!123",
+            role = "Admin"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var responseJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(accessToken, responseJson.RootElement.GetProperty("accessToken").GetString());
+        Assert.Equal(refreshToken, responseJson.RootElement.GetProperty("refreshToken").GetString());
+        Assert.Equal(expectedRole, responseJson.RootElement.GetProperty("user").GetProperty("role").GetString());
+
+        var upstreamRequest = Assert.Single(handler.Requests);
+        Assert.Equal("POST", upstreamRequest.Method);
+        Assert.Equal("/auth/login", upstreamRequest.Path);
+        Assert.Equal(normalizedEmail, upstreamRequest.Body.GetProperty("email").GetString());
+        Assert.Equal("StrongPassword!123", upstreamRequest.Body.GetProperty("password").GetString());
+        Assert.Equal("turnova", upstreamRequest.Body.GetProperty("appId").GetString());
+        Assert.False(upstreamRequest.Body.TryGetProperty("role", out _));
+    }
+
+    [Fact]
+    public async Task DriverMeEndpointReturnsDriverProfileAndForwardsExactBearerToken()
+    {
+        const string accessToken = "driver-profile-access-token";
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/auth/me", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """
+                {"id":"driver-1","email":"driver@example.com","name":"Driver","role":"Driver"}
+                """));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var profileBody = await response.Content.ReadAsStringAsync();
+        using var profile = JsonDocument.Parse(profileBody);
+        Assert.Equal("driver-1", profile.RootElement.GetProperty("id").GetString());
+        Assert.Equal("driver@example.com", profile.RootElement.GetProperty("email").GetString());
+        Assert.Equal("Driver", profile.RootElement.GetProperty("role").GetString());
+        Assert.DoesNotContain("accessToken", profileBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("refreshToken", profileBody, StringComparison.OrdinalIgnoreCase);
+
+        var upstreamRequest = Assert.Single(handler.Requests);
+        Assert.Equal("GET", upstreamRequest.Method);
+        Assert.Equal("/auth/me", upstreamRequest.Path);
+        Assert.Equal("Bearer", upstreamRequest.AuthorizationScheme);
+        Assert.Equal(accessToken, upstreamRequest.AuthorizationParameter);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/auth/rider/login", "", "password")]
+    [InlineData("/api/v1/auth/rider/login", "rider@example.com", " ")]
+    [InlineData("/api/v1/auth/driver/login", "", "password")]
+    [InlineData("/api/v1/auth/driver/login", "driver@example.com", " ")]
+    public async Task LoginWithMissingCredentialsDoesNotCallTriSend(
+        string route,
+        string email,
+        string password)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("TriSend must not be called."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(route, new { email, password });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task UnsupportedLoginRoleDoesNotCallTriSend()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("TriSend must not be called."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/admin/login",
+            new { email = "admin@example.com", password = "password" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
     [Fact]
     public async Task RegistrationWithMissingCredentialsDoesNotCallTriSend()
     {

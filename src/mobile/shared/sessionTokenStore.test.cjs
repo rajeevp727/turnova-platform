@@ -8,6 +8,7 @@ const {
   saveSessionTokens,
   saveSessionTokensIfCurrent,
   clearSessionTokens,
+  clearSessionTokensIfCurrent,
   logoutSession,
   restoreStoredSession
 } = require("./sessionTokenStore.js");
@@ -620,4 +621,91 @@ test("startup profile lookup after token rotation cannot publish after account s
   assert.equal(await restoring, null);
   assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "access-new-login");
   assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "refresh-new-login");
+});
+
+
+test("clears the complete token pair only for the current replacement-authentication epoch", async () => {
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "previous-access",
+    [REFRESH_TOKEN_KEY]: "previous-refresh"
+  });
+
+  const cleared = await clearSessionTokensIfCurrent(storage, () => true);
+
+  assert.equal(cleared, true);
+  assert.equal(storage.values.has(ACCESS_TOKEN_KEY), false);
+  assert.equal(storage.values.has(REFRESH_TOKEN_KEY), false);
+  assert.deepEqual(storage.calls.filter(call => call[0] === "delete").map(call => call[1]), [
+    ACCESS_TOKEN_KEY,
+    REFRESH_TOKEN_KEY
+  ]);
+});
+
+test("stale replacement authentication does not delete a newer account token pair", async () => {
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "account-b-access",
+    [REFRESH_TOKEN_KEY]: "account-b-refresh"
+  });
+
+  const cleared = await clearSessionTokensIfCurrent(storage, () => false);
+
+  assert.equal(cleared, false);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "account-b-access");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "account-b-refresh");
+  assert.equal(storage.calls.some(call => call[0] === "delete"), false);
+});
+
+test("replacement cleanup that becomes stale during deletion returns false and preserves the queued new pair", async () => {
+  let epoch = 4;
+  let signalDeleteStarted;
+  let releaseDelete;
+  const deleteStarted = new Promise(resolve => { signalDeleteStarted = resolve; });
+  const pendingDelete = new Promise(resolve => { releaseDelete = resolve; });
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "account-a-access",
+    [REFRESH_TOKEN_KEY]: "account-a-refresh"
+  }, {
+    delete: async key => {
+      if (key === ACCESS_TOKEN_KEY) {
+        signalDeleteStarted();
+        await pendingDelete;
+      }
+    }
+  });
+
+  const cleanup = clearSessionTokensIfCurrent(storage, () => epoch === 4);
+  await deleteStarted;
+
+  epoch = 5;
+  const replacementSave = saveSessionTokensIfCurrent(storage, {
+    accessToken: "account-b-access",
+    refreshToken: "account-b-refresh"
+  }, () => epoch === 5);
+  releaseDelete();
+
+  assert.equal(await cleanup, false);
+  assert.equal(await replacementSave, true);
+  assert.equal(storage.values.get(ACCESS_TOKEN_KEY), "account-b-access");
+  assert.equal(storage.values.get(REFRESH_TOKEN_KEY), "account-b-refresh");
+});
+
+test("replacement authentication fails closed when secure token deletion fails", async () => {
+  const storage = createStorage({
+    [ACCESS_TOKEN_KEY]: "previous-access",
+    [REFRESH_TOKEN_KEY]: "previous-refresh"
+  }, {
+    delete: async key => {
+      if (key === ACCESS_TOKEN_KEY) throw new Error("secure delete failed");
+    }
+  });
+  let authenticationRequests = 0;
+
+  await assert.rejects(async () => {
+    const cleared = await clearSessionTokensIfCurrent(storage, () => true);
+    if (!cleared) return;
+    authenticationRequests += 1;
+  }, /Unable to clear stored session tokens/);
+
+  assert.equal(authenticationRequests, 0);
+  assert.equal(storage.calls.filter(call => call[0] === "delete").length, 2);
 });

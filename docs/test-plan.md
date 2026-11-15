@@ -78,6 +78,7 @@
 | AUTH-LOGIN-046 | Startup refresh completes after account switch | Hold the startup refresh request, advance the session epoch and persist a replacement login pair, then release the old rotated pair | The stale startup refresh does not persist or publish its token pair | Shared mobile unit + Rider/Driver | P0 |
 | AUTH-LOGIN-047 | Stale startup 400/401 cannot clear a replacement login | Hold startup /auth/refresh, persist a replacement login pair after epoch advance, then reject the old refresh with 400/401 | The stale restore returns without deleting the replacement token pair | Shared mobile unit + Rider/Driver | P0 |
 | AUTH-LOGIN-048 | Partial token cleanup rechecks its observed pair | Pause a token-pair write after the access key, start a partial-pair read, then finish the refresh-key write before queued cleanup executes | Cleanup re-reads under the mutation queue, sees the complete replacement pair differs from the observed partial snapshot, and preserves it | Shared mobile unit + Rider/Driver | P0 |
+| AUTH-LOGIN-063 | Rider replacement login/register clears previous SecureStore pair | Start a replacement Rider login or registration while an older access/refresh pair is stored; also fail one delete and change the session epoch while deletion is pending | Both token keys are attempted before the auth request; cleanup failure prevents network dispatch and surfaces a recoverable error; stale epochs do not delete a newer pair or send a request; queued replacement credentials survive | Shared mobile unit + Rider source contract | P0 |
 
 ## 2A. Authentication API integration contracts
 
@@ -96,6 +97,8 @@ The API contract tests use a fake named TriSend HTTP handler; CI must never call
 | AUTH-API-009 | Rider app rejects a Driver account | Log in to the Rider route with a TriSend profile whose role is Driver | HTTP 403; returned access token is revoked through TriSend logout and is not returned to the Rider client | API integration | P0 |
 | AUTH-API-010 | Successful Rider/Driver login symmetry | Submit valid credentials to each app-role login route using deterministic matching Rider and Driver TriSend profiles | HTTP 200 for both routes; upstream receives normalized email and appId=turnova; returned profile role matches the requested app, access/refresh token pair is returned only for the matching role, and no logout call occurs | API integration | P0 |
 | AUTH-API-011 | Driver profile read forwards bearer token | Call `/api/v1/auth/me` with a Driver bearer token and a deterministic Driver profile response from TriSend | HTTP 200; exact Bearer token is forwarded to `/auth/me`; Driver profile fields are returned; access/refresh token values are not included in the profile body | API integration | P0 |
+| AUTH-API-012 | Missing login credentials | Submit missing email and missing password to both Rider and Driver login routes | HTTP 400 for all four cases; fake TriSend handler receives no request | API integration | P0 |
+| AUTH-API-013 | Unsupported login role | Submit credentials to an unsupported role login route | HTTP 404; fake TriSend handler receives no request | API integration | P0 |
 
 ## 3. JWT validation and authorization
 
@@ -2451,8 +2454,64 @@ PR [#164](https://github.com/rajeevp727/turnova-platform/pull/164) merged at `fc
 - Same-run artifacts: API publish `14140496643`; Rider/Driver Android release APKs `14140123738` / `14140133675`; unsigned iOS Simulator apps `14140971426` / `14140747139`; Android smoke `14140732615` / `14140697653`; iOS smoke `14141209935` / `14141216177`; production JS bundles `14140830474` / `14139924837`. Rider iOS artifact upload recovered after a transient DNS error; final artifact is present. Both iOS smoke tests verify the unsigned SecureStore-unavailable banner; signed-device Keychain remains unverified.
 - Backend Release build reported 20 xUnit analyzer warnings and zero errors. The earlier CS8604 warning in the new test diagnostic helper is removed. No provider/model/credential is selected; live provider sandbox, managed-secret wiring and privacy/data-processing review remain external. AI-01 remains outside the 19-row denominator.
 
-## AUTH-01 next deterministic API integration increment (planned; not yet implemented)
+## AUTH-01 implementation — PR #166 (2026-11-15)
 
-- `AUTH-API-010`: add a theory for successful Rider and Driver login using deterministic fake-TriSend responses. Verify normalized email and `appId=turnova` are forwarded, returned profile role matches the route, access/refresh tokens are returned only for the matching role, and no logout is called.
-- `AUTH-API-011`: add Driver `/api/v1/auth/me` coverage proving the exact bearer token is forwarded to TriSend and the Driver profile is returned without token fields.
-- Existing tests already cover successful registration for both roles, wrong-role login rejection/revocation and Rider profile read. No editable profile/update API contract exists; do not invent one. These two tests are planned and have not yet been executed.
+- PR [#166](https://github.com/rajeevp727/turnova-platform/pull/166), branch fix/auth-01-session-cleanup-and-login-contracts. Source/test code includes AUTH-API-010..013 and AUTH-LOGIN-063; current pre-final-documentation head is ea23732e7f1066ec68a2097b5590347ebcbf2912. Exact-head CI #1690 / run 43679447427 was pending when the evidence was synchronized; the four-document update advances the PR head and requires fresh exact-head CI.
+- AUTH-API-010: two successful Rider/Driver login theory cases verify normalized email, server-owned appId=turnova, absence of a client-supplied role upstream, matching profile role/access-refresh pair, and no unnecessary logout.
+- AUTH-API-011: Driver /api/v1/auth/me forwards the exact Bearer token and returns the Driver profile without access/refresh token fields in the profile body.
+- AUTH-API-012: four theory cases verify missing email and missing password on both Rider and Driver login routes return HTTP 400 without calling fake TriSend.
+- AUTH-API-013: unsupported login role returns HTTP 404 without calling fake TriSend.
+- AUTH-LOGIN-063: Rider replacement login/register awaits epoch-bound clearSessionTokensIfCurrent before network dispatch. The helper is serialized with token writes and returns the post-delete epoch state. Tests cover current cleanup, stale-before-start, epoch change during deletion with a queued replacement pair, deletion failure (fail closed) and Rider source ordering.
+- Initial CI #1684 / run 43679276782 on d9813c488adade7b6b0a292b3cf1e8b825735a1b executed 195 shared tests: 194 passed and one failed only because an existing source-contract test expected the old minified Rider function declaration. Correction 9c92670ec37952db0247ba9f35f15cde3edc10ad updates that test anchor; no runtime behavior or assertion was weakened.
+- Added API cases total eight (632 baseline -> expected 640); shared mobile total five new cases (190 baseline -> expected 195). CI #1690 / run 43679447427 was queued for the prior documentation head; exact final-head result is pending. No production TriSend, physical-device SecureStore/Keychain or profile-update contract is claimed.
+### AUTH-01 TypeScript declaration correction
+
+- CI #1692 / run 43679561783 found Rider typecheck TS2724 because clearSessionTokensIfCurrent was exported from sessionTokenStore.js but its public sessionTokenStore.d.ts contract had not been updated. Added the declaration with the same storage/current-predicate/optional-expected-token signature in commit 11ac80407601d14e7a54c0eb0a21d9063e500eb6. No runtime behavior or test expectation changed; fresh exact-head CI is pending.
+
+## Latest exact-head verification — AUTH-01 / PR #166 (2026-11-15)
+
+[CI #1695 / run 43679705761](https://github.com/rajeevp727/turnova-platform/actions/runs/43679705761) passed all 12 jobs on exact PR head `7c110b9591fe2f8090e58729a0638b0a978c1717`: backend .NET 10 Release build/tests/native publish 640/640 (0 failed/0 skipped), shared mobile/auth 195/195, deterministic Python 48/48, Rider/Driver Expo validation and production JS bundles, four native Android/iOS builds and four same-run Android/iOS smoke jobs.
+
+- AUTH-API-010: successful Rider and Driver login theory cases verify normalized email, server-owned `appId=turnova`, no client-supplied role forwarded upstream, matching response role/access-refresh pair and no unnecessary logout.
+- AUTH-API-011: Driver `/api/v1/auth/me` forwards the exact Bearer token and returns the Driver profile without access/refresh token fields in the profile body.
+- AUTH-API-012: four theory cases verify missing email/password on both role-specific login routes return HTTP 400 without calling fake TriSend.
+- AUTH-API-013: unsupported login role returns HTTP 404 without calling fake TriSend.
+- AUTH-LOGIN-063: Rider replacement login/register awaits serialized epoch-bound SecureStore cleanup before network dispatch. Tests cover current cleanup, stale-before-start, epoch change during deletion with a queued replacement pair, fail-closed deletion failure and source ordering.
+- The initial source-contract and TypeScript declaration failures were corrected without weakening runtime assertions. CI #1695 confirms all 195 shared tests and Rider/Driver Expo typechecks pass.
+- Limitation: unsigned iOS Simulator smoke is not signed-device Keychain evidence; live TriSend refresh rotation/reuse and production auth remain external. No profile-update route or editable profile field contract is invented.
+- Next sequential test: AUTH-API-014 — missing, empty and whitespace-only refresh-token payloads must return HTTP 400 before invoking fake TriSend. This remains planned until implemented and executed.
+
+
+## AUTH-01 exact documentation-head verification — CI #1696 (2026-11-15)
+
+[CI #1696 / run 43684020490](https://github.com/rajeevp727/turnova-platform/actions/runs/43684020490) passed all **12/12 jobs** on exact PR documentation head `920f755d69fb00ec2722bd908cdd431c665b6bd4`. Backend .NET 10 Release build/tests/native publish: **640/640** (0 failed, 0 skipped); shared mobile/auth: **195/195**; deterministic Python harness: **48/48**; Rider and Driver Expo validation/production JS bundles; both Android native builds; both unsigned iOS Simulator builds; native API publish/verifier; and all four same-run Android/iOS smoke jobs passed.
+
+- Same-run artifacts: API publish `14149453571`; Rider/Driver Android debug APKs `14149194640` / `14149219548`; standalone release APKs `14149399426` / `14149414569`; unsigned iOS Simulator apps `14149739778` / `14150415816`; Rider/Driver Android smoke `14149084098` / `14150100081`; Rider/Driver iOS smoke `14151402724` / `14150511783`; production JS bundles `14149722534` / `14149920198`.
+- Android smoke: Rider PID 2849 and Driver PID 2797; both installed, launched and captured screenshots on attempt 1. iOS smoke: Rider PID 15698 and Driver PID 6038; both reached their role-specific login screens, captured screenshots and explicitly verified the unsigned SecureStore-unavailable banner. Rider iOS retry job `132733292609` passed after clean-runner simulator startup/install delay; screenshot/log artifact upload succeeded (artifact `14151402724`).
+- All 12 latest-attempt jobs are completed/success. Artifacts are unexpired. Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA; no physical-device SecureStore/Keychain acceptance is claimed.
+- AUTH-01 code/test head `7c110b9591fe2f8090e58729a0638b0a978c1717` remains covered by CI #1695. CI #1696 verifies the four-document evidence head `920f755d69fb00ec2722bd908cdd431c665b6bd4`.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). AUTH-01/AUTH-02 remain In Progress pending physical-device and live TriSend evidence; production readiness is not established.
+- Next sequential implementation after PR #166 merges: AUTH-02 / AUTH-API-014 — reject missing, null, empty and whitespace-only refresh-token input with HTTP 400 before invoking fake TriSend. This is planned, not yet implemented.
+
+
+## AUTH-02 planned regression — AUTH-API-014 (not yet implemented)
+
+After PR #166 merges, add deterministic fake-TriSend integration coverage for `POST /api/v1/auth/refresh`:
+- Missing `refreshToken` property.
+- Explicit JSON null.
+- Empty string.
+- Whitespace-only string.
+
+Each case must return HTTP 400 before the TriSend handler is invoked; assert zero recorded upstream requests. Preserve the existing valid-token forwarding and upstream refresh-token rotation/reuse contract. Do not claim live TriSend rotation/reuse validation from fake-provider tests.
+
+
+
+## AUTH-01 exact-head completion — CI #1698 (2026-11-15)
+
+[CI #1698 / run 43692874382](https://github.com/rajeevp727/turnova-platform/actions/runs/43692874382) passed **12/12** on exact head `a11fe3ee83e59603e781947df64dc47c904a2f1d`: backend 640/640 (0 failed/0 skipped), shared mobile/auth 195/195, Python 48/48, both Expo validations, four native Android/iOS builds, native API publish and all four same-run smoke jobs.
+
+- Driver iOS native retry job `132759201336` passed after the first artifact upload encountered transient `ENOTFOUND`; both iOS Simulator smoke jobs then passed and uploaded artifacts. Rider PID 14283; Driver PID 6897. Both verified the unsigned SecureStore-unavailable banner.
+- Artifacts (unexpired): API `14153435866`; Rider/Driver Android release APKs `14153561765` / `14153940748`; Rider/Driver iOS Simulator apps `14154085997` / `14154772560`; Rider/Driver Android smoke `14153048004` / `14153547247`; Rider/Driver iOS smoke `14155930330` / `14154863252`.
+- Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA. No physical-device Keychain acceptance is claimed. Dependency audit baseline: 0 critical, 0 high, 11 moderate, 1 low in each app; no package manifest/lockfile changes in PR #166.
+- PR #166 was marked ready for review at exact head `a11fe3ee83e59603e781947df64dc47c904a2f1d`; three COMMENT-only reviews, zero unresolved threads, no self-approval. Normal squash merge is permitted only if GitHub accepts it without bypass.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. Next: merge PR #166 if policy permits, re-read main, then implement AUTH-02 / AUTH-API-014 and shared mobile whitespace-only refresh-token rejection.
