@@ -97,6 +97,8 @@ The API contract tests use a fake named TriSend HTTP handler; CI must never call
 | AUTH-API-009 | Rider app rejects a Driver account | Log in to the Rider route with a TriSend profile whose role is Driver | HTTP 403; returned access token is revoked through TriSend logout and is not returned to the Rider client | API integration | P0 |
 | AUTH-API-010 | Successful Rider/Driver login symmetry | Submit valid credentials to each app-role login route using deterministic matching Rider and Driver TriSend profiles | HTTP 200 for both routes; upstream receives normalized email and appId=turnova; returned profile role matches the requested app, access/refresh token pair is returned only for the matching role, and no logout call occurs | API integration | P0 |
 | AUTH-API-011 | Driver profile read forwards bearer token | Call `/api/v1/auth/me` with a Driver bearer token and a deterministic Driver profile response from TriSend | HTTP 200; exact Bearer token is forwarded to `/auth/me`; Driver profile fields are returned; access/refresh token values are not included in the profile body | API integration | P0 |
+| AUTH-API-012 | Missing login credentials | Submit missing email and missing password to both Rider and Driver login routes | HTTP 400 for all four cases; fake TriSend handler receives no request | API integration | P0 |
+| AUTH-API-013 | Unsupported login role | Submit credentials to an unsupported role login route | HTTP 404; fake TriSend handler receives no request | API integration | P0 |
 
 ## 3. JWT validation and authorization
 
@@ -2469,3 +2471,8 @@ PR [#164](https://github.com/rajeevp727/turnova-platform/pull/164) merged at `fc
 
 - Initial PR #166 head d9813c488adade7b6b0a292b3cf1e8b825735a1b ran CI #1684 / run 43679276782. The mobile-auth suite executed 195 tests: 194 passed, one failed because the existing auth-form source-contract test searched for the old minified Rider declaration `const authenticate=async()=>`; the implementation was deliberately expanded to a multiline `const authenticate = async () =>` block to make the awaited cleanup and epoch guard explicit.
 - Corrected only the source-contract anchor in sessionStateReset.test.cjs to match the formatted declaration. The new AUTH-LOGIN-063 assertions remain unchanged. No runtime code or expected behavior was weakened. Correction commit: 9c92670ec37952db0247ba9f35f15cde3edc10ad. Fresh exact-head CI is pending.
+### AUTH-API-012/013 deterministic boundary coverage
+
+- AUTH-API-012 adds four theory cases covering missing email and missing password on both Rider and Driver login routes. Each must return HTTP 400 without calling the fake TriSend handler.
+- AUTH-API-013 verifies an unsupported login role returns HTTP 404 without calling TriSend.
+- With AUTH-API-010's two theory cases and AUTH-API-011's Driver profile-read fact, the PR adds eight backend test cases total. Expected backend count is 640 from the 632 baseline; exact-head CI is pending.
