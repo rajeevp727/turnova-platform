@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `33c863cec4155c116a2089cd9804e54ca6fad5a4`. PR #164 RELEASE-01, PR #165 supplemental AI-01, PR #166 AUTH-01, PR #167 AUTH-02 and PR #168 RIDER-01 are merged. Sole active feature PR #169 is RIDER-02 on `feat/rider-02-persistent-proposal-idempotency`; source/test head `c4902018a22e8892506ec70c2dd0babe02127c7b`; exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `33c863cec4155c116a2089cd9804e54ca6fad5a4`. PR #164 RELEASE-01, PR #165 supplemental AI-01, PR #166 AUTH-01, PR #167 AUTH-02 and PR #168 RIDER-01 are merged. Sole active feature PR #169 is RIDER-02 on `feat/rider-02-persistent-proposal-idempotency`; source/test head `02c5b191cecb29319b3609509532c9283b9c1c1b`; exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2360,10 +2360,10 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 ## Latest engineering handoff — RIDER-02 PR #169 (2026-11-15)
 
 - Main HEAD: `33c863cec4155c116a2089cd9804e54ca6fad5a4`. RIDER-01 PR #168 merged after exact-head CI #1713 / run 43712409000 passed 12/12.
-- Sole active PR: [#169](https://github.com/rajeevp727/turnova-platform/pull/169), branch `feat/rider-02-persistent-proposal-idempotency`; source/test head `c4902018a22e8892506ec70c2dd0babe02127c7b`; exact-head CI pending.
+- Sole active PR: [#169](https://github.com/rajeevp727/turnova-platform/pull/169), branch `feat/rider-02-persistent-proposal-idempotency`; source/test head `02c5b191cecb29319b3609509532c9283b9c1c1b`; exact-head CI pending.
 - Both Rider and Driver persist a versioned proposal attempt in Expo SecureStore before POST. The slot is scoped by actor and authenticated user; the validated fingerprint includes ride ID, amount and currency. Same terms after process restart reuse the same Idempotency-Key; changed terms get a new key.
 - SecureStore read/write failure fails closed before proposal POST. Per-store mutation serialization prevents concurrent creation races. The attempt remains through ambiguous POST/history-refresh failure and is cleared only after successful history refresh. Matching-key cleanup cannot delete a newer attempt; failed deletion retains the key for safe replay. Session reset clears in-memory refs/locks but retains the durable user/actor record for same-account retry after re-authentication; other accounts cannot restore it. Ride changes clear the old matching record.
-- Thirteen deterministic persistent-store tests plus Rider/Driver source-integration assertions are included. CI must verify backend, shared mobile tests, both Expo apps, four native builds, API publish and four same-run smoke jobs on the exact final PR head before merge.
+- Thirteen deterministic persistent-store tests plus Rider/Driver source-integration assertions are included; invalid-envelope cases include cross-account/actor slot mismatch. CI must verify backend, shared mobile tests, both Expo apps, four native builds, API publish and four same-run smoke jobs on the exact final PR head before merge.
 - External: live Cosmos ETag/multi-instance/restart; signed-device SecureStore/Keychain; Android/iOS physical-device negotiation/confirmation/renegotiation/reconnect. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
