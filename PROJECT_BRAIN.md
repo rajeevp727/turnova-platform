@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-16
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `3e040770f05f380d1ef2670b45f497c5bd936cae`. PRs #164–#169 are merged. Sole active PR #170 is RIDER-03 / CAB-BOOK-007 on `test/rider-03-negotiation-lifetime-side-effect-guards`; tested documentation head `27b577c33ebc25803abe622bc870428b188723dd`; CI #1750 / run 43744227035 passed 12/12 on that exact SHA (backend 653/653, shared mobile/auth 211/211, Python 48/48, Rider/Driver Expo, four native builds, API publish and four smoke tests). Final evidence sync is now committed and requires fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** 0005b477ac06831b8c5532dd55a448886a2eccd1. PRs #164–#170 are merged; RIDER-03 / CAB-BOOK-007 merged at 0005b477ac06831b8c5532dd55a448886a2eccd1 after exact-head CI #1752 / run 43749699550 passed 12/12 (backend 653/653, shared mobile/auth 211/211, Python 48/48, Rider/Driver Expo, four native builds, native API publish and four smoke tests). Sole active feature PR #171 is fix/dispatch-01-validate-zones-before-driver-mutations, latest source/test head c8fd4ff766b4ec9921082c99c8f56203003c7ea6; exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
