@@ -2646,3 +2646,18 @@ Automated implementation: InvalidDispatchZoneConfigurationFailsClosedAcrossRider
 - DISPATCH-01 remains **Blocked for strict acceptance** pending Product approval of positive pickup radius, Driver location freshness and whether global zone non-overlap is required, plus live Cosmos and physical-device evidence. Checked-in radius 0 intentionally fails closed.
 - After this documentation synchronization, run fresh exact-head CI. Then mark PR #171 ready and squash-merge only if all required checks pass on the exact head and GitHub's normal merge operation permits it. Re-read main and continue sequentially to DISPATCH-02.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); substantial implementation and automated evidence exist. Production readiness is not established.
+
+
+## DISPATCH-01 additional raw configuration binding regression
+
+- `DISPATCH-01-CFG-010`: inject `Dispatch:Zones:1:MinLatitude=not-a-number` through raw test configuration. With `ConfigurationBinder.ErrorOnUnknownConfiguration=true`, failed numeric conversion must become `InvalidConfiguration` and HTTP 503, not a defaulted/dropped boundary. Exercise Rider discovery, selected booking, Driver Online, Driver location and legacy queue join; assert no ride/idempotency/Rider reservation/Driver reservation/queue/profile/coordinate mutation.
+- The integration factory accepts raw zone-key overrides only for deterministic malformed-configuration tests. Production configuration remains external and checked-in radius 0 remains fail-closed.
+
+## DISPATCH-01 CI #1770 evidence status
+
+- Source/test head `325c8c5f5b9f45685542a21dfe37d28e7231473e`.
+- Backend Release build and tests: **665 passed, 0 failed, 0 skipped**.
+- Shared mobile/auth: **212 passed, 0 failed**.
+- Python harness: **48 passed**.
+- Rider and Driver Expo validations: passed.
+- Four native Android/iOS builds are still running; downstream same-run smoke tests have not yet completed. Do not mark the PR fully verified or merge until all required jobs pass on the exact final documentation head.
