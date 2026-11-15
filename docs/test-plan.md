@@ -2483,7 +2483,7 @@ PR [#164](https://github.com/rajeevp727/turnova-platform/pull/164) merged at `fc
 - AUTH-LOGIN-063: Rider replacement login/register awaits serialized epoch-bound SecureStore cleanup before network dispatch. Tests cover current cleanup, stale-before-start, epoch change during deletion with a queued replacement pair, fail-closed deletion failure and source ordering.
 - The initial source-contract and TypeScript declaration failures were corrected without weakening runtime assertions. CI #1695 confirms all 195 shared tests and Rider/Driver Expo typechecks pass.
 - Limitation: unsigned iOS Simulator smoke is not signed-device Keychain evidence; live TriSend refresh rotation/reuse and production auth remain external. No profile-update route or editable profile field contract is invented.
-- Next sequential test: AUTH-API-014 — missing, empty and whitespace-only refresh-token payloads must return HTTP 400 before invoking fake TriSend. This remains planned until implemented and executed.
+- AUTH-API-014 is implemented and merged in PR #167. Exact-head CI [#1707 / run 43706769059](https://github.com/rajeevp727/turnova-platform/actions/runs/43706769059) passed 12/12 on `3719e83df3fc95880cb4a5ffdb57aa45df98b3ae`: backend 645/645, shared mobile/auth 197/197, Python 48/48, Rider/Driver Expo, four native builds, native API publish and four same-run smoke jobs. Four fake-TriSend payload cases (missing property, null, empty and whitespace-only) return HTTP 400 with zero upstream calls; valid opaque token forwarding is unchanged. AUTH-LOGIN-064 verifies empty/space/tab/CRLF-only stored tokens fail before refresh and nonblank tokens are forwarded unchanged.
 
 
 ## AUTH-01 exact documentation-head verification — CI #1696 (2026-11-15)
@@ -2495,18 +2495,16 @@ PR [#164](https://github.com/rajeevp727/turnova-platform/pull/164) merged at `fc
 - All 12 latest-attempt jobs are completed/success. Artifacts are unexpired. Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA; no physical-device SecureStore/Keychain acceptance is claimed.
 - AUTH-01 code/test head `7c110b9591fe2f8090e58729a0638b0a978c1717` remains covered by CI #1695. CI #1696 verifies the four-document evidence head `920f755d69fb00ec2722bd908cdd431c665b6bd4`.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). AUTH-01/AUTH-02 remain In Progress pending physical-device and live TriSend evidence; production readiness is not established.
-- Next sequential implementation after PR #166 merges: AUTH-02 / AUTH-API-014 — reject missing, null, empty and whitespace-only refresh-token input with HTTP 400 before invoking fake TriSend. This is planned, not yet implemented.
+- PR #167 AUTH-02 is merged at `b8113303a80094457493f737627bbbdd99cfbe2d` after CI #1707 passed 12/12. Next sequential implementation after RIDER-01 PR #168: RIDER-02 proposal-attempt idempotency and restart-safe same-payload retry.
 
 
-## AUTH-02 planned regression — AUTH-API-014 (not yet implemented)
+## AUTH-02 implemented regression — AUTH-API-014 (PR #167, 2026-11-15)
 
-After PR #166 merges, add deterministic fake-TriSend integration coverage for `POST /api/v1/auth/refresh`:
-- Missing `refreshToken` property.
-- Explicit JSON null.
-- Empty string.
-- Whitespace-only string.
+PR [#167](https://github.com/rajeevp727/turnova-platform/pull/167) merged at `b8113303a80094457493f737627bbbdd99cfbe2d`. Exact documentation-head [CI #1707 / run 43706769059](https://github.com/rajeevp727/turnova-platform/actions/runs/43706769059) passed 12/12 on `3719e83df3fc95880cb4a5ffdb57aa45df98b3ae`: backend 645/645, shared mobile/auth 197/197, Python 48/48, Rider/Driver Expo, four native Android/iOS builds, native API publish and four same-run smoke tests.
 
-Each case must return HTTP 400 before the TriSend handler is invoked; assert zero recorded upstream requests. Preserve the existing valid-token forwarding and upstream refresh-token rotation/reuse contract. Do not claim live TriSend rotation/reuse validation from fake-provider tests.
+- AUTH-API-014: missing `refreshToken` property, explicit null, empty string and whitespace-only string each return HTTP 400 before the fake TriSend handler; every case asserts zero upstream requests. A valid nonblank opaque token is forwarded unchanged, including surrounding whitespace.
+- AUTH-LOGIN-064: empty, spaces, tabs and CR/LF-only stored refresh tokens are rejected before invoking the shared refresh callback; nonblank opaque values are forwarded byte-for-byte.
+- Live TriSend refresh rotation/reuse semantics, production identity and signed-device SecureStore/Keychain restore, expiry and logout acceptance remain external. Fake-provider tests do not claim live provider validation.
 
 
 
