@@ -1273,7 +1273,7 @@ DispatchZoneResolution ResolveDispatchZone(double latitude, double longitude)
 }
 
 IResult DispatchZoneConfigurationUnavailable() => Results.Problem(
-    "The configured dispatch zones are invalid or ambiguous. Rider discovery/booking and Driver availability/location updates are temporarily unavailable.",
+    "The configured dispatch zones are invalid or ambiguous. Rider discovery/booking and Driver availability/location/queue updates are temporarily unavailable.",
     statusCode: StatusCodes.Status503ServiceUnavailable,
     title: "Dispatch configuration unavailable");
 

@@ -364,6 +364,14 @@ public sealed partial class RideApiIntegrationTests
             .GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
         Assert.Contains(eligible, entry => entry.DriverId == "driver-onboarding-pending");
 
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.LeaveAsync("driver-onboarding-pending", "hyderabad-central", "cab");
+        var validZoneJoin = await driver.PostAsJsonAsync("/api/v1/queues/join",
+            new { zoneId = "hyderabad-central", serviceClass = "cab" });
+        Assert.Equal(HttpStatusCode.OK, validZoneJoin.StatusCode);
+        Assert.Contains(await queueService.GetPositionedQueueAsync("hyderabad-central", "cab"),
+            entry => entry.DriverId == "driver-onboarding-pending");
+
         var wrongZone = await driver.PostAsJsonAsync("/api/v1/queues/join",
             new { zoneId = "hyderabad-north", serviceClass = "cab" });
         Assert.Equal(HttpStatusCode.Forbidden, wrongZone.StatusCode);
