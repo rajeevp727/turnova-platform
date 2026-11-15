@@ -4,6 +4,16 @@ function isDriverAvailabilityConflict(error) {
   return Boolean(error && typeof error === "object" && Number(error.status) === 409);
 }
 
+const DRIVER_ZONE_EXIT_MESSAGE = "You left your assigned service zone and were taken offline.";
+
+function isDriverZoneExit(error) {
+  return Boolean(error &&
+    typeof error === "object" &&
+    Number(error.status) === 409 &&
+    typeof error.message === "string" &&
+    error.message.trim() === DRIVER_ZONE_EXIT_MESSAGE);
+}
+
 async function reconcileDriverAvailability({
   fetchAvailability,
   fetchRideHistory,
@@ -47,4 +57,4 @@ async function reconcileDriverAvailability({
   };
 }
 
-module.exports = { isDriverAvailabilityConflict, reconcileDriverAvailability };
+module.exports = { isDriverAvailabilityConflict, isDriverZoneExit, reconcileDriverAvailability };

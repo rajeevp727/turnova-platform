@@ -3557,8 +3557,13 @@ public sealed partial class RideApiIntegrationTests
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task RiderDiscoveryFailsClosedWhenPickupMatchesOverlappingConfiguredZones(
+    public async Task RiderDiscoveryReturnsServiceUnavailableWhenConfiguredZonesOverlap(
         bool reverseZoneOrder, bool sharedBoundary)
     {
         var zones = CreateAmbiguousDispatchZones(reverseZoneOrder, sharedBoundary);
@@ -3570,16 +3575,21 @@ public sealed partial class RideApiIntegrationTests
         using var response = await rider.GetAsync(
             $"/api/v1/rider/discovery?latitude={pickupLatitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}&longitude={pickupLongitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}&passengers=1");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("not available in this pickup zone", await response.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("configured dispatch zones are invalid or ambiguous",
+            (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
     }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
 
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task SelectedBookingFailsClosedWhenPickupMatchesOverlappingConfiguredZonesBeforeReservation(
+    public async Task SelectedBookingReturnsServiceUnavailableWhenConfiguredZonesOverlapBeforeReservation(
         bool reverseZoneOrder, bool sharedBoundary)
     {
         var zones = CreateAmbiguousDispatchZones(reverseZoneOrder, sharedBoundary);
@@ -3593,19 +3603,27 @@ public sealed partial class RideApiIntegrationTests
 
         using var response = await rider.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("configured dispatch zones are invalid or ambiguous",
+            (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync("rider-ambiguous-booking-zone"));
         Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .GetActiveAsync("ambiguous-booking-driver"));
     }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
 
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task DriverLocationTakesDriverOfflineWhenPickupMatchesOverlappingConfiguredZones(
+    public async Task DriverLocationPreservesOnlineStateWhenConfiguredZonesOverlap(
         bool reverseZoneOrder, bool sharedBoundary)
     {
         var zones = CreateAmbiguousDispatchZones(reverseZoneOrder, sharedBoundary);
@@ -3614,27 +3632,136 @@ public sealed partial class RideApiIntegrationTests
         using var factory = new TurnOvaApiFactory(dispatchZones: zones);
         using var driver = factory.CreateClient("Driver", "driver-ambiguous-zone");
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var capturedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
         profiles["driver-ambiguous-zone"] = profiles["driver-ambiguous-zone"] with
         {
             AvailabilityStatus = "Online",
             CurrentLatitude = pickupLatitude,
             CurrentLongitude = pickupLongitude,
-            LocationUpdatedAtUtc = DateTimeOffset.UtcNow
+            LocationUpdatedAtUtc = capturedAt,
+            LocationCapturedAtUtc = capturedAt
         };
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            "driver-ambiguous-zone", "hyderabad-central", "cab", capturedAt, 0, true));
 
         using var response = await driver.PostAsJsonAsync(
-            "/api/v1/driver/location", new { latitude = pickupLatitude, longitude = pickupLongitude });
+            "/api/v1/driver/location",
+            new { latitude = pickupLatitude, longitude = pickupLongitude, capturedAtUtc = capturedAt.AddMinutes(1) });
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Contains("left your assigned service zone",
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("configured dispatch zones are invalid or ambiguous",
             (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
         var updated = profiles["driver-ambiguous-zone"];
-        Assert.Equal("Offline", updated.AvailabilityStatus);
-        Assert.Null(updated.CurrentLatitude);
-        Assert.Null(updated.CurrentLongitude);
-        Assert.Null(updated.LocationUpdatedAtUtc);
+        Assert.Equal("Online", updated.AvailabilityStatus);
+        Assert.Equal(pickupLatitude, updated.CurrentLatitude);
+        Assert.Equal(pickupLongitude, updated.CurrentLongitude);
+        Assert.Equal(capturedAt, updated.LocationUpdatedAtUtc);
+        Assert.Equal(capturedAt, updated.LocationCapturedAtUtc);
+        Assert.Contains(await queueService.GetPositionedQueueAsync("hyderabad-central", "cab"),
+            entry => entry.DriverId == "driver-ambiguous-zone");
+        var reservationStore = Assert.IsType<InMemoryDriverRideReservationStore>(
+            factory.Services.GetRequiredService<IDriverRideReservationStore>());
+        Assert.Empty(reservationStore.GetAuditEvents("driver-ambiguous-zone"));
     }
 
+    [Theory]
+    [InlineData("blank-zone-id")]
+    [InlineData("duplicate-zone-id")]
+    [InlineData("nan-boundary")]
+    [InlineData("infinite-boundary")]
+    [InlineData("latitude-out-of-range")]
+    [InlineData("longitude-out-of-range")]
+    [InlineData("inverted-latitude")]
+    [InlineData("inverted-longitude")]
+    [InlineData("overlap-away-from-pickup")]
+    public async Task InvalidDispatchZoneConfigurationFailsClosedAcrossRiderAndDriverOperationsWithoutMutation(
+        string invalidCase)
+    {
+        using var factory = new TurnOvaApiFactory(dispatchZones: CreateInvalidDispatchZones(invalidCase));
+        const string riderId = "invalid-zone-config-rider";
+        const string driverId = "invalid-zone-config-driver";
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedActiveCabUnion(factory, driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var offlineProfile = profiles[driverId];
+
+        using var goOnline = await driver.PostAsJsonAsync(
+            "/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399 });
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, goOnline.StatusCode);
+        Assert.Equal(offlineProfile, profiles[driverId]);
+
+        var capturedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        profiles[driverId] = offlineProfile with
+        {
+            AvailabilityStatus = "Online",
+            CurrentLatitude = 17.493,
+            CurrentLongitude = 78.399,
+            LocationUpdatedAtUtc = capturedAt,
+            LocationCapturedAtUtc = capturedAt
+        };
+        var onlineProfile = profiles[driverId];
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(driverId, "hyderabad-central", "cab", capturedAt, 0, true));
+
+        using var location = await driver.PostAsJsonAsync(
+            "/api/v1/driver/location",
+            new { latitude = 17.493, longitude = 78.399, capturedAtUtc = capturedAt.AddMinutes(1) });
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, location.StatusCode);
+        Assert.Equal(onlineProfile, profiles[driverId]);
+        Assert.Contains(await queueService.GetPositionedQueueAsync("hyderabad-central", "cab"),
+            entry => entry.DriverId == driverId);
+
+        using var discovery = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, discovery.StatusCode);
+
+        using var booking = await rider.SendAsync(CreateSelectedBookingRequest(
+            "invalid-zone-config-booking-key", "selected-driver", "selected-union",
+            "KPHB", "HITEC City", []));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, booking.StatusCode);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync(riderId));
+        var reservationStore = Assert.IsType<InMemoryDriverRideReservationStore>(
+            factory.Services.GetRequiredService<IDriverRideReservationStore>());
+        Assert.Empty(reservationStore.GetAuditEvents(driverId));
+    }
+
+    [Fact]
+    public async Task DriverLocationStillTakesDriverOfflineWhenValidConfigurationHasNoMatchingZone()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-valid-zone-no-match";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, "valid-zone-no-match-union");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var capturedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        profiles[driverId] = profiles[driverId] with
+        {
+            LocationCapturedAtUtc = capturedAt,
+            LocationUpdatedAtUtc = capturedAt
+        };
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(driverId, "hyderabad-central", "cab", capturedAt, 0, true));
+
+        using var response = await driver.PostAsJsonAsync(
+            "/api/v1/driver/location",
+            new { latitude = 0d, longitude = 0d, capturedAtUtc = capturedAt.AddMinutes(1) });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var responseJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("You left your assigned service zone and were taken offline.",
+            responseJson.RootElement.GetProperty("message").GetString());
+        Assert.Equal("Offline", profiles[driverId].AvailabilityStatus);
+        Assert.Null(profiles[driverId].CurrentLatitude);
+        Assert.Null(profiles[driverId].CurrentLongitude);
+        Assert.Null(profiles[driverId].LocationUpdatedAtUtc);
+        Assert.Empty(await queueService.GetPositionedQueueAsync("hyderabad-central", "cab"));
+    }
     [Fact]
     public async Task CustomerFacingFifoRideCreationIsDisabledOutsideTestCompatibilityMode()
     {
@@ -5933,6 +6060,34 @@ public sealed partial class RideApiIntegrationTests
             ? new DispatchZoneConfig("hyderabad-east", 17.6, 17.8, 78.2, 78.6)
             : new DispatchZoneConfig("hyderabad-east", 17.4, 17.8, 78.3, 78.7);
         return reverseZoneOrder ? new[] { overlapping, central } : new[] { central, overlapping };
+    }
+
+    private static DispatchZoneConfig[] CreateInvalidDispatchZones(string invalidCase)
+    {
+        var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
+        if (invalidCase == "overlap-away-from-pickup")
+        {
+            return
+            [
+                central,
+                new DispatchZoneConfig("north-west", 18.0, 18.5, 78.2, 78.6),
+                new DispatchZoneConfig("north-east", 18.4, 18.8, 78.3, 78.7)
+            ];
+        }
+
+        var invalid = invalidCase switch
+        {
+            "blank-zone-id" => new DispatchZoneConfig(" ", 18.0, 18.5, 78.2, 78.6),
+            "duplicate-zone-id" => new DispatchZoneConfig("HYDERABAD-CENTRAL", 18.0, 18.5, 78.2, 78.6),
+            "nan-boundary" => new DispatchZoneConfig("north", double.NaN, 18.5, 78.2, 78.6),
+            "infinite-boundary" => new DispatchZoneConfig("north", 18.0, 18.5, 78.2, double.PositiveInfinity),
+            "latitude-out-of-range" => new DispatchZoneConfig("north", 91, 92, 78.2, 78.6),
+            "longitude-out-of-range" => new DispatchZoneConfig("north", 18.0, 18.5, 180, 181),
+            "inverted-latitude" => new DispatchZoneConfig("north", 18.5, 18.0, 78.2, 78.6),
+            "inverted-longitude" => new DispatchZoneConfig("north", 18.0, 18.5, 78.6, 78.2),
+            _ => throw new ArgumentOutOfRangeException(nameof(invalidCase))
+        };
+        return [central, invalid];
     }
 
     private static HttpRequestMessage CreateSelectedBookingRequest(

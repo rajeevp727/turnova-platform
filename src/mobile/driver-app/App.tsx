@@ -21,7 +21,7 @@ import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { finishLoadingIfSessionCurrent, resetDriverSessionState } from "../shared/sessionStateReset";
 import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePersistentProposalAttempt, type PersistentProposalAttempt } from "../shared/proposalAttempt";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
-import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
+import { isDriverAvailabilityConflict, isDriverZoneExit, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
 import { clearCachedDriverPayslips, deleteManagedDriverPayslip, writeCachedDriverPayslipIfCurrent } from "../shared/driverPayslipCache";
@@ -392,7 +392,7 @@ export default function App() {
         return true;
       } catch (e) {
         if (!mounted) return false;
-        if (e instanceof Error && e.message.includes("left your assigned service zone")) {
+        if (isDriverZoneExit(e)) {
           stopWatching();
           setAvailabilityStatus("Offline");
           setNotice("You were taken offline because your current location left your assigned service zone.");
