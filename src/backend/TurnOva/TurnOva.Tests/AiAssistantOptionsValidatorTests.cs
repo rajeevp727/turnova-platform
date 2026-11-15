@@ -22,26 +22,7 @@ public sealed class AiAssistantOptionsValidatorTests
     }
 
     [Theory]
-    [InlineData("http://api.example.com")]
-    [InlineData("https:/api.example.com")]
-    [InlineData("https:///v1/assist")]
-    [InlineData("/v1/assist")]
-    [InlineData("https://user:password@api.example.com")]
-    [InlineData("https://@api.example.com")]
-    [InlineData("https://api.example.com?token=value")]
-    [InlineData("https://api.example.com?")]
-    [InlineData("https://api.example.com#fragment")]
-    [InlineData("https://api.example.com#")]
-    [InlineData(" https://api.example.com")]
-    [InlineData("https://api.example.com/path with space")]
-    [InlineData("https://api.example.com/path\\tsegment")]
-    [InlineData("https://api.example.com\\path")]
-    [InlineData("https://api.example.com/\\u0000")]
-    [InlineData("https://api.example.com/\\u0080")]
-    [InlineData("https://api.example.com/\\u0085")]
-    [InlineData("https://api.example.com/\\u009f")]
-    [InlineData("https://api.example.com/\\u2028")]
-    [InlineData("https://api.example.com/\\u2029")]
+    [MemberData(nameof(UnsafeEndpoints))]
     public void EnabledProviderRejectsUnsafeOrAmbiguousEndpointForms(string endpoint)
     {
         var result = Validate(EnabledOptions(endpoint));
@@ -49,6 +30,32 @@ public sealed class AiAssistantOptionsValidatorTests
         Assert.False(result.Succeeded);
         Assert.Contains(result.Failures, failure =>
             failure.Contains("AiAssistant:Endpoint", StringComparison.Ordinal));
+    }
+
+    public static IEnumerable<object[]> UnsafeEndpoints()
+    {
+        yield return new object[] { "http://api.example.com" };
+        yield return new object[] { "https:/api.example.com" };
+        yield return new object[] { "https:///v1/assist" };
+        yield return new object[] { "/v1/assist" };
+        yield return new object[] { "https://user:password@api.example.com" };
+        yield return new object[] { "https://@api.example.com" };
+        yield return new object[] { "https://api.example.com?token=value" };
+        yield return new object[] { "https://api.example.com?" };
+        yield return new object[] { "https://api.example.com#fragment" };
+        yield return new object[] { "https://api.example.com#" };
+        yield return new object[] { " https://api.example.com" };
+        yield return new object[] { "https://api.example.com/path with space" };
+        yield return new object[] { "https://api.example.com/path" + (char)9 + "segment" };
+        yield return new object[] { "https://api.example.com" + (char)92 + "path" };
+        yield return new object[] { "https://api.example.com/" + (char)0x0000 };
+        yield return new object[] { "https://api.example.com/" + (char)0x000A };
+        yield return new object[] { "https://api.example.com/" + (char)0x000D };
+        yield return new object[] { "https://api.example.com/" + (char)0x0080 };
+        yield return new object[] { "https://api.example.com/" + (char)0x0085 };
+        yield return new object[] { "https://api.example.com/" + (char)0x009F };
+        yield return new object[] { "https://api.example.com/" + (char)0x2028 };
+        yield return new object[] { "https://api.example.com/" + (char)0x2029 };
     }
 
     [Fact]
