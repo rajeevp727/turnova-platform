@@ -84,7 +84,11 @@ for (const [role, appPath] of [
     assert.match(handler, /await getOrCreatePersistentProposalAttempt\(\s*SecureStore,\s*proposalAttemptRef/);
     assert.match(handler, /userId:\s*proposalUserId/);
     assert.match(handler, /proposalSubmissionSequence\.current/);
-    assert.match(handler, /proposalSubmissionInFlight\.current\s*=\s*attempt\.key/);
+    assert.match(handler, /proposalSubmissionInFlight\.current\s*=\s*pendingLock/);
+    assert.match(handler, /proposalSubmissionInFlight\.current\s*!==\s*pendingLock/);
+    assert.match(handler, /let ownedSubmissionLock\s*=\s*pendingLock/);
+    assert.doesNotMatch(handler, /proposalSubmissionInFlight\.current\s*=\s*attempt\.key/);
+    assert.doesNotMatch(handler, /ownedSubmissionLock\s*=\s*attempt\.key/);
     assert.match(handler, /await clearPersistentProposalAttempt\(SecureStore,\s*proposalAttemptRef,\s*attempt\)/);
     assert.match(handler, /finishProposalSubmission\(proposalSubmissionInFlight,\s*ownedSubmissionLock\)/);
     assert.match(handler, /"Idempotency-Key":\s*attempt\.key/);
@@ -259,6 +263,26 @@ test("a stale session is rejected before secure-store reads or writes", async ()
   );
   assert.equal(reads, 0);
   assert.equal(writes, 0);
+});
+
+test("stale cleanup cannot clear a newer fingerprint even when an idempotency key collides", async () => {
+  const storage = createSecureStore();
+  const ref = createRef();
+  const keyFactory = () => "same-idempotency-key";
+  const previous = await getOrCreatePersistentProposalAttempt(storage, ref, persistentInput(), keyFactory);
+  const current = await getOrCreatePersistentProposalAttempt(storage, ref, persistentInput({ amount: 275 }), keyFactory);
+  assert.equal(previous.key, current.key);
+  assert.notEqual(previous.fingerprint, current.fingerprint);
+
+  const storageKey = createProposalAttemptStorageKey(persistentInput());
+  storage.values.set(storageKey, "{");
+  assert.equal(await clearPersistentProposalAttempt(storage, ref, previous), false);
+  assert.equal(ref.current.fingerprint, current.fingerprint);
+  assert.equal(storage.values.get(storageKey), "{");
+
+  storage.values.delete(storageKey);
+  assert.equal(await clearPersistentProposalAttempt(storage, ref, previous), false);
+  assert.equal(ref.current.fingerprint, current.fingerprint);
 });
 
 test("successful agreement-history refresh cleanup removes only the matching persisted key", async () => {
