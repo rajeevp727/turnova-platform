@@ -2369,7 +2369,7 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 
 ### RIDER-02 corrupt-record safety correction — 2026-11-15
 
-Follow-up source/test commit `02c5b191cecb29319b3609509532c9283b9c1c1b` distinguishes missing, valid and invalid SecureStore proposal records. Invalid JSON, unsupported version, malformed fields or fingerprint inconsistency now fail closed before a new key is generated or any proposal POST is sent. This prevents overwriting an unreadable key that might represent a server-accepted ambiguous proposal. A corrupt record is deleted only after successful agreement-history refresh if the current in-memory attempt still owns the expected key. CAB-AGR-038 covers the no-new-key/no-request behavior. Exact-head CI must be rerun; the prior CI run is stale after this source change.
+Follow-up source/test commit `02c5b191cecb29319b3609509532c9283b9c1c1b` distinguishes missing, valid and invalid SecureStore proposal records. Invalid JSON, unsupported version, malformed fields, fingerprint inconsistency or a valid record stored under a different authenticated-user/actor slot now fail closed before a new key is generated or any proposal POST is sent. This prevents overwriting an unreadable key that might represent a server-accepted ambiguous proposal. A corrupt record is deleted only after successful agreement-history refresh if the current in-memory attempt still owns the expected key. CAB-AGR-038 covers the no-new-key/no-request behavior. Exact-head CI must be rerun; the prior CI run is stale after this source change.
 
 
 ### RIDER-02 async session-race follow-up — 2026-11-15
