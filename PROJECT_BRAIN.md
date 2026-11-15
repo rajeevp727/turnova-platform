@@ -2420,11 +2420,32 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 
 ## Latest sequential handoff — DISPATCH-01 zone configuration safety (2026-11-16)
 
+- Main after RIDER-03: 0005b477ac06831b8c5532dd55a448886a2eccd1. PR #170 merged at 3bbde8a6452a1ab00d36e28be27685c28509eec0; [CI #1752 / run 43749699550](https://github.com/rajeevp727/turnova-platform/actions/runs/43749699550) passed 12/12 on exact head 2ba42858da2a26987cd978d140e04a586f1ec6ee (backend 653/653, shared mobile/auth 211/211, Python 48/48, both Expo apps, four native builds, API publish and four smoke tests).
+- Sole active feature PR #171: fix/dispatch-01-validate-zones-before-driver-mutations; source/test head 3bbde8a6452a1ab00d36e28be27685c28509eec0. Exact-head CI pending.
+- Resolver returns Matched / NoMatch / InvalidConfiguration and validates all configured zones for blank/untrimmed/duplicate IDs, non-finite/out-of-range coordinates, inverted bounds and pairwise overlaps including inclusive shared boundaries.
+- Invalid/ambiguous configuration fails with HTTP 503 before Driver availability/location reservation, profile or queue mutation and before Rider discovery/booking writes. Valid no-match remains a legitimate Driver zone exit.
+- Driver mobile sets Offline for a zone exit only when the response is HTTP 409 and its message exactly matches the server contract; other 409 conflicts reconcile server state and 503 never means zone exit.
+- Automated regressions cover malformed configuration on zones that do not contain the request, overlap away from pickup, reverse overlap order/shared boundaries, Rider discovery/booking no-side-effects, Driver Online/location state and queue preservation, valid no-match zone exit and the mobile classifier.
+- Product-approved positive radius, non-overlapping zone policy and Driver location freshness remain external gates; checked-in radius 0 intentionally fails closed. Live Cosmos query/index/ETag/multi-instance/restart and Android/iOS physical-device zone/location acceptance remain unverified. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## Latest sequential handoff — DISPATCH-01 zone configuration safety (2026-11-16)
+
+- Main after RIDER-03: 0005b477ac06831b8c5532dd55a448886a2eccd1. PR #170 merged at 0005b477ac06831b8c5532dd55a448886a2eccd1; [CI #1752 / run 43749699550](https://github.com/rajeevp727/turnova-platform/actions/runs/43749699550) passed 12/12 on exact head 2ba42858da2a26987cd978d140e04a586f1ec6ee.
+- Sole active feature PR #171: fix/dispatch-01-validate-zones-before-driver-mutations; source/test head 1c1a75728d70ad20e7d596ebdd8a71d436f4352c; exact-head CI pending.
+- Resolver returns Matched / NoMatch / InvalidConfiguration and validates all configured zones for blank/untrimmed/duplicate IDs, non-finite/out-of-range coordinates, inverted bounds and pairwise overlaps including inclusive shared boundaries.
+- Invalid/ambiguous configuration fails with HTTP 503 before Driver availability/location reservation, profile or queue mutation and before Rider discovery/booking writes. Valid no-match remains a legitimate Driver zone exit.
+- Driver mobile sets Offline for a zone exit only when the response is HTTP 409 and its message exactly matches the server contract; other 409 conflicts reconcile server state and 503 never means zone exit.
+- Automated regressions cover malformed configuration on zones that do not contain the request, overlap away from pickup, reverse overlap order/shared boundaries, Rider discovery/booking no-side-effects, Driver Online/location state and queue preservation, valid no-match zone exit and the mobile classifier. The duplicate Theory-attribute fixture correction is included in the source/test head; assertions were retained.
+- Product-approved positive radius, non-overlapping zone policy and Driver location freshness remain external gates; checked-in radius 0 intentionally fails closed. Live Cosmos query/index/ETag/multi-instance/restart and Android/iOS physical-device zone/location acceptance remain unverified. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## Latest sequential handoff — DISPATCH-01 zone configuration safety (2026-11-16)
+
 - Main after RIDER-03: 0005b477ac06831b8c5532dd55a448886a2eccd1. PR #170 merged at 0005b477ac06831b8c5532dd55a448886a2eccd1; [CI #1752 / run 43749699550](https://github.com/rajeevp727/turnova-platform/actions/runs/43749699550) passed 12/12 on exact head 2ba42858da2a26987cd978d140e04a586f1ec6ee.
 - Sole active feature PR #171: fix/dispatch-01-validate-zones-before-driver-mutations; latest source/test head c8fd4ff766b4ec9921082c99c8f56203003c7ea6; exact-head CI pending.
 - Resolver returns Matched / NoMatch / InvalidConfiguration and validates all configured zones for blank/untrimmed/duplicate IDs, non-finite/out-of-range coordinates, inverted bounds and pairwise overlaps including inclusive shared boundaries.
 - Invalid/ambiguous configuration fails with HTTP 503 before Driver availability/location reservation, profile or queue mutation and before Rider discovery/booking writes. Valid no-match remains a legitimate Driver zone exit.
 - Driver mobile sets Offline for a zone exit only when the response is HTTP 409 and its message exactly matches the server contract; other 409 conflicts reconcile server state and 503 never means zone exit.
-- Automated regressions cover malformed configuration on zones that do not contain the request, overlap away from pickup, reverse overlap order/shared boundaries, Rider discovery/booking no-side-effects, Driver Online/location state and queue preservation, reservation audit assertions for both Driver and selected-booking identities, valid no-match zone exit and the mobile classifier.
+- Automated regressions cover malformed configuration on zones that do not contain the request, overlap away from pickup, reverse overlap order/shared boundaries, Rider discovery/booking no-side-effects, Driver Online/location state and queue preservation, reservation audit assertions for Driver and selected-booking identities, valid no-match zone exit and the mobile classifier.
 - Active-ride conflict precedence remains unchanged. Product-approved positive radius, non-overlapping zone policy and Driver location freshness remain external gates; checked-in radius 0 intentionally fails closed. Live Cosmos query/index/ETag/multi-instance/restart and Android/iOS physical-device zone/location acceptance remain unverified. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
-

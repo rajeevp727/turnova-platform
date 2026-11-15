@@ -1138,6 +1138,23 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 - The complete configured zone set is validated before resolution: nonblank trimmed unique IDs (case-insensitive), finite boundaries, legal latitude/longitude ranges, non-inverted min/max and pairwise non-overlap. Inclusive shared boundaries are rejected.
 - Invalid/ambiguous configuration returns HTTP 503 before Driver Online reservation acquisition, Driver location zone-exit reservation/profile/queue mutation, Rider discovery data reads, and selected-booking idempotency/ride/reservation writes.
 - Valid configuration with no matching zone remains distinct: Rider discovery/booking keep the unavailable-zone response; an Online Driver receives the existing authoritative 409 zone-exit response and is taken Offline.
+- Driver app zone-exit handling now requires both HTTP 409 and the exact server message. Generic 409 conflicts still reconcile authoritative availability; 503 does not stop location watching or mark Offline.
+- Automated regressions cover malformed configuration including non-matching zones, overlap away from pickup, reverse overlap order/shared boundaries, Rider discovery/booking no-side-effects, Driver Online/location state and queue preservation, valid no-match zone exit and mobile classifier tests. Exact-head CI is pending; no row is marked Verified.
+
+
+## DISPATCH-01 zone configuration safety increment — PR #171 / exact-head CI pending (2026-11-16)
+
+- The complete configured zone set is validated before resolution: nonblank trimmed unique IDs (case-insensitive), finite boundaries, legal latitude/longitude ranges, non-inverted min/max and pairwise non-overlap. Inclusive shared boundaries are rejected.
+- Invalid/ambiguous configuration returns HTTP 503 before Driver Online reservation acquisition, Driver location zone-exit reservation/profile/queue mutation, Rider discovery data reads, and selected-booking idempotency/ride/reservation writes.
+- Valid configuration with no matching zone remains distinct: Rider discovery/booking keep the unavailable-zone response; an Online Driver receives the existing authoritative 409 zone-exit response and is taken Offline.
+- Driver app zone-exit handling requires both HTTP 409 and the exact server message. Generic 409 conflicts still reconcile authoritative availability; 503 does not stop location watching or mark Offline.
+- Automated regressions cover malformed configuration including non-matching zones, overlap away from pickup, reverse overlap order/shared boundaries, Rider discovery/booking no-side-effects, Driver Online/location state and queue preservation, valid no-match zone exit and the mobile classifier. Source/test head 1c1a75728d70ad20e7d596ebdd8a71d436f4352c; exact-head CI pending; no row is marked Verified.
+
+
+## DISPATCH-01 zone configuration safety increment — PR #171 / exact-head CI pending (2026-11-16)
+
+- The complete configured zone set is validated before resolution: nonblank trimmed unique IDs (case-insensitive), finite boundaries, legal latitude/longitude ranges, non-inverted min/max and pairwise non-overlap. Inclusive shared boundaries are rejected.
+- Invalid/ambiguous configuration returns HTTP 503 before Driver Online reservation acquisition, Driver location zone-exit reservation/profile/queue mutation, Rider discovery data reads, and selected-booking idempotency/ride/reservation writes.
+- Valid configuration with no matching zone remains distinct: Rider discovery/booking keep the unavailable-zone response; an Online Driver receives the existing authoritative 409 zone-exit response and is taken Offline.
 - Driver app zone-exit handling requires both HTTP 409 and the exact server message. Generic 409 conflicts still reconcile authoritative availability; 503 does not stop location watching or mark Offline.
 - Automated regressions cover malformed configuration including non-matching zones, overlap away from pickup, reverse overlap order/shared boundaries, Rider discovery/booking no-side-effects, Driver Online/location state and queue preservation, reservation audit checks, valid no-match zone exit and the mobile classifier. Source/test head c8fd4ff766b4ec9921082c99c8f56203003c7ea6; exact-head CI pending; no row is marked Verified.
-
