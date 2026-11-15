@@ -19,7 +19,7 @@ import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { finishLoadingIfSessionCurrent, resetDriverSessionState } from "../shared/sessionStateReset";
-import { clearProposalAttempt, finishProposalSubmission, getOrCreateProposalAttempt, type ProposalAttempt } from "../shared/proposalAttempt";
+import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePersistentProposalAttempt, type PersistentProposalAttempt } from "../shared/proposalAttempt";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import { isDriverAvailabilityConflict, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
@@ -107,8 +107,9 @@ export default function App() {
   const [driverRideHistory, setDriverRideHistory] = useState<DriverRideHistoryItem[]>([]);
   const [agreementHistory, setAgreementHistory] = useState<AgreementVersion[]>([]);
   const [agreementAmount, setAgreementAmount] = useState("");
-  const proposalAttemptRef = useRef<ProposalAttempt | null>(null);
+  const proposalAttemptRef = useRef<PersistentProposalAttempt | null>(null);
   const proposalSubmissionInFlight = useRef<string | null>(null);
+  const proposalSubmissionSequence = useRef(0);
   const [proposalSubmitting, setProposalSubmitting] = useState(false);
   const currentActiveRideIdRef = useRef<string | null>(null);
   currentActiveRideIdRef.current = activeRide?.rideId ?? null;
@@ -117,7 +118,9 @@ export default function App() {
     const nextRideId = activeRide?.rideId ?? null;
     if (proposalRideIdRef.current === nextRideId) return;
     proposalRideIdRef.current = nextRideId;
+    const previousAttempt = proposalAttemptRef.current;
     proposalAttemptRef.current = null;
+    if (previousAttempt) void clearPersistentProposalAttempt(SecureStore, proposalAttemptRef, previousAttempt).catch(() => {});
     proposalSubmissionInFlight.current = null;
     setProposalSubmitting(false);
   }, [activeRide?.rideId]);
@@ -134,6 +137,7 @@ export default function App() {
   const [profilePhotoBase64, setProfilePhotoBase64] = useState("");
   const [legacyServiceClass, setLegacyServiceClass] = useState<string | null>(null);
   const clearDriverSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
+    // Keep the durable per-user/ride proposal attempt so an ambiguous POST can be replayed safely after re-authentication.
     proposalAttemptRef.current = null;
     proposalSubmissionInFlight.current = null;
     setProposalSubmitting(false);
@@ -578,14 +582,29 @@ export default function App() {
 
   const proposeAgreement = async () => {
     const rideId = activeRide?.rideId;
-    if (!rideId || proposalSubmissionInFlight.current) return;
+    const proposalUserId = user?.id;
+    const requestEpoch = sessionEpoch.current;
+    if (!rideId || !proposalUserId || proposalSubmissionInFlight.current) return;
     const amount = Number(agreementAmount);
     if (!Number.isFinite(amount) || amount <= 0) { setError("Enter a positive proposed amount in INR."); return; }
-    const attempt = getOrCreateProposalAttempt(proposalAttemptRef, { rideId, actor: "driver", amount, currency: "INR" });
-    proposalSubmissionInFlight.current = attempt.key;
+    const pendingLock = "pending-" + (++proposalSubmissionSequence.current);
+    proposalSubmissionInFlight.current = pendingLock;
+    let ownedSubmissionLock = pendingLock;
+    let attempt: PersistentProposalAttempt | null = null;
+    const isProposalCurrent = () => currentActiveRideIdRef.current === rideId &&
+      user?.id === proposalUserId &&
+      isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, requestEpoch);
     setProposalSubmitting(true);
     setError("");
     try {
+      attempt = await getOrCreatePersistentProposalAttempt(
+        SecureStore,
+        proposalAttemptRef,
+        { rideId, actor: "driver", userId: proposalUserId, amount, currency: "INR" },
+        undefined,
+        isProposalCurrent
+      );
+      if (proposalSubmissionInFlight.current !== pendingLock || !isProposalCurrent()) return;
       try {
         await apiFetch(`/api/v1/rides/${rideId}/agreements`, {
           method: "POST",
@@ -593,27 +612,38 @@ export default function App() {
           body: JSON.stringify({ amount, currency: "INR" })
         });
       } catch (e) {
-        if (currentActiveRideIdRef.current === rideId) {
+        if (isProposalCurrent()) {
           setError((e instanceof Error ? e.message : "Unable to submit fare proposal.") + " Retry the same amount to reuse this request key.");
         }
         return;
       }
-      if (currentActiveRideIdRef.current !== rideId) return;
+      if (!isProposalCurrent()) return;
+      let refreshed = false;
       try {
-        const refreshed = await loadAgreementHistory(rideId, () => currentActiveRideIdRef.current === rideId);
-        if (!refreshed || currentActiveRideIdRef.current !== rideId) return;
-        clearProposalAttempt(proposalAttemptRef, attempt.key);
-        setAgreementAmount("");
+        refreshed = await loadAgreementHistory(rideId, isProposalCurrent);
       } catch {
-        if (currentActiveRideIdRef.current === rideId) {
+        if (isProposalCurrent()) {
           setError("The proposal may already be saved. Retry the same amount to safely reload it; the same request key will be reused.");
         }
+        return;
+      }
+      if (!refreshed || !isProposalCurrent()) return;
+      try {
+        await clearPersistentProposalAttempt(SecureStore, proposalAttemptRef, attempt);
+        setAgreementAmount("");
+      } catch {
+        if (isProposalCurrent()) {
+          setError("Proposal history refreshed, but secure retry-key cleanup failed. The same terms will continue to reuse the existing key.");
+        }
+      }
+    } catch (e) {
+      if (isProposalCurrent()) {
+        setError(e instanceof Error ? e.message : "Unable to securely prepare the proposal retry. No proposal was sent.");
       }
     } finally {
-      if (finishProposalSubmission(proposalSubmissionInFlight, attempt.key)) setProposalSubmitting(false);
+      if (finishProposalSubmission(proposalSubmissionInFlight, ownedSubmissionLock)) setProposalSubmitting(false);
     }
   };
-
   const confirmAgreement = async () => {
     if (!activeRide?.rideId) return;
     const current = agreementHistory[agreementHistory.length - 1];

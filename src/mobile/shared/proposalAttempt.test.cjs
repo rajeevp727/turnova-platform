@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const { clearProposalAttempt, finishProposalSubmission, getOrCreateProposalAttempt } = require("./proposalAttempt.js");
+const { clearProposalAttempt, clearPersistentProposalAttempt, createProposalAttemptStorageKey, finishProposalSubmission, getOrCreatePersistentProposalAttempt, getOrCreateProposalAttempt } = require("./proposalAttempt.js");
 
 function createRef() {
   return { current: null };
@@ -75,21 +75,28 @@ for (const [role, appPath] of [
   ["Rider", path.join(__dirname, "../rider-app/App.tsx")],
   ["Driver", path.join(__dirname, "../driver-app/App.tsx")]
 ]) {
-  test(role + " proposal submission uses stable attempts and blocks concurrent taps", () => {
+  test(role + " proposal submission persists retry keys and blocks concurrent taps", () => {
     const source = fs.readFileSync(appPath, "utf8");
     const handlerStart = source.indexOf("const proposeAgreement");
     const handlerEnd = source.indexOf("const confirmAgreement", handlerStart);
     assert.ok(handlerStart >= 0 && handlerEnd > handlerStart, role + " proposal handler must be present");
     const handler = source.slice(handlerStart, handlerEnd);
-    assert.match(handler, /getOrCreateProposalAttempt\(proposalAttemptRef/);
-    assert.match(handler, /clearProposalAttempt\(proposalAttemptRef/);
-    assert.match(handler, /proposalSubmissionInFlight\.current/);
-    assert.match(handler, /proposalSubmissionInFlight\.current\s*=\s*attempt\.key/);
-    assert.match(handler, /finishProposalSubmission\(proposalSubmissionInFlight,\s*attempt\.key\)/);
+    assert.match(handler, /await getOrCreatePersistentProposalAttempt\(\s*SecureStore,\s*proposalAttemptRef/);
+    assert.match(handler, /userId:\s*proposalUserId/);
+    assert.match(handler, /proposalSubmissionSequence\.current/);
+    assert.match(handler, /proposalSubmissionInFlight\.current\s*=\s*pendingLock/);
+    assert.match(handler, /proposalSubmissionInFlight\.current\s*!==\s*pendingLock/);
+    assert.match(handler, /let ownedSubmissionLock\s*=\s*pendingLock/);
+    assert.doesNotMatch(handler, /proposalSubmissionInFlight\.current\s*=\s*attempt\.key/);
+    assert.doesNotMatch(handler, /ownedSubmissionLock\s*=\s*attempt\.key/);
+    assert.match(handler, /await clearPersistentProposalAttempt\(SecureStore,\s*proposalAttemptRef,\s*attempt\)/);
+    assert.match(handler, /finishProposalSubmission\(proposalSubmissionInFlight,\s*ownedSubmissionLock\)/);
     assert.match(handler, /"Idempotency-Key":\s*attempt\.key/);
     assert.doesNotMatch(handler, /Date\.now|Math\.random/);
-    assert.ok(handler.indexOf("loadAgreementHistory") < handler.indexOf("clearProposalAttempt"),
-      "attempt must remain available until agreement history refresh succeeds");
+    assert.ok(handler.indexOf("getOrCreatePersistentProposalAttempt") < handler.indexOf("apiFetch("),
+      "the retry key must be durably stored before the proposal POST");
+    assert.ok(handler.indexOf("loadAgreementHistory") < handler.indexOf("clearPersistentProposalAttempt"),
+      "the persisted key must remain until agreement history refresh succeeds");
     assert.match(source, /proposalSubmitting/);
     assert.match(source, /editable=\{!proposalSubmitting\}/);
     const resetName = role === "Rider" ? "const clearRiderSessionState" : "const clearDriverSessionState";
@@ -99,11 +106,11 @@ for (const [role, appPath] of [
     const reset = source.slice(resetStart, resetEnd);
     assert.match(reset, /proposalAttemptRef\.current\s*=\s*null/);
     assert.match(reset, /proposalSubmissionInFlight\.current\s*=\s*null/);
-    assert.match(reset, /setProposalSubmitting\(false\)/);
+    assert.match(reset, /Keep the durable per-user\/ride proposal attempt/);
+    assert.match(source, /clearPersistentProposalAttempt\(SecureStore,\s*proposalAttemptRef,\s*previousAttempt\)/);
     assert.match(source, /proposalRideIdRef/);
   });
 }
-
 
 test("changing actor or currency creates a new proposal attempt key", () => {
   const ref = createRef();
@@ -132,4 +139,302 @@ test("changing actor or currency creates a new proposal attempt key", () => {
   assert.notEqual(driverInr.key, riderInr.key);
   assert.notEqual(driverUsd.key, driverInr.key);
   assert.deepEqual(generatedActors, ["rider", "driver", "driver"]);
+});
+
+
+function createSecureStore(options = {}) {
+  const values = new Map();
+  return {
+    values,
+    async getItemAsync(key) {
+      options.onRead?.(key);
+      if (options.failRead) throw new Error("simulated secure-store read failure");
+      return values.has(key) ? values.get(key) : null;
+    },
+    async setItemAsync(key, value) {
+      options.onWrite?.(key, value);
+      if (options.failWrite) throw new Error("simulated secure-store write failure");
+      values.set(key, value);
+    },
+    async deleteItemAsync(key) {
+      options.onDelete?.(key);
+      if (options.failDelete) throw new Error("simulated secure-store delete failure");
+      values.delete(key);
+    }
+  };
+}
+
+function persistentInput(overrides = {}) {
+  return {
+    userId: "rider-1",
+    rideId: "ride-1",
+    actor: "rider",
+    amount: 250,
+    currency: "INR",
+    ...overrides
+  };
+}
+
+test("persistent proposal attempt restores the same key after an app-process restart", async () => {
+  const storage = createSecureStore();
+  let generated = 0;
+  const keyFactory = actor => actor + "-persisted-" + (++generated);
+  const first = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), keyFactory);
+  const restored = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), keyFactory);
+  assert.equal(restored.key, first.key);
+  assert.equal(restored.fingerprint, first.fingerprint);
+  assert.equal(generated, 1);
+  assert.equal(storage.values.size, 1);
+});
+
+test("persistent proposal storage isolates users and actors while fingerprinting rides", async () => {
+  const storage = createSecureStore();
+  let generated = 0;
+  const keyFactory = actor => actor + "-isolated-" + (++generated);
+  const riderOne = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), keyFactory);
+  const riderTwo = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ userId: "rider-2" }), keyFactory);
+  const driverOne = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ actor: "driver" }), keyFactory);
+  const riderOtherRide = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ rideId: "ride-2" }), keyFactory);
+  assert.notEqual(riderOne.key, riderTwo.key);
+  assert.notEqual(riderOne.key, driverOne.key);
+  assert.notEqual(riderOne.key, riderOtherRide.key);
+  assert.equal(createProposalAttemptStorageKey(persistentInput({ userId: "rider-1" })), createProposalAttemptStorageKey(persistentInput()));
+  assert.equal(
+    createProposalAttemptStorageKey(persistentInput({ rideId: "ride-2" })),
+    createProposalAttemptStorageKey(persistentInput()),
+    "one active attempt slot per user/actor avoids unbounded per-ride SecureStore records"
+  );
+  assert.equal(storage.values.size, 3);
+  const riderOtherRideRestored = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ rideId: "ride-2" }), keyFactory);
+  assert.equal(riderOtherRideRestored.key, riderOtherRide.key);
+  assert.equal(generated, 4);
+});
+
+test("changed proposal terms replace the persisted key and stale cleanup cannot delete the replacement", async () => {
+  const storage = createSecureStore();
+  let generated = 0;
+  const keyFactory = actor => actor + "-changed-" + (++generated);
+  const ref = createRef();
+  const first = await getOrCreatePersistentProposalAttempt(storage, ref, persistentInput(), keyFactory);
+  const changed = await getOrCreatePersistentProposalAttempt(storage, ref, persistentInput({ amount: 275 }), keyFactory);
+  assert.notEqual(changed.key, first.key);
+  assert.equal(await clearPersistentProposalAttempt(storage, ref, first), false);
+  const restored = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput({ amount: 275 }), keyFactory);
+  assert.equal(restored.key, changed.key);
+  assert.equal(generated, 2);
+});
+
+test("concurrent persistent proposal attempts serialize and reuse one key", async () => {
+  const storage = createSecureStore();
+  const ref = createRef();
+  let generated = 0;
+  const keyFactory = actor => actor + "-concurrent-" + (++generated);
+  const results = await Promise.all([
+    getOrCreatePersistentProposalAttempt(storage, ref, persistentInput(), keyFactory),
+    getOrCreatePersistentProposalAttempt(storage, ref, persistentInput(), keyFactory),
+    getOrCreatePersistentProposalAttempt(storage, ref, persistentInput(), keyFactory)
+  ]);
+  assert.equal(new Set(results.map(result => result.key)).size, 1);
+  assert.equal(generated, 1);
+});
+
+test("secure-store read and write failures fail closed before a proposal can be submitted", async () => {
+  const readFailure = createSecureStore({ failRead: true });
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(readFailure, createRef(), persistentInput(), actor => actor + "-read-failure"),
+    /No proposal was sent/
+  );
+  const writeFailure = createSecureStore({ failWrite: true });
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(writeFailure, createRef(), persistentInput(), actor => actor + "-write-failure"),
+    /No proposal was sent/
+  );
+  assert.equal(readFailure.values.size, 0);
+  assert.equal(writeFailure.values.size, 0);
+});
+
+test("a stale session is rejected before secure-store reads or writes", async () => {
+  let reads = 0;
+  let writes = 0;
+  const storage = createSecureStore({ onRead: () => reads++, onWrite: () => writes++ });
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), undefined, () => false),
+    /Session changed/
+  );
+  assert.equal(reads, 0);
+  assert.equal(writes, 0);
+});
+
+test("stale cleanup cannot clear a newer fingerprint even when an idempotency key collides", async () => {
+  const storage = createSecureStore();
+  const ref = createRef();
+  const keyFactory = () => "same-idempotency-key";
+  const previous = await getOrCreatePersistentProposalAttempt(storage, ref, persistentInput(), keyFactory);
+  const current = await getOrCreatePersistentProposalAttempt(storage, ref, persistentInput({ amount: 275 }), keyFactory);
+  assert.equal(previous.key, current.key);
+  assert.notEqual(previous.fingerprint, current.fingerprint);
+
+  const storageKey = createProposalAttemptStorageKey(persistentInput());
+  storage.values.set(storageKey, "{");
+  assert.equal(await clearPersistentProposalAttempt(storage, ref, previous), false);
+  assert.equal(ref.current.fingerprint, current.fingerprint);
+  assert.equal(storage.values.get(storageKey), "{");
+
+  storage.values.delete(storageKey);
+  assert.equal(await clearPersistentProposalAttempt(storage, ref, previous), false);
+  assert.equal(ref.current.fingerprint, current.fingerprint);
+});
+
+test("successful agreement-history refresh cleanup removes only the matching persisted key", async () => {
+  const storage = createSecureStore();
+  const ref = createRef();
+  let generated = 0;
+  const keyFactory = actor => actor + "-clear-" + (++generated);
+  const attempt = await getOrCreatePersistentProposalAttempt(storage, ref, persistentInput(), keyFactory);
+  assert.equal(await clearPersistentProposalAttempt(storage, ref, attempt), true);
+  assert.equal(ref.current, null);
+  const nextAttempt = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), keyFactory);
+  assert.notEqual(nextAttempt.key, attempt.key);
+  assert.equal(generated, 2);
+});
+
+test("failed secure-store deletion retains the current attempt for safe replay", async () => {
+  const storage = createSecureStore({ failDelete: true });
+  const ref = createRef();
+  const attempt = await getOrCreatePersistentProposalAttempt(storage, ref, persistentInput(), actor => actor + "-delete-failure");
+  await assert.rejects(clearPersistentProposalAttempt(storage, ref, attempt), /clear the completed proposal retry key/);
+  assert.equal(ref.current.key, attempt.key);
+  const restored = await getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), () => "must-not-be-used");
+  assert.equal(restored.key, attempt.key);
+});
+
+test("corrupt stored proposal retry data fails closed instead of generating a new key", async () => {
+  const storage = createSecureStore();
+  const input = persistentInput();
+  const storageKey = createProposalAttemptStorageKey(input);
+  storage.values.set(storageKey, "{");
+  let generated = 0;
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(storage, createRef(), input, actor => actor + "-corrupt-" + (++generated)),
+    /No proposal was sent/
+  );
+  assert.equal(generated, 0);
+  assert.equal(storage.values.get(storageKey), "{");
+});
+
+
+test("unsupported or inconsistent stored proposal envelopes fail closed without writes or replacement keys", async () => {
+  const input = persistentInput();
+  const storageKey = createProposalAttemptStorageKey(input);
+  const seedStorage = createSecureStore();
+  const seeded = await getOrCreatePersistentProposalAttempt(
+    seedStorage,
+    createRef(),
+    input,
+    actor => actor + "-seed"
+  );
+  assert.ok(seeded.key);
+  const validEnvelope = JSON.parse(seedStorage.values.get(storageKey));
+  const otherUserInput = persistentInput({ userId: "rider-2" });
+  const otherUserStorage = createSecureStore();
+  await getOrCreatePersistentProposalAttempt(otherUserStorage, createRef(), otherUserInput, actor => actor + "-other-user");
+  const otherUserEnvelope = JSON.parse(otherUserStorage.values.get(createProposalAttemptStorageKey(otherUserInput)));
+  const otherActorInput = persistentInput({ actor: "driver" });
+  const otherActorStorage = createSecureStore();
+  await getOrCreatePersistentProposalAttempt(otherActorStorage, createRef(), otherActorInput, actor => actor + "-other-actor");
+  const otherActorEnvelope = JSON.parse(otherActorStorage.values.get(createProposalAttemptStorageKey(otherActorInput)));
+  const invalidEnvelopes = [
+    ["unsupported version", { version: 2, attempt: validEnvelope.attempt }],
+    ["missing attempt", { version: 1 }],
+    ["unsupported actor", { version: 1, attempt: { ...validEnvelope.attempt, actor: "admin" } }],
+    ["invalid amount", { version: 1, attempt: { ...validEnvelope.attempt, amount: 0 } }],
+    ["inconsistent fingerprint", { version: 1, attempt: { ...validEnvelope.attempt, fingerprint: "mismatch" } }],
+    ["blank idempotency key", { version: 1, attempt: { ...validEnvelope.attempt, key: " " } }],
+    ["record from another account in this slot", otherUserEnvelope],
+    ["record from another actor in this slot", otherActorEnvelope]
+  ];
+
+  for (const [label, envelope] of invalidEnvelopes) {
+    let writes = 0;
+    let generated = 0;
+    const storage = createSecureStore({ onWrite: () => { writes += 1; } });
+    const raw = JSON.stringify(envelope);
+    storage.values.set(storageKey, raw);
+
+    await assert.rejects(
+      getOrCreatePersistentProposalAttempt(
+        storage,
+        createRef(),
+        input,
+        actor => {
+          generated += 1;
+          return actor + "-must-not-replace";
+        }
+      ),
+      /No proposal was sent/,
+      label
+    );
+
+    assert.equal(generated, 0, label + ": no replacement key may be generated");
+    assert.equal(writes, 0, label + ": invalid stored data must not be overwritten");
+    assert.equal(storage.values.get(storageKey), raw, label + ": invalid record must remain available for safe recovery");
+  }
+});
+
+test("a session change during secure-store read stops before writing or sending", async () => {
+  let current = true;
+  let writes = 0;
+  const storage = createSecureStore({
+    onRead: () => { current = false; },
+    onWrite: () => { writes += 1; }
+  });
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(storage, createRef(), persistentInput(), undefined, () => current),
+    /Session changed/
+  );
+  assert.equal(writes, 0);
+  assert.equal(storage.values.size, 0);
+});
+
+test("a session change during secure-store write stops POST while retaining the same key for safe replay", async () => {
+  let current = true;
+  let generated = 0;
+  const storage = createSecureStore({ onWrite: () => { current = false; } });
+  await assert.rejects(
+    getOrCreatePersistentProposalAttempt(
+      storage,
+      createRef(),
+      persistentInput(),
+      actor => actor + "-write-race-" + (++generated),
+      () => current
+    ),
+    /Session changed/
+  );
+  assert.equal(storage.values.size, 1);
+  const restored = await getOrCreatePersistentProposalAttempt(
+    storage,
+    createRef(),
+    persistentInput(),
+    () => "must-not-be-used",
+    () => true
+  );
+  assert.equal(restored.key, "rider-write-race-1");
+  assert.equal(generated, 1);
+});
+
+test("a corrupt record is deleted only when the completed in-memory attempt still owns its key", async () => {
+  const storage = createSecureStore();
+  const ref = createRef();
+  const attempt = await getOrCreatePersistentProposalAttempt(
+    storage, ref, persistentInput(), actor => actor + "-corrupt-cleanup"
+  );
+  const storageKey = createProposalAttemptStorageKey(persistentInput());
+  storage.values.set(storageKey, "{");
+  assert.equal(await clearPersistentProposalAttempt(storage, ref, attempt), true);
+  assert.equal(ref.current, null);
+  assert.equal(storage.values.has(storageKey), false);
+
+  storage.values.set(storageKey, "{");
+  assert.equal(await clearPersistentProposalAttempt(storage, createRef(), attempt), false);
+  assert.equal(storage.values.get(storageKey), "{");
 });

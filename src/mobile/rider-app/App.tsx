@@ -18,7 +18,7 @@ import { createSelectedBookingLocation } from "../shared/selectedBookingLocation
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { resetRiderSessionState } from "../shared/sessionStateReset";
-import { clearProposalAttempt, finishProposalSubmission, getOrCreateProposalAttempt, type ProposalAttempt } from "../shared/proposalAttempt";
+import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePersistentProposalAttempt, type PersistentProposalAttempt } from "../shared/proposalAttempt";
 import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
 import { canStartRiderBooking, hasActiveRiderRide } from "../shared/riderBookingGuard";
@@ -90,8 +90,9 @@ export default function App() {
   const [selectedDriverId,setSelectedDriverId]=useState<string|null>(null);
   const [agreementHistory,setAgreementHistory]=useState<AgreementVersion[]>([]);
   const [agreementAmount,setAgreementAmount]=useState("");
-  const proposalAttemptRef=useRef<ProposalAttempt|null>(null);
+  const proposalAttemptRef=useRef<PersistentProposalAttempt|null>(null);
   const proposalSubmissionInFlight=useRef<string|null>(null);
+  const proposalSubmissionSequence=useRef(0);
   const [proposalSubmitting,setProposalSubmitting]=useState(false);
   const currentRideIdRef=useRef<string|null>(null);
   currentRideIdRef.current=ride?.rideId??null;
@@ -100,7 +101,9 @@ export default function App() {
     const nextRideId=ride?.rideId??null;
     if(proposalRideIdRef.current===nextRideId)return;
     proposalRideIdRef.current=nextRideId;
+    const previousAttempt=proposalAttemptRef.current;
     proposalAttemptRef.current=null;
+    if(previousAttempt)void clearPersistentProposalAttempt(SecureStore,proposalAttemptRef,previousAttempt).catch(()=>{});
     proposalSubmissionInFlight.current=null;
     setProposalSubmitting(false);
   },[ride?.rideId]);
@@ -115,6 +118,7 @@ export default function App() {
     setBookingRequestKey(nextKey);
   },[]);
   const clearRiderSessionState = useCallback((preserveAuthInput?: { email: string; password: string; name: string; mode: "login" | "register" }) => {
+    // Keep the durable per-user/ride proposal attempt so an ambiguous POST can be replayed safely after re-authentication.
     proposalAttemptRef.current=null;
     proposalSubmissionInFlight.current=null;
     setProposalSubmitting(false);
@@ -374,35 +378,50 @@ export default function App() {
    const requestSelectedDriver=async()=>{if(!canStartRiderBooking(activeRideStateLoaded,ride)){if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before requesting another Driver.");}else{setError("Your active booking status is still being verified. Retry after the status check completes.");}return;}if(!selectedDriver||!selectedUnion||bookingInFlight.current)return;const requestKey=bookingRequestKey;const selectedDriverIdForRequest=selectedDriver.driverId;const unionIdForRequest=selectedUnion.unionId;const pickupForRequest=pickup;const dropoffForRequest=dropoff;const stops=stopsText.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean);const passengerCount=parsePassengerCountInput(passengers);if(passengerCount===null){setError("Enter a passenger count from 1 to 6 before requesting a driver.");return;}bookingInFlight.current=true;setLoading(true);setError("");try{const coordinates=await selectedBookingLocation.current.capture();if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");const created=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});setRide(created as Ride);setRideHistory(current=>[created as RideHistoryItem,...current.filter(item=>item.rideId!==created.rideId)]);setAgreementHistory([]);setAgreementAmount("");setTab("Activity");setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}catch(e){setError(e instanceof Error?e.message:"Unable to request the selected driver.");}finally{bookingInFlight.current=false;setLoading(false);}};
   const loadAgreementHistory=useCallback(async(rideId:string,isActive:()=>boolean=()=>true)=>{const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);if(!isCurrent())return false;const result=await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];if(!isCurrent())return false;setAgreementHistory(result);return true;},[apiFetch]);
   useEffect(()=>{if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}if(tab!=="Activity"||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;let active=true;void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(result=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory(result as AgreementVersion[]);}).catch(()=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory([]);});return()=>{active=false;};},[ride?.rideId,tab,apiFetch]);
-  const proposeAgreement=async()=>{
-    const rideId=ride?.rideId;
-    if(!rideId||proposalSubmissionInFlight.current)return;
-    const amount=Number(agreementAmount);
-    if(!Number.isFinite(amount)||amount<=0){setError("Enter a positive agreed amount in INR.");return;}
-    const attempt=getOrCreateProposalAttempt(proposalAttemptRef,{rideId,actor:"rider",amount,currency:"INR"});
-    proposalSubmissionInFlight.current=attempt.key;
-    setProposalSubmitting(true);
-    setError("");
-    try{
-      try{
-        await apiFetch(`/api/v1/rides/${rideId}/agreements`,{method:"POST",headers:{"Idempotency-Key":attempt.key},body:JSON.stringify({amount,currency:"INR"})});
-      }catch(e){
-        if(currentRideIdRef.current===rideId)setError((e instanceof Error?e.message:"Unable to submit fare proposal.")+" Retry the same amount to reuse this request key.");
-        return;
-      }
-      if(currentRideIdRef.current!==rideId)return;
-      try{
-        const refreshed=await loadAgreementHistory(rideId,()=>currentRideIdRef.current===rideId);
-        if(!refreshed||currentRideIdRef.current!==rideId)return;
-        clearProposalAttempt(proposalAttemptRef,attempt.key);
-        setAgreementAmount("");
-      }catch{
-        if(currentRideIdRef.current===rideId)setError("The proposal may already be saved. Retry the same amount to safely reload it; the same request key will be reused.");
-      }
-    }finally{
-      if(finishProposalSubmission(proposalSubmissionInFlight,attempt.key))setProposalSubmitting(false);
-    }
-  };
+   const proposeAgreement=async()=>{
+     const rideId=ride?.rideId;
+     const proposalUserId=user?.id;
+     const requestEpoch=sessionEpoch.current;
+     if(!rideId||!proposalUserId||proposalSubmissionInFlight.current)return;
+     const amount=Number(agreementAmount);
+     if(!Number.isFinite(amount)||amount<=0){setError("Enter a positive agreed amount in INR.");return;}
+     const pendingLock="pending-"+(++proposalSubmissionSequence.current);
+     proposalSubmissionInFlight.current=pendingLock;
+     let ownedSubmissionLock=pendingLock;
+     let attempt:PersistentProposalAttempt|null=null;
+     const isProposalCurrent=()=>currentRideIdRef.current===rideId&&user?.id===proposalUserId&&isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch);
+     setProposalSubmitting(true);
+     setError("");
+     try{
+       attempt=await getOrCreatePersistentProposalAttempt(SecureStore,proposalAttemptRef,{rideId,actor:"rider",userId:proposalUserId,amount,currency:"INR"},undefined,isProposalCurrent);
+       if(proposalSubmissionInFlight.current!==pendingLock||!isProposalCurrent())return;
+       try{
+         await apiFetch(`/api/v1/rides/${rideId}/agreements`,{method:"POST",headers:{"Idempotency-Key":attempt.key},body:JSON.stringify({amount,currency:"INR"})});
+       }catch(e){
+         if(isProposalCurrent())setError((e instanceof Error?e.message:"Unable to submit fare proposal.")+" Retry the same amount to reuse this request key.");
+         return;
+       }
+       if(!isProposalCurrent())return;
+       let refreshed=false;
+       try{
+         refreshed=await loadAgreementHistory(rideId,isProposalCurrent);
+       }catch{
+         if(isProposalCurrent())setError("The proposal may already be saved. Retry the same amount to safely reload it; the same request key will be reused.");
+         return;
+       }
+       if(!refreshed||!isProposalCurrent())return;
+       try{
+         await clearPersistentProposalAttempt(SecureStore,proposalAttemptRef,attempt);
+         setAgreementAmount("");
+       }catch{
+         if(isProposalCurrent())setError("Proposal history refreshed, but secure retry-key cleanup failed. The same terms will continue to reuse the existing key.");
+       }
+     }catch(e){
+       if(isProposalCurrent())setError(e instanceof Error?e.message:"Unable to securely prepare the proposal retry. No proposal was sent.");
+     }finally{
+       if(finishProposalSubmission(proposalSubmissionInFlight,ownedSubmissionLock))setProposalSubmitting(false);
+     }
+   };
   const confirmAgreement=async()=>{if(!ride)return;const current=agreementHistory[agreementHistory.length-1];if(!current)return;setError("");try{await apiFetch(`/api/v1/rides/${ride.rideId}/agreements/${current.version}/confirm`,{method:"POST"});await loadAgreementHistory(ride.rideId);}catch(e){setError(e instanceof Error?e.message:"Unable to confirm fare agreement.");}};
 
   useEffect(()=>{if(!user||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;let active=true;void loadRideHistory(()=>active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)).catch(e=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setError(e instanceof Error?e.message:"Unable to load trip history.");});return()=>{active=false;};},[user?.id,loadRideHistory,ride?.status]);
