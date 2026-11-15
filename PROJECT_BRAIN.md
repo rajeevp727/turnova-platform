@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** 364480308b2e07fdbdc63ca42d2f04f6a91dc132. PR #164 RELEASE-01 and supplemental PR #165 AI-01 are merged; PR #165 source/test and exact documentation-head CI #1681/#1682 passed 12/12. Sole active PR #166 is AUTH-01 with AUTH-API-010..013, AUTH-LOGIN-063 and TypeScript declaration. CI #1684 had one stale source-contract failure (194/195 shared tests), fixed in 9c92670ec37952db0247ba9f35f15cde3edc10ad; CI #1692 then found TS2724 missing sessionTokenStore.d.ts declaration, fixed in 11ac80407601d14e7a54c0eb0a21d9063e500eb6. Expected backend 640 and shared mobile 195; fresh exact-head CI pending. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `364480308b2e07fdbdc63ca42d2f04f6a91dc132`. PR #164 RELEASE-01 and supplemental PR #165 AI-01 are merged. Sole active PR #166 is AUTH-01, branch `fix/auth-01-session-cleanup-and-login-contracts`, exact head `7c110b9591fe2f8090e58729a0638b0a978c1717`; CI #1695 / run 43679705761 passed 12/12 (backend 640/640, shared mobile 195/195, Python 48/48, Rider/Driver Expo, four native builds, API publish and four same-run smoke jobs). Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2303,3 +2303,12 @@ PR #164 exact source/test head `cd30bbea9d05ef72e5cc487427ff045688d0102d` includ
 - AUTH-API-010/011 verify successful Rider/Driver login and Driver /auth/me; AUTH-API-012/013 verify missing credentials and unsupported login role fail before TriSend. AUTH-LOGIN-063 makes Rider replacement login/register await epoch-bound token deletion before network dispatch, aborts stale epochs, fails closed on delete errors and preserves a newer queued pair.
 - Next: finish final-head CI, inspect native and same-run smoke artifacts, re-review the full diff and merge only if all checks pass and GitHub permits. Re-read main and continue #2 AUTH-02, then proceed in the agreed 19-row order.
 - Profile-update fields/provider route remain undefined. Physical-device SecureStore/Keychain, live TriSend refresh rotation/reuse, production authentication and store acceptance remain external gates. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness not established.
+
+## Latest engineering handoff — AUTH-01 PR #166 (2026-11-15)
+
+- Sole active PR [#166](https://github.com/rajeevp727/turnova-platform/pull/166), branch `fix/auth-01-session-cleanup-and-login-contracts`, exact head `7c110b9591fe2f8090e58729a0638b0a978c1717`; [CI #1695 / run 43679705761](https://github.com/rajeevp727/turnova-platform/actions/runs/43679705761) passed 12/12. Backend 640/640, shared mobile/auth 195/195, Python 48/48, both Expo validations, four native Android/iOS builds, native API publish and four same-run smoke jobs passed.
+- AUTH-01 implementation: Rider replacement login/register now clears the prior SecureStore pair through epoch-bound serialized cleanup before network dispatch, aborts stale attempts, fails closed on deletion errors and preserves a newer queued pair. API integration tests cover successful Rider/Driver login symmetry, Driver `/auth/me`, missing credentials and unsupported roles. No profile-update route/field contract is defined.
+- Initial CI failures were test-source anchor and missing declaration issues, corrected without weakening runtime assertions. The final exact-head CI is green.
+- External AUTH gates: live TriSend refresh rotation/reuse and production identity, signed-device SecureStore/Keychain, physical-device auth/profile acceptance. No live provider or production credentials claimed.
+- Next: after exact documentation-head CI and safe merge, re-read main and continue AUTH-02 with missing/empty/whitespace refresh-token validation (AUTH-API-014), then proceed in the ordered 19-row plan.
+- Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.

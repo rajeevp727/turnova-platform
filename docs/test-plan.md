@@ -2467,3 +2467,16 @@ PR [#164](https://github.com/rajeevp727/turnova-platform/pull/164) merged at `fc
 ### AUTH-01 TypeScript declaration correction
 
 - CI #1692 / run 43679561783 found Rider typecheck TS2724 because clearSessionTokensIfCurrent was exported from sessionTokenStore.js but its public sessionTokenStore.d.ts contract had not been updated. Added the declaration with the same storage/current-predicate/optional-expected-token signature in commit 11ac80407601d14e7a54c0eb0a21d9063e500eb6. No runtime behavior or test expectation changed; fresh exact-head CI is pending.
+
+## Latest exact-head verification — AUTH-01 / PR #166 (2026-11-15)
+
+[CI #1695 / run 43679705761](https://github.com/rajeevp727/turnova-platform/actions/runs/43679705761) passed all 12 jobs on exact PR head `7c110b9591fe2f8090e58729a0638b0a978c1717`: backend .NET 10 Release build/tests/native publish 640/640 (0 failed/0 skipped), shared mobile/auth 195/195, deterministic Python 48/48, Rider/Driver Expo validation and production JS bundles, four native Android/iOS builds and four same-run Android/iOS smoke jobs.
+
+- AUTH-API-010: successful Rider and Driver login theory cases verify normalized email, server-owned `appId=turnova`, no client-supplied role forwarded upstream, matching response role/access-refresh pair and no unnecessary logout.
+- AUTH-API-011: Driver `/api/v1/auth/me` forwards the exact Bearer token and returns the Driver profile without access/refresh token fields in the profile body.
+- AUTH-API-012: four theory cases verify missing email/password on both role-specific login routes return HTTP 400 without calling fake TriSend.
+- AUTH-API-013: unsupported login role returns HTTP 404 without calling fake TriSend.
+- AUTH-LOGIN-063: Rider replacement login/register awaits serialized epoch-bound SecureStore cleanup before network dispatch. Tests cover current cleanup, stale-before-start, epoch change during deletion with a queued replacement pair, fail-closed deletion failure and source ordering.
+- The initial source-contract and TypeScript declaration failures were corrected without weakening runtime assertions. CI #1695 confirms all 195 shared tests and Rider/Driver Expo typechecks pass.
+- Limitation: unsigned iOS Simulator smoke is not signed-device Keychain evidence; live TriSend refresh rotation/reuse and production auth remain external. No profile-update route or editable profile field contract is invented.
+- Next sequential test: AUTH-API-014 — missing, empty and whitespace-only refresh-token payloads must return HTTP 400 before invoking fake TriSend. This remains planned until implemented and executed.
