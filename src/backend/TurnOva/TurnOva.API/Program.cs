@@ -1255,30 +1255,21 @@ DispatchZoneResolution ResolveDispatchZone(double latitude, double longitude)
             return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
     }
 
-    // Validate the whole configuration, not only the rectangle containing this fix.
-    // Inclusive edges are ambiguous too; configuration order must never choose a zone.
-    for (var firstIndex = 0; firstIndex < zones.Length; firstIndex++)
+    // Overlap is ambiguous only for this pickup coordinate. A separate overlap elsewhere
+    // must not disable an otherwise valid zone; inclusive shared boundaries match both
+    // rectangles and therefore fail closed for the affected pickup.
+    var matches = zones
+        .Where(zone =>
+            latitude >= zone.MinLatitude && latitude <= zone.MaxLatitude &&
+            longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude)
+        .Take(2)
+        .ToArray();
+    return matches.Length switch
     {
-        for (var secondIndex = firstIndex + 1; secondIndex < zones.Length; secondIndex++)
-        {
-            var first = zones[firstIndex];
-            var second = zones[secondIndex];
-            var overlaps =
-                first.MinLatitude <= second.MaxLatitude &&
-                first.MaxLatitude >= second.MinLatitude &&
-                first.MinLongitude <= second.MaxLongitude &&
-                first.MaxLongitude >= second.MinLongitude;
-            if (overlaps)
-                return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
-        }
-    }
-
-    var match = zones.FirstOrDefault(zone =>
-        latitude >= zone.MinLatitude && latitude <= zone.MaxLatitude &&
-        longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude);
-    return match is null
-        ? new DispatchZoneResolution(DispatchZoneResolutionKind.NoMatch)
-        : new DispatchZoneResolution(DispatchZoneResolutionKind.Matched, match.ZoneId);
+        0 => new DispatchZoneResolution(DispatchZoneResolutionKind.NoMatch),
+        1 => new DispatchZoneResolution(DispatchZoneResolutionKind.Matched, matches[0].ZoneId),
+        _ => new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration)
+    };
 }
 
 IResult DispatchZoneConfigurationUnavailable() => Results.Problem(

@@ -3661,7 +3661,6 @@ public sealed partial class RideApiIntegrationTests
     [InlineData("longitude-out-of-range")]
     [InlineData("inverted-latitude")]
     [InlineData("inverted-longitude")]
-    [InlineData("overlap-away-from-pickup")]
     public async Task InvalidDispatchZoneConfigurationFailsClosedAcrossRiderAndDriverOperationsWithoutMutation(
         string invalidCase)
     {
@@ -3721,6 +3720,57 @@ public sealed partial class RideApiIntegrationTests
         Assert.Null(await reservationStore.GetActiveAsync(driverId));
         Assert.Empty(reservationStore.GetAuditEvents("selected-driver"));
         Assert.Null(await reservationStore.GetActiveAsync("selected-driver"));
+    }
+
+    [Fact]
+    public async Task RiderAndDriverRemainOperationalWhenConfiguredZonesOverlapOnlyOutsidePickup()
+    {
+        var zones = new[]
+        {
+            new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6),
+            new DispatchZoneConfig("north-west", 18.0, 18.5, 78.2, 78.6),
+            new DispatchZoneConfig("north-east", 18.4, 18.8, 78.3, 78.7)
+        };
+        using var factory = new TurnOvaApiFactory(dispatchZones: zones);
+        const string driverId = "driver-valid-zone-overlap-elsewhere";
+        const string unionId = "union-valid-zone-overlap-elsewhere";
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var rider = factory.CreateClient("Rider", "rider-valid-zone-overlap-elsewhere");
+        SeedBookableDriver(factory, driverId, unionId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            AvailabilityStatus = "Offline",
+            CurrentLatitude = null,
+            CurrentLongitude = null,
+            LocationUpdatedAtUtc = null,
+            LocationCapturedAtUtc = null
+        };
+
+        var now = DateTimeOffset.UtcNow;
+        using var goOnline = await driver.PostAsJsonAsync(
+            "/api/v1/driver/availability",
+            new { isOnline = true, latitude = 17.493, longitude = 78.399, capturedAtUtc = now });
+        Assert.True(goOnline.IsSuccessStatusCode);
+        Assert.Equal("Online", profiles[driverId].AvailabilityStatus);
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        Assert.Contains(await queueService.GetPositionedQueueAsync("hyderabad-central", "cab"),
+            entry => entry.DriverId == driverId);
+
+        using var location = await driver.PostAsJsonAsync(
+            "/api/v1/driver/location",
+            new { latitude = 17.493, longitude = 78.399, capturedAtUtc = now.AddSeconds(1) });
+        Assert.True(location.IsSuccessStatusCode);
+        Assert.Equal("Online", profiles[driverId].AvailabilityStatus);
+        Assert.Equal(17.493, profiles[driverId].CurrentLatitude);
+        Assert.Equal(78.399, profiles[driverId].CurrentLongitude);
+        Assert.Contains(await queueService.GetPositionedQueueAsync("hyderabad-central", "cab"),
+            entry => entry.DriverId == driverId);
+
+        using var discovery = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
+        Assert.Contains(driverId, await discovery.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -6057,16 +6107,6 @@ public sealed partial class RideApiIntegrationTests
     private static DispatchZoneConfig[] CreateInvalidDispatchZones(string invalidCase)
     {
         var central = new DispatchZoneConfig("hyderabad-central", 17.2, 17.6, 78.2, 78.6);
-        if (invalidCase == "overlap-away-from-pickup")
-        {
-            return
-            [
-                central,
-                new DispatchZoneConfig("north-west", 18.0, 18.5, 78.2, 78.6),
-                new DispatchZoneConfig("north-east", 18.4, 18.8, 78.3, 78.7)
-            ];
-        }
-
         var invalid = invalidCase switch
         {
             "blank-zone-id" => new DispatchZoneConfig(" ", 18.0, 18.5, 78.2, 78.6),
