@@ -3662,6 +3662,7 @@ public sealed partial class RideApiIntegrationTests
 
     [Theory]
     [InlineData("blank-zone-id")]
+    [InlineData("untrimmed-zone-id")]
     [InlineData("duplicate-zone-id")]
     [InlineData("nan-boundary")]
     [InlineData("infinite-boundary")]
@@ -6126,6 +6127,7 @@ public sealed partial class RideApiIntegrationTests
         var invalid = invalidCase switch
         {
             "blank-zone-id" => new DispatchZoneConfig(" ", 18.0, 18.5, 78.2, 78.6),
+            "untrimmed-zone-id" => new DispatchZoneConfig(" north ", 18.0, 18.5, 78.2, 78.6),
             "duplicate-zone-id" => new DispatchZoneConfig("HYDERABAD-CENTRAL", 18.0, 18.5, 78.2, 78.6),
             "nan-boundary" => new DispatchZoneConfig("north", double.NaN, 18.5, 78.2, 78.6),
             "infinite-boundary" => new DispatchZoneConfig("north", 18.0, 18.5, 78.2, double.PositiveInfinity),
