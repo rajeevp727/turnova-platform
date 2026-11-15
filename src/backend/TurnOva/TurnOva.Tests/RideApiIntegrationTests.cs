@@ -3670,10 +3670,16 @@ public sealed partial class RideApiIntegrationTests
     [InlineData("longitude-out-of-range")]
     [InlineData("inverted-latitude")]
     [InlineData("inverted-longitude")]
+    [InlineData("non-numeric-boundary")]
     public async Task InvalidDispatchZoneConfigurationFailsClosedAcrossRiderAndDriverOperationsWithoutMutation(
         string invalidCase)
     {
-        using var factory = new TurnOvaApiFactory(dispatchZones: CreateInvalidDispatchZones(invalidCase));
+        var rawZoneOverrides = invalidCase == "non-numeric-boundary"
+            ? CreateInvalidDispatchZoneConfigurationOverrides()
+            : null;
+        using var factory = rawZoneOverrides is null
+            ? new TurnOvaApiFactory(dispatchZones: CreateInvalidDispatchZones(invalidCase))
+            : new TurnOvaApiFactory(dispatchZoneConfigurationOverrides: rawZoneOverrides);
         const string riderId = "invalid-zone-config-rider";
         const string driverId = "invalid-zone-config-driver";
         using var rider = factory.CreateClient("Rider", riderId);
@@ -6140,6 +6146,21 @@ public sealed partial class RideApiIntegrationTests
         return [central, invalid];
     }
 
+    private static IReadOnlyDictionary<string, string?> CreateInvalidDispatchZoneConfigurationOverrides() =>
+        new Dictionary<string, string?>
+        {
+            ["Dispatch:Zones:0:ZoneId"] = "hyderabad-central",
+            ["Dispatch:Zones:0:MinLatitude"] = "17.2",
+            ["Dispatch:Zones:0:MaxLatitude"] = "17.6",
+            ["Dispatch:Zones:0:MinLongitude"] = "78.2",
+            ["Dispatch:Zones:0:MaxLongitude"] = "78.6",
+            ["Dispatch:Zones:1:ZoneId"] = "north",
+            ["Dispatch:Zones:1:MinLatitude"] = "not-a-number",
+            ["Dispatch:Zones:1:MaxLatitude"] = "18.5",
+            ["Dispatch:Zones:1:MinLongitude"] = "78.2",
+            ["Dispatch:Zones:1:MaxLongitude"] = "78.6"
+        };
+
     private static HttpRequestMessage CreateSelectedBookingRequest(
         string key, string driverId, string unionId, string pickup, string dropoff, string[] stops,
         double pickupLatitude = 17.493, double pickupLongitude = 78.399)
@@ -7498,6 +7519,7 @@ public sealed partial class RideApiIntegrationTests
         private readonly Exception? _storageReadinessException;
         private readonly IRideOfferAdvancer? _rideOfferAdvancer;
         private readonly IReadOnlyList<DispatchZoneConfig>? _dispatchZones;
+        private readonly IReadOnlyDictionary<string, string?>? _dispatchZoneConfigurationOverrides;
         private readonly IQueueStore? _queueStore;
         private readonly IDriverRideReservationStore? _reservationStore;
 
@@ -7507,7 +7529,8 @@ public sealed partial class RideApiIntegrationTests
             IReadOnlyList<DispatchZoneConfig>? dispatchZones = null,
             IQueueStore? queueStore = null,
             IDriverRideReservationStore? reservationStore = null,
-            Exception? storageReadinessException = null)
+            Exception? storageReadinessException = null,
+            IReadOnlyDictionary<string, string?>? dispatchZoneConfigurationOverrides = null)
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
             _nearbyRadiusKm = nearbyRadiusKm;
@@ -7517,6 +7540,7 @@ public sealed partial class RideApiIntegrationTests
             _storageReadinessException = storageReadinessException;
             _rideOfferAdvancer = rideOfferAdvancer;
             _dispatchZones = dispatchZones;
+            _dispatchZoneConfigurationOverrides = dispatchZoneConfigurationOverrides;
             _queueStore = queueStore;
             _reservationStore = reservationStore;
         }
@@ -7556,6 +7580,12 @@ public sealed partial class RideApiIntegrationTests
                         settings[$"Dispatch:Zones:{index}:MaxLongitude"] =
                             zone.MaxLongitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     }
+                }
+
+                if (_dispatchZoneConfigurationOverrides is not null)
+                {
+                    foreach (var (key, value) in _dispatchZoneConfigurationOverrides)
+                        settings[key] = value;
                 }
 
                 configuration.AddInMemoryCollection(settings);

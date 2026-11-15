@@ -1233,7 +1233,22 @@ async Task<bool> HasActiveRiderBookingAsync(
 
 DispatchZoneResolution ResolveDispatchZone(double latitude, double longitude)
 {
-    var zones = app.Configuration.GetSection("Dispatch:Zones").Get<DispatchZoneConfig[]>();
+    DispatchZoneConfig[]? zones;
+    try
+    {
+        // ConfigurationBinder otherwise permits failed property conversions to be omitted/defaulted.
+        // Dispatch coverage must fail closed when any configured numeric boundary is not parseable.
+        zones = app.Configuration.GetSection("Dispatch:Zones").Get<DispatchZoneConfig[]>(
+            options => options.ErrorOnUnknownConfiguration = true);
+    }
+    catch (InvalidOperationException)
+    {
+        return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
+    }
+    catch (AggregateException)
+    {
+        return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
+    }
     if (zones is null || zones.Length == 0)
         return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
 
