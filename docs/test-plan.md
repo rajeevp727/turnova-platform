@@ -2503,7 +2503,7 @@ PR [#164](https://github.com/rajeevp727/turnova-platform/pull/164) merged at `fc
 - All 12 latest-attempt jobs are completed/success. Artifacts are unexpired. Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA; no physical-device SecureStore/Keychain acceptance is claimed.
 - AUTH-01 code/test head `7c110b9591fe2f8090e58729a0638b0a978c1717` remains covered by CI #1695. CI #1696 verifies the four-document evidence head `920f755d69fb00ec2722bd908cdd431c665b6bd4`.
 - Strict acceptance remains **0/19** (15 In Progress, 4 Blocked). AUTH-01/AUTH-02 remain In Progress pending physical-device and live TriSend evidence; production readiness is not established.
-- PR #167 AUTH-02 is merged at `b8113303a80094457493f737627bbbdd99cfbe2d` after CI #1707 passed 12/12. Next sequential implementation after RIDER-01 PR #168: RIDER-02 proposal-attempt idempotency and restart-safe same-payload retry.
+- PR #167 AUTH-02 is merged at `b8113303a80094457493f737627bbbdd99cfbe2d` after CI #1707 passed 12/12. RIDER-01 PR #168 then merged at `33c863cec4155c116a2089cd9804e54ca6fad5a4` after CI #1713 passed 12/12. Current sequential implementation is RIDER-02 in PR #169: restart-safe SecureStore proposal idempotency for both Rider and Driver.
 
 
 ## AUTH-02 implemented regression — AUTH-API-014 (PR #167, 2026-11-15)
@@ -2524,7 +2524,7 @@ PR [#167](https://github.com/rajeevp727/turnova-platform/pull/167) merged at `b8
 - Artifacts (unexpired): API `14153435866`; Rider/Driver Android release APKs `14153561765` / `14153940748`; Rider/Driver iOS Simulator apps `14154085997` / `14154772560`; Rider/Driver Android smoke `14153048004` / `14153547247`; Rider/Driver iOS smoke `14155930330` / `14154863252`.
 - Android outputs are APKs and iOS outputs are unsigned Simulator apps, not signed production AAB/IPA. No physical-device Keychain acceptance is claimed. Dependency audit baseline: 0 critical, 0 high, 11 moderate, 1 low in each app; no package manifest/lockfile changes in PR #166.
 - PR #166 merged at `81fb076a4130b378c68e772ceb05492c9b2771d8` after exact-head CI #1704 / run 43702026320 passed 12/12. PR #167 AUTH-02 then merged at `b8113303a80094457493f737627bbbdd99cfbe2d` after exact-head CI #1707 / run 43706769059 passed 12/12. Neither merge used self-approval or a protection bypass.
-- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. Current sequential work is RIDER-01 in PR #168; exact final-head CI is tracked in the progress handoff and PR.
+- Strict acceptance remains **0/19** (15 In Progress, 4 Blocked); production readiness is not established. Current sequential work is RIDER-02 in PR #169; exact final-head CI is tracked in the progress handoff and PR.
 
 | CAB-AGR-038 | SecureStore contains a malformed, unsupported-version or inconsistent proposal retry record | Do not generate a replacement key or send a proposal; surface a safe recovery error. After a successful history refresh, cleanup may delete only the corrupt record still owned by the current in-memory attempt | deterministic invalid-envelope matrix covers malformed JSON, unsupported version, missing attempt, unsupported actor, invalid amount, inconsistent fingerprint and blank key; asserts no replacement-key generation, no SecureStore overwrite and no proposal POST; matching-owner cleanup remains covered | P0 |
 
