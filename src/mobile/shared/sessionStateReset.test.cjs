@@ -321,3 +321,22 @@ test("Driver payment-report handler fences response, history refresh, errors and
   assert.doesNotMatch(handler, /loadDriverRideHistory\(\(\) => true\)/);
   assert.doesNotMatch(handler, /finally\s*\{\s*setLoading\(false\)/);
 });
+
+
+test("AUTH-LOGIN-063 Rider replacement authentication awaits epoch-bound SecureStore cleanup before login or registration", () => {
+  const app = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const authStart = app.indexOf("const authenticate = async");
+  const authEnd = app.indexOf("const draftTripIntent", authStart);
+  assert.notEqual(authStart, -1);
+  assert.notEqual(authEnd, -1);
+  const auth = app.slice(authStart, authEnd);
+
+  const cleanupIndex = auth.indexOf("await clearSessionTokensIfCurrent(");
+  const staleGuardIndex = auth.indexOf("if (!tokensCleared || sessionEpoch.current !== authEpoch) return;");
+  const requestIndex = auth.indexOf("await request(path");
+  assert.ok(cleanupIndex >= 0, "Rider authentication must clear persisted tokens.");
+  assert.ok(staleGuardIndex > cleanupIndex, "Rider authentication must recheck the session epoch after asynchronous cleanup.");
+  assert.ok(requestIndex > staleGuardIndex, "No login or registration request may be sent before successful current-epoch cleanup.");
+  assert.match(auth, /clearSessionTokensIfCurrent\(\s*SecureStore,\s*\(\) => sessionEpoch\.current === authEpoch\s*\)/);
+  assert.match(auth, /catch \(e\)\s*\{\s*if \(sessionEpoch\.current === authEpoch\)\s*setError/);
+});
