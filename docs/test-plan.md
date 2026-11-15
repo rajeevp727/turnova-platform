@@ -1634,6 +1634,7 @@ Both iOS result JSONs report `secureStoreAvailable=false`, the expected SecureSt
 
 - CAB-BOOK-005: An expired temporary Rider reservation is not promoted by default; it may be made permanent only after the API has re-read the authoritative ride and confirmed it is Accepted, Arrived or InProgress. Verify the promotion appends its audit event and never permits a different Rider booking.
 - CAB-BOOK-006: After successful sign-in/registration and after stored-session restoration, the authenticated session epoch is established before the user identity is published; the user-id hydration effect then reads server-owned ride history and active-ride details. A stale/replaced session must not trigger or complete hydration.
+- CAB-BOOK-007: For selected-Cab booking, configure `Dispatch:SelectedDriverNegotiationLifetimeMinutes` as null, zero and -1. Every otherwise-valid booking request must fail with HTTP 503 before any booking side effect. Assert no `DemoRide`, no `RideIdempotencyRecord`, no Rider active-booking reservation and no Driver reservation exists, and the selected Driver remains Online. Do not supply a production default.
 
 
 ## RIDER-03 exact-head follow-up — 2026-11-11
@@ -2544,3 +2545,12 @@ PR [#167](https://github.com/rajeevp727/turnova-platform/pull/167) merged at `b8
 - The final documentation-only synchronization is subject to a fresh exact-head CI before merge. PR remains Draft until that run succeeds; no self-approval or bypass.
 - Next sequential item after merge: RIDER-03 / CAB-BOOK-007. Extend selected-booking configuration fail-closed integration coverage for null, zero and negative `Dispatch:SelectedDriverNegotiationLifetimeMinutes`. Each case must return HTTP 503 and assert no ride, booking idempotency record, Rider active-booking reservation or Driver reservation is created and Driver availability remains Online. Do not invent a production lifetime; preserve the external Product decision.
 - External: live Cosmos ETag/multi-instance/restart, signed-device SecureStore/Keychain, physical-device negotiation and Product/Privacy retention approval. Strict acceptance remains 0/19; production readiness is not established.
+
+
+## RIDER-03 CAB-BOOK-007 — negotiation lifetime guard (PR #170, 2026-11-15)
+
+- Test: `SelectedBookingFailsClosedWhenNegotiationLifetimeIsMissingOrNonPositiveBeforeAnySideEffect`.
+- xUnit theory inputs: `null`, `0`, `-1`.
+- Expected for each: HTTP 503 and the explicit “Selected-driver negotiation lifetime is not configured” response; no `DemoRide`, no `RideIdempotencyRecord`, no Rider active-booking reservation, no Driver reservation, and Driver profile availability remains `Online`.
+- The production configuration intentionally remains null until Product approves a positive negotiation lifetime. A 15-minute value used by unrelated integration fixtures is not a production policy.
+- Initial CI #1739 failed three cases before sending the request because the test omitted an authenticated Driver test client; `SeedBookableDriver` requires the profile seeded by that client. Follow-up commit `fbd3b43da34ac06942b34aaeef3e4cfccaea82a2` adds the Driver client before seeding. Exact-head CI [#1740 / run 43734085829](https://github.com/rajeevp727/turnova-platform/actions/runs/43734085829) is in progress; do not record this case as passing until a successful exact-head run completes.

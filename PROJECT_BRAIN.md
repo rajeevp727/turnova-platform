@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-15
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `33c863cec4155c116a2089cd9804e54ca6fad5a4`. PR #164 RELEASE-01, PR #165 supplemental AI-01, PR #166 AUTH-01, PR #167 AUTH-02 and PR #168 RIDER-01 are merged. Sole active PR #169 is RIDER-02 on `feat/rider-02-persistent-proposal-idempotency`; source/test head `0c6a5b89d1542121980a96221a2edc277c3374f7`; exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/turnova-platform/actions/runs/43720789081) passed 12/12. Final documentation sync requires a fresh exact-head CI before merge. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `3e040770f05f380d1ef2670b45f497c5bd936cae`. PRs #164 RELEASE-01, #165 supplemental AI-01, #166 AUTH-01, #167 AUTH-02, #168 RIDER-01 and #169 RIDER-02 are merged. Sole active PR #170 is RIDER-03 / CAB-BOOK-007 on `test/rider-03-negotiation-lifetime-side-effect-guards`; source/test commit `1e80c9501c0cad1aad65a82b6f880623f58f8efe`, follow-up test-fixture correction `fbd3b43da34ac06942b34aaeef3e4cfccaea82a2`. Initial CI #1739 failed three new test cases in setup because the authenticated Driver profile was not seeded; the API request was not reached. Exact-head CI [#1740 / run 43734085829](https://github.com/rajeevp727/turnova-platform/actions/runs/43734085829) is in progress. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2385,3 +2385,14 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039â€
 - Fourteen deterministic persistent-store cases plus Rider/Driver source-integration assertions are included. Full diff reviewed for SecureStore privacy, account/ride isolation, async races, fail-closed corruption handling, no-request-on-storage-failure and backend idempotency. Zero unresolved review threads; COMMENT-only review history; no self-approval.
 - Next sequential item after merge: RIDER-03 / CAB-BOOK-007. Extend selected-booking configuration fail-closed integration coverage for null, zero and negative `Dispatch:SelectedDriverNegotiationLifetimeMinutes`. Each case must return HTTP 503 and assert no ride, booking idempotency record, Rider active-booking reservation or Driver reservation is created and Driver availability remains Online. Do not invent a production lifetime; preserve the external Product decision.
 - External: live Cosmos ETag/multi-instance/restart; signed-device SecureStore/Keychain; Android/iOS physical-device negotiation/confirmation/renegotiation/reconnect; Product/Privacy approval of same-account retry-record retention. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## Latest sequential handoff â€” RIDER-03 / PR #170 (2026-11-15)
+
+- Main HEAD: `3e040770f05f380d1ef2670b45f497c5bd936cae`; sole active feature PR [#170](https://github.com/rajeevp727/turnova-platform/pull/170).
+- Scope: test-only CAB-BOOK-007 for null, zero and negative selected-driver negotiation lifetime configuration. Each request must return HTTP 503 before any booking write; assert no ride, booking idempotency record, Rider reservation or Driver reservation, and Driver remains Online.
+- Initial source/test commit `1e80c9501c0cad1aad65a82b6f880623f58f8efe` failed three new cases in fixture setup: `SeedBookableDriver` indexes an onboarding profile that is created by the authenticated Driver test client, but the new theory had created only the Rider client. No request reached the API in those cases.
+- Follow-up commit `fbd3b43da34ac06942b34aaeef3e4cfccaea82a2` adds `factory.CreateClient("Driver", driverId)` before `SeedBookableDriver`; no runtime code or production policy changed.
+- Exact-head CI [#1740 / run 43734085829](https://github.com/rajeevp727/turnova-platform/actions/runs/43734085829) is in progress. Require all 12 jobs on the final documentation head before merge.
+- Do not invent the production negotiation lifetime. Product must supply an approved positive value; live Cosmos ETag/multi-instance/restart and physical-device booking/expiry remain external.
+- After merge, re-read main and continue sequentially to DISPATCH-01. Strict acceptance remains 0/19; production readiness is not established.
