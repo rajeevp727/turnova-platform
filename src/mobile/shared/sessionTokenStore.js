@@ -126,7 +126,7 @@ function clearSessionTokensIfCurrent(storage, isCurrent, expectedTokens) {
     )) return false;
     if (!accessToken && !refreshToken) return true;
     await clearSessionTokensCore(storage);
-    return true;
+    return isCurrent();
   });
 }
 
@@ -184,6 +184,7 @@ module.exports = {
   saveSessionTokens,
   saveSessionTokensIfCurrent,
   clearSessionTokens,
+  clearSessionTokensIfCurrent,
   logoutSession,
   restoreStoredSession
 };
