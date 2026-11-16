@@ -1240,3 +1240,12 @@ The current Ops Union creation endpoint performs a normalized-code list check, t
 Product/Safety must separately decide whether Ops rejection/suspension is permitted during an active negotiation/ride and how an existing ride is handled. Do not invent an emergency-suspension policy.
 
 **Acceptance accounting remains:** 19 rows total; 15 In Progress, 4 Blocked, 0 Strictly Verified. Strict verification includes applicable external gates and is not an implementation-completion percentage.
+
+
+## Latest verification addendum — REALTIME-01 CI #1799 (2026-11-16)
+
+- PR #172 (https://github.com/rajeevp727/turnova-platform/pull/172), exact verified documentation head e05412dbe9bd0e5d16aa9fbecf0b7a132133ef90, base main 4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8.
+- CI #1799 / run 43795581881 (https://github.com/rajeevp727/turnova-platform/actions/runs/43795581881) passed 12/12 jobs on the exact head: backend 666/666, shared mobile/auth, Python 48/48, Rider/Driver Expo, native API publish, four Android/iOS native builds and four same-run emulator/Simulator smoke tests.
+- REALTIME-01 engineering evidence: persisted immutable-version currency displayed in Rider and Driver history; five shared formatter tests; one backend integration test verifies USD v1/EUR v2 for both parties. New proposal entry remains INR-only pending Product policy. Strict acceptance remains blocked pending applicable external gates.
+- Next row in sequence: DRIVER-01 Union-code creation concurrency. Current list-check/random-GUID/upsert is race-prone. Planned safe correction: deterministic IDs for newly created normalized codes, create-if-absent in existing /unionId-partitioned container, HTTP 409 duplicate handling, concurrent case/whitespace tests, preserving existing IDs. Active-ride Ops suspension policy remains Product/Safety-owned.
+- Acceptance accounting remains 19 rows: 15 In Progress, 4 Blocked, 0 Strictly Verified.

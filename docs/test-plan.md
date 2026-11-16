@@ -2753,3 +2753,14 @@ REALTIME-01 runtime scope remains agreement-history presentation: display each i
 Main-branch `POST /api/v1/ops/unions` normalizes the code and checks `ListUnionsAsync`, then creates a random GUID and persists through `UpsertItemAsync`. This check-then-upsert sequence is race-prone: concurrent Ops requests can both pass and create duplicate active normalized codes. Planned safe correction after REALTIME-01 merges: deterministic ID for newly created normalized codes, create-if-absent semantics in the existing `Unions` container partitioned by `/unionId`, HTTP 409 translation for duplicate conflicts, and concurrent case/whitespace-normalization tests. Existing Union IDs and historical records must remain unchanged.
 
 A separate Product/Safety decision is required for Ops rejection/suspension during active negotiation/ride; do not invent a policy or mutate active rides until Product defines the outcome.
+
+
+## Exact-head verification record — REALTIME-01 CI #1799 (2026-11-16)
+
+CI #1799 / run 43795581881 (https://github.com/rajeevp727/turnova-platform/actions/runs/43795581881) completed 12/12 jobs successfully on PR #172 documentation HEAD e05412dbe9bd0e5d16aa9fbecf0b7a132133ef90: .NET 10 Release build and 666/666 backend tests; shared mobile/auth tests; Python harness 48/48; Rider and Driver Expo config/typecheck/production bundles; native API publish with 11 negative verifier fixtures plus a valid fixture; Rider/Driver Android debug and standalone release APKs; Rider/Driver unsigned iOS Simulator apps; and four same-run emulator/Simulator install-launch smoke tests.
+
+This evidence is limited to CI, Android emulators and unsigned iOS Simulators. It does not establish signed Android/iOS distribution, physical-device acceptance, SecureStore/Keychain on signed devices, production API/authentication, live Cosmos or store approval.
+
+REALTIME-01 regression coverage includes five deterministic shared formatter tests and one API integration test proving immutable USD v1/EUR v2 history is returned in order to both Rider and Driver. Proposal entry remains INR-only.
+
+Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged.
