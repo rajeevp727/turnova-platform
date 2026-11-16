@@ -1122,6 +1122,40 @@ public sealed partial class RideApiIntegrationTests
 
 
     [Theory]
+    [InlineData("DrivingLicence")]
+    [InlineData("VehicleRegistration")]
+    public async Task DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences(string missingDocumentType)
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-onboarding-required-documents";
+        using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+
+        var documents = new[]
+        {
+            new { documentType = "DrivingLicence", storageReference = "drivers/test/licence" },
+            new { documentType = "VehicleRegistration", storageReference = "drivers/test/rc" }
+        }.Where(document => document.documentType != missingDocumentType).ToArray();
+
+        using var response = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", new
+        {
+            profilePhotoBase64 = "/9j/2Q==",
+            zoneId = "hyderabad-central",
+            fullName = "Test Driver",
+            phoneNumber = "+919876543210",
+            vehicleMake = "Maruti",
+            vehicleModel = "Dzire",
+            vehicleRegistration = "TS09AB1234",
+            serviceClass = "cab",
+            passengerCapacity = 3,
+            documents
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(profiles.ContainsKey(driverId));
+    }
+
+    [Theory]
     [InlineData("91+9876543210")]
     [InlineData("++919876543210")]
     [InlineData("+91+9876543210")]
