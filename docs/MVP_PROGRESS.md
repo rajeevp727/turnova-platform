@@ -2210,3 +2210,11 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 - Shared formatter accepts only a three-letter currency code (trimmed and uppercased), never silently defaults a missing/malformed code to INR, and safely renders non-finite/non-number amounts as an em dash. Five deterministic Node tests cover INR, USD/EUR, normalization, missing/malformed currency, and invalid amounts. The existing CI command `node --test src/mobile/shared/*.test.cjs` automatically includes the new tests.
 - Expected shared-mobile test count is baseline 212 plus five new tests; report the actual CI result only after execution. Native Android/iOS and Expo/typecheck evidence must pass on the final PR head.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); DISPATCH-01 remains Blocked for Product/live production gates despite merged engineering. Production readiness is not established.
+
+
+
+## REALTIME-01 evidence expansion — API history persistence (2026-11-16)
+
+- Added API integration test `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties` in `RideApiIntegrationTests.cs`. It creates immutable version 1 in USD and version 2 in EUR, then verifies both Rider and Driver GET agreement-history responses return both versions in order with the original currency codes and amounts.
+- The five shared Node formatter tests remain unchanged. Expected CI deltas against the prior exact-head baseline are backend 665 + 1 = 666 and shared mobile/auth 212 + 5 = 217; actual counts must be taken from the next successful CI logs.
+- The active REALTIME-01 branch now includes the API integration test in addition to the Rider/Driver UI changes, shared formatter/tests and four project-document updates. A new commit invalidates any earlier CI attempt on the previous head; require a fresh exact-head run after the documentation update.
