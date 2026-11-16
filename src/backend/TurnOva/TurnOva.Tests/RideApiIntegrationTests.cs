@@ -5,6 +5,7 @@ using System.Diagnostics.Metrics;
 using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -1121,6 +1122,75 @@ public sealed partial class RideApiIntegrationTests
 
 
     [Theory]
+    [InlineData("DrivingLicence")]
+    [InlineData("VehicleRegistration")]
+    public async Task DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences(string missingDocumentType)
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-onboarding-required-documents";
+        using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
+
+        var documents = new[]
+        {
+            new { documentType = "DrivingLicence", storageReference = "drivers/test/licence" },
+            new { documentType = "VehicleRegistration", storageReference = "drivers/test/rc" }
+        }.Where(document => document.documentType != missingDocumentType).ToArray();
+
+        using var response = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", new
+        {
+            profilePhotoBase64 = "/9j/2Q==",
+            zoneId = "hyderabad-central",
+            fullName = "Test Driver",
+            phoneNumber = "+919876543210",
+            vehicleMake = "Maruti",
+            vehicleModel = "Dzire",
+            vehicleRegistration = "TS09AB1234",
+            serviceClass = "cab",
+            passengerCapacity = 3,
+            documents
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(profiles.ContainsKey(driverId));
+    }
+
+    [Fact]
+    public async Task DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-onboarding-required-document-preserve";
+        using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
+
+        using var initial = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest());
+        Assert.Equal(HttpStatusCode.Accepted, initial.StatusCode);
+        var before = profiles[driverId];
+
+        using var resubmission = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", new
+        {
+            profilePhotoBase64 = "/9j/2Q==",
+            zoneId = "hyderabad-central",
+            fullName = "Replacement Driver",
+            phoneNumber = "+919876543210",
+            vehicleMake = "Maruti",
+            vehicleModel = "Dzire",
+            vehicleRegistration = "TS09AB5678",
+            serviceClass = "cab",
+            passengerCapacity = 3,
+            documents = new[]
+            {
+                new { documentType = "DrivingLicence", storageReference = "drivers/test/licence-v2" }
+            }
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resubmission.StatusCode);
+        Assert.Equal(before, profiles[driverId]);
+    }
+
+    [Theory]
     [InlineData("91+9876543210")]
     [InlineData("++919876543210")]
     [InlineData("+91+9876543210")]
@@ -1189,6 +1259,96 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(before, profiles[driverId]);
     }
 
+
+    [Fact]
+    public async Task ConcurrentUnionCreationWithEquivalentNormalizedCodesCreatesExactlyOneUnion()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var ops = factory.CreateClient("Rider", "ops-union-concurrency");
+
+        async Task<HttpResponseMessage> CreateUnionAsync(string name, string code)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
+            {
+                Content = JsonContent.Create(new
+                {
+                    name,
+                    code,
+                    location = "Hyderabad",
+                    managerName = "Union Manager",
+                    managerPhone = "+919876543210",
+                    zoneIds = new[] { "hyderabad-central" },
+                    serviceClasses = new[] { "cab" }
+                })
+            };
+            request.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+            return await ops.SendAsync(request);
+        }
+
+        var firstTask = CreateUnionAsync("Concurrent Union A", "  hyd-race  ");
+        var secondTask = CreateUnionAsync("Concurrent Union B", "HYD-RACE");
+        using var firstResponse = await firstTask;
+        using var secondResponse = await secondTask;
+
+        var createdResponse = firstResponse.StatusCode == HttpStatusCode.Created
+            ? firstResponse
+            : secondResponse;
+        var conflictResponse = ReferenceEquals(createdResponse, firstResponse)
+            ? secondResponse
+            : firstResponse;
+        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, conflictResponse.StatusCode);
+
+        using var createdJson = JsonDocument.Parse(await createdResponse.Content.ReadAsStringAsync());
+        var createdUnionId = createdJson.RootElement.GetProperty("unionId").GetString();
+        var expectedUnionId = "union-" + Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes("HYD-RACE"))).ToLowerInvariant();
+        Assert.Equal(expectedUnionId, createdUnionId);
+        Assert.Equal("HYD-RACE", createdJson.RootElement.GetProperty("code").GetString());
+
+        using var listRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/ops/unions");
+        listRequest.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var listResponse = await ops.SendAsync(listRequest);
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        using var listJson = JsonDocument.Parse(await listResponse.Content.ReadAsStringAsync());
+        Assert.Equal(1, listJson.RootElement.GetArrayLength());
+        Assert.Equal(createdUnionId, listJson.RootElement[0].GetProperty("unionId").GetString());
+        Assert.Equal("HYD-RACE", listJson.RootElement[0].GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task UnionCreationConflictPreservesExistingLegacyUnionIdAndRecord()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var ops = factory.CreateClient("Rider", "ops-union-legacy-code");
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        var legacyUnion = new DriverUnion(
+            "legacy-union-id", "Legacy Union", " hyd-legacy ", "Hyderabad",
+            "Legacy Manager", null, ["hyderabad-central"], ["cab"], "Active",
+            DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddDays(-1));
+        Assert.True(unions.TryAdd(legacyUnion.UnionId, legacyUnion));
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ops/unions")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "Duplicate Legacy Union",
+                code = "HYD-LEGACY",
+                location = "Hyderabad",
+                managerName = "New Manager",
+                managerPhone = (string?)null,
+                zoneIds = new[] { "hyderabad-central" },
+                serviceClasses = new[] { "cab" }
+            })
+        };
+        request.Headers.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        using var response = await ops.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(legacyUnion, Assert.Single(unions.Values));
+        Assert.Equal(legacyUnion, unions["legacy-union-id"]);
+        Assert.Equal("legacy-union-id", unions.Values.Single().UnionId);
+    }
 
     [Fact]
     public async Task OperationsCanCreateUnionAssignDriverTransferAndReadAuditHistory()

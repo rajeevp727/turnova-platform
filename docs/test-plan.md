@@ -1232,6 +1232,10 @@ Phone-number syntax is validated locally by the API; this does not prove ownersh
 | DRIVER-GPS-005 | Server receipt time is recent but the stored GPS capture time is stale | Rider discovery excludes the Driver and selected booking conflicts before creating a ride or reservation | `RiderDiscoveryExcludesLocationWithStaleCaptureEvenWhenServerReceiptIsFresh`; `SelectedBookingRejectsStaleCaptureEvenWhenServerReceiptIsFresh` | CI [42472744096] passed 8/8 jobs |
 | DRIVER-GPS-006 | Driver location/manual availability receives HTTP 409 during a stale or reservation race | App stops the stale watcher, reads authoritative availability and Driver-owned ride history together, applies neither result if the effect is stale or either read fails, and schedules one delayed foreground refresh only when Online with no active selected ride | Six tests in `src/mobile/shared/driverAvailabilityRecovery.test.cjs` cover conflict classification, Offline, active negotiation, retry eligibility, stale-effect fencing and failed-read atomicity | CI [42472744096] passed 8/8 jobs |
 
+| DRIVER-GPS-007 | Driver availability GPS publication fails with a network TypeError or HTTP 408, 429 or 5xx while foregrounded | Schedule at most one bounded 15-second foreground refresh; keep the existing 409 authoritative reconciliation path separate | Shared transient-error classifier tests plus Driver App retry wiring and timer tests | Planned |
+| DRIVER-GPS-008 | Driver availability GPS publication returns permanent HTTP 4xx, including 400, 401, 403 or 409 | Do not enter the generic transient retry path; HTTP 409 continues to use authoritative availability/history reconciliation and zone exit remains fail-closed | Shared classifier tests and Driver App branch tests | Planned |
+| DRIVER-GPS-009 | A pending retry is followed by a successful watcher publication, app backgrounding or component unmount | Successful publication cancels the pending retry; background/unmount clears the timer; no stale foreground refresh runs | Deterministic timer-injection tests and Driver App lifecycle wiring | Planned |
+
 The Driver app sends Expo GPS `LocationObject.timestamp` for Online, foreground refresh and watcher updates. The API keeps `LocationCapturedAtUtc` (untrusted client capture time) distinct from `LocationUpdatedAtUtc` (server receipt time), rejects future skew greater than one minute and rejects non-advancing capture times through conditional profile writes. Legacy requests without `capturedAtUtc` retain backward compatibility by using server receipt time; the strict ordering guarantee therefore applies to updated clients. The one-minute allowance is a clock-skew tolerance, not a product freshness policy. A positive Product-approved `Dispatch:NearbyLocationMaxAgeSeconds` remains required and missing/non-positive configuration fails closed for discovery/booking. Live Cosmos multi-instance/ETag/restart and physical Android/iOS foreground/resume/location acceptance remain external gates; no live validation is claimed.
 
 
@@ -2810,3 +2814,66 @@ Next sequential test work is DRIVER-01 concurrent normalized Union-code creation
 - This documentation synchronization creates a new branch head and therefore requires fresh exact-head CI before marking PR ready or merging. Do not reuse CI #1804 as evidence for the new documentation commit.
 - Next sequential code task after REALTIME-01 merges: DRIVER-01 normalized Union-code creation concurrency. Replace list-check/random-GUID/upsert for new codes with deterministic IDs and create-if-absent in the existing `Unions` container partitioned by `/unionId`; map duplicate Cosmos/in-memory conflicts to HTTP 409; add concurrent case/whitespace-normalization tests; preserve existing Union IDs and historical records. Product/Safety separately decides Ops rejection/suspension during an active negotiation/ride; do not invent emergency-suspension behavior.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established. External gates include Product-approved radius/zones/location freshness/negotiation lifetime; live Cosmos ETag/transaction/multi-instance/restart; production auth and realtime/maps providers; private document storage/scanning/consent/retention; support and reconciliation policies; Union legal approval; signed-device/physical-device testing; signing, hosting and store approval.
+
+
+## DRIVER-01 normalized Union-code creation concurrency (2026-11-16)
+
+| Scenario | Expected result | Type | Priority |
+|---|---|---|---|
+| Two simultaneous Ops create requests use codes differing only by case and surrounding whitespace | Canonical code is identical; exactly one request returns 201 and one returns 409; one Union is stored/listed; new Union ID is deterministic from normalized code | API integration (in-memory concurrency fixture) | P1 |
+| A legacy Union has a random historical ID and a non-canonical stored code; Ops submits the equivalent normalized code | API returns 409; legacy Union record, ID and timestamps remain unchanged; no second Union is created | API integration / historical-data preservation | P1 |
+
+Implementation uses `ConcurrentDictionary.TryAdd` for in-memory create-if-absent and Cosmos `CreateItemAsync` in the existing `Unions` container partitioned by `/unionId`; HTTP 409 is returned for duplicate create conflicts. Existing Union status updates continue to use the existing upsert path. No migration rewrites existing IDs.
+
+The four deterministic API integration regressions are included in PR #173: two Union-code create-if-absent tests and two required-document/no-data-loss onboarding tests. CI #1824 / run 43847810882 passed 12/12 on exact pre-sync head `cb07fee1f5339b9d355bf9017b4b2bfa0fb0c0f5`: backend Release build/tests 671/671 (0 failed, 0 skipped), shared mobile/auth 217/217, Python 48/48, both Expo validations/bundles, native API publish, four Android/iOS native builds and four same-run install/launch smokes; all 19 artifacts were unexpired. Driver iOS smoke artifact upload initially hit transient DNS ENOTFOUND; targeted retry job 133263725680 completed successfully and uploaded artifact 14221354973. This documentation sync changes the PR head, so fresh exact-head CI is still required before merge. Live Cosmos cross-instance contention, ETag/transaction and restart recovery remain separate infrastructure acceptance gates. Product/Safety's active-ride Ops rejection/suspension policy remains unresolved and is not changed by this work.
+
+
+### Required-document submission regressions
+
+- `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences` omits each required document type in turn and verifies HTTP 400 with no profile created. This aligns submission validation with the existing Ops approval and Union assignment preconditions.
+- `DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile` verifies an incomplete resubmission returns HTTP 400 before mutation and preserves the existing profile and document references.
+
+These tests do not choose a document provider or change private-storage, scanning, consent or retention policy.
+
+
+The onboarding API tests clear the factory's default Driver profile for their unique test IDs before the initial-submission scenarios. CI #1820 exposed that fixture requirement (three new tests had inherited pre-seeded profiles); the fixture setup was corrected in commit `5a23e4ee44aecf8e7c0cbec09486d7eea1289d6e`. CI #1824 is valid evidence for the exact pre-sync PR head only; this documentation synchronization requires a fresh final-head workflow before merge.
+
+
+## DRIVER-01 exact-head verification — CI #1824 (2026-11-16)
+
+- PR #173 exact pre-sync head: `cb07fee1f5339b9d355bf9017b4b2bfa0fb0c0f5`; [CI #1824 / run 43847810882](https://github.com/rajeevp727/turnova-platform/actions/runs/43847810882) passed 12/12 jobs.
+- Backend .NET 10 Release build/tests: **671 passed, 0 failed, 0 skipped**. Shared mobile/auth: **217 passed**. Python harness: **48 passed**. Rider/Driver Expo validation and production JS bundles, native API publish, both Android native builds, both iOS Simulator builds and all four same-run Android/iOS install-launch smoke jobs passed.
+- All **19 artifacts** were unexpired at inspection. Driver iOS smoke first attempt installed/launched the app but artifact upload hit transient DNS `ENOTFOUND`; targeted retry job `133263725680` passed all steps and uploaded Driver iOS smoke artifact `14221354973`.
+- The four deterministic API integration methods cover concurrent normalized Union creation, legacy Union ID preservation, both required Cab document omissions, and no-data-loss on incomplete onboarding resubmission. CI #1820's factory-seeded-profile fixture issue was corrected before #1824.
+- This documentation synchronization advances the PR head; CI #1824 must not be reused as final-head evidence. Run fresh CI on the resulting documentation head before PR readiness/merge.
+- Strict acceptance remains **0/19 Verified**; production readiness is not established. Live Cosmos, mixed-version rollout, private document controls, OTP/UnionManager claims, legal approval and physical-device gates remain external.
+
+
+## DRIVER-01 final documentation-head verification — CI #1825 (2026-11-16)
+
+PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173), branch `fix/driver-01-union-code-create-if-absent`, exact documentation HEAD `de27edea70760d4979fe2a8942568addb72fe92d`, passed [CI #1825 / run 43885066258](https://github.com/rajeevp727/turnova-platform/actions/runs/43885066258) **12/12 jobs**:
+
+- Backend .NET 10 Release build and integration/unit suite: **671 passed, 0 failed, 0 skipped**. The build reported 20 non-blocking xUnit analyzer warnings and zero errors.
+- Shared mobile/auth Node suite: **217 passed**.
+- Python native-artifact/Simulator harness: **48 passed**.
+- Rider and Driver Expo public config, TypeScript checks and Android/iOS production JavaScript bundles passed.
+- Native non-container .NET API publish and artifact verification passed.
+- Rider and Driver Android debug APKs and standalone release APKs compiled; package identities were verified as `com.turnova.rider` and `com.turnova.driver`.
+- Rider and Driver unsigned iOS Simulator applications compiled; bundle identities were verified.
+- All four same-run Android emulator/iOS Simulator install-launch smoke tests passed.
+- All **19 workflow artifacts** were unexpired at inspection. Key artifact IDs: API publish `14234107539`; Rider/Driver Android release APKs `14233393978` / `14234802137`; Rider/Driver iOS Simulator apps `14234397832` / `14235891727`; Rider/Driver Android smoke `14235216982` / `14234952637`; Rider/Driver iOS smoke `14236542693` / `14236476988`.
+
+The six-file PR diff was re-inspected. Six review submissions are COMMENT-only, there are zero unresolved inline threads, and no approval/self-approval. No critical/high authorization, privacy, concurrency, idempotency or data-loss finding remains unresolved. The final documentation sync below changes the branch head and requires another exact-head CI run before merge.
+
+DRIVER-01 tests: `ConcurrentUnionCreationWithEquivalentNormalizedCodesCreatesExactlyOneUnion` proves simultaneous case/whitespace-equivalent requests produce exactly one 201, one 409 and one stored Union with deterministic ID. `UnionCreationConflictPreservesExistingLegacyUnionIdAndRecord` preserves a legacy random ID and padded code. `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences` rejects either missing document; `DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile` proves incomplete resubmission cannot overwrite an existing profile. CI #1820's factory-seeded-profile fixture setup was corrected before the passing final run.
+
+Mixed-version deployment must drain old random-ID Union writers before enabling new Union creation traffic. Existing duplicate legacy records are not auto-merged/deleted. Live Cosmos cross-instance contention, ETag/transaction/restart, private document provider/scanning/consent/retention, phone OTP, signed UnionManager claim issuance, physical-device camera/document permissions and partnership legal approval remain external gates. Product/Safety owns the unresolved Ops rejection/suspension policy during active negotiation/ride.
+
+Next sequential test work: **DRIVER-02**. Re-read current main and verify the existing monotonic GPS capture watermark, future/out-of-order rejection, CAS/ETag profile writes, stale-location discovery/booking guards and Driver HTTP 409 recovery across API, Rider/Driver app and tests. Add any independent deterministic regression/build evidence still missing; do not invent Product-approved location freshness, radius/zone or FIFO policy.
+
+
+## DRIVER-01 final documentation-head verification — CI #1826 (2026-11-16)
+
+PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173), branch `fix/driver-01-union-code-create-if-absent`, pre-documentation-sync head `74432951b93697797efd41dd2a09c1ee27dd41f3`, passed [CI #1826 / run 43900372293](https://github.com/rajeevp727/turnova-platform/actions/runs/43900372293) **12/12 jobs**. Backend .NET 10 Release build/tests: **671 passed, 0 failed, 0 skipped**; shared mobile/auth **217/217**; Python harness **48/48**; both Expo apps; native non-container API publish; Rider/Driver Android debug and standalone release APKs; both unsigned iOS Simulator apps; and four same-run Android emulator/iOS Simulator install-launch smoke tests. All 19 artifacts were unexpired at inspection. Driver iOS smoke log verifies `com.turnova.driver` install/launch, screenshot capture, unsigned SecureStore-unavailable banner and successful artifact upload. This docs-only synchronization requires fresh exact-head CI before PR readiness/merge. No signed-device Keychain or physical-device acceptance is claimed.
+
+DRIVER-01 implementation/test evidence is described in the acceptance matrix and PR. The next sequential DRIVER-02 gap is transient Driver availability-location retry: network TypeError and HTTP 408/429/5xx currently do not schedule the existing bounded foreground retry; only successful 409 reconciliation does. DRIVER-GPS-007–009 above are planned, not yet implemented or passed. Product-approved location freshness/radius/zone policy, live Cosmos and physical-device GPS acceptance remain external.
