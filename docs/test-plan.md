@@ -2684,3 +2684,17 @@ Automated implementation: InvalidDispatchZoneConfigurationFailsClosedAcrossRider
 - DISPATCH-01 regression coverage: ten malformed configuration cases including raw non-numeric binder value; overlapping and inclusive shared-boundary cases; overlap elsewhere remains usable; no-mutation assertions for Rider discovery/booking, Driver Online/location and legacy queue join; valid no-match zone exit; exact HTTP 409/message mobile classifier.
 - Rider and Driver npm audit reports each show 1 low + 11 moderate, 0 high/critical; reports `14185251457` / `14185097811`. Generated lockfile artifacts `14184873367` / `14185157537` are inputs for sequential PLATFORM-01 remediation. Targeted compatible overrides and committed reproducible lockfiles must be tested; no blind Expo/RN major upgrade.
 - Fresh exact-head fresh exact-head CI on the final documentation commit is required after this documentation sync. Strict acceptance remains 0/19; production readiness is not established.
+
+
+
+## REALTIME-01 — persisted agreement currency display (2026-11-16)
+
+- Rider and Driver history use the API-provided `AgreementVersion.currency` for each immutable agreement version. The history heading is currency-neutral; proposal entry remains INR-only until Product approves any multi-currency proposal scope.
+- Shared helper: `src/mobile/shared/agreementFormatting.js`; tests: `src/mobile/shared/agreementFormatting.test.cjs`.
+- Five deterministic tests cover persisted INR formatting, non-INR USD/EUR formatting, trim/case normalization, missing or malformed currency (no silent INR fallback), and invalid amount rendering.
+- The existing CI step `node --test src/mobile/shared/*.test.cjs` discovers the new test file without workflow changes. Expected shared-mobile count is prior 212 plus five; actual count must be taken from the next CI log.
+- The feature branch changes only Rider App.tsx, Driver App.tsx and the shared formatter/test. No API contract, fare policy, payment behaviour, auth, or ride state was changed. Exact-head Expo/typecheck, Android/iOS native builds, and same-run smoke tests are required before merge.
+
+## DISPATCH-01 merge evidence (2026-11-16)
+
+PR #171 merged at `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8` after exact-head CI #1781 / run 43778207524 passed 12/12 on `dcb8b30424e61db29021d4661be5eee481d0c315`. The merge does not establish Product radius/freshness/global-overlap approval, live Cosmos ETag/transactional-batch/multi-instance/restart validation or physical-device acceptance.
