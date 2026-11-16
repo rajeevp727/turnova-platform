@@ -2729,3 +2729,27 @@ PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), exact docume
 The unsigned Simulator SecureStore-unavailable state is expected and does not prove signed-device Keychain. Emulator/Simulator smoke tests do not establish physical-device acceptance, production authentication/API, live Cosmos or store release.
 
 REALTIME-01 adds five deterministic formatter tests and `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties`, which creates immutable USD version 1 and EUR version 2 and verifies both Rider and Driver history responses preserve order, amount and currency. Proposal entry remains INR-only pending Product policy. This CI is exact-head evidence for `2cbe20f4d09685580236c0306e1df144447bd3d2`; a new exact-head run is required after the current documentation synchronization.
+
+
+## REALTIME-01 final exact-head CI verification — CI #1796 (2026-11-16)
+
+PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), exact documentation HEAD `54dd665faaacc1d43c13437d017627c9cd9a8362`, passed [CI #1796 / run 43789311523](https://github.com/rajeevp727/turnova-platform/actions/runs/43789311523) **12/12 latest-attempt jobs**:
+
+- Backend .NET 10 Release build; **666 tests passed, 0 failed, 0 skipped**. Native framework-dependent API publish passed; publish verifier fixtures passed 11 negative cases plus the valid fixture. Linux-x64 publish output was 43,118,747 bytes, below the 120 MiB verifier limit.
+- Shared mobile/auth Node suite: **217 passed, 0 failed**, including five agreement-currency formatter tests.
+- Python native-artifact/simulator harness: **48 passed**.
+- Rider and Driver Expo config, TypeScript typecheck and Android/iOS production JS bundle exports passed.
+- Rider and Driver Android debug APKs and standalone release APKs compiled; both release APKs passed embedded package-identity verification.
+- Rider and Driver unsigned iOS Simulator apps compiled; bundle identifiers were verified as `com.turnova.rider` and `com.turnova.driver`.
+- Four same-run smoke tests installed/launched Rider/Driver Android release APKs in Android emulators and unsigned iOS apps in iOS Simulators; screenshots/results were uploaded.
+- Key artifact IDs: API publish `14191722931`; Rider/Driver Android release APKs `14192100809` / `14192240467`; Rider/Driver iOS Simulator apps `14192415480` / `14191879859`; Android smoke artifacts `14191908507` / `14192316108`; iOS smoke artifacts `14192902623` / `14192173099`. All 19 artifacts were unexpired at verification.
+
+This run validates the exact pre-documentation-sync head only. The current documentation update creates a new head and requires a fresh exact-head CI before PR #172 can merge. Unsigned Simulator SecureStore-unavailable behaviour is expected and does not prove signed-device Keychain; emulator/Simulator smoke tests do not establish physical-device acceptance, production authentication/API, live Cosmos or store release.
+
+REALTIME-01 runtime scope remains agreement-history presentation: display each immutable version's persisted currency; never infer or default missing/malformed currency to INR; proposal entry remains INR-only pending Product policy. No fare, conversion, payment, reconciliation, auth, API production contract or ride-state behaviour changed.
+
+## DRIVER-01 next sequential engineering audit — Union code uniqueness
+
+Main-branch `POST /api/v1/ops/unions` normalizes the code and checks `ListUnionsAsync`, then creates a random GUID and persists through `UpsertItemAsync`. This check-then-upsert sequence is race-prone: concurrent Ops requests can both pass and create duplicate active normalized codes. Planned safe correction after REALTIME-01 merges: deterministic ID for newly created normalized codes, create-if-absent semantics in the existing `Unions` container partitioned by `/unionId`, HTTP 409 translation for duplicate conflicts, and concurrent case/whitespace-normalization tests. Existing Union IDs and historical records must remain unchanged.
+
+A separate Product/Safety decision is required for Ops rejection/suspension during active negotiation/ride; do not invent a policy or mutate active rides until Product defines the outcome.
