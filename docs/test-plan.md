@@ -2711,3 +2711,21 @@ PR #171 merged at `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8` after exact-head CI
 ## REALTIME-01 executed test evidence update (2026-11-16)
 
 CI #1788 / run 43784156915 on the preceding documentation head executed **666 backend tests (0 failed, 0 skipped)** and **217 shared mobile tests (0 failed, 0 skipped)**; the five new agreement-currency formatter tests passed. Python harness: 48 passed. Rider and Driver Expo config, TypeScript typechecks and Android/iOS production JS bundle exports passed; native Android/iOS builds and four same-run smoke tests were still running when the documentation was refreshed. This run is not final 12/12 evidence. A fresh exact-head CI is required after this documentation commit.
+
+
+## REALTIME-01 exact-head executed verification — CI #1794 (2026-11-16)
+
+PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), exact documentation HEAD `2cbe20f4d09685580236c0306e1df144447bd3d2`, passed [CI #1794 / run 43784910317](https://github.com/rajeevp727/turnova-platform/actions/runs/43784910317) **12/12 jobs**:
+
+- Backend .NET 10 Release build; **666 tests passed, 0 failed, 0 skipped**.
+- Shared mobile/auth Node suite; **217 passed, 0 failed, 0 skipped**, including five agreement-currency formatter cases.
+- Python native-artifact/simulator harness: **48 passed**.
+- Rider and Driver Expo config, TypeScript typecheck and Android/iOS production JS bundle export.
+- Native non-container API publish and artifact verification.
+- Rider and Driver Android debug APKs and standalone release APKs; both release APKs passed embedded package-identity verification.
+- Rider and Driver unsigned iOS Simulator apps compiled; bundle identifiers verified as `com.turnova.rider` and `com.turnova.driver`.
+- Four same-run smoke tests installed/launched the corresponding Android release APKs in Android emulators and unsigned iOS apps in iOS Simulators; screenshots/results were uploaded.
+
+The unsigned Simulator SecureStore-unavailable state is expected and does not prove signed-device Keychain. Emulator/Simulator smoke tests do not establish physical-device acceptance, production authentication/API, live Cosmos or store release.
+
+REALTIME-01 adds five deterministic formatter tests and `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties`, which creates immutable USD version 1 and EUR version 2 and verifies both Rider and Driver history responses preserve order, amount and currency. Proposal entry remains INR-only pending Product policy. This CI is exact-head evidence for `2cbe20f4d09685580236c0306e1df144447bd3d2`; a new exact-head run is required after the current documentation synchronization.
