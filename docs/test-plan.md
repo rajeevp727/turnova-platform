@@ -2706,3 +2706,8 @@ PR #171 merged at `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8` after exact-head CI
 - `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties` creates version 1 in USD and version 2 in EUR, then reads agreement history as both Rider and Driver and asserts ordered versions preserve the original amount and currency.
 - This complements five shared Node tests for persisted-code formatting, non-INR display, normalization, no INR fallback and invalid amount handling.
 - Expected next-CI deltas from prior exact-head baseline: backend 666 (665 + 1), shared mobile/auth 217 (212 + 5). Use actual test logs for reporting.
+
+
+## REALTIME-01 executed test evidence update (2026-11-16)
+
+CI #1788 / run 43784156915 on the preceding documentation head executed **666 backend tests (0 failed, 0 skipped)** and **217 shared mobile tests (0 failed, 0 skipped)**; the five new agreement-currency formatter tests passed. Python harness: 48 passed. Rider and Driver Expo config, TypeScript typechecks and Android/iOS production JS bundle exports passed; native Android/iOS builds and four same-run smoke tests were still running when the documentation was refreshed. This run is not final 12/12 evidence. A fresh exact-head CI is required after this documentation commit.
