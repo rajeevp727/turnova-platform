@@ -103,4 +103,11 @@ function createDriverLocationRetryScheduler({
   };
 }
 
-module.exports = { isDriverAvailabilityConflict, isDriverZoneExit, reconcileDriverAvailability , isDriverTransientLocationError, createDriverLocationRetryScheduler, DRIVER_LOCATION_RETRY_DELAY_MS};
+module.exports = {
+  isDriverAvailabilityConflict,
+  isDriverZoneExit,
+  reconcileDriverAvailability,
+  isDriverTransientLocationError,
+  createDriverLocationRetryScheduler,
+  DRIVER_LOCATION_RETRY_DELAY_MS
+};

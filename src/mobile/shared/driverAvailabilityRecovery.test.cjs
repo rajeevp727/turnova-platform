@@ -1,9 +1,14 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   isDriverAvailabilityConflict,
   isDriverZoneExit,
-  reconcileDriverAvailability
+  reconcileDriverAvailability,
+  createDriverLocationRetryScheduler,
+  isDriverTransientLocationError,
+  DRIVER_LOCATION_RETRY_DELAY_MS
 } = require("./driverAvailabilityRecovery.js");
 
 function createState() {
@@ -118,14 +123,6 @@ test("failed reconciliation reads do not partially update local state", async ()
   assert.equal(state.history, null);
   assert.equal(state.activeRide, undefined);
 });
-
-const fs = require("node:fs");
-const path = require("node:path");
-const {
-  createDriverLocationRetryScheduler,
-  isDriverTransientLocationError,
-  DRIVER_LOCATION_RETRY_DELAY_MS
-} = require("./driverAvailabilityRecovery.js");
 
 function createFakeTimers() {
   let nextId = 0;

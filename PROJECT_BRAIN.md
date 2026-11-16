@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-16
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `650b7a8c5db6c214ee692931b01da19dd0f89f45`. REALTIME-01 PR #172 merged after [CI #1806 / run 43833202236](https://github.com/rajeevp727/turnova-platform/actions/runs/43833202236) passed 12/12. Sole active feature PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173) is DRIVER-01 on `fix/driver-01-union-code-create-if-absent`; pre-documentation-sync head `74432951b93697797efd41dd2a09c1ee27dd41f3`. [CI #1826 / run 43900372293](https://github.com/rajeevp727/turnova-platform/actions/runs/43900372293) passed **12/12 jobs on that exact head**: backend 671/671 (0 failed, 0 skipped), shared mobile/auth 217/217, Python harness 48/48, both Expo apps, native API publish, four Android/iOS native builds, four same-run emulator/Simulator smoke tests and 19 unexpired artifacts. This commit synchronizes evidence; a fresh exact-head CI is required after this documentation-only update. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `b0014139f849408e838c67df13f05722dc9b7afe`. PR #172 REALTIME-01 and PR #173 DRIVER-01 are merged. DRIVER-01 exact-head CI [#1827 / run 43906366037](https://github.com/rajeevp727/turnova-platform/actions/runs/43906366037) passed 12/12 on `f32d9b56551afd108d7a728119ac53bba03af8fc`: backend 671/671, shared mobile/auth 217/217, Python 48/48, both Expo apps, native API publish, four native builds, four same-run smokes and 19 unexpired artifacts. Sole active feature PR [#174](https://github.com/rajeevp727/turnova-platform/pull/174) is DRIVER-02 on `fix/driver-02-transient-location-retry`; source/test head `f82c59f32ffc574d88a3e99f1613f58e66d717c6`; CI #1830 / run 43915286464 is running. This documentation synchronization requires fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
 ## Product in one line
@@ -2602,3 +2602,15 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 - This documentation commit is based on the exact CI-verified head above and changes documentation only. Do not reuse CI #1826 for the resulting new head; wait for a fresh exact-head run before marking ready or merging.
 - Next sequential row after PR #173 merges: DRIVER-02. The latest source audit found that Driver availability location retries are scheduled after successful HTTP 409 reconciliation only. Transient network failures and HTTP 408/429/5xx from GPS publication currently surface an error without scheduling the bounded foreground retry. Implement a transient-only one-shot retry with success/background/unmount cleanup; preserve the separate authoritative 409 path and do not change Product freshness/radius/zone policy. Planned cases DRIVER-GPS-007–009 are added to the test plan.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established.
+
+
+## Latest engineering handoff — DRIVER-02 PR #174 (2026-11-16)
+
+- Main HEAD `b0014139f849408e838c67df13f05722dc9b7afe`; PR #172 REALTIME-01 and PR #173 DRIVER-01 merged. DRIVER-01 CI #1827 passed 12/12 on exact head `f32d9b56551afd108d7a728119ac53bba03af8fc`, including backend 671/671, shared 217/217, Python 48/48, both Expo apps, native API publish, four native builds, four same-run smoke tests and 19 artifacts.
+- Sole active PR [#174](https://github.com/rajeevp727/turnova-platform/pull/174), branch `fix/driver-02-transient-location-retry`, source/test head `f82c59f32ffc574d88a3e99f1613f58e66d717c6`.
+- Driver availability retry now classifies network TypeError and HTTP 408/429/5xx as transient; HTTP 409 remains separate authoritative availability/history reconciliation and permanent 4xx are excluded.
+- One 15-second timer is allowed at a time, gated on mounted + foreground-active state, and cancelled on successful location publication, background/stop-watching and unmount.
+- Six deterministic shared tests cover classification, one-shot scheduling, background fencing, success cancellation, background/unmount cleanup and App wiring.
+- CI #1830 / run 43915286464 was triggered on the source/test head and was in progress at handoff. This documentation update requires fresh exact-head CI.
+- Product-approved positive location freshness, pickup radius and zone policy, live Cosmos multi-instance/ETag/restart, physical-device foreground/resume/GPS acceptance and internal FIFO decision remain external. No production/device validation is claimed.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). Production readiness is not established.
