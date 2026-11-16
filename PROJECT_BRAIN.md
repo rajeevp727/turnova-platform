@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `f274285db6e3f28c19b66f46920368491e6377b2`. PRs #172 REALTIME-01, #173 DRIVER-01 and #174 DRIVER-02 are merged. Sole active feature PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), Draft, branch `fix/trip-01-tab-independent-active-ride-lifecycle`, exact head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) passed 12/12 on that exact head: backend 671/671, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typechecks/bundles, native API publish, four native Android/iOS builds, four same-run smoke tests and 19 unexpired artifacts. Four deterministic TRIP-01 tests passed. Reviews are COMMENT-only with zero unresolved threads and no approvals. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `f274285db6e3f28c19b66f46920368491e6377b2`. PRs #172 REALTIME-01, #173 DRIVER-01 and #174 DRIVER-02 are merged. Sole active feature PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), Draft, branch `fix/trip-01-tab-independent-active-ride-lifecycle`, pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) passed 12/12 on that exact head: backend 671/671, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typechecks/bundles, native API publish, four native Android/iOS builds, four same-run smoke tests and 19 unexpired artifacts. Four deterministic TRIP-01 tests passed. Reviews are COMMENT-only with zero unresolved threads and no approvals. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
 ## Product in one line
@@ -2678,3 +2678,10 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039â€
 - PR #175 is the sole active feature PR and remains Draft in this handoff. Recheck exact HEAD/reviews/threads, mark ready and merge only through normal GitHub policy.
 - Continue acceptance order after merge: DRIVER-03 audit (no additional safe code gap), DRIVER-04 Product/Operations blocked, RIDER-04 audit (no additional safe code gap), SUPPORT-01 Product/Operations blocked, then PLATFORM-01 hardening and RELEASE-01 safe release engineering.
 - Strict acceptance 0/19 Verified (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## Final documentation-head handoff â€” TRIP-01 (2026-11-17)
+
+- CI #1842 / run 43967092267 passed 12/12 on pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. The subsequent four documentation-only commits `6ee40e58aa88f943c137d22a3154af805a8ad28d`, `662efa68ec726247829c465d27dd60f8b16e4614`, `192c23a6093747fce0ce91a9eadaa7341c3db450` and `efaf8a4a6aa41f5e847be52f178d2902435a5a33` synchronize the four project documents; CI #1845 / run 43976377915 was started on the last pre-final-sync head and is superseded by this metadata correction. A fresh exact-head workflow is required after this commit.
+- PR #175 remains the sole active feature PR; after its merge, continue the remaining acceptance rows in order and then implement the identified PLATFORM-01 hardening.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); production readiness is not established.
