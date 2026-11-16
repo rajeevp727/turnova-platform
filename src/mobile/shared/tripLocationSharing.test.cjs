@@ -275,8 +275,9 @@ function driverEffectContaining(source, marker) {
   assert.notEqual(markerIndex, -1, "missing Driver App wiring marker: " + marker);
   const start = source.lastIndexOf("  useEffect(() => {", markerIndex);
   const end = source.indexOf("\n  }, [", markerIndex);
-  assert.ok(start >= 0 && end > markerIndex, "unable to isolate effect for: " + marker);
-  return source.slice(start, end + 4);
+  const close = source.indexOf("]);", end);
+  assert.ok(start >= 0 && end > markerIndex && close > end, "unable to isolate effect for: " + marker);
+  return source.slice(start, close + 3);
 }
 
 test("Driver active ride history, agreement and SignalR effects do not depend on Trips navigation", () => {
@@ -294,6 +295,10 @@ test("Driver active ride history, agreement and SignalR effects do not depend on
   ]) {
     assert.doesNotMatch(driverEffectContaining(source, marker), /\btab\b/, marker);
   }
+  assert.match(driverEffectContaining(source, "loadDriverRideHistory(isHistoryCurrent)"), /activeRide\?\.status/);
+  assert.match(driverEffectContaining(source, 'connection.on("RideAgreementChanged", refreshAgreement);'), /activeRide\?\.status/);
+  assert.match(driverEffectContaining(source, 'connection.on("RideStatusChanged", handleRideStatusChanged);'), /activeRide\?\.status/);
+  assert.match(driverEffectContaining(source, "findAuthoritativeActiveTrip(history, activeRide.rideId)"), /activeRide\?\.status/);
   assert.match(source, /Foreground location sharing continues while your active trip remains eligible/);
 });
 
