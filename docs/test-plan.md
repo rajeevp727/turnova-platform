@@ -2764,3 +2764,24 @@ This evidence is limited to CI, Android emulators and unsigned iOS Simulators. I
 REALTIME-01 regression coverage includes five deterministic shared formatter tests and one API integration test proving immutable USD v1/EUR v2 history is returned in order to both Rider and Driver. Proposal entry remains INR-only.
 
 Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged.
+
+## REALTIME-01 exact-head executed verification — CI #1800 (2026-11-16)
+
+PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), exact tested documentation HEAD `dd4791e6ba3561a1c5c755a5f0d7b5176301102f`, passed [CI #1800 / run 43801220854](https://github.com/rajeevp727/turnova-platform/actions/runs/43801220854) **12/12 jobs**:
+- Backend .NET 10 Release build; **666 tests passed, 0 failed, 0 skipped**.
+- Shared mobile/auth Node suite: **217 passed, 0 failed**; five agreement-currency formatter tests are included.
+- Python native-artifact/Simulator harness: **48 passed**.
+- Rider and Driver Expo config, TypeScript typecheck and Android/iOS production JS bundle exports passed.
+- Native non-container API publish passed.
+- Rider and Driver Android debug APKs and standalone release APKs compiled; embedded package identities were verified.
+- Rider and Driver unsigned iOS Simulator apps compiled; bundle IDs were verified.
+- Four same-run smoke tests installed/launched the Rider and Driver Android release APKs in Android emulators and the unsigned iOS apps in iOS Simulators. All passed.
+- All 19 workflow artifacts were unexpired at inspection. Key artifact IDs: API publish `14196353556`; Android release APKs `14197305398` / `14196019297`; iOS Simulator apps `14198020486` / `14197731002`; smoke results `14197200669`, `14197136314`, `14197767953`, `14197444406`.
+
+This is CI/emulator/unsigned Simulator evidence only. It does not establish signed Android/iOS distribution, physical-device acceptance, SecureStore/Keychain on signed devices, production API/authentication, live Cosmos or store approval.
+
+REALTIME-01 regression coverage includes five deterministic shared formatter tests and `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties`, which creates immutable USD v1 and EUR v2 and verifies both Rider and Driver history responses preserve order, amount and currency. Proposal entry remains INR-only pending Product policy.
+
+The current Rider and Driver npm audit artifacts (`14195939928` / `14196118910`) each report 1 low, 11 moderate, 0 high and 0 critical. Findings include deepmerge prototype poisoning, glob AbortSignal cancellation bypass and minimatch denial of service. Do not blind-upgrade Expo/React Native to the major version suggested by npm audit; evaluate compatible targeted overrides and lockfile reproducibility in PLATFORM-01.
+
+Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged. Product/Safety separately decides Ops suspension/rejection during active negotiation/ride.
