@@ -1209,3 +1209,9 @@ PR [#171](https://github.com/rajeevp727/turnova-platform/pull/171) was squash-me
 Rider and Driver agreement-history rows now display the persisted three-letter currency code and amount through a shared formatter. Missing/malformed currency never defaults to INR. Proposal entry remains INR-only pending Product policy. Five deterministic Node regression tests were added and are included by the existing shared-mobile test glob. Exact-head CI is pending. The REALTIME-01 row remains In Progress until API/mobile end-to-end, reconnect/history and native build evidence is complete.
 
 **Acceptance accounting remains:** 19 rows total; 15 In Progress, 4 Blocked, 0 Strictly Verified. Strict verification includes applicable external gates and is not an implementation-completion percentage.
+
+
+
+## REALTIME-01 API persistence regression added (2026-11-16)
+
+The in-progress REALTIME-01 increment now includes `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties`: it creates USD and EUR immutable agreement versions and asserts both Rider and Driver history reads preserve each version's currency and amount. Five shared formatter tests cover UI formatting and fail-closed missing/malformed currency. Exact-head CI is pending; do not mark the row Verified until the complete API/mobile/native evidence and applicable external gates pass.
