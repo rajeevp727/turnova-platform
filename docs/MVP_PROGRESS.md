@@ -2,7 +2,7 @@
 
 ## 1. Current step
 
-**DRIVER-02 transient availability-location retry is implemented in PR #174; six new deterministic shared tests are included.** The source/test head is `f82c59f32ffc574d88a3e99f1613f58e66d717c6`; CI #1830 is running on that exact head. The current documentation commit will require its own exact-head CI before merge.
+**DRIVER-02 transient availability-location retry is implemented in PR #174; six new deterministic shared tests passed.** Source/test commit `f82c59f32ffc574d88a3e99f1613f58e66d717c6`; CI #1831 passed 12/12 on exact documentation head `2564bc4fd22cadff54cb3f83a1243a2d3d8bdeb3`. The latest documentation head is `ac5027f4f3410b4345155651b022c109c236570e`; CI #1832 / run 43924592252 is its exact-head verification. This additional documentation cleanup will require a new exact-head run.
 
 - The classifier retries network TypeError and HTTP 408/429/5xx only. HTTP 409 remains on the separate authoritative availability/history reconciliation path; permanent 4xx are not retried.
 - One 15-second retry timer is allowed at a time and runs only while the effect is mounted and AppState is foreground-active.
