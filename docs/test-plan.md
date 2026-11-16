@@ -2821,7 +2821,7 @@ Next sequential test work is DRIVER-01 concurrent normalized Union-code creation
 
 Implementation uses `ConcurrentDictionary.TryAdd` for in-memory create-if-absent and Cosmos `CreateItemAsync` in the existing `Unions` container partitioned by `/unionId`; HTTP 409 is returned for duplicate create conflicts. Existing Union status updates continue to use the existing upsert path. No migration rewrites existing IDs.
 
-The four deterministic API integration regressions are included in PR #173: two Union-code create-if-absent tests and two required-document/no-data-loss onboarding tests. Fresh exact-head CI is pending after the synchronized documentation commit. Live Cosmos cross-instance contention, ETag/transaction and restart recovery remain separate infrastructure acceptance gates. Product/Safety's active-ride Ops rejection/suspension policy remains unresolved and is not changed by this work.
+The four deterministic API integration regressions are included in PR #173: two Union-code create-if-absent tests and two required-document/no-data-loss onboarding tests. CI #1824 / run 43847810882 passed 12/12 on exact pre-sync head `cb07fee1f5339b9d355bf9017b4b2bfa0fb0c0f5`: backend Release build/tests 671/671 (0 failed, 0 skipped), shared mobile/auth 217/217, Python 48/48, both Expo validations/bundles, native API publish, four Android/iOS native builds and four same-run install/launch smokes; all 19 artifacts were unexpired. Driver iOS smoke artifact upload initially hit transient DNS ENOTFOUND; targeted retry job 133263725680 completed successfully and uploaded artifact 14221354973. This documentation sync changes the PR head, so fresh exact-head CI is still required before merge. Live Cosmos cross-instance contention, ETag/transaction and restart recovery remain separate infrastructure acceptance gates. Product/Safety's active-ride Ops rejection/suspension policy remains unresolved and is not changed by this work.
 
 
 ### Required-document submission regressions
@@ -2832,4 +2832,14 @@ The four deterministic API integration regressions are included in PR #173: two 
 These tests do not choose a document provider or change private-storage, scanning, consent or retention policy.
 
 
-The onboarding API tests clear the factory's default Driver profile for their unique test IDs before the initial-submission scenarios. CI #1820 exposed that fixture requirement (three new tests had inherited pre-seeded profiles); the fixture setup was corrected in commit `5a23e4ee44aecf8e7c0cbec09486d7eea1289d6e`. The previous run is not merge evidence; use the fresh final-head workflow only.
+The onboarding API tests clear the factory's default Driver profile for their unique test IDs before the initial-submission scenarios. CI #1820 exposed that fixture requirement (three new tests had inherited pre-seeded profiles); the fixture setup was corrected in commit `5a23e4ee44aecf8e7c0cbec09486d7eea1289d6e`. CI #1824 is valid evidence for the exact pre-sync PR head only; this documentation synchronization requires a fresh final-head workflow before merge.
+
+
+## DRIVER-01 exact-head verification — CI #1824 (2026-11-16)
+
+- PR #173 exact pre-sync head: `cb07fee1f5339b9d355bf9017b4b2bfa0fb0c0f5`; [CI #1824 / run 43847810882](https://github.com/rajeevp727/turnova-platform/actions/runs/43847810882) passed 12/12 jobs.
+- Backend .NET 10 Release build/tests: **671 passed, 0 failed, 0 skipped**. Shared mobile/auth: **217 passed**. Python harness: **48 passed**. Rider/Driver Expo validation and production JS bundles, native API publish, both Android native builds, both iOS Simulator builds and all four same-run Android/iOS install-launch smoke jobs passed.
+- All **19 artifacts** were unexpired at inspection. Driver iOS smoke first attempt installed/launched the app but artifact upload hit transient DNS `ENOTFOUND`; targeted retry job `133263725680` passed all steps and uploaded Driver iOS smoke artifact `14221354973`.
+- The four deterministic API integration methods cover concurrent normalized Union creation, legacy Union ID preservation, both required Cab document omissions, and no-data-loss on incomplete onboarding resubmission. CI #1820's factory-seeded-profile fixture issue was corrected before #1824.
+- This documentation synchronization advances the PR head; CI #1824 must not be reused as final-head evidence. Run fresh CI on the resulting documentation head before PR readiness/merge.
+- Strict acceptance remains **0/19 Verified**; production readiness is not established. Live Cosmos, mixed-version rollout, private document controls, OTP/UnionManager claims, legal approval and physical-device gates remain external.
