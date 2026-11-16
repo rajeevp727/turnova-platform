@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** f274285db6e3f28c19b66f46920368491e6377b2. PR #172 REALTIME-01, PR #173 DRIVER-01 and PR #174 DRIVER-02 are merged. Sole active feature PR [PR #175](https://github.com/rajeevp727/turnova-platform/pull/175), Draft, branch fix/trip-01-tab-independent-active-ride-lifecycle, exact head c01312184b9e070ee83b211e1a2b4d2990f0989b. [CI #1841 / run 43957046023](https://github.com/rajeevp727/turnova-platform/actions/runs/43957046023) passed 12/12 on that exact head (backend 671/671, shared mobile/auth 227/227, Python 48/48, both Expo apps, native API publish, four native builds, four same-run smoke tests and 19 unexpired artifacts). Four TRIP-01 deterministic shared tests passed. CI #1839's TS2305 declaration failure was corrected in tripLocationSharing.d.ts and verified by CI #1841. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `f274285db6e3f28c19b66f46920368491e6377b2`. PRs #172 REALTIME-01, #173 DRIVER-01 and #174 DRIVER-02 are merged. Sole active feature PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), Draft, branch `fix/trip-01-tab-independent-active-ride-lifecycle`, exact head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) passed 12/12 on that exact head: backend 671/671, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typechecks/bundles, native API publish, four native Android/iOS builds, four same-run smoke tests and 19 unexpired artifacts. Four deterministic TRIP-01 tests passed. Reviews are COMMENT-only with zero unresolved threads and no approvals. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
 ## Product in one line
@@ -2669,3 +2669,12 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039â€
 - Four deterministic shared regression tests passed. The missing TypeScript declarations found by CI #1839 were corrected in tripLocationSharing.d.ts and verified by CI #1841. The review is COMMENT-only, with zero unresolved inline threads and no approvals.
 - External: live Cosmos ETag/multi-instance/restart, SignalR backplane/device reconnect, physical Android/iOS foreground/background GPS and map acceptance, signed Keychain, production routing and Product reconciliation/next-ride policy decisions.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). Production readiness is not established.
+
+
+## Latest handoff â€” TRIP-01 exact-head CI #1842 (2026-11-17)
+
+- PR #175 branch `fix/trip-01-tab-independent-active-ride-lifecycle`, exact head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`; [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) passed 12/12 on that head, including backend 671/671, shared 227/227, Python 48/48, Expo, native API publish, four native builds, four same-run smoke tests and 19 unexpired artifacts.
+- Four deterministic TRIP-01 tests verify tab-independent Driver ride lifecycle, authenticated GPS eligibility, App effect/dependency wiring and authoritative foreground resume. No background GPS or backend schema changes.
+- PR #175 is the sole active feature PR and remains Draft in this handoff. Recheck exact HEAD/reviews/threads, mark ready and merge only through normal GitHub policy.
+- Continue acceptance order after merge: DRIVER-03 audit (no additional safe code gap), DRIVER-04 Product/Operations blocked, RIDER-04 audit (no additional safe code gap), SUPPORT-01 Product/Operations blocked, then PLATFORM-01 hardening and RELEASE-01 safe release engineering.
+- Strict acceptance 0/19 Verified (15 In Progress, 4 Blocked); production readiness is not established.
