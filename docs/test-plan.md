@@ -2911,10 +2911,29 @@ All four same-run smoke tests passed: Rider/Driver Android emulator and Rider/Dr
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established.
 
 
-## TRIP-01 final exact-head verification — 2026-11-17
+## TRIP-01 final documentation-head verification — CI #1842 (2026-11-17)
 
-- PR [PR #175](https://github.com/rajeevp727/turnova-platform/pull/175), branch fix/trip-01-tab-independent-active-ride-lifecycle, exact head c01312184b9e070ee83b211e1a2b4d2990f0989b; source/test commit bb701c11388b3625ee96209af99c067c497ac65e, test-hardening b6e311fadf5b5482fceb539457290312c8c2e7e7, TypeScript declaration correction 6da88bbadea0cb037fb13a45510cde40f21f8967.
-- [CI #1841 / run 43957046023](https://github.com/rajeevp727/turnova-platform/actions/runs/43957046023) passed **12/12 jobs on the exact PR head**: backend .NET 10 Release 671/671; shared mobile/auth 227/227; Python harness 48/48; Rider/Driver Expo validation, typecheck and production JS bundles; native non-container API publish; both Android debug and standalone release APKs; both unsigned iOS Simulator apps; and four same-run Android emulator/iOS Simulator install-launch smoke tests. All 19 artifacts were unexpired at inspection.
-- The four new shared regression tests verify tab-independent lifecycle eligibility, authenticated active GPS eligibility, Driver App effect/dependency wiring, and authoritative history/permission revalidation before foreground watcher restart. CI #1839's TS2305 failure was corrected by declaring DriverRideLifecycleState and both helper exports in tripLocationSharing.d.ts; CI #1841 verifies the correction.
-- These are automated builds and emulator/Simulator smoke results only. No signed production build, physical-device GPS/background acceptance, live Cosmos multi-instance/ETag/restart or production SignalR backplane validation is claimed.
-- Product next-ride-before-report and non-zero-delta eligibility decisions remain unresolved; no new reconciliation policy is implemented.
+PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), branch `fix/trip-01-tab-independent-active-ride-lifecycle`, exact documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`, passed [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) **12/12 jobs**.
+
+- Backend .NET 10 Release build/tests: **671 passed, 0 failed, 0 skipped**.
+- Shared mobile/auth tests: **227 passed**; deterministic Python native-artifact/Simulator harness: **48 passed**.
+- Rider and Driver Expo validation, TypeScript checks and Android/iOS production JavaScript bundles passed.
+- Native non-container .NET API publish passed.
+- Rider and Driver Android debug APKs and standalone release APKs compiled; embedded package identities were verified by the workflow.
+- Rider and Driver unsigned iOS Simulator applications compiled.
+- All four same-run Android emulator/iOS Simulator install-launch smoke jobs passed.
+- All **19 artifacts** were inspected and unexpired. Key artifact IDs: API publish `14277647087`; Rider/Driver Android standalone release APKs `14276167860` / `14276692986`; Rider/Driver iOS Simulator apps `14278655039` / `14277578968`; Rider/Driver Android smoke `14277008234` / `14278370471`; Rider/Driver iOS smoke `14278294327` / `14278892371`.
+- Four TRIP-01 deterministic shared tests cover tab-independent lifecycle eligibility, authenticated active GPS eligibility, Driver App effect/dependency wiring and authoritative history/permission revalidation before foreground watcher restart. The TS2305 declaration gap from CI #1839 was corrected in `tripLocationSharing.d.ts` and verified by CI #1841 and #1842.
+- These are CI, Android emulator and iOS Simulator results only. No signed production release, physical-device GPS/background acceptance, live Cosmos multi-instance/ETag/restart or production SignalR backplane validation is claimed.
+- PR review state: three COMMENTED submissions, zero unresolved inline threads, no approvals/self-approval. The exact eight-file diff was inspected for session fencing, JWT/SignalR ownership, foreground-only GPS, terminal cleanup, capture-watermark preservation, map follow/manual-pan and data-loss/privacy risks; no unresolved critical/high finding was identified.
+- PR #175 remains Draft until explicitly marked ready; merge has not been attempted. Next sequential work after merge: finish DRIVER-03/DRIVER-04/RIDER-04/SUPPORT-01 row audits and proceed to PLATFORM-01's raw CORS-origin and storage-readiness cancellation hardening.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). Production readiness is not established.
+
+## TRIP-01 deterministic test identifiers
+
+| ID | Scenario | Expected result | Type | Status |
+|---|---|---|---|---|
+| TRIP-LOC-010 | Driver switches Home/Queue/Trips/Payslips/Profile during an assigned non-terminal ride | Ride history, agreement history and authenticated status/agreement subscriptions remain active independent of selected tab | Shared mobile regression | Implemented; CI #1842 passed |
+| TRIP-LOC-011 | Active Driver ride has valid session and server locationSharingActive flag | Foreground GPS eligibility is true only for Accepted/Arrived/InProgress and a current authenticated session; negotiation/terminal/invalid session is false | Shared mobile unit | Implemented; CI #1842 passed |
+| TRIP-LOC-012 | Inspect Driver App lifecycle effect wiring | History, agreement, SignalR and GPS effect dependencies contain no Trips-tab gate and remain keyed to ride/session/status | Shared source-integration regression | Implemented; CI #1842 passed |
+| TRIP-LOC-013 | App resumes to foreground while Driver is on Home | Re-read authoritative Driver ride history, confirm same active ride/location-sharing flag, recheck foreground permission, then create watcher | Shared source-integration regression | Implemented; CI #1842 passed |
