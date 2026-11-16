@@ -1,7 +1,7 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
-**Last audited:** 2026-11-17; main HEAD `f274285db6e3f28c19b66f46920368491e6377b2`. PRs #172 REALTIME-01, #173 DRIVER-01 and #174 DRIVER-02 are merged. Sole active feature PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), Draft, branch `fix/trip-01-tab-independent-active-ride-lifecycle`, exact head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) passed **12/12** on that exact head: backend 671/671, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typechecks/production bundles, native API publish, four Android/iOS native builds, four same-run smoke tests and 19 unexpired artifacts. Four deterministic TRIP-01 tests passed; the TS2305 declaration correction is verified.
+**Last audited:** 2026-11-17; main HEAD `f274285db6e3f28c19b66f46920368491e6377b2`. PRs #172 REALTIME-01, #173 DRIVER-01 and #174 DRIVER-02 are merged. Sole active feature PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), Draft, branch `fix/trip-01-tab-independent-active-ride-lifecycle`, pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) passed **12/12** on that exact head: backend 671/671, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typechecks/production bundles, native API publish, four Android/iOS native builds, four same-run smoke tests and 19 unexpired artifacts. Four deterministic TRIP-01 tests passed; the TS2305 declaration correction is verified.
 **Latest sequential audit:** TRIP-01 implementation and automated evidence are complete; its row remains In progress pending merge and external end-to-end gates. DRIVER-03 and RIDER-04 audits found no additional safe code gap; DRIVER-04 and SUPPORT-01 remain policy-blocked. PLATFORM-01 has two safe hardening gaps queued after TRIP-01 merge. Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); production readiness is not established. Fleet/Ops Phase 2 remains excluded.
 
 ## Status definitions
@@ -1340,3 +1340,10 @@ Current Rider and Driver CI #1800 npm audit artifacts `14195939928` and `1419611
 - TRIP-01 remains In progress until merge and external Cosmos, SignalR, physical-device GPS/map and signed-Keychain gates pass.
 - Next row audits: DRIVER-03 and RIDER-04 have no additional safe code gap identified; DRIVER-04 and SUPPORT-01 remain blocked on Product/Operations support policy. Continue with PLATFORM-01 raw CORS-origin validation and storage-readiness caller-cancellation precedence, then RELEASE-01.
 - Strict count: **0/19 Verified**, 15 In Progress and 4 Blocked. No production readiness claim.
+
+
+## Final documentation-head handoff — TRIP-01 (2026-11-17)
+
+- CI #1842 / run 43967092267 passed 12/12 on pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. The subsequent four documentation-only commits `6ee40e58aa88f943c137d22a3154af805a8ad28d`, `662efa68ec726247829c465d27dd60f8b16e4614`, `192c23a6093747fce0ce91a9eadaa7341c3db450` and `efaf8a4a6aa41f5e847be52f178d2902435a5a33` synchronize the four project documents; CI #1845 / run 43976377915 was started on the last pre-final-sync head and is superseded by this metadata correction. A fresh exact-head workflow is required after this commit.
+- PR #175 remains the sole active feature PR; PLATFORM-01 must wait until it merges.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); production readiness is not established.
