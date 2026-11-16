@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-16
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. PRs #164–#171 are merged. Sole active PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172) is REALTIME-01 on `fix/realtime-01-display-persisted-agreement-currency`; exact tested head `a0dabaf2ab83cc4bae23b1dd3db093662ea93163`. [CI #1804 / run 43822209077](https://github.com/rajeevp727/turnova-platform/actions/runs/43822209077) passed 12/12 on that exact SHA: backend 666/666 (0 failed, 0 skipped), shared mobile/auth 217/217, Python 48/48, Rider/Driver Expo and production bundles, native API publish, four Android/iOS native builds and four same-run smoke tests. All 19 artifacts were unexpired. Fresh exact-head CI is required after this documentation update. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `650b7a8c5db6c214ee692931b01da19dd0f89f45`. PR #172 REALTIME-01 merged after exact-head [CI #1806 / run 43833202236](https://github.com/rajeevp727/turnova-platform/actions/runs/43833202236) passed 12/12 on `5e8b1a636548d3aab427026167296a134d640daa` (backend 666/666, shared mobile/auth 217/217, Python 48/48, Rider/Driver Expo, four Android/iOS native builds, four same-run smokes; 19 artifacts unexpired). Sole active feature PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173) is DRIVER-01 on `fix/driver-01-union-code-create-if-absent`; source/test head before docs sync `ed7417795118a9a3ba05d54261697aacd8a7892f`; fresh exact-head CI pending. Strict acceptance 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
 ## Product in one line
@@ -2575,3 +2575,14 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 - This documentation synchronization creates a new branch head and therefore requires fresh exact-head CI before marking PR ready or merging. Do not reuse CI #1804 as evidence for the new documentation commit.
 - Next sequential code task after REALTIME-01 merges: DRIVER-01 normalized Union-code creation concurrency. Replace list-check/random-GUID/upsert for new codes with deterministic IDs and create-if-absent in the existing `Unions` container partitioned by `/unionId`; map duplicate Cosmos/in-memory conflicts to HTTP 409; add concurrent case/whitespace-normalization tests; preserve existing Union IDs and historical records. Product/Safety separately decides Ops rejection/suspension during an active negotiation/ride; do not invent emergency-suspension behavior.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established. External gates include Product-approved radius/zones/location freshness/negotiation lifetime; live Cosmos ETag/transaction/multi-instance/restart; production auth and realtime/maps providers; private document storage/scanning/consent/retention; support and reconciliation policies; Union legal approval; signed-device/physical-device testing; signing, hosting and store approval.
+
+
+## Latest engineering handoff — DRIVER-01 Union-code create-if-absent (2026-11-16)
+
+- REALTIME-01 PR #172 merged at `650b7a8c5db6c214ee692931b01da19dd0f89f45` after [CI #1806](https://github.com/rajeevp727/turnova-platform/actions/runs/43833202236) passed 12/12 on exact PR head `5e8b1a636548d3aab427026167296a134d640daa`.
+- Sole active feature PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173), branch `fix/driver-01-union-code-create-if-absent`. Runtime/test head before this docs sync: `ed7417795118a9a3ba05d54261697aacd8a7892f`.
+- `POST /api/v1/ops/unions` now canonicalizes codes, uses SHA-256 deterministic IDs for new normalized codes, keeps a legacy-code scan, uses in-memory `ConcurrentDictionary.TryAdd` and Cosmos `CreateItemAsync` create-if-absent in the existing `/unionId` partition, and maps duplicate conflicts to HTTP 409. Existing Union IDs and status-update upsert behaviour are preserved.
+- Added `ConcurrentUnionCreationWithEquivalentNormalizedCodesCreatesExactlyOneUnion` and `UnionCreationConflictPreservesExistingLegacyUnionIdAndRecord`. Both are deterministic API integration tests; live Cosmos cross-instance conflict/ETag/restart validation remains external.
+- Exact-head CI is pending after this documentation synchronization. Recheck all required jobs, reviews and PR head before merge.
+- Product/Safety must decide Ops rejection/suspension behaviour during active negotiation/ride. Do not invent an emergency policy.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). Production readiness is not established.
