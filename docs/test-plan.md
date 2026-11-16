@@ -2827,3 +2827,8 @@ The two deterministic integration tests are included in PR #173. Fresh exact-hea
 | Cab onboarding omits either required DrivingLicence or VehicleRegistration reference | API returns 400 before creating/updating the Driver profile; both document references remain mandatory before Ops approval and Union assignment | API integration | P1 |
 
 The regression `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences` exercises each missing-document case. This aligns submission validation with the existing Ops approval and Union assignment preconditions; it does not choose a document provider or change private-storage, scanning, consent or retention policy.
+
+
+| An existing Driver resubmits onboarding without one required Cab document reference | API returns 400 before mutation; previously submitted profile fields and document references remain byte-for-byte equivalent at the record level | API integration / no-data-loss regression | P1 |
+
+Regression: `DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile`. This complements `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences`, which covers each missing-document case on first submission.
