@@ -2283,6 +2283,7 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 ## Latest handoff — DRIVER-01 final exact-head CI passed (2026-11-16)
 
 - Main HEAD: `650b7a8c5db6c214ee692931b01da19dd0f89f45`; PR #172 REALTIME-01 merged after CI #1806 passed 12/12.
+- Current documentation head `3bc8964b2e7271e581f3ada54da821980d1b4a56` is a docs-only commit after CI #1825. No workflow run is currently associated with this newer head; do not reuse CI #1825 or merge until exact-head verification is available.
 - Sole active PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173), branch `fix/driver-01-union-code-create-if-absent`, exact head `de27edea70760d4979fe2a8942568addb72fe92d`. [CI #1825 / run 43885066258](https://github.com/rajeevp727/turnova-platform/actions/runs/43885066258) passed 12/12 on this exact head; 671 backend, 217 shared mobile/auth, 48 Python, Expo, native API publish, four native builds, four same-run smokes and 19 unexpired artifacts.
 - Source/test implementation is complete and the full six-file diff has six COMMENT-only reviews and zero unresolved threads. No self-approval. The final docs synchronization will require a new exact-head CI run.
 - Mixed-version rollout must drain old random-ID Union writers; legacy duplicate reconciliation requires approved plan. Product/Safety active-ride Ops suspension/rejection, live Cosmos, private document controls, OTP/claims, legal and physical-device gates remain external.
