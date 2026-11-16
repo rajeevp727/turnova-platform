@@ -22,7 +22,7 @@ import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { finishLoadingIfSessionCurrent, resetDriverSessionState } from "../shared/sessionStateReset";
 import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePersistentProposalAttempt, type PersistentProposalAttempt } from "../shared/proposalAttempt";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
-import { isDriverAvailabilityConflict, isDriverZoneExit, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
+import { createDriverLocationRetryScheduler, isDriverAvailabilityConflict, isDriverTransientLocationError, isDriverZoneExit, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
 import { clearCachedDriverPayslips, deleteManagedDriverPayslip, writeCachedDriverPayslipIfCurrent } from "../shared/driverPayslipCache";
@@ -365,22 +365,16 @@ export default function App() {
     let mounted = true;
     let refreshing = false;
     let subscription: Location.LocationSubscription | undefined;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let refreshForegroundLocation: () => Promise<void> = async () => {};
+    const retryScheduler = createDriverLocationRetryScheduler({
+      canRetry: () => mounted && AppState.currentState === "active",
+      retry: () => refreshForegroundLocation()
+    });
 
     const stopWatching = () => {
       subscription?.remove();
       subscription = undefined;
-      if (retryTimer) clearTimeout(retryTimer);
-      retryTimer = undefined;
-    };
-
-    const scheduleRefresh = () => {
-      if (!mounted || retryTimer) return;
-      retryTimer = setTimeout(() => {
-        retryTimer = undefined;
-        if (mounted) void refreshForegroundLocation();
-      }, 15000);
+      retryScheduler.cancel();
     };
 
     const publishLocation = async (latitude: number, longitude: number, timestamp: number): Promise<boolean> => {
@@ -390,6 +384,7 @@ export default function App() {
           method: "POST",
           body: JSON.stringify({ latitude, longitude, capturedAtUtc: new Date(timestamp).toISOString() })
         });
+        retryScheduler.cancel();
         return true;
       } catch (e) {
         if (!mounted) return false;
@@ -401,13 +396,14 @@ export default function App() {
           stopWatching();
           try {
             const state = await reconcileServerAvailability(() => mounted);
-            if (state.shouldRetryLocation) scheduleRefresh();
+            if (state.shouldRetryLocation) retryScheduler.schedule();
           } catch (recoveryError) {
             // Fail closed: do not publish another GPS fix until both authoritative reads succeed.
             if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
           }
         } else {
           setError(e instanceof Error ? e.message : "Unable to update availability location.");
+          if (isDriverTransientLocationError(e)) retryScheduler.schedule();
         }
         return false;
       }
@@ -450,13 +446,14 @@ export default function App() {
           stopWatching();
           try {
             const state = await reconcileServerAvailability(() => mounted);
-            if (state.shouldRetryLocation) scheduleRefresh();
+            if (state.shouldRetryLocation) retryScheduler.schedule();
           } catch (recoveryError) {
             // Fail closed: do not publish another GPS fix until both authoritative reads succeed.
             if (mounted) setError(recoveryError instanceof Error ? recoveryError.message : "Unable to reconcile server availability.");
           }
         } else if (mounted) {
           setError(e instanceof Error ? e.message : "Unable to refresh availability location.");
+          if (isDriverTransientLocationError(e)) retryScheduler.schedule();
         }
       } finally {
         refreshing = false;

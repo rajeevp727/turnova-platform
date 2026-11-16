@@ -57,4 +57,57 @@ async function reconcileDriverAvailability({
   };
 }
 
-module.exports = { isDriverAvailabilityConflict, isDriverZoneExit, reconcileDriverAvailability };
+const DRIVER_LOCATION_RETRY_DELAY_MS = 15000;
+
+function isDriverTransientLocationError(error) {
+  if (!error || typeof error !== "object") return false;
+  if (error instanceof TypeError || error.name === "TypeError") return true;
+
+  const status = Number(error.status);
+  return status === 408 || status === 429 || (status >= 500 && status <= 599);
+}
+
+function createDriverLocationRetryScheduler({
+  canRetry,
+  retry,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout
+}) {
+  if (typeof canRetry !== "function" ||
+      typeof retry !== "function" ||
+      typeof setTimeoutFn !== "function" ||
+      typeof clearTimeoutFn !== "function") {
+    throw new TypeError("Driver location retry scheduling requires activity, retry and timer callbacks.");
+  }
+
+  let timer;
+
+  return {
+    schedule() {
+      if (timer !== undefined || !canRetry()) return false;
+      timer = setTimeoutFn(() => {
+        timer = undefined;
+        if (canRetry()) void retry();
+      }, DRIVER_LOCATION_RETRY_DELAY_MS);
+      return true;
+    },
+    cancel() {
+      if (timer === undefined) return false;
+      clearTimeoutFn(timer);
+      timer = undefined;
+      return true;
+    },
+    isPending() {
+      return timer !== undefined;
+    }
+  };
+}
+
+module.exports = {
+  isDriverAvailabilityConflict,
+  isDriverZoneExit,
+  reconcileDriverAvailability,
+  isDriverTransientLocationError,
+  createDriverLocationRetryScheduler,
+  DRIVER_LOCATION_RETRY_DELAY_MS
+};
