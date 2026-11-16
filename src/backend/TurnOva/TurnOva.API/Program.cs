@@ -450,6 +450,29 @@ async Task SaveUnionAsync(DriverUnion union, CancellationToken ct)
     await unionContainer.UpsertItemAsync(union, new PartitionKey(union.UnionId), cancellationToken: ct);
 }
 
+static string NormalizeUnionCode(string? code) =>
+    (code ?? string.Empty).Trim().ToUpperInvariant();
+
+static string CreateUnionId(string normalizedCode) =>
+    "union-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedCode))).ToLowerInvariant();
+
+async Task<bool> TryCreateUnionIfAbsentAsync(DriverUnion union, CancellationToken ct)
+{
+    if (unionContainer is null)
+        return unions.TryAdd(union.UnionId, union);
+
+    try
+    {
+        await unionContainer.CreateItemAsync(
+            union, new PartitionKey(union.UnionId), cancellationToken: ct);
+        return true;
+    }
+    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+    {
+        return false;
+    }
+}
+
 async Task<DriverUnionAssignment?> FindUnionAssignmentAsync(string driverId, CancellationToken ct)
 {
     if (unionAssignmentContainer is null) return unionAssignments.TryGetValue(driverId, out var value) ? value : null;
@@ -1766,17 +1789,20 @@ opsUnions.MapPost("/", async (HttpContext context, CreateUnionRequest request, C
         !string.Equals(request.ServiceClasses[0]?.Trim(), "cab", StringComparison.OrdinalIgnoreCase))
         return Results.BadRequest(new { message = "Provide a name, unique code, at least one service zone and the Cab service class only." });
 
-    var code = request.Code.Trim().ToUpperInvariant();
+    var code = NormalizeUnionCode(request.Code);
     var existing = await ListUnionsAsync(ct);
-    if (existing.Any(item => item.Code.Equals(code, StringComparison.OrdinalIgnoreCase)))
+    if (existing.Any(item => string.Equals(NormalizeUnionCode(item.Code), code, StringComparison.Ordinal)))
         return Results.Conflict(new { message = "A union with this code already exists." });
 
-    var union = new DriverUnion(Guid.NewGuid().ToString("N"), request.Name.Trim(), code,
+    var now = DateTimeOffset.UtcNow;
+    var union = new DriverUnion(CreateUnionId(code), request.Name.Trim(), code,
         request.Location?.Trim(), request.ManagerName?.Trim(), request.ManagerPhone?.Trim(),
         request.ZoneIds.Select(zone => zone.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
         ["cab"],
-        "Active", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-    await SaveUnionAsync(union, ct);
+        "Active", now, now);
+    if (!await TryCreateUnionIfAbsentAsync(union, ct))
+        return Results.Conflict(new { message = "A union with this code already exists." });
+
     return Results.Created($"/api/v1/ops/unions/{union.UnionId}", union);
 });
 
