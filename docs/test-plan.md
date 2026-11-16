@@ -2821,14 +2821,12 @@ Next sequential test work is DRIVER-01 concurrent normalized Union-code creation
 
 Implementation uses `ConcurrentDictionary.TryAdd` for in-memory create-if-absent and Cosmos `CreateItemAsync` in the existing `Unions` container partitioned by `/unionId`; HTTP 409 is returned for duplicate create conflicts. Existing Union status updates continue to use the existing upsert path. No migration rewrites existing IDs.
 
-The two deterministic integration tests are included in PR #173. Fresh exact-head CI is pending after the synchronized documentation commit. Live Cosmos cross-instance contention, ETag/transaction and restart recovery remain separate infrastructure acceptance gates. Product/Safety's active-ride Ops rejection/suspension policy remains unresolved and is not changed by this work.
+The four deterministic API integration regressions are included in PR #173: two Union-code create-if-absent tests and two required-document/no-data-loss onboarding tests. Fresh exact-head CI is pending after the synchronized documentation commit. Live Cosmos cross-instance contention, ETag/transaction and restart recovery remain separate infrastructure acceptance gates. Product/Safety's active-ride Ops rejection/suspension policy remains unresolved and is not changed by this work.
 
 
-| Cab onboarding omits either required DrivingLicence or VehicleRegistration reference | API returns 400 before creating/updating the Driver profile; both document references remain mandatory before Ops approval and Union assignment | API integration | P1 |
+### Required-document submission regressions
 
-The regression `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences` exercises each missing-document case. This aligns submission validation with the existing Ops approval and Union assignment preconditions; it does not choose a document provider or change private-storage, scanning, consent or retention policy.
+- `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences` omits each required document type in turn and verifies HTTP 400 with no profile created. This aligns submission validation with the existing Ops approval and Union assignment preconditions.
+- `DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile` verifies an incomplete resubmission returns HTTP 400 before mutation and preserves the existing profile and document references.
 
-
-| An existing Driver resubmits onboarding without one required Cab document reference | API returns 400 before mutation; previously submitted profile fields and document references remain byte-for-byte equivalent at the record level | API integration / no-data-loss regression | P1 |
-
-Regression: `DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile`. This complements `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences`, which covers each missing-document case on first submission.
+These tests do not choose a document provider or change private-storage, scanning, consent or retention policy.
