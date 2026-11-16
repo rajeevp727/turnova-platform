@@ -1197,3 +1197,15 @@ The DISPATCH-01 engineering implementation and deterministic regression coverage
 **Status remains Blocked for strict acceptance**, not because implementation is absent, but because Product must approve positive pickup radius, Driver location freshness and global zone non-overlap policy, and live Cosmos ETag/transactional-batch/multi-instance/restart plus physical-device evidence must pass. Checked-in radius 0 remains fail-closed. No strict Verified status is assigned.
 
 The new documentation head requires exact-head fresh exact-head CI on the final documentation commit before normal squash merge. The 19-row matrix remains 15 In Progress, 4 Blocked, 0 Strictly Verified.
+
+
+
+## DISPATCH-01 final engineering evidence — merged (2026-11-16)
+
+PR [#171](https://github.com/rajeevp727/turnova-platform/pull/171) was squash-merged at `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8` after [CI #1781 / run 43778207524](https://github.com/rajeevp727/turnova-platform/actions/runs/43778207524) passed all 12 jobs on exact PR head `dcb8b30424e61db29021d4661be5eee481d0c315`. The implementation and automated evidence are complete for the code-only portion of DISPATCH-01. The row remains **Blocked** for strict acceptance pending Product approval of positive pickup radius, Driver location freshness and global zone-overlap policy, plus live Cosmos and physical-device evidence. Do not mark Verified based solely on CI.
+
+## REALTIME-01 engineering increment — in progress (2026-11-16)
+
+Rider and Driver agreement-history rows now display the persisted three-letter currency code and amount through a shared formatter. Missing/malformed currency never defaults to INR. Proposal entry remains INR-only pending Product policy. Five deterministic Node regression tests were added and are included by the existing shared-mobile test glob. Exact-head CI is pending. The REALTIME-01 row remains In Progress until API/mobile end-to-end, reconnect/history and native build evidence is complete.
+
+**Acceptance accounting remains:** 19 rows total; 15 In Progress, 4 Blocked, 0 Strictly Verified. Strict verification includes applicable external gates and is not an implementation-completion percentage.
