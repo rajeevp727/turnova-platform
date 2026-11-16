@@ -1570,6 +1570,10 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
         return Results.BadRequest(new { message = "A valid JPEG selfie is required. Capture it in the app; maximum decoded size is 300 KB." });
+    if (request.Documents is null ||
+        !request.Documents.Any(document => document is not null && document.DocumentType == "DrivingLicence") ||
+        !request.Documents.Any(document => document is not null && document.DocumentType == "VehicleRegistration"))
+        return Results.BadRequest(new { message = "A driving licence and Cab vehicle registration reference are required for onboarding." });
     if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length > 120 ||
         string.IsNullOrWhiteSpace(request.ZoneId) || request.ZoneId.Trim().Length > 80 ||
         !IsValidDriverPhoneNumber(request.PhoneNumber) ||
