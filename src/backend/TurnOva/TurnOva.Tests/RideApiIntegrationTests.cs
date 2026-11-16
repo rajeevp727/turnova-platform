@@ -1130,6 +1130,7 @@ public sealed partial class RideApiIntegrationTests
         const string driverId = "driver-onboarding-required-documents";
         using var driver = factory.CreateClient("Driver", driverId);
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
 
         var documents = new[]
         {
@@ -1162,6 +1163,7 @@ public sealed partial class RideApiIntegrationTests
         const string driverId = "driver-onboarding-required-document-preserve";
         using var driver = factory.CreateClient("Driver", driverId);
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles.TryRemove(driverId, out _);
 
         using var initial = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest());
         Assert.Equal(HttpStatusCode.Accepted, initial.StatusCode);
