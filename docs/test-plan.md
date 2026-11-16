@@ -2937,3 +2937,9 @@ PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), branch `fix/
 | TRIP-LOC-011 | Active Driver ride has valid session and server locationSharingActive flag | Foreground GPS eligibility is true only for Accepted/Arrived/InProgress and a current authenticated session; negotiation/terminal/invalid session is false | Shared mobile unit | Implemented; CI #1842 passed |
 | TRIP-LOC-012 | Inspect Driver App lifecycle effect wiring | History, agreement, SignalR and GPS effect dependencies contain no Trips-tab gate and remain keyed to ride/session/status | Shared source-integration regression | Implemented; CI #1842 passed |
 | TRIP-LOC-013 | App resumes to foreground while Driver is on Home | Re-read authoritative Driver ride history, confirm same active ride/location-sharing flag, recheck foreground permission, then create watcher | Shared source-integration regression | Implemented; CI #1842 passed |
+
+
+## Final documentation-head handoff — TRIP-01 (2026-11-17)
+
+- CI #1842 / run 43967092267 passed 12/12 on pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. The subsequent four documentation-only commits `6ee40e58aa88f943c137d22a3154af805a8ad28d`, `662efa68ec726247829c465d27dd60f8b16e4614`, `192c23a6093747fce0ce91a9eadaa7341c3db450` and `efaf8a4a6aa41f5e847be52f178d2902435a5a33` synchronize the four project documents; CI #1845 / run 43976377915 was started on the last pre-final-sync head and is superseded by this metadata correction. A fresh exact-head workflow is required after this commit.
+- TRIP-LOC-010–013 are implemented and passed in CI #1842 on pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. No signed-device, physical-device, live Cosmos or production SignalR acceptance is claimed.
