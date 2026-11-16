@@ -2830,3 +2830,6 @@ The four deterministic API integration regressions are included in PR #173: two 
 - `DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile` verifies an incomplete resubmission returns HTTP 400 before mutation and preserves the existing profile and document references.
 
 These tests do not choose a document provider or change private-storage, scanning, consent or retention policy.
+
+
+The onboarding API tests clear the factory's default Driver profile for their unique test IDs before the initial-submission scenarios. CI #1820 exposed that fixture requirement (three new tests had inherited pre-seeded profiles); the fixture setup was corrected in commit `5a23e4ee44aecf8e7c0cbec09486d7eea1289d6e`. The previous run is not merge evidence; use the fresh final-head workflow only.
