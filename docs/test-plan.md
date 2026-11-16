@@ -2822,3 +2822,8 @@ Next sequential test work is DRIVER-01 concurrent normalized Union-code creation
 Implementation uses `ConcurrentDictionary.TryAdd` for in-memory create-if-absent and Cosmos `CreateItemAsync` in the existing `Unions` container partitioned by `/unionId`; HTTP 409 is returned for duplicate create conflicts. Existing Union status updates continue to use the existing upsert path. No migration rewrites existing IDs.
 
 The two deterministic integration tests are included in PR #173. Fresh exact-head CI is pending after the synchronized documentation commit. Live Cosmos cross-instance contention, ETag/transaction and restart recovery remain separate infrastructure acceptance gates. Product/Safety's active-ride Ops rejection/suspension policy remains unresolved and is not changed by this work.
+
+
+| Cab onboarding omits either required DrivingLicence or VehicleRegistration reference | API returns 400 before creating/updating the Driver profile; both document references remain mandatory before Ops approval and Union assignment | API integration | P1 |
+
+The regression `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences` exercises each missing-document case. This aligns submission validation with the existing Ops approval and Union assignment preconditions; it does not choose a document provider or change private-storage, scanning, consent or retention policy.
