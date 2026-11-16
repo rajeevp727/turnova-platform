@@ -1,8 +1,8 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
-**Last audited:** 2026-11-16; main HEAD `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. PRs #164–#171 are merged. Sole active feature PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172) is REALTIME-01; exact tested docs head `2cbe20f4d09685580236c0306e1df144447bd3d2`. [CI #1794 / run 43784910317](https://github.com/rajeevp727/turnova-platform/actions/runs/43784910317) passed 12/12 on that exact head: backend 666/666, shared mobile/auth 217/217, Python 48/48, both Expo typechecks/bundles, native API publish, four native Android/iOS builds and four same-run install/launch smoke tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
-**Latest sequential audit:** DISPATCH-01 engineering merged; DISPATCH-02/03/04, TRIP-01 and DRIVER-01/02/03 audits found no independent source gap in the reviewed pass. REALTIME-01 now displays each immutable agreement version's persisted currency in Rider and Driver history; five formatter tests and one USD/EUR API history integration test pass. Next ordered area after REALTIME-01 is DRIVER-01.
+**Last audited:** 2026-11-16; main HEAD `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. PRs #164–#171 are merged. Sole active PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172) is REALTIME-01; exact tested documentation HEAD `54dd665faaacc1d43c13437d017627c9cd9a8362`. [CI #1796 / run 43789311523](https://github.com/rajeevp727/turnova-platform/actions/runs/43789311523) passed **12/12** on that exact SHA: backend 666/666, shared mobile/auth 217/217, Python 48/48, both Expo config/typechecks/bundles, native API publish, four Android/iOS native builds and four same-run emulator/Simulator smoke tests. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Latest sequential audit:** DISPATCH-01 engineering is merged; DISPATCH-02/03/04 and TRIP-01 audits found no independent source gap in the reviewed pass. REALTIME-01 now displays each immutable agreement version's persisted currency in Rider and Driver history; five formatter tests and one USD/EUR API history integration test pass. The next code task is DRIVER-01 Union-code creation concurrency; Ops review during an active ride remains a Product/Safety gate.
 
 ## Status definitions
 
@@ -1225,3 +1225,18 @@ PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), branch `fix/
 REALTIME-01 scope is limited to displaying persisted agreement-version currency in Rider/Driver history. Proposal input remains INR-only pending Product policy. No currency conversion, fare policy, payment collection, API production contract, auth, ride lifecycle or reconciliation change was introduced. Two COMMENT-only reviews and zero unresolved threads; no self-approval.
 
 **Acceptance accounting remains:** 19 total; 15 In Progress, 4 Blocked, 0 Strictly Verified. DISPATCH-01 remains Blocked for strict acceptance pending Product-approved radius/location freshness/global-overlap policy plus live Cosmos and physical-device evidence. Production readiness is not established.
+
+
+## REALTIME-01 exact-head verification — CI #1796 (2026-11-16)
+
+PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), branch `fix/realtime-01-display-persisted-agreement-currency`, exact tested documentation HEAD `54dd665faaacc1d43c13437d017627c9cd9a8362`, passed [CI #1796 / run 43789311523](https://github.com/rajeevp727/turnova-platform/actions/runs/43789311523) **12/12 jobs**. Backend .NET 10 Release build and **666/666 tests (0 failed, 0 skipped)**; shared mobile/auth **217/217 (0 failed)**; Python harness **48/48**; Rider/Driver Expo config, TypeScript typechecks and production JS bundles; native API publish; both Android debug and standalone release APKs; both unsigned iOS Simulator apps; and four same-run Android emulator/iOS Simulator install-launch smoke tests all passed. All 19 artifacts were unexpired at verification. This is CI/emulator/Simulator evidence, not signed-device or physical-device acceptance.
+
+REALTIME-01 remains In Progress for strict acceptance because applicable production, provider and physical-device gates are outstanding. The persisted currency display code and deterministic tests are implemented; proposal entry remains INR-only pending Product policy.
+
+## Next sequential finding — DRIVER-01 Union creation concurrency
+
+The current Ops Union creation endpoint performs a normalized-code list check, then assigns a random GUID and uses upsert. Concurrent requests can both pass the check and create duplicate active normalized codes. The next focused implementation should use deterministic IDs for newly created normalized codes plus create-if-absent semantics in the existing `Unions` container (`/unionId` partition key), return HTTP 409 on Cosmos/in-memory duplicate conflicts, and add concurrent case/whitespace-normalization regression tests. Preserve existing Union IDs and historical records.
+
+Product/Safety must separately decide whether Ops rejection/suspension is permitted during an active negotiation/ride and how an existing ride is handled. Do not invent an emergency-suspension policy.
+
+**Acceptance accounting remains:** 19 rows total; 15 In Progress, 4 Blocked, 0 Strictly Verified. Strict verification includes applicable external gates and is not an implementation-completion percentage.
