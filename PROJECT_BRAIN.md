@@ -2509,3 +2509,11 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039â€
 - REALTIME-01 change: show each persisted agreement version's three-letter currency code in Rider and Driver history; remove misleading hardcoded INR history heading/symbol. Keep new proposal entry INR-only pending Product policy. Shared helper fails closed for missing/malformed currency and safely renders invalid amounts. Five deterministic tests are added; the CI Node glob discovers them.
 - Next: inspect complete four-file diff and test design; open one focused PR; require exact-head CI with backend/shared mobile/Expo/native Android/iOS and four same-run smoke tests. Then continue sequentially through remaining acceptance rows, including PLATFORM-01 targeted Expo dependency remediation and reproducible lockfiles. Do not blind-upgrade Expo/React Native.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); implementation evidence is substantial but external gates remain. Production readiness is not established.
+
+
+
+## REALTIME-01 API evidence addition (2026-11-16)
+
+- Added backend integration regression `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties`: USD v1 and EUR v2 are created and both Rider/Driver history responses must preserve both currencies and amounts in order.
+- Five shared Node formatter tests remain. Expected CI baseline deltas are backend 666 and shared mobile/auth 217, subject to actual logs.
+- Latest source commit: `b40d5610655e8109eb7388657afa42676c683d80`. Documentation must be synchronized and a fresh exact-head CI run must complete before PR #172 can be marked ready.
