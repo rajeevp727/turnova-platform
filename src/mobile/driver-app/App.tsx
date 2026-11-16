@@ -22,6 +22,7 @@ import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { finishLoadingIfSessionCurrent, resetDriverSessionState } from "../shared/sessionStateReset";
 import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePersistentProposalAttempt, type PersistentProposalAttempt } from "../shared/proposalAttempt";
 import { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
+import { canLoadDriverRideHistory, canMaintainDriverRideSession } from "../shared/driverTripLifecycle";
 import { createDriverLocationRetryScheduler, isDriverAvailabilityConflict, isDriverTransientLocationError, isDriverZoneExit, reconcileDriverAvailability } from "../shared/driverAvailabilityRecovery";
 import { canShareTripLocation, findAuthoritativeActiveTrip } from "../shared/tripLocationSharing";
 import { formatIndiaMonthLabel, getCompletedIndiaMonths } from "../shared/completedIndiaMonths";
@@ -570,13 +571,18 @@ export default function App() {
   };
   useEffect(() => {
     if (!activeRide?.rideId) { setAgreementHistory([]); setAgreementAmount(""); return; }
-    if (tab !== "Trips") return;
+    if (!canMaintainDriverRideSession({
+      userId: user?.id,
+      rideId: activeRide.rideId,
+      hasAccessToken: Boolean(tokens?.accessToken),
+      isAuthenticated: isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)
+    })) return;
     let active = true;
-    void apiFetch(`/api/v1/rides/${activeRide.rideId}/agreements`).then(result => {
-      if (active) setAgreementHistory(result as AgreementVersion[]);
-    }).catch(() => { if (active) setAgreementHistory([]); });
+    void loadAgreementHistory(activeRide.rideId, () => active)
+      .then(loaded => { if (active && !loaded) setAgreementHistory([]); })
+      .catch(() => { if (active) setAgreementHistory([]); });
     return () => { active = false; };
-  }, [activeRide?.rideId, tab, apiFetch]);
+  }, [user?.id, tokens?.accessToken, activeRide?.rideId, loadAgreementHistory]);
 
   const proposeAgreement = async () => {
     const rideId = activeRide?.rideId;
@@ -654,13 +660,17 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!user?.id || tab !== "Trips") return;
+    if (!canLoadDriverRideHistory({
+      userId: user?.id,
+      hasAccessToken: Boolean(tokens?.accessToken),
+      isAuthenticated: isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)
+    })) return;
     let active = true;
     void loadDriverRideHistory(() => active).catch(e => {
       if (active) setError(e instanceof Error ? e.message : "Unable to load trip history.");
     });
     return () => { active = false; };
-  }, [user?.id, tab, loadDriverRideHistory, activeRide?.status]);
+  }, [user?.id, tokens?.accessToken, loadDriverRideHistory, activeRide?.status]);
 
   // SignalR is at-least-once: deduplicate by the server-issued offerId before surfacing it.
   const receivedOfferIds = useRef<Set<string>>(new Set());
@@ -730,7 +740,12 @@ export default function App() {
   }, [user?.id, availabilityStatus, legacyServiceClass, tokens?.accessToken, loadAvailableRides, loadDriverRideHistory, apiFetch]);
 
   useEffect(() => {
-    if (!user?.id || tab !== "Trips" || !activeRide?.rideId || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
+    if (!canMaintainDriverRideSession({
+      userId: user?.id,
+      rideId: activeRide?.rideId,
+      hasAccessToken: Boolean(tokens?.accessToken),
+      isAuthenticated: isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)
+    })) return;
     let mounted = true;
     const connectionEpoch = sessionEpoch.current;
     const isConnectionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, connectionEpoch);
@@ -765,12 +780,17 @@ export default function App() {
       }
     });
     return () => { mounted = false; connection.off("RideAgreementChanged", refreshAgreement); activeSessionStops.current.delete(stopConnection); stopRegisteredConnections(new Set<() => unknown>([stopConnection])); };
-  }, [user?.id, tab, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory, apiFetch]);
+  }, [user?.id, activeRide?.rideId, tokens?.accessToken, loadAgreementHistory, apiFetch]);
 
-  const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing is active while this screen is open."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
+  const acceptRide = async (rideId: string) => { try { const accepted = await apiFetch(`/api/v1/rides/${rideId}/accept`, { method: "POST" }); setActiveRide(accepted); setNotice("Ride accepted. Location sharing remains active while the app is foregrounded."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept ride."); } };
   const rejectRide = async (rideId: string) => { try { await apiFetch(`/api/v1/rides/${rideId}/reject`, { method: "POST" }); setAvailableRides(current => current.filter(item => item.rideId !== rideId)); setNotice("Selected Rider request declined. No automatic reassignment was made."); if (activeRide?.rideId === rideId) { setActiveRide(null); setAgreementHistory([]); } } catch (e) { setError(e instanceof Error ? e.message : "Unable to decline ride."); } };
   useEffect(() => {
-    if (!user || tab !== "Trips" || !activeRide || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
+    if (!canMaintainDriverRideSession({
+      userId: user?.id,
+      rideId: activeRide?.rideId,
+      hasAccessToken: Boolean(tokens?.accessToken),
+      isAuthenticated: isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)
+    })) return;
     let mounted = true;
     const connectionEpoch = sessionEpoch.current;
     const isConnectionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, connectionEpoch);
@@ -812,10 +832,15 @@ export default function App() {
       }
     });
     return () => { mounted = false; connection.off("RideStatusChanged", handleRideStatusChanged); activeSessionStops.current.delete(stopConnection); stopRegisteredConnections(new Set<() => unknown>([stopConnection])); };
-  }, [user, tab, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory, apiFetch]);
+  }, [user?.id, activeRide?.rideId, tokens?.accessToken, loadDriverRideHistory, apiFetch]);
 
   useEffect(() => {
-    if (!user || tab !== "Trips" || !activeRide || !tokens || !isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)) return;
+    if (!canMaintainDriverRideSession({
+      userId: user?.id,
+      rideId: activeRide?.rideId,
+      hasAccessToken: Boolean(tokens?.accessToken),
+      isAuthenticated: isAuthenticatedSessionCurrent(sessionEpoch, authenticatedSessionEpoch)
+    })) return;
     const locationEpoch = sessionEpoch.current;
     const isLocationSessionCurrent = () => isSessionEpochCurrent(sessionEpoch, authenticatedSessionEpoch, locationEpoch);
     let appStateSubscription: ReturnType<typeof AppState.addEventListener> | undefined;
@@ -913,7 +938,7 @@ export default function App() {
       activeSessionStops.current.delete(stopForSessionInvalidation);
       stopForSessionInvalidation();
     };
-  }, [user?.id, tab, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, apiFetch]);
+  }, [user?.id, activeRide?.rideId, activeRide?.status, activeRide?.locationSharingActive, tokens?.accessToken, apiFetch]);
 
   const advanceRide = async (action: "arrive" | "start" | "complete") => { if (!activeRide) return; try { const updated = await apiFetch(`/api/v1/rides/${activeRide.rideId}/${action}`, { method: "POST" }); setActiveRide(updated); setNotice(action === "arrive" ? "Arrival confirmed." : action === "start" ? "Trip started." : "Trip completed. Location sharing stopped."); } catch (e) { setError(e instanceof Error ? e.message : "Unable to update ride status."); } };
 
