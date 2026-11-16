@@ -1196,4 +1196,4 @@ The DISPATCH-01 engineering implementation and deterministic regression coverage
 
 **Status remains Blocked for strict acceptance**, not because implementation is absent, but because Product must approve positive pickup radius, Driver location freshness and global zone non-overlap policy, and live Cosmos ETag/transactional-batch/multi-instance/restart plus physical-device evidence must pass. Checked-in radius 0 remains fail-closed. No strict Verified status is assigned.
 
-The new documentation head requires exact-head CI #1776 before normal squash merge. The 19-row matrix remains 15 In Progress, 4 Blocked, 0 Strictly Verified.
+The new documentation head requires exact-head fresh exact-head CI on the final documentation commit before normal squash merge. The 19-row matrix remains 15 In Progress, 4 Blocked, 0 Strictly Verified.
