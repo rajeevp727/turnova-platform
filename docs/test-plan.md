@@ -2810,3 +2810,15 @@ Next sequential test work is DRIVER-01 concurrent normalized Union-code creation
 - This documentation synchronization creates a new branch head and therefore requires fresh exact-head CI before marking PR ready or merging. Do not reuse CI #1804 as evidence for the new documentation commit.
 - Next sequential code task after REALTIME-01 merges: DRIVER-01 normalized Union-code creation concurrency. Replace list-check/random-GUID/upsert for new codes with deterministic IDs and create-if-absent in the existing `Unions` container partitioned by `/unionId`; map duplicate Cosmos/in-memory conflicts to HTTP 409; add concurrent case/whitespace-normalization tests; preserve existing Union IDs and historical records. Product/Safety separately decides Ops rejection/suspension during an active negotiation/ride; do not invent emergency-suspension behavior.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established. External gates include Product-approved radius/zones/location freshness/negotiation lifetime; live Cosmos ETag/transaction/multi-instance/restart; production auth and realtime/maps providers; private document storage/scanning/consent/retention; support and reconciliation policies; Union legal approval; signed-device/physical-device testing; signing, hosting and store approval.
+
+
+## DRIVER-01 normalized Union-code creation concurrency (2026-11-16)
+
+| Scenario | Expected result | Type | Priority |
+|---|---|---|---|
+| Two simultaneous Ops create requests use codes differing only by case and surrounding whitespace | Canonical code is identical; exactly one request returns 201 and one returns 409; one Union is stored/listed; new Union ID is deterministic from normalized code | API integration (in-memory concurrency fixture) | P1 |
+| A legacy Union has a random historical ID and a non-canonical stored code; Ops submits the equivalent normalized code | API returns 409; legacy Union record, ID and timestamps remain unchanged; no second Union is created | API integration / historical-data preservation | P1 |
+
+Implementation uses `ConcurrentDictionary.TryAdd` for in-memory create-if-absent and Cosmos `CreateItemAsync` in the existing `Unions` container partitioned by `/unionId`; HTTP 409 is returned for duplicate create conflicts. Existing Union status updates continue to use the existing upsert path. No migration rewrites existing IDs.
+
+The two deterministic integration tests are included in PR #173. Fresh exact-head CI is pending after the synchronized documentation commit. Live Cosmos cross-instance contention, ETag/transaction and restart recovery remain separate infrastructure acceptance gates. Product/Safety's active-ride Ops rejection/suspension policy remains unresolved and is not changed by this work.
