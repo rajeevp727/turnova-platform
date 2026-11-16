@@ -1155,6 +1155,39 @@ public sealed partial class RideApiIntegrationTests
         Assert.False(profiles.ContainsKey(driverId));
     }
 
+    [Fact]
+    public async Task DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile()
+    {
+        using var factory = new TurnOvaApiFactory();
+        const string driverId = "driver-onboarding-required-document-preserve";
+        using var driver = factory.CreateClient("Driver", driverId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+
+        using var initial = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", ValidOnboardingRequest());
+        Assert.Equal(HttpStatusCode.Accepted, initial.StatusCode);
+        var before = profiles[driverId];
+
+        using var resubmission = await driver.PostAsJsonAsync("/api/v1/driver/onboarding", new
+        {
+            profilePhotoBase64 = "/9j/2Q==",
+            zoneId = "hyderabad-central",
+            fullName = "Replacement Driver",
+            phoneNumber = "+919876543210",
+            vehicleMake = "Maruti",
+            vehicleModel = "Dzire",
+            vehicleRegistration = "TS09AB5678",
+            serviceClass = "cab",
+            passengerCapacity = 3,
+            documents = new[]
+            {
+                new { documentType = "DrivingLicence", storageReference = "drivers/test/licence-v2" }
+            }
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resubmission.StatusCode);
+        Assert.Equal(before, profiles[driverId]);
+    }
+
     [Theory]
     [InlineData("91+9876543210")]
     [InlineData("++919876543210")]
