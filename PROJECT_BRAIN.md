@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-16
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `0005b477ac06831b8c5532dd55a448886a2eccd1`. PRs #164–#170 are merged. Sole active PR #171 is DISPATCH-01 on `fix/dispatch-01-validate-zones-before-driver-mutations`; source/test head `325c8c5f5b9f45685542a21dfe37d28e7231473e`; current documentation head `the current PR #171 branch head (see the pull request for its exact SHA)`. Exact-head CI #1773 / run 43773171101 passed 12/12 on prior docs head `49b30f6060eb4eaffd022e6495617ceacd6c0a88`: backend 665/665, shared mobile/auth 212/212, Python 48/48, both Expo apps, native API publish, four native Android/iOS builds and four same-run smoke tests. Current documentation head requires fresh exact-head CI before merge. Release-readiness artifacts confirm no signed Android AAB/iOS IPA, EAS project linkage, approved iOS bundle registration, production API URL or signing credentials.
+**Main HEAD:** `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. PRs #164–#171 are merged. Sole active PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172) is REALTIME-01 on `fix/realtime-01-display-persisted-agreement-currency`; current known head `9c1d11acd7aee142a2887e054f227ae3dae4a069`. CI #1786 / run 43783792455: backend 666/666 and shared mobile/auth 217/217 passed; Rider/Driver Expo typechecks and Android/iOS production JS bundles passed; four native builds and four same-run smoke tests are still pending. No merge until exact-head 12/12.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
