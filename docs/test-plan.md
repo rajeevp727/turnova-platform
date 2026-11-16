@@ -2843,3 +2843,26 @@ The onboarding API tests clear the factory's default Driver profile for their un
 - The four deterministic API integration methods cover concurrent normalized Union creation, legacy Union ID preservation, both required Cab document omissions, and no-data-loss on incomplete onboarding resubmission. CI #1820's factory-seeded-profile fixture issue was corrected before #1824.
 - This documentation synchronization advances the PR head; CI #1824 must not be reused as final-head evidence. Run fresh CI on the resulting documentation head before PR readiness/merge.
 - Strict acceptance remains **0/19 Verified**; production readiness is not established. Live Cosmos, mixed-version rollout, private document controls, OTP/UnionManager claims, legal approval and physical-device gates remain external.
+
+
+## DRIVER-01 final documentation-head verification — CI #1825 (2026-11-16)
+
+PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173), branch `fix/driver-01-union-code-create-if-absent`, exact documentation HEAD `de27edea70760d4979fe2a8942568addb72fe92d`, passed [CI #1825 / run 43885066258](https://github.com/rajeevp727/turnova-platform/actions/runs/43885066258) **12/12 jobs**:
+
+- Backend .NET 10 Release build and integration/unit suite: **671 passed, 0 failed, 0 skipped**. The build reported 20 non-blocking xUnit analyzer warnings and zero errors.
+- Shared mobile/auth Node suite: **217 passed**.
+- Python native-artifact/Simulator harness: **48 passed**.
+- Rider and Driver Expo public config, TypeScript checks and Android/iOS production JavaScript bundles passed.
+- Native non-container .NET API publish and artifact verification passed.
+- Rider and Driver Android debug APKs and standalone release APKs compiled; package identities were verified as `com.turnova.rider` and `com.turnova.driver`.
+- Rider and Driver unsigned iOS Simulator applications compiled; bundle identities were verified.
+- All four same-run Android emulator/iOS Simulator install-launch smoke tests passed.
+- All **19 workflow artifacts** were unexpired at inspection. Key artifact IDs: API publish `14234107539`; Rider/Driver Android release APKs `14233393978` / `14234802137`; Rider/Driver iOS Simulator apps `14234397832` / `14235891727`; Rider/Driver Android smoke `14235216982` / `14234952637`; Rider/Driver iOS smoke `14236542693` / `14236476988`.
+
+The six-file PR diff was re-inspected. Six review submissions are COMMENT-only, there are zero unresolved inline threads, and no approval/self-approval. No critical/high authorization, privacy, concurrency, idempotency or data-loss finding remains unresolved. The final documentation sync below changes the branch head and requires another exact-head CI run before merge.
+
+DRIVER-01 tests: `ConcurrentUnionCreationWithEquivalentNormalizedCodesCreatesExactlyOneUnion` proves simultaneous case/whitespace-equivalent requests produce exactly one 201, one 409 and one stored Union with deterministic ID. `UnionCreationConflictPreservesExistingLegacyUnionIdAndRecord` preserves a legacy random ID and padded code. `DriverOnboardingRequiresBothDrivingLicenceAndVehicleRegistrationReferences` rejects either missing document; `DriverOnboardingMissingRequiredDocumentDoesNotReplaceExistingProfile` proves incomplete resubmission cannot overwrite an existing profile. CI #1820's factory-seeded-profile fixture setup was corrected before the passing final run.
+
+Mixed-version deployment must drain old random-ID Union writers before enabling new Union creation traffic. Existing duplicate legacy records are not auto-merged/deleted. Live Cosmos cross-instance contention, ETag/transaction/restart, private document provider/scanning/consent/retention, phone OTP, signed UnionManager claim issuance, physical-device camera/document permissions and partnership legal approval remain external gates. Product/Safety owns the unresolved Ops rejection/suspension policy during active negotiation/ride.
+
+Next sequential test work: **DRIVER-02**. Re-read current main and verify the existing monotonic GPS capture watermark, future/out-of-order rejection, CAS/ETag profile writes, stale-location discovery/booking guards and Driver HTTP 409 recovery across API, Rider/Driver app and tests. Add any independent deterministic regression/build evidence still missing; do not invent Product-approved location freshness, radius/zone or FIFO policy.
