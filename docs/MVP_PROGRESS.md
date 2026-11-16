@@ -2,7 +2,7 @@
 
 ## 1. Current step
 
-**REALTIME-01 implementation and deterministic evidence are complete; exact-head CI #1804 passed 12/12 on `a0dabaf2ab83cc4bae23b1dd3db093662ea93163`.** PR #172 remains the sole active feature PR; this documentation refresh records CI #1800 and requires fresh exact-head CI on the resulting documentation commit before merge.
+**REALTIME-01 implementation and deterministic evidence are complete; exact-head CI #1804 passed 12/12 on `a0dabaf2ab83cc4bae23b1dd3db093662ea93163`.** PR #172 remains the sole active feature PR; this documentation refresh records CI #1804 and requires fresh exact-head CI on the resulting documentation commit before merge.
 
 - Rider and Driver agreement history render the currency persisted on each immutable agreement version. The history heading is currency-neutral. New proposal entry and validation remain INR-only pending explicit Product policy.
 - Shared helper `src/mobile/shared/agreementFormatting.js` normalizes valid three-letter currency codes, never silently defaults missing/malformed values to INR, and renders invalid numeric values safely. Five deterministic Node tests cover INR, USD/EUR, normalization, missing/malformed currency and invalid amounts.
