@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-16
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. PRs #164–#171 are merged. Sole active PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172) is REALTIME-01 on `fix/realtime-01-display-persisted-agreement-currency`; current known head `9c1d11acd7aee142a2887e054f227ae3dae4a069`. CI #1786 / run 43783792455: backend 666/666 and shared mobile/auth 217/217 passed; Rider/Driver Expo typechecks and Android/iOS production JS bundles passed; four native builds and four same-run smoke tests are still pending. No merge until exact-head 12/12.
+**Main HEAD:** `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. PRs #164–#171 are merged. Sole active PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172) is REALTIME-01; use the PR for its current exact head. CI #1788 / run 43784156915 on preceding docs head `7c0644ad1782704a4a9025aff6ba5c3c4ede251d` passed backend 666/666, shared mobile/auth 217/217, Python 48/48, both Expo typechecks/bundles and native API publish. Android debug APKs uploaded; Android release/iOS Simulator builds and four same-run smoke tests were pending. Fresh exact-head CI required after this docs refresh.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -2502,18 +2502,9 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 
 ## Latest handoff — DISPATCH-01 merged; REALTIME-01 active (2026-11-16)
 
-- Main HEAD: `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. PR #171 DISPATCH-01 merged by squash after exact-head CI #1781 / run 43778207524 passed 12/12 on `dcb8b30424e61db29021d4661be5eee481d0c315`. Merge commit: `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`.
-- DISPATCH-01 code implementation is merged; strict acceptance remains blocked by Product-approved positive radius, Driver location freshness, decision on global zone non-overlap, live Cosmos ETag/transactional-batch/multi-instance/restart validation and physical-device evidence.
-- DISPATCH-02/03/04 were re-audited on main after the merge. Existing discovery/selection, expiry/read-repair/no-FIFO-advance, reservation and concurrency implementation/tests cover the current agreed scope; no independent source gap was found in this pass. Revisit if later evidence exposes a gap.
-- Active feature branch: `fix/realtime-01-display-persisted-agreement-currency`, based on main `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. Four code/test commits currently change Rider App.tsx, Driver App.tsx, shared agreement formatter and its Node tests. Latest known commit: `59ca4f41f8936fb88932daaa3aa344f2e15d33b1`.
-- REALTIME-01 change: show each persisted agreement version's three-letter currency code in Rider and Driver history; remove misleading hardcoded INR history heading/symbol. Keep new proposal entry INR-only pending Product policy. Shared helper fails closed for missing/malformed currency and safely renders invalid amounts. Five deterministic tests are added; the CI Node glob discovers them.
-- Next: inspect complete four-file diff and test design; open one focused PR; require exact-head CI with backend/shared mobile/Expo/native Android/iOS and four same-run smoke tests. Then continue sequentially through remaining acceptance rows, including PLATFORM-01 targeted Expo dependency remediation and reproducible lockfiles. Do not blind-upgrade Expo/React Native.
-- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); implementation evidence is substantial but external gates remain. Production readiness is not established.
-
-
-
-## REALTIME-01 API evidence addition (2026-11-16)
-
-- Added backend integration regression `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties`: USD v1 and EUR v2 are created and both Rider/Driver history responses must preserve both currencies and amounts in order.
-- Five shared Node formatter tests remain. Expected CI baseline deltas are backend 666 and shared mobile/auth 217, subject to actual logs.
-- Latest source commit: `b40d5610655e8109eb7388657afa42676c683d80`. Documentation must be synchronized and a fresh exact-head CI run must complete before PR #172 can be marked ready.
+- Main HEAD: `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`. PR #171 DISPATCH-01 merged after exact-head CI #1781 / run 43778207524 passed 12/12 on `dcb8b30424e61db29021d4661be5eee481d0c315`.
+- Active feature PR: [#172](https://github.com/rajeevp727/turnova-platform/pull/172), branch `fix/realtime-01-display-persisted-agreement-currency`. Current exact head is recorded on the PR; do not infer from historical source commits. PR remains Draft, 9 changed files, COMMENT-only review, zero unresolved threads.
+- REALTIME-01: Rider and Driver agreement history display each immutable version's persisted currency code; new proposal input remains INR-only pending Product policy. Shared helper fails closed for missing/malformed currency. Five shared Node tests and one API integration test were added; API test verifies USD v1 and EUR v2 persist and are returned in order to both Rider and Driver.
+- CI #1788 / run 43784156915 on preceding docs head `7c0644ad1782704a4a9025aff6ba5c3c4ede251d` verified backend 666/666, shared mobile/auth 217/217, Python 48/48, Rider/Driver Expo typechecks and production bundles, and native API publish. Android debug APKs uploaded; standalone Android release and both iOS Simulator builds were still running; four same-run smoke tests pending. This docs refresh requires a fresh exact-head CI before merge.
+- DISPATCH-02/03/04, TRIP-01, DRIVER-01/02/03 audits found no independent source gap in the reviewed pass; revisit if CI/device/Cosmos evidence reveals one. Next acceptance rows remain in matrix order. PLATFORM-01 dependency remediation/reproducible lockfiles remains later; no blind Expo major upgrade.
+- Strict acceptance remains 0/19 Verified (15 In Progress, 4 Blocked); this does not mean no engineering implementation exists. Production readiness is not established.
