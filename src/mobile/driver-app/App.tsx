@@ -15,6 +15,7 @@ import { advanceSessionEpoch, getFreshAccessToken, isAuthenticatedSessionCurrent
 import { readAccessTokenIfCurrent, readSessionTokens, saveSessionTokensIfCurrent, clearSessionTokens, restoreStoredSession, logoutSession } from "../shared/sessionTokenStore";
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
+import { formatAgreementAmount } from "../shared/agreementFormatting";
 import { paymentReportPresentation } from "../shared/paymentReportPresentation";
 import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
@@ -1201,9 +1202,9 @@ export default function App() {
             <Text style={styles.cardTitle}>{activeRide.pickup} → {activeRide.dropoff}</Text>
             {activeRide.stops?.length ? <Text style={styles.muted}>Stops · {activeRide.stops.join(" → ")}</Text> : null}
             <View style={{marginTop:12,paddingTop:10,borderTopWidth:1,borderTopColor:colors.border}}>
-              <Text style={styles.cardTitle}>Direct fare negotiation · INR</Text>
+              <Text style={styles.cardTitle}>Direct fare negotiation</Text>
               {agreementHistory.map(item=><View key={item.version} style={{paddingVertical:7}}>
-                <Text style={styles.muted}>Version {item.version} · ₹{item.amount.toFixed(2)} · proposed by {item.proposedBy}</Text>
+                <Text style={styles.muted}>Version {item.version} · {formatAgreementAmount(item.amount, item.currency)} · proposed by {item.proposedBy}</Text>
                 <Text style={styles.muted}>{agreementConfirmationLabel("Rider", item.riderConfirmed, item.riderConfirmedAtUtc)}</Text><Text style={styles.muted}>{agreementConfirmationLabel("Driver", item.driverConfirmed, item.driverConfirmedAtUtc)}</Text>
               </View>)}
               <Pressable style={styles.secondary} onPress={()=>void loadAgreementHistory(activeRide.rideId)}><Text style={styles.secondaryText}>Refresh agreement</Text></Pressable>

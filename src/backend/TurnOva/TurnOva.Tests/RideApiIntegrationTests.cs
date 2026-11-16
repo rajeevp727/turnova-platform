@@ -6276,6 +6276,50 @@ public sealed partial class RideApiIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "agreement-currency-rider");
+        using var driver = factory.CreateClient("Driver", "agreement-currency-driver");
+        const string rideId = "RIDE-AGREEMENT-CURRENCY";
+        SeedAgreementRide(factory, rideId, "agreement-currency-rider", "agreement-currency-driver");
+
+        using var riderProposal = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 450.25m, currency = "USD" })
+        };
+        riderProposal.Headers.Add("Idempotency-Key", "agreement-currency-usd-001");
+        using var riderResponse = await rider.SendAsync(riderProposal);
+        Assert.Equal(HttpStatusCode.Created, riderResponse.StatusCode);
+
+        using var driverProposal = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 460.75m, currency = "EUR" })
+        };
+        driverProposal.Headers.Add("Idempotency-Key", "agreement-currency-eur-001");
+        using var driverResponse = await driver.SendAsync(driverProposal);
+        Assert.Equal(HttpStatusCode.Created, driverResponse.StatusCode);
+
+        foreach (var party in new[] { rider, driver })
+        {
+            using var historyResponse = await party.GetAsync($"/api/v1/rides/{rideId}/agreements");
+            Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+            using var historyJson = JsonDocument.Parse(await historyResponse.Content.ReadAsStringAsync());
+            var versions = historyJson.RootElement;
+            Assert.Equal(JsonValueKind.Array, versions.ValueKind);
+            Assert.Equal(2, versions.GetArrayLength());
+            Assert.Equal(1, versions[0].GetProperty("version").GetInt32());
+            Assert.Equal("USD", versions[0].GetProperty("currency").GetString());
+            Assert.Equal(450.25m, versions[0].GetProperty("amount").GetDecimal());
+            Assert.Equal(2, versions[1].GetProperty("version").GetInt32());
+            Assert.Equal("EUR", versions[1].GetProperty("currency").GetString());
+            Assert.Equal(460.75m, versions[1].GetProperty("amount").GetDecimal());
+        }
+    }
+
     [Theory]
     [InlineData(0, "INR")]
     [InlineData(-1, "INR")]

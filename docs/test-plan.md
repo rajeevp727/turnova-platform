@@ -1673,7 +1673,7 @@ The nine executed theory cases comprise six radius values (missing, zero, negati
 Same-run simulator result JSONs and screenshots were inspected: Rider Android `13817215681`, Driver Android `13816635972`, Rider iOS `13818882794`, Driver iOS `13818155109`. Both Android apps installed/launched with stable processes, correct role-specific login screens, no stale-session error and zero Pixel Launcher ANR recovery attempts. Both unsigned iOS apps installed/launched, remained stable and displayed the expected SecureStore-unavailable banner. The first Rider iOS smoke attempt timed out during `simctl install` after the bounded 300-second operation timeout; only that failed job was retried and the retry passed without code changes. Native iOS app bundle IDs are `com.turnova.rider` and `com.turnova.driver`. These unsigned simulator results do not establish signed-device Keychain persistence, production authentication or physical-device acceptance. No production radius/freshness values are selected by these tests.
 
 
-## Latest exact-head verification — DISPATCH-01 documentation CI #1225 (2026-11-11)
+## Historical exact-head verification — DISPATCH-01 (pre-merge) documentation CI #1225 (2026-11-11)
 
 - PR #147 remains the sole active feature PR on `test/dispatch-01-selected-booking-config-guards`; source/test head `8cca1958f0e9d67d57ee69ee5327fd4449d9651a`, documentation head verified by CI `7bcb81cb9596fc9f2877bb6f79a7c502665f8e80`, base main HEAD `b1ea22f4e2d19e76f5b182b93e527960b110ad7a`.
 - Documentation-synchronized CI [#1225 / 42938055684](https://github.com/rajeevp727/turnova-platform/actions/runs/42938055684) completed **12/12 jobs successfully**: .NET backend **411/411**, shared mobile **171/171**, Python native-artifact/simulator tests **41/41**, Rider/Driver TypeScript validation and production bundles, four native Android/iOS builds, and four Android/iOS simulator smoke jobs.
@@ -2638,9 +2638,9 @@ Automated implementation: InvalidDispatchZoneConfigurationFailsClosedAcrossRider
 - Strict acceptance remains 0/19 (15 In Progress, 4 Blocked). DISPATCH-01 remains Blocked for strict acceptance pending Product approval of positive radius, location freshness and global overlap policy, plus live Cosmos and physical-device evidence. Production readiness is not established.
 
 
-## Latest exact-head verification — DISPATCH-01 (2026-11-16)
+## Historical exact-head verification — DISPATCH-01 (pre-merge) (2026-11-16)
 
-- Sole active PR [#171](https://github.com/rajeevp727/turnova-platform/pull/171), branch `fix/dispatch-01-validate-zones-before-driver-mutations`, exact tested documentation HEAD `037cb952270a9628842cb20de310a16858ff1e97`. Final documentation-head [CI #1767 / run 43761232468](https://github.com/rajeevp727/turnova-platform/actions/runs/43761232468) passed **12/12 jobs on exact HEAD `037cb952270a9628842cb20de310a16858ff1e97`**: backend Release build and tests **664/664**, shared mobile/auth **212/212**, Python harness **48/48**, Rider and Driver Expo validation, native API publish, four native Android/iOS builds, and four same-run install/launch smoke tests (two Android emulator release-APK smokes and two unsigned iOS Simulator smokes). All 19 returned artifacts were unexpired at verification. These are CI/emulator/Simulator artifacts, not signed production releases or physical-device acceptance.
+- [PR #171](https://github.com/rajeevp727/turnova-platform/pull/171) (sole active PR at that time), branch `fix/dispatch-01-validate-zones-before-driver-mutations`, exact tested documentation HEAD `037cb952270a9628842cb20de310a16858ff1e97`. Final documentation-head [CI #1767 / run 43761232468](https://github.com/rajeevp727/turnova-platform/actions/runs/43761232468) passed **12/12 jobs on exact HEAD `037cb952270a9628842cb20de310a16858ff1e97`**: backend Release build and tests **664/664**, shared mobile/auth **212/212**, Python harness **48/48**, Rider and Driver Expo validation, native API publish, four native Android/iOS builds, and four same-run install/launch smoke tests (two Android emulator release-APK smokes and two unsigned iOS Simulator smokes). All 19 returned artifacts were unexpired at verification. These are CI/emulator/Simulator artifacts, not signed production releases or physical-device acceptance.
 - The four smoke jobs completed successfully: Rider and Driver standalone Android release APKs installed/launched in Android emulators; Rider and Driver unsigned iOS apps installed/launched in iOS Simulators. This does not establish signed-device SecureStore/Keychain, physical-device, production auth/API, live Cosmos or store acceptance.
 - Backend zone validation, no-mutation reservation/profile/queue assertions, valid no-match zone-exit preservation and the Driver exact HTTP 409/message classifier are covered by the PR's deterministic tests. The full nine-file diff was reviewed; one COMMENT-only review is recorded, zero unresolved review threads, no self-approval, and no critical/high-risk finding identified.
 - DISPATCH-01 remains **Blocked for strict acceptance** pending Product approval of positive pickup radius, Driver location freshness and whether global zone non-overlap is required, plus live Cosmos and physical-device evidence. Checked-in radius 0 intentionally fails closed.
@@ -2683,4 +2683,130 @@ Automated implementation: InvalidDispatchZoneConfigurationFailsClosedAcrossRider
 - Smoke artifacts: Rider Android `14185558493`, Driver Android `14185194709`, Rider iOS `14186166975`, Driver iOS `14185189939`. Native artifacts: Rider/Driver Android standalone release APKs `14185538085` / `14185388427`; Rider/Driver unsigned iOS Simulator apps `14185567880` / `14185399691`; API publish `14185307515`. All were unexpired at verification. No signed-device Keychain, physical-device, production auth/Cosmos or store acceptance is inferred.
 - DISPATCH-01 regression coverage: ten malformed configuration cases including raw non-numeric binder value; overlapping and inclusive shared-boundary cases; overlap elsewhere remains usable; no-mutation assertions for Rider discovery/booking, Driver Online/location and legacy queue join; valid no-match zone exit; exact HTTP 409/message mobile classifier.
 - Rider and Driver npm audit reports each show 1 low + 11 moderate, 0 high/critical; reports `14185251457` / `14185097811`. Generated lockfile artifacts `14184873367` / `14185157537` are inputs for sequential PLATFORM-01 remediation. Targeted compatible overrides and committed reproducible lockfiles must be tested; no blind Expo/RN major upgrade.
-- Fresh exact-head fresh exact-head CI on the final documentation commit is required after this documentation sync. Strict acceptance remains 0/19; production readiness is not established.
+- Fresh exact-head CI on the final documentation commit is required after this documentation sync. Strict acceptance remains 0/19; production readiness is not established.
+
+
+
+## REALTIME-01 — persisted agreement currency display (2026-11-16)
+
+- Rider and Driver history use the API-provided `AgreementVersion.currency` for each immutable agreement version. The history heading is currency-neutral; proposal entry remains INR-only until Product approves any multi-currency proposal scope.
+- Shared helper: `src/mobile/shared/agreementFormatting.js`; tests: `src/mobile/shared/agreementFormatting.test.cjs`.
+- Five deterministic tests cover persisted INR formatting, non-INR USD/EUR formatting, trim/case normalization, missing or malformed currency (no silent INR fallback), and invalid amount rendering.
+- The existing CI step `node --test src/mobile/shared/*.test.cjs` discovers the new test file without workflow changes. Expected shared-mobile count is prior 212 plus five; actual count must be taken from the next CI log.
+- The feature branch changes only Rider App.tsx, Driver App.tsx and the shared formatter/test. No API contract, fare policy, payment behaviour, auth, or ride state was changed. Exact-head Expo/typecheck, Android/iOS native builds, and same-run smoke tests are required before merge.
+
+## DISPATCH-01 merge evidence (2026-11-16)
+
+PR #171 merged at `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8` after exact-head CI #1781 / run 43778207524 passed 12/12 on `dcb8b30424e61db29021d4661be5eee481d0c315`. The merge does not establish Product radius/freshness/global-overlap approval, live Cosmos ETag/transactional-batch/multi-instance/restart validation or physical-device acceptance.
+
+
+
+### REALTIME-01 API persistence regression
+
+- `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties` creates version 1 in USD and version 2 in EUR, then reads agreement history as both Rider and Driver and asserts ordered versions preserve the original amount and currency.
+- This complements five shared Node tests for persisted-code formatting, non-INR display, normalization, no INR fallback and invalid amount handling.
+- CI #1788 / run 43784156915 subsequently confirmed backend 666/666 and shared mobile/auth 217/217 (zero failures/skips); see the executed evidence section below. Native Android/iOS and four same-run smoke checks remained pending on that superseded docs head.
+
+
+## REALTIME-01 executed test evidence update (2026-11-16)
+
+CI #1788 / run 43784156915 on the preceding documentation head executed **666 backend tests (0 failed, 0 skipped)** and **217 shared mobile tests (0 failed, 0 skipped)**; the five new agreement-currency formatter tests passed. Python harness: 48 passed. Rider and Driver Expo config, TypeScript typechecks and Android/iOS production JS bundle exports passed; native Android/iOS builds and four same-run smoke tests were still running when the documentation was refreshed. This run is not final 12/12 evidence. A fresh exact-head CI is required after this documentation commit.
+
+
+## REALTIME-01 exact-head executed verification — CI #1794 (2026-11-16)
+
+PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), exact documentation HEAD `2cbe20f4d09685580236c0306e1df144447bd3d2`, passed [CI #1794 / run 43784910317](https://github.com/rajeevp727/turnova-platform/actions/runs/43784910317) **12/12 jobs**:
+
+- Backend .NET 10 Release build; **666 tests passed, 0 failed, 0 skipped**.
+- Shared mobile/auth Node suite; **217 passed, 0 failed, 0 skipped**, including five agreement-currency formatter cases.
+- Python native-artifact/simulator harness: **48 passed**.
+- Rider and Driver Expo config, TypeScript typecheck and Android/iOS production JS bundle export.
+- Native non-container API publish and artifact verification.
+- Rider and Driver Android debug APKs and standalone release APKs; both release APKs passed embedded package-identity verification.
+- Rider and Driver unsigned iOS Simulator apps compiled; bundle identifiers verified as `com.turnova.rider` and `com.turnova.driver`.
+- Four same-run smoke tests installed/launched the corresponding Android release APKs in Android emulators and unsigned iOS apps in iOS Simulators; screenshots/results were uploaded.
+
+The unsigned Simulator SecureStore-unavailable state is expected and does not prove signed-device Keychain. Emulator/Simulator smoke tests do not establish physical-device acceptance, production authentication/API, live Cosmos or store release.
+
+REALTIME-01 adds five deterministic formatter tests and `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties`, which creates immutable USD version 1 and EUR version 2 and verifies both Rider and Driver history responses preserve order, amount and currency. Proposal entry remains INR-only pending Product policy. This CI is exact-head evidence for `2cbe20f4d09685580236c0306e1df144447bd3d2`; a new exact-head run is required after the current documentation synchronization.
+
+
+## REALTIME-01 final exact-head CI verification — CI #1796 (2026-11-16)
+
+PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), exact documentation HEAD `54dd665faaacc1d43c13437d017627c9cd9a8362`, passed [CI #1796 / run 43789311523](https://github.com/rajeevp727/turnova-platform/actions/runs/43789311523) **12/12 latest-attempt jobs**:
+
+- Backend .NET 10 Release build; **666 tests passed, 0 failed, 0 skipped**. Native framework-dependent API publish passed; publish verifier fixtures passed 11 negative cases plus the valid fixture. Linux-x64 publish output was 43,118,747 bytes, below the 120 MiB verifier limit.
+- Shared mobile/auth Node suite: **217 passed, 0 failed**, including five agreement-currency formatter tests.
+- Python native-artifact/simulator harness: **48 passed**.
+- Rider and Driver Expo config, TypeScript typecheck and Android/iOS production JS bundle exports passed.
+- Rider and Driver Android debug APKs and standalone release APKs compiled; both release APKs passed embedded package-identity verification.
+- Rider and Driver unsigned iOS Simulator apps compiled; bundle identifiers were verified as `com.turnova.rider` and `com.turnova.driver`.
+- Four same-run smoke tests installed/launched Rider/Driver Android release APKs in Android emulators and unsigned iOS apps in iOS Simulators; screenshots/results were uploaded.
+- Key artifact IDs: API publish `14191722931`; Rider/Driver Android release APKs `14192100809` / `14192240467`; Rider/Driver iOS Simulator apps `14192415480` / `14191879859`; Android smoke artifacts `14191908507` / `14192316108`; iOS smoke artifacts `14192902623` / `14192173099`. All 19 artifacts were unexpired at verification.
+
+This run validates the exact pre-documentation-sync head only. The current documentation update creates a new head and requires a fresh exact-head CI before PR #172 can merge. Unsigned Simulator SecureStore-unavailable behaviour is expected and does not prove signed-device Keychain; emulator/Simulator smoke tests do not establish physical-device acceptance, production authentication/API, live Cosmos or store release.
+
+REALTIME-01 runtime scope remains agreement-history presentation: display each immutable version's persisted currency; never infer or default missing/malformed currency to INR; proposal entry remains INR-only pending Product policy. No fare, conversion, payment, reconciliation, auth, API production contract or ride-state behaviour changed.
+
+## DRIVER-01 next sequential engineering audit — Union code uniqueness
+
+Main-branch `POST /api/v1/ops/unions` normalizes the code and checks `ListUnionsAsync`, then creates a random GUID and persists through `UpsertItemAsync`. This check-then-upsert sequence is race-prone: concurrent Ops requests can both pass and create duplicate active normalized codes. Planned safe correction after REALTIME-01 merges: deterministic ID for newly created normalized codes, create-if-absent semantics in the existing `Unions` container partitioned by `/unionId`, HTTP 409 translation for duplicate conflicts, and concurrent case/whitespace-normalization tests. Existing Union IDs and historical records must remain unchanged.
+
+A separate Product/Safety decision is required for Ops rejection/suspension during active negotiation/ride; do not invent a policy or mutate active rides until Product defines the outcome.
+
+
+## Exact-head verification record — REALTIME-01 CI #1799 (2026-11-16)
+
+CI #1799 / run 43795581881 (https://github.com/rajeevp727/turnova-platform/actions/runs/43795581881) completed 12/12 jobs successfully on PR #172 documentation HEAD e05412dbe9bd0e5d16aa9fbecf0b7a132133ef90: .NET 10 Release build and 666/666 backend tests; shared mobile/auth tests; Python harness 48/48; Rider and Driver Expo config/typecheck/production bundles; native API publish with 11 negative verifier fixtures plus a valid fixture; Rider/Driver Android debug and standalone release APKs; Rider/Driver unsigned iOS Simulator apps; and four same-run emulator/Simulator install-launch smoke tests.
+
+This evidence is limited to CI, Android emulators and unsigned iOS Simulators. It does not establish signed Android/iOS distribution, physical-device acceptance, SecureStore/Keychain on signed devices, production API/authentication, live Cosmos or store approval.
+
+REALTIME-01 regression coverage includes five deterministic shared formatter tests and one API integration test proving immutable USD v1/EUR v2 history is returned in order to both Rider and Driver. Proposal entry remains INR-only.
+
+Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged.
+
+## REALTIME-01 exact-head executed verification — CI #1800 (2026-11-16)
+
+PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), exact tested documentation HEAD `dd4791e6ba3561a1c5c755a5f0d7b5176301102f`, passed [CI #1800 / run 43801220854](https://github.com/rajeevp727/turnova-platform/actions/runs/43801220854) **12/12 jobs**:
+- Backend .NET 10 Release build; **666 tests passed, 0 failed, 0 skipped**.
+- Shared mobile/auth Node suite: **217 passed, 0 failed**; five agreement-currency formatter tests are included.
+- Python native-artifact/Simulator harness: **48 passed**.
+- Rider and Driver Expo config, TypeScript typecheck and Android/iOS production JS bundle exports passed.
+- Native non-container API publish passed.
+- Rider and Driver Android debug APKs and standalone release APKs compiled; embedded package identities were verified.
+- Rider and Driver unsigned iOS Simulator apps compiled; bundle IDs were verified.
+- Four same-run smoke tests installed/launched the Rider and Driver Android release APKs in Android emulators and the unsigned iOS apps in iOS Simulators. All passed.
+- All 19 workflow artifacts were unexpired at inspection. Key artifact IDs: API publish `14196353556`; Android release APKs `14197305398` / `14196019297`; iOS Simulator apps `14198020486` / `14197731002`; smoke results `14197200669`, `14197136314`, `14197767953`, `14197444406`.
+
+This is CI/emulator/unsigned Simulator evidence only. It does not establish signed Android/iOS distribution, physical-device acceptance, SecureStore/Keychain on signed devices, production API/authentication, live Cosmos or store approval.
+
+REALTIME-01 regression coverage includes five deterministic shared formatter tests and `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties`, which creates immutable USD v1 and EUR v2 and verifies both Rider and Driver history responses preserve order, amount and currency. Proposal entry remains INR-only pending Product policy.
+
+The current Rider and Driver npm audit artifacts (`14195939928` / `14196118910`) each report 1 low, 11 moderate, 0 high and 0 critical. Findings include deepmerge prototype poisoning, glob AbortSignal cancellation bypass and minimatch denial of service. Do not blind-upgrade Expo/React Native to the major version suggested by npm audit; evaluate compatible targeted overrides and lockfile reproducibility in PLATFORM-01.
+
+Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged. Product/Safety separately decides Ops suspension/rejection during active negotiation/ride.
+
+
+## Latest exact-head verification — REALTIME-01 CI #1803 (2026-11-16)
+
+- Active feature PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), branch `fix/realtime-01-display-persisted-agreement-currency`; parent documentation head `28a341134d4aea30db076f2d3b225b02957510aa`; base main `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`.
+- [CI #1803 / run 43807446079](https://github.com/rajeevp727/turnova-platform/actions/runs/43807446079) completed **12/12 latest-attempt jobs successfully** on exact parent head `28a341134d4aea30db076f2d3b225b02957510aa`. Backend .NET 10 Release build and tests: **666 passed, 0 failed, 0 skipped**. Shared mobile/auth: **217 passed, 0 failed**. Python native-artifact/Simulator harness: **48 passed**. Rider/Driver Expo config, TypeScript checks and production JS bundles passed. Native non-container API publish passed, including 11 negative verifier fixtures plus the valid fixture. Rider/Driver Android debug and standalone release APKs compiled and package identities were verified. Rider/Driver unsigned iOS Simulator apps compiled and bundle IDs were verified. All four same-run Android emulator/iOS Simulator install-launch smoke tests passed.
+- The first Driver iOS native attempt compiled successfully but artifact upload failed with transient DNS `ENOTFOUND`. Targeted retry job 133120122741 completed all steps successfully, including artifact upload; Driver iOS Simulator app artifact `14202227471` was uploaded. Driver iOS smoke artifact `14201684484` and Rider iOS smoke artifact `14202785598` were uploaded. Android smoke artifacts: Rider `14199407017`, Driver `14200000071`. Rider/Driver iOS app artifacts: `14199303929` / `14202227471`; Android standalone release APKs: `14199486521` / `14199835145`; native API publish: `14199340760`.
+- All **19 workflow artifacts were unexpired** at inspection. The targeted retry resolved the transient upload failure; no source change was needed for it.
+- REALTIME-01 engineering implementation remains complete: both apps display persisted currency per immutable agreement version; five shared formatter tests and one backend integration test verify USD v1/EUR v2 history for both authenticated parties; proposal entry remains INR-only pending Product policy. No currency conversion, fare, payment, schema, auth or ride-lifecycle behavior was added.
+- Review state: four COMMENT-only reviews, zero unresolved inline threads, no approval/self-approval and no critical/high authorization, privacy, concurrency, idempotency or data-loss finding identified in the reviewed nine-file diff.
+- This evidence/documentation synchronization advances the branch; a fresh exact-head CI is required on the resulting documentation commit before PR readiness/merge. Recheck the exact head and all required jobs before proceeding.
+- Next sequential engineering task after REALTIME-01 merges: DRIVER-01 normalized Union-code creation concurrency. Replace the list-check/random-GUID/upsert race for new codes with deterministic IDs and create-if-absent in the existing `Unions` container (`/unionId` partition); map Cosmos/in-memory duplicate conflicts to HTTP 409; add concurrent case/whitespace-normalization tests; preserve existing Union IDs and historical records. Product/Safety separately owns the active-ride Ops rejection/suspension policy; do not invent an emergency-suspension policy.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established.
+
+
+## Latest exact-head verification — REALTIME-01 CI #1804 (2026-11-16)
+
+- Active feature PR [#172](https://github.com/rajeevp727/turnova-platform/pull/172), branch `fix/realtime-01-display-persisted-agreement-currency`; exact tested HEAD `a0dabaf2ab83cc4bae23b1dd3db093662ea93163`; base main `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8`.
+- [CI #1804 / run 43822209077](https://github.com/rajeevp727/turnova-platform/actions/runs/43822209077) completed **12/12 jobs successfully on exact HEAD `a0dabaf2ab83cc4bae23b1dd3db093662ea93163`**. Backend .NET 10 Release build and tests: **666 passed, 0 failed, 0 skipped**. Shared mobile/auth: **217 passed**. Python native-artifact/Simulator harness: **48 passed**. Rider and Driver Expo config, TypeScript validation and Android/iOS production JavaScript bundles passed. Native non-container API publish and verifier passed. Rider/Driver Android debug and standalone release APKs compiled and package identities verified. Rider/Driver unsigned iOS Simulator applications compiled and bundle IDs verified. All four same-run Android emulator/iOS Simulator install-launch smoke tests passed. Every one of the **19 workflow artifacts** was unexpired at inspection.
+- Key artifacts: native API publish `14204098964`; Rider/Driver Android release APKs `14205915158` / `14204929420`; Rider/Driver iOS Simulator apps `14206010860` / `14205737287`; Rider/Driver Android smoke `14204424516` / `14205915671`; Rider/Driver iOS smoke `14205923432` / `14206218660`.
+- REALTIME-01 engineering implementation and deterministic evidence are complete: both apps display the currency persisted on each immutable agreement version; five shared formatter tests cover INR, USD/EUR, normalization, missing/malformed codes and invalid amounts; one API integration test verifies USD v1 and EUR v2 in order for both authenticated parties. New proposal entry remains INR-only pending Product policy. No conversion, fare, payment, persistence schema, auth, SignalR or ride-lifecycle behavior changed.
+- Full nine-file PR diff was inspected. Four reviews are COMMENT-only, zero unresolved inline threads, no approval/self-approval, and no critical/high security, privacy, authorization, concurrency, idempotency or data-loss finding was identified. The repository's rulesets API returned an empty list; the branch-protection endpoint returned HTTP 403 (not accessible through this integration). Use only the normal expected-head GitHub merge operation, which will enforce any applicable server-side policy.
+- This documentation synchronization creates a new branch head and therefore requires fresh exact-head CI before marking PR ready or merging. Do not reuse CI #1804 as evidence for the new documentation commit.
+- Next sequential code task after REALTIME-01 merges: DRIVER-01 normalized Union-code creation concurrency. Replace list-check/random-GUID/upsert for new codes with deterministic IDs and create-if-absent in the existing `Unions` container partitioned by `/unionId`; map duplicate Cosmos/in-memory conflicts to HTTP 409; add concurrent case/whitespace-normalization tests; preserve existing Union IDs and historical records. Product/Safety separately decides Ops rejection/suspension during an active negotiation/ride; do not invent emergency-suspension behavior.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established. External gates include Product-approved radius/zones/location freshness/negotiation lifetime; live Cosmos ETag/transaction/multi-instance/restart; production auth and realtime/maps providers; private document storage/scanning/consent/retention; support and reconciliation policies; Union legal approval; signed-device/physical-device testing; signing, hosting and store approval.
