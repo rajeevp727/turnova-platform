@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   isDriverAvailabilityConflict,
+  isDriverZoneExit,
   reconcileDriverAvailability
 } = require("./driverAvailabilityRecovery.js");
 
@@ -21,6 +22,16 @@ test("only HTTP 409 responses trigger server-state availability reconciliation",
   assert.equal(isDriverAvailabilityConflict(Object.assign(new Error("Unavailable"), { status: 503 })), false);
   assert.equal(isDriverAvailabilityConflict(new Error("Network unavailable")), false);
   assert.equal(isDriverAvailabilityConflict(null), false);
+});
+
+test("only the exact authoritative HTTP 409 zone-exit response stops location watching", () => {
+  const zoneExitMessage = "You left your assigned service zone and were taken offline.";
+  assert.equal(isDriverZoneExit(Object.assign(new Error(zoneExitMessage), { status: 409 })), true);
+  assert.equal(isDriverZoneExit(Object.assign(new Error(zoneExitMessage), { status: 503 })), false);
+  assert.equal(isDriverZoneExit(Object.assign(new Error("Conflict"), { status: 409 })), false);
+  assert.equal(isDriverZoneExit(Object.assign(new Error("You left your assigned service zone"), { status: 409 })), false);
+  assert.equal(isDriverZoneExit(new Error(zoneExitMessage)), false);
+  assert.equal(isDriverAvailabilityConflict(Object.assign(new Error(zoneExitMessage), { status: 409 })), true);
 });
 
 test("server Offline state replaces stale local Online state and stops retry eligibility", async () => {

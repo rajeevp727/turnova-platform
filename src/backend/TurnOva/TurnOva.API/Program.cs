@@ -1231,22 +1231,66 @@ async Task<bool> HasActiveRiderBookingAsync(
     return true;
 }
 
-string? ResolveDispatchZone(double latitude, double longitude)
+DispatchZoneResolution ResolveDispatchZone(double latitude, double longitude)
 {
-    var zones = app.Configuration.GetSection("Dispatch:Zones").Get<DispatchZoneConfig[]>() ?? [];
+    DispatchZoneConfig[]? zones;
+    try
+    {
+        // ConfigurationBinder otherwise permits failed property conversions to be omitted/defaulted.
+        // Dispatch coverage must fail closed when any configured numeric boundary is not parseable.
+        zones = app.Configuration.GetSection("Dispatch:Zones").Get<DispatchZoneConfig[]>(
+            options => options.ErrorOnUnknownConfiguration = true);
+    }
+    catch (InvalidOperationException)
+    {
+        return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
+    }
+    catch (AggregateException)
+    {
+        return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
+    }
+    if (zones is null || zones.Length == 0)
+        return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
+
+    var zoneIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var zone in zones)
+    {
+        if (zone is null ||
+            string.IsNullOrWhiteSpace(zone.ZoneId) ||
+            !string.Equals(zone.ZoneId, zone.ZoneId.Trim(), StringComparison.Ordinal) ||
+            !zoneIds.Add(zone.ZoneId) ||
+            !double.IsFinite(zone.MinLatitude) ||
+            !double.IsFinite(zone.MaxLatitude) ||
+            !double.IsFinite(zone.MinLongitude) ||
+            !double.IsFinite(zone.MaxLongitude) ||
+            zone.MinLatitude < -90 || zone.MaxLatitude > 90 ||
+            zone.MinLongitude < -180 || zone.MaxLongitude > 180 ||
+            zone.MinLatitude > zone.MaxLatitude ||
+            zone.MinLongitude > zone.MaxLongitude)
+            return new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration);
+    }
+
+    // Overlap is ambiguous only for this pickup coordinate. A separate overlap elsewhere
+    // must not disable an otherwise valid zone; inclusive shared boundaries match both
+    // rectangles and therefore fail closed for the affected pickup.
     var matches = zones
         .Where(zone =>
             latitude >= zone.MinLatitude && latitude <= zone.MaxLatitude &&
             longitude >= zone.MinLongitude && longitude <= zone.MaxLongitude)
         .Take(2)
         .ToArray();
-
-    // Never let configuration order decide a pickup zone. Overlapping rectangles
-    // (including inclusive shared boundaries) are ambiguous and must fail closed.
-    return matches.Length == 1 && !string.IsNullOrWhiteSpace(matches[0].ZoneId)
-        ? matches[0].ZoneId
-        : null;
+    return matches.Length switch
+    {
+        0 => new DispatchZoneResolution(DispatchZoneResolutionKind.NoMatch),
+        1 => new DispatchZoneResolution(DispatchZoneResolutionKind.Matched, matches[0].ZoneId),
+        _ => new DispatchZoneResolution(DispatchZoneResolutionKind.InvalidConfiguration)
+    };
 }
+
+IResult DispatchZoneConfigurationUnavailable() => Results.Problem(
+    "The configured dispatch zones are invalid or ambiguous. Rider discovery/booking and Driver availability/location/queue updates are temporarily unavailable.",
+    statusCode: StatusCodes.Status503ServiceUnavailable,
+    title: "Dispatch configuration unavailable");
 
 double CalculateDistanceKm(double firstLatitude, double firstLongitude, double secondLatitude, double secondLongitude)
 {
@@ -2454,10 +2498,29 @@ app.MapPost("/api/v1/driver/availability", async (
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    if (await GetApprovedDriverProfileAsync(driverId, ct) is null)
+    var initialProfile = await GetApprovedDriverProfileAsync(driverId, ct);
+    if (initialProfile is null)
         return Results.Conflict(new { message = "Only an approved driver can change availability." });
+
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "Resolve or complete the active selected booking/ride before changing availability." });
+
+    DispatchZoneResolution? requestedZone = null;
+    if (request.IsOnline)
+    {
+        if (!string.Equals(initialProfile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "Only approved Cab drivers can go online for new MVP ride requests. Legacy non-Cab profiles are retained for history." });
+        if (request.Latitude is null || request.Longitude is null ||
+            !RideLifecycle.AreCoordinatesValid(request.Latitude.Value, request.Longitude.Value))
+            return Results.BadRequest(new { message = "Valid GPS coordinates are required before going online." });
+
+        requestedZone = ResolveDispatchZone(request.Latitude.Value, request.Longitude.Value);
+        if (requestedZone.Kind == DispatchZoneResolutionKind.InvalidConfiguration)
+            return DispatchZoneConfigurationUnavailable();
+        if (requestedZone.Kind != DispatchZoneResolutionKind.Matched ||
+            !string.Equals(requestedZone.ZoneId, initialProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "Your current location is outside your assigned service zone." });
+    }
 
     // Serialize availability changes with selected bookings and Union transfers.
     // This is a short technical lease, not a Rider/Driver negotiation-lifetime policy.
@@ -2497,8 +2560,9 @@ app.MapPost("/api/v1/driver/availability", async (
                 !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
                 return Results.Conflict(new { message = "Approved driving licence and Cab vehicle documents are required before going online." });
 
-            var currentZoneId = ResolveDispatchZone(request.Latitude.Value, request.Longitude.Value);
-            if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
+            if (requestedZone is null ||
+                requestedZone.Kind != DispatchZoneResolutionKind.Matched ||
+                !string.Equals(requestedZone.ZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
                 return Results.Conflict(new { message = "Your current location is outside your assigned service zone." });
 
             var capturedAtUtc = request.CapturedAtUtc ?? DateTimeOffset.UtcNow;
@@ -2604,8 +2668,13 @@ app.MapPost("/api/v1/driver/location", async (
     if (profile.LocationCapturedAtUtc is not null && capturedAtUtc <= profile.LocationCapturedAtUtc)
         return Results.Conflict(new { message = "This GPS fix is older than the latest accepted Driver location." });
 
-    var currentZoneId = ResolveDispatchZone(latitude, longitude);
-    if (!string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
+    var zoneResolution = ResolveDispatchZone(latitude, longitude);
+    if (zoneResolution.Kind == DispatchZoneResolutionKind.InvalidConfiguration)
+        return DispatchZoneConfigurationUnavailable();
+
+    var currentZoneId = zoneResolution.ZoneId;
+    if (zoneResolution.Kind != DispatchZoneResolutionKind.Matched ||
+        !string.Equals(currentZoneId, profile.ZoneId, StringComparison.OrdinalIgnoreCase))
     {
         // A zone-exit transition must not race a Rider selecting this Driver.
         // The same per-Driver lease serializes it with bookings and Union transfers.
@@ -2624,8 +2693,8 @@ app.MapPost("/api/v1/driver/location", async (
             if (latestProfile.LocationCapturedAtUtc is not null && capturedAtUtc <= latestProfile.LocationCapturedAtUtc)
                 return Results.Conflict(new { message = "This GPS fix is older than the latest accepted Driver location." });
 
-            var latestZoneId = ResolveDispatchZone(latitude, longitude);
-            if (string.Equals(latestZoneId, latestProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
+            if (zoneResolution.Kind == DispatchZoneResolutionKind.Matched &&
+                string.Equals(zoneResolution.ZoneId, latestProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
             {
                 var savedInside = await TryUpdateDriverProfileAsync(driverId, current =>
                     current.Status == "Approved" && current.AvailabilityStatus == "Online" &&
@@ -2770,6 +2839,18 @@ app.MapPost("/api/v1/queues/join", async (
         if (!string.Equals(serviceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(request.ZoneId.Trim(), approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
             return Results.Forbid();
+        if (approvedProfile.CurrentLatitude is null || approvedProfile.CurrentLongitude is null ||
+            !RideLifecycle.AreCoordinatesValid(approvedProfile.CurrentLatitude.Value, approvedProfile.CurrentLongitude.Value))
+            return Results.Conflict(new { message = "A valid accepted Driver location is required before joining the queue." });
+
+        var zoneResolution = ResolveDispatchZone(
+            approvedProfile.CurrentLatitude.Value, approvedProfile.CurrentLongitude.Value);
+        if (zoneResolution.Kind == DispatchZoneResolutionKind.InvalidConfiguration)
+            return DispatchZoneConfigurationUnavailable();
+        if (zoneResolution.Kind != DispatchZoneResolutionKind.Matched ||
+            !string.Equals(zoneResolution.ZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase))
+            return Results.Conflict(new { message = "Driver location is outside the assigned service zone." });
+
         await service.JoinAsync(new DriverQueueEntry(
             driverId, request.ZoneId.Trim(), serviceClass,
             DateTimeOffset.UtcNow, 0, true), ct);
@@ -2794,9 +2875,12 @@ app.MapGet("/api/v1/rider/discovery", async (
     if (radiusKm is null || !double.IsFinite(radiusKm.Value) || radiusKm.Value <= 0)
         return Results.Problem("The approved Rider discovery radius is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
 
-    var zoneId = ResolveDispatchZone(latitude, longitude);
-    if (string.IsNullOrWhiteSpace(zoneId))
+    var zoneResolution = ResolveDispatchZone(latitude, longitude);
+    if (zoneResolution.Kind == DispatchZoneResolutionKind.InvalidConfiguration)
+        return DispatchZoneConfigurationUnavailable();
+    if (zoneResolution.Kind == DispatchZoneResolutionKind.NoMatch)
         return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
+    var zoneId = zoneResolution.ZoneId!;
 
     var maxAgeSeconds = app.Configuration.GetValue<int?>("Dispatch:NearbyLocationMaxAgeSeconds");
     if (maxAgeSeconds is null || maxAgeSeconds <= 0)
@@ -2922,9 +3006,12 @@ app.MapPost("/api/v1/rider/bookings", async (
     var radiusKm = app.Configuration.GetValue<double?>("Dispatch:NearbyRadiusKm");
     if (radiusKm is null || !double.IsFinite(radiusKm.Value) || radiusKm.Value <= 0)
         return Results.Problem("The approved Rider discovery radius is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
-    var zoneId = ResolveDispatchZone(request.PickupLatitude, request.PickupLongitude);
-    if (string.IsNullOrWhiteSpace(zoneId))
+    var zoneResolution = ResolveDispatchZone(request.PickupLatitude, request.PickupLongitude);
+    if (zoneResolution.Kind == DispatchZoneResolutionKind.InvalidConfiguration)
+        return DispatchZoneConfigurationUnavailable();
+    if (zoneResolution.Kind == DispatchZoneResolutionKind.NoMatch)
         return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
+    var zoneId = zoneResolution.ZoneId!;
 
     var idempotencyKey = context.Request.Headers["Idempotency-Key"].ToString().Trim();
     if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 128)
@@ -3330,9 +3417,12 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
     var serviceClass = request.ServiceClass?.Trim().ToLowerInvariant() ?? string.Empty;
     if (!string.Equals(serviceClass, "cab", StringComparison.OrdinalIgnoreCase))
         return Results.BadRequest(new { message = "Only Cab rides are supported in the TurnOva MVP." });
-    var dispatchZoneId = ResolveDispatchZone(request.PickupLatitude.Value, request.PickupLongitude.Value);
-    if (string.IsNullOrWhiteSpace(dispatchZoneId))
+    var zoneResolution = ResolveDispatchZone(request.PickupLatitude.Value, request.PickupLongitude.Value);
+    if (zoneResolution.Kind == DispatchZoneResolutionKind.InvalidConfiguration)
+        return DispatchZoneConfigurationUnavailable();
+    if (zoneResolution.Kind == DispatchZoneResolutionKind.NoMatch)
         return Results.BadRequest(new { message = "TurnOva is not available in this pickup zone yet." });
+    var dispatchZoneId = zoneResolution.ZoneId!;
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var key = context.Request.Headers["Idempotency-Key"].ToString().Trim();
     if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
@@ -4586,6 +4676,15 @@ public sealed record DemoRide(
     RidePaymentReconciliation? PaymentReconciliation = null,
     IReadOnlyList<RideAuditEvent>? AuditEvents = null,
     DateTimeOffset? DriverLocationCapturedAtUtc = null);
+
+public enum DispatchZoneResolutionKind
+{
+    Matched,
+    NoMatch,
+    InvalidConfiguration
+}
+
+public sealed record DispatchZoneResolution(DispatchZoneResolutionKind Kind, string? ZoneId = null);
 
 public sealed record DispatchZoneConfig(string ZoneId, double MinLatitude, double MaxLatitude, double MinLongitude, double MaxLongitude);
 
