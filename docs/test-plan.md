@@ -2698,3 +2698,11 @@ Automated implementation: InvalidDispatchZoneConfigurationFailsClosedAcrossRider
 ## DISPATCH-01 merge evidence (2026-11-16)
 
 PR #171 merged at `4f34979eaf2eba8f6dc3153ab28043b40e7b3eb8` after exact-head CI #1781 / run 43778207524 passed 12/12 on `dcb8b30424e61db29021d4661be5eee481d0c315`. The merge does not establish Product radius/freshness/global-overlap approval, live Cosmos ETag/transactional-batch/multi-instance/restart validation or physical-device acceptance.
+
+
+
+### REALTIME-01 API persistence regression
+
+- `AgreementHistoryReturnsEachPersistedCurrencyCodeToBothRideParties` creates version 1 in USD and version 2 in EUR, then reads agreement history as both Rider and Driver and asserts ordered versions preserve the original amount and currency.
+- This complements five shared Node tests for persisted-code formatting, non-INR display, normalization, no INR fallback and invalid amount handling.
+- Expected next-CI deltas from prior exact-head baseline: backend 666 (665 + 1), shared mobile/auth 217 (212 + 5). Use actual test logs for reporting.
