@@ -1734,8 +1734,16 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
-        return Results.BadRequest(new { message = "A valid JPEG selfie is required. Capture it in the app; maximum decoded size is 300 KB." });
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    var hasInlineSelfie = !string.IsNullOrWhiteSpace(request.ProfilePhotoBase64);
+    var hasSelfieReference = !string.IsNullOrWhiteSpace(request.ProfilePhotoStorageReference);
+    if (hasInlineSelfie == hasSelfieReference ||
+        (hasInlineSelfie && !IsValidDriverSelfie(request.ProfilePhotoBase64)))
+        return Results.BadRequest(new { message = "Provide exactly one valid JPEG selfie payload or server-issued private media reference." });
+    if (hasSelfieReference &&
+        !await privateDriverMediaStore.IsOwnedAndCleanAsync(driverId, "ProfilePhoto", request.ProfilePhotoStorageReference!, ct))
+        return Results.BadRequest(new { message = "The selfie reference is not owned by this Driver or is not scan-cleared." });
     if (request.Documents is null ||
         !request.Documents.Any(document => document is not null && document.DocumentType == "DrivingLicence") ||
         !request.Documents.Any(document => document is not null && document.DocumentType == "VehicleRegistration"))
@@ -1756,6 +1764,16 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
             Uri.TryCreate(document.StorageReference, UriKind.Absolute, out _)))
         return Results.BadRequest(new { message = "Provide valid driver, vehicle and document metadata. Upload files to private object storage and submit opaque storage references only." });
     
+    foreach (var document in request.Documents)
+    {
+        var isServerIssued = document.StorageReference.StartsWith("drvmedia_", StringComparison.Ordinal);
+        if (isServerIssued &&
+            !await privateDriverMediaStore.IsOwnedAndCleanAsync(driverId, document.DocumentType, document.StorageReference, ct))
+            return Results.BadRequest(new { message = "A document reference is not owned by this Driver or is not scan-cleared." });
+        if (!isServerIssued && !localMediaCompatibility)
+            return Results.BadRequest(new { message = "Production onboarding requires server-issued Driver-bound private document references." });
+    }
+
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "A Driver with an active negotiation or ride cannot replace onboarding data." });
 
@@ -1765,10 +1783,21 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         driverId, onboardingLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct, onboardingAuditContext))
         return Results.Conflict(new { message = "The Driver is reserved by a booking, ride or Union membership change. Retry after it is resolved." });
 
+    string? newlyStoredSelfieReference = null;
     try
     {
     var submittedAtUtc = DateTimeOffset.UtcNow;
     var profilePhotoCapturedAtUtc = submittedAtUtc;
+    var selfieReference = request.ProfilePhotoStorageReference;
+    if (hasInlineSelfie)
+    {
+        var bytes = Convert.FromBase64String(request.ProfilePhotoBase64!);
+        var stored = await privateDriverMediaStore.StoreAsync(driverId, "ProfilePhoto", "image/jpeg", bytes, ct);
+        if (stored is null)
+            return Results.Problem("Private Driver media storage is unavailable.", statusCode: 503);
+        selfieReference = stored.Reference;
+        newlyStoredSelfieReference = stored.Reference;
+    }
     var documents = request.Documents
         .Select(document => new DriverDocumentReference(document.DocumentType, document.StorageReference))
         .ToArray();
@@ -1776,7 +1805,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         driverId, driverId, request.ZoneId.Trim(), request.FullName.Trim(), request.PhoneNumber.Trim(),
         request.VehicleMake.Trim(), request.VehicleModel.Trim(), request.VehicleRegistration.Trim().ToUpperInvariant(),
         "cab", request.PassengerCapacity, documents, "Pending", submittedAtUtc,
-        ProfilePhotoBase64: request.ProfilePhotoBase64,
+        ProfilePhotoBase64: null,
+        ProfilePhotoStorageReference: selfieReference,
         ProfilePhotoContentType: "image/jpeg",
         ProfilePhotoCapturedAtUtc: profilePhotoCapturedAtUtc,
         ProfilePhotoApprovalStatus: "Pending");
@@ -1789,7 +1819,13 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         if (existing is null)
         {
             if (await TryCreateDriverProfileAsync(profile, ct))
-                return Results.Accepted("/api/v1/driver/onboarding/me", profile);
+            {
+                newlyStoredSelfieReference = null;
+                return Results.Accepted("/api/v1/driver/onboarding/me", profile with
+                {
+                    ProfilePhotoBase64 = await GetProfilePhotoBase64Async(profile, ct)
+                });
+            }
             continue;
         }
 
@@ -1837,7 +1873,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
                 SubmittedAtUtc = current.SubmittedAtUtc,
                 ReviewedAtUtc = null,
                 ReviewReason = null,
-                ProfilePhotoBase64 = profile.ProfilePhotoBase64,
+                ProfilePhotoBase64 = null,
+                ProfilePhotoStorageReference = profile.ProfilePhotoStorageReference,
                 ProfilePhotoContentType = profile.ProfilePhotoContentType,
                 ProfilePhotoCapturedAtUtc = profile.ProfilePhotoCapturedAtUtc,
                 ProfilePhotoApprovalStatus = "Pending",
@@ -1855,10 +1892,14 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
 
         if (saved)
         {
+            newlyStoredSelfieReference = null;
             var updated = await FindDriverProfileAsync(driverId, ct);
             return updated is null
                 ? Results.Conflict(new { message = "Driver profile changed during onboarding. Refresh the profile and retry." })
-                : Results.Accepted("/api/v1/driver/onboarding/me", updated);
+                : Results.Accepted("/api/v1/driver/onboarding/me", updated with
+                {
+                    ProfilePhotoBase64 = await GetProfilePhotoBase64Async(updated, ct)
+                });
         }
 
         var latest = await FindDriverProfileAsync(driverId, ct);
@@ -1875,6 +1916,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
     }
     finally
     {
+        if (newlyStoredSelfieReference is not null)
+            await privateDriverMediaStore.DeleteAsync(driverId, newlyStoredSelfieReference, CancellationToken.None);
         await driverRideReservations.TryReleaseAsync(
             driverId, onboardingLeaseId, CancellationToken.None, onboardingAuditContext);
     }
