@@ -447,7 +447,7 @@ export default function App() {
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.eyebrow}>RIDER ACCOUNT</Text>
       <Text style={styles.title}>{mode==="login"?"Welcome back":"Create your account"}</Text>
-      <Text style={styles.sub}>Sign in securely with your email and password.</Text>
+      <Text style={styles.sub}>Sign in with your email and password.</Text>
       {themePicker}
       <View style={styles.card}>
         {mode==="register"&&<TextInput
