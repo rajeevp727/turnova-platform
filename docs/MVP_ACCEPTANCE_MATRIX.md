@@ -1,11 +1,12 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Cab-only Android/iOS MVP. Fleet and Ops applications are Phase 2 and excluded.
-**Last audited:** 2026-11-17; main HEAD `ebbdb8da0e4054d0f1420754dad4b8aafc49ad3a` (PR #179 merged).
+**Last audited:** 2026-11-17; main HEAD `e5ec120bf06d0e92967a564300198cf042553b0b` (PR #180 merged).
 **Current platform phase:** API. Android must not start until API implementation, deterministic tests, OpenAPI/docs, auth/privacy, persistence and native non-container publish/API CI exit criteria pass. iOS must not start until both Android apps pass their exit criteria.
-**Current API PR:** [#180 — Cosmos migration lease renewal and fencing](https://github.com/rajeevp727/turnova-platform/pull/180), branch `feat/api-cosmos-migration-lease-renewal`. Final documentation-head CI #44130301238 on source/test head d3a24df5592895d5dbc92438cec68c138c474636 passed scope, Release build, 744/744 backend tests (0 failed, 0 skipped) and native non-container .NET 10 publish; artifact 14348249426. Android/iOS jobs were correctly skipped. The current documentation sync is the only delta from that verified source/test head; its exact-head CI is the remaining merge gate.
-**Previous API evidence:** PR #179 exact-head CI #44126440529 passed backend **735/735**, native non-container .NET 10 publish and phase scope; Android/iOS jobs were correctly skipped.
-**API remaining:** private media/server-issued Driver-bound document references, Kestrel host-level 16 KiB rejection and complete API row-by-row source/auth/privacy/persistence audit. Live Cosmos multi-instance/restart and storage provider/scanning remain external.
+**Current API PR:** [#181 — provider-agnostic private Driver media boundary](https://github.com/rajeevp727/turnova-platform/pull/181), branch `feat/api-private-driver-media-boundary`. Source/test head `f75be86dae358a7c2dd4df727d1a9710c7c8bc69`; final-head API CI pending.
+**Previous API evidence:** PR #180 exact-head [CI #44131030509](https://github.com/rajeevp727/turnova-platform/actions/runs/44131030509) passed scope, Release build, **744/744 backend tests**, native non-container .NET 10 publish (artifact [14349777538](https://github.com/rajeevp727/turnova-platform/actions/runs/44131030509/artifacts/14349777538)); Android/iOS jobs correctly skipped.
+**PR #181 implementation:** private-media abstraction, opaque Driver-bound references, file signature/size validation, owner-only retrieval, current-Union-only document retrieval, scan-cleared checks and new-profile reference persistence without inline Base64. Historical Base64 remains readable. Staging/Production fail closed because no real storage/scanner provider is configured.
+**API remaining after PR #181:** Kestrel host-level 16 KiB support payload rejection and complete API row-by-row source/auth/privacy/persistence audit. Live Cosmos multi-instance/restart, private object storage/scanning, consent/retention, managed identity and production auth remain external.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Platform phase gate
