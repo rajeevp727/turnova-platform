@@ -1617,8 +1617,11 @@ onboarding.MapGet("/media/{reference}", async (
     if (!privateDriverMediaStore.IsConfigured)
         return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
     var asset = await privateDriverMediaStore.ReadAsync(driverId, reference, ct);
-    if (asset is null) return Results.NotFound();
+    if (asset is null ||
+        !IsValidPrivateMediaPayload(asset.Metadata.MediaType, asset.Metadata.ContentType, asset.Content))
+        return Results.NotFound();
     context.Response.Headers.CacheControl = "private, no-store";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     return Results.File(asset.Content, asset.Metadata.ContentType, enableRangeProcessing: false);
 });
 
@@ -2315,18 +2318,29 @@ unionManagerApi.MapGet("/drivers/{driverId}/documents/{documentType}", async (
         return Results.NotFound();
     if (!privateDriverMediaStore.IsConfigured)
         return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    if (documentType is not ("DrivingLicence" or "VehicleRegistration" or "Insurance" or "Permit"))
+        return Results.NotFound();
     var union = await FindUnionAsync(assignment.UnionId, ct);
-    if (union is null || union.Status != "Active") return Results.NotFound();
+    if (union is null || union.Status != "Active" ||
+        !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
+        return Results.NotFound();
     var profile = await FindDriverProfileAsync(driverId, ct);
-    var document = profile?.Documents?.FirstOrDefault(item =>
+    if (profile is null || profile.Status != "Approved" ||
+        !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+        !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
+        return Results.NotFound();
+    var document = profile.Documents?.FirstOrDefault(item =>
         string.Equals(item.DocumentType, documentType, StringComparison.Ordinal));
-    if (document is null) return Results.NotFound();
+    if (document is null || !document.StorageReference.StartsWith("drvmedia_", StringComparison.Ordinal))
+        return Results.NotFound();
 
     var asset = await privateDriverMediaStore.ReadAsync(driverId, document.StorageReference, ct);
-    if (asset is null || asset.Metadata.MediaType != documentType || asset.Metadata.ScanStatus != "Clean")
+    if (asset is null || asset.Metadata.MediaType != documentType || asset.Metadata.ScanStatus != "Clean" ||
+        !IsValidPrivateMediaPayload(documentType, asset.Metadata.ContentType, asset.Content))
         return Results.NotFound();
 
     context.Response.Headers.CacheControl = "private, no-store";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     return Results.File(asset.Content, asset.Metadata.ContentType, enableRangeProcessing: false);
 });
 
