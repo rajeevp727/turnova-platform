@@ -2836,8 +2836,11 @@ PR #185 now rejects `package-lock.json` unless its existing write target is a re
 
 ## Android dependency audit exception — 2026-11-18
 
-PR #185's fresh Rider and Driver audit reports each show 34 package findings: 27 high package nodes, 7 moderate, 0 critical. All high nodes resolve to one transitive picomatch advisory in Expo CLI/Metro/Jest build tooling. The advisory is not marked fixed; no upstream patched version is listed. The CI exception is exact-advisory-only and fails on critical/unknown high findings, direct app imports, unreviewed parents or picomatch in Android source maps. Verification maps are deleted before artifacts are uploaded. See docs/security/mobile-dependency-audit.md. Exact-head Android builds and emulator smoke remain pending; iOS remains gated.
+Fresh Rider and Driver audit artifacts from CI #44161191929 each contained 34 vulnerability records (27 high, 7 moderate, 0 critical). All high records resolved to the single transitive picomatch GHSA-fc5q-39xc-vjpf. The exact contextual gate passed against both real Android production source maps, and verification-only source maps were removed before artifact upload. This remains a disclosed build-tooling exception, not a patch.
 
+CI #44161191929 also passed Rider/Driver npm ci, Expo config/typecheck/export, debug/release APK builds, package identity checks and emulator install/launch smoke. Backend 758/758; mobile auth/native 227/227 Node and 48/48 Python; iOS jobs skipped.
+
+The verifier was then hardened to reject missing/malformed audit metadata, severity/total mismatches, invalid package-node lists, inconsistent audit exit status and any change to the observed major-only react-native@0.88.1 remediation path. Its deterministic suite now has 17 cases. Those follow-up commits require fresh exact-head CI; do not merge based on CI #44161191929 alone.
 ## Android PR #185 latest execution handoff — 2026-11-18
 
 - Main baseline: `0992579b76012f24a057ae4842e524927eb9536f`; API engineering exit complete; Android in progress; iOS not started.
