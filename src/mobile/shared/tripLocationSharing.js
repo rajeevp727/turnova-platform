@@ -1,4 +1,24 @@
 const ACTIVE_TRIP_STATUSES = new Set(["Accepted", "Arrived", "InProgress"]);
+const DRIVER_RIDE_LIFECYCLE_STATUSES = new Set(["Negotiating", "AgreementConfirmed", ...ACTIVE_TRIP_STATUSES]);
+
+function shouldMaintainDriverRideLifecycle(state) {
+  return Boolean(
+    state &&
+    typeof state.userId === "string" && state.userId.trim().length > 0 &&
+    typeof state.rideId === "string" && state.rideId.trim().length > 0 &&
+    state.hasAccessToken === true &&
+    state.sessionCurrent === true &&
+    DRIVER_RIDE_LIFECYCLE_STATUSES.has(state.status)
+  );
+}
+
+function shouldWatchDriverTripLocation(state) {
+  return Boolean(
+    shouldMaintainDriverRideLifecycle(state) &&
+    ACTIVE_TRIP_STATUSES.has(state.status) &&
+    state.locationSharingActive === true
+  );
+}
 
 function canShareTripLocation(state) {
   return Boolean(
@@ -118,6 +138,8 @@ function shouldFitRideMap({ tab, rideId, readyRideId, followDriverLocation }) {
 }
 
 module.exports = {
+  shouldMaintainDriverRideLifecycle,
+  shouldWatchDriverTripLocation,
   canShareTripLocation,
   findAuthoritativeActiveTrip,
   shouldApplyTripLocationUpdate,

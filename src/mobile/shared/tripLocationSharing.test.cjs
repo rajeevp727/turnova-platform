@@ -1,6 +1,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
+  shouldMaintainDriverRideLifecycle,
+  shouldWatchDriverTripLocation,
   canShareTripLocation,
   findAuthoritativeActiveTrip,
   shouldApplyTripLocationUpdate,
@@ -223,4 +227,87 @@ test("session invalidation immediately makes an otherwise active foreground loca
   assert.equal(canShare(), true);
   mounted = false;
   assert.equal(canShare(), false);
+});
+
+
+const driverRideContext = {
+  userId: "driver-1",
+  rideId: "ride-1",
+  hasAccessToken: true,
+  sessionCurrent: true,
+  status: "Accepted",
+  locationSharingActive: true
+};
+
+test("active Driver ride lifecycle is independent of the selected app tab", () => {
+  for (const tab of ["Home", "Queue", "Trips", "Payslips", "Profile"]) {
+    assert.equal(shouldMaintainDriverRideLifecycle({ ...driverRideContext, tab }), true, tab);
+  }
+  for (const status of ["Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"]) {
+    assert.equal(shouldMaintainDriverRideLifecycle({ ...driverRideContext, status }), true, status);
+  }
+  for (const status of ["Completed", "Cancelled", "Expired", "Rejected", "Unknown"]) {
+    assert.equal(shouldMaintainDriverRideLifecycle({ ...driverRideContext, status }), false, status);
+  }
+  for (const invalid of [
+    { userId: "" },
+    { rideId: "" },
+    { hasAccessToken: false },
+    { sessionCurrent: false }
+  ]) {
+    assert.equal(shouldMaintainDriverRideLifecycle({ ...driverRideContext, ...invalid }), false);
+  }
+});
+
+test("foreground trip GPS requires an authenticated active ride and server-enabled location sharing", () => {
+  for (const status of ["Accepted", "Arrived", "InProgress"]) {
+    assert.equal(shouldWatchDriverTripLocation({ ...driverRideContext, status }), true, status);
+  }
+  for (const status of ["Negotiating", "AgreementConfirmed", "Completed", "Cancelled", "Expired"]) {
+    assert.equal(shouldWatchDriverTripLocation({ ...driverRideContext, status }), false, status);
+  }
+  assert.equal(shouldWatchDriverTripLocation({ ...driverRideContext, locationSharingActive: false }), false);
+  assert.equal(shouldWatchDriverTripLocation({ ...driverRideContext, sessionCurrent: false }), false);
+});
+
+function driverEffectContaining(source, marker) {
+  const markerIndex = source.indexOf(marker);
+  assert.notEqual(markerIndex, -1, "missing Driver App wiring marker: " + marker);
+  const start = source.lastIndexOf("  useEffect(() => {", markerIndex);
+  const end = source.indexOf("\n  }, [", markerIndex);
+  const close = source.indexOf("]);", end);
+  assert.ok(start >= 0 && end > markerIndex && close > end, "unable to isolate effect for: " + marker);
+  return source.slice(start, close + 3);
+}
+
+test("Driver active ride history, agreement and SignalR effects do not depend on Trips navigation", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../driver-app/App.tsx"), "utf8");
+  assert.doesNotMatch(source, /tab\s*!==\s*["']Trips["']/);
+  assert.match(source, /shouldMaintainDriverRideLifecycle/);
+  assert.match(source, /shouldWatchDriverTripLocation/);
+
+  for (const marker of [
+    "loadDriverRideHistory(isHistoryCurrent)",
+    "loadAgreementHistory(activeRide.rideId, () => active)",
+    'connection.on("RideAgreementChanged", refreshAgreement);',
+    'connection.on("RideStatusChanged", handleRideStatusChanged);',
+    "findAuthoritativeActiveTrip(history, activeRide.rideId)"
+  ]) {
+    assert.doesNotMatch(driverEffectContaining(source, marker), /\btab\b/, marker);
+  }
+  assert.match(driverEffectContaining(source, "loadDriverRideHistory(isHistoryCurrent)"), /activeRide\?\.status/);
+  assert.match(driverEffectContaining(source, 'connection.on("RideAgreementChanged", refreshAgreement);'), /activeRide\?\.status/);
+  assert.match(driverEffectContaining(source, 'connection.on("RideStatusChanged", handleRideStatusChanged);'), /activeRide\?\.status/);
+  assert.match(driverEffectContaining(source, "findAuthoritativeActiveTrip(history, activeRide.rideId)"), /activeRide\?\.status/);
+  assert.match(source, /Foreground location sharing continues while your active trip remains eligible/);
+});
+
+test("Driver foreground resume rechecks authoritative history before recreating the GPS watcher", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../driver-app/App.tsx"), "utf8");
+  const effect = driverEffectContaining(source, "findAuthoritativeActiveTrip(history, activeRide.rideId)");
+  const historyRead = effect.indexOf('apiFetch("/api/v1/driver/rides/mine")');
+  const authoritativeCheck = effect.indexOf("findAuthoritativeActiveTrip(history, activeRide.rideId)");
+  const watcherStart = effect.indexOf("Location.watchPositionAsync");
+  assert.ok(historyRead >= 0 && authoritativeCheck > historyRead && watcherStart > authoritativeCheck);
+  assert.match(effect, /if \(state === "active"\) void startWatching\(\)/);
 });

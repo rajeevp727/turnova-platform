@@ -5,6 +5,19 @@ export interface TripLocationSharingState {
   locationSharingActive: boolean;
 }
 
+export interface DriverRideLifecycleState {
+  userId?: string | null;
+  rideId?: string | null;
+  hasAccessToken?: boolean;
+  sessionCurrent?: boolean;
+  status?: string | null;
+  locationSharingActive?: boolean | null;
+}
+
+export function shouldMaintainDriverRideLifecycle(state: DriverRideLifecycleState | null | undefined): boolean;
+
+export function shouldWatchDriverTripLocation(state: DriverRideLifecycleState | null | undefined): boolean;
+
 export function canShareTripLocation(state: TripLocationSharingState): boolean;
 
 export interface AuthoritativeTripLocationState {

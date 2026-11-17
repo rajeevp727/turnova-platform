@@ -380,6 +380,16 @@ These APIs currently use the temporary server-side admin API key and are not a s
 
 Payslip output is PDF only; monetary calculations are intentionally absent until the compensation model is approved. Automated tests cover completed-month validation, missing/changed Union assignment, authenticated Driver isolation, exclusion of customer/ride/payment details and the shared `completedIndiaMonths.test.cjs` boundary/year-rollover cases. The Driver app builds its recent-month list using `Asia/Kolkata`, matching the API's completed-month rule rather than the device's local time zone. Before the first snapshot, the API reconstructs missing selected-Cab Accepted/Completed/Driver-decline ledger rows from the same ride's append-only audit events; deterministic activity IDs make repair idempotent. A CreateItem conflict triggers bounded canonical point reads (three attempts, 50 ms then 100 ms); a missing canonical snapshot after those reads fails closed instead of returning locally calculated metrics. `DriverPayslipSnapshotRecoveryTests` cover immediate/delayed visibility, fail-closed behaviour, read failure and cancellation. Driver app cache cleanup targets only exact generated monthly payslip filenames and runs on logout, detected session expiry, no-session startup and before new account authentication; session-epoch tests prove an in-flight write is removed if logout wins the race. `driverPayslipCache.test.cjs` covers exact filename filtering, unrelated-file preservation, partial failures and write/logout races. The PDF uses SkiaSharp/HarfBuzz raw positioned glyph runs for visible vector rendering. A separate PDFsharp 6.2.4 (MIT) text layer appends low-visibility searchable Unicode text with embedded Noto Sans SIL OFL 1.1 fonts and ToUnicode mappings for Latin plus nine Indic scripts. Immutable Skia typefaces are process-cached; HarfBuzz shapers and text placements are request-local; PDFsharp's process-wide font resolver/cache append is serialized. A Skia-only positioned-text experiment did not embed a Unicode font program or preserve searchable long-name text (two backend tests failed), so the PDFsharp text layer is intentionally retained. PdfSharpCore was removed because its transitive ImageSharp 1.0.4 dependency triggered high-severity GIF-decoder advisories; PDFsharp 6.2.4 has no ImageSharp dependency. Its transitive System.Security.Cryptography.Pkcs 8.0.1 was also high-vulnerable, so the API pins patched 10.0.13; backend Directory.Build.props fails restore on audit-feed errors and high/critical advisories (NU1900/NU1903/NU1904). PdfPig tests cover all bundled scripts, embedded fonts/ToUnicode, unsupported-script 422, long-name wrapping, immutable snapshots, concurrent request isolation and repeated-download text equality. The API publish CI target is framework-dependent linux-x64 and rejects unrelated runtime assets or output larger than 120 MiB; production host OS/RID remains unselected. Live Cosmos create-conflict visibility/restart/multi-instance and physical Android/iOS PDF visual/save/share/screen-reader acceptance remain external. The bundled font set excludes Arabic, Sinhala, emoji and other unbundled scripts; these fail closed. The existing DaysWorked definition (distinct India-local dates with at least one completed activity) still requires Product confirmation.
 
+### TRIP-01 Driver tab-independent active-ride lifecycle increment (PR #175, 2026-11-17)
+
+- PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175) removes selected-tab gating from Driver-owned ride history, agreement history, RideAgreementChanged/RideStatusChanged subscriptions and the active-trip foreground GPS watcher.
+- The shared lifecycle predicate requires a nonblank Driver ID, ride ID, access token, current authenticated session and a non-terminal lifecycle status. GPS additionally requires Accepted/Arrived/InProgress and server-reported `locationSharingActive=true`.
+- History refresh remains session-epoch fenced and re-runs after ride-status changes. Agreement history uses the existing session-aware loader. SignalR reconnect recovery and ownership checks remain unchanged.
+- Foreground resume re-reads Driver-owned server history, confirms the same ride remains active/location-sharing-enabled and rechecks foreground permission before recreating the GPS watcher. Backgrounding, terminal status, ride/session change and unmount stop the watcher. No background GPS is introduced.
+- Four deterministic shared tests cover tab independence, lifecycle/session/status eligibility, Driver App effect wiring/dependencies and authoritative foreground-resume ordering. [CI #1841 / run 43957046023](https://github.com/rajeevp727/turnova-platform/actions/runs/43957046023) passed 12/12 on exact head c01312184b9e070ee83b211e1a2b4d2990f0989b: backend 671/671, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typecheck/production bundles, native API publish, both Android standalone release APKs, both unsigned iOS Simulator apps, four same-run smoke tests and 19 unexpired artifacts. The earlier CI #1839 TS2305 declaration failure is corrected and verified. The review remains COMMENT-only; zero unresolved inline threads.
+- Existing API assigned-Driver authorization, server persistence/CAS, GPS capture watermark and Rider stale-event/manual-pan/Follow logic are unchanged. Live Cosmos multi-instance/ETag/restart, SignalR backplane/reconnect and physical Android/iOS foreground/background GPS/map acceptance remain external.
+
+
 ### DRIVER-03 payslip session concurrency
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
@@ -1265,6 +1275,10 @@ The active-trip capture watermark is optional on existing ride documents and is 
 | TRIP-LOC-008 | Rider reconnects with a ride snapshot returned by the API, then receives an older SignalR event | The Rider compares the event capture time with the API's serialized `driverLocationCapturedAtUtc` watermark and ignores the older event; a newer event is accepted | `restored ride API capture watermark rejects an older SignalR capture` in `src/mobile/shared/tripLocationSharing.test.cjs` | P0 |
 
 | TRIP-LOC-009 | A delayed ride-history/reconnect API response returns after a newer SignalR location event | Merge status/agreement/other non-location fields from the response but preserve the newer Driver coordinates and capture watermark; a genuinely newer API snapshot may replace them | `stale history refresh cannot overwrite a newer SignalR location snapshot` in `src/mobile/shared/tripLocationSharing.test.cjs` | P0 |
+| TRIP-LOC-010 | Driver changes between Home, Queue, Trips, Payslips and Profile while a selected ride is active | Driver-owned ride history, agreement history, ride-status/agreement SignalR subscriptions and eligible foreground GPS remain independent of the selected tab; no GPS is published in background | `active Driver ride lifecycle is independent of the selected app tab`; `Driver active ride history, agreement and SignalR effects do not depend on Trips navigation` | P0 |
+| TRIP-LOC-011 | Driver authenticates/restores the app on Home while an active selected ride exists | Driver-owned history loads without opening Trips; active ride and agreement history restore and the authenticated ride subscriptions are established | `Driver active ride history, agreement and SignalR effects do not depend on Trips navigation`; `active Driver ride lifecycle is independent of the selected app tab` | P0 |
+| TRIP-LOC-012 | A terminal ride-status event arrives while the Driver is outside Trips | Status is applied for the matching ride; history refresh reconciles the terminal state; ride-specific SignalR subscriptions and GPS watcher are cleaned up | `active Driver ride lifecycle is independent of the selected app tab`; `foreground trip GPS requires an authenticated active ride and server-enabled location sharing`; Driver App source-wiring test | P0 |
+| TRIP-LOC-013 | Driver returns to foreground while on Home with a previously active ride | The app re-reads `/api/v1/driver/rides/mine`, verifies the same ride remains active and location-sharing-enabled, checks foreground permission, then recreates the watcher; stale/terminal history does not restart GPS | `Driver foreground resume rechecks authoritative history before recreating the GPS watcher`; existing authoritative active-trip helper tests | P0 |
 
 
 ### TRIP-01 merged exact-head CI execution evidence (2026-11-08)
@@ -2895,3 +2909,57 @@ All four same-run smoke tests passed: Rider/Driver Android emulator and Rider/Dr
 - This subsequent commit changes documentation only; CI #1834 must not be reused for the new documentation head. Wait for its own exact-head workflow before marking PR ready or merging.
 - Next sequential acceptance row after PR #174 merges: **TRIP-01**. Re-audit Driver history restoration, agreement/status SignalR subscriptions, foreground GPS lifecycle across tabs, session cleanup, API ownership, persisted GPS ordering and Rider map follow/manual-pan behaviour. Preliminary finding: active-trip history, SignalR and location effects appear tied to `tab === "Trips"`; verify exact effect dependencies and implement safe tab-independent active-ride lifecycle handling with deterministic tests. Live Cosmos, SignalR backplane/reconnect and physical-device foreground/background GPS/map acceptance remain external.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); this is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established.
+
+
+## TRIP-01 final documentation-head verification — CI #1842 (2026-11-17)
+
+PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), branch `fix/trip-01-tab-independent-active-ride-lifecycle`, exact documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`, passed [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) **12/12 jobs**.
+
+- Backend .NET 10 Release build/tests: **671 passed, 0 failed, 0 skipped**.
+- Shared mobile/auth tests: **227 passed**; deterministic Python native-artifact/Simulator harness: **48 passed**.
+- Rider and Driver Expo validation, TypeScript checks and Android/iOS production JavaScript bundles passed.
+- Native non-container .NET API publish passed.
+- Rider and Driver Android debug APKs and standalone release APKs compiled; embedded package identities were verified by the workflow.
+- Rider and Driver unsigned iOS Simulator applications compiled.
+- All four same-run Android emulator/iOS Simulator install-launch smoke jobs passed.
+- All **19 artifacts** were inspected and unexpired. Key artifact IDs: API publish `14277647087`; Rider/Driver Android standalone release APKs `14276167860` / `14276692986`; Rider/Driver iOS Simulator apps `14278655039` / `14277578968`; Rider/Driver Android smoke `14277008234` / `14278370471`; Rider/Driver iOS smoke `14278294327` / `14278892371`.
+- Four TRIP-01 deterministic shared tests cover tab-independent lifecycle eligibility, authenticated active GPS eligibility, Driver App effect/dependency wiring and authoritative history/permission revalidation before foreground watcher restart. The TS2305 declaration gap from CI #1839 was corrected in `tripLocationSharing.d.ts` and verified by CI #1841 and #1842.
+- These are CI, Android emulator and iOS Simulator results only. No signed production release, physical-device GPS/background acceptance, live Cosmos multi-instance/ETag/restart or production SignalR backplane validation is claimed.
+- PR review state: three COMMENTED submissions, zero unresolved inline threads, no approvals/self-approval. The exact eight-file diff was inspected for session fencing, JWT/SignalR ownership, foreground-only GPS, terminal cleanup, capture-watermark preservation, map follow/manual-pan and data-loss/privacy risks; no unresolved critical/high finding was identified.
+- PR #175 remains Draft until explicitly marked ready; merge has not been attempted. Next sequential work after merge: finish DRIVER-03/DRIVER-04/RIDER-04/SUPPORT-01 row audits and proceed to PLATFORM-01's raw CORS-origin and storage-readiness cancellation hardening.
+- Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). Production readiness is not established.
+
+## TRIP-01 deterministic test identifiers
+
+| ID | Scenario | Expected result | Type | Status |
+|---|---|---|---|---|
+| TRIP-LOC-010 | Driver switches Home/Queue/Trips/Payslips/Profile during an assigned non-terminal ride | Ride history, agreement history and authenticated status/agreement subscriptions remain active independent of selected tab | Shared mobile regression | Implemented; CI #1842 passed |
+| TRIP-LOC-011 | Active Driver ride has valid session and server locationSharingActive flag | Foreground GPS eligibility is true only for Accepted/Arrived/InProgress and a current authenticated session; negotiation/terminal/invalid session is false | Shared mobile unit | Implemented; CI #1842 passed |
+| TRIP-LOC-012 | Inspect Driver App lifecycle effect wiring | History, agreement, SignalR and GPS effect dependencies contain no Trips-tab gate and remain keyed to ride/session/status | Shared source-integration regression | Implemented; CI #1842 passed |
+| TRIP-LOC-013 | App resumes to foreground while Driver is on Home | Re-read authoritative Driver ride history, confirm same active ride/location-sharing flag, recheck foreground permission, then create watcher | Shared source-integration regression | Implemented; CI #1842 passed |
+
+
+## Final documentation-head handoff — TRIP-01 (2026-11-17)
+
+- CI #1842 / run 43967092267 passed 12/12 on pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. The subsequent four documentation-only commits `6ee40e58aa88f943c137d22a3154af805a8ad28d`, `662efa68ec726247829c465d27dd60f8b16e4614`, `192c23a6093747fce0ce91a9eadaa7341c3db450` and `efaf8a4a6aa41f5e847be52f178d2902435a5a33` synchronize the four project documents; CI #1845 / run 43976377915 was started on the last pre-final-sync head and is superseded by this metadata correction. A fresh exact-head workflow is required after this commit.
+- TRIP-LOC-010–013 are implemented and passed in CI #1842 on pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. No signed-device, physical-device, live Cosmos or production SignalR acceptance is claimed.
+
+
+
+## TRIP-01 exact-head verification — CI #1847 (2026-11-17)
+
+- PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), branch `fix/trip-01-tab-independent-active-ride-lifecycle`, verified pre-this-documentation-sync head `cbff86cf32f5b007c6a259a4a03772fe92b25d23`; base main `f274285db6e3f28c19b66f46920368491e6377b2`. PR was marked Ready for Review after the exact-head run passed.
+- [CI #1847 / run 43976481819](https://github.com/rajeevp727/turnova-platform/actions/runs/43976481819) completed **12/12 jobs successfully on exact head `cbff86cf32f5b007c6a259a4a03772fe92b25d23`**:
+  - Backend .NET 10 Release: **671 passed, 0 failed, 0 skipped**.
+  - Shared mobile/auth: **227/227**.
+  - Python native-artifact/Simulator harness: **48/48**.
+  - Rider and Driver Expo validation/typecheck/production JavaScript bundles.
+  - Native non-container API publish.
+  - Rider and Driver Android debug and standalone release APKs.
+  - Rider and Driver unsigned iOS Simulator applications.
+  - Four same-run Android emulator/iOS Simulator install-launch smoke tests.
+  - **19/19 artifacts** available and unexpired at inspection.
+- Key artifact IDs: API publish `14282685308`; Rider/Driver Android standalone release APKs `14282091082` / `14281936241`; Rider/Driver iOS Simulator apps `14281826751` / `14281309754`; Rider/Driver Android smoke `14282956351` / `14282206570`; Rider/Driver iOS smoke `14283028421` / `14284125820`.
+- The four TRIP-LOC-010–013 regression tests are implemented and passed. Driver history/agreement history and authenticated ride status/agreement SignalR subscriptions are independent of the selected tab. GPS remains foreground-only, authenticated, limited to Accepted/Arrived/InProgress with server `locationSharingActive=true`; background/terminal/session/ride cleanup stops it, and foreground resume revalidates authoritative history and permission.
+- This follow-up commit synchronizes the four project documents only; it does not change runtime or test source. It advances the PR head, so a **fresh exact-head CI is required for the resulting documentation commit** before merge. Recheck the latest head, reviews, threads and normal GitHub merge policy.
+- No signed production build, physical-device acceptance, live Cosmos, production SignalR backplane or production routing validation is claimed. Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); production readiness is not established.
