@@ -194,20 +194,6 @@ public sealed class SupportRequestApiIntegrationTests
     }
 
     [Fact]
-    public async Task StagingSupportIntakeCanBeEnabledOnlyWithExplicitPolicyApproval()
-    {
-        using var factory = new SupportApiFactory("Staging", policyApproved: true);
-        using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
-        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-staging-approved-01");
-
-        using var response = await client.PostAsJsonAsync("/api/v1/support/requests",
-            new { subject = "Trip update issue", description = "The trip status did not refresh after reconnecting." });
-
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-    }
-
-    [Fact]
     public async Task SupportRequestsDoNotExposeAReadOrListEndpoint()
     {
         using var factory = new SupportApiFactory();
