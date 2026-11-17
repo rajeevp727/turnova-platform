@@ -21,6 +21,15 @@ public static class SupportRequestEndpoints
             configuration.GetValue<bool>("SupportRequests:PolicyApproved");
     }
 
+    public static int? GetRetentionTtlSeconds(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var retentionDays = configuration.GetValue<int?>("SupportRequests:RetentionDays");
+        if (!retentionDays.HasValue || retentionDays.Value <= 0 || retentionDays.Value > int.MaxValue / 86_400)
+            return null;
+        return checked(retentionDays.Value * 86_400);
+    }
+
     public static WebApplication MapSupportRequestUnavailable(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/support")
@@ -47,6 +56,7 @@ public static class SupportRequestEndpoints
             SupportRequestSubmission? request,
             ClaimsPrincipal user,
             ISupportRequestStore store,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -75,7 +85,8 @@ public static class SupportRequestEndpoints
                 reporterRole,
                 subject,
                 description,
-                DateTimeOffset.UtcNow);
+                DateTimeOffset.UtcNow,
+                GetRetentionTtlSeconds(configuration));
 
             var result = await store.CreateOrGetAsync(supportRequest, cancellationToken);
             var response = new SupportRequestSubmissionResponse(
