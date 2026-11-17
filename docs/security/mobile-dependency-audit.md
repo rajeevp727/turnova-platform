@@ -16,7 +16,7 @@ The PR #185 run [#44158843845](https://github.com/rajeevp727/turnova-platform/ac
 
 The 27 high package nodes are a transitive cascade from one direct high advisory root: [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), affecting picomatch through 4.0.7. The lockfiles resolve picomatch 2.3.2 and 4.0.7 under Expo CLI, Expo Metro config, tinyglobby, anymatch, Jest and micromatch tooling. It is not a direct Rider or Driver dependency.
 
-The GitHub advisory currently has no patched version listed. The advisory is disputed by the package maintainer; Snyk's [amendment](https://security.snyk.io/vuln/SNYK-JS-PICOMATCH-21248802) records that it was deemed not a vulnerability. TurnOva does not treat that dispute as a patch or erase the finding.
+The GitHub advisory currently lists no patched picomatch version. The Rider/Driver npm audit JSON reports fixAvailable as react-native@0.88.1 with isSemVerMajor=true; this is a major React Native remediation path, not a patched picomatch release. CI pins that exact remediation metadata so a changed recommendation forces a fresh review. The advisory is disputed by the package maintainer; Snyk's [amendment](https://security.snyk.io/vuln/SNYK-JS-PICOMATCH-21248802) records that it was deemed not a vulnerability. TurnOva does not treat that dispute as a patch or erase the finding.
 
 The same audit reports seven moderate package nodes rooted in glob and minimatch advisories. They remain recorded for follow-up; they are not represented as fixed.
 
@@ -40,3 +40,13 @@ The exception is deliberately narrow and fail-closed. It is a contextual build-t
 No blind Expo/React Native major upgrade is included in this dependency-reproducibility PR. Expo SDK 58 upgrades React Native to 0.88 and documents TypeScript/native lifecycle and Android release-build changes; such a migration needs its own Rider/Driver regression work and platform evidence. Expo's [SDK 58 upgrade guide](https://expo.dev/blog/how-to-upgrade-to-sdk-58) and [SDK 58 release notes](https://expo.dev/changelog/sdk-58) are the compatibility references.
 
 Revisit the picomatch advisory when the maintainer publishes a patched release or the advisory is withdrawn. Until then, preserve the explicit CI exception and the bundle-exclusion proof; do not claim the advisory is fixed.
+
+## Android exact-head evidence and follow-up — 2026-11-18
+
+PR #185 run [#44161191929](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929) completed successfully on prior source head `1e09053bb1ec1ba4d31ca0deb4b5b1dcc35808bd`: Rider and Driver npm ci, lockfile digest verification, Expo configuration, TypeScript checks and Android bundle export passed; both actual Android source maps passed the exact-advisory contextual gate; debug and standalone release APKs built and passed package-identity verification; both standalone release APKs installed and launched in CI Android emulators; backend Release build, 758/758 backend tests, native non-container API publish and artifact validation passed; mobile auth/native tests passed 227/227 Node and 48/48 Python; iOS jobs were correctly skipped.
+
+Artifacts: Rider release APK [14364856295](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929/artifacts/14364856295), Driver release APK [14364336448](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929/artifacts/14364336448), Rider emulator smoke [14363499225](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929/artifacts/14363499225), Driver emulator smoke [14363638701](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929/artifacts/14363638701).
+
+A subsequent security review found that the contextual verifier should reject malformed or internally inconsistent npm audit JSON before applying the advisory exception. The verifier now requires all severity counters, verifies record counts and package-node arrays, checks the audit exit code against the inventory, and pins the current major-only react-native@0.88.1 remediation metadata. Its deterministic test suite now has 17 cases. These follow-up code commits are not yet covered by the prior green run; fresh exact-head CI is mandatory before merge.
+
+The picomatch advisory remains unresolved and is not represented as patched. No Expo/React Native major upgrade was performed.
