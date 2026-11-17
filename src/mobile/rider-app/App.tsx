@@ -23,7 +23,7 @@ import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePe
 import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
 import { canStartRiderBooking, hasActiveRiderRide } from "../shared/riderBookingGuard";
-import { getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps } from "../shared/riderAuthForm";
+import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps, tryBeginRiderAuthSubmission } from "../shared/riderAuthForm";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -81,7 +81,7 @@ export default function App() {
   const invalidateSession=useCallback(()=>{const epoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);stopSessionResources();return epoch;},[stopSessionResources]);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
-  const nameInputRef=useRef<TextInput|null>(null); const emailInputRef=useRef<TextInput|null>(null); const passwordInputRef=useRef<TextInput|null>(null);
+  const nameInputRef=useRef<TextInput|null>(null); const emailInputRef=useRef<TextInput|null>(null); const passwordInputRef=useRef<TextInput|null>(null); const authSubmissionInFlight=useRef(false);
   const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
   const [tripIntentText,setTripIntentText]=useState(""); const [tripIntentBusy,setTripIntentBusy]=useState(false); const [tripIntentNotice,setTripIntentNotice]=useState("");
   const [helpQuestion,setHelpQuestion]=useState(""); const [helpBusy,setHelpBusy]=useState(false); const [helpAnswer,setHelpAnswer]=useState("");
@@ -309,6 +309,7 @@ export default function App() {
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
   const authenticate = async () => {
+    if(!tryBeginRiderAuthSubmission(authSubmissionInFlight))return;
     const credentials = { email: email.trim(), password, name: name.trim(), mode };
     const authEpoch = invalidateSession();
     clearRiderSessionState(credentials);
@@ -339,6 +340,7 @@ export default function App() {
       if (sessionEpoch.current === authEpoch)
         setError(e instanceof Error ? e.message : "Authentication failed.");
     } finally {
+      finishRiderAuthSubmission(authSubmissionInFlight);
       if (sessionEpoch.current === authEpoch) setLoading(false);
     }
   };

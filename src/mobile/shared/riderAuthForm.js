@@ -81,6 +81,16 @@ function getRiderAuthModeToggleProps(mode) {
   };
 }
 
+function tryBeginRiderAuthSubmission(gate) {
+  if (gate.current) return false;
+  gate.current = true;
+  return true;
+}
+
+function finishRiderAuthSubmission(gate) {
+  gate.current = false;
+}
+
 function getRiderAuthErrorProps() {
   return {
     accessible: true,
@@ -90,8 +100,10 @@ function getRiderAuthErrorProps() {
 }
 
 module.exports = {
+  finishRiderAuthSubmission,
   getRiderAuthErrorProps,
   getRiderAuthFieldProps,
   getRiderAuthModeToggleProps,
-  getRiderAuthSubmitProps
+  getRiderAuthSubmitProps,
+  tryBeginRiderAuthSubmission
 };

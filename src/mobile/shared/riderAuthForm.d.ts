@@ -1,5 +1,8 @@
 export type RiderAuthMode = "login" | "register";
 export type RiderAuthField = "name" | "email" | "password";
+export interface MutableBooleanRef { current: boolean; }
+export function tryBeginRiderAuthSubmission(gate: MutableBooleanRef): boolean;
+export function finishRiderAuthSubmission(gate: MutableBooleanRef): void;
 
 export interface RiderAuthFieldProps {
   accessibilityLabel: string;

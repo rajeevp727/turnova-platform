@@ -8,7 +8,9 @@ const {
   getRiderAuthErrorProps,
   getRiderAuthFieldProps,
   getRiderAuthModeToggleProps,
-  getRiderAuthSubmitProps
+  getRiderAuthSubmitProps,
+  finishRiderAuthSubmission,
+  tryBeginRiderAuthSubmission
 } = require("./riderAuthForm.js");
 
 test("Rider registration name field exposes native name autofill and next-key behavior", () => {
@@ -64,6 +66,18 @@ test("Rider submit action announces busy and disabled states", () => {
   assert.deepEqual(busy.accessibilityState, { disabled: true, busy: true });
 });
 
+test("Rider auth submission gate prevents overlapping login/register dispatch and reopens after completion", () => {
+  const gate = { current: false };
+  assert.equal(tryBeginRiderAuthSubmission(gate), true);
+  assert.equal(gate.current, true);
+  assert.equal(tryBeginRiderAuthSubmission(gate), false);
+  assert.equal(gate.current, true);
+  finishRiderAuthSubmission(gate);
+  assert.equal(gate.current, false);
+  assert.equal(tryBeginRiderAuthSubmission(gate), true);
+  finishRiderAuthSubmission(gate);
+});
+
 test("Rider auth mode toggle announces the destination action", () => {
   const register = getRiderAuthModeToggleProps("login");
   assert.equal(register.accessibilityLabel, "Create a Rider account");
@@ -89,6 +103,8 @@ test("Rider auth field helper rejects unknown fields and modes", () => {
 
 test("Rider auth screen wires accessible fields, keyboard focus, and error announcements", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /if\(!tryBeginRiderAuthSubmission\(authSubmissionInFlight\)\)return;/);
+  assert.match(source, /finally\s*\{\s*finishRiderAuthSubmission\(authSubmissionInFlight\)/);
   assert.match(source, /getRiderAuthFieldProps\("name",mode\)/);
   assert.match(source, /getRiderAuthFieldProps\("email",mode\)/);
   assert.match(source, /getRiderAuthFieldProps\("password",mode\)/);
