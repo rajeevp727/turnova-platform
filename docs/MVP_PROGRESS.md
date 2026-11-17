@@ -2551,3 +2551,10 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 - New reviewed pins now match the generated lockfiles: Rider `1d577165033eb4b2a0e12dfa9b35889f474e638225a1c787678eefc4bfabb083`; Driver `d6437f510bbfd01dbb3467688241d03bcb2e4035570c3fe62e31827356134f14`.
 - Current PR branch head after pin refresh: `993e19d72331f894a2821aad97ed7d05d840cbe1`. Fresh exact-head CI must rerun both Rider and Driver installs, npm audit, Expo validation, Android debug/release builds and emulator smoke. Historical npm audit counts (11 moderate, 0 high, 0 critical per app) are not substituted for the fresh audit.
 - iOS remains `not_started`; no iOS dependency or build job is enabled. Do not start Rider feature work until PR #185 dependency/Android infrastructure checks pass.
+
+
+## Android lockfile write-target hardening — 2026-11-18
+
+A further path-safety review found that symlink containment alone does not detect a hard link: an existing `package-lock.json` could share an inode with a file outside the app. PR #185 now rejects any existing lockfile write target that is not a regular file with exactly one hard link, both before lockfile generation and after generation. A deterministic real-filesystem test creates an app lockfile hardlinked to an external fixture, asserts rejection before npm is invoked, and verifies the external file remains unchanged. This supplements the existing external/broken symlink and `node_modules` symlink tests.
+
+Latest PR #185 handoff: lockfile pins refreshed to Rider `1d577165033eb4b2a0e12dfa9b35889f474e638225a1c787678eefc4bfabb083` and Driver `d6437f510bbfd01dbb3467688241d03bcb2e4035570c3fe62e31827356134f14`; hardlink guard and regression added in commits `c37e0ff6e49eb97dea6f66e33b85eff57647d486` and `3927751df6cf51cea952ab212fcbb22c32a7e667`. Fresh exact-head CI is required; no Android build/smoke success is claimed yet.
