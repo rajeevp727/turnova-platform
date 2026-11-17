@@ -3196,7 +3196,7 @@ The current checked-in state is API `in_progress`, Android/iOS `not_started`. Ex
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
 |---|---|---|---|---|
-| DRIVER-MEDIA-006 | Driver retrieves an uploaded private object | Only the owning Driver receives bytes; response is `Cache-Control: private, no-store`; another Driver receives 404 | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadIssuesOpaqueOwnerBoundReferenceAndPrivateRead` | P0 |
+| DRIVER-MEDIA-006 | Driver retrieves an uploaded private object | Only the owning Driver receives bytes; response is `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`; another Driver receives 404 | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadIssuesOpaqueOwnerBoundReferenceAndPrivateRead` | P0 |
 | DRIVER-MEDIA-007 | Upload declares an unsupported media type or mismatched file signature | API rejects it before storage; no media reference is issued | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadRejectsMismatchedContentSignature` plus `IsValidPrivateMediaPayload`; exact-head CI pending | P0 |
 | DRIVER-MEDIA-008 | Historical Driver profile contains inline Base64 selfie | Historical record remains readable; new writes leave Base64 null and use `ProfilePhotoStorageReference` | Existing selfie/discovery regression suite plus new onboarding reference assertion | P0 |
 
