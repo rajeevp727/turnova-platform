@@ -3337,3 +3337,8 @@ The PR diff changes Rider auth UI and adds a pure helper/type declaration/test f
 ## Rider auth single-flight follow-up — 2026-11-18
 
 PR #186 source/test head `069882d8846f74ee5404863038f3a34b6c76775b` adds a shared `authSubmissionInFlight` ref and pure `tryBeginRiderAuthSubmission` / `finishRiderAuthSubmission` helpers. Both keyboard and button submissions use the same guard; only one login/register POST can be initiated at a time. The lock is released in `finally` on success, error, cancellation/epoch mismatch and early return. The auth epoch remains the authority for stale response rejection and token persistence. New deterministic case RIDER-AUTH-ACCESS-009 verifies acquisition, duplicate rejection and retry after release; the App.tsx source-wiring test asserts acquisition occurs before auth work and release occurs in `finally`. Exact-head CI is pending; no API payload or token lifecycle changed.
+
+
+## Rider auth epoch-assertion correction — 2026-11-18
+
+CI [#44196954234](https://github.com/rajeevp727/turnova-platform/actions/runs/44196954234) ran 237 Node tests: 236 passed and one existing `AUTH-LOGIN-063` source-wiring assertion failed because the refactor renamed the local epoch variable used by its regression guard. The new `RIDER-AUTH-ACCESS-009` single-flight helper test passed. This was a test-contract mismatch, not a runtime auth failure. App.tsx now retains the `authEpoch` identifier and the existing post-SecureStore-cleanup stale-session check while keeping the new submission lock and releasing it in `finally`. Source/test head `ddd6852d4dbc1f4f5b7cb423d9395446fbe1dc07` requires fresh exact-head CI; no merge is permitted until all required checks pass.
