@@ -1557,3 +1557,6 @@ PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), branch `feat
 - Deterministic tests RIDER-AUTH-ACCESS-001..008 in `src/mobile/shared/riderAuthForm.test.cjs`; final-head CI is pending.
 
 No API auth payload, token/session behaviour, role, booking, fare or ride state was changed. AUTH-01/AUTH-02 remain In Progress; signed-device SecureStore/Keychain, live TriSend and physical-device evidence remain external. Strict acceptance remains 0/19 Verified; production readiness is not established.
+
+
+**CI phase-label correction (2026-11-18):** Initial PR #186 run [#44187824869](https://github.com/rajeevp727/turnova-platform/actions/runs/44187824869) failed only in the scope detector because the PR lacked the required phase labels; no build/test job ran. The user-authorized `turnova:api-phase-complete` and `turnova:android-phase-approved` labels are now applied. A new synchronized head is being pushed so GitHub Actions receives the approved labels in the pull_request event payload. Do not interpret the initial scope failure as an app/test failure.
