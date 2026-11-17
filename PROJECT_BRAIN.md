@@ -5,13 +5,12 @@
 
 **Last verified:** 2026-11-18
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `ea42ae49f200738316e72a1505d93ab7265bd0e2`; PR #182 (real Kestrel support body-limit verification) is merged. PR #177 remains closed/unmerged and parked for Android only. PR #183 is the sole active feature increment.
-**Current platform phase:** API. Android remains prohibited until API source, deterministic tests, OpenAPI/docs, auth/privacy, persistence and native non-container publish exit criteria pass. iOS remains gated until both Android apps exit.
-**Current API PR:** [#183 — AI assistance request input guards](https://github.com/rajeevp727/turnova-platform/pull/183), branch `feat/api-ai-assistance-input-guards`; source/test head at handoff `1cc61f270977599809bb00419fe6c922261cdfb4`.
-**PR #182 verification:** [CI #44144136443](https://github.com/rajeevp727/turnova-platform/actions/runs/44144136443) passed scope, .NET 10 Release build, **754/754 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact verification. The real-Kestrel 16 KiB support request test passed; Android/iOS jobs were correctly skipped.
-**PR #183 implementation:** AI trip-intent/help endpoints now enforce 16 KiB Kestrel request limits and OpenAPI 413; request DTOs reject unmapped JSON fields; deterministic API and real-Kestrel tests cover unknown sensitive fields and oversized bodies before provider invocation. Exact-head CI is pending.
-**AI-01:** approved supplemental scope, outside the 19-row denominator. Provider remains disabled by default; no paid provider/model/credential selected. Live sandbox, managed-secret and data-processing validation remain external.
-**API next:** verify PR #183 final-head Release build, backend tests and native publish; then continue the full API acceptance-row source/auth/privacy/persistence audit. Do not start Android until API phase exit criteria pass.
+**Main HEAD:** `dda08764b25f2a2b4f5e7665e85a59e539d8663e`; PR #183 (AI-01 assistance input guards) is merged. PR #177 remains closed/unmerged and parked for Android dependency-reproducibility review.
+**Current platform phase:** Android. API engineering exit criteria are complete; Rider and Driver Android work may begin. iOS remains gated until both Android apps exit.
+**API phase evidence:** PR #183 exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed scope, .NET 10 Release build, **758/758 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact verification (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)).
+**API engineering exit:** in-scope API flows, deterministic backend/domain/persistence tests, API docs, auth/authorization/privacy checks and native publish are complete. Live Cosmos, production identity, private-media provider/scanning, hosting and product/legal decisions remain external; no production readiness is claimed.
+**AI-01:** approved supplemental API scope is implemented/tested and remains outside the 19-row denominator. Provider is disabled by default; no paid provider/model/credential selected.
+**Current Android task:** inspect PR #177 and current Rider/Driver manifests, lockfiles and CI install commands. Complete safe dependency reproducibility, then Rider Android before Driver Android. Do not start iOS until both Android apps exit.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Product in one line
@@ -2811,3 +2810,8 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 ## Latest API handoff — AI-01 request input guards (2026-11-18)
 
 PR #183 is the sole active API feature increment. It adds 16 KiB request-size metadata and OpenAPI 413 to both assistance endpoints, strict JSON request DTOs and deterministic tests for unmapped fields plus real Kestrel body-limit enforcement. Source/test head at handoff: `1cc61f270977599809bb00419fe6c922261cdfb4`. Final-head CI and independent review are required before merge. AI-01 remains supplemental/outside the 19 acceptance rows. Do not choose a paid provider/model/credential or start Android before API exit.
+
+
+## API phase exit — Android handoff (2026-11-18)
+
+PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e` after exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed 758/758 backend tests and native non-container API publish. API engineering exit is complete; strict 19-row acceptance remains 0/19 and production readiness is not established. Current phase is Android. Re-audit parked PR #177 and current Rider/Driver dependency files before changes; complete Rider Android and Driver Android before iOS.

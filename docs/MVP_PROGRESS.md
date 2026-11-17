@@ -1,29 +1,26 @@
-**Last updated:** 2026-11-18; main HEAD `ea42ae49f200738316e72a1505d93ab7265bd0e2` (PR #182 merged).
-**Platform phase:** **API first**. Android completion remains prohibited until all in-scope API source, deterministic tests, API contract/docs, auth/privacy, persistence and native non-container publish/CI exit criteria pass. iOS remains gated until both Android apps exit.
-**Merged:** PRs #172–#176 and #178–#182. PR #177 remains closed/unmerged and parked for Android only; its mobile CI is not API exit evidence.
-**Current API PR:** [#183 — AI assistance request input guards](https://github.com/rajeevp727/turnova-platform/pull/183), branch `feat/api-ai-assistance-input-guards`. Source/test head at handoff: `1cc61f270977599809bb00419fe6c922261cdfb4`; final PR head is shown on the linked PR.
-**PR #182 final evidence:** [CI #44144136443](https://github.com/rajeevp727/turnova-platform/actions/runs/44144136443) passed on exact head `97f28d8ead66bd540e63e48f6a0d4a94eb68dfaa`: scope passed; .NET 10 Release build passed; **754/754 backend tests passed (0 failed, 0 skipped)**; native non-container API publish and artifact verification passed. Android/iOS jobs were correctly skipped under API `in_progress`. PR #182 merged at `ea42ae49f200738316e72a1505d93ab7265bd0e2`.
-**PR #183 change:** AI-01 trip-intent and help endpoints now declare a 16 KiB request-size limit and OpenAPI HTTP 413 response. Strict request DTOs reject unknown JSON members so callers cannot attach ride IDs, exact coordinates, fare, contact, payment or token fields. New deterministic tests cover both strict DTOs and real Kestrel rejection before provider invocation. Exact-head API CI is pending.
-**API next:** verify PR #183 exact-head backend tests/native publish, then continue the API acceptance-row source/auth/privacy/persistence audit. Do not start Android until every API phase exit criterion passes.
-**AI-01:** supplemental and outside the 19-row denominator; provider remains disabled by default, no paid provider/model/credential selected, and live provider validation remains external.
+**Last updated:** 2026-11-18; main HEAD `dda08764b25f2a2b4f5e7665e85a59e539d8663e` (PR #183 merged).
+**Platform phase:** **Android**. API engineering exit criteria are complete; Android Rider and Driver work may begin. iOS remains gated until both Android apps pass their exit criteria.
+**Merged:** PRs #172–#176 and #178–#183. PR #177 remains closed/unmerged and parked for Android dependency-reproducibility review; do not assume its changes are safe without re-auditing the exact diff.
+**API phase exit evidence:** PR #183 exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed scope, .NET 10 Release build, **758/758 backend tests (0 failed, 0 skipped)**, native non-container API publish, publish verifier and artifact validation (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)). PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e`.
+**API engineering exit:** all in-scope API flows, deterministic backend/domain/persistence tests, OpenAPI/route documentation, auth/authorization/privacy checks and native API publish evidence are complete. This is not strict acceptance or production readiness; live Cosmos, production identity, private-media provider/scanning, hosting and product/legal decisions remain external.
+**Current Android task:** recover and inspect PR #177 plus current Rider/Driver package manifests, lockfiles and CI install commands. Complete safe dependency-reproducibility work, then finish Rider Android before Driver Android. iOS remains `not_started`.
+**AI-01:** supplemental API boundary is implemented/tested, disabled by default, outside the 19-row denominator; no paid provider/model/credential selected.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation-completion percentage.
-**Production readiness:** Not established. No live private-media provider/scanner, Cosmos multi-instance/restart, production identity, hosted API, legal approval or physical-device validation is claimed.
+**Production readiness:** Not established. No live Cosmos multi-instance/restart, production identity, private-media provider/scanning, hosted API, legal approval or physical-device validation is claimed.
 
 ## Platform phase exit criteria
 
-- **API:** all in-scope API flows and authorization/privacy checks implemented; deterministic API/domain/persistence tests; generated/versioned OpenAPI contract and route documentation; native non-container .NET 10 Release publish; final-head API CI. Live Cosmos multi-instance/ETag/restart, production identity/secrets, hosting and provider validation remain external evidence and do not block safe code work.
-- **Android:** only after API exit; complete Rider and Driver flows/tests, Android debug/release builds and emulator install/launch smoke for both apps. Physical-device/signing/API-host gates remain external.
-- **iOS:** only after both Android apps exit; complete Rider and Driver iOS flows/tests, Simulator builds and install/launch smoke for both apps. Physical-device/signing/TestFlight gates remain external.
+- **API — engineering exit complete:** all in-scope API flows and authorization/privacy checks implemented; deterministic API/domain/persistence tests; API contract/docs; native non-container .NET 10 Release publish; final-head CI. Live Cosmos multi-instance/ETag/restart, production identity/secrets, hosting and provider validation remain external and do not block Android engineering.
+- **Android — current phase:** complete Rider and Driver flows/tests, Android debug/release builds and emulator install/launch smoke for both apps. Physical-device/signing/API-host gates remain external.
+- **iOS — not started:** only after both Android apps exit; complete Rider and Driver iOS flows/tests, Simulator builds and install/launch smoke for both apps. Physical-device/signing/TestFlight gates remain external.
 
 ## 1. Current step
 
-**API phase — AI-01 request input and body-size hardening (PR #183), followed by the complete API acceptance-row audit.**
+**Android phase — dependency reproducibility audit, then Rider Android implementation and Driver Android implementation.**
 
-PR #182 is merged. Its real-Kestrel support-request test proves that a request above 16 KiB returns HTTP 413 before support persistence. Exact-head CI #44144136443 passed 754/754 backend tests and native non-container API publishing.
+The API phase exited on engineering evidence only. PR #183 exact-head CI passed 758/758 backend tests and native non-container API publishing. API external gates remain explicitly open; strict acceptance is still 0/19.
 
-PR #183 caps both AI assistance routes at 16 KiB, documents 413 in OpenAPI, and rejects unmapped JSON properties. The Kestrel regression exercises both trip-intent and help routes and asserts no provider invocation for oversized requests. Unknown ride/location/fare/contact/payment fields are rejected rather than silently ignored.
-
-**Next exact action:** finish PR #183 final-head Release build, backend tests and native publish; review all changed files and merge only if GitHub policy permits. Then re-read main and continue the API row-by-row audit. Do not start Android before API phase exit.
+**Next exact action:** inspect PR #177's current status, head and full diff; compare its proposed lockfiles/install changes with the latest main manifests and CI. Reuse only safe, current changes in one focused Android-phase PR. Keep iOS jobs gated until Rider and Driver Android exit.
 
 ## 2. Overall MVP completion
 
@@ -2522,3 +2519,13 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 - Required checks: exact-head .NET 10 Release build, full backend suite, native non-container API publish and artifact verifier. Android/iOS jobs must remain skipped under API phase.
 - External gates remain Product-approved dispatch radius/freshness, support policies, live Cosmos ETag/multi-instance/restart/retention, production JWT/TriSend identity, private storage/scanning/consent/retention, maps/realtime providers, reconciliation policy, Union legal terms and hosted API.
 - Strict acceptance remains 0/19 Verified, 16 In Progress, 3 Blocked (DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
+
+ 
+## API phase exit handoff — 2026-11-18
+
+- Main after PR #183: `dda08764b25f2a2b4f5e7665e85a59e539d8663e`.
+- API final-head evidence: [CI #44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366), 758/758 backend tests, zero failed/skipped, native non-container API publish and artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057).
+- API engineering exit criteria are complete. This does not mean any of the 19 acceptance rows is strictly Verified and does not establish production readiness.
+- Phase state is `api=complete`, `android=in_progress`, `ios=not_started`. First Android increment must re-audit PR #177 and current Rider/Driver dependency manifests; then complete Rider Android and Driver Android sequentially.
+- Strict acceptance remains 0/19 (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01).
+- External gates remain live Cosmos multi-instance/restart, production identity/secrets, private storage/scanning/consent/retention, dispatch radius/freshness, maps/realtime, support policy, reconciliation policy, Union legal review, API hosting, Android/iOS physical devices and signing.

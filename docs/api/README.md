@@ -177,4 +177,9 @@ AI-01 is an approved supplemental requirement and remains outside the 19-row acc
 - Rate limiting is partitioned by authenticated subject after authentication/authorization. `AiAssistant:MaxRequestsPerMinute` defaults to 10 and is validated from 1 to 60.
 - Assistance is disabled by default and uses `UnavailableAiAssistantProvider` until a provider is selected and validated. No paid provider/model, endpoint or credential is selected. Deterministic fallback remains available.
 - AI-01 must never book, charge, set/recommend fares, approve KYC, change eligibility/dispatch/ride state, or make safety/legal decisions. Live provider sandbox, managed-secret wiring and data-processing/legal terms remain external gates.
-- PR [#183](https://github.com/rajeevp727/turnova-platform/pull/183) adds the 16 KiB Kestrel limit to both assistance endpoints, strict unmapped-member rejection and deterministic API/Kestrel tests. Its exact-head CI is tracked by the PR checks.
+- PR [#183](https://github.com/rajeevp727/turnova-platform/pull/183) merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e`. Exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed **758/758 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact validation (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)).
+
+
+## API engineering phase exit — 2026-11-18
+
+The API engineering phase is complete. All in-scope API flows, deterministic backend/domain/persistence tests, auth/authorization/privacy checks, API contracts/docs, native non-container .NET 10 Release publish and exact-head CI are present. This is not strict acceptance or production readiness. Live Cosmos ETag/multi-instance/restart, production JWT/TriSend identity, private object storage/scanning/managed identity, consent/retention/deletion, maps/realtime providers, product support/dispatch/reconciliation policies, legal terms and hosted API remain external. Android is now the active engineering phase; iOS remains gated until both Android apps exit.
