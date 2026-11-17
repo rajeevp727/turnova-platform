@@ -53,7 +53,7 @@ Only `rider` and `driver` route values are accepted. The API owns `appId=turnova
 - `GET /api/v1/driver/union`
 - `GET /api/v1/driver/payslips/{year}/{month}.pdf`
 
-New onboarding and ride eligibility are Cab-only. Document values are private storage references, not public URLs or document contents. A public selfie requires approval by the current union.
+New onboarding and ride eligibility are Cab-only. Current API storage limitation: the Driver selfie is accepted as JPEG Base64 (maximum decoded size 300 KB) and stored inline in the Cosmos Driver profile; it is not yet stored in a private object-storage provider. Driving-licence and vehicle documents are represented by client-supplied opaque `StorageReference` strings; the API validates shape/URL/path safety but cannot verify that the reference was issued for that Driver or that its contents were scanned. A public selfie requires approval by the current Union. These are development/test contracts, not production private-media readiness.
 
 ### Rider discovery and selected booking
 
@@ -101,8 +101,39 @@ The zone/queue and `/api/v1/rides/request`, pending-offer, available-ride, accep
 - `GET /health/live` reports process liveness.
 - `GET /health/ready` performs a bounded storage dependency probe and returns 503 when storage is unavailable or the probe times out.
 - Unexpected exceptions return generic Problem Details with a trace ID; raw exception details, credentials, tokens, exact coordinates and request bodies are not returned.
-- Common contract outcomes include 400 validation, 401 missing/invalid authentication, 403 role/scope denial, 404 non-owned/not-found resources, 409 state/concurrency conflict, 503 unavailable configuration/dependency and 504 upstream timeout.
+- Common contract outcomes include 400 validation, 401 missing/invalid authentication, 403 role/scope denial, 404 non-owned/not-found resources, 409 state/concurrency conflict, 413 oversized request body, 503 unavailable configuration/dependency and 504 upstream timeout.
 
 ## API phase follow-ups still open
 
-The API phase is not complete. The current audit has identified support-request intake and Cosmos adapter-level deterministic tests as remaining engineering work, in addition to the OpenAPI/auth changes in the current increment. Support categories, severity, assignment, escalation/SLA and retention remain Product/Operations decisions; code must not invent them. Live Cosmos ETag/multi-instance/restart and production TriSend/JWT validation remain external gates.
+PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179) implements neutral Rider/Driver support intake, reporter-partitioned Cosmos persistence, deterministic ETag/transactional-batch and migration contracts, OpenAPI documentation and API-first CI gates. The preceding docs head `aaee8df8585013aa95d89d19dad5f68a8bcf099c` passed API-only CI [#44115448770](https://github.com/rajeevp727/turnova-platform/actions/runs/44115448770): backend **724/724**, native non-container publish artifact [14341634913](https://github.com/rajeevp727/turnova-platform/actions/runs/44115448770/artifacts/14341634913), scope passed and every mobile/Android/iOS job correctly skipped. Retention code head `fb4e0c92a27796d2ec1d5cfbb6b5bc6af4fe1e31` now adds a null-by-default `SupportRequests:RetentionDays` placeholder, positive/overflow-safe validation, startup and per-request fail-closed checks for persistent support intake, per-item `ttl` seconds and `DefaultTimeToLive=-1` container enforcement. Each request captures the validated TTL once; a configuration reload that removes policy approval or required retention returns 503 before store access. The retention changes and current documentation synchronization require fresh exact-head API CI.
+
+Support categories, severity, assignment, escalation/SLA, attachments and the retention duration remain Product/Operations decisions; code must not invent them. `SupportRequests:RetentionDays` is null in checked-in configuration. Any enabled persistent Cosmos support intake requires a positive approved value; the container uses `DefaultTimeToLive=-1` and each item stores `ttl = RetentionDays × 86400`. Staging/Production support intake requires `SupportRequests:PolicyApproved=true`, valid retention days and durable Cosmos configuration. Missing/invalid retention or missing Staging Cosmos configuration fails closed; with policy disabled, the route returns 503 before binding or persisting content. Live Cosmos ETag/multi-instance/restart, production TriSend/JWT identity, hosted API and provider validation remain external gates.
+
+
+## Neutral Rider/Driver support intake
+
+`POST /api/v1/support/requests` accepts a Rider or Driver JWT and an `Idempotency-Key` header. The JSON body contains only `subject` and `description`, with a 16 KiB maximum request body.
+
+- First submission: HTTP 202 with request ID, server timestamp and `replayed=false`.
+- Same reporter/key/content: HTTP 200 with the original request ID/timestamp and `replayed=true`.
+- Same reporter/key with different content: HTTP 409; the existing item is never overwritten.
+- Missing/invalid key or invalid body: HTTP 400.
+- Anonymous caller: HTTP 401; other roles: HTTP 403.
+
+The Cosmos `SupportRequests` container uses partition key `/reporterId`. The item ID is a SHA-256 digest of the reporter ID and idempotency key; the raw key is not stored. The response does not echo the reporter ID or request text, and support content is not logged.
+
+There is intentionally no support-request list/read endpoint, attachment upload, category, severity, priority, assignment, escalation or response target. No retention duration is selected. `SupportRequests:RetentionDays` remains an unconfigured placeholder; when a persistent store is enabled, the API requires a positive approved value, the container enables per-item TTL with `DefaultTimeToLive=-1`, and each item receives `ttl` in seconds. Development/Testing in-memory intake may omit retention configuration.
+
+Support intake is enabled by default only in Development and Testing. Staging/Production require `SupportRequests:PolicyApproved=true`, a positive Product/Operations-approved `SupportRequests:RetentionDays`, and configured Cosmos persistence. A policy-approved Staging/Production host without valid retention fails startup; Staging without `CosmosDb:Endpoint` and `CosmosDb:Key` also fails closed instead of accepting requests into an in-memory store. Production already requires Cosmos at startup. The checked-in policy default is false and retention days remain null until approved.
+
+
+## Private media and KYC storage — production gate
+
+- Current selfie bytes are stored inline in the Cosmos Driver profile as `ProfilePhotoBase64`; they are returned to the Driver/authorized Union review paths and included in public discovery only after current-Union approval.
+- Driving-licence and vehicle document references are supplied by the Driver client. The API rejects absolute URLs and traversal-like strings, but no configured provider verifies reference ownership, scans/quarantines content, enforces consent/retention, or serves private content.
+- Before production, implement a provider-agnostic private-media boundary with server-issued Driver-bound references, upload quarantine/malware scanning, consent evidence, retention/deletion, and current-Union-only retrieval. Riders must never receive KYC document references or content. No storage provider, credentials or legal retention policy are configured.
+- Owner/input: Infrastructure/Security must provide the private object-storage/scanning service contract and managed identity; Product/Legal must approve consent and retention; Union operations must approve reviewer access. Until then this is an explicit external gate, not completed acceptance.
+
+## Cosmos migration lease safety
+
+The current migration runner uses a 30-minute ETag-protected lease and releases by matching ETag, but does not renew the lease while a migration is running. Existing migrations only create containers idempotently. Before adding non-idempotent data migrations, add a renewal heartbeat, lost-lease cancellation/fencing and deterministic fake-store tests; live multi-instance/restart recovery remains an external Cosmos validation gate.

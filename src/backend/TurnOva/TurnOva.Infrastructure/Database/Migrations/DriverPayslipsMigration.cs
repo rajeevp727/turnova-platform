@@ -1,5 +1,3 @@
-using Microsoft.Azure.Cosmos;
-
 namespace TurnOva.Infrastructure.Database.Migrations;
 
 public sealed class DriverPayslipsMigration : ICosmosMigration
@@ -7,13 +5,11 @@ public sealed class DriverPayslipsMigration : ICosmosMigration
     public string Id => "202611050003_DriverPayslips";
     public string Description => "Create driver work activity ledger and immutable monthly payslip containers.";
 
-    public async Task UpAsync(Microsoft.Azure.Cosmos.Database database, CancellationToken cancellationToken)
+    public async Task UpAsync(ICosmosMigrationDatabase database, CancellationToken cancellationToken)
     {
         await database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties("DriverWorkActivities", "/driverId"),
-            cancellationToken: cancellationToken);
+            "DriverWorkActivities", "/driverId", cancellationToken);
         await database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties("DriverPayslips", "/driverId"),
-            cancellationToken: cancellationToken);
+            "DriverPayslips", "/driverId", cancellationToken);
     }
 }

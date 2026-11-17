@@ -30,6 +30,7 @@ public sealed class CosmosMigrationRunner(
             cancellationToken: cancellationToken);
         var locks = lockResponse.Container;
 
+        var migrationDatabase = new CosmosMigrationDatabase(database);
         var lease = await AcquireLockAsync(locks, cancellationToken);
         try
         {
@@ -45,7 +46,7 @@ public sealed class CosmosMigrationRunner(
 
                 logger.LogInformation("Applying Cosmos migration {MigrationId}: {Description}",
                     migration.Id, migration.Description);
-                await migration.UpAsync(database, cancellationToken);
+                await migration.UpAsync(migrationDatabase, cancellationToken);
 
                 var historyDocument = new MigrationHistoryDocument
                 {

@@ -1,6 +1,7 @@
 using TurnOva.API;
 using TurnOva.API.Assistance;
 using TurnOva.API.Observability;
+using TurnOva.API.Support;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
@@ -16,12 +17,15 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
+using TurnOva.Application.Support;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Database;
 using TurnOva.Infrastructure.Database.Migrations;
 using TurnOva.Infrastructure.Dispatch;
+using TurnOva.Infrastructure.Support;
 
 var builder = WebApplication.CreateBuilder(args);
+
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi(options =>
@@ -160,6 +164,7 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, SupportRequestsMigration>();
     builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
     builder.Services.AddSingleton<IRiderActiveBookingReservationStore>(sp =>
         new CosmosRiderActiveBookingReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency")));
@@ -169,6 +174,9 @@ if (useCosmos)
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
             .GetContainer(databaseName, "QueueEntries")));
+    builder.Services.AddSingleton<ISupportRequestStore>(sp =>
+        new CosmosSupportRequestStore(sp.GetRequiredService<CosmosClient>()
+            .GetContainer(databaseName, "SupportRequests")));
 }
 else
 {
@@ -189,6 +197,7 @@ else
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
     builder.Services.AddSingleton<IRiderActiveBookingReservationStore, InMemoryRiderActiveBookingReservationStore>();
+    builder.Services.AddSingleton<ISupportRequestStore, InMemorySupportRequestStore>();
 }
 
 builder.Services.AddSingleton<StorageReadinessProbe>(sp =>
@@ -226,6 +235,19 @@ builder.Services.AddHostedService<RideOfferExpiryWorker>();
 builder.Services.AddScoped<QueueService>();
 
 var app = builder.Build();
+var supportRequestsEnabled = SupportRequestEndpoints.IsEnabledForEnvironment(app.Environment, app.Configuration);
+var supportRetentionTtlSeconds = SupportRequestEndpoints.GetRetentionTtlSeconds(app.Configuration);
+var supportPolicyApproved = app.Configuration.GetValue<bool>("SupportRequests:PolicyApproved");
+var localSupportEnvironment = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing");
+
+if (supportPolicyApproved && !localSupportEnvironment && supportRetentionTtlSeconds is null)
+    throw new InvalidOperationException("SupportRequests:RetentionDays must be a positive Product/Operations-approved value that fits Cosmos item TTL seconds before Staging/Production support intake can be enabled.");
+
+if (supportRequestsEnabled && useCosmos && supportRetentionTtlSeconds is null)
+    throw new InvalidOperationException("SupportRequests:RetentionDays must be a positive approved value that fits Cosmos item TTL seconds whenever support requests use persistent Cosmos storage.");
+
+if (app.Environment.IsStaging() && supportRequestsEnabled && !useCosmos)
+    throw new InvalidOperationException("Staging support intake requires CosmosDb:Endpoint and CosmosDb:Key. Keep SupportRequests:PolicyApproved=false until durable storage is configured.");
 
 if (useCosmos)
 {
@@ -271,6 +293,10 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
+if (supportRequestsEnabled)
+    app.MapSupportRequestEndpoints(requireRetention: useCosmos || !localSupportEnvironment);
+else
+    app.MapSupportRequestUnavailable();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();

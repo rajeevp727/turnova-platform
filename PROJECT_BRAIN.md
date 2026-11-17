@@ -5,9 +5,11 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `dbc04619e6e1dce24bf3d965f2488111fdf16090`. PRs #172–#176 are merged. PR #177 is closed unmerged and parked because it contains mobile dependency/bootstrap work that belongs after API phase exit; branch `fix/platform-01-mobile-lockfile-reproducibility` and successful exact-head CI #44080286615 (12/12 jobs, 19/19 artifacts) are preserved for the Android phase.
+**Main HEAD:** `0ff05f93ce2ea6befae0fda6f8ab7a74e58b843e`. PRs #172–#176 and API contract/phase-gate PR #178 are merged. PR #177 is closed unmerged and parked because its mobile dependency/bootstrap work belongs after API phase exit; its branch and successful exact-head CI #44080286615 (12/12 jobs, 19/19 artifacts) are preserved for the Android phase only.
 **Current platform phase:** API. Do not begin Android completion until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests and native non-container publish/API CI are complete. Do not begin iOS completion until Rider and Driver Android exit criteria pass.
-**Current API PR:** [#178](https://github.com/rajeevp727/turnova-platform/pull/178), branch `feature/api-contract-openapi-auth`. Last verified source/test head `ab759167011828bba9be95bb4d170abbaa76bf89` passed [CI #44093266740](https://github.com/rajeevp727/turnova-platform/actions/runs/44093266740): API scope gate, backend 686/686 and native non-container API publish passed; mobile jobs were correctly skipped. Microsoft.OpenApi 2.7.5 is pinned to the patched compatible 2.x line. Current follow-up excludes the Testing-only exception route from OpenAPI and requires fresh exact-head CI. API phase remains open; neutral support intake and Cosmos adapter/migration contract tests are next.
+**Current API PR:** [#179 — neutral Rider/Driver support intake and Cosmos contracts](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`. Retention hardening code head `7bb5b77f63e3342a67d6f9d1e400cba0f3535333` requires a positive approved `SupportRequests:RetentionDays` whenever persistent support intake is enabled, rechecks policy/retention on every request, sets container `DefaultTimeToLive=-1` and stores per-item `ttl` seconds. The checked-in duration remains null; no Product/Operations retention value is invented. Previous exact-head API-only CI #44115448770 passed 724/724 and native publish on the prior head; fresh exact-head CI is pending.
+**Current API follow-ups before phase exit:** provider-agnostic private-media boundary and server-issued Driver-bound references; Cosmos migration lease renewal/lost-lease cancellation tests; Kestrel host-level 16 KiB payload rejection; complete API row-by-row source/auth/privacy/persistence audit. Android and iOS remain not started.
+**API next:** private-media storage/server-issued Driver-bound document references, migration lease renewal/fencing, Kestrel host-level 16 KiB rejection and complete API row-by-row audit. Android remains gated until API phase exit; iOS remains gated until both Android apps exit.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 
@@ -2798,3 +2800,9 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 - **Strict acceptance: 0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage. **Production readiness is not established.** No live Cosmos, physical-device, signed-production, provider, legal or production-hosting validation is claimed.
 - No secrets, paid providers, Docker/container builds, images, registries or production deployments were added. Fleet/Ops Phase 2 and in-app payment collection remain excluded.
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
+
+
+**Phase gate source of truth:** `.github/turnova-phase.json` currently records API `in_progress`, Android/iOS `not_started`. The phase detector enforces that state for PR labels and main pushes; a push no longer automatically enables Android. iOS-specific path changes require Android complete and iOS active. Deterministic fixtures cover push and PR transitions.
+
+
+**Support intake durability:** policy-approved Staging now fails startup unless Cosmos endpoint/key are configured; it cannot acknowledge support requests into an in-memory store. Production already requires Cosmos. Regression: SUPPORT-API-012.

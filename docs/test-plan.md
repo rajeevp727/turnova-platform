@@ -3090,3 +3090,103 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 - **Strict acceptance: 0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage. **Production readiness is not established.** No live Cosmos, physical-device, signed-production, provider, legal or production-hosting validation is claimed.
 - No secrets, paid providers, Docker/container builds, images, registries or production deployments were added. Fleet/Ops Phase 2 and in-app payment collection remain excluded.
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
+
+
+## API support intake and Cosmos adapter contracts
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| SUPPORT-API-001 | Rider submits neutral support request | HTTP 202; authenticated Rider ID/role and timestamp are persisted; response contains only request ID/time/replay flag | API integration | P0 |
+| SUPPORT-API-002 | Driver submits neutral support request | HTTP 202; authenticated Driver ID/role is persisted; no category or severity is inferred | API integration | P0 |
+| SUPPORT-API-003 | Retry same reporter/key/content | HTTP 200 replay; original request ID and timestamp are returned; one record remains | API + idempotency | P0 |
+| SUPPORT-API-004 | Reuse reporter/key with changed content | HTTP 409; existing request is not overwritten | API + idempotency | P0 |
+| SUPPORT-API-005 | Missing key, invalid lengths or unknown policy fields | HTTP 400; no request is stored | API validation | P0 |
+| SUPPORT-API-006 | Anonymous or non-Rider/Driver caller | HTTP 401/403 before store access | API security | P0 |
+| SUPPORT-API-007 | OpenAPI support contract | Support route is Bearer-protected and body exposes only subject/description | API contract | P1 |
+| COSMOS-STORE-001 | Create support request | Cosmos adapter writes to the reporterId partition and does not persist the raw idempotency key | Repository contract | P0 |
+| COSMOS-STORE-002 | Duplicate support item | Same content replays; different content conflicts; a missing item after conflict fails closed | Repository contract | P0 |
+| COSMOS-STORE-003 | Ride offer state replacement | Cosmos adapter sends the expected ETag as IfMatchEtag | Repository contract | P0 |
+| COSMOS-STORE-004 | Driver/Rider reservation acquisition | Reservation and append-only audit event are created in one same-partition transactional batch | Repository contract | P0 |
+| COSMOS-MIG-006 | Migration schema contract | Every migration ID is unique and every declared container/partition-key pair matches the deterministic schema contract | Migration contract | P0 |
+
+Live Cosmos ETag contention, multi-instance migration lease recovery, restart/crash recovery, cross-partition query/index/RU behaviour and production retention remain external Cosmos integration gates.
+
+| CI-PHASE-001 | Enforce API → Android → iOS native order | Android native build/smoke jobs require `turnova:android-phase-approved`; iOS native build/smoke jobs require both Android and iOS approval labels; main-branch pushes run Android for changed mobile files but not iOS | Workflow contract | P0 |
+
+
+| SUPPORT-API-008 | Staging/Production support intake without explicit policy approval | Authenticated POST returns HTTP 503 before request-body binding; no support request is accepted or persisted. The normal schema migration may provision an empty container. | API integration | P0 |
+| SUPPORT-API-009 | Staging/Production support intake with explicit policy approval | The policy matrix enables the route only when the explicit flag is true; the host still fails closed without durable Cosmos configuration. A live Cosmos-backed Staging submission remains external validation. | API configuration + external integration | P0 |
+| SUPPORT-API-010 | Support request body exceeds the bounded endpoint limit | Deterministic endpoint metadata asserts a 16 KiB maximum and OpenAPI documents HTTP 413; actual Kestrel host-level rejection still requires a dedicated host integration check | API metadata contract | P1 |
+| SUPPORT-API-011 | Staging/Production support intake is disabled and receives malformed JSON | Authenticated POST returns HTTP 503 before JSON parsing/body binding; no support request is persisted | API integration/privacy | P0 |
+| SUPPORT-API-012 | Staging policy is approved but Cosmos is not configured | Host startup fails closed with a clear configuration error; support requests are never accepted into an in-memory store | API configuration/security | P0 |
+| SUPPORT-API-013 | Validate approved support retention days | Missing, non-numeric, zero, negative or Cosmos-TTL-overflow values produce no TTL; a policy-approved persistent environment fails startup instead of accepting unbounded support content | API configuration/security | P0 |
+| SUPPORT-API-014 | Persist support item TTL | A positive approved retention value is converted to `ttl = days × 86400`; the SupportRequests container declares `DefaultTimeToLive=-1` so per-item TTL is enforced | Cosmos migration/serialization | P0 |
+| SUPPORT-API-015 | Keep support retention unset until approved | `SupportRequests:RetentionDays` remains null by default; Development/Testing in-memory intake may omit it, while any enabled persistent Cosmos intake requires a positive value | API configuration | P0 |
+| SUPPORT-API-016 | Recheck support policy and retention on each request | If configuration reload disables policy or removes/invalidates required retention, the next POST returns 503 before persistence; the validated TTL value is the one stored on the item | API configuration/privacy | P0 |
+
+| API-PLATFORM-001 | API-only PR changes | Backend/publish runs; all mobile validation, auth harness, Android and iOS jobs are skipped | CI workflow | P0 |
+| API-PLATFORM-002 | Mobile PR without Android approval | Expo/typecheck/Android bundle, shared mobile tests, native Android and smoke jobs are skipped | CI workflow | P0 |
+| API-PLATFORM-003 | Android-approved PR | Android validation/build/smoke run; iOS bundle/build/smoke remain skipped | CI workflow | P0 |
+| API-PLATFORM-004 | iOS phase approval | iOS bundle/build/smoke require both Android-complete and iOS-approved labels | CI workflow | P0 |
+
+| API-PLATFORM-008 | Same-head iOS phase sequencing | iOS bundle validation waits for both Android native matrix and Android emulator smoke success on the same head | CI workflow | P0 |
+
+
+## API phase exact-head verification — PR #179 / CI #44102867811 (2026-11-17)
+
+PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`, exact head `4aa9e438c4d40a26e84402a8ed55f5c6dc1f353b`, passed [API-only CI #44109551373](https://github.com/rajeevp727/turnova-platform/actions/runs/44109551373). The scope detector and backend build/test/native non-container publish job passed; the API publish artifact is `14340236840`. All mobile-auth, Expo, Android native/emulator and iOS bundle/native/simulator jobs were skipped as required for API-only changes. This is API engineering evidence only; no live Cosmos, production identity, hosted API or provider validation is claimed.
+
+The support intake route declares a 16 KiB request-body limit and OpenAPI HTTP 413. `SUPPORT-API-010` verifies endpoint metadata and the 413 response contract; actual Kestrel host-level rejection still needs a dedicated host integration check. `SUPPORT-API-011` verifies policy-disabled Staging returns 503 before malformed-body parsing/binding, and `SUPPORT-API-012` verifies startup fails closed without Cosmos when policy is approved. `SUPPORT-API-013–015` cover fail-closed retention validation, per-item TTL serialization and the `DefaultTimeToLive=-1` migration contract; `SUPPORT-API-016` verifies request-time policy/retention revalidation after configuration reload. `SupportRequests:RetentionDays` remains null until Product/Operations approves a duration; no retention period is invented. Support categories, severity, assignment, escalation/SLA and attachment handling remain unapproved.
+
+
+The API-only run #44111719737 on exact head `48053cb6385a5ac274dccee6a5727dbe99ab9b48` completed successfully: scope and backend build/test/native publish passed; backend 724/724; all mobile/Android/iOS jobs were skipped. The API publish artifact `14340957657` was unexpired at inspection. The scope fixtures also verify that main pushes and PR labels cannot bypass the checked-in API→Android→iOS phase state.
+
+
+## API phase exact-head verification — PR #179 / CI #44110257240 (2026-11-17)
+
+PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), exact head `39aea309685e8e1b8f1c48578b2763e8886b1a6d`, passed API-only CI [#44110257240](https://github.com/rajeevp727/turnova-platform/actions/runs/44110257240): scope passed; backend .NET 10 Release **724 passed, 0 failed, 0 skipped**; native non-container API publish succeeded (artifact `14340916409`); all mobile-auth, Expo, Android native/emulator and iOS bundle/native/simulator jobs were correctly skipped. No live Cosmos, production identity, hosted API or provider validation is claimed.
+
+PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), baseline head `aaee8df8585013aa95d89d19dad5f68a8bcf099c`, passed API-only CI [#44115448770](https://github.com/rajeevp727/turnova-platform/actions/runs/44115448770): scope passed; backend .NET 10 Release **724 passed, 0 failed, 0 skipped**; native non-container API publish succeeded (artifact [14341634913](https://github.com/rajeevp727/turnova-platform/actions/runs/44115448770/artifacts/14341634913)); every mobile, Android and iOS job was correctly skipped under API `in_progress` / Android+iOS `not_started`. Retention code head `fb4e0c92a27796d2ec1d5cfbb6b5bc6af4fe1e31` adds positive approved retention validation, per-item TTL serialization and container `DefaultTimeToLive=-1`; fresh exact-head CI is required after this documentation synchronization. CI #44113282011 exposed an invalid Staging test that tried to start with policy approval but no Cosmos; the fail-closed guard was correct and the invalid test was removed. No fallback or credential was added.
+
+The same suite verifies SUPPORT-API-010 endpoint size-limit metadata/OpenAPI 413, SUPPORT-API-011 Staging malformed-body 503-before-binding and SUPPORT-API-012 Staging no-Cosmos startup rejection. New SUPPORT-API-013–016 cases cover retention-day parsing/overflow, per-item `ttl` serialization, the `DefaultTimeToLive=-1` migration contract and request-time revalidation after configuration reload. The 16 KiB metadata is tested; Kestrel host-level payload rejection still needs a dedicated host integration check.
+
+### Private media/KYC API follow-up (planned; not implemented or passed)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DRIVER-MEDIA-001 | Driver uploads selfie through provider-agnostic private-media boundary | Raw bytes are stored outside the Cosmos Driver profile; profile stores only a server-issued opaque reference bound to that Driver | API/storage contract | P0 |
+| DRIVER-MEDIA-002 | Driver submits another Driver's, arbitrary, absolute-URL or expired document reference | API rejects it before onboarding/review; no cross-Driver reference is persisted | API security | P0 |
+| DRIVER-MEDIA-003 | Selfie/document scan is pending, rejected or unavailable | Content remains quarantined/private and cannot be approved or exposed in Rider discovery | API/privacy | P0 |
+| DRIVER-MEDIA-004 | UnionManager reviews or retrieves a member document | Only the current signed UnionManager for the Driver's current Union can retrieve the private review asset; Rider and other unions are denied | API authorization | P0 |
+| DRIVER-MEDIA-005 | Consent withdrawal or retention expiry | Private object and reference are deleted/invalidated according to the approved policy; audit retains only the permitted non-content evidence | API/privacy | P1 |
+
+These tests require a provider-agnostic interface and deterministic in-memory fake before live provider integration. Production scanning, managed identity, consent/retention policy and private object-storage credentials remain external.
+
+### Cosmos migration lease follow-up (planned; not implemented or passed)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-MIG-007 | Migration runs longer than the initial lease duration | Renewal heartbeat extends the ETag lease before expiry; a second runner cannot acquire it | Deterministic concurrency | P0 |
+| COSMOS-MIG-008 | Lease renewal loses an ETag race | Current migration is cancelled before writing migration history; lost owner never deletes/replaces the new owner's lease | Deterministic concurrency | P0 |
+| COSMOS-MIG-009 | Runner is cancelled while holding the lease | Renewal stops, migration cancellation propagates, and release is bounded and ETag-conditional | Deterministic lifecycle | P1 |
+| COSMOS-MIG-010 | Two runners acquire/recover an expired lease | Only one ETag owner applies each migration; idempotent history read-back is preserved | Deterministic concurrency | P0 |
+
+The current runner has a 30-minute ETag-protected lease but no renewal heartbeat. Existing migrations only create containers idempotently; implement and test renewal/fencing before adding non-idempotent data migrations. Live Cosmos multi-instance/restart remains external.
+
+
+### Platform phase-state CI fixtures (implemented in PR #179; API-only CI #44111719737 passed)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| API-PLATFORM-009 | Main push while API is in progress | Android and iOS phases remain false; any mobile-file change fails the scope gate | CI phase contract | P0 |
+| API-PLATFORM-010 | Main push after API completion and Android phase activation | Android jobs may run; iOS remains false until Android is complete and iOS is active | CI phase contract | P0 |
+| API-PLATFORM-011 | iOS-specific path changes before Android completion | Scope job fails even if Android phase is active; no iOS completion work starts early | CI phase contract | P0 |
+| API-PLATFORM-012 | PR labels claim later phase while checked-in phase state is incomplete | Labels cannot override `.github/turnova-phase.json`; Android/iOS jobs remain blocked | CI phase contract | P0 |
+
+The current checked-in state is API `in_progress`, Android/iOS `not_started`. Exact-head CI #44111719737 passed the scope detector and backend; all mobile/Android/iOS jobs were skipped. This is not Android or iOS completion evidence.
+
+- CI recovery note (2026-11-17): #441247 caught a stale helper reference in the new SUPPORT-API-016 configuration-reload test at compile time. The test now calls `TryGetRequestTtl` and asserts no TTL after policy removal; fresh exact-head API CI is pending.
+
+- CI recovery note (2026-11-17): #441251 compiled successfully and ran 735 tests; 734 passed and SUPPORT-API-016 failed because a null in-memory configuration override fell back to the earlier value. The test now uses explicit invalid value `0` and verifies the TTL output is null. Fresh exact-head API CI is pending.
+
+- CI recovery note (2026-11-17): #441256 compiled and ran 735 tests; 734 passed and SUPPORT-API-016 failed because the test expected a null TTL when policy alone was disabled. The method correctly returned false for acceptance but preserved the valid 7-day TTL. The test now asserts 604800 seconds in that branch; zero-retention still asserts null. Corrected commit `fb4e0c92a27796d2ec1d5cfbb6b5bc6af4fe1e31`; fresh exact-head CI is pending.

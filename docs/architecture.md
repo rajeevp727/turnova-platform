@@ -27,7 +27,7 @@ Use the latest supported .NET 10 servicing patch. Keep secrets out of source con
 
 The .NET API generates its OpenAPI v1 document from endpoint metadata at `/openapi/v1.json` in Development and automated Testing only. JWT-protected endpoints and operations-key routes are represented with distinct security schemes. The production host does not map the OpenAPI endpoint.
 
-Platform completion is sequential: API implementation, API tests/docs and native non-container publish first; both Android apps second; both iOS apps third. CI skips mobile matrices for API-only changes. iOS native/simulator checks require the explicit `turnova:ios-phase-approved` pull-request label, which is applied only after the Android phase exit criteria pass.
+Platform completion is sequential: API implementation, API tests/docs and native non-container publish first; both Android apps second; both iOS apps third. API-only changes run backend tests and native publish while skipping all mobile jobs. Android validation/build/smoke requires both `turnova:api-phase-complete` and `turnova:android-phase-approved`. iOS bundle/native/simulator work requires `turnova:api-phase-complete`, `turnova:android-phase-complete` and `turnova:ios-phase-approved`; the iOS bundle job also waits for same-head Rider/Driver Android native builds and Android emulator smoke to pass.
 
 ## 3. High-level topology
 
@@ -466,3 +466,22 @@ PR #160 instruments the existing Union audit create/canonical-recovery boundary 
 ### Ride-audit and storage-readiness telemetry listener isolation (2026-11-14)
 
 PR #161 makes optional diagnostics best-effort across the authoritative ride-audit and storage-readiness paths. ActivitySource creation, outcome tagging/status, Activity disposal, Counter.Add and Histogram.Record are isolated independently. A host-provided listener exception cannot replace a ride create/replace result, append-only audit outcome, ETag/conflict behavior, caller cancellation, storage timeout or original dependency-failure classification. Deterministic RIDE-OBS-001/002 and STORAGE-OBS-001/002 passed CI #1589 / run 43564291551 (12/12; backend 594/594) on source/test head `e625693c697c3903639c1135dd66075895643926`. No exporter, vendor, credentials, endpoint or new package was introduced. Live Cosmos multi-instance/ETag/restart/retention and production telemetry export/alert validation remain external.
+
+
+## API support intake persistence
+
+The Rider/Driver API exposes neutral `POST /api/v1/support/requests` intake only. It stores a bounded subject and description with the authenticated reporter ID/role and server timestamp. A reporter-scoped deterministic item ID makes retries idempotent without storing the raw `Idempotency-Key`. Cosmos uses the `SupportRequests` container partitioned by `/reporterId`; Development/Testing uses a concurrent in-memory adapter.
+
+There is no support-agent read/list surface, attachment upload, category, severity, priority, assignment, escalation, SLA or retention policy. The endpoint does not log request content and returns only request ID, timestamp and replay status. Product/Operations must still approve support workflow, access, privacy and retention decisions.
+
+
+## API external media and migration gates (2026-11-17)
+
+The current Driver selfie is Base64 stored inline in the Cosmos Driver profile. Licence/vehicle document references are client-supplied opaque strings and are not verified by a private storage provider. Production requires server-issued Driver-bound references, private object storage, malware scanning/quarantine, consent, retention/deletion and authorized UnionManager retrieval. These provider/legal dependencies are not configured and are not claimed complete.
+
+The Cosmos migration runner uses a 30-minute ETag-protected lease without renewal. Existing migrations are idempotent container creation only; add renewal/lost-lease cancellation and deterministic tests before introducing non-idempotent data migrations. Live multi-instance/restart recovery remains an external gate.
+
+
+## Checked-in platform phase state
+
+`.github/turnova-phase.json` is the source of truth for platform progression. It currently records API `in_progress`, Android `not_started`, iOS `not_started`. Pull-request labels alone cannot bypass the checked-in phase state. Main-branch pushes also consult the same file; Android jobs remain disabled until API is complete and Android is active, and iOS jobs remain disabled until Android is complete and iOS is active. iOS-specific file changes fail scope validation before the iOS phase. This prevents the push-event path from implicitly bypassing API→Android→iOS order.
