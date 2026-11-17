@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `5e889daefbb31fdad963a7f2e24ea391e44ae5b6`. PRs #172–#175 are merged. Sole active PR [#176](https://github.com/rajeevp727/turnova-platform/pull/176) is Draft on `fix/platform-01-cors-readiness-cancellation`, exact head `8f603e13b4074dd8437b867890cc1817bed36ca3`. Exact-head [CI #44052735488](https://github.com/rajeevp727/turnova-platform/actions/runs/44052735488) passed 12/12 on that SHA: backend 684/684, shared 227/227, Python 48/48, both Expo apps, native API publish, four native builds, four same-run smoke tests and 19/19 unexpired artifacts. Four COMMENT-only reviews, zero unresolved threads, zero approvals. Next same-row work is committed reproducible lockfiles plus npm ci, then RELEASE-01 path hardening. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established.
+**Main HEAD:** `dbc04619e6e1dce24bf3d965f2488111fdf16090`. PRs #172–#176 are merged. Sole active feature branch `fix/platform-01-mobile-lockfile-reproducibility` is being prepared as PR #177. Exact-head CI #44062098659 passed 12/12 on merged PR #176 head `196dff3a534006707fda505e9181befc78d83429`: backend 684/684, shared 227/227, Python 48/48, both Expo apps, native API publish, four native builds, four same-run smoke tests and 19/19 unexpired artifacts. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established.
 
 
 ## Product in one line
@@ -2794,3 +2794,14 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 - **Strict acceptance: 0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage. **Production readiness is not established.** No live Cosmos, physical-device, signed-production, provider, legal or production-hosting validation is claimed.
 - No secrets, paid providers, Docker/container builds, images, registries or production deployments were added. Fleet/Ops Phase 2 and in-app payment collection remain excluded.
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
+
+
+## Latest engineering handoff — PLATFORM-01 dependency bootstrap (2026-11-17)
+
+- PR #176 merged at `dbc04619e6e1dce24bf3d965f2488111fdf16090` after exact-head CI #44062098659 passed 12/12 on `196dff3a534006707fda505e9181befc78d83429`, including backend 684/684, shared 227/227, Python 48/48, four native builds, four smoke tests and 19 unexpired artifacts.
+- Sole active work is PLATFORM-01 same-row dependency reproducibility on `fix/platform-01-mobile-lockfile-reproducibility` (PR #177 being prepared). Rider/Driver lockfile SHA pins are `3a070767e6ba0161ecc0049a63e7cf4170b65f112ab1883e6663e1faadf11acd` and `5e2c19ef6ffe060a9ad2bd5731cf3d848a077b09c8fa1f204fecf14713319`.
+- `scripts/prepare-mobile-dependencies.sh` generates lockfiles with scripts disabled, checks the app-specific SHA-256, and only then invokes `npm ci`. The fixture test covers matching, mismatch fail-closed and verify-only. Local fixture tests and both downloaded artifact checksum checks passed; exact-head CI is pending.
+- `.github/workflows/ci.yml` uses the helper in all three app jobs (Expo validation, Android native and iOS native) and runs the fixture tests in the mobile validation job. No package lock JSON is committed; the hash pin ensures generated dependency-tree drift fails before install.
+- Rider/Driver audits remain 11 moderate, 0 high, 0 critical. Expo 54 ranges do not accept advisory-fixed major versions; no incompatible overrides or blind Expo upgrade.
+- After PR #177 merges, proceed to RELEASE-01 canonical realpath/symlink/hardlink-safe release preflight and icon generation.
+- Strict acceptance remains **0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established; live Cosmos, production providers, legal/policy, signed-device and physical-device/store gates remain external.
