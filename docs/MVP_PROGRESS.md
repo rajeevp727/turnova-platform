@@ -2600,3 +2600,8 @@ Security follow-up: verify-mobile-npm-audit.py now rejects missing metadata, sev
 ## PR #185 npm remediation metadata drift handoff — 2026-11-18
 
 The new exact-head CI #44169775823 exposed a further npm metadata change: the Rider audit report now suggests `expo@58.0.26` (major-only) instead of the previously observed `react-native@0.88.1`, with the same 34-record inventory and same GHSA root. The per-app mapping was too strict. The verifier now allows only those two exact major-only suggestions for either known app name and still rejects unknown apps, packages/versions, non-major hints, critical/unknown advisories, direct imports and Android bundle inclusion. The suite remains 27 deterministic tests. Fresh exact-head CI is required after this correction.
+
+
+## PR #185 third remediation hint review — 2026-11-18
+
+CI #44170775823's Rider audit artifact reported `expo-asset@58.0.21` as `fixAvailable` (major-only); Driver reported `expo@58.0.26`. The previous Rider reports suggested `react-native@0.88.1` and `expo@58.0.26`. Inventory and GHSA root stayed unchanged. The exact allow-list now contains those three observed major-only suggestions for either known app. Unknown/fourth hints, non-major metadata, unknown app identity, critical/unknown advisory and bundle inclusion still fail. Deterministic verifier tests: 28. New exact-head CI required.
