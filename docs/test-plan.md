@@ -3190,3 +3190,15 @@ The current checked-in state is API `in_progress`, Android/iOS `not_started`. Ex
 - CI recovery note (2026-11-17): #441251 compiled successfully and ran 735 tests; 734 passed and SUPPORT-API-016 failed because a null in-memory configuration override fell back to the earlier value. The test now uses explicit invalid value `0` and verifies the TTL output is null. Fresh exact-head API CI is pending.
 
 - CI recovery note (2026-11-17): #441256 compiled and ran 735 tests; 734 passed and SUPPORT-API-016 failed because the test expected a null TTL when policy alone was disabled. The method correctly returned false for acceptance but preserved the valid 7-day TTL. The test now asserts 604800 seconds in that branch; zero-retention still asserts null. Corrected commit `fb4e0c92a27796d2ec1d5cfbb6b5bc6af4fe1e31`; fresh exact-head CI is pending.
+
+
+## Cosmos migration lease renewal and fencing (API phase)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-MIG-007 | Migration runner holds a lease longer than the initial lease window | A heartbeat renews the 30-minute lease every 10 minutes using the current ETag; the same owner remains fenced and a competing runner cannot acquire it | Deterministic lease coordinator + live Cosmos gate | P0 |
+| COSMOS-MIG-008 | Renewal loses an ETag race or the lease is replaced by another owner | Renewal fails closed, cancels the migration token, and the runner does not write the migration-history marker after lease loss is observed | Deterministic fake-store concurrency | P0 |
+| COSMOS-MIG-009 | Runner finishes or is cancelled while holding a renewed lease | Heartbeat stops before release; release uses the latest ETag and cannot delete a replacement owner's lease | Deterministic lifecycle + Cosmos adapter contract | P0 |
+| COSMOS-MIG-010 | Runner encounters an active lease or an expired lease | Active leases are retried with cancellation; expired leases are recovered only through conditional ETag replacement | Deterministic lease coordinator + live Cosmos gate | P0 |
+
+The in-repository fake-store and Cosmos adapter tests verify coordinator ownership, ETag preconditions, renewal cancellation and latest-ETag release. Live two-instance contention, process crash/restart and Cosmos ETag behaviour remain external integration evidence.
