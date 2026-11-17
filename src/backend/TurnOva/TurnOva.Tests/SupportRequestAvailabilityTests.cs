@@ -9,6 +9,26 @@ namespace TurnOva.Tests;
 public sealed class SupportRequestAvailabilityTests
 {
     [Theory]
+    [InlineData("7", 604800)]
+    [InlineData("1", 86400)]
+    [InlineData("0", null)]
+    [InlineData("-1", null)]
+    [InlineData("24856", null)]
+    [InlineData("not-a-number", null)]
+    [InlineData(null, null)]
+    public void RetentionDaysMustConvertToPositiveCosmosTtlSeconds(string? configuredDays, int? expectedTtlSeconds)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["SupportRequests:RetentionDays"] = configuredDays
+            })
+            .Build();
+
+        Assert.Equal(expectedTtlSeconds, SupportRequestEndpoints.GetRetentionTtlSeconds(configuration));
+    }
+
+    [Theory]
     [InlineData("Development", false, true)]
     [InlineData("Testing", false, true)]
     [InlineData("Staging", false, false)]
