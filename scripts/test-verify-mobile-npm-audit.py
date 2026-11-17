@@ -156,8 +156,31 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         self.assertNotEqual(self.run_gate(audit_status=1).returncode, 0)
 
 
-    def test_rejects_changed_picomatch_remediation_path(self):
+    def test_allows_reviewed_expo_sdk_remediation_metadata(self):
+        self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
+            "name": "expo", "version": "58.0.26", "isSemVerMajor": True
+        }
+        self.write_report()
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("not represented as patched", result.stdout)
+
+    def test_rejects_unreviewed_picomatch_remediation_path(self):
         self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = True
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_unreviewed_picomatch_remediation_version(self):
+        self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
+            "name": "expo", "version": "58.0.27", "isSemVerMajor": True
+        }
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_non_major_picomatch_remediation(self):
+        self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
+            "name": "expo", "version": "58.0.26", "isSemVerMajor": False
+        }
         self.write_report()
         self.assertNotEqual(self.run_gate().returncode, 0)
 
