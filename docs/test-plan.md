@@ -3085,3 +3085,8 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 - Shared implementation: `scripts/prepare-mobile-dependencies.sh`; deterministic fixture: `scripts/test-prepare-mobile-dependencies.sh`. Local fixture tests passed for matching, mismatch fail-closed and verify-only; both extracted CI lockfiles passed verify-only.
 - CI #177 will regenerate each lockfile using `npm install --package-lock-only --ignore-scripts`, validate the exact hash, then run `npm ci` in Rider/Driver validation, Android and iOS jobs. This is a hash-pinned generated-lockfile strategy; the JSON lockfiles remain CI artifacts rather than committed source files. No actual CI #177 result is claimed until its exact head completes.
 - Current audits: 11 moderate, 0 high, 0 critical per app. Advisory-fixed major versions remain outside Expo 54 dependency ranges; no incompatible override or blind SDK upgrade.
+
+
+### PLATFORM-NPM portability regression
+
+The lockfile bootstrap and fixture use Node's built-in `crypto` SHA-256 implementation, not `sha256sum`, so the same checks execute on Ubuntu and macOS. CI invokes the fixture in Expo validation, Android native and iOS native jobs; the real lockfile generation/hash/clean-install path is exercised in each job. This exact-head CI evidence is pending.
