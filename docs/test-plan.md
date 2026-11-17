@@ -3319,7 +3319,7 @@ Artifacts: Rider release [14368397985](https://github.com/rajeevp727/turnova-pla
 | RIDER-AUTH-ACCESS-006 | Mode toggle announces the destination form | Pure helper contract |
 | RIDER-AUTH-ACCESS-007 | Authentication errors use an assertive alert announcement | Pure helper contract |
 | RIDER-AUTH-ACCESS-008 | Rider App.tsx binds field helpers, focus order, guarded keyboard submit, keyboard-safe taps and stable test IDs | Source-wiring regression |
-| RIDER-AUTH-ACCESS-009 | Rapid button/keyboard double-submit attempts while login or registration is in flight | A shared single-flight guard permits only one auth attempt until finally releases it; a later retry is allowed | Shared mobile unit + Rider source wiring | P0 |
+| RIDER-AUTH-ACCESS-009 | Rapid button/keyboard double-submit attempts while login or registration is in flight permit only one auth request; a later retry is allowed after completion | Single-flight helper unit test plus Rider App.tsx source-wiring regression |
 
 The source/test commit is `607a9233845759a12da321a3f8a6e3e1e1c14733`; exact final-head CI [#44188275975](https://github.com/rajeevp727/turnova-platform/actions/runs/44188275975) on `60e03c7742352ffbc837bc01a6f21b796acb084b` passed all 12 jobs, including these eight cases within 236/236 Node tests, 48/48 Python harness tests, 758/758 backend tests, both apps' Expo/TypeScript validation, Android release builds/package identity and both emulator install/launch smoke jobs. iOS jobs were correctly skipped. Passing deterministic helper/source tests is not physical-device screen-reader/autofill acceptance. Manual TalkBack/VoiceOver, signed-device auth and real API/TriSend validation remain external.
 

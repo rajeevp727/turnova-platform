@@ -310,17 +310,20 @@ export default function App() {
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
   const authenticate = async () => {
     if(!tryBeginRiderAuthSubmission(authSubmissionInFlight))return;
-    const credentials = { email: email.trim(), password, name: name.trim(), mode };
-    const authEpoch = invalidateSession();
-    clearRiderSessionState(credentials);
-    setLoading(true);
-    setError("");
+    let authEpoch: number | null = null;
     try {
+      const credentials = { email: email.trim(), password, name: name.trim(), mode };
+      const currentAuthEpoch = invalidateSession();
+      authEpoch = currentAuthEpoch;
+      clearRiderSessionState(credentials);
+      setLoading(true);
+      setError("");
+
       const tokensCleared = await clearSessionTokensIfCurrent(
         SecureStore,
-        () => sessionEpoch.current === authEpoch
+        () => sessionEpoch.current === currentAuthEpoch
       );
-      if (!tokensCleared || sessionEpoch.current !== authEpoch) return;
+      if (!tokensCleared || sessionEpoch.current !== currentAuthEpoch) return;
 
       const path = credentials.mode === "register"
         ? "/api/v1/auth/rider/register"
@@ -333,15 +336,15 @@ export default function App() {
           name: credentials.name || null
         })
       });
-      const accepted = await accept(result, authEpoch, true);
+      const accepted = await accept(result, currentAuthEpoch, true);
       if (!accepted) throw new Error("Session changed. Please sign in again.");
       setPassword("");
     } catch (e) {
-      if (sessionEpoch.current === authEpoch)
+      if (authEpoch === null || sessionEpoch.current === authEpoch)
         setError(e instanceof Error ? e.message : "Authentication failed.");
     } finally {
       finishRiderAuthSubmission(authSubmissionInFlight);
-      if (sessionEpoch.current === authEpoch) setLoading(false);
+      if (authEpoch !== null && sessionEpoch.current === authEpoch) setLoading(false);
     }
   };
   const draftTripIntent=async()=>{
