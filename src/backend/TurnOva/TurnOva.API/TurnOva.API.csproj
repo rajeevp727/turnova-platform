@@ -16,6 +16,7 @@
     <ProjectReference Include="..\TurnOva.Application\TurnOva.Application.csproj" />
     <ProjectReference Include="..\TurnOva.Infrastructure\TurnOva.Infrastructure.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.54.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
   </ItemGroup>
