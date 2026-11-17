@@ -3019,8 +3019,28 @@ The source audit confirms that `release-preflight.cjs` uses lexical `path.resolv
 Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number policy, signing certificates/profiles, production HTTPS API/DNS/TLS/CORS, signed-device Keychain, physical-device/pilot and store gates remain external. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked); production readiness is not established.
 
 
-## PLATFORM-01 and current exact-head handoff — 2026-11-17
+## PLATFORM-01 exact-head verification — CI #44015165884 (2026-11-17)
 
-The PLATFORM-CORS-008/009 and PLATFORM-HEALTH-013–016 tests are implemented and passed in [CI #44006952215](https://github.com/rajeevp727/turnova-platform/actions/runs/44006952215) on source/test head `0f986a2878adc5f479f43c4d09d64fcc45501143`: backend 684/684, shared mobile/auth 227/227, Python 48/48, both Expo apps, native API publish, four native builds, four same-run install/launch smoke tests and 19/19 unexpired artifacts. The first documentation-only sync commit `bbe194de1e0872c2f1c7b4f75f062657906246c0` triggered [CI #44014822648](https://github.com/rajeevp727/turnova-platform/actions/runs/44014822648); this follow-up docs-only correction requires a new exact-head CI. PR [#176](https://github.com/rajeevp727/turnova-platform/pull/176) remains Draft/unmerged with three COMMENT-only reviews, zero unresolved threads and zero approvals. The PR page records the current exact branch head and workflow.
+PR [#176](https://github.com/rajeevp727/turnova-platform/pull/176), branch `fix/platform-01-cors-readiness-cancellation`, exact head `02e7c7d8c292a5299d3e76887cd6321e8bf2b00f`, base main `5e889daefbb31fdad963a7f2e24ea391e44ae5b6`.
 
-RELEASE-01 remains the next sequential engineering increment after PLATFORM-01 merges. The five planned cases RELEASE-PREFLIGHT-012–014 and RELEASE-ICONS-001–002 are not implemented or passed. They cover external icon/assets symlinks, safe internal symlinks, symlinked outputs and broken input/output symlinks using real temporary filesystem fixtures. The source audit confirms lexical containment and symlink-following `existsSync`; both icon generators execute at `npm postinstall` before release preflight. Canonical path validation must fail closed before external reads/writes. Production-signed AAB/IPA, approved identifiers/EAS, production API, signing, physical-device/pilot and store gates remain external.
+[CI #44015165884](https://github.com/rajeevp727/turnova-platform/actions/runs/44015165884) completed **12/12 jobs successfully on the exact head**:
+- Backend .NET 10 Release: **684 passed, 0 failed, 0 skipped**.
+- Shared mobile/auth: **227/227**; Python native-artifact/Simulator harness: **48/48**.
+- Rider and Driver Expo config/typecheck/Android+iOS production JS bundles; native non-container API publish.
+- Rider and Driver Android debug APKs and standalone release APKs; both unsigned iOS Simulator apps.
+- Four same-run Android emulator/iOS Simulator install-launch smoke tests.
+- **19/19 artifacts** were available and unexpired at inspection; all 12 job conclusions were success, no failed steps.
+
+Key artifacts: API publish `14298597520`; Rider/Driver Android release APKs `14299305490` / `14298927341`; Rider/Driver iOS Simulator apps `14298642993` / `14299462108`; Rider/Driver Android smoke `14299556343` / `14298154286`; Rider/Driver iOS smoke `14300046542` / `14300066183`.
+
+PLATFORM-CORS-008/009 and PLATFORM-HEALTH-013–016 are implemented and passed in the 684-test backend suite. Three COMMENT-only reviews, zero unresolved inline threads and zero approvals; PR remains Draft/unmerged. No self-approval or bypass. No live Cosmos, production CORS, telemetry export, production auth, physical-device or production acceptance is claimed.
+
+## PLATFORM-01 next same-row engineering increment — deterministic npm dependencies
+
+Both Rider and Driver npm audit reports from this run report **11 moderate, 0 high, 0 critical** findings, principally transitive `glob`/`minimatch` advisories in the Expo 54 dependency trees. npm's full automatic remediation proposes Expo 58, a major SDK upgrade; do not blindly upgrade Expo/React Native. After PR #176 merges, validate compatible targeted `glob`/`minimatch` overrides, commit reproducible Rider and Driver package-lock files, replace every app CI `npm install` with `npm ci`, and rerun audit, Expo configuration/typecheck/bundles, native Android/iOS builds and all four same-run smoke tests. If compatible overrides cannot be proven, document the precise Expo SDK migration gate.
+
+## RELEASE-01 — symlink-safe release preflight and icon generation (following dependency work)
+
+The source audit confirms that `release-preflight.cjs` uses lexical `path.resolve`/`path.relative` containment and `existsSync` follows symlinks. Rider and Driver icon generators run at `npm postinstall` before release preflight and write through configured assets/output paths. Planned tests RELEASE-PREFLIGHT-012–014 and RELEASE-ICONS-001–002 cover external icon/assets symlinks, safe internal symlinks, symlinked outputs and broken input/output symlinks using real temporary filesystem fixtures. These cases are **planned, not implemented or passed**. Implement canonical app/assets/input/output containment and fail closed before any external read/write.
+
+Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number policy, signing certificates/profiles, production HTTPS API/DNS/TLS/CORS, signed-device Keychain, physical-device/pilot and store gates remain external. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked); production readiness is not established.
