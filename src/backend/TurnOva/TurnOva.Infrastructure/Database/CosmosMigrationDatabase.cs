@@ -1,8 +1,9 @@
 using Microsoft.Azure.Cosmos;
+using CosmosDatabase = Microsoft.Azure.Cosmos.Database;
 
 namespace TurnOva.Infrastructure.Database;
 
-public sealed class CosmosMigrationDatabase(Database database) : ICosmosMigrationDatabase
+public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMigrationDatabase
 {
     public async Task CreateContainerIfNotExistsAsync(
         string containerName,
