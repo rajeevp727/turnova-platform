@@ -1,13 +1,13 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Cab-only Android/iOS MVP. Fleet and Ops applications are Phase 2 and excluded.
-**Last audited:** 2026-11-17; main HEAD `e5ec120bf06d0e92967a564300198cf042553b0b` (PR #180 merged).
+**Last audited:** 2026-11-17; main HEAD `dafb9a39b0e876e65f9c7b8443714cbf0ca646a4` (PR #181 merged).
 **Current platform phase:** API. Android must not start until API implementation, deterministic tests, OpenAPI/docs, auth/privacy, persistence and native non-container publish/API CI exit criteria pass. iOS must not start until both Android apps pass their exit criteria.
-**Current API PR:** [#181 — private Driver media boundary](https://github.com/rajeevp727/turnova-platform/pull/181), branch `feat/api-private-driver-media-boundary`, last CI-verified documentation head `256aaf50f1c7165d0682afb0a4459e0ff6711500`; corrected source/test commit `1d37d685fdda9b20d8967c887cee9647a60fd5cf`. See PR #181 for the current branch head.
-**PR #181 implementation:** provider-agnostic media boundary; opaque Driver-bound references; content signature/size validation; owner-only retrieval/status; current active Cab-Union document access; scan-cleared checks; new profile writes do not persist inline Base64; historical Base64 remains readable. Development PendingScan, Testing Clean fake, Staging/Production fail-closed 503.
-**CI correction:** [#44137503480](https://github.com/rajeevp727/turnova-platform/actions/runs/44137503480) had 751/753 tests pass; two tests incorrectly depended on Cache-Control directive order. Commit `1d37d685fdda9b20d8967c887cee9647a60fd5cf` asserts the parsed `Private` and `NoStore` flags instead. Corrected exact-head CI [#44140212462](https://github.com/rajeevp727/turnova-platform/actions/runs/44140212462) passed scope, Release build, **753/753 backend tests (0 failed, 0 skipped)** and native non-container .NET 10 publish; artifact [14353189121](https://github.com/rajeevp727/turnova-platform/actions/runs/44140212462/artifacts/14353189121). Mobile/Android/iOS jobs were correctly skipped. CI #44138321351 was cancelled by a later documentation commit; this documentation update requires fresh exact-head CI before merge.
-**Previous API evidence:** PR #180 exact-head [CI #44131030509](https://github.com/rajeevp727/turnova-platform/actions/runs/44131030509) passed 744/744 backend tests and native non-container .NET 10 publish (artifact [14349777538](https://github.com/rajeevp727/turnova-platform/actions/runs/44131030509/artifacts/14349777538)); Android/iOS jobs correctly skipped.
-**API remaining after PR #181:** Kestrel host-level 16 KiB support payload rejection and complete API row-by-row source/auth/privacy/persistence audit. Live private storage/scanning, managed identity, consent/retention, Cosmos multi-instance/restart and production auth remain external.
+**Current API PR:** [#182 — real Kestrel support payload limit](https://github.com/rajeevp727/turnova-platform/pull/182), branch `feat/api-kestrel-support-body-limit`, source/test commit `818bf01e453291ca5c954c0015c8157b5c4e4c11`; exact-head CI [#44143080030](https://github.com/rajeevp727/turnova-platform/actions/runs/44143080030) is running. Final documentation-head CI is required before merge.
+**PR #181 merged:** provider-agnostic private-media boundary; opaque Driver-bound references; content signature/size validation; owner-only content/status reads; current active Cab-Union-only document retrieval; new profile writes use `ProfilePhotoStorageReference` and leave inline Base64 null; historical inline Base64 remains readable. Testing Clean is an explicit fake; Development is PendingScan; Staging/Production fail closed with 503.
+**PR #182 adds:** a real Kestrel host-level integration test for the 16 KiB support body limit. It sends a known oversized Content-Length through the same support endpoint mapping and asserts HTTP 413 with zero store writes. Existing endpoint metadata and OpenAPI response assertions remain.
+**Previous exact-head API evidence:** [CI #44141514282](https://github.com/rajeevp727/turnova-platform/actions/runs/44141514282) passed scope, .NET 10 Release build, **753/753 backend tests (0 failed, 0 skipped)** and native non-container API publish; artifact [14354467904](https://github.com/rajeevp727/turnova-platform/actions/runs/44141514282/artifacts/14354467904). Mobile/Android/iOS jobs were correctly skipped.
+**API remaining:** final Kestrel exact-head evidence and complete API row-by-row source/auth/privacy/persistence audit. Live private storage/scanning, managed identity, consent/retention, Cosmos multi-instance/restart, production identity and hosting remain external.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Platform phase gate
@@ -1447,3 +1447,9 @@ Current Rider and Driver CI #1800 npm audit artifacts `14195939928` and `1419611
 
 
 **Support intake durability:** Staging requires both explicit policy approval and Cosmos credentials; policy-approved Staging with no Cosmos fails startup. Production requires Cosmos globally. The route remains 503/no-body-binding while policy is disabled. SUPPORT-API-012 covers the fail-closed startup path.
+
+## API supplemental evidence — support request payload enforcement
+
+| Test-plan ID | Criterion | Current automated evidence | Status |
+|---|---|---|---|
+| SUPPORT-API-017 | A real Kestrel host rejects a support request with Content-Length above 16 KiB before persistence | `SupportRequestKestrelIntegrationTests.KestrelRejectsOversizedSupportRequestBeforeStoreAccess`; asserts HTTP 413 and zero store writes. Exact-head CI is pending. | In progress |
