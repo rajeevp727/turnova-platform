@@ -6,5 +6,6 @@ public sealed class SupportRequestsMigration : ICosmosMigration
     public string Description => "Create reporter-partitioned neutral support request intake storage.";
 
     public Task UpAsync(ICosmosMigrationDatabase database, CancellationToken cancellationToken) =>
-        database.CreateContainerIfNotExistsAsync("SupportRequests", "/reporterId", cancellationToken);
+        database.CreateContainerIfNotExistsAsync(
+            "SupportRequests", "/reporterId", cancellationToken, defaultTimeToLive: -1);
 }
