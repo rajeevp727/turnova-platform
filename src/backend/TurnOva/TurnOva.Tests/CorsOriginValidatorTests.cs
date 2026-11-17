@@ -52,3 +52,20 @@ public sealed class CorsOriginValidatorTests
             () => CorsOriginValidator.ValidateOrigin(origin, allowHttp: false));
     }
 }
+
+    [Theory]
+    [InlineData("https://@app.turnova.test")]
+    [InlineData("https://app.turnova.test?")]
+    [InlineData("https://app.turnova.test#")]
+    [InlineData(" https://app.turnova.test")]
+    [InlineData("https://app.turnova.test ")]
+    [InlineData("https://app .turnova.test")]
+    [InlineData("https://app.turnova.test\\evil")]
+    [InlineData("https://app.turnova.test\r\n")]
+    [InlineData("https://app.turnova.test\t")]
+    public void ValidateOriginRejectsAmbiguousRawCharactersBeforeUriNormalization(string origin)
+    {
+        Assert.Throws<InvalidOperationException>(
+            () => CorsOriginValidator.ValidateOrigin(origin, allowHttp: false));
+    }
+
