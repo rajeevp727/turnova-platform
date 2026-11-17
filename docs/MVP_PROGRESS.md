@@ -2,7 +2,7 @@
 **Platform phase:** **API first**. Android Rider/Driver completion is gated until API phase exit; iOS Rider/Driver completion is gated until both Android apps exit.
 **Merged:** PRs #172–#176. PR #176 is CORS/readiness hardening merged at `dbc04619e6e1dce24bf3d965f2488111fdf16090`.
 **Parked mobile work:** PR [#177](https://github.com/rajeevp727/turnova-platform/pull/177) was closed unmerged on 2026-11-17 because its dependency/bootstrap work belongs after API phase exit. Its branch `fix/platform-01-mobile-lockfile-reproducibility` and successful exact-head CI [#44080286615](https://github.com/rajeevp727/turnova-platform/actions/runs/44080286615) are preserved for the Android phase; this historical mobile evidence does not satisfy the new API-first gate.
-**Current API PR:** [#178 — OpenAPI contract and API-first CI gating](https://github.com/rajeevp727/turnova-platform/pull/178), branch `feature/api-contract-openapi-auth`. Last verified source/test head `ab759167011828bba9be95bb4d170abbaa76bf89` passed [CI #44093266740](https://github.com/rajeevp727/turnova-platform/actions/runs/44093266740): scope detector passed; backend **686/686**; native non-container API publish succeeded (artifact `14331834992`); Android/iOS/mobile jobs were skipped by the API-first scope gate. Microsoft.OpenApi is pinned to patched 2.7.5 after the initial NU1903 finding. This documentation/test-only-route follow-up requires fresh exact-head API CI. API phase remains open; neutral support intake and Cosmos adapter/migration contract tests are next API engineering tasks.
+**Current API work:** neutral Rider/Driver support intake and Cosmos migration/repository contract tests on branch `feat/api-support-intake-cosmos-contracts` (PR number will be recorded after creation). API phase remains active; Android and iOS completion remain gated.
 
 ## Platform phase exit criteria
 
@@ -12,13 +12,13 @@
 
 ## 1. Current step
 
-**API phase — generated OpenAPI contract, local profile-read authorization and CI phase gating.**
+**API phase — neutral Rider/Driver support intake and deterministic Cosmos adapter/migration contracts.**
 
 The source audit found broad Rider/Driver/Union/Cab flows, JWT role policies, Cosmos and in-memory adapters, SignalR, readiness probes and a native .NET publish job. This increment addresses three concrete API gaps: no generated OpenAPI document, `/api/v1/auth/me` forwarded an unauthenticated request to TriSend instead of rejecting it locally, and the shared CI workflow always started mobile/native matrices for API-only changes. It adds an OpenAPI document/security transformer, protects `/auth/me`, and gates Android/iOS CI by changed platform scope (iOS also requires phase approval).
 
-**Remaining API engineering audit:** support-request intake is not exposed; deterministic tests focus heavily on in-memory repositories and need Cosmos adapter contract coverage; every API acceptance row still needs a criterion-by-criterion review. Support category/severity/assignment/escalation/retention policies must not be invented. API phase is not exited.
+**Remaining API engineering audit:** after support intake and Cosmos contract CI pass, complete a criterion-by-criterion API source/auth/privacy/persistence audit across all 19 acceptance rows. Support categories, severity, assignment, escalation/SLA, attachments and retention must not be invented. API phase is not exited.
 
-**Next API actions:** complete exact-head API CI, then add neutral Rider/Driver support intake without inventing policy, add deterministic Cosmos adapter/migration contract tests, finish API endpoint/auth/privacy audit and synchronize API evidence. Do not begin Android completion until the API exit checklist passes.
+**Next API actions:** complete support intake/Cosmos contract CI, then finish the API endpoint/auth/privacy/persistence audit and API contract documentation. Do not begin Android completion until every API phase exit criterion passes.
 
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage.
 **Production readiness:** Not established. No live Cosmos, production TriSend, hosted API, signed-device or physical-device acceptance is claimed.

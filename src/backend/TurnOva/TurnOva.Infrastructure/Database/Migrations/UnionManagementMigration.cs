@@ -1,5 +1,3 @@
-using Microsoft.Azure.Cosmos;
-
 namespace TurnOva.Infrastructure.Database.Migrations;
 
 public sealed class UnionManagementMigration : ICosmosMigration
@@ -7,19 +5,20 @@ public sealed class UnionManagementMigration : ICosmosMigration
     public string Id => "202611050002_UnionManagement";
     public string Description => "Create union, driver assignment and assignment audit containers.";
 
-    public async Task UpAsync(Microsoft.Azure.Cosmos.Database database, CancellationToken cancellationToken)
+    public async Task UpAsync(ICosmosMigrationDatabase database, CancellationToken cancellationToken)
     {
-        var containers = new[]
+        var containers = new (string Name, string PartitionKeyPath)[]
         {
-            new ContainerProperties("Unions", "/unionId"),
-            new ContainerProperties("DriverUnionAssignments", "/driverId"),
-            new ContainerProperties("DriverUnionAudit", "/driverId")
+            ("Unions", "/unionId"),
+            ("DriverUnionAssignments", "/driverId"),
+            ("DriverUnionAudit", "/driverId")
         };
 
-        foreach (var properties in containers)
+        foreach (var container in containers)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await database.CreateContainerIfNotExistsAsync(
-                properties, cancellationToken: cancellationToken);
+                container.Name, container.PartitionKeyPath, cancellationToken);
         }
     }
 }

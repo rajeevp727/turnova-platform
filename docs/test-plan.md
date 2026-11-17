@@ -3090,3 +3090,23 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 - **Strict acceptance: 0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage. **Production readiness is not established.** No live Cosmos, physical-device, signed-production, provider, legal or production-hosting validation is claimed.
 - No secrets, paid providers, Docker/container builds, images, registries or production deployments were added. Fleet/Ops Phase 2 and in-app payment collection remain excluded.
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
+
+
+## API support intake and Cosmos adapter contracts
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| SUPPORT-API-001 | Rider submits neutral support request | HTTP 202; authenticated Rider ID/role and timestamp are persisted; response contains only request ID/time/replay flag | API integration | P0 |
+| SUPPORT-API-002 | Driver submits neutral support request | HTTP 202; authenticated Driver ID/role is persisted; no category or severity is inferred | API integration | P0 |
+| SUPPORT-API-003 | Retry same reporter/key/content | HTTP 200 replay; original request ID and timestamp are returned; one record remains | API + idempotency | P0 |
+| SUPPORT-API-004 | Reuse reporter/key with changed content | HTTP 409; existing request is not overwritten | API + idempotency | P0 |
+| SUPPORT-API-005 | Missing key, invalid lengths or unknown policy fields | HTTP 400; no request is stored | API validation | P0 |
+| SUPPORT-API-006 | Anonymous or non-Rider/Driver caller | HTTP 401/403 before store access | API security | P0 |
+| SUPPORT-API-007 | OpenAPI support contract | Support route is Bearer-protected and body exposes only subject/description | API contract | P1 |
+| COSMOS-STORE-001 | Create support request | Cosmos adapter writes to the reporterId partition and does not persist the raw idempotency key | Repository contract | P0 |
+| COSMOS-STORE-002 | Duplicate support item | Same content replays; different content conflicts; a missing item after conflict fails closed | Repository contract | P0 |
+| COSMOS-STORE-003 | Ride offer state replacement | Cosmos adapter sends the expected ETag as IfMatchEtag | Repository contract | P0 |
+| COSMOS-STORE-004 | Driver/Rider reservation acquisition | Reservation and append-only audit event are created in one same-partition transactional batch | Repository contract | P0 |
+| COSMOS-MIG-006 | Migration schema contract | Every migration ID is unique and every declared container/partition-key pair matches the deterministic schema contract | Migration contract | P0 |
+
+Live Cosmos ETag contention, multi-instance migration lease recovery, restart/crash recovery, cross-partition query/index/RU behaviour and production retention remain external Cosmos integration gates.

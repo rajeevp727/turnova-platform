@@ -106,3 +106,18 @@ The zone/queue and `/api/v1/rides/request`, pending-offer, available-ride, accep
 ## API phase follow-ups still open
 
 The API phase is not complete. The current audit has identified support-request intake and Cosmos adapter-level deterministic tests as remaining engineering work, in addition to the OpenAPI/auth changes in the current increment. Support categories, severity, assignment, escalation/SLA and retention remain Product/Operations decisions; code must not invent them. Live Cosmos ETag/multi-instance/restart and production TriSend/JWT validation remain external gates.
+
+
+## Neutral Rider/Driver support intake
+
+`POST /api/v1/support/requests` accepts a Rider or Driver JWT and an `Idempotency-Key` header. The JSON body contains only `subject` and `description`.
+
+- First submission: HTTP 202 with request ID, server timestamp and `replayed=false`.
+- Same reporter/key/content: HTTP 200 with the original request ID/timestamp and `replayed=true`.
+- Same reporter/key with different content: HTTP 409; the existing item is never overwritten.
+- Missing/invalid key or invalid body: HTTP 400.
+- Anonymous caller: HTTP 401; other roles: HTTP 403.
+
+The Cosmos `SupportRequests` container uses partition key `/reporterId`. The item ID is a SHA-256 digest of the reporter ID and idempotency key; the raw key is not stored. The response does not echo the reporter ID or request text, and support content is not logged.
+
+There is intentionally no support-request list/read endpoint, attachment upload, category, severity, priority, assignment, escalation, response target or retention setting. Cosmos TTL remains unset until Product/Operations approves a retention policy. Those decisions remain external gates.

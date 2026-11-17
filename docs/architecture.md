@@ -466,3 +466,10 @@ PR #160 instruments the existing Union audit create/canonical-recovery boundary 
 ### Ride-audit and storage-readiness telemetry listener isolation (2026-11-14)
 
 PR #161 makes optional diagnostics best-effort across the authoritative ride-audit and storage-readiness paths. ActivitySource creation, outcome tagging/status, Activity disposal, Counter.Add and Histogram.Record are isolated independently. A host-provided listener exception cannot replace a ride create/replace result, append-only audit outcome, ETag/conflict behavior, caller cancellation, storage timeout or original dependency-failure classification. Deterministic RIDE-OBS-001/002 and STORAGE-OBS-001/002 passed CI #1589 / run 43564291551 (12/12; backend 594/594) on source/test head `e625693c697c3903639c1135dd66075895643926`. No exporter, vendor, credentials, endpoint or new package was introduced. Live Cosmos multi-instance/ETag/restart/retention and production telemetry export/alert validation remain external.
+
+
+## API support intake persistence
+
+The Rider/Driver API exposes neutral `POST /api/v1/support/requests` intake only. It stores a bounded subject and description with the authenticated reporter ID/role and server timestamp. A reporter-scoped deterministic item ID makes retries idempotent without storing the raw `Idempotency-Key`. Cosmos uses the `SupportRequests` container partitioned by `/reporterId`; Development/Testing uses a concurrent in-memory adapter.
+
+There is no support-agent read/list surface, attachment upload, category, severity, priority, assignment, escalation, SLA or retention policy. The endpoint does not log request content and returns only request ID, timestamp and replay status. Product/Operations must still approve support workflow, access, privacy and retention decisions.

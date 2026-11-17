@@ -1,6 +1,7 @@
 using TurnOva.API;
 using TurnOva.API.Assistance;
 using TurnOva.API.Observability;
+using TurnOva.API.Support;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
@@ -16,10 +17,12 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
+using TurnOva.Application.Support;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Database;
 using TurnOva.Infrastructure.Database.Migrations;
 using TurnOva.Infrastructure.Dispatch;
+using TurnOva.Infrastructure.Support;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -160,6 +163,7 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, SupportRequestsMigration>();
     builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
     builder.Services.AddSingleton<IRiderActiveBookingReservationStore>(sp =>
         new CosmosRiderActiveBookingReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency")));
@@ -169,6 +173,9 @@ if (useCosmos)
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
             .GetContainer(databaseName, "QueueEntries")));
+    builder.Services.AddSingleton<ISupportRequestStore>(sp =>
+        new CosmosSupportRequestStore(sp.GetRequiredService<CosmosClient>()
+            .GetContainer(databaseName, "SupportRequests")));
 }
 else
 {
@@ -189,6 +196,7 @@ else
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
     builder.Services.AddSingleton<IRiderActiveBookingReservationStore, InMemoryRiderActiveBookingReservationStore>();
+    builder.Services.AddSingleton<ISupportRequestStore, InMemorySupportRequestStore>();
 }
 
 builder.Services.AddSingleton<StorageReadinessProbe>(sp =>
@@ -271,6 +279,7 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
+app.MapSupportRequestEndpoints();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
