@@ -18,11 +18,13 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
 using TurnOva.Application.Support;
+using TurnOva.Application.Media;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Database;
 using TurnOva.Infrastructure.Database.Migrations;
 using TurnOva.Infrastructure.Dispatch;
 using TurnOva.Infrastructure.Support;
+using TurnOva.Infrastructure.Media;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -99,6 +101,12 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
     }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.")
     .ValidateOnStart();
 builder.Services.AddAuthorization();
+if (builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddSingleton<IPrivateDriverMediaStore>(new InMemoryPrivateDriverMediaStore(markUploadsCleanForTests: true));
+else if (builder.Environment.IsDevelopment())
+    builder.Services.AddSingleton<IPrivateDriverMediaStore>(new InMemoryPrivateDriverMediaStore(markUploadsCleanForTests: false));
+else
+    builder.Services.AddSingleton<IPrivateDriverMediaStore, UnavailablePrivateDriverMediaStore>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DemoRide>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, string>>();
@@ -312,6 +320,8 @@ var riderActiveBookingReservations = app.Services.GetRequiredService<IRiderActiv
 Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
 Container? driverContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null;
 var driverProfiles = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+var privateDriverMediaStore = app.Services.GetRequiredService<IPrivateDriverMediaStore>();
+var localMediaCompatibility = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing");
 var unions = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
 var unionAssignments = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
 var unionAudit = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
@@ -449,6 +459,54 @@ bool IsValidDriverSelfie(string? base64)
             bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
     }
     catch (FormatException) { return false; }
+}
+
+bool TryDecodePrivateMedia(string? base64, int maximumBytes, out byte[] content)
+{
+    content = [];
+    if (string.IsNullOrWhiteSpace(base64) || base64.Length > ((maximumBytes + 2) / 3 * 4) + 8)
+        return false;
+    try
+    {
+        content = Convert.FromBase64String(base64);
+        return content.Length is > 0 && content.Length <= maximumBytes;
+    }
+    catch (FormatException)
+    {
+        content = [];
+        return false;
+    }
+}
+
+bool IsValidPrivateMediaPayload(string mediaType, string contentType, byte[] content)
+{
+    if (mediaType == "ProfilePhoto")
+        return contentType == "image/jpeg" && IsValidDriverSelfie(Convert.ToBase64String(content));
+    if (mediaType is not ("DrivingLicence" or "VehicleRegistration" or "Insurance" or "Permit"))
+        return false;
+    return contentType switch
+    {
+        "application/pdf" => content.Length >= 5 && content.AsSpan(0, 5).SequenceEqual("%PDF-"u8),
+        "image/jpeg" => content.Length >= 3 && content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF,
+        "image/png" => content.Length >= 8 && content.AsSpan(0, 8).SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }),
+        _ => false
+    };
+}
+
+async Task<string?> GetProfilePhotoBase64Async(DriverOnboardingProfile profile, CancellationToken ct)
+{
+    if (string.IsNullOrWhiteSpace(profile.ProfilePhotoStorageReference))
+        return profile.ProfilePhotoBase64;
+    var asset = await privateDriverMediaStore.ReadAsync(profile.DriverId, profile.ProfilePhotoStorageReference, ct);
+    if (asset is null || asset.Metadata.MediaType != "ProfilePhoto" || asset.Metadata.ScanStatus != "Clean")
+        return null;
+    return Convert.ToBase64String(asset.Content);
+}
+
+async Task<bool> HasUsableProfilePhotoAsync(DriverOnboardingProfile profile, CancellationToken ct)
+{
+    var content = await GetProfilePhotoBase64Async(profile, ct);
+    return IsValidDriverSelfie(content);
 }
 
 bool IsValidDriverPhoneNumber(string? phoneNumber)
