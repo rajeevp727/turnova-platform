@@ -2542,3 +2542,12 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 - The lockfile JSON is a generated artifact, not committed; the committed digest is the pin. If the acceptance requirement is interpreted as requiring source-controlled package-lock.json files, that remains a limitation to revisit rather than misreporting.
 - Historical PR #177 npm audit artifacts: 11 moderate, 0 high, 0 critical for each app; fresh Android-phase audits are required. No Expo/React Native SDK upgrade is included.
 - Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
+
+
+## Android dependency pin drift — 2026-11-18
+
+- PR #185 exact-head CI [#44157712885](https://github.com/rajeevp727/turnova-platform/actions/runs/44157712885) failed closed in the Driver mobile dependency bootstrap before `npm ci`; the Rider job was cancelled by the matrix fail-fast behavior. Backend Release/build/tests/native publish passed in that run. This is a dependency-resolution pin mismatch, not an Android build or application-test failure.
+- The uploaded generated lockfiles were compared with the reviewed PR #177 artifacts. Both app graphs retained the same package count (Rider 788, Driver 790), with zero added or removed package entries and exactly two transitive patch updates in each: `electron-to-chromium` 1.5.487 → 1.5.488 and `node-releases` 2.0.64 → 2.0.65. Expo 54 / React Native 0.81.4 direct versions and all other package versions were unchanged.
+- New reviewed pins now match the generated lockfiles: Rider `1d577165033eb4b2a0e12dfa9b35889f474e638225a1c787678eefc4bfabb083`; Driver `d6437f510bbfd01dbb3467688241d03bcb2e4035570c3fe62e31827356134f14`.
+- Current PR branch head after pin refresh: `993e19d72331f894a2821aad97ed7d05d840cbe1`. Fresh exact-head CI must rerun both Rider and Driver installs, npm audit, Expo validation, Android debug/release builds and emulator smoke. Historical npm audit counts (11 moderate, 0 high, 0 critical per app) are not substituted for the fresh audit.
+- iOS remains `not_started`; no iOS dependency or build job is enabled. Do not start Rider feature work until PR #185 dependency/Android infrastructure checks pass.
