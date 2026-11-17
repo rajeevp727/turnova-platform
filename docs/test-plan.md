@@ -3241,3 +3241,8 @@ PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e`. Exact-head API CI 
 | PLATFORM-NPM-007 | Android phase CI after API phase exit | Rider and Driver Android debug/release builds and emulator install/launch smoke run; iOS/mobile-ios/native-ios/simulator jobs remain skipped until Android exit |
 
 The helper's real-filesystem fixture is executed in both Rider and Driver mobile validation and native-Android matrix jobs. The current design commits per-app SHA-256 pins and shares the generated lockfile as a same-run artifact; the JSON lockfile itself is not committed. Registry-resolution drift fails closed and requires an explicit pin review. Historical PR #177 audit artifacts showed 11 moderate, 0 high and 0 critical findings in each app; the current Android-phase run must regenerate the lockfiles and rerun npm audit. No Expo/React Native SDK upgrade is included.
+
+
+| PLATFORM-NPM-008 | Registry metadata advances a transitive patch version after a previously reviewed lockfile pin | Bootstrap generates with lifecycle scripts disabled, computes the actual lockfile digest and fails before `npm ci` when the committed pin is stale; reviewer compares package additions/removals and version changes, then updates the pin only after dependency/audit review | CI regression / supply-chain guard | P0 |
+
+PR #185 run [#44157712885](https://github.com/rajeevp727/turnova-platform/actions/runs/44157712885) exercised this fail-closed path: each app retained its package set and only `electron-to-chromium` and `node-releases` advanced one patch version. Updated per-app pins must be verified by a fresh exact-head run that reaches npm ci and npm audit; no current audit result is inferred from historical artifacts.
