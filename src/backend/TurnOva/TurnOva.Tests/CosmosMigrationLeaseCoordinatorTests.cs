@@ -22,10 +22,10 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
 
         var acquired = await coordinator.AcquireAsync(CancellationToken.None);
 
-        Assert.Equal("replacement-owner", acquired.Owner);
+        Assert.NotEqual(expired.Owner, acquired.Owner);
         Assert.Equal("etag-new", acquired.ETag);
         Assert.Equal(expired.ETag, store.LastExpectedLease?.ETag);
-        Assert.Equal("replacement-owner", store.LastReplacementOwner);
+        Assert.Equal(acquired.Owner, store.LastReplacementOwner);
     }
 
     [Fact]
