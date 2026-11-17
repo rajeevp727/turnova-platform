@@ -184,6 +184,14 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
+    def test_allows_expo_asset_remediation_hint_for_rider(self):
+        self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
+            "name": "expo-asset", "version": "58.0.21", "isSemVerMajor": True
+        }
+        self.write_report()
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
     def test_rejects_unknown_app_identity_for_contextual_exception(self):
         package = json.loads((self.app / "package.json").read_text())
         package["name"] = "turnova-unknown"
