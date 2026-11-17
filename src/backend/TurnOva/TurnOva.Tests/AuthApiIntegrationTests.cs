@@ -120,9 +120,23 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task MeEndpointRejectsAnonymousRequestBeforeCallingTriSend()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Anonymous profile reads must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task MeEndpointReturnsUpstreamProfileAndForwardsBearerToken()
     {
-        const string accessToken = "rider-profile-access-token";
+        var accessToken = CreateToken("Rider");
         using var handler = new RecordingHandler((request, _) =>
         {
             Assert.Equal("/auth/me", request.Path);
@@ -149,6 +163,45 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal(accessToken, request.AuthorizationParameter);
     }
 
+
+
+    [Fact]
+    public async Task OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySchemes()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("OpenAPI generation must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        Assert.Equal("TurnOva API", root.GetProperty("info").GetProperty("title").GetString());
+        var paths = root.GetProperty("paths");
+        Assert.True(paths.TryGetProperty("/api/v1/auth/me", out var mePath));
+        Assert.True(paths.TryGetProperty("/api/v1/auth/{role}/login", out var loginPath));
+        Assert.True(paths.TryGetProperty("/api/v1/rider/discovery", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/rider/bookings", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/union/reconciliation", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/ops/drivers/{driverId}", out var opsPath));
+        Assert.False(paths.TryGetProperty("/__test/throw", out _),
+            "Testing-only exception routes must not appear in the published API contract.");
+
+        var schemes = root.GetProperty("components").GetProperty("securitySchemes");
+        Assert.Equal("http", schemes.GetProperty("Bearer").GetProperty("type").GetString());
+        Assert.Equal("bearer", schemes.GetProperty("Bearer").GetProperty("scheme").GetString());
+        Assert.Equal("apiKey", schemes.GetProperty("OpsAdminKey").GetProperty("type").GetString());
+        Assert.Equal("X-Driver-Admin-Key", schemes.GetProperty("OpsAdminKey").GetProperty("name").GetString());
+
+        var meSecurity = mePath.GetProperty("get").GetProperty("security");
+        Assert.Contains(meSecurity.EnumerateArray(), requirement => requirement.TryGetProperty("Bearer", out _));
+        Assert.False(loginPath.GetProperty("post").TryGetProperty("security", out _));
+        var opsSecurity = opsPath.GetProperty("get").GetProperty("security");
+        Assert.Contains(opsSecurity.EnumerateArray(), requirement => requirement.TryGetProperty("OpsAdminKey", out _));
+        Assert.Empty(handler.Requests);
+    }
 
     [Theory]
     [InlineData("/api/v1/auth/rider/login", "RIDER@example.com", "rider@example.com", "Rider", "rider-access-token", "rider-refresh-token")]
@@ -205,7 +258,7 @@ public sealed class AuthApiIntegrationTests
     [Fact]
     public async Task DriverMeEndpointReturnsDriverProfileAndForwardsExactBearerToken()
     {
-        const string accessToken = "driver-profile-access-token";
+        var accessToken = CreateToken("Driver");
         using var handler = new RecordingHandler((request, _) =>
         {
             Assert.Equal("/auth/me", request.Path);

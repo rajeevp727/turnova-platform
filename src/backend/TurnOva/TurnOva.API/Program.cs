@@ -24,6 +24,11 @@ using TurnOva.Infrastructure.Dispatch;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<TurnOvaOpenApiDocumentTransformer>();
+    options.AddOperationTransformer<TurnOvaOpenApiOperationTransformer>();
+});
 builder.Services.AddHealthChecks();
 builder.Services.AddAiAssistance(builder.Configuration);
 
@@ -250,6 +255,8 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+    app.MapOpenApi().AllowAnonymous();
 app.MapHealthChecks("/health/live");
 
 // Render may probe the service root with HEAD. Return a lightweight success
@@ -260,7 +267,7 @@ if (app.Environment.IsEnvironment("Testing"))
     app.MapGet("/__test/throw", () =>
     {
         throw new InvalidOperationException("sensitive-test-exception");
-    });
+    }).ExcludeFromDescription();
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
@@ -1362,7 +1369,7 @@ app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, Cance
 });
 
 
-var authGroup = app.MapGroup("/api/v1/auth");
+var authGroup = app.MapGroup("/api/v1/auth").WithTags("Authentication");
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
     CancellationToken ct) =>
@@ -1416,7 +1423,8 @@ authGroup.MapPost("/logout", async (
         context.Request.Headers.Authorization.ToString(), null, ct));
 authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Get, "/auth/me", null,
-        context.Request.Headers.Authorization.ToString(), null, ct));
+        context.Request.Headers.Authorization.ToString(), null, ct))
+    .RequireAuthorization();
 
 static async Task<IResult> ForwardAuthRequest(
     IHttpClientFactory clients, HttpMethod method, string path, object? body,
@@ -1461,7 +1469,7 @@ static async Task<IResult> ForwardAuthRequest(
     }
 }
 
-var onboarding = app.MapGroup("/api/v1/driver/onboarding").RequireAuthorization(policy => policy.RequireRole("Driver"));
+var onboarding = app.MapGroup("/api/v1/driver/onboarding").RequireAuthorization(policy => policy.RequireRole("Driver")).WithTags("Driver onboarding");
 onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
@@ -1781,7 +1789,7 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/review", async (
 });
 
 
-var opsUnions = app.MapGroup("/api/v1/ops/unions");
+var opsUnions = app.MapGroup("/api/v1/ops/unions").WithTags("Operations unions");
 opsUnions.MapPost("/", async (HttpContext context, CreateUnionRequest request, CancellationToken ct) =>
 {
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
@@ -2033,7 +2041,8 @@ opsUnions.MapGet("/{unionId}/drivers/{driverId}", async (HttpContext context, st
 
 
 var unionManagerApi = app.MapGroup("/api/v1/union")
-    .RequireAuthorization(policy => policy.RequireRole("UnionManager"));
+    .RequireAuthorization(policy => policy.RequireRole("UnionManager"))
+    .WithTags("Union manager");
 
 unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
