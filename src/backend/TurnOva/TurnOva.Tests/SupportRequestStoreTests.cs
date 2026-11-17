@@ -44,7 +44,7 @@ public sealed class SupportRequestStoreTests
         var results = await Task.WhenAll(Enumerable.Range(0, 16)
             .Select(_ => store.CreateOrGetAsync(request)));
 
-        Assert.Single(results.Where(result => result.Status == SupportRequestWriteStatus.Created));
+        Assert.Single(results, result => result.Status == SupportRequestWriteStatus.Created);
         Assert.Equal(15, results.Count(result => result.Status == SupportRequestWriteStatus.Replayed));
     }
 
