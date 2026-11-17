@@ -3259,7 +3259,7 @@ PR #185 run [#44157712885](https://github.com/rajeevp727/turnova-platform/action
 | PLATFORM-NPM-013 | Source maps are missing, malformed, or npm audit exits for an execution error | The gate fails closed | CI/security regression | P0 |
 | PLATFORM-NPM-014 | Unknown high advisory or critical advisory appears in either app | The gate fails; only the exact reviewed advisory may be contextually excepted | CI/security regression | P0 |
 
-The deterministic test script covers the allowlisted transitive build-tool case plus critical/unknown-high, direct dependency, app import, unknown parent, bundle inclusion and missing-source-map failures. The live Rider and Driver audit reports from CI #44158843845 each contain 34 package findings (27 high package nodes, 7 moderate, 0 critical); the high package nodes resolve to one transitive picomatch advisory. This remains a contextual build-tooling exception, not a patched dependency. The exact-head CI must independently prove that picomatch is absent from both Android production bundle source maps.
+The deterministic verifier now has 17 cases, including malformed/inconsistent report metadata and the pinned major-only remediation recommendation. The live Rider and Driver audit reports from CI #44161191929 each contain 34 vulnerability records (27 high, 7 moderate, 0 critical); all high records resolve to one transitive picomatch advisory. Both real Android production source maps passed the contextual gate in that prior exact-head run. This remains a contextual build-tooling exception, not a patched dependency. The subsequent schema/remediation hardening requires a fresh exact-head CI run before PR #185 can merge.
 
 ## Android audit-report integrity regressions — PR #185 follow-up
 
