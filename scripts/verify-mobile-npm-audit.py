@@ -20,11 +20,12 @@ ALLOWED_PICOMATCH_PARENTS = {
     "jest-util",
     "micromatch",
 }
+SEVERITIES = ("info", "low", "moderate", "high", "critical")
 IMPORT_PATTERN = re.compile(
-    r"(?:from\s*|require\s*\(|import\s*\()\s*['\"]picomatch(?:/[^'\"]*)?['\"]"
+    r"(?:from\\s*|require\\s*\\(|import\\s*\\()\\s*['\\"]picomatch(?:/[^'\\"]*)?['\\"]"
 )
 SOURCE_PATTERN = re.compile(
-    r"(?:^|[/\\])node_modules[/\\]picomatch(?:[/\\]|$)", re.IGNORECASE
+    r"(?:^|[/\\\\])node_modules[/\\\\]picomatch(?:[/\\\\]|$)", re.IGNORECASE
 )
 SOURCE_EXTENSIONS = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
 
@@ -57,6 +58,50 @@ def package_name_from_lock_path(path: str) -> str:
     return path.rsplit("node_modules/", 1)[1]
 
 
+def validate_audit_report(report: dict) -> tuple[dict, dict] | str:
+    """Reject incomplete or internally inconsistent npm audit JSON before exceptions apply."""
+    metadata = report.get("metadata")
+    if not isinstance(metadata, dict):
+        return "npm audit report is missing its metadata object."
+    counts = metadata.get("vulnerabilities")
+    if not isinstance(counts, dict):
+        return "npm audit report is missing metadata.vulnerabilities."
+
+    vulnerabilities = report.get("vulnerabilities")
+    if not isinstance(vulnerabilities, dict):
+        return "npm audit report is missing a valid vulnerabilities object."
+
+    actual_counts = {severity: 0 for severity in SEVERITIES}
+    for name, item in vulnerabilities.items():
+        if not isinstance(name, str) or not name or not isinstance(item, dict):
+            return "npm audit report contains a malformed vulnerability record."
+        severity = item.get("severity")
+        if severity not in actual_counts:
+            return f"npm audit report contains an unknown severity for {name}."
+        nodes = item.get("nodes")
+        if not isinstance(nodes, list) or not nodes or any(not isinstance(node, str) or not node for node in nodes):
+            return f"npm audit report contains invalid package nodes for {name}."
+        actual_counts[severity] += 1
+
+    for severity in SEVERITIES:
+        reported = counts.get(severity)
+        if type(reported) is not int or reported < 0:
+            return f"npm audit metadata has an invalid {severity} count."
+        if reported != actual_counts[severity]:
+            return (
+                f"npm audit metadata {severity} count ({reported}) does not match "
+                f"the vulnerability records ({actual_counts[severity]})."
+            )
+
+    total = counts.get("total")
+    if type(total) is not int or total < 0:
+        return "npm audit metadata has an invalid total count."
+    if total != len(vulnerabilities) or total != sum(actual_counts.values()):
+        return "npm audit metadata total does not match the vulnerability records."
+
+    return counts, vulnerabilities
+
+
 def verify(report_path: Path, audit_status: int, app_dir: Path, bundle_dir: Path) -> int:
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -67,13 +112,23 @@ def verify(report_path: Path, audit_status: int, app_dir: Path, bundle_dir: Path
 
     if audit_status not in (0, 1):
         return fail(f"npm audit execution failed with exit code {audit_status}")
+    if not isinstance(report, dict):
+        return fail("npm audit report root must be a JSON object.")
 
-    metadata = report.get("metadata", {}).get("vulnerabilities", {})
-    critical = int(metadata.get("critical", 0))
-    high = int(metadata.get("high", 0))
-    moderate = int(metadata.get("moderate", 0))
-    low = int(metadata.get("low", 0))
-    total = int(metadata.get("total", 0))
+    validated = validate_audit_report(report)
+    if isinstance(validated, str):
+        return fail(validated)
+    metadata, vulnerabilities = validated
+
+    critical = metadata["critical"]
+    high = metadata["high"]
+    moderate = metadata["moderate"]
+    low = metadata["low"]
+    total = metadata["total"]
+
+    if (audit_status == 0 and total != 0) or (audit_status == 1 and total == 0):
+        return fail("npm audit exit status is inconsistent with its vulnerability inventory.")
+
     print(
         f"npm audit inventory: {total} total; {critical} critical; {high} high package nodes; "
         f"{moderate} moderate; {low} low."
@@ -82,17 +137,11 @@ def verify(report_path: Path, audit_status: int, app_dir: Path, bundle_dir: Path
     if critical:
         return fail("critical advisories are never allowlisted")
 
-    vulnerabilities = report.get("vulnerabilities", {})
-    if not isinstance(vulnerabilities, dict):
-        return fail("npm audit vulnerabilities payload is malformed")
-
     high_packages = {
         name for name, item in vulnerabilities.items()
-        if isinstance(item, dict) and item.get("severity") == "high"
+        if item.get("severity") == "high"
     }
     if high:
-        if not high_packages:
-            return fail("metadata reports high findings but no high package records exist")
         for name in sorted(high_packages):
             roots = high_roots(name, vulnerabilities)
             if roots != {ALLOWED_HIGH_ADVISORY}:
