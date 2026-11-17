@@ -3,14 +3,15 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
 
-**Last verified:** 2026-11-17
+**Last verified:** 2026-11-18
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `dafb9a39b0e876e65f9c7b8443714cbf0ca646a4`; PR #181 (private Driver media boundary) is merged. PR #177 remains closed/unmerged and parked for Android only. PR #182 is the sole active feature PR.
+**Main HEAD:** `ea42ae49f200738316e72a1505d93ab7265bd0e2`; PR #182 (real Kestrel support body-limit verification) is merged. PR #177 remains closed/unmerged and parked for Android only. PR #183 is the sole active feature increment.
 **Current platform phase:** API. Android remains prohibited until API source, deterministic tests, OpenAPI/docs, auth/privacy, persistence and native non-container publish exit criteria pass. iOS remains gated until both Android apps exit.
-**Current API PR:** [#182 — real Kestrel support payload limit](https://github.com/rajeevp727/turnova-platform/pull/182), branch `feat/api-kestrel-support-body-limit`, source/test commit `818bf01e453291ca5c954c0015c8157b5c4e4c11`, verified pre-follow-up-docs head `3e6faa1a4f0853c3741c5c7b6869263d142eaa96`.
-**PR #182 verification:** [CI #44143458072](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072) passed scope, .NET 10 Release build, **754/754 backend tests (0 failed, 0 skipped)** and native non-container API publish (artifact [14355367845](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072/artifacts/14355367845)). The real-Kestrel 16 KiB/HTTP 413/no-store-write regression passed. The follow-up documentation-only commit needs a fresh exact-head run.
-**PR #181 evidence:** exact-head CI [#44141514282](https://github.com/rajeevp727/turnova-platform/actions/runs/44141514282) passed 753/753 backend tests and native non-container .NET 10 publish (artifact [14354467904](https://github.com/rajeevp727/turnova-platform/actions/runs/44141514282/artifacts/14354467904)). Private-media provider/scanning, managed identity, consent/retention/deletion and live Cosmos validation remain external.
-**API next:** complete the full API acceptance-row source/auth/privacy/persistence audit. Do not start Android until every API phase exit criterion passes.
+**Current API PR:** [#183 — AI assistance request input guards](https://github.com/rajeevp727/turnova-platform/pull/183), branch `feat/api-ai-assistance-input-guards`; source/test head at handoff `1cc61f270977599809bb00419fe6c922261cdfb4`.
+**PR #182 verification:** [CI #44144136443](https://github.com/rajeevp727/turnova-platform/actions/runs/44144136443) passed scope, .NET 10 Release build, **754/754 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact verification. The real-Kestrel 16 KiB support request test passed; Android/iOS jobs were correctly skipped.
+**PR #183 implementation:** AI trip-intent/help endpoints now enforce 16 KiB Kestrel request limits and OpenAPI 413; request DTOs reject unmapped JSON fields; deterministic API and real-Kestrel tests cover unknown sensitive fields and oversized bodies before provider invocation. Exact-head CI is pending.
+**AI-01:** approved supplemental scope, outside the 19-row denominator. Provider remains disabled by default; no paid provider/model/credential selected. Live sandbox, managed-secret and data-processing validation remain external.
+**API next:** verify PR #183 final-head Release build, backend tests and native publish; then continue the full API acceptance-row source/auth/privacy/persistence audit. Do not start Android until API phase exit criteria pass.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Product in one line
@@ -2805,3 +2806,8 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 
 
 **Support intake durability:** policy-approved Staging now fails startup unless Cosmos endpoint/key are configured; it cannot acknowledge support requests into an in-memory store. Production already requires Cosmos. Regression: SUPPORT-API-012.
+
+
+## Latest API handoff — AI-01 request input guards (2026-11-18)
+
+PR #183 is the sole active API feature increment. It adds 16 KiB request-size metadata and OpenAPI 413 to both assistance endpoints, strict JSON request DTOs and deterministic tests for unmapped fields plus real Kestrel body-limit enforcement. Source/test head at handoff: `1cc61f270977599809bb00419fe6c922261cdfb4`. Final-head CI and independent review are required before merge. AI-01 remains supplemental/outside the 19 acceptance rows. Do not choose a paid provider/model/credential or start Android before API exit.
