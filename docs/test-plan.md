@@ -3166,12 +3166,12 @@ These tests require a provider-agnostic interface and deterministic in-memory fa
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| COSMOS-MIG-007 | Migration runs longer than the initial lease duration | Renewal heartbeat extends the ETag lease before expiry; a second runner cannot acquire it | Deterministic concurrency | P0 |
-| COSMOS-MIG-008 | Lease renewal loses an ETag race | Current migration is cancelled before writing migration history; lost owner never deletes/replaces the new owner's lease | Deterministic concurrency | P0 |
-| COSMOS-MIG-009 | Runner is cancelled while holding the lease | Renewal stops, migration cancellation propagates, and release is bounded and ETag-conditional | Deterministic lifecycle | P1 |
-| COSMOS-MIG-010 | Two runners acquire/recover an expired lease | Only one ETag owner applies each migration; idempotent history read-back is preserved | Deterministic concurrency | P0 |
+| COSMOS-MIG-007 | Migration runs longer than the initial lease duration | A 30-minute lease is renewed every 10 minutes using the latest ETag and same owner; the state publishes the new ETag before the next heartbeat | Deterministic coordinator/fake-delay tests; live Cosmos contention remains external | P0 |
+| COSMOS-MIG-008 | Lease renewal loses an ETag race or a renewal request fails | Renewal fails closed, cancels the migration token, and the runner checks cancellation after migration work before writing the history marker | Deterministic fake-store concurrency and runner cancellation boundary | P0 |
+| COSMOS-MIG-009 | Runner finishes or is cancelled while holding a renewed lease | Heartbeat is stopped and awaited before release; release uses the latest ETag and cannot delete a replacement owner's lease | Deterministic lifecycle and Cosmos adapter contract | P0 |
+| COSMOS-MIG-010 | Two runners acquire/recover an active or expired lease | Active lease is retried; expired lease takeover uses the observed ETag; only one owner can renew/release the current lease | Deterministic coordinator and Cosmos adapter ETag tests; live two-instance gate remains | P0 |
 
-The current runner has a 30-minute ETag-protected lease but no renewal heartbeat. Existing migrations only create containers idempotently; implement and test renewal/fencing before adding non-idempotent data migrations. Live Cosmos multi-instance/restart remains external.
+The runner now renews a 30-minute ETag-protected lease every 10 minutes and cancels migration work when renewal loses ownership. Current migrations create containers idempotently and receive the cancellation token. Future non-idempotent migrations must remain cancellation-aware and resumable. Live Cosmos multi-instance contention, process suspension/crash and restart remain external. Source/test CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Final documentation-head CI #44130301238 also passed 744/744 backend tests and native publish (artifact 14348249426). The current documentation-only sync requires its own exact-head CI before merge; live two-instance contention, process suspension/crash and restart remain external. Final PR #180 exact-head CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Live two-instance contention, process suspension/crash and restart remain external.
 
 
 ### Platform phase-state CI fixtures (implemented in PR #179; API-only CI #44111719737 passed)
@@ -3190,3 +3190,4 @@ The current checked-in state is API `in_progress`, Android/iOS `not_started`. Ex
 - CI recovery note (2026-11-17): #441251 compiled successfully and ran 735 tests; 734 passed and SUPPORT-API-016 failed because a null in-memory configuration override fell back to the earlier value. The test now uses explicit invalid value `0` and verifies the TTL output is null. Fresh exact-head API CI is pending.
 
 - CI recovery note (2026-11-17): #441256 compiled and ran 735 tests; 734 passed and SUPPORT-API-016 failed because the test expected a null TTL when policy alone was disabled. The method correctly returned false for acceptance but preserved the valid 7-day TTL. The test now asserts 604800 seconds in that branch; zero-retention still asserts null. Corrected commit `fb4e0c92a27796d2ec1d5cfbb6b5bc6af4fe1e31`; fresh exact-head CI is pending.
+

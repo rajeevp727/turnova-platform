@@ -170,6 +170,12 @@ if (useCosmos)
         new CosmosRiderActiveBookingReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency")));
     builder.Services.AddSingleton<IRideOfferStore>(sp =>
         new CosmosRideOfferStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideOffers")));
+    builder.Services.AddSingleton<ICosmosMigrationLeaseStore>(sp =>
+        new CosmosMigrationLeaseStore(sp.GetRequiredService<CosmosClient>()
+            .GetDatabase(databaseName).GetContainer(CosmosMigrationRunner.LockContainerName)));
+    builder.Services.AddSingleton<ICosmosMigrationDelay, SystemCosmosMigrationDelay>();
+    builder.Services.AddSingleton(CosmosMigrationLeaseOptions.Default);
+    builder.Services.AddSingleton<CosmosMigrationLeaseCoordinator>();
     builder.Services.AddSingleton<CosmosMigrationRunner>();
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()

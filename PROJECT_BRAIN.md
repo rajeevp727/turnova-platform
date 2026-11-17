@@ -5,13 +5,12 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `0ff05f93ce2ea6befae0fda6f8ab7a74e58b843e`. PRs #172–#176 and API contract/phase-gate PR #178 are merged. PR #177 is closed unmerged and parked because its mobile dependency/bootstrap work belongs after API phase exit; its branch and successful exact-head CI #44080286615 (12/12 jobs, 19/19 artifacts) are preserved for the Android phase only.
-**Current platform phase:** API. Do not begin Android completion until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests and native non-container publish/API CI are complete. Do not begin iOS completion until Rider and Driver Android exit criteria pass.
-**Current API PR:** [#179 — neutral Rider/Driver support intake and Cosmos contracts](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`. Retention hardening code head `7bb5b77f63e3342a67d6f9d1e400cba0f3535333` requires a positive approved `SupportRequests:RetentionDays` whenever persistent support intake is enabled, rechecks policy/retention on every request, sets container `DefaultTimeToLive=-1` and stores per-item `ttl` seconds. The checked-in duration remains null; no Product/Operations retention value is invented. Previous exact-head API-only CI #44115448770 passed 724/724 and native publish on the prior head; fresh exact-head CI is pending.
-**Current API follow-ups before phase exit:** provider-agnostic private-media boundary and server-issued Driver-bound references; Cosmos migration lease renewal/lost-lease cancellation tests; Kestrel host-level 16 KiB payload rejection; complete API row-by-row source/auth/privacy/persistence audit. Android and iOS remain not started.
-**API next:** private-media storage/server-issued Driver-bound document references, migration lease renewal/fencing, Kestrel host-level 16 KiB rejection and complete API row-by-row audit. Android remains gated until API phase exit; iOS remains gated until both Android apps exit.
+**Main HEAD:** `ebbdb8da0e4054d0f1420754dad4b8aafc49ad3a`. PRs #172–#176, #178 and #179 are merged. PR #177 remains closed unmerged and parked for the Android phase only.
+**Current platform phase:** API. Android completion is gated until API source, deterministic tests, OpenAPI/docs, auth/privacy, persistence and native non-container publish exit criteria pass. iOS is gated until both Android apps exit.
+**Current API PR:** [#180 — Cosmos migration lease renewal and fencing](https://github.com/rajeevp727/turnova-platform/pull/180), branch `feat/api-cosmos-migration-lease-renewal`. Final documentation-head CI #44130301238 on source/test head d3a24df5592895d5dbc92438cec68c138c474636 passed scope, Release build, 744/744 backend tests (0 failed, 0 skipped) and native non-container .NET 10 publish; artifact 14348249426. Android/iOS jobs were correctly skipped. The current documentation sync is the only delta from that verified source/test head; its exact-head CI is the remaining merge gate.
+**Previous API evidence:** PR #179 exact-head CI #44126440529 passed backend 735/735 and native non-container .NET 10 publish; Android/iOS jobs were correctly skipped.
+**API next:** private-media boundary/server-issued Driver-bound document references, Kestrel host-level 16 KiB rejection, and complete API acceptance audit. Live Cosmos multi-instance/restart, provider storage/scanning, consent/retention approval, production identity and hosting remain external.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
-
 
 
 ## Product in one line
