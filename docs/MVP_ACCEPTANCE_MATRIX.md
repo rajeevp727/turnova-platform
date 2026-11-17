@@ -1525,3 +1525,8 @@ The contextual audit verifier now requires `package.json.name` to match the one 
 ## PR #185 npm metadata drift correction — 2026-11-18
 
 CI #44169775823 showed Rider's `fixAvailable` changed to `expo@58.0.26` while the inventory remained 34 records (27 high package nodes, 7 moderate, 0 critical) and the same GHSA root. The verifier now accepts only either exact reviewed major-only hint for either known app; unknown package/version, non-major, unknown app, critical/unknown advisory and bundle inclusion remain failures. Tests remain 27. The run failed at Rider's audit guard; no Android native/release/emulator evidence is claimed from that run. Strict acceptance remains 0/19.
+
+
+## PR #185 third npm hint review — 2026-11-18
+
+Rider's audit artifact from CI #44170775823 suggested `expo-asset@58.0.21` (major-only); Driver suggested `expo@58.0.26`; the earlier Rider report suggested `react-native@0.88.1`. Inventory remained 34 records and the same GHSA root. The fail-closed allow-list now contains exactly those three major-only hints for either known app. Verifier tests: 28. Unknown/fourth hints and non-major suggestions fail. No patch or SDK upgrade is claimed; fresh exact-head CI is required.
