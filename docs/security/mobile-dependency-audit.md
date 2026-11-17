@@ -7,18 +7,20 @@
 
 ## Current exact audit evidence
 
-The PR #185 run [#44158843845](https://github.com/rajeevp727/turnova-platform/actions/runs/44158843845) generated fresh lockfiles and completed npm ci for both apps. Both audit artifacts report:
+The latest exact-head PR #185 run [#44171401948](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948), head `6d02436938f50f98f4463a253fa4ed1a93287c6e`, generated checksum-pinned lockfiles, completed `npm ci` for both apps and passed the contextual audit/source-map gate for both Android production bundles.
 
 | App | Total package findings | High package nodes | Moderate | Critical |
 |---|---:|---:|---:|---:|
 | Rider | 34 | 27 | 7 | 0 |
 | Driver | 34 | 27 | 7 | 0 |
 
-The 27 high package nodes are a transitive cascade from one direct high advisory root: [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), affecting picomatch through 4.0.7. The lockfiles resolve picomatch 2.3.2 and 4.0.7 under Expo CLI, Expo Metro config, tinyglobby, anymatch, Jest and micromatch tooling. It is not a direct Rider or Driver dependency.
+All 27 high package records per app resolve to the same single root: [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), affecting picomatch through 4.0.7. Each generated lockfile contains three picomatch nodes; all six dependency parents are within the reviewed Expo CLI/Metro/Jest tooling set. Picomatch is not a direct Rider/Driver dependency. Both Android production source-map checks passed, and verification-only maps were removed before bundle artifact upload.
 
-The GitHub advisory currently lists no patched picomatch version. The Rider npm audit JSON reports fixAvailable as react-native@0.88.1, while the Driver report reports expo@58.0.26; both have isSemVerMajor=true. These are app-specific major SDK migration suggestions, not patched picomatch releases. CI accepts only those two exact app-specific remediation metadata objects; any other package, version or major/minor classification forces a fresh review. The advisory is disputed by the package maintainer; Snyk's [amendment](https://security.snyk.io/vuln/SNYK-JS-PICOMATCH-21248802) records that it was deemed not a vulnerability. TurnOva does not treat that dispute as a patch or erase the finding.
+The current npm metadata has emitted three different major-only migration hints across runs: `react-native@0.88.1`, `expo@58.0.26` and `expo-asset@58.0.21`, each with `isSemVerMajor=true`. These are not patched picomatch versions and no SDK upgrade was performed. The verifier accepts only these three exact reviewed metadata objects for the two known app identities; unknown/fourth hints, non-major suggestions, malformed reports, unknown high roots, critical findings, direct imports, unreviewed parents or bundle inclusion fail closed.
 
-The same audit reports seven moderate package nodes rooted in glob and minimatch advisories. They remain recorded for follow-up; they are not represented as fixed.
+GitHub's advisory currently lists no patched version. The advisory is disputed by the package maintainer; Snyk's [amendment](https://security.snyk.io/vuln/SNYK-JS-PICOMATCH-21248802) records that it was deemed not a vulnerability. TurnOva does not treat that dispute as a patch or erase the finding. The contextual CI gate is a documented build-tooling containment decision, not a clean npm audit and not a vulnerability fix.
+
+The same exact-head run passed Rider/Driver debug and standalone release APK builds, package identity checks, and both emulator install/launch smoke jobs. Backend passed 758/758; mobile auth/native tests passed 227/227 Node and 48/48 Python; the audit verifier passed 28 tests per app. The emulator smoke explicitly records that production API/authentication was not exercised. iOS jobs were correctly skipped.
 
 ## TurnOva exposure assessment and CI controls
 
@@ -71,3 +73,10 @@ The exact Rider npm audit artifact from CI #44169775823 reported the same invent
 ## Third observed major-only remediation hint — 2026-11-18
 
 The Rider audit artifact from CI #44170775823 reports `expo-asset@58.0.21` with `isSemVerMajor=true`; Driver reports `expo@58.0.26`; an earlier Rider report reported `react-native@0.88.1`. All reports retain the same 34-record inventory and sole GHSA root. The allow-list now contains only these three exact major-only hints for either known app identity. A fourth/unreviewed hint, non-major suggestion, unknown app, critical/unknown advisory or bundle inclusion fails. No SDK upgrade is performed and no picomatch patch is claimed. The deterministic audit suite now has 28 cases.
+
+## Exact-head CI verification — 2026-11-18
+
+- Rider release APK [14368397985](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368397985); Driver release APK [14367803994](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14367803994).
+- Rider emulator smoke [14369920066](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14369920066); Driver emulator smoke [14368548000](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368548000).
+- Both smoke results prove install, launch, stable process and login-screen text only. Neither proves production API/authentication, real Cosmos or physical-device acceptance.
+- The GHSA remains a high-severity upstream advisory. It is not patched. The residual risk is limited to trusted build/test tooling under the current threat model; source/bundle exclusion and dependency-parent checks are automated and must remain green. Reassess on every dependency change and when upstream publishes a patch or changes the advisory.

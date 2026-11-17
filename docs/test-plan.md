@@ -3294,3 +3294,12 @@ The latest verifier suite has 28 deterministic cases. The app name must be `turn
 | MOBILE-AUDIT-008 | npm audit reports the newly observed `expo-asset@58.0.21` major-only hint | Accept only this exact object (alongside `react-native@0.88.1` and `expo@58.0.26`) for either known app; unknown/fourth hints fail | CI/unit | P0 |
 
 The Rider report on CI #44170775823 changed to `expo-asset@58.0.21`; Driver reported `expo@58.0.26`. The earlier Rider report had `react-native@0.88.1`. The exact allow-list now contains these three observed values; no SDK upgrade or picomatch patch is implied.
+
+
+## Android dependency infrastructure — exact-head evidence, 2026-11-18
+
+[CI #44171401948](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948) on source/test head `6d02436938f50f98f4463a253fa4ed1a93287c6e` passed all required Android-phase jobs. Rider and Driver both passed checksum-pinned lockfile generation, `npm ci`, Expo config, TypeScript, Android production bundle export, contextual npm audit/source-map checks, debug and standalone release APK compilation, embedded package identity verification, and hosted emulator install/launch smoke. Backend 758/758; mobile auth/native tests 227/227 Node and 48/48 Python; audit verifier 28 tests per app. iOS jobs were skipped.
+
+Both npm audit inventories contained 34 records (27 high package nodes, 7 moderate, 0 critical). All high records resolved to the sole transitive picomatch GHSA-fc5q-39xc-vjpf. The advisory remains unpatched; it is not suppressed or represented as a clean audit. The contextual gate checks the reviewed dependency parents, rejects direct app imports/unknown high roots, and verifies no picomatch source-map inclusion. Residual build-time denial-of-service risk remains documented.
+
+Artifacts: Rider release [14368397985](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368397985), Driver release [14367803994](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14367803994), Rider emulator smoke [14369920066](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14369920066), Driver emulator smoke [14368548000](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368548000).
