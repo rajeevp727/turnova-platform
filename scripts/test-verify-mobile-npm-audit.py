@@ -162,5 +162,15 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         self.assertNotEqual(self.run_gate().returncode, 0)
 
 
+    def test_rejects_unknown_audit_severity(self):
+        self.report["vulnerabilities"]["picomatch"]["severity"] = "urgent"
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_non_object_audit_report_root(self):
+        self.report_path.write_text(json.dumps([]), encoding="utf-8")
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
