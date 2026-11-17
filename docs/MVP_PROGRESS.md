@@ -2,7 +2,7 @@
 **Platform phase:** **API first**. Android Rider/Driver completion is gated until API phase exit; iOS Rider/Driver completion is gated until both Android apps exit.
 **Merged:** PRs #172–#176. PR #176 is CORS/readiness hardening merged at `dbc04619e6e1dce24bf3d965f2488111fdf16090`.
 **Parked mobile work:** PR [#177](https://github.com/rajeevp727/turnova-platform/pull/177) was closed unmerged on 2026-11-17 because its dependency/bootstrap work belongs after API phase exit. Its branch `fix/platform-01-mobile-lockfile-reproducibility` and successful exact-head CI [#44080286615](https://github.com/rajeevp727/turnova-platform/actions/runs/44080286615) are preserved for the Android phase; this historical mobile evidence does not satisfy the new API-first gate.
-**Current API branch:** `feature/api-contract-openapi-auth`; PR creation follows the initial API commit.
+**Current API PR:** [#178 — OpenAPI contract and API-first CI gating](https://github.com/rajeevp727/turnova-platform/pull/178), branch `feature/api-contract-openapi-auth`, exact head `66a78bfe373067c1c62233b6ac058c726b477fd4`. Initial exact-head CI #44092287922 proved the phase gate works (scope passed; all mobile/native/smoke jobs were skipped), but backend restore failed because Microsoft.OpenApi 2.0.0 triggered NU1903 for GHSA-v5pm-xwqc-g5wc. The branch now pins Microsoft.OpenApi 2.7.5 on the compatible 2.x line; fresh exact-head CI is required.
 
 ## Platform phase exit criteria
 

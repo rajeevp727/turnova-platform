@@ -18,6 +18,7 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 | API-OPENAPI-003 | Keep OpenAPI out of Production | Runtime maps the generated contract only in Development/Testing | API configuration | P1 |
 | AUTH-API-015 | Local profile-read authorization | `GET /api/v1/auth/me` rejects missing/invalid JWT before calling TriSend; valid Rider/Driver tokens are forwarded unchanged | API integration/security | P0 |
 | API-CI-001 | Enforce API-first CI phase | Backend tests and native API publish run for API-only changes while mobile jobs are skipped; mobile changes enable Android jobs; iOS jobs require the phase-approval label | CI fixture | P0 |
+| API-OPENAPI-004 | Keep OpenAPI.NET dependency patched | Restore resolves Microsoft.OpenApi 2.7.5 or later on the compatible 2.x line; NU1903 remains an error and no audit suppression is added | Dependency/security CI | P0 |
 
 ## 1. Authentication — registration
 

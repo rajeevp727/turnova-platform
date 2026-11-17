@@ -3,7 +3,7 @@
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Last audited:** 2026-11-17; main HEAD `dbc04619e6e1dce24bf3d965f2488111fdf16090`. PRs #172–#176 are merged. PR #177 is closed unmerged and parked for the Android phase; its branch and CI #44080286615 evidence are preserved.
 **Current platform phase:** API. Android completion must not start until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests, native non-container publish and API CI exit criteria pass. iOS completion must not start until both Android apps pass their exit criteria.
-**Current API branch:** `feature/api-contract-openapi-auth`; PR/CI links will be added after the initial commit is opened.
+**Current API PR:** [#178](https://github.com/rajeevp727/turnova-platform/pull/178), exact head `66a78bfe373067c1c62233b6ac058c726b477fd4`. CI #44092287922 confirmed API-only scope gating (no Android/iOS jobs started) but backend restore failed on vulnerable Microsoft.OpenApi 2.0.0; explicit patched 2.7.5 pin is now committed and needs fresh verification.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Platform phase gate

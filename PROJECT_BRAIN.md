@@ -7,7 +7,7 @@
 **Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `dbc04619e6e1dce24bf3d965f2488111fdf16090`. PRs #172–#176 are merged. PR #177 is closed unmerged and parked because it contains mobile dependency/bootstrap work that belongs after API phase exit; branch `fix/platform-01-mobile-lockfile-reproducibility` and successful exact-head CI #44080286615 (12/12 jobs, 19/19 artifacts) are preserved for the Android phase.
 **Current platform phase:** API. Do not begin Android completion until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests and native non-container publish/API CI are complete. Do not begin iOS completion until Rider and Driver Android exit criteria pass.
-**Current API branch:** `feature/api-contract-openapi-auth`; this increment adds generated OpenAPI security metadata, local `/api/v1/auth/me` authorization and API-first CI scope gating. API phase remains open; support intake and Cosmos adapter-level tests are next audit items.
+**Current API PR:** [#178](https://github.com/rajeevp727/turnova-platform/pull/178), branch `feature/api-contract-openapi-auth`, exact head `66a78bfe373067c1c62233b6ac058c726b477fd4`. This increment adds generated OpenAPI security metadata, local `/api/v1/auth/me` authorization and API-first CI scope gating. The first restore surfaced NU1903 on transitive Microsoft.OpenApi 2.0.0; the branch pins patched 2.7.5 and requires fresh exact-head CI. API phase remains open; support intake and Cosmos adapter-level tests are next audit items.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 
