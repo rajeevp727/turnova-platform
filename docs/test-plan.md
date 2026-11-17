@@ -3320,4 +3320,6 @@ Artifacts: Rider release [14368397985](https://github.com/rajeevp727/turnova-pla
 | RIDER-AUTH-ACCESS-007 | Authentication errors use an assertive alert announcement | Pure helper contract |
 | RIDER-AUTH-ACCESS-008 | Rider App.tsx binds field helpers, focus order, guarded keyboard submit, keyboard-safe taps and stable test IDs | Source-wiring regression |
 
-The source/test commit at handoff is `458b9a73e67fae0f2abb5f11f14dd833afbc72e7`; the final documentation-head CI must execute these cases along with both apps' Expo/TypeScript validation, Android release builds and emulator smoke. Passing deterministic helper/source tests is not physical-device screen-reader/autofill acceptance. Manual TalkBack/VoiceOver, signed-device auth and real API/TriSend validation remain external.
+The source/test commit at handoff is `607a9233845759a12da321a3f8a6e3e1e1c14733`; the final documentation-head CI must execute these cases along with both apps' Expo/TypeScript validation, Android release builds and emulator smoke. Passing deterministic helper/source tests is not physical-device screen-reader/autofill acceptance. Manual TalkBack/VoiceOver, signed-device auth and real API/TriSend validation remain external.
+
+The accessible submit hint and sign-in subtitle intentionally avoid claiming secure transport; production HTTPS is validated only after the hosted API URL/DNS/TLS configuration is supplied.
