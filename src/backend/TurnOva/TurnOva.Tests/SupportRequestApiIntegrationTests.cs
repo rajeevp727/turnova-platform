@@ -1,3 +1,8 @@
+using TurnOva.Domain.Support;
+using TurnOva.Application.Support;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.TestHost;
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using Microsoft.AspNetCore.Http;
@@ -50,6 +55,22 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.False(body.RootElement.TryGetProperty("reporterId", out _));
         Assert.False(body.RootElement.TryGetProperty("subject", out _));
         Assert.False(body.RootElement.TryGetProperty("description", out _));
+    }
+
+    [Fact]
+    public async Task PersistentSupportRequestUsesConfiguredPerItemTtlSeconds()
+    {
+        var store = new CapturingSupportRequestStore();
+        using var factory = new SupportApiFactory(retentionDays: 7, supportStore: store);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
+        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-retention-01");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/support/requests",
+            new { subject = "Trip update issue", description = "The trip status did not refresh after reconnecting." });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(7 * 86_400, store.LastRequest?.Ttl);
     }
 
     [Fact]
@@ -170,9 +191,20 @@ public sealed class SupportRequestApiIntegrationTests
     }
 
     [Fact]
-    public void StagingSupportIntakeCannotEnableWithoutCosmosPersistence()
+    public void StagingSupportIntakeCannotEnableWithoutApprovedRetentionDays()
     {
         using var factory = new SupportApiFactory("Staging", policyApproved: true);
+
+        var exception = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(exception);
+        Assert.Contains("SupportRequests:RetentionDays", exception.ToString());
+    }
+
+    [Fact]
+    public void StagingSupportIntakeCannotEnableWithoutCosmosPersistence()
+    {
+        using var factory = new SupportApiFactory("Staging", policyApproved: true, retentionDays: 7);
 
         var exception = Record.Exception(() => factory.CreateClient());
 
@@ -339,14 +371,24 @@ public sealed class SupportRequestApiIntegrationTests
 
     private sealed class SupportApiFactory(
         string environmentName = "Testing",
-        bool policyApproved = false) : WebApplicationFactory<Program>
+        bool policyApproved = false,
+        int? retentionDays = null,
+        ISupportRequestStore? supportStore = null) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment(environmentName);
+            builder.ConfigureTestServices(services =>
+            {
+                if (supportStore is not null)
+                {
+                    services.RemoveAll<ISupportRequestStore>();
+                    services.AddSingleton(supportStore);
+                }
+            });
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                var values = new Dictionary<string, string?>
                 {
                     ["Auth:Jwt:Issuer"] = Issuer,
                     ["Auth:Jwt:Audience"] = Audience,
@@ -355,8 +397,25 @@ public sealed class SupportRequestApiIntegrationTests
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
                     ["AiAssistant:Enabled"] = "false",
                     ["SupportRequests:PolicyApproved"] = policyApproved ? "true" : "false"
-                });
+                };
+                if (retentionDays.HasValue)
+                    values["SupportRequests:RetentionDays"] = retentionDays.Value.ToString(CultureInfo.InvariantCulture);
+                configuration.AddInMemoryCollection(values);
             });
+        }
+    }
+
+    private sealed class CapturingSupportRequestStore : ISupportRequestStore
+    {
+        public SupportRequest? LastRequest { get; private set; }
+
+        public Task<SupportRequestWriteResult> CreateOrGetAsync(
+            SupportRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastRequest = request;
+            return Task.FromResult(new SupportRequestWriteResult(SupportRequestWriteStatus.Created, request));
         }
     }
 }
