@@ -67,9 +67,13 @@ public sealed class CosmosMigrationContractTests
     }
 
     [Fact]
-    public async Task SupportRequestsMigrationIsReporterPartitioned()
+    public async Task SupportRequestsMigrationIsReporterPartitionedAndEnablesPerItemTtl()
     {
-        await AssertContainers(new SupportRequestsMigration(), [("SupportRequests", "/reporterId")]);
+        var database = new RecordingMigrationDatabase();
+        await new SupportRequestsMigration().UpAsync(database, CancellationToken.None);
+
+        Assert.Equal([("SupportRequests", "/reporterId")], database.Containers);
+        Assert.Equal(-1, database.DefaultTimeToLives["SupportRequests"]);
     }
 
     [Fact]
@@ -97,14 +101,17 @@ public sealed class CosmosMigrationContractTests
     private sealed class RecordingMigrationDatabase : ICosmosMigrationDatabase
     {
         public List<(string Name, string PartitionKeyPath)> Containers { get; } = [];
+        public Dictionary<string, int?> DefaultTimeToLives { get; } = new(StringComparer.Ordinal);
 
         public Task CreateContainerIfNotExistsAsync(
             string containerName,
             string partitionKeyPath,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            int? defaultTimeToLive = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Containers.Add((containerName, partitionKeyPath));
+            DefaultTimeToLives[containerName] = defaultTimeToLive;
             return Task.CompletedTask;
         }
     }
