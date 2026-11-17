@@ -2885,7 +2885,10 @@ Next after PR #185 review/merge: Rider Android AUTH-01/AUTH-02 accessibility, au
 
 PR #185 merged at `d553cc89f547b81d64020ac8b22c2af643b941c4` after exact-head CI #44174144600 passed 758/758 backend, 227/227 Node, 48/48 Python, both apps' 28-case audit verifier, Rider/Driver debug and release APKs, package identity and Android emulator smoke. The unpatched picomatch GHSA remains High upstream; TurnOva exposure is assessed low and build-time-only under the trusted-input threat model, with direct app use and Android source-map inclusion rejected by CI. Do not claim a patch or clean npm audit.
 
-PR #186 is the sole active feature PR. It adds Rider auth accessibility labels/hints, name/email/password autofill, keyboard focus/submit flow, accessible busy/disabled state, mode-toggle labels, assertive error announcements and deterministic tests RIDER-AUTH-ACCESS-001..008. No API or session-token contract changed. Source/test head: `458b9a73e67fae0f2abb5f11f14dd833afbc72e7`; final docs-head CI pending. Finish Rider before Driver; iOS remains gated.
+PR #186 is the sole active feature PR. It adds Rider auth accessibility labels/hints, name/email/password autofill, keyboard focus/submit flow, accessible busy/disabled state, mode-toggle labels, assertive error announcements and deterministic tests RIDER-AUTH-ACCESS-001..008. No API or session-token contract changed. Source/test head: `607a9233845759a12da321a3f8a6e3e1e1c14733`; final docs-head CI pending. Finish Rider before Driver; iOS remains gated.
 
 
 **CI phase-label correction (2026-11-18):** Initial PR #186 run [#44187824869](https://github.com/rajeevp727/turnova-platform/actions/runs/44187824869) failed only in the scope detector because the PR lacked the required phase labels; no build/test job ran. The user-authorized `turnova:api-phase-complete` and `turnova:android-phase-approved` labels are now applied. A new synchronized head is being pushed so GitHub Actions receives the approved labels in the pull_request event payload. Do not interpret the initial scope failure as an app/test failure.
+
+
+Rider auth copy review: the submit hint and sign-in subtitle now describe the action without claiming transport security; HTTPS remains a production-host configuration/validation gate.
