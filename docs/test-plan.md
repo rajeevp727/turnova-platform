@@ -3273,3 +3273,12 @@ The deterministic verifier now has 17 cases, including malformed/inconsistent re
 | PLATFORM-NPM-020 | Audit report root is not a JSON object | Verifier fails closed; no malformed report is treated as clean | Security regression | P0 |
 
 The contextual verifier now has 17 deterministic tests. The real Rider/Driver audit reports from CI #44161191929 showed 34 vulnerability records each (27 high, 7 moderate, 0 critical); metadata severity counts matched all 34 records and each record contained package nodes. The picomatch root record's fixAvailable field recommends react-native@0.88.1 with isSemVerMajor=true; this is a major upgrade path, not a patched picomatch release. The follow-up schema/remediation checks require fresh exact-head CI before PR #185 can merge.
+
+## Android dependency audit gate — remediation metadata
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| MOBILE-AUDIT-001 | Rider npm audit reports the observed picomatch major-only remediation hint | Accept only `react-native@0.88.1` with `isSemVerMajor=true`; do not claim the advisory is patched | CI/unit | P0 |
+| MOBILE-AUDIT-002 | Driver npm audit reports the observed picomatch major-only remediation hint | Accept only `expo@58.0.26` with `isSemVerMajor=true`; do not claim the advisory is patched | CI/unit | P0 |
+| MOBILE-AUDIT-003 | npm changes the suggested remediation package/version or major/minor classification | Fail closed and require dependency/security re-review before updating the exact allow-list | CI/unit | P0 |
+| MOBILE-AUDIT-004 | A high/critical advisory, unknown high root, direct picomatch dependency/import, unreviewed parent or Android bundle source-map inclusion appears | Fail the mobile validation job; no native Android release or emulator smoke may be treated as passed | CI/security | P0 |
