@@ -143,13 +143,18 @@ There is intentionally no support-request list/read endpoint, attachment upload,
 
 Support intake is enabled by default only in Development and Testing. Staging/Production require `SupportRequests:PolicyApproved=true`, a positive Product/Operations-approved `SupportRequests:RetentionDays`, and configured Cosmos persistence. A policy-approved Staging/Production host without valid retention fails startup; Staging without `CosmosDb:Endpoint` and `CosmosDb:Key` also fails closed instead of accepting requests into an in-memory store. Production already requires Cosmos at startup. The checked-in policy default is false and retention days remain null until approved.
 
+The 16 KiB request-body limit is declared through endpoint metadata and documented as HTTP 413 in OpenAPI. PR [#182](https://github.com/rajeevp727/turnova-platform/pull/182) adds a real Kestrel host-level integration test using the same support endpoint mapping; it asserts HTTP 413 for a known Content-Length above 16 KiB and zero support-store writes. Exact-head API CI [#44143458072](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072) passed **754/754 backend tests (0 failed, 0 skipped)** and native non-container .NET 10 publish (artifact [14355367845](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072/artifacts/14355367845)); the Kestrel regression passed. A follow-up documentation-only commit requires its own exact-head CI.
+
+
 
 ## Private media and KYC storage — production gate
 
-- Current selfie bytes are stored inline in the Cosmos Driver profile as `ProfilePhotoBase64`; they are returned to the Driver/authorized Union review paths and included in public discovery only after current-Union approval.
-- Driving-licence and vehicle document references are supplied by the Driver client. The API rejects absolute URLs and traversal-like strings, but no configured provider verifies reference ownership, scans/quarantines content, enforces consent/retention, or serves private content.
-- Before production, implement a provider-agnostic private-media boundary with server-issued Driver-bound references, upload quarantine/malware scanning, consent evidence, retention/deletion, and current-Union-only retrieval. Riders must never receive KYC document references or content. No storage provider, credentials or legal retention policy are configured.
-- Owner/input: Infrastructure/Security must provide the private object-storage/scanning service contract and managed identity; Product/Legal must approve consent and retention; Union operations must approve reviewer access. Until then this is an explicit external gate, not completed acceptance.
+- The API exposes a provider-agnostic `IPrivateDriverMediaStore` boundary and issues opaque, random references bound to the authenticated Driver and media type. References are not URLs and are not authorization tokens.
+- New Driver selfie/profile writes persist `ProfilePhotoStorageReference` and leave `ProfilePhotoBase64` null. Historical inline Base64 records remain readable for compatibility; no destructive bulk migration is performed.
+- Drivers can upload, retrieve and poll scan status for their own media. A UnionManager can retrieve a document only while the Driver has a current active assignment to a Cab-serving Union managed by that account. Riders never receive KYC document references or content.
+- Upload validates the declared media type, MIME type, JPEG/PNG/PDF signature and decoded size. PendingScan content cannot be used for onboarding approval, Union review or public discovery. Private responses are no-store and nosniff.
+- Automated Testing uses a deterministic in-memory adapter with an explicit fake Clean result; Development returns PendingScan. Staging/Production use an unavailable adapter and fail closed with HTTP 503. The fake Clean result is not malware-scanning evidence.
+- Production remains blocked until Infrastructure/Security supplies private object storage, malware scanning/quarantine, managed identity and provider-backed private retrieval, and Product/Legal approves consent, retention and deletion. Live provider/Cosmos validation is not claimed.
 
 ## Cosmos startup migration lease
 

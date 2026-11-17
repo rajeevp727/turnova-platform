@@ -3211,3 +3211,11 @@ The current checked-in state is API `in_progress`, Android/iOS `not_started`. Ex
 **External gate:** Real private object storage, malware scanning/quarantine, managed identity, consent, retention/deletion and live authorization integration remain unconfigured. Testing uses a deterministic Clean fake only; Development returns PendingScan; Staging/Production fail closed. No live provider or production media validation is claimed.
 
 | DRIVER-MEDIA-009 | UnionManager requests a historical non-Cab Driver document | API returns 404 and does not expand Scooty/Bike/Auto access | `PrivateDriverMediaApiIntegrationTests.UnionManagerCannotRetrieveDocumentsForHistoricalNonCabDriver` | P0 |
+
+### SUPPORT-API-017 — real Kestrel support request body limit
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| SUPPORT-API-017 | Authenticated support request Content-Length exceeds 16 KiB | A real Kestrel host returns HTTP 413 before endpoint body binding/persistence; the injected support store records zero writes | Real Kestrel host integration: `SupportRequestKestrelIntegrationTests.KestrelRejectsOversizedSupportRequestBeforeStoreAccess` | P0 |
+
+The test starts Kestrel on an ephemeral loopback port and maps the same `SupportRequestEndpoints.MapSupportRequestEndpoints` extension used by the API. It complements the endpoint metadata and OpenAPI 413 assertions. Exact-head CI [#44143458072](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072) passed **754/754 backend tests (0 failed, 0 skipped)** and native non-container API publish (artifact [14355367845](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072/artifacts/14355367845)); this test is included in that suite. A subsequent documentation-only commit requires its own exact-head CI.
