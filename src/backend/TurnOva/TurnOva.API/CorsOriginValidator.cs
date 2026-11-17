@@ -11,6 +11,8 @@ public static class CorsOriginValidator
     public static void ValidateOrigin(string? origin, bool allowHttp)
     {
         if (string.IsNullOrWhiteSpace(origin) ||
+            origin.Any(character => char.IsWhiteSpace(character) || char.IsControl(character) ||
+                character is '\\\\' or '@' or '?' or '#') ||
             origin.Contains('*') ||
             !Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin) ||
             (parsedOrigin.Scheme != Uri.UriSchemeHttps &&
