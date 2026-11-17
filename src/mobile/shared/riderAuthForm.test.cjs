@@ -56,6 +56,7 @@ test("Rider submit action announces busy and disabled states", () => {
   const idle = getRiderAuthSubmitProps("login", false, false);
   assert.equal(idle.accessibilityRole, "button");
   assert.equal(idle.accessibilityLabel, "Sign in to TurnOva");
+  assert.equal(idle.accessibilityHint, "Submits your email address and password to sign in.");
   assert.deepEqual(idle.accessibilityState, { disabled: false, busy: false });
 
   const busy = getRiderAuthSubmitProps("register", true, true);
