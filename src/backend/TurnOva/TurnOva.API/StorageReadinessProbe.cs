@@ -34,17 +34,32 @@ public sealed class StorageReadinessProbe
         Task? probeTask = null;
         try
         {
+            requestCancellationToken.ThrowIfCancellationRequested();
             probeTask = _probe(timeoutSource.Token);
             // Enforce the deadline even if a provider implementation ignores its token.
             await probeTask.WaitAsync(timeoutSource.Token);
         }
         catch (CosmosException ex)
         {
+            if (requestCancellationToken.IsCancellationRequested)
+            {
+                ObserveLateProbeFailure(probeTask);
+                outcome = "cancelled";
+                requestCancellationToken.ThrowIfCancellationRequested();
+            }
+
             outcome = "unavailable";
             throw new StorageReadinessException("unavailable", ex);
         }
         catch (HttpRequestException ex)
         {
+            if (requestCancellationToken.IsCancellationRequested)
+            {
+                ObserveLateProbeFailure(probeTask);
+                outcome = "cancelled";
+                requestCancellationToken.ThrowIfCancellationRequested();
+            }
+
             outcome = "unavailable";
             throw new StorageReadinessException("unavailable", ex);
         }
@@ -69,6 +84,13 @@ public sealed class StorageReadinessProbe
         }
         catch (Exception ex)
         {
+            if (requestCancellationToken.IsCancellationRequested)
+            {
+                ObserveLateProbeFailure(probeTask);
+                outcome = "cancelled";
+                requestCancellationToken.ThrowIfCancellationRequested();
+            }
+
             outcome = "unavailable";
             throw new StorageReadinessException("unavailable", ex);
         }

@@ -1,3 +1,4 @@
+using Microsoft.Azure.Cosmos;
 using TurnOva.API;
 using TurnOva.API.Observability;
 using System.Collections.Concurrent;
@@ -369,5 +370,84 @@ public sealed class StorageReadinessProbeTests
         Assert.IsType<HttpRequestException>(exception.InnerException);
         Assert.True(Volatile.Read(ref stoppedActivities) >= 1);
         Assert.True(Volatile.Read(ref measurementCallbacks) >= 1);
+    }
+
+    [Fact]
+    public async Task CheckAsyncDoesNotInvokeProviderWhenCallerIsAlreadyCancelled()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var invocations = 0;
+        var probe = new StorageReadinessProbe(
+            _ =>
+            {
+                Interlocked.Increment(ref invocations);
+                return Task.CompletedTask;
+            },
+            TimeSpan.FromSeconds(1));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => probe.CheckAsync(cancellation.Token));
+
+        Assert.Equal(0, Volatile.Read(ref invocations));
+    }
+
+    [Fact]
+    public async Task CheckAsyncPropagatesCallerCancellationWhenProviderThrowsHttpFailureAfterCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var probe = new StorageReadinessProbe(
+            _ =>
+            {
+                cancellation.Cancel();
+                throw new HttpRequestException("private-provider-endpoint");
+            },
+            TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => probe.CheckAsync(cancellation.Token));
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+    }
+
+    [Fact]
+    public async Task CheckAsyncPropagatesCallerCancellationWhenCosmosThrowsAfterCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var probe = new StorageReadinessProbe(
+            _ =>
+            {
+                cancellation.Cancel();
+                throw new CosmosException(
+                    "private-cosmos-endpoint",
+                    System.Net.HttpStatusCode.ServiceUnavailable,
+                    0,
+                    "activity-id",
+                    0);
+            },
+            TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => probe.CheckAsync(cancellation.Token));
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+    }
+
+    [Fact]
+    public async Task CheckAsyncPropagatesCallerCancellationWhenOtherProviderFailureRacesWithCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var probe = new StorageReadinessProbe(
+            _ =>
+            {
+                cancellation.Cancel();
+                throw new InvalidOperationException("private-provider-detail");
+            },
+            TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => probe.CheckAsync(cancellation.Token));
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
     }
 }

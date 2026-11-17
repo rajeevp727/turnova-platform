@@ -6,11 +6,13 @@ namespace TurnOva.API;
 public static class CorsOriginValidator
 {
     private const string InvalidOriginMessage =
-        "Cors:AllowedOrigins must contain explicit HTTPS origins (HTTP is allowed only in Development); wildcards and URL paths are not allowed.";
+        "Cors:AllowedOrigins must contain explicit HTTPS origins (HTTP is allowed only in Development); wildcards, paths, user-info/query/fragment delimiters, whitespace and backslashes are not allowed.";
 
     public static void ValidateOrigin(string? origin, bool allowHttp)
     {
         if (string.IsNullOrWhiteSpace(origin) ||
+            origin.Any(character => char.IsWhiteSpace(character) || char.IsControl(character) ||
+                character is '\\' or '@' or '?' or '#') ||
             origin.Contains('*') ||
             !Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin) ||
             (parsedOrigin.Scheme != Uri.UriSchemeHttps &&
