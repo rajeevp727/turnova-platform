@@ -256,7 +256,7 @@ public sealed class AuthApiIntegrationTests
     [Fact]
     public async Task DriverMeEndpointReturnsDriverProfileAndForwardsExactBearerToken()
     {
-        const string accessToken = "driver-profile-access-token";
+        var accessToken = CreateToken("Driver");
         using var handler = new RecordingHandler((request, _) =>
         {
             Assert.Equal("/auth/me", request.Path);
