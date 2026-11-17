@@ -2820,3 +2820,10 @@ PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e` after exact-head CI
 ## Android dependency reproducibility — 2026-11-18
 
 PR #185 is the sole active Android-phase increment. The previous PR #177 remains closed/unmerged and is used only as historical implementation/artifact evidence. The current branch reapplies its checksum-pinned generated-lockfile approach on main after API exit, uses npm ci in shared mobile validation and native Android, and adds realpath-safe symlink checks. The package-lock JSON remains a same-run CI artifact rather than a committed source file; the SHA-256 pin is committed and fails closed on registry drift. iOS dependency/build commands are deliberately unchanged until Android Rider and Driver both exit.
+
+
+## Latest Android dependency handoff — 2026-11-18
+
+PR #185 CI [#44157712885](https://github.com/rajeevp727/turnova-platform/actions/runs/44157712885) failed closed because the Driver lockfile generated from the current registry differed from the old SHA pin; Rider was cancelled by fail-fast. The backend build, 758 tests and native API publish passed. Downloaded generated lockfiles were compared with PR #177 artifacts: package counts unchanged (Rider 788, Driver 790), no additions/removals, and only two transitive patch updates in both apps (`electron-to-chromium` 1.5.487→1.5.488; `node-releases` 2.0.64→2.0.65). Direct Expo 54 / React Native 0.81.4 versions remain unchanged.
+
+The branch pins were refreshed to Rider `1d577165033eb4b2a0e12dfa9b35889f474e638225a1c787678eefc4bfabb083` and Driver `d6437f510bbfd01dbb3467688241d03bcb2e4035570c3fe62e31827356134f14`. Current PR #185 head at handoff: `993e19d72331f894a2821aad97ed7d05d840cbe1`. Require fresh exact-head npm audit, Expo validation, Rider/Driver Android debug/release builds and emulator install/launch smoke before merge. Historical audit reports are not current evidence. iOS remains not_started.
