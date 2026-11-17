@@ -22,12 +22,18 @@ public static class SupportRequestEndpoints
             configuration.GetValue<bool>("SupportRequests:PolicyApproved");
     }
 
-    public static bool CanAcceptRequest(
+    public static bool TryGetRequestTtl(
         IHostEnvironment environment,
         IConfiguration configuration,
-        bool requireRetention) =>
-        IsEnabledForEnvironment(environment, configuration) &&
-        (!requireRetention || GetRetentionTtlSeconds(configuration).HasValue);
+        bool requireRetention,
+        out int? ttlSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(configuration);
+        ttlSeconds = GetRetentionTtlSeconds(configuration);
+        return IsEnabledForEnvironment(environment, configuration) &&
+            (!requireRetention || ttlSeconds.HasValue);
+    }
 
     public static int? GetRetentionTtlSeconds(IConfiguration configuration)
     {
@@ -69,7 +75,7 @@ public static class SupportRequestEndpoints
             IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
-            if (!CanAcceptRequest(environment, configuration, requireRetention))
+            if (!TryGetRequestTtl(environment, configuration, requireRetention, out var retentionTtlSeconds))
                 return Results.Problem(
                     title: "Support intake is unavailable until policy approval and durable retention are configured.",
                     statusCode: StatusCodes.Status503ServiceUnavailable);
@@ -101,7 +107,7 @@ public static class SupportRequestEndpoints
                 subject,
                 description,
                 DateTimeOffset.UtcNow,
-                GetRetentionTtlSeconds(configuration));
+                retentionTtlSeconds);
 
             var result = await store.CreateOrGetAsync(supportRequest, cancellationToken);
             var response = new SupportRequestSubmissionResponse(
