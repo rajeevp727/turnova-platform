@@ -51,7 +51,6 @@ public sealed class CorsOriginValidatorTests
         Assert.Throws<InvalidOperationException>(
             () => CorsOriginValidator.ValidateOrigin(origin, allowHttp: false));
     }
-}
 
     [Theory]
     [InlineData("https://@app.turnova.test")]
@@ -68,4 +67,4 @@ public sealed class CorsOriginValidatorTests
         Assert.Throws<InvalidOperationException>(
             () => CorsOriginValidator.ValidateOrigin(origin, allowHttp: false));
     }
-
+}
