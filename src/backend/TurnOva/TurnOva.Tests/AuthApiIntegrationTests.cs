@@ -186,6 +186,8 @@ public sealed class AuthApiIntegrationTests
         Assert.True(paths.TryGetProperty("/api/v1/rider/bookings", out _));
         Assert.True(paths.TryGetProperty("/api/v1/union/reconciliation", out _));
         Assert.True(paths.TryGetProperty("/api/v1/ops/drivers/{driverId}", out var opsPath));
+        Assert.False(paths.TryGetProperty("/__test/throw", out _),
+            "Testing-only exception routes must not appear in the published API contract.");
 
         var schemes = root.GetProperty("components").GetProperty("securitySchemes");
         Assert.Equal("http", schemes.GetProperty("Bearer").GetProperty("type").GetString());

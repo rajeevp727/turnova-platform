@@ -267,7 +267,7 @@ if (app.Environment.IsEnvironment("Testing"))
     app.MapGet("/__test/throw", () =>
     {
         throw new InvalidOperationException("sensitive-test-exception");
-    });
+    }).ExcludeFromDescription();
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();

@@ -10,7 +10,7 @@ In Development and automated Testing, the API serves the generated OpenAPI docum
 
 `GET /openapi/v1.json`
 
-The document is generated from ASP.NET Core endpoint metadata. Contract integration tests assert core routes and their security schemes. The document endpoint is deliberately not mapped in Production; publish this checked-in contract guidance with the application rather than exposing internal route metadata on a public production host.
+The document is generated from ASP.NET Core endpoint metadata. Contract integration tests assert core routes and their security schemes. The document endpoint is deliberately not mapped in Production; publish this checked-in contract guidance with the application rather than exposing internal route metadata on a public production host. The Testing-only `/__test/throw` exception route is explicitly excluded from API descriptions and never appears in the generated contract.
 
 ## Authentication and authorization
 
