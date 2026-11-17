@@ -1,8 +1,21 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
-**Last audited:** 2026-11-17; main HEAD `5e889daefbb31fdad963a7f2e24ea391e44ae5b6`. PRs #172–#175 are merged. Sole active PR [#176](https://github.com/rajeevp727/turnova-platform/pull/176) is Draft on `fix/platform-01-cors-readiness-cancellation`, exact head `8f603e13b4074dd8437b867890cc1817bed36ca3`. Exact-head [CI #44052735488](https://github.com/rajeevp727/turnova-platform/actions/runs/44052735488) passed 12/12 and 19/19 unexpired artifacts: backend 684/684, shared 227/227, Python 48/48, Expo, native API publish, four native builds and four smoke tests.
-**Latest sequential audit:** PLATFORM-01 CORS/readiness hardening and six deterministic regressions passed; exact-head CI #44052735488 passed all 12 jobs and 19 artifacts on `8f603e13b4074dd8437b867890cc1817bed36ca3`. Rider and Driver npm audits each report 11 moderate, zero high/critical; patched glob/minimatch majors remain outside Expo 54 ranges. Next same-row work is committed reproducible lockfiles and npm ci, then RELEASE-01 symlink/hardlink-safe preflight and icon generation. Strict acceptance is 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established.
+**Last audited:** 2026-11-17; main HEAD `dbc04619e6e1dce24bf3d965f2488111fdf16090`. PRs #172–#176 are merged. PR #177 is closed unmerged and parked for the Android phase; its branch and CI #44080286615 evidence are preserved.
+**Current platform phase:** API. Android completion must not start until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests, native non-container publish and API CI exit criteria pass. iOS completion must not start until both Android apps pass their exit criteria.
+**Current API branch:** `feature/api-contract-openapi-auth`; PR/CI links will be added after the initial commit is opened.
+**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
+
+## Platform phase gate
+
+| Phase | Exit evidence | State |
+|---|---|---|
+| API | In-scope API implementation, auth/authorization/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and final-head API CI | **Current phase — not exited** |
+| Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | Not started under the new phase order; previous CI artifacts are historical evidence only |
+| iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after Android exit | Not started under the new phase order |
+
+External API gates (live Cosmos ETag/multi-instance/restart, production identity/secrets, hosted endpoint and provider validation) remain explicit and do not stop independent API engineering. External Android/iOS gates include physical devices, signing, TestFlight/store and approved production configuration.
+
 
 ## Status definitions
 

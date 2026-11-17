@@ -15,7 +15,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    outputs:
+      mobile: ${{ steps.detect.outputs.mobile }}
+      ios_phase: ${{ steps.detect.outputs.ios_phase }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Test platform phase scope detector
+        run: bash scripts/test-detect-mobile-ci-scope.sh
+      - name: Detect changed platform scope
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+            head_sha="${{ github.sha }}"
+          fi
+
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            mobile=true
+          else
+            git diff --name-only "$base_sha" "$head_sha" > "$RUNNER_TEMP/changed-files.txt"
+            mobile="$(bash scripts/detect-mobile-ci-scope.sh "$RUNNER_TEMP/changed-files.txt")"
+          fi
+
+          ios_phase=false
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:ios-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
+            ios_phase=true
+          fi
+
+          echo "mobile=$mobile" >> "$GITHUB_OUTPUT"
+          echo "ios_phase=$ios_phase" >> "$GITHUB_OUTPUT"
+          printf 'Mobile CI enabled: %s\niOS phase approved: %s\n' "$mobile" "$ios_phase"
+
   backend:
+    needs: [scope]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -75,6 +116,8 @@ jobs:
           if-no-files-found: error
 
   mobile:
+    needs: [scope]
+    if: ${{ needs.scope.outputs.mobile == 'true' }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -181,6 +224,8 @@ jobs:
 
   # Release APKs are built and bundle-verified in the same native Android matrix.
   native-android:
+    needs: [scope, mobile]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.mobile.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -316,6 +361,8 @@ jobs:
           retention-days: 30
 
   native-ios:
+    needs: [scope, mobile]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.mobile.result == 'success' }}
     runs-on: macos-15-intel
     timeout-minutes: 90
     strategy:
@@ -408,7 +455,8 @@ jobs:
           if-no-files-found: error
 
   android-emulator-smoke:
-    needs: [native-android]
+    needs: [scope, native-android]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.native-android.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -465,7 +513,8 @@ jobs:
           retention-days: 14
 
   ios-simulator-smoke:
-    needs: [native-ios]
+    needs: [scope, native-ios]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.native-ios.result == 'success' }}
     runs-on: macos-15-intel
     timeout-minutes: 45
     strategy:
@@ -500,6 +549,8 @@ jobs:
           retention-days: 14
 
   mobile-auth-tests:
+    needs: [scope]
+    if: ${{ needs.scope.outputs.mobile == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

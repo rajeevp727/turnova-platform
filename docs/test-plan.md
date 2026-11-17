@@ -5,6 +5,20 @@
 **Priority:** P0 = release blocker, P1 = high, P2 = normal.
 **Status convention:** Planned means the case is specified but has not yet been executed. A green build/type-check is not evidence that a functional scenario passed. PRD.md §15 is authoritative where earlier test sections describe multi-category or customer-facing FIFO behaviour.
 
+## Platform phase order
+
+TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
+
+## API contract and authentication hardening
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| API-OPENAPI-001 | Generate API v1 contract in Testing | `GET /openapi/v1.json` returns the v1 document and includes auth, Rider discovery/booking, Union reconciliation and Driver payment-report routes | API integration | P0 |
+| API-OPENAPI-002 | Document authorization accurately | Authenticated routes use JWT Bearer; `/api/v1/ops/*` uses `X-Driver-Admin-Key`; public login/register/refresh routes have no bearer requirement | API integration/security | P0 |
+| API-OPENAPI-003 | Keep OpenAPI out of Production | Runtime maps the generated contract only in Development/Testing | API configuration | P1 |
+| AUTH-API-015 | Local profile-read authorization | `GET /api/v1/auth/me` rejects missing/invalid JWT before calling TriSend; valid Rider/Driver tokens are forwarded unchanged | API integration/security | P0 |
+| API-CI-001 | Enforce API-first CI phase | Backend tests and native API publish run for API-only changes while mobile jobs are skipped; mobile changes enable Android jobs; iOS jobs require the phase-approval label | CI fixture | P0 |
+
 ## 1. Authentication — registration
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |

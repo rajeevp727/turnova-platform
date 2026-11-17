@@ -18,10 +18,16 @@ TurnOva is a mobile-only Android/iOS ride-hailing platform. The MVP includes Tur
 | Database | Azure Cosmos DB |
 | Realtime | SignalR |
 | Authentication | JWT access tokens + refresh-token rotation |
-| API contract | OpenAPI / Swagger |
+| API contract | ASP.NET Core OpenAPI generated at `/openapi/v1.json` in Development/Testing; contract tests verify route/security metadata |
 | Source control | GitHub |
 
 Use the latest supported .NET 10 servicing patch. Keep secrets out of source control.
+
+## API contract and platform phase gate
+
+The .NET API generates its OpenAPI v1 document from endpoint metadata at `/openapi/v1.json` in Development and automated Testing only. JWT-protected endpoints and operations-key routes are represented with distinct security schemes. The production host does not map the OpenAPI endpoint.
+
+Platform completion is sequential: API implementation, API tests/docs and native non-container publish first; both Android apps second; both iOS apps third. CI skips mobile matrices for API-only changes. iOS native/simulator checks require the explicit `turnova:ios-phase-approved` pull-request label, which is applied only after the Android phase exit criteria pass.
 
 ## 3. High-level topology
 

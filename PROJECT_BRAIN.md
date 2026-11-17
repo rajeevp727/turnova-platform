@@ -5,7 +5,11 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `5e889daefbb31fdad963a7f2e24ea391e44ae5b6`. PRs #172–#175 are merged. Sole active PR [#176](https://github.com/rajeevp727/turnova-platform/pull/176) is Draft on `fix/platform-01-cors-readiness-cancellation`, exact head `8f603e13b4074dd8437b867890cc1817bed36ca3`. Exact-head [CI #44052735488](https://github.com/rajeevp727/turnova-platform/actions/runs/44052735488) passed 12/12 on that SHA: backend 684/684, shared 227/227, Python 48/48, both Expo apps, native API publish, four native builds, four same-run smoke tests and 19/19 unexpired artifacts. Four COMMENT-only reviews, zero unresolved threads, zero approvals. Next same-row work is committed reproducible lockfiles plus npm ci, then RELEASE-01 path hardening. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established.
+**Main HEAD:** `dbc04619e6e1dce24bf3d965f2488111fdf16090`. PRs #172–#176 are merged. PR #177 is closed unmerged and parked because it contains mobile dependency/bootstrap work that belongs after API phase exit; branch `fix/platform-01-mobile-lockfile-reproducibility` and successful exact-head CI #44080286615 (12/12 jobs, 19/19 artifacts) are preserved for the Android phase.
+**Current platform phase:** API. Do not begin Android completion until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests and native non-container publish/API CI are complete. Do not begin iOS completion until Rider and Driver Android exit criteria pass.
+**Current API branch:** `feature/api-contract-openapi-auth`; this increment adds generated OpenAPI security metadata, local `/api/v1/auth/me` authorization and API-first CI scope gating. API phase remains open; support intake and Cosmos adapter-level tests are next audit items.
+**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
+
 
 
 ## Product in one line
