@@ -1614,6 +1614,8 @@ onboarding.MapGet("/media/{reference}", async (
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
     var asset = await privateDriverMediaStore.ReadAsync(driverId, reference, ct);
     if (asset is null) return Results.NotFound();
     context.Response.Headers.CacheControl = "private, no-store";
@@ -2311,10 +2313,12 @@ unionManagerApi.MapGet("/drivers/{driverId}/documents/{documentType}", async (
     var assignment = await FindUnionAssignmentAsync(driverId, ct);
     if (assignment is null || assignment.Status != "Active" || !IsUnionManagerFor(user, assignment.UnionId))
         return Results.NotFound();
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
     var union = await FindUnionAsync(assignment.UnionId, ct);
     if (union is null || union.Status != "Active") return Results.NotFound();
     var profile = await FindDriverProfileAsync(driverId, ct);
-    var document = profile?.Documents?.SingleOrDefault(item =>
+    var document = profile?.Documents?.FirstOrDefault(item =>
         string.Equals(item.DocumentType, documentType, StringComparison.Ordinal));
     if (document is null) return Results.NotFound();
 
