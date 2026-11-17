@@ -499,7 +499,8 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var updated = profiles["driver-selfie-preserve-latest"];
         Assert.Null(updated.ProfilePhotoBase64);
-        Assert.StartsWith("drvmedia_", updated.ProfilePhotoStorageReference);
+        Assert.NotNull(updated.ProfilePhotoStorageReference);
+        Assert.True(updated.ProfilePhotoStorageReference.StartsWith("drvmedia_", StringComparison.Ordinal));
         var responseProfile = await response.Content.ReadFromJsonAsync<DriverOnboardingProfile>();
         Assert.Equal("/9j/4AAQSkZJRg==", responseProfile?.ProfilePhotoBase64);
         Assert.Equal("Pending", updated.ProfilePhotoApprovalStatus);
