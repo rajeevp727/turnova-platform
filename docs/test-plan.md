@@ -3076,17 +3076,21 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
 
 
-## PLATFORM-NPM-001–004 — deterministic Rider/Driver dependency bootstrap (2026-11-17)
+## PLATFORM-NPM-001–005 — deterministic Rider/Driver dependency bootstrap (2026-11-17)
 
-- **PLATFORM-NPM-001:** The Rider generated lockfile must match the committed SHA-256 pin `3a070767e6ba0161ecc0049a63e7cf4170b65f112ab1883e6663e1faadf11acd`; after a match, the helper may invoke `npm ci`.
+- **PLATFORM-NPM-001:** The Rider generated lockfile must match the committed SHA-256 pin `560d1297c3cf440d69c1dfe35d7279f39f02d4de2c6d2cfabfe61ad2666bfee0`; after a match, the helper may invoke `npm ci`.
 - **PLATFORM-NPM-002:** A mismatched or malformed lockfile digest must fail closed before `npm ci` and before package lifecycle scripts execute.
 - **PLATFORM-NPM-003:** `--verify-only` validates an existing lockfile and checksum without invoking npm.
-- **PLATFORM-NPM-004:** The Driver generated lockfile must match its separate committed SHA-256 pin `5e2c19ef6ffe060a9ad2bd5731cf3d848a077b09c8fa1f204fecf14713319`.
+- **PLATFORM-NPM-004:** The Driver generated lockfile must match its separate committed SHA-256 pin `1a5684ce27cdbdc3e55b4d3c4ccafa8c2dccc3af1aff0d112c1e4cfe26b14d56`.
 - Shared implementation: `scripts/prepare-mobile-dependencies.sh`; deterministic fixture: `scripts/test-prepare-mobile-dependencies.sh`. Local fixture tests passed for matching, mismatch fail-closed and verify-only; both extracted CI lockfiles passed verify-only.
-- CI #177 will regenerate each lockfile using `npm install --package-lock-only --ignore-scripts`, validate the exact hash, then run `npm ci` in Rider/Driver validation, Android and iOS jobs. This is a hash-pinned generated-lockfile strategy; the JSON lockfiles remain CI artifacts rather than committed source files. No actual CI #177 result is claimed until its exact head completes.
+- CI #177 regenerates each lockfile once in the Ubuntu mobile-validation job using `npm install --package-lock-only --ignore-scripts`, validates the exact hash, runs `npm ci` and uploads the lockfile artifact. Native Android/iOS jobs wait for mobile validation, download that exact artifact, verify-only and run `npm ci` without re-resolving. This is a hash-pinned generated-lockfile strategy; the JSON lockfiles remain CI artifacts rather than committed source files. No actual CI #177 result is claimed until its exact head completes.
 - Current audits: 11 moderate, 0 high, 0 critical per app. Advisory-fixed major versions remain outside Expo 54 dependency ranges; no incompatible override or blind SDK upgrade.
 
 
 ### PLATFORM-NPM portability regression
 
 The lockfile bootstrap and fixture use Node's built-in `crypto` SHA-256 implementation, not `sha256sum`, so the same checks execute on Ubuntu and macOS. CI invokes the fixture in Expo validation, Android native and iOS native jobs; the real lockfile generation/hash/clean-install path is exercised in each job. This exact-head CI evidence is pending.
+
+
+- **PLATFORM-NPM-005:** Android and iOS native jobs depend on successful mobile validation, download the exact per-app lockfile artifact from the same workflow run, verify its checksum in `--verify-only` mode, then run `npm ci`. They must not independently regenerate the lockfile.
+- First exact-head CI #44073048598 demonstrated fail-closed behaviour when registry metadata changed 39 transitive patch/minor versions. New pins correspond to the generated artifact hashes; the failed run did not install or audit those new lockfiles. The next exact-head run must validate clean installs, audits, native builds and four smoke tests.
