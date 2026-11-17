@@ -44,9 +44,33 @@ NODE
     fi
   }
 
+  assert_single_linked_lockfile() {
+    local candidate="$app_dir/package-lock.json"
+    if [[ -e "$candidate" ]]; then
+      node - "$candidate" <<'NODE'
+const fs = require("node:fs");
+const candidate = process.argv[2];
+let stats;
+try {
+  stats = fs.statSync(candidate);
+} catch {
+  console.error("Unable to inspect the package-lock.json write target.");
+  process.exit(2);
+}
+if (!stats.isFile() || stats.nlink !== 1) {
+  console.error("Refusing package-lock.json unless it is a regular file with exactly one hard link.");
+  process.exit(2);
+}
+NODE
+    fi
+  }
+
   for file in package.json package-lock.sha256 package-lock.json; do
     assert_safe_link_target "$file"
   done
+  # npm's lockfile-only install writes package-lock.json. A hard link can
+  # alias a path outside the app even when no symlink is present.
+  assert_single_linked_lockfile
 
   # npm ci removes node_modules before installing. Never allow it to operate
   # through a symlink, even when the target is internal to the app.
@@ -78,6 +102,7 @@ NODE
   fi
 
   assert_safe_link_target package-lock.json
+  assert_single_linked_lockfile
   if [[ ! -f package-lock.json ]]; then
     echo "A generated package-lock.json is required." >&2
     exit 2
