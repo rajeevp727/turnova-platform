@@ -51,7 +51,7 @@ public sealed class SupportRequestAvailabilityTests
         configuration["SupportRequests:RetentionDays"] = "7";
         configuration["SupportRequests:PolicyApproved"] = "false";
         Assert.False(SupportRequestEndpoints.TryGetRequestTtl(environment.Object, configuration, requireRetention: true, out ttlSeconds));
-        Assert.Null(ttlSeconds);
+        Assert.Equal(7 * 86_400, ttlSeconds);
     }
 
     [Theory]
