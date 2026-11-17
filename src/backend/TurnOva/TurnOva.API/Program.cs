@@ -708,10 +708,16 @@ async Task EnsureOperationsSelfieRejectionAuditAsync(
         ?? throw new InvalidOperationException("A rejected Operations selfie review must retain its original Union name.");
     var reason = reviewedProfile.ProfilePhotoReviewReason
         ?? throw new InvalidOperationException("A rejected Operations selfie review must retain its reason.");
+    var selfieAuditIdentity = reviewedProfile.ProfilePhotoBase64;
+    if (string.IsNullOrWhiteSpace(selfieAuditIdentity))
+    {
+        var mediaReference = reviewedProfile.ProfilePhotoStorageReference
+            ?? throw new InvalidOperationException("A rejected selfie review must retain its private media reference.");
+        selfieAuditIdentity = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(mediaReference));
+    }
     var eventId = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
         reviewedProfile.DriverId, unionId, reviewedProfile.ProfilePhotoCapturedAtUtc, reviewedAtUtc,
-        reviewedProfile.ProfilePhotoStorageReference ?? reviewedProfile.ProfilePhotoBase64
-            ?? throw new InvalidOperationException("A rejected selfie review must retain its private media reference."), reason);
+        selfieAuditIdentity, reason);
     await SaveUnionAuditAsync(new DriverUnionAuditEvent(
         eventId, reviewedProfile.DriverId, unionId, unionName, unionId, unionName,
         "SelfieRejectedByOperations", reason, actor, reviewedAtUtc), ct);
