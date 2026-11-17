@@ -29,6 +29,6 @@ public sealed class InMemorySupportRequestStore : ISupportRequestStore
 
         return Task.FromResult(new SupportRequestWriteResult(
             sameSubmission ? SupportRequestWriteStatus.Replayed : SupportRequestWriteStatus.Conflict,
-            sameSubmission ? existing : request));
+            existing));
     }
 }

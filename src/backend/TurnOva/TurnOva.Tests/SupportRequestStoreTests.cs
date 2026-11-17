@@ -32,6 +32,7 @@ public sealed class SupportRequestStoreTests
         var conflict = await store.CreateOrGetAsync(request with { Description = "Different content for the same idempotency key." });
 
         Assert.Equal(SupportRequestWriteStatus.Conflict, conflict.Status);
+        Assert.Equal(request.Description, conflict.Request.Description);
     }
 
     [Fact]

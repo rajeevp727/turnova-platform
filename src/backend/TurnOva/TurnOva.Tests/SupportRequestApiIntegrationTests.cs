@@ -86,6 +86,11 @@ public sealed class SupportRequestApiIntegrationTests
 
         Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        using var conflictBody = JsonDocument.Parse(await conflict.Content.ReadAsStringAsync());
+        Assert.Equal(
+            "This Idempotency-Key was already used for different support content.",
+            conflictBody.RootElement.GetProperty("message").GetString());
+        Assert.DoesNotContain("Different issue", conflictBody.RootElement.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -126,6 +131,8 @@ public sealed class SupportRequestApiIntegrationTests
             new { subject = "Trip update issue", description = "The trip status did not refresh after reconnecting." });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(body.RootElement.TryGetProperty("message", out _));
     }
 
     [Fact]
@@ -195,6 +202,14 @@ public sealed class SupportRequestApiIntegrationTests
         }
         var propertyNames = GetSchemaPropertyNames(schema, root);
         Assert.Equal(new[] { "description", "subject" }, propertyNames);
+
+        var badRequestSchema = operation.GetProperty("responses").GetProperty("400")
+            .GetProperty("content").GetProperty("application/json").GetProperty("schema");
+        Assert.Equal(new[] { "message" }, GetSchemaPropertyNames(badRequestSchema, root));
+
+        var conflictSchema = operation.GetProperty("responses").GetProperty("409")
+            .GetProperty("content").GetProperty("application/json").GetProperty("schema");
+        Assert.Equal(new[] { "message" }, GetSchemaPropertyNames(conflictSchema, root));
     }
 
     private static string[] GetSchemaPropertyNames(JsonElement schema, JsonElement documentRoot)

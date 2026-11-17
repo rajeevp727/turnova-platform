@@ -26,6 +26,8 @@ using TurnOva.Infrastructure.Support;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var supportRequestsEnabled = SupportRequestEndpoints.IsEnabledForEnvironment(builder.Environment, builder.Configuration);
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi(options =>
 {
@@ -163,7 +165,8 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
-    builder.Services.AddSingleton<ICosmosMigration, SupportRequestsMigration>();
+    if (supportRequestsEnabled)
+        builder.Services.AddSingleton<ICosmosMigration, SupportRequestsMigration>();
     builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
     builder.Services.AddSingleton<IRiderActiveBookingReservationStore>(sp =>
         new CosmosRiderActiveBookingReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency")));
@@ -196,7 +199,8 @@ else
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
     builder.Services.AddSingleton<IRiderActiveBookingReservationStore, InMemoryRiderActiveBookingReservationStore>();
-    builder.Services.AddSingleton<ISupportRequestStore, InMemorySupportRequestStore>();
+    if (supportRequestsEnabled)
+        builder.Services.AddSingleton<ISupportRequestStore, InMemorySupportRequestStore>();
 }
 
 builder.Services.AddSingleton<StorageReadinessProbe>(sp =>
@@ -279,7 +283,10 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
-app.MapSupportRequestEndpoints();
+if (supportRequestsEnabled)
+    app.MapSupportRequestEndpoints();
+else
+    app.MapSupportRequestUnavailable();
 
 var rides = app.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
 var idempotencyKeys = app.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
