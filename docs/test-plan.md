@@ -2933,10 +2933,10 @@ PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), branch `fix/
 
 | ID | Scenario | Expected result | Type | Status |
 |---|---|---|---|---|
-| TRIP-LOC-010 | Driver switches Home/Queue/Trips/Payslips/Profile during an assigned non-terminal ride | Ride history, agreement history and authenticated status/agreement subscriptions remain active independent of selected tab | Shared mobile regression | Implemented; CI #1842 passed |
-| TRIP-LOC-011 | Active Driver ride has valid session and server locationSharingActive flag | Foreground GPS eligibility is true only for Accepted/Arrived/InProgress and a current authenticated session; negotiation/terminal/invalid session is false | Shared mobile unit | Implemented; CI #1842 passed |
-| TRIP-LOC-012 | Inspect Driver App lifecycle effect wiring | History, agreement, SignalR and GPS effect dependencies contain no Trips-tab gate and remain keyed to ride/session/status | Shared source-integration regression | Implemented; CI #1842 passed |
-| TRIP-LOC-013 | App resumes to foreground while Driver is on Home | Re-read authoritative Driver ride history, confirm same active ride/location-sharing flag, recheck foreground permission, then create watcher | Shared source-integration regression | Implemented; CI #1842 passed |
+| TRIP-LOC-010 | Driver switches Home/Queue/Trips/Payslips/Profile during an assigned non-terminal ride | Ride history, agreement history and authenticated status/agreement subscriptions remain active independent of selected tab | Shared mobile regression | Implemented; CI #1849 passed |
+| TRIP-LOC-011 | Active Driver ride has valid session and server locationSharingActive flag | Foreground GPS eligibility is true only for Accepted/Arrived/InProgress and a current authenticated session; negotiation/terminal/invalid session is false | Shared mobile unit | Implemented; CI #1849 passed |
+| TRIP-LOC-012 | Inspect Driver App lifecycle effect wiring | History, agreement, SignalR and GPS effect dependencies contain no Trips-tab gate and remain keyed to ride/session/status | Shared source-integration regression | Implemented; CI #1849 passed |
+| TRIP-LOC-013 | App resumes to foreground while Driver is on Home | Re-read authoritative Driver ride history, confirm same active ride/location-sharing flag, recheck foreground permission, then create watcher | Shared source-integration regression | Implemented; CI #1849 passed |
 
 
 ## Final documentation-head handoff — TRIP-01 (2026-11-17)
@@ -2963,3 +2963,17 @@ PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), branch `fix/
 - The four TRIP-LOC-010–013 regression tests are implemented and passed. Driver history/agreement history and authenticated ride status/agreement SignalR subscriptions are independent of the selected tab. GPS remains foreground-only, authenticated, limited to Accepted/Arrived/InProgress with server `locationSharingActive=true`; background/terminal/session/ride cleanup stops it, and foreground resume revalidates authoritative history and permission.
 - This follow-up commit synchronizes the four project documents only; it does not change runtime or test source. It advances the PR head, so a **fresh exact-head CI is required for the resulting documentation commit** before merge. Recheck the latest head, reviews, threads and normal GitHub merge policy.
 - No signed production build, physical-device acceptance, live Cosmos, production SignalR backplane or production routing validation is claimed. Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+## PLATFORM-01 raw CORS and caller-cancellation regressions — 2026-11-17
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| PLATFORM-CORS-008 | Configured origin contains an empty user-info, query or fragment delimiter (`@`, `?`, `#`) | Reject the raw origin before URI normalization; no CORS allow-list entry is created | Unit | P1 |
+| PLATFORM-CORS-009 | Configured origin contains leading/trailing/embedded whitespace, control characters or a backslash | Reject the raw origin before URI normalization; explicit HTTPS and Development-only localhost HTTP remain supported | Unit | P1 |
+| PLATFORM-HEALTH-013 | Readiness request is already cancelled before the probe begins | Propagate caller cancellation and do not invoke the storage provider | Unit | P1 |
+| PLATFORM-HEALTH-014 | Caller cancellation occurs immediately before a provider throws `CosmosException` | Propagate caller cancellation and record outcome `cancelled`, not `unavailable` | Unit | P1 |
+| PLATFORM-HEALTH-015 | Caller cancellation occurs immediately before a provider throws `HttpRequestException` | Propagate caller cancellation and record outcome `cancelled`, not `unavailable` | Unit | P1 |
+| PLATFORM-HEALTH-016 | Caller cancellation occurs immediately before another provider exception | Propagate caller cancellation and record outcome `cancelled`, not `unavailable` | Unit | P1 |
+
+These tests are implemented on `fix/platform-01-cors-readiness-cancellation`; exact-head CI is pending. They do not claim live Cosmos, production CORS configuration, telemetry export, physical-device or production acceptance.
