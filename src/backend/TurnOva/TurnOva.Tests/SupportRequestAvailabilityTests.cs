@@ -41,10 +41,12 @@ public sealed class SupportRequestAvailabilityTests
             })
             .Build();
 
-        Assert.True(SupportRequestEndpoints.CanAcceptRequest(environment.Object, configuration, requireRetention: true));
+        Assert.True(SupportRequestEndpoints.TryGetRequestTtl(environment.Object, configuration, requireRetention: true, out var ttlSeconds));
+        Assert.Equal(7 * 86_400, ttlSeconds);
 
         configuration["SupportRequests:RetentionDays"] = null;
-        Assert.False(SupportRequestEndpoints.CanAcceptRequest(environment.Object, configuration, requireRetention: true));
+        Assert.False(SupportRequestEndpoints.TryGetRequestTtl(environment.Object, configuration, requireRetention: true, out ttlSeconds));
+        Assert.Null(ttlSeconds);
 
         configuration["SupportRequests:RetentionDays"] = "7";
         configuration["SupportRequests:PolicyApproved"] = "false";
