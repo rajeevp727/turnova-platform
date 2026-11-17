@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `f274285db6e3f28c19b66f46920368491e6377b2`. PRs #172 REALTIME-01, #173 DRIVER-01 and #174 DRIVER-02 are merged. Sole active feature PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), Draft, branch `fix/trip-01-tab-independent-active-ride-lifecycle`, pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. [CI #1842 / run 43967092267](https://github.com/rajeevp727/turnova-platform/actions/runs/43967092267) passed 12/12 on that exact head: backend 671/671, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typechecks/bundles, native API publish, four native Android/iOS builds, four same-run smoke tests and 19 unexpired artifacts. Four deterministic TRIP-01 tests passed. Reviews are COMMENT-only with zero unresolved threads and no approvals. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
+**Main HEAD:** `f274285db6e3f28c19b66f46920368491e6377b2`. PRs #172 REALTIME-01, #173 DRIVER-01 and #174 DRIVER-02 are merged. Sole active PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175) is Ready for Review on `fix/trip-01-tab-independent-active-ride-lifecycle`; exact pre-documentation-sync head `cbff86cf32f5b007c6a259a4a03772fe92b25d23`. [CI #1847 / run 43976481819](https://github.com/rajeevp727/turnova-platform/actions/runs/43976481819) passed 12/12 on that exact head: backend 671/671, shared mobile/auth 227/227, Python 48/48, both Expo apps, native API publish, four native builds, four same-run smoke tests and 19 unexpired artifacts. This four-document synchronization advances the PR and requires fresh exact-head CI. Strict acceptance remains 0/19 (15 In Progress, 4 Blocked); production readiness is not established.
 
 
 ## Product in one line
@@ -2685,3 +2685,23 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039�
 - CI #1842 / run 43967092267 passed 12/12 on pre-final-sync documentation head `b86b36d545163d5fa00765b24cfb7cbe5e5d0b47`. The subsequent four documentation-only commits `6ee40e58aa88f943c137d22a3154af805a8ad28d`, `662efa68ec726247829c465d27dd60f8b16e4614`, `192c23a6093747fce0ce91a9eadaa7341c3db450` and `efaf8a4a6aa41f5e847be52f178d2902435a5a33` synchronize the four project documents; CI #1845 / run 43976377915 was started on the last pre-final-sync head and is superseded by this metadata correction. A fresh exact-head workflow is required after this commit.
 - PR #175 remains the sole active feature PR; after its merge, continue the remaining acceptance rows in order and then implement the identified PLATFORM-01 hardening.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); production readiness is not established.
+
+
+
+## TRIP-01 exact-head verification — CI #1847 (2026-11-17)
+
+- PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), branch `fix/trip-01-tab-independent-active-ride-lifecycle`, verified pre-this-documentation-sync head `cbff86cf32f5b007c6a259a4a03772fe92b25d23`; base main `f274285db6e3f28c19b66f46920368491e6377b2`. PR was marked Ready for Review after the exact-head run passed.
+- [CI #1847 / run 43976481819](https://github.com/rajeevp727/turnova-platform/actions/runs/43976481819) completed **12/12 jobs successfully on exact head `cbff86cf32f5b007c6a259a4a03772fe92b25d23`**:
+  - Backend .NET 10 Release: **671 passed, 0 failed, 0 skipped**.
+  - Shared mobile/auth: **227/227**.
+  - Python native-artifact/Simulator harness: **48/48**.
+  - Rider and Driver Expo validation/typecheck/production JavaScript bundles.
+  - Native non-container API publish.
+  - Rider and Driver Android debug and standalone release APKs.
+  - Rider and Driver unsigned iOS Simulator applications.
+  - Four same-run Android emulator/iOS Simulator install-launch smoke tests.
+  - **19/19 artifacts** available and unexpired at inspection.
+- Key artifact IDs: API publish `14282685308`; Rider/Driver Android standalone release APKs `14282091082` / `14281936241`; Rider/Driver iOS Simulator apps `14281826751` / `14281309754`; Rider/Driver Android smoke `14282956351` / `14282206570`; Rider/Driver iOS smoke `14283028421` / `14284125820`.
+- The four TRIP-LOC-010–013 regression tests are implemented and passed. Driver history/agreement history and authenticated ride status/agreement SignalR subscriptions are independent of the selected tab. GPS remains foreground-only, authenticated, limited to Accepted/Arrived/InProgress with server `locationSharingActive=true`; background/terminal/session/ride cleanup stops it, and foreground resume revalidates authoritative history and permission.
+- This follow-up commit synchronizes the four project documents only; it does not change runtime or test source. It advances the PR head, so a **fresh exact-head CI is required for the resulting documentation commit** before merge. Recheck the latest head, reviews, threads and normal GitHub merge policy.
+- No signed production build, physical-device acceptance, live Cosmos, production SignalR backplane or production routing validation is claimed. Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked); production readiness is not established.
