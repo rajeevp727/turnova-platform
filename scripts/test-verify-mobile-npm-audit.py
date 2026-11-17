@@ -37,7 +37,7 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         }), encoding="utf-8")
         self.report = {
             "metadata": {"vulnerabilities": {
-                "total": 27, "critical": 0, "high": 2, "moderate": 0, "low": 0
+                "info": 0, "low": 0, "moderate": 0, "high": 2, "critical": 0, "total": 2
             }},
             "vulnerabilities": {
                 "picomatch": {
@@ -60,9 +60,9 @@ class MobileNpmAuditGateTests(unittest.TestCase):
     def write_report(self):
         self.report_path.write_text(json.dumps(self.report), encoding="utf-8")
 
-    def run_gate(self):
+    def run_gate(self, audit_status=1):
         return subprocess.run(
-            [sys.executable, str(SCRIPT), str(self.report_path), "1", str(self.app), str(self.bundle)],
+            [sys.executable, str(SCRIPT), str(self.report_path), str(audit_status), str(self.app), str(self.bundle)],
             capture_output=True, text=True, check=False,
         )
 
@@ -72,15 +72,26 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         self.assertIn("not represented as patched", result.stdout)
 
     def test_rejects_any_critical_finding(self):
-        self.report["metadata"]["vulnerabilities"]["critical"] = 1
+        self.report["vulnerabilities"]["critical-package"] = {
+            "severity": "critical", "isDirect": False,
+            "nodes": ["node_modules/critical-package"],
+            "via": [{"name": "critical-package", "severity": "critical", "url": "https://example.invalid/critical"}],
+        }
+        counts = self.report["metadata"]["vulnerabilities"]
+        counts["critical"] = 1
+        counts["total"] = 3
         self.write_report()
         self.assertNotEqual(self.run_gate().returncode, 0)
 
     def test_rejects_unknown_high_advisory(self):
         self.report["vulnerabilities"]["other"] = {
             "severity": "high", "isDirect": False,
+            "nodes": ["node_modules/other"],
             "via": [{"name": "other", "severity": "high", "url": "https://example.invalid/GHSA-unknown"}]
         }
+        counts = self.report["metadata"]["vulnerabilities"]
+        counts["high"] = 3
+        counts["total"] = 3
         self.write_report()
         self.assertNotEqual(self.run_gate().returncode, 0)
 
@@ -111,6 +122,37 @@ class MobileNpmAuditGateTests(unittest.TestCase):
     def test_rejects_missing_source_maps(self):
         (self.bundle / "index.android.js.map").unlink()
         self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_missing_audit_metadata(self):
+        del self.report["metadata"]
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_mismatched_severity_count(self):
+        self.report["metadata"]["vulnerabilities"]["high"] = 0
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_mismatched_total_count(self):
+        self.report["metadata"]["vulnerabilities"]["total"] = 3
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_malformed_vulnerability_nodes(self):
+        self.report["vulnerabilities"]["picomatch"]["nodes"] = []
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_audit_exit_status_inconsistent_with_findings(self):
+        self.assertNotEqual(self.run_gate(audit_status=0).returncode, 0)
+
+    def test_rejects_nonzero_exit_without_findings(self):
+        self.report["metadata"]["vulnerabilities"] = {
+            "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0, "total": 0
+        }
+        self.report["vulnerabilities"] = {}
+        self.write_report()
+        self.assertNotEqual(self.run_gate(audit_status=1).returncode, 0)
 
 
 if __name__ == "__main__":
