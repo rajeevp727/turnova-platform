@@ -5,12 +5,12 @@
 
 **Last verified:** 2026-11-18
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `dda08764b25f2a2b4f5e7665e85a59e539d8663e`; PR #183 (AI-01 assistance input guards) is merged. PR #177 remains closed/unmerged and parked for Android dependency-reproducibility review.
+**Main HEAD:** `0992579b76012f24a057ae4842e524927eb9536f`; PR #183 (AI-01 assistance input guards) and PR #184 (API phase exit/Android gate) are merged. PR #177 remains closed/unmerged; its dependency approach is being re-audited and reapplied on current main in PR #185.
 **Current platform phase:** Android. API engineering exit criteria are complete; Rider and Driver Android work may begin. iOS remains gated until both Android apps exit.
 **API phase evidence:** PR #183 exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed scope, .NET 10 Release build, **758/758 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact verification (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)).
 **API engineering exit:** in-scope API flows, deterministic backend/domain/persistence tests, API docs, auth/authorization/privacy checks and native publish are complete. Live Cosmos, production identity, private-media provider/scanning, hosting and product/legal decisions remain external; no production readiness is claimed.
 **AI-01:** approved supplemental API scope is implemented/tested and remains outside the 19-row denominator. Provider is disabled by default; no paid provider/model/credential selected.
-**Current Android task:** inspect PR #177 and current Rider/Driver manifests, lockfiles and CI install commands. Complete safe dependency reproducibility, then Rider Android before Driver Android. Do not start iOS until both Android apps exit.
+**Current Android PR:** [#185 — Rider/Driver dependency reproducibility](https://github.com/rajeevp727/turnova-platform/pull/185). It adds per-app SHA-256 lockfile pins, same-run generated lockfile artifacts, npm ci for shared mobile validation/native Android and real-filesystem symlink safety tests. Exact-head Android CI/build/emulator evidence is pending. After merge, start Rider Android AUTH-01/AUTH-02; complete Driver Android before iOS. Do not start iOS until both Android apps exit.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Product in one line
@@ -2815,3 +2815,8 @@ PR #183 is the sole active API feature increment. It adds 16 KiB request-size me
 ## API phase exit — Android handoff (2026-11-18)
 
 PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e` after exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed 758/758 backend tests and native non-container API publish. API engineering exit is complete; strict 19-row acceptance remains 0/19 and production readiness is not established. Current phase is Android. Re-audit parked PR #177 and current Rider/Driver dependency files before changes; complete Rider Android and Driver Android before iOS.
+
+
+## Android dependency reproducibility — 2026-11-18
+
+PR #185 is the sole active Android-phase increment. The previous PR #177 remains closed/unmerged and is used only as historical implementation/artifact evidence. The current branch reapplies its checksum-pinned generated-lockfile approach on main after API exit, uses npm ci in shared mobile validation and native Android, and adds realpath-safe symlink checks. The package-lock JSON remains a same-run CI artifact rather than a committed source file; the SHA-256 pin is committed and fails closed on registry drift. iOS dependency/build commands are deliberately unchanged until Android Rider and Driver both exit.
