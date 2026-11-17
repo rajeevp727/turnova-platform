@@ -26,7 +26,6 @@ using TurnOva.Infrastructure.Support;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var supportRequestsEnabled = SupportRequestEndpoints.IsEnabledForEnvironment(builder.Environment, builder.Configuration);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi(options =>
@@ -165,8 +164,7 @@ if (useCosmos)
     builder.Services.AddSingleton<ICosmosMigration, DriverPayslipsMigration>();
     builder.Services.AddSingleton<ICosmosMigration, RideOffersMigration>();
     builder.Services.AddSingleton<ICosmosMigration, DriverRideReservationsMigration>();
-    if (supportRequestsEnabled)
-        builder.Services.AddSingleton<ICosmosMigration, SupportRequestsMigration>();
+    builder.Services.AddSingleton<ICosmosMigration, SupportRequestsMigration>();
     builder.Services.AddSingleton<IDriverRideReservationStore>(sp => new CosmosDriverRideReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "DriverRideReservations")));
     builder.Services.AddSingleton<IRiderActiveBookingReservationStore>(sp =>
         new CosmosRiderActiveBookingReservationStore(sp.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency")));
@@ -176,10 +174,9 @@ if (useCosmos)
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
             .GetContainer(databaseName, "QueueEntries")));
-    if (supportRequestsEnabled)
-        builder.Services.AddSingleton<ISupportRequestStore>(sp =>
-            new CosmosSupportRequestStore(sp.GetRequiredService<CosmosClient>()
-                .GetContainer(databaseName, "SupportRequests")));
+    builder.Services.AddSingleton<ISupportRequestStore>(sp =>
+        new CosmosSupportRequestStore(sp.GetRequiredService<CosmosClient>()
+            .GetContainer(databaseName, "SupportRequests")));
 }
 else
 {
@@ -200,8 +197,7 @@ else
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
     builder.Services.AddSingleton<IRiderActiveBookingReservationStore, InMemoryRiderActiveBookingReservationStore>();
-    if (supportRequestsEnabled)
-        builder.Services.AddSingleton<ISupportRequestStore, InMemorySupportRequestStore>();
+    builder.Services.AddSingleton<ISupportRequestStore, InMemorySupportRequestStore>();
 }
 
 builder.Services.AddSingleton<StorageReadinessProbe>(sp =>
@@ -239,6 +235,7 @@ builder.Services.AddHostedService<RideOfferExpiryWorker>();
 builder.Services.AddScoped<QueueService>();
 
 var app = builder.Build();
+var supportRequestsEnabled = SupportRequestEndpoints.IsEnabledForEnvironment(app.Environment, app.Configuration);
 
 if (useCosmos)
 {
