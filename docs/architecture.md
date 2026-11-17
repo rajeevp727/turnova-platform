@@ -473,3 +473,10 @@ PR #161 makes optional diagnostics best-effort across the authoritative ride-aud
 The Rider/Driver API exposes neutral `POST /api/v1/support/requests` intake only. It stores a bounded subject and description with the authenticated reporter ID/role and server timestamp. A reporter-scoped deterministic item ID makes retries idempotent without storing the raw `Idempotency-Key`. Cosmos uses the `SupportRequests` container partitioned by `/reporterId`; Development/Testing uses a concurrent in-memory adapter.
 
 There is no support-agent read/list surface, attachment upload, category, severity, priority, assignment, escalation, SLA or retention policy. The endpoint does not log request content and returns only request ID, timestamp and replay status. Product/Operations must still approve support workflow, access, privacy and retention decisions.
+
+
+## API external media and migration gates (2026-11-17)
+
+The current Driver selfie is Base64 stored inline in the Cosmos Driver profile. Licence/vehicle document references are client-supplied opaque strings and are not verified by a private storage provider. Production requires server-issued Driver-bound references, private object storage, malware scanning/quarantine, consent, retention/deletion and authorized UnionManager retrieval. These provider/legal dependencies are not configured and are not claimed complete.
+
+The Cosmos migration runner uses a 30-minute ETag-protected lease without renewal. Existing migrations are idempotent container creation only; add renewal/lost-lease cancellation and deterministic tests before introducing non-idempotent data migrations. Live multi-instance/restart recovery remains an external gate.

@@ -53,7 +53,7 @@ Only `rider` and `driver` route values are accepted. The API owns `appId=turnova
 - `GET /api/v1/driver/union`
 - `GET /api/v1/driver/payslips/{year}/{month}.pdf`
 
-New onboarding and ride eligibility are Cab-only. Document values are private storage references, not public URLs or document contents. A public selfie requires approval by the current union.
+New onboarding and ride eligibility are Cab-only. Current API storage limitation: the Driver selfie is accepted as JPEG Base64 (maximum decoded size 300 KB) and stored inline in the Cosmos Driver profile; it is not yet stored in a private object-storage provider. Driving-licence and vehicle documents are represented by client-supplied opaque `StorageReference` strings; the API validates shape/URL/path safety but cannot verify that the reference was issued for that Driver or that its contents were scanned. A public selfie requires approval by the current Union. These are development/test contracts, not production private-media readiness.
 
 ### Rider discovery and selected booking
 
@@ -105,7 +105,7 @@ The zone/queue and `/api/v1/rides/request`, pending-offer, available-ride, accep
 
 ## API phase follow-ups still open
 
-The neutral Rider/Driver support intake, reporter-partitioned Cosmos adapter, deterministic Cosmos ETag/transactional-batch contracts, migration container/partition contracts, OpenAPI contract and API-only native publish gate are implemented and have passed API-only CI on PR #179 head `d942a40588fe5d97dbf10578f761cbe42daf6df8` ([CI #44102867811](https://github.com/rajeevp727/turnova-platform/actions/runs/44102867811)). The API phase remains open while the complete API source/auth/privacy/persistence audit is finished across all 19 acceptance rows and any remaining safe deterministic tests or contract documentation are added.
+The neutral Rider/Driver support intake, reporter-partitioned Cosmos adapter, deterministic Cosmos ETag/transactional-batch contracts, migration container/partition contracts, OpenAPI contract and API-only native publish gate are implemented and have passed API-only CI on PR #179 head `d942a40588fe5d97dbf10578f761cbe42daf6df8` ([CI #44102867811](https://github.com/rajeevp727/turnova-platform/actions/runs/44102867811)). Exact-head API-only CI [#44110257240](https://github.com/rajeevp727/turnova-platform/actions/runs/44110257240) passed on `39aea309685e8e1b8f1c48578b2763e8886b1a6d`: backend 724/724, native non-container publish artifact `14340916409`, and all mobile jobs skipped. The API phase remains open while the complete API source/auth/privacy/persistence audit is finished across all 19 acceptance rows and remaining safe deterministic tests/docs are added.
 
 Support categories, severity, assignment, escalation/SLA, attachments and retention remain Product/Operations decisions; code must not invent them. The production/staging support route stays disabled unless `SupportRequests:PolicyApproved=true`; an empty schema container may be provisioned, but no request is accepted or persisted while disabled. Live Cosmos ETag/multi-instance/restart, production TriSend/JWT identity, hosted API and provider validation remain external gates.
 
@@ -125,3 +125,15 @@ The Cosmos `SupportRequests` container uses partition key `/reporterId`. The ite
 There is intentionally no support-request list/read endpoint, attachment upload, category, severity, priority, assignment, escalation, response target or retention setting. Cosmos TTL remains unset until Product/Operations approves a retention policy. Those decisions remain external gates.
 
 Support intake is enabled by default only in Development and Testing. Staging/Production require the explicit `SupportRequests:PolicyApproved=true` setting after Product/Operations has approved the intake, privacy, access and retention policy. Until then the authenticated route returns HTTP 503 without binding or persisting the submitted body. The checked-in default is false.
+
+
+## Private media and KYC storage — production gate
+
+- Current selfie bytes are stored inline in the Cosmos Driver profile as `ProfilePhotoBase64`; they are returned to the Driver/authorized Union review paths and included in public discovery only after current-Union approval.
+- Driving-licence and vehicle document references are supplied by the Driver client. The API rejects absolute URLs and traversal-like strings, but no configured provider verifies reference ownership, scans/quarantines content, enforces consent/retention, or serves private content.
+- Before production, implement a provider-agnostic private-media boundary with server-issued Driver-bound references, upload quarantine/malware scanning, consent evidence, retention/deletion, and current-Union-only retrieval. Riders must never receive KYC document references or content. No storage provider, credentials or legal retention policy are configured.
+- Owner/input: Infrastructure/Security must provide the private object-storage/scanning service contract and managed identity; Product/Legal must approve consent and retention; Union operations must approve reviewer access. Until then this is an explicit external gate, not completed acceptance.
+
+## Cosmos migration lease safety
+
+The current migration runner uses a 30-minute ETag-protected lease and releases by matching ETag, but does not renew the lease while a migration is running. Existing migrations only create containers idempotently. Before adding non-idempotent data migrations, add a renewal heartbeat, lost-lease cancellation/fencing and deterministic fake-store tests; live multi-instance/restart recovery remains an external Cosmos validation gate.

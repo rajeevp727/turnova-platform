@@ -3116,7 +3116,7 @@ Live Cosmos ETag contention, multi-instance migration lease recovery, restart/cr
 
 | SUPPORT-API-008 | Staging/Production support intake without explicit policy approval | Authenticated POST returns HTTP 503 before request-body binding; no support request is accepted or persisted. The normal schema migration may provision an empty container. | API integration | P0 |
 | SUPPORT-API-009 | Staging/Production support intake with explicit policy approval | `SupportRequests:PolicyApproved=true` enables the authenticated intake and reporter-partitioned store; the normal idempotency contract applies | API integration | P0 |
-| SUPPORT-API-010 | Support request body exceeds the bounded endpoint limit | Endpoint metadata advertises a 16 KiB maximum request body and OpenAPI documents HTTP 413; host enforcement is verified by the Kestrel deployment check | API contract | P1 |
+| SUPPORT-API-010 | Support request body exceeds the bounded endpoint limit | Deterministic endpoint metadata asserts a 16 KiB maximum and OpenAPI documents HTTP 413; actual Kestrel host-level rejection still requires a dedicated host integration check | API metadata contract | P1 |
 | SUPPORT-API-011 | Staging/Production support intake is disabled and receives malformed JSON | Authenticated POST returns HTTP 503 before JSON parsing/body binding; no support request is persisted | API integration/privacy | P0 |
 
 | API-PLATFORM-001 | API-only PR changes | Backend/publish runs; all mobile validation, auth harness, Android and iOS jobs are skipped | CI workflow | P0 |
@@ -3135,3 +3135,33 @@ The support intake route declares a 16 KiB request-body limit and OpenAPI HTTP 4
 
 
 The API-only run #44109551373 on exact head `4aa9e438c4d40a26e84402a8ed55f5c6dc1f353b` completed successfully: scope and backend build/test/native publish passed; all mobile/Android/iOS jobs were skipped. The API publish artifact `14340236840` was unexpired at inspection. The subsequent test/documentation commit adds SUPPORT-API-011 and the OpenAPI 413 assertion; fresh exact-head CI is required.
+
+
+## API phase exact-head verification — PR #179 / CI #44110257240 (2026-11-17)
+
+PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), exact head `39aea309685e8e1b8f1c48578b2763e8886b1a6d`, passed API-only CI [#44110257240](https://github.com/rajeevp727/turnova-platform/actions/runs/44110257240): scope passed; backend .NET 10 Release **724 passed, 0 failed, 0 skipped**; native non-container API publish succeeded (artifact `14340916409`); all mobile-auth, Expo, Android native/emulator and iOS bundle/native/simulator jobs were correctly skipped. No live Cosmos, production identity, hosted API or provider validation is claimed.
+
+The same exact-head suite verifies SUPPORT-API-010 endpoint size-limit metadata/OpenAPI 413 and SUPPORT-API-011 Staging malformed-body 503-before-binding. The 16 KiB metadata is tested; Kestrel host-level payload rejection still needs a dedicated host integration check.
+
+### Private media/KYC API follow-up (planned; not implemented or passed)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DRIVER-MEDIA-001 | Driver uploads selfie through provider-agnostic private-media boundary | Raw bytes are stored outside the Cosmos Driver profile; profile stores only a server-issued opaque reference bound to that Driver | API/storage contract | P0 |
+| DRIVER-MEDIA-002 | Driver submits another Driver's, arbitrary, absolute-URL or expired document reference | API rejects it before onboarding/review; no cross-Driver reference is persisted | API security | P0 |
+| DRIVER-MEDIA-003 | Selfie/document scan is pending, rejected or unavailable | Content remains quarantined/private and cannot be approved or exposed in Rider discovery | API/privacy | P0 |
+| DRIVER-MEDIA-004 | UnionManager reviews or retrieves a member document | Only the current signed UnionManager for the Driver's current Union can retrieve the private review asset; Rider and other unions are denied | API authorization | P0 |
+| DRIVER-MEDIA-005 | Consent withdrawal or retention expiry | Private object and reference are deleted/invalidated according to the approved policy; audit retains only the permitted non-content evidence | API/privacy | P1 |
+
+These tests require a provider-agnostic interface and deterministic in-memory fake before live provider integration. Production scanning, managed identity, consent/retention policy and private object-storage credentials remain external.
+
+### Cosmos migration lease follow-up (planned; not implemented or passed)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-MIG-007 | Migration runs longer than the initial lease duration | Renewal heartbeat extends the ETag lease before expiry; a second runner cannot acquire it | Deterministic concurrency | P0 |
+| COSMOS-MIG-008 | Lease renewal loses an ETag race | Current migration is cancelled before writing migration history; lost owner never deletes/replaces the new owner's lease | Deterministic concurrency | P0 |
+| COSMOS-MIG-009 | Runner is cancelled while holding the lease | Renewal stops, migration cancellation propagates, and release is bounded and ETag-conditional | Deterministic lifecycle | P1 |
+| COSMOS-MIG-010 | Two runners acquire/recover an expired lease | Only one ETag owner applies each migration; idempotent history read-back is preserved | Deterministic concurrency | P0 |
+
+The current runner has a 30-minute ETag-protected lease but no renewal heartbeat. Existing migrations only create containers idempotently; implement and test renewal/fencing before adding non-idempotent data migrations. Live Cosmos multi-instance/restart remains external.
