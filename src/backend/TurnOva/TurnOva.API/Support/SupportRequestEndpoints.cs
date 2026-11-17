@@ -132,7 +132,8 @@ public static class SupportRequestEndpoints
         .Produces(StatusCodes.Status401Unauthorized)
         .Produces(StatusCodes.Status403Forbidden)
         .Produces<SupportRequestErrorResponse>(StatusCodes.Status409Conflict)
-        .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+        .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         return app;
     }
