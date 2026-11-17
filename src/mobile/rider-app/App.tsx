@@ -313,17 +313,16 @@ export default function App() {
     let authEpoch: number | null = null;
     try {
       const credentials = { email: email.trim(), password, name: name.trim(), mode };
-      const currentAuthEpoch = invalidateSession();
-      authEpoch = currentAuthEpoch;
+      authEpoch = invalidateSession();
       clearRiderSessionState(credentials);
       setLoading(true);
       setError("");
 
       const tokensCleared = await clearSessionTokensIfCurrent(
         SecureStore,
-        () => sessionEpoch.current === currentAuthEpoch
+        () => sessionEpoch.current === authEpoch
       );
-      if (!tokensCleared || sessionEpoch.current !== currentAuthEpoch) return;
+      if (!tokensCleared || sessionEpoch.current !== authEpoch) return;
 
       const path = credentials.mode === "register"
         ? "/api/v1/auth/rider/register"
@@ -336,7 +335,7 @@ export default function App() {
           name: credentials.name || null
         })
       });
-      const accepted = await accept(result, currentAuthEpoch, true);
+      const accepted = await accept(result, authEpoch!, true);
       if (!accepted) throw new Error("Session changed. Please sign in again.");
       setPassword("");
     } catch (e) {
