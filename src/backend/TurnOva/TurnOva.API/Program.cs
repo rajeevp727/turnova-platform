@@ -176,9 +176,10 @@ if (useCosmos)
     builder.Services.AddSingleton<IQueueStore>(sp =>
         new CosmosQueueStore(sp.GetRequiredService<CosmosClient>()
             .GetContainer(databaseName, "QueueEntries")));
-    builder.Services.AddSingleton<ISupportRequestStore>(sp =>
-        new CosmosSupportRequestStore(sp.GetRequiredService<CosmosClient>()
-            .GetContainer(databaseName, "SupportRequests")));
+    if (supportRequestsEnabled)
+        builder.Services.AddSingleton<ISupportRequestStore>(sp =>
+            new CosmosSupportRequestStore(sp.GetRequiredService<CosmosClient>()
+                .GetContainer(databaseName, "SupportRequests")));
 }
 else
 {
