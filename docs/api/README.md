@@ -143,7 +143,7 @@ There is intentionally no support-request list/read endpoint, attachment upload,
 
 Support intake is enabled by default only in Development and Testing. Staging/Production require `SupportRequests:PolicyApproved=true`, a positive Product/Operations-approved `SupportRequests:RetentionDays`, and configured Cosmos persistence. A policy-approved Staging/Production host without valid retention fails startup; Staging without `CosmosDb:Endpoint` and `CosmosDb:Key` also fails closed instead of accepting requests into an in-memory store. Production already requires Cosmos at startup. The checked-in policy default is false and retention days remain null until approved.
 
-The 16 KiB request-body limit is declared through endpoint metadata and documented as HTTP 413 in OpenAPI. PR [#182](https://github.com/rajeevp727/turnova-platform/pull/182) adds a real Kestrel host-level integration test using the same support endpoint mapping; it asserts HTTP 413 for a known Content-Length above 16 KiB and zero support-store writes. Exact-head API CI [#44143458072](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072) passed **754/754 backend tests (0 failed, 0 skipped)** and native non-container .NET 10 publish (artifact [14355367845](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072/artifacts/14355367845)); the Kestrel regression passed. A follow-up documentation-only commit requires its own exact-head CI.
+The 16 KiB request-body limit is declared through endpoint metadata and documented as HTTP 413 in OpenAPI. PR [#182](https://github.com/rajeevp727/turnova-platform/pull/182) is merged at `ea42ae49f200738316e72a1505d93ab7265bd0e2`. Its real Kestrel host-level test asserts HTTP 413 for a known Content-Length above 16 KiB and zero support-store writes. Final documentation-head CI [#44144136443](https://github.com/rajeevp727/turnova-platform/actions/runs/44144136443) passed scope, .NET 10 Release build, **754/754 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact verification; Android/iOS jobs were correctly skipped while API remains active.
 
 
 
@@ -163,3 +163,18 @@ The API creates the `MigrationHistory` and `MigrationLocks` containers before ap
 Every renewal preserves the current owner and uses `IfMatchEtag`. If renewal loses its ETag race or the lease is replaced, the coordinator cancels the migration token. The runner checks cancellation after each migration before writing its history marker. The heartbeat is stopped and awaited before release; release uses the latest ETag and cannot delete another instance's replacement lease.
 
 Automated fake-store and Cosmos adapter tests cover expired-lease recovery, active-lease retry, renewal, lost-lease cancellation, ETag preconditions and latest-ETag release. Live multi-instance contention and process crash/restart recovery still require a configured Cosmos environment and are not claimed by deterministic tests.
+
+
+## Approved AI assistance — AI-01 supplemental API contract
+
+AI-01 is an approved supplemental requirement and remains outside the 19-row acceptance denominator.
+
+- `POST /api/v1/assistance/trip-intent` requires a Rider JWT. It returns an editable Cab trip draft and always requires explicit Rider confirmation; it does not create a ride, select a Driver, set a fare or mutate booking state.
+- `POST /api/v1/assistance/help` requires a Rider or Driver JWT. It returns exact approved in-repository help content or a deterministic escalation response; it does not invent support categories, SLAs, fares, ETAs or policy.
+- Both endpoints reject request bodies larger than 16 KiB with HTTP 413 before service/provider processing. OpenAPI declares the 413 response.
+- Request DTOs reject unmapped JSON properties. Trip intent accepts only `text`; help accepts only `question` and the optional allow-listed `rideState`. Extra ride IDs, exact coordinates, fare, contact, payment or token fields return HTTP 400.
+- The service separately enforces `AiAssistant:MaxInputCharacters` (default 1000, validated range 64–2000). Provider prompts use placeholder pickup/drop-off tokens and allow-listed generic keywords; exact route text, passenger count and arbitrary personal context remain local. Help providers receive only allow-listed keywords/source IDs; the API returns the approved repository answer, not provider-generated policy.
+- Rate limiting is partitioned by authenticated subject after authentication/authorization. `AiAssistant:MaxRequestsPerMinute` defaults to 10 and is validated from 1 to 60.
+- Assistance is disabled by default and uses `UnavailableAiAssistantProvider` until a provider is selected and validated. No paid provider/model, endpoint or credential is selected. Deterministic fallback remains available.
+- AI-01 must never book, charge, set/recommend fares, approve KYC, change eligibility/dispatch/ride state, or make safety/legal decisions. Live provider sandbox, managed-secret wiring and data-processing/legal terms remain external gates.
+- PR [#183](https://github.com/rajeevp727/turnova-platform/pull/183) adds the 16 KiB Kestrel limit to both assistance endpoints, strict unmapped-member rejection and deterministic API/Kestrel tests. Its exact-head CI is tracked by the PR checks.

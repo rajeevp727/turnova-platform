@@ -1,14 +1,18 @@
 # TurnOva MVP Acceptance Matrix
 
 **Scope:** TurnOva Rider and TurnOva Driver Cab-only Android/iOS MVP. Fleet and Ops applications are Phase 2 and excluded.
-**Last audited:** 2026-11-17; main HEAD `dafb9a39b0e876e65f9c7b8443714cbf0ca646a4` (PR #181 merged).
+**Last audited:** 2026-11-18; main HEAD `ea42ae49f200738316e72a1505d93ab7265bd0e2` (PR #182 merged).
 **Current platform phase:** API. Android must not start until API implementation, deterministic tests, OpenAPI/docs, auth/privacy, persistence and native non-container publish/API CI exit criteria pass. iOS must not start until both Android apps pass their exit criteria.
-**Current API PR:** [#182 — real Kestrel support payload limit](https://github.com/rajeevp727/turnova-platform/pull/182), branch `feat/api-kestrel-support-body-limit`, source/test commit `818bf01e453291ca5c954c0015c8157b5c4e4c11`, verified pre-follow-up-docs head `3e6faa1a4f0853c3741c5c7b6869263d142eaa96`.
-Exact-head API CI [#44143458072](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072) passed on documentation head `3e6faa1a4f0853c3741c5c7b6869263d142eaa96`: scope passed; .NET 10 Release build passed; **754/754 backend tests passed (0 failed, 0 skipped)**; native non-container API publish, publish verifier and artifact upload passed (artifact [14355367845](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072/artifacts/14355367845)). The new real-Kestrel `SUPPORT-API-017` regression is included in the 754-test suite. All mobile/Android/iOS jobs were correctly skipped while API remains in progress. The earlier source-head run #44143080030 was superseded by documentation commits before its backend test/publish completed and is not counted as passing. This follow-up documentation-only commit requires its own exact-head CI before merge.
-**PR #181 merged:** provider-agnostic private-media boundary; opaque Driver-bound references; content signature/size validation; owner-only content/status reads; current active Cab-Union-only document retrieval; new profile writes use `ProfilePhotoStorageReference` and leave inline Base64 null; historical inline Base64 remains readable. Testing Clean is an explicit fake; Development is PendingScan; Staging/Production fail closed with 503.
-**PR #182 adds:** real Kestrel host-level support payload enforcement; `SUPPORT-API-017` is passing in the 754-test exact-head suite.
-**API remaining:** complete API row-by-row source/auth/privacy/persistence audit. Live private storage/scanning, managed identity, consent/retention, Cosmos multi-instance/restart, production identity and hosting remain external.
+**Current API PR:** [#183 — AI assistance request input guards](https://github.com/rajeevp727/turnova-platform/pull/183), branch `feat/api-ai-assistance-input-guards`; source/test head at handoff `1cc61f270977599809bb00419fe6c922261cdfb4` (final PR head is shown on the linked PR).
+**PR #182 merged:** real Kestrel support-request 16 KiB/HTTP 413/no-store-write verification. Final-head API CI [#44144136443](https://github.com/rajeevp727/turnova-platform/actions/runs/44144136443) passed scope, .NET 10 Release build, **754/754 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact verification; Android/iOS jobs were correctly skipped.
+**PR #183 engineering:** both AI-01 assistance endpoints now have a 16 KiB Kestrel request-body limit and OpenAPI 413 response; strict JSON DTOs reject unmapped ride/location/fare/contact/payment fields. Deterministic API tests and real-Kestrel tests cover these boundaries. Fresh exact-head CI is required before merge.
+**AI-01:** approved supplemental API work, not a twentieth acceptance area. It remains disabled by default, provider-agnostic and outside the 19-row denominator; no paid provider/model/credentials are selected.
+**API remaining:** continue the complete API row-by-row source/auth/privacy/persistence audit and close safe engineering gaps. Live private storage/scanning, managed identity, consent/retention, Cosmos multi-instance/restart, production identity and hosting remain external.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
+
+## Supplemental API evidence — AI-01
+
+AI-01 remains outside the 19 acceptance rows. PR #183 adds a 16 KiB Kestrel body limit and HTTP 413 contract to both assistance endpoints, rejects unmapped JSON members, and adds deterministic API and real-Kestrel tests. No booking, fare, payment, eligibility, dispatch or ride-state authority is added.
 
 ## Platform phase gate
 

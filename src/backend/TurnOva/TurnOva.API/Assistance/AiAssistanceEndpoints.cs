@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using TurnOva.Application.Assistance;
 
@@ -84,7 +85,9 @@ public static class AiAssistanceEndpoints
                     "TripIntent", exception.GetType().Name);
                 return Results.BadRequest(new { message = exception.Message });
             }
-        }).RequireAuthorization(policy => policy.RequireRole("Rider"));
+        }).RequireAuthorization(policy => policy.RequireRole("Rider"))
+            .WithMetadata(new RequestSizeLimitAttribute(16 * 1024))
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
         group.MapPost("/help", async Task<IResult> (
             HelpRequest request,
@@ -107,7 +110,9 @@ public static class AiAssistanceEndpoints
                     "Help", exception.GetType().Name);
                 return Results.BadRequest(new { message = exception.Message });
             }
-        }).RequireAuthorization(policy => policy.RequireRole("Rider", "Driver"));
+        }).RequireAuthorization(policy => policy.RequireRole("Rider", "Driver"))
+            .WithMetadata(new RequestSizeLimitAttribute(16 * 1024))
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
         return app;
     }
