@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-18
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `0992579b76012f24a057ae4842e524927eb9536f`; PR #183 (AI-01 assistance input guards) and PR #184 (API phase exit/Android gate) are merged. PR #177 remains closed/unmerged; its dependency approach is being re-audited and reapplied on current main in PR #185.
+**Main HEAD:** `d553cc89f547b81d64020ac8b22c2af643b941c4`; PR #183 (AI-01 input guards), #184 (API phase exit/Android gate) and #185 (Rider/Driver dependency reproducibility) are merged. PR #177 remains closed/unmerged.
 **Current platform phase:** Android. API engineering exit criteria are complete; Rider and Driver Android work may begin. iOS remains gated until both Android apps exit.
 **API phase evidence:** PR #183 exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed scope, .NET 10 Release build, **758/758 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact verification (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)).
 **API engineering exit:** in-scope API flows, deterministic backend/domain/persistence tests, API docs, auth/authorization/privacy checks and native publish are complete. Live Cosmos, production identity, private-media provider/scanning, hosting and product/legal decisions remain external; no production readiness is claimed.
@@ -2879,3 +2879,10 @@ Rider's latest audit artifact on CI #44170775823 reported `expo-asset@58.0.21`; 
 PR #185 exact source/test head `6d02436938f50f98f4463a253fa4ed1a93287c6e` passed [CI #44171401948](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948): both apps' checksum-pinned dependencies, npm audit context, Expo config/typecheck/bundle, debug/release APKs, package identities and emulator install/launch smoke; backend 758/758; mobile auth/native 227/227 Node and 48/48 Python; 28 audit tests per app. iOS jobs skipped. Emulator smoke explicitly does not exercise production API/auth. The sole high advisory remains transitive picomatch GHSA-fc5q-39xc-vjpf, unpatched; no app source-map inclusion was found. Treat as disclosed build-time residual, not a clean audit.
 
 Next after PR #185 review/merge: Rider Android AUTH-01/AUTH-02 accessibility, autofill, keyboard and error-announcement work with deterministic tests; finish Rider before Driver. Keep iOS gated until both Android apps exit. External release gates are exact EAS project linkage, approved iOS bundle IDs, build-number policy, production API URL/DNS/TLS/CORS/health, signing credentials, physical-device acceptance and store/legal review.
+
+
+## Latest Android Rider handoff — 2026-11-18
+
+PR #185 merged at `d553cc89f547b81d64020ac8b22c2af643b941c4` after exact-head CI #44174144600 passed 758/758 backend, 227/227 Node, 48/48 Python, both apps' 28-case audit verifier, Rider/Driver debug and release APKs, package identity and Android emulator smoke. The unpatched picomatch GHSA remains High upstream; TurnOva exposure is assessed low and build-time-only under the trusted-input threat model, with direct app use and Android source-map inclusion rejected by CI. Do not claim a patch or clean npm audit.
+
+PR #186 is the sole active feature PR. It adds Rider auth accessibility labels/hints, name/email/password autofill, keyboard focus/submit flow, accessible busy/disabled state, mode-toggle labels, assertive error announcements and deterministic tests RIDER-AUTH-ACCESS-001..008. No API or session-token contract changed. Source/test head: `458b9a73e67fae0f2abb5f11f14dd833afbc72e7`; final docs-head CI pending. Finish Rider before Driver; iOS remains gated.
