@@ -1628,6 +1628,27 @@ onboarding.MapGet("/media/{reference}", async (
     return Results.File(asset.Content, asset.Metadata.ContentType, enableRangeProcessing: false);
 });
 
+onboarding.MapGet("/media/{reference}/status", async (
+    HttpContext context, ClaimsPrincipal user, string reference, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    var asset = await privateDriverMediaStore.ReadAsync(driverId, reference, ct);
+    if (asset is null || asset.Metadata.DriverId != driverId) return Results.NotFound();
+    context.Response.Headers.CacheControl = "private, no-store";
+    return Results.Ok(new
+    {
+        storageReference = asset.Metadata.Reference,
+        documentType = asset.Metadata.MediaType,
+        contentType = asset.Metadata.ContentType,
+        length = asset.Metadata.Length,
+        scanStatus = asset.Metadata.ScanStatus,
+        uploadedAtUtc = asset.Metadata.UploadedAtUtc
+    });
+});
+
 onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest request, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
