@@ -44,7 +44,7 @@ app_dir="$(cd "$app_dir" && pwd -P)"
     exit 2
   fi
 
-  actual="$(sha256sum package-lock.json | awk '{print $1}')"
+  actual="$(node -e 'const fs = require("node:fs"); const { createHash } = require("node:crypto"); process.stdout.write(createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"));' package-lock.json)"
   if [[ "$actual" != "$expected" ]]; then
     echo "Generated package-lock.json does not match the reviewed SHA-256 pin." >&2
     echo "Expected: $expected" >&2
