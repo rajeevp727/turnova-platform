@@ -123,4 +123,46 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, foreignReference.StatusCode);
         Assert.False(profiles.ContainsKey("private-media-onboarding-other"));
     }
+
+    [Fact]
+    public async Task UnionManagerCanReadOnlyCurrentAssignedDriversScanClearedDocuments()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "private-media-union-driver");
+        const string unionId = "private-media-union";
+        SeedBookableDriver(factory, "private-media-union-driver", unionId);
+
+        var pdf = Encoding.ASCII.GetBytes("%PDF-1.4\\nunion-review-document");
+        using var licenceUpload = await driver.PostAsJsonAsync("/api/v1/driver/onboarding/media", new
+        {
+            documentType = "DrivingLicence",
+            contentType = "application/pdf",
+            contentBase64 = Convert.ToBase64String(pdf)
+        });
+        Assert.Equal(HttpStatusCode.Created, licenceUpload.StatusCode);
+        using var licenceJson = JsonDocument.Parse(await licenceUpload.Content.ReadAsStringAsync());
+        var licenceReference = licenceJson.RootElement.GetProperty("storageReference").GetString()!;
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles["private-media-union-driver"] = profiles["private-media-union-driver"] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", licenceReference, "Approved"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "private-media-union-manager");
+        using var otherManager = factory.CreateUnionManagerClient("another-private-media-union", "private-media-other-manager");
+        using var ownerRead = await manager.GetAsync(
+            "/api/v1/union/drivers/private-media-union-driver/documents/DrivingLicence");
+        Assert.Equal(HttpStatusCode.OK, ownerRead.StatusCode);
+        Assert.Equal("private, no-store", ownerRead.Headers.CacheControl?.ToString());
+        Assert.Equal(pdf, await ownerRead.Content.ReadAsByteArrayAsync());
+
+        using var otherRead = await otherManager.GetAsync(
+            "/api/v1/union/drivers/private-media-union-driver/documents/DrivingLicence");
+        Assert.Equal(HttpStatusCode.NotFound, otherRead.StatusCode);
+    }
 }
