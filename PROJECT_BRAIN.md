@@ -5,13 +5,13 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `ebbdb8da0e4054d0f1420754dad4b8aafc49ad3a`. PRs #172–#176, #178 and #179 are merged. PR #177 remains closed unmerged and parked for the Android phase only.
+**Main HEAD:** `e5ec120bf06d0e92967a564300198cf042553b0b`. PRs #172–#176 and #178–#180 are merged. PR #177 remains closed unmerged and parked for Android only.
 **Current platform phase:** API. Android completion is gated until API source, deterministic tests, OpenAPI/docs, auth/privacy, persistence and native non-container publish exit criteria pass. iOS is gated until both Android apps exit.
-**Current API PR:** [#180 — Cosmos migration lease renewal and fencing](https://github.com/rajeevp727/turnova-platform/pull/180), branch `feat/api-cosmos-migration-lease-renewal`. Final documentation-head CI #44130301238 on source/test head d3a24df5592895d5dbc92438cec68c138c474636 passed scope, Release build, 744/744 backend tests (0 failed, 0 skipped) and native non-container .NET 10 publish; artifact 14348249426. Android/iOS jobs were correctly skipped. The current documentation sync is the only delta from that verified source/test head; its exact-head CI is the remaining merge gate.
-**Previous API evidence:** PR #179 exact-head CI #44126440529 passed backend 735/735 and native non-container .NET 10 publish; Android/iOS jobs were correctly skipped.
-**API next:** private-media boundary/server-issued Driver-bound document references, Kestrel host-level 16 KiB rejection, and complete API acceptance audit. Live Cosmos multi-instance/restart, provider storage/scanning, consent/retention approval, production identity and hosting remain external.
+**Current API PR:** [#181 — provider-agnostic private Driver media boundary](https://github.com/rajeevp727/turnova-platform/pull/181), branch `feat/api-private-driver-media-boundary`. Source/test head before documentation synchronization: `f75be86dae358a7c2dd4df727d1a9710c7c8bc69`; exact-head API CI pending.
+**Previous API evidence:** PR #180 exact-head [CI #44131030509](https://github.com/rajeevp727/turnova-platform/actions/runs/44131030509) passed scope, Release build, 744/744 backend tests and native non-container .NET 10 publish (artifact [14349777538](https://github.com/rajeevp727/turnova-platform/actions/runs/44131030509/artifacts/14349777538); Android/iOS correctly skipped).
+**PR #181 implementation:** provider-agnostic `IPrivateDriverMediaStore`, deterministic Development/Testing adapters, unavailable Staging/Production adapter, opaque Driver-bound media references, content signature/size validation, owner-only retrieval, current-active-Union document retrieval, scan-cleared checks, and new profile writes that persist `ProfilePhotoStorageReference` rather than inline Base64. Historical inline selfie records remain readable; no bulk migration is performed.
+**API next after PR #181:** Kestrel host-level 16 KiB support-request payload rejection and full API acceptance-row audit. Real object storage, malware scanning, managed identity, consent/retention approval and live Cosmos multi-instance/restart remain external.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
-
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
