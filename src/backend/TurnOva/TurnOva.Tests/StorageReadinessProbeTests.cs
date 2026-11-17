@@ -371,7 +371,6 @@ public sealed class StorageReadinessProbeTests
         Assert.True(Volatile.Read(ref stoppedActivities) >= 1);
         Assert.True(Volatile.Read(ref measurementCallbacks) >= 1);
     }
-}
 
     [Fact]
     public async Task CheckAsyncDoesNotInvokeProviderWhenCallerIsAlreadyCancelled()
@@ -451,4 +450,4 @@ public sealed class StorageReadinessProbeTests
 
         Assert.Equal(cancellation.Token, exception.CancellationToken);
     }
-
+}
