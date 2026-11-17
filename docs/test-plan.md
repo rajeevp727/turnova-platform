@@ -3278,14 +3278,14 @@ The contextual verifier now has 17 deterministic tests. The real Rider/Driver au
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| MOBILE-AUDIT-001 | Rider npm audit reports the observed picomatch major-only remediation hint | Accept only `react-native@0.88.1` with `isSemVerMajor=true`; do not claim the advisory is patched | CI/unit | P0 |
-| MOBILE-AUDIT-002 | Driver npm audit reports the observed picomatch major-only remediation hint | Accept only `expo@58.0.26` with `isSemVerMajor=true`; do not claim the advisory is patched | CI/unit | P0 |
+| MOBILE-AUDIT-001 | Rider npm audit reports either reviewed major-only picomatch remediation hint | Accept only `react-native@0.88.1` or `expo@58.0.26` with `isSemVerMajor=true`; do not claim the advisory is patched | CI/unit | P0 |
+| MOBILE-AUDIT-002 | Driver npm audit reports either reviewed major-only picomatch remediation hint | Accept only `react-native@0.88.1` or `expo@58.0.26` with `isSemVerMajor=true`; do not claim the advisory is patched | CI/unit | P0 |
 | MOBILE-AUDIT-003 | npm changes the suggested remediation package/version or major/minor classification | Fail closed and require dependency/security re-review before updating the exact allow-list | CI/unit | P0 |
 | MOBILE-AUDIT-004 | A high/critical advisory, unknown high root, direct picomatch dependency/import, unreviewed parent or Android bundle source-map inclusion appears | Fail the mobile validation job; no native Android release or emulator smoke may be treated as passed | CI/security | P0 |
 
-| MOBILE-AUDIT-005 | Rider report supplies the Driver Expo 58.0.26 hint, or Driver report supplies the Rider React Native 0.88.1 hint | Verifier rejects the cross-app remediation hint | CI/unit | P0 |
+| MOBILE-AUDIT-005 | npm metadata switches between the two reviewed major-only hints for either known app | Verifier accepts only exact `react-native@0.88.1` or `expo@58.0.26` objects with `isSemVerMajor=true`; no per-app mapping is assumed | CI/unit | P0 |
 | MOBILE-AUDIT-006 | App package name is unknown or package/lock JSON root is not an object | Verifier fails closed before applying the contextual advisory exception | CI/unit | P0 |
 | MOBILE-AUDIT-007 | App source uses a static side-effect picomatch import or require.resolve('picomatch') | Source scanner rejects the direct app reference | CI/security | P0 |
 
 
-The latest verifier suite has 27 deterministic cases. The reviewed major-only hint is app-specific: Rider package name `turnova-rider` -> `react-native@0.88.1`; Driver package name `turnova-driver` -> `expo@58.0.26`. Cross-app values, unknown package identities, unknown versions, non-major metadata, malformed package/lock roots and direct source imports fail closed. This remains a contextual exception for the sole transitive picomatch advisory, not a patched dependency.
+The latest verifier suite has 27 deterministic cases. The app name must be `turnova-rider` or `turnova-driver`; either exact major-only hint (`react-native@0.88.1` or `expo@58.0.26`) is accepted for either app because npm metadata changed across runs. Unknown package identities, unknown versions, non-major metadata, malformed package/lock roots and direct source imports fail closed. This remains a contextual exception for the sole transitive picomatch advisory, not a patched dependency.
