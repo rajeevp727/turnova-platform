@@ -156,7 +156,10 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         self.assertNotEqual(self.run_gate(audit_status=1).returncode, 0)
 
 
-    def test_allows_reviewed_expo_sdk_remediation_metadata(self):
+    def test_allows_driver_expo_sdk_remediation_metadata(self):
+        package = json.loads((self.app / "package.json").read_text())
+        package["name"] = "turnova-driver"
+        (self.app / "package.json").write_text(json.dumps(package))
         self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
             "name": "expo", "version": "58.0.26", "isSemVerMajor": True
         }
@@ -165,12 +168,44 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn("not represented as patched", result.stdout)
 
+    def test_rejects_driver_remediation_hint_for_rider(self):
+        self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
+            "name": "expo", "version": "58.0.26", "isSemVerMajor": True
+        }
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_rider_remediation_hint_for_driver(self):
+        package = json.loads((self.app / "package.json").read_text())
+        package["name"] = "turnova-driver"
+        (self.app / "package.json").write_text(json.dumps(package))
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_unknown_app_identity_for_contextual_exception(self):
+        package = json.loads((self.app / "package.json").read_text())
+        package["name"] = "turnova-unknown"
+        (self.app / "package.json").write_text(json.dumps(package))
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_non_object_package_manifest(self):
+        (self.app / "package.json").write_text("[]", encoding="utf-8")
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_non_object_package_lock(self):
+        (self.app / "package-lock.json").write_text("[]", encoding="utf-8")
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
     def test_rejects_unreviewed_picomatch_remediation_path(self):
         self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = True
         self.write_report()
         self.assertNotEqual(self.run_gate().returncode, 0)
 
     def test_rejects_unreviewed_picomatch_remediation_version(self):
+        package = json.loads((self.app / "package.json").read_text())
+        package["name"] = "turnova-driver"
+        (self.app / "package.json").write_text(json.dumps(package))
         self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
             "name": "expo", "version": "58.0.27", "isSemVerMajor": True
         }
@@ -178,10 +213,21 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         self.assertNotEqual(self.run_gate().returncode, 0)
 
     def test_rejects_non_major_picomatch_remediation(self):
+        package = json.loads((self.app / "package.json").read_text())
+        package["name"] = "turnova-driver"
+        (self.app / "package.json").write_text(json.dumps(package))
         self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
             "name": "expo", "version": "58.0.26", "isSemVerMajor": False
         }
         self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_static_side_effect_picomatch_import(self):
+        (self.app / "src" / "index.ts").write_text("import 'picomatch';")
+        self.assertNotEqual(self.run_gate().returncode, 0)
+
+    def test_rejects_picomatch_require_resolve(self):
+        (self.app / "src" / "index.ts").write_text("const path = require.resolve('picomatch');")
         self.assertNotEqual(self.run_gate().returncode, 0)
 
 
