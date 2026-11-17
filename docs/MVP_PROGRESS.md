@@ -2589,9 +2589,14 @@ Security follow-up: verify-mobile-npm-audit.py now rejects missing metadata, sev
 
 ## PR #185 per-app audit identity handoff — 2026-11-18
 
-- The exact-head correction binds the two observed npm remediation hints to `package.json.name`: Rider `turnova-rider` -> `react-native@0.88.1`; Driver `turnova-driver` -> `expo@58.0.26`; both must remain major-only. Cross-app, unknown app and unreviewed metadata fail closed.
+- The exact-head correction validates the app name is Rider or Driver and allows only either exact major-only npm hint observed for this advisory (`react-native@0.88.1` or `expo@58.0.26`). A subsequent Rider audit changed from the React Native hint to the Expo hint without changing the vulnerability inventory, so the hint is not stable per app. Unknown app identities and unreviewed metadata still fail closed.
 - Added audit-source detection for static side-effect imports and `require.resolve`, plus malformed package.json/package-lock root tests. Audit verifier tests: 27.
 - The latest in-progress run on the superseded head `d7041fcdfabb0f6198e895bf343a12b26371936c` had both mobile audit/typecheck/Android bundle jobs and backend build/tests/native API publish passed; both Android debug APKs had been generated. Release APK builds were still running when the per-app hardening commit superseded that head. Do not use it as final-head release/emulator evidence.
 - **Next exact action:** verify the new branch head and fresh CI. Require both apps' audit tests/reports, Android bundle, debug/release APK, package identity, emulator install/launch smoke, backend tests/native publish and all required checks green.
 - PR #185 remains the sole active PR. Do not merge until final-head checks pass and the security review confirms the build-tooling-only exception remains accurately scoped. No self-approval or protection bypass.
 - Platform remains Android; finish Rider Android before Driver Android; iOS remains gated. Strict acceptance 0/19; production readiness not established.
+
+
+## PR #185 npm remediation metadata drift handoff — 2026-11-18
+
+The new exact-head CI #44169775823 exposed a further npm metadata change: the Rider audit report now suggests `expo@58.0.26` (major-only) instead of the previously observed `react-native@0.88.1`, with the same 34-record inventory and same GHSA root. The per-app mapping was too strict. The verifier now allows only those two exact major-only suggestions for either known app name and still rejects unknown apps, packages/versions, non-major hints, critical/unknown advisories, direct imports and Android bundle inclusion. The suite remains 27 deterministic tests. Fresh exact-head CI is required after this correction.
