@@ -184,4 +184,36 @@ public sealed partial class RideApiIntegrationTests
             "/api/v1/union/drivers/private-media-union-driver/documents/DrivingLicence");
         Assert.Equal(HttpStatusCode.NotFound, otherRead.StatusCode);
     }
+
+    [Fact]
+    public async Task UnionManagerCannotRetrieveDocumentsForHistoricalNonCabDriver()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "private-media-noncab-driver");
+        const string unionId = "private-media-noncab-union";
+        SeedBookableDriver(factory, "private-media-noncab-driver", unionId);
+
+        var pdf = Encoding.ASCII.GetBytes("%PDF-1.4\\nlegacy-noncab-document");
+        using var upload = await driver.PostAsJsonAsync("/api/v1/driver/onboarding/media", new
+        {
+            documentType = "DrivingLicence",
+            contentType = "application/pdf",
+            contentBase64 = Convert.ToBase64String(pdf)
+        });
+        Assert.Equal(HttpStatusCode.Created, upload.StatusCode);
+        using var json = JsonDocument.Parse(await upload.Content.ReadAsStringAsync());
+        var reference = json.RootElement.GetProperty("storageReference").GetString()!;
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles["private-media-noncab-driver"] = profiles["private-media-noncab-driver"] with
+        {
+            ServiceClass = "auto",
+            Documents = [new DriverDocumentReference("DrivingLicence", reference, "Approved")]
+        };
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "private-media-noncab-manager");
+        using var response = await manager.GetAsync(
+            "/api/v1/union/drivers/private-media-noncab-driver/documents/DrivingLicence");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
 }
