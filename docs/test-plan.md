@@ -2976,7 +2976,7 @@ PR [#175](https://github.com/rajeevp727/turnova-platform/pull/175), branch `fix/
 | PLATFORM-HEALTH-015 | Caller cancellation occurs immediately before a provider throws `HttpRequestException` | Propagate caller cancellation and record outcome `cancelled`, not `unavailable` | Unit | P1 |
 | PLATFORM-HEALTH-016 | Caller cancellation occurs immediately before another provider exception | Propagate caller cancellation and record outcome `cancelled`, not `unavailable` | Unit | P1 |
 
-These tests are implemented on PR [#176](https://github.com/rajeevp727/turnova-platform/pull/176), branch `fix/platform-01-cors-readiness-cancellation`. Exact-head [CI #43994529067](https://github.com/rajeevp727/turnova-platform/actions/runs/43994529067) passed **12/12 jobs** on `92c4e409b9de38f9386e767dd4ec9a3688293486`: backend 684/684, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typecheck/production bundles, native non-container API publish, both Android debug and standalone release APK builds, both unsigned iOS Simulator builds, four same-run Android/iOS install-launch smoke tests and 19/19 artifacts. All job conclusions were success and all artifacts were unexpired at inspection. These are hosted build/emulator/Simulator results only; they do not claim live Cosmos, production CORS, telemetry export, physical-device or production acceptance.
+These tests are implemented on PR [#176](https://github.com/rajeevp727/turnova-platform/pull/176), branch `fix/platform-01-cors-readiness-cancellation`. Exact-head [CI #44006952215](https://github.com/rajeevp727/turnova-platform/actions/runs/44006952215) passed **12/12 jobs** on `0f986a2878adc5f479f43c4d09d64fcc45501143`: backend 684/684, shared mobile/auth 227/227, Python 48/48, Rider/Driver Expo validation/typecheck/production bundles, native non-container API publish, both Android debug and standalone release APK builds, both unsigned iOS Simulator builds, four same-run Android/iOS install-launch smoke tests and 19/19 artifacts. All job conclusions were success and all artifacts were unexpired at inspection. These are hosted build/emulator/Simulator results only; they do not claim live Cosmos, production CORS, telemetry export, physical-device or production acceptance. PR #176 remains Draft/unmerged with three COMMENT-only reviews, zero unresolved threads and zero approvals. This four-document synchronization requires a fresh exact-head CI before ready/merge.
 
 ## RELEASE-01 — symlink-safe release preflight and icon generation (planned next increment)
 
@@ -2989,3 +2989,31 @@ These tests are implemented on PR [#176](https://github.com/rajeevp727/turnova-p
 | RELEASE-ICONS-002 | Configured master/foreground input or generated output is a broken symlink | Generator fails closed before writing any output and reports a bounded diagnostic | Node filesystem integration | P1 |
 
 These cases are planned for the next sequential RELEASE-01 PR after PLATFORM-01 merges. They are not yet implemented or passed. The source audit found that lexical `path.resolve`/`path.relative` checks do not resolve symlinks and `existsSync` follows them; the two icon generators execute at `npm postinstall` before the release preflight. The implementation must canonicalize app root, assets directory, input and output targets before any write, reject external/broken links, preserve safe internal links, and test both Rider and Driver scripts with real temporary filesystem fixtures. Production-signed AAB/IPA, approved identifiers/EAS, production API, physical-device/pilot and store gates remain external.
+
+
+## PLATFORM-01 exact-head verification — CI #44006952215 (2026-11-17)
+
+PR [#176](https://github.com/rajeevp727/turnova-platform/pull/176), branch `fix/platform-01-cors-readiness-cancellation`, exact head `0f986a2878adc5f479f43c4d09d64fcc45501143`, base main `5e889daefbb31fdad963a7f2e24ea391e44ae5b6`.
+
+[CI #44006952215](https://github.com/rajeevp727/turnova-platform/actions/runs/44006952215) completed **12/12 jobs successfully on the exact head**:
+- Backend .NET 10 Release: **684 passed, 0 failed, 0 skipped**.
+- Shared mobile/auth: **227/227**.
+- Python native-artifact/Simulator harness: **48/48**.
+- Rider and Driver Expo configuration, TypeScript checks and Android/iOS production JavaScript bundle exports.
+- Native non-container .NET API publish.
+- Rider and Driver Android debug APKs and standalone release APKs.
+- Rider and Driver unsigned iOS Simulator applications.
+- Four same-run Android emulator/iOS Simulator install-launch smoke tests.
+- **19/19 artifacts** were available and unexpired at inspection.
+
+Key artifacts: API publish `14295325615`; Rider/Driver Android release APKs `14294419636` / `14295241962`; Rider/Driver iOS Simulator apps `14295756624` / `14295587063`; Rider/Driver Android smoke `14294209039` / `14294393743`; Rider/Driver iOS smoke `14296695278` / `14296491157`.
+
+PLATFORM-CORS-008/009 and PLATFORM-HEALTH-013–016 are implemented and passed. The six deterministic regressions cover ambiguous raw CORS delimiters/characters, pre-cancelled readiness requests and caller-cancellation precedence over Cosmos, HTTP and general provider exceptions. No live Cosmos, production CORS, telemetry export, production auth, physical-device or production acceptance is claimed.
+
+PR #176 remains Draft/unmerged with three COMMENT-only reviews, zero unresolved inline threads and zero approvals. The following documentation-only synchronization creates a new PR head; fresh exact-head CI is required before marking ready or merging.
+
+## RELEASE-01 — symlink-safe release preflight and icon generation (planned next increment)
+
+The source audit confirms that `release-preflight.cjs` uses lexical `path.resolve`/`path.relative` containment and `existsSync` follows symlinks. Rider and Driver icon generators run during `npm postinstall` before release preflight and write through configured assets/output paths. Planned tests RELEASE-PREFLIGHT-012–014 and RELEASE-ICONS-001–002 cover external icon symlinks, external assets-directory symlinks, safe internal symlinks, output symlinks and broken input/output symlinks using real temporary filesystem fixtures. These tests are **planned, not implemented or passed**. After PLATFORM-01 merges, implement canonical app/assets/input/output containment and fail closed before any external read/write.
+
+Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number policy, signing certificates/profiles, production HTTPS API/DNS/TLS/CORS, signed-device Keychain, physical-device/pilot and store gates remain external. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked); production readiness is not established.
