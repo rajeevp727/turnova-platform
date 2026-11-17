@@ -7,12 +7,11 @@ public sealed class CosmosMigrationRunner(
     CosmosClient client,
     CosmosDbOptions options,
     IEnumerable<ICosmosMigration> migrations,
+    CosmosMigrationLeaseCoordinator leaseCoordinator,
     ILogger<CosmosMigrationRunner> logger)
 {
     public const string HistoryContainerName = "MigrationHistory";
     public const string LockContainerName = "MigrationLocks";
-    private static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan LockRetryDelay = TimeSpan.FromSeconds(2);
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
@@ -25,20 +24,24 @@ public sealed class CosmosMigrationRunner(
             cancellationToken: cancellationToken);
         var history = historyResponse.Container;
 
-        var lockResponse = await database.CreateContainerIfNotExistsAsync(
+        await database.CreateContainerIfNotExistsAsync(
             new ContainerProperties(LockContainerName, "/id"),
             cancellationToken: cancellationToken);
-        var locks = lockResponse.Container;
 
         var migrationDatabase = new CosmosMigrationDatabase(database);
-        var lease = await AcquireLockAsync(locks, cancellationToken);
+        var lease = await leaseCoordinator.AcquireAsync(cancellationToken);
+        var leaseState = new CosmosMigrationLeaseState(lease);
+        using var migrationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var renewalTask = leaseCoordinator.RunRenewalLoopAsync(leaseState, migrationCancellation);
+
         try
         {
             foreach (var migration in migrations.OrderBy(x => x.Id, StringComparer.Ordinal))
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                var migrationToken = migrationCancellation.Token;
+                migrationToken.ThrowIfCancellationRequested();
                 var migrationId = migration.Id;
-                if (await IsAppliedAsync(history, migrationId, cancellationToken))
+                if (await IsAppliedAsync(history, migrationId, migrationToken))
                 {
                     logger.LogInformation("Cosmos migration {MigrationId} already applied; skipping.", migrationId);
                     continue;
@@ -46,7 +49,11 @@ public sealed class CosmosMigrationRunner(
 
                 logger.LogInformation("Applying Cosmos migration {MigrationId}: {Description}",
                     migration.Id, migration.Description);
-                await migration.UpAsync(migrationDatabase, cancellationToken);
+                await migration.UpAsync(migrationDatabase, migrationToken);
+
+                // A migration may finish after its lease was fenced. Never publish its history
+                // marker unless this runner still owns the renewed lease.
+                migrationToken.ThrowIfCancellationRequested();
 
                 var historyDocument = new MigrationHistoryDocument
                 {
@@ -60,12 +67,12 @@ public sealed class CosmosMigrationRunner(
                 {
                     await history.CreateItemAsync(
                         historyDocument, new PartitionKey(historyDocument.Id),
-                        cancellationToken: cancellationToken);
+                        cancellationToken: migrationToken);
                 }
                 catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
                 {
                     // A previously applied migration record is authoritative; verify it exists.
-                    if (!await IsAppliedAsync(history, migrationId, cancellationToken))
+                    if (!await IsAppliedAsync(history, migrationId, migrationToken))
                         throw;
                 }
 
@@ -74,74 +81,10 @@ public sealed class CosmosMigrationRunner(
         }
         finally
         {
-            await ReleaseLockAsync(locks, lease);
-        }
-    }
-
-    private async Task<MigrationLockLease> AcquireLockAsync(
-        Container locks, CancellationToken cancellationToken)
-    {
-        var owner = Guid.NewGuid().ToString("N");
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var lease = new MigrationLockDocument
-            {
-                Id = "schema-migrations",
-                Owner = owner,
-                ExpiresAtUtc = DateTimeOffset.UtcNow.Add(LockDuration)
-            };
-
-            try
-            {
-                var created = await locks.CreateItemAsync(
-                    lease, new PartitionKey(lease.Id), cancellationToken: cancellationToken);
-                logger.LogInformation("Acquired Cosmos migration lock {Owner}.", owner);
-                return new MigrationLockLease(lease.Id, owner, created.ETag);
-            }
-            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-            {
-                var current = await ReadLockAsync(locks, cancellationToken);
-                if (current is null)
-                    continue;
-
-                if (current.Document.ExpiresAtUtc <= DateTimeOffset.UtcNow)
-                {
-                    try
-                    {
-                        var replacement = lease;
-                        var response = await locks.ReplaceItemAsync(
-                            replacement, replacement.Id, new PartitionKey(replacement.Id),
-                            new ItemRequestOptions { IfMatchEtag = current.ETag },
-                            cancellationToken);
-                        logger.LogWarning("Recovered expired Cosmos migration lock owned by {PreviousOwner}.", current.Document.Owner);
-                        return new MigrationLockLease(replacement.Id, owner, response.ETag);
-                    }
-                    catch (CosmosException replaceException) when (
-                        replaceException.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
-                    {
-                        continue;
-                    }
-                }
-
-                await Task.Delay(LockRetryDelay, cancellationToken);
-            }
-        }
-    }
-
-    private static async Task<MigrationLockReadResult?> ReadLockAsync(
-        Container locks, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var response = await locks.ReadItemAsync<MigrationLockDocument>(
-                "schema-migrations", new PartitionKey("schema-migrations"),
-                cancellationToken: cancellationToken);
-            return new MigrationLockReadResult(response.Resource, response.ETag);
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return null;
+            // Stop and await the heartbeat before releasing with its latest ETag.
+            migrationCancellation.Cancel();
+            await renewalTask;
+            await leaseCoordinator.ReleaseAsync(leaseState);
         }
     }
 
@@ -160,38 +103,11 @@ public sealed class CosmosMigrationRunner(
         }
     }
 
-    private static async Task ReleaseLockAsync(
-        Container locks, MigrationLockLease lease)
-    {
-        try
-        {
-            await locks.DeleteItemAsync<MigrationLockDocument>(
-                lease.Id, new PartitionKey(lease.Id),
-                new ItemRequestOptions { IfMatchEtag = lease.ETag },
-                CancellationToken.None);
-        }
-        catch (CosmosException ex) when (
-            ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
-        {
-            // The lease expired or was replaced; never delete another instance's lock.
-        }
-    }
-
     private sealed class MigrationHistoryDocument
     {
         public string Id { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public DateTimeOffset AppliedAtUtc { get; set; }
         public string AppliedBy { get; set; } = string.Empty;
-    }
-
-    private sealed record MigrationLockReadResult(MigrationLockDocument Document, string ETag);
-    private sealed record MigrationLockLease(string Id, string Owner, string ETag);
-
-    private sealed record MigrationLockDocument
-    {
-        public string Id { get; init; } = string.Empty;
-        public string Owner { get; init; } = string.Empty;
-        public DateTimeOffset ExpiresAtUtc { get; init; }
     }
 }
