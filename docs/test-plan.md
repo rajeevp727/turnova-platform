@@ -3154,11 +3154,11 @@ The same suite verifies SUPPORT-API-010 endpoint size-limit metadata/OpenAPI 413
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| DRIVER-MEDIA-001 | Driver uploads selfie through provider-agnostic private-media boundary | Raw bytes are stored outside the Cosmos Driver profile; profile stores only a server-issued opaque reference bound to that Driver | API/storage contract | P0 |
-| DRIVER-MEDIA-002 | Driver submits another Driver's, arbitrary, absolute-URL or expired document reference | API rejects it before onboarding/review; no cross-Driver reference is persisted | API security | P0 |
-| DRIVER-MEDIA-003 | Selfie/document scan is pending, rejected or unavailable | Content remains quarantined/private and cannot be approved or exposed in Rider discovery | API/privacy | P0 |
-| DRIVER-MEDIA-004 | UnionManager reviews or retrieves a member document | Only the current signed UnionManager for the Driver's current Union can retrieve the private review asset; Rider and other unions are denied | API authorization | P0 |
-| DRIVER-MEDIA-005 | Consent withdrawal or retention expiry | Private object and reference are deleted/invalidated according to the approved policy; audit retains only the permitted non-content evidence | API/privacy | P1 |
+| DRIVER-MEDIA-001 | Driver uploads selfie through provider-agnostic private-media boundary | Raw bytes are stored outside the Cosmos Driver profile; new profile stores only a server-issued opaque reference bound to that Driver | `PrivateDriverMediaApiIntegrationTests.OnboardingPersistsPrivateSelfieReferenceAndRejectsAnotherDriversDocumentReference`; `PrivateDriverMediaStoreTests.StoredReferenceIsOpaqueAndBoundToDriverAndMediaType` | P0 |
+| DRIVER-MEDIA-002 | Driver submits another Driver's, arbitrary, absolute-URL or expired document reference | Server-issued cross-Driver or wrong-media-type reference is rejected before onboarding; local legacy fixtures are limited to Development/Testing | `PrivateDriverMediaApiIntegrationTests.OnboardingPersistsPrivateSelfieReferenceAndRejectsAnotherDriversDocumentReference`; `PrivateDriverMediaStoreTests.StoredReferenceIsOpaqueAndBoundToDriverAndMediaType` | P0 |
+| DRIVER-MEDIA-003 | Selfie/document scan is pending, rejected or unavailable | PendingScan cannot be used for onboarding, Union review or Rider discovery; Staging/Production without a provider return 503 | `PrivateDriverMediaStoreTests.PendingScanCannotBeUsedForOnboardingOrReview`; `PrivateDriverMediaStoreTests.UnconfiguredProviderFailsClosed` | P0 |
+| DRIVER-MEDIA-004 | UnionManager reviews or retrieves a member document | Only the current signed UnionManager for the Driver's current active Union can retrieve a scan-cleared asset; Rider and other unions are denied | `PrivateDriverMediaApiIntegrationTests.UnionManagerCanReadOnlyCurrentAssignedDriversScanClearedDocuments` | P0 |
+| DRIVER-MEDIA-005 | Consent withdrawal or retention expiry | Private object and reference are deleted/invalidated according to the approved policy; audit retains only permitted non-content evidence | External policy/provider validation; no retention or consent behaviour is claimed by the in-memory adapter | P1 |
 
 These tests require a provider-agnostic interface and deterministic in-memory fake before live provider integration. Production scanning, managed identity, consent/retention policy and private object-storage credentials remain external.
 
@@ -3191,3 +3191,13 @@ The current checked-in state is API `in_progress`, Android/iOS `not_started`. Ex
 
 - CI recovery note (2026-11-17): #441256 compiled and ran 735 tests; 734 passed and SUPPORT-API-016 failed because the test expected a null TTL when policy alone was disabled. The method correctly returned false for acceptance but preserved the valid 7-day TTL. The test now asserts 604800 seconds in that branch; zero-retention still asserts null. Corrected commit `fb4e0c92a27796d2ec1d5cfbb6b5bc6af4fe1e31`; fresh exact-head CI is pending.
 
+
+### Additional private-media API regressions
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| DRIVER-MEDIA-006 | Driver retrieves an uploaded private object | Only the owning Driver receives bytes; response is `Cache-Control: private, no-store`; another Driver receives 404 | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadIssuesOpaqueOwnerBoundReferenceAndPrivateRead` | P0 |
+| DRIVER-MEDIA-007 | Upload declares an unsupported media type or mismatched file signature | API rejects it before storage; no media reference is issued | Content-signature validation in `IsValidPrivateMediaPayload`; exact-head CI pending | P0 |
+| DRIVER-MEDIA-008 | Historical Driver profile contains inline Base64 selfie | Historical record remains readable; new writes leave Base64 null and use `ProfilePhotoStorageReference` | Existing selfie/discovery regression suite plus new onboarding reference assertion | P0 |
+
+**External gate:** Real private object storage, malware scanning/quarantine, managed identity, consent, retention/deletion and live authorization integration remain unconfigured. Testing uses a deterministic Clean fake only; Development returns PendingScan; Staging/Production fail closed. No live provider or production media validation is claimed.
