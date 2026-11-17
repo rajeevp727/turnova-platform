@@ -77,7 +77,7 @@ def validate_audit_report(report: dict) -> tuple[dict, dict] | str:
         if not isinstance(name, str) or not name or not isinstance(item, dict):
             return "npm audit report contains a malformed vulnerability record."
         severity = item.get("severity")
-        if severity not in actual_counts:
+        if not isinstance(severity, str) or severity not in actual_counts:
             return f"npm audit report contains an unknown severity for {name}."
         nodes = item.get("nodes")
         if not isinstance(nodes, list) or not nodes or any(not isinstance(node, str) or not node for node in nodes):
