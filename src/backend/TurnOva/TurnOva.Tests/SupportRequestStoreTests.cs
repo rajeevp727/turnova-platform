@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Microsoft.Azure.Cosmos;
 using Moq;
 using TurnOva.Domain.Support;
@@ -8,6 +9,17 @@ namespace TurnOva.Tests;
 
 public sealed class SupportRequestStoreTests
 {
+    [Fact]
+    public void SupportRequestSerializesPerItemTtlUsingCosmosPropertyName()
+    {
+        var request = CreateRequest() with { Ttl = 604800 };
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(
+            request,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        Assert.Equal(604800, document.RootElement.GetProperty("ttl").GetInt32());
+    }
+
     [Fact]
     public async Task InMemoryStoreCreatesAndReplaysSameSubmission()
     {
