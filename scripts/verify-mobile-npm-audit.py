@@ -8,7 +8,12 @@ import re
 import sys
 from pathlib import Path
 
-EXPECTED_PICOMATCH_REMEDIATION = {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True}
+# npm currently reports one of two equivalent major-only SDK migration paths
+# across Rider and Driver lockfiles. Neither is a patched picomatch release.
+EXPECTED_PICOMATCH_REMEDIATIONS = (
+    {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True},
+    {"name": "expo", "version": "58.0.26", "isSemVerMajor": True},
+)
 ALLOWED_HIGH_ADVISORY = (
     "picomatch",
     "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
@@ -155,7 +160,7 @@ def verify(report_path: Path, audit_status: int, app_dir: Path, bundle_dir: Path
             return fail("allowlisted picomatch advisory must remain transitive, not a direct app dependency")
         if picomatch.get("severity") != "high":
             return fail("expected the allowlisted picomatch record to remain high severity")
-        if picomatch.get("fixAvailable") != EXPECTED_PICOMATCH_REMEDIATION:
+        if picomatch.get("fixAvailable") not in EXPECTED_PICOMATCH_REMEDIATIONS:
             return fail("picomatch remediation metadata changed; re-review the dependency upgrade path")
 
         nodes = set(picomatch.get("nodes", []))
