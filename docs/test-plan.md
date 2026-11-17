@@ -3121,3 +3121,5 @@ Live Cosmos ETag contention, multi-instance migration lease recovery, restart/cr
 | API-PLATFORM-002 | Mobile PR without Android approval | Expo/typecheck/Android bundle, shared mobile tests, native Android and smoke jobs are skipped | CI workflow | P0 |
 | API-PLATFORM-003 | Android-approved PR | Android validation/build/smoke run; iOS bundle/build/smoke remain skipped | CI workflow | P0 |
 | API-PLATFORM-004 | iOS phase approval | iOS bundle/build/smoke require both Android-complete and iOS-approved labels | CI workflow | P0 |
+
+| API-PLATFORM-008 | Same-head iOS phase sequencing | iOS bundle validation waits for both Android native matrix and Android emulator smoke success on the same head | CI workflow | P0 |

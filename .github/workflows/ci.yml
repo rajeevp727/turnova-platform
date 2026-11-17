@@ -231,8 +231,8 @@ jobs:
           if-no-files-found: error
 
   mobile-ios:
-    needs: [scope, mobile]
-    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.mobile.result == 'success' }}
+    needs: [scope, mobile, mobile-auth-tests, native-android, android-emulator-smoke]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.mobile.result == 'success' && needs.mobile-auth-tests.result == 'success' && needs.native-android.result == 'success' && needs.android-emulator-smoke.result == 'success' }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
