@@ -2326,6 +2326,27 @@ unionManagerApi.MapGet("/drivers/{driverId}/documents/{documentType}", async (
     return Results.File(asset.Content, asset.Metadata.ContentType, enableRangeProcessing: false);
 });
 
+unionManagerApi.MapGet("/drivers/{driverId}/documents/{documentType}", async (
+    HttpContext context, ClaimsPrincipal user, string driverId, string documentType, CancellationToken ct) =>
+{
+    var assignment = await FindUnionAssignmentAsync(driverId, ct);
+    if (assignment is null || assignment.Status != "Active" || !IsUnionManagerFor(user, assignment.UnionId))
+        return Results.NotFound();
+    var union = await FindUnionAsync(assignment.UnionId, ct);
+    if (union is null || union.Status != "Active") return Results.NotFound();
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    var document = profile?.Documents?.SingleOrDefault(item =>
+        string.Equals(item.DocumentType, documentType, StringComparison.Ordinal));
+    if (document is null) return Results.NotFound();
+
+    var asset = await privateDriverMediaStore.ReadAsync(driverId, document.StorageReference, ct);
+    if (asset is null || asset.Metadata.MediaType != documentType || asset.Metadata.ScanStatus != "Clean")
+        return Results.NotFound();
+
+    context.Response.Headers.CacheControl = "private, no-store";
+    return Results.File(asset.Content, asset.Metadata.ContentType, enableRangeProcessing: false);
+});
+
 unionManagerApi.MapGet("/reconciliation", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
     var unionIds = user.FindAll("unionId")
