@@ -45,6 +45,8 @@ Only `rider` and `driver` route values are accepted. The API owns `appId=turnova
 ### Driver onboarding and eligibility
 
 - `GET /api/v1/driver/onboarding/me`
+- `POST /api/v1/driver/onboarding/media`
+- `GET /api/v1/driver/onboarding/media/{reference}`
 - `POST /api/v1/driver/onboarding`
 - `PUT /api/v1/driver/onboarding/selfie`
 - `GET /api/v1/driver/availability`
@@ -53,7 +55,19 @@ Only `rider` and `driver` route values are accepted. The API owns `appId=turnova
 - `GET /api/v1/driver/union`
 - `GET /api/v1/driver/payslips/{year}/{month}.pdf`
 
-New onboarding and ride eligibility are Cab-only. Current API storage limitation: the Driver selfie is accepted as JPEG Base64 (maximum decoded size 300 KB) and stored inline in the Cosmos Driver profile; it is not yet stored in a private object-storage provider. Driving-licence and vehicle documents are represented by client-supplied opaque `StorageReference` strings; the API validates shape/URL/path safety but cannot verify that the reference was issued for that Driver or that its contents were scanned. A public selfie requires approval by the current Union. These are development/test contracts, not production private-media readiness.
+New onboarding and ride eligibility are Cab-only. New selfie/document uploads use the provider-agnostic `IPrivateDriverMediaStore` boundary. `POST /api/v1/driver/onboarding/media` validates the declared document type, MIME type and file signature, then returns a random opaque `drvmedia_` reference bound to the authenticated Driver and media type. The API never accepts a client-supplied URL as a storage location. New Driver profiles persist `ProfilePhotoStorageReference`; `ProfilePhotoBase64` is left null for new uploads and remains readable only for historical records. The Driver can retrieve their own media through the authenticated owner route; a UnionManager can retrieve a document only while the Driver is actively assigned to a Union managed by that account. Union document responses are private/no-store and only scan-cleared media is served. Rider discovery still exposes a selfie only after approval by the current Union and never returns KYC document references or content.
+
+The current adapters are deliberately non-production: automated Testing uses a deterministic in-memory store with an explicit fake Clean result; Development uses an in-memory PendingScan store; Staging/Production use `UnavailablePrivateDriverMediaStore` and fail closed with HTTP 503. No real object-storage provider, malware scanner, managed identity, encryption/retention/consent policy is configured or claimed. Production onboarding requires server-issued Driver-bound, scan-cleared references. Development/Testing temporarily accept legacy document-reference fixtures for compatibility; this exception is not available in Staging/Production. Historical inline selfie records are preserved and are not bulk-migrated by this change.
+
+### Private Driver media
+
+- `POST /api/v1/driver/onboarding/media` — authenticated Driver upload. Request: `{ documentType, contentType, contentBase64 }`; accepted types are ProfilePhoto, DrivingLicence, VehicleRegistration, Insurance and Permit. The server validates JPEG/PNG/PDF signatures and bounded decoded size, stores through `IPrivateDriverMediaStore`, and returns an opaque Driver-bound reference plus scan status.
+- `GET /api/v1/driver/onboarding/media/{reference}` — authenticated owner-only retrieval; response is `Cache-Control: private, no-store`.
+- `GET /api/v1/union/drivers/{driverId}/documents/{documentType}` — UnionManager-only retrieval. The handler rechecks the current active Driver-to-Union assignment, active Union and document membership; another Union cannot retrieve the document. Only scan-cleared media is served.
+- `POST /api/v1/driver/onboarding` and `PUT /api/v1/driver/onboarding/selfie` accept exactly one of the legacy Base64 payload or a server-issued reference. Base64 input is immediately written through the private-media boundary; the new profile stores only the reference.
+- A reference is not authorization by itself. Every read checks the authenticated Driver or the current UnionManager assignment. Rider endpoints never receive document references or document bytes.
+- `PendingScan` media cannot be used for onboarding approval, Union review or public selfie discovery. The deterministic test adapter simulates Clean only in automated Testing; this is not malware-scan evidence.
+- Production/Staging remain blocked until a real private object-storage provider, malware scanner, managed identity, consent evidence and approved retention/deletion policy are configured. The current unavailable adapter returns 503 rather than persisting Base64 in Cosmos.
 
 ### Rider discovery and selected booking
 
