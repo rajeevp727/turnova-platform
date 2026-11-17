@@ -121,3 +121,5 @@ The API phase is not complete. The current audit has identified support-request 
 The Cosmos `SupportRequests` container uses partition key `/reporterId`. The item ID is a SHA-256 digest of the reporter ID and idempotency key; the raw key is not stored. The response does not echo the reporter ID or request text, and support content is not logged.
 
 There is intentionally no support-request list/read endpoint, attachment upload, category, severity, priority, assignment, escalation, response target or retention setting. Cosmos TTL remains unset until Product/Operations approves a retention policy. Those decisions remain external gates.
+
+Support intake is enabled by default only in Development and Testing. Staging/Production require the explicit `SupportRequests:PolicyApproved=true` setting after Product/Operations has approved the intake, privacy, access and retention policy. Until then the authenticated route returns HTTP 503 without binding or persisting the submitted body. The checked-in default is false.

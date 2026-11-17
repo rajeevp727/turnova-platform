@@ -150,6 +150,36 @@ public sealed class SupportRequestApiIntegrationTests
     }
 
     [Fact]
+    public async Task StagingSupportIntakeFailsClosedUntilPolicyIsApproved()
+    {
+        using var factory = new SupportApiFactory("Staging");
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
+        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-staging-01");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/support/requests",
+            new { subject = "Trip update issue", description = "The trip status did not refresh after reconnecting." });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, body.RootElement.GetProperty("status").GetInt32());
+    }
+
+    [Fact]
+    public async Task StagingSupportIntakeCanBeEnabledOnlyWithExplicitPolicyApproval()
+    {
+        using var factory = new SupportApiFactory("Staging", policyApproved: true);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
+        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-staging-approved-01");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/support/requests",
+            new { subject = "Trip update issue", description = "The trip status did not refresh after reconnecting." });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [Fact]
     public async Task SupportRequestsDoNotExposeAReadOrListEndpoint()
     {
         using var factory = new SupportApiFactory();
@@ -277,11 +307,13 @@ public sealed class SupportRequestApiIntegrationTests
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private sealed class SupportApiFactory : WebApplicationFactory<Program>
+    private sealed class SupportApiFactory(
+        string environmentName = "Testing",
+        bool policyApproved = false) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Testing");
+            builder.UseEnvironment(environmentName);
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -291,7 +323,8 @@ public sealed class SupportRequestApiIntegrationTests
                     ["Auth:Jwt:SigningKey"] = SigningKey,
                     ["TriSend:BaseUrl"] = "https://auth.test.invalid",
                     ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars",
-                    ["AiAssistant:Enabled"] = "false"
+                    ["AiAssistant:Enabled"] = "false",
+                    ["SupportRequests:PolicyApproved"] = policyApproved ? "true" : "false"
                 });
             });
         }

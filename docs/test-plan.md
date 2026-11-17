@@ -3112,3 +3112,7 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 Live Cosmos ETag contention, multi-instance migration lease recovery, restart/crash recovery, cross-partition query/index/RU behaviour and production retention remain external Cosmos integration gates.
 
 | CI-PHASE-001 | Enforce API → Android → iOS native order | Android native build/smoke jobs require `turnova:android-phase-approved`; iOS native build/smoke jobs require both Android and iOS approval labels; main-branch pushes run Android for changed mobile files but not iOS | Workflow contract | P0 |
+
+
+| SUPPORT-API-008 | Staging/Production support intake without explicit policy approval | Authenticated POST returns HTTP 503; no support store or migration is registered and request content is not persisted | API integration | P0 |
+| SUPPORT-API-009 | Staging/Production support intake with explicit policy approval | `SupportRequests:PolicyApproved=true` enables the authenticated intake and reporter-partitioned store; the normal idempotency contract applies | API integration | P0 |
