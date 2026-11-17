@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -24,10 +25,11 @@ public static class SupportRequestEndpoints
     public static int? GetRetentionTtlSeconds(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
-        var retentionDays = configuration.GetValue<int?>("SupportRequests:RetentionDays");
-        if (!retentionDays.HasValue || retentionDays.Value <= 0 || retentionDays.Value > int.MaxValue / 86_400)
+        var configuredDays = configuration["SupportRequests:RetentionDays"];
+        if (!int.TryParse(configuredDays, NumberStyles.None, CultureInfo.InvariantCulture, out var retentionDays) ||
+            retentionDays <= 0 || retentionDays > int.MaxValue / 86_400)
             return null;
-        return checked(retentionDays.Value * 86_400);
+        return checked(retentionDays * 86_400);
     }
 
     public static WebApplication MapSupportRequestUnavailable(this WebApplication app)
