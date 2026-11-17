@@ -40,8 +40,15 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal("nosniff", ownerRead.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal(pdf, await ownerRead.Content.ReadAsByteArrayAsync());
 
+        using var statusRead = await owner.GetAsync($"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(mediaReference)}/status");
+        Assert.Equal(HttpStatusCode.OK, statusRead.StatusCode);
+        using var statusJson = JsonDocument.Parse(await statusRead.Content.ReadAsStringAsync());
+        Assert.Equal("Clean", statusJson.RootElement.GetProperty("scanStatus").GetString());
+
         using var otherRead = await other.GetAsync($"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(mediaReference)}");
         Assert.Equal(HttpStatusCode.NotFound, otherRead.StatusCode);
+        using var otherStatus = await other.GetAsync($"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(mediaReference)}/status");
+        Assert.Equal(HttpStatusCode.NotFound, otherStatus.StatusCode);
     }
 
     [Fact]
