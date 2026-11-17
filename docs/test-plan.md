@@ -3269,7 +3269,7 @@ The deterministic verifier now has 17 cases, including malformed/inconsistent re
 | PLATFORM-NPM-016 | Metadata severity counts or total disagree with vulnerability records | Verifier rejects the inconsistent report before applying any exception | Security regression | P0 |
 | PLATFORM-NPM-017 | Vulnerability record has unknown severity or missing/empty package-node list | Verifier rejects malformed records | Security regression | P0 |
 | PLATFORM-NPM-018 | npm audit exit code contradicts the report inventory | Verifier rejects success with findings and nonzero exit without findings | Security regression | P0 |
-| PLATFORM-NPM-019 | Picomatch fixAvailable recommendation changes from the reviewed react-native@0.88.1 major upgrade | Verifier fails and requires a new dependency/remediation review | Supply-chain regression | P0 |
+| PLATFORM-NPM-019 | Picomatch fixAvailable does not match the exact app identity mapping (Rider react-native@0.88.1; Driver expo@58.0.26), or the app identity is unknown | Verifier fails and requires a new dependency/remediation review | Supply-chain regression | P0 |
 | PLATFORM-NPM-020 | Audit report root is not a JSON object | Verifier fails closed; no malformed report is treated as clean | Security regression | P0 |
 
 The contextual verifier now has 17 deterministic tests. The real Rider/Driver audit reports from CI #44161191929 showed 34 vulnerability records each (27 high, 7 moderate, 0 critical); metadata severity counts matched all 34 records and each record contained package nodes. The picomatch root record's fixAvailable field recommends react-native@0.88.1 with isSemVerMajor=true; this is a major upgrade path, not a patched picomatch release. The follow-up schema/remediation checks require fresh exact-head CI before PR #185 can merge.
@@ -3282,3 +3282,10 @@ The contextual verifier now has 17 deterministic tests. The real Rider/Driver au
 | MOBILE-AUDIT-002 | Driver npm audit reports the observed picomatch major-only remediation hint | Accept only `expo@58.0.26` with `isSemVerMajor=true`; do not claim the advisory is patched | CI/unit | P0 |
 | MOBILE-AUDIT-003 | npm changes the suggested remediation package/version or major/minor classification | Fail closed and require dependency/security re-review before updating the exact allow-list | CI/unit | P0 |
 | MOBILE-AUDIT-004 | A high/critical advisory, unknown high root, direct picomatch dependency/import, unreviewed parent or Android bundle source-map inclusion appears | Fail the mobile validation job; no native Android release or emulator smoke may be treated as passed | CI/security | P0 |
+
+| MOBILE-AUDIT-005 | Rider report supplies the Driver Expo 58.0.26 hint, or Driver report supplies the Rider React Native 0.88.1 hint | Verifier rejects the cross-app remediation hint | CI/unit | P0 |
+| MOBILE-AUDIT-006 | App package name is unknown or package/lock JSON root is not an object | Verifier fails closed before applying the contextual advisory exception | CI/unit | P0 |
+| MOBILE-AUDIT-007 | App source uses a static side-effect picomatch import or require.resolve('picomatch') | Source scanner rejects the direct app reference | CI/security | P0 |
+
+
+The latest verifier suite has 27 deterministic cases. The reviewed major-only hint is app-specific: Rider package name `turnova-rider` -> `react-native@0.88.1`; Driver package name `turnova-driver` -> `expo@58.0.26`. Cross-app values, unknown package identities, unknown versions, non-major metadata, malformed package/lock roots and direct source imports fail closed. This remains a contextual exception for the sole transitive picomatch advisory, not a patched dependency.
