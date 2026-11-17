@@ -294,7 +294,7 @@ if (app.Environment.IsEnvironment("Testing"))
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
 if (supportRequestsEnabled)
-    app.MapSupportRequestEndpoints();
+    app.MapSupportRequestEndpoints(requireRetention: useCosmos || !localSupportEnvironment);
 else
     app.MapSupportRequestUnavailable();
 
