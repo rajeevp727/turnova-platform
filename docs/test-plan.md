@@ -3260,3 +3260,16 @@ PR #185 run [#44157712885](https://github.com/rajeevp727/turnova-platform/action
 | PLATFORM-NPM-014 | Unknown high advisory or critical advisory appears in either app | The gate fails; only the exact reviewed advisory may be contextually excepted | CI/security regression | P0 |
 
 The deterministic test script covers the allowlisted transitive build-tool case plus critical/unknown-high, direct dependency, app import, unknown parent, bundle inclusion and missing-source-map failures. The live Rider and Driver audit reports from CI #44158843845 each contain 34 package findings (27 high package nodes, 7 moderate, 0 critical); the high package nodes resolve to one transitive picomatch advisory. This remains a contextual build-tooling exception, not a patched dependency. The exact-head CI must independently prove that picomatch is absent from both Android production bundle source maps.
+
+## Android audit-report integrity regressions — PR #185 follow-up
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| PLATFORM-NPM-015 | npm audit JSON omits the metadata or vulnerabilities object | Contextual advisory exception is not evaluated; verifier fails closed | Security regression | P0 |
+| PLATFORM-NPM-016 | Metadata severity counts or total disagree with vulnerability records | Verifier rejects the inconsistent report before applying any exception | Security regression | P0 |
+| PLATFORM-NPM-017 | Vulnerability record has unknown severity or missing/empty package-node list | Verifier rejects malformed records | Security regression | P0 |
+| PLATFORM-NPM-018 | npm audit exit code contradicts the report inventory | Verifier rejects success with findings and nonzero exit without findings | Security regression | P0 |
+| PLATFORM-NPM-019 | Picomatch fixAvailable recommendation changes from the reviewed react-native@0.88.1 major upgrade | Verifier fails and requires a new dependency/remediation review | Supply-chain regression | P0 |
+| PLATFORM-NPM-020 | Audit report root is not a JSON object | Verifier fails closed; no malformed report is treated as clean | Security regression | P0 |
+
+The contextual verifier now has 17 deterministic tests. The real Rider/Driver audit reports from CI #44161191929 showed 34 vulnerability records each (27 high, 7 moderate, 0 critical); metadata severity counts matched all 34 records and each record contained package nodes. The picomatch root record's fixAvailable field recommends react-native@0.88.1 with isSemVerMajor=true; this is a major upgrade path, not a patched picomatch release. The follow-up schema/remediation checks require fresh exact-head CI before PR #185 can merge.
