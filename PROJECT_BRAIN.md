@@ -1,3 +1,8 @@
+# TurnOva Project Brain
+
+> Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
+> Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
+
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `dafb9a39b0e876e65f9c7b8443714cbf0ca646a4`; PR #181 (private Driver media boundary) is merged. PR #177 remains closed/unmerged and parked for Android only. PR #182 is the sole active feature PR.
