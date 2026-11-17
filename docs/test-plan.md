@@ -3134,7 +3134,7 @@ PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat
 The support intake route declares a 16 KiB request-body limit and OpenAPI HTTP 413. `SUPPORT-API-010` verifies the endpoint metadata and 413 response contract. `SUPPORT-API-011` verifies the policy-disabled Staging route returns 503 even for malformed JSON, before body parsing/binding. The schema migration may provision an empty container, but no support request is accepted or persisted while disabled. Support categories, severity, assignment, escalation/SLA, attachment handling and retention remain Product/Operations decisions.
 
 
-The API-only run #44109551373 on exact head `4aa9e438c4d40a26e84402a8ed55f5c6dc1f353b` completed successfully: scope and backend build/test/native publish passed; all mobile/Android/iOS jobs were skipped. The API publish artifact `14340236840` was unexpired at inspection. The subsequent test/documentation commit adds SUPPORT-API-011 and the OpenAPI 413 assertion; fresh exact-head CI is required.
+The API-only run #44111719737 on exact head `48053cb6385a5ac274dccee6a5727dbe99ab9b48` completed successfully: scope and backend build/test/native publish passed; backend 724/724; all mobile/Android/iOS jobs were skipped. The API publish artifact `14340957657` was unexpired at inspection. The scope fixtures also verify that main pushes and PR labels cannot bypass the checked-in API→Android→iOS phase state.
 
 
 ## API phase exact-head verification — PR #179 / CI #44110257240 (2026-11-17)
@@ -3165,3 +3165,15 @@ These tests require a provider-agnostic interface and deterministic in-memory fa
 | COSMOS-MIG-010 | Two runners acquire/recover an expired lease | Only one ETag owner applies each migration; idempotent history read-back is preserved | Deterministic concurrency | P0 |
 
 The current runner has a 30-minute ETag-protected lease but no renewal heartbeat. Existing migrations only create containers idempotently; implement and test renewal/fencing before adding non-idempotent data migrations. Live Cosmos multi-instance/restart remains external.
+
+
+### Platform phase-state CI fixtures (implemented in PR #179; API-only CI #44111719737 passed)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| API-PLATFORM-009 | Main push while API is in progress | Android and iOS phases remain false; any mobile-file change fails the scope gate | CI phase contract | P0 |
+| API-PLATFORM-010 | Main push after API completion and Android phase activation | Android jobs may run; iOS remains false until Android is complete and iOS is active | CI phase contract | P0 |
+| API-PLATFORM-011 | iOS-specific path changes before Android completion | Scope job fails even if Android phase is active; no iOS completion work starts early | CI phase contract | P0 |
+| API-PLATFORM-012 | PR labels claim later phase while checked-in phase state is incomplete | Labels cannot override `.github/turnova-phase.json`; Android/iOS jobs remain blocked | CI phase contract | P0 |
+
+The current checked-in state is API `in_progress`, Android/iOS `not_started`. Exact-head CI #44111719737 passed the scope detector and backend; all mobile/Android/iOS jobs were skipped. This is not Android or iOS completion evidence.
