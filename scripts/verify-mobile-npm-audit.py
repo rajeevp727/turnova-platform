@@ -8,6 +8,7 @@ import re
 import sys
 from pathlib import Path
 
+EXPECTED_PICOMATCH_REMEDIATION = {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True}
 ALLOWED_HIGH_ADVISORY = (
     "picomatch",
     "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
@@ -154,6 +155,8 @@ def verify(report_path: Path, audit_status: int, app_dir: Path, bundle_dir: Path
             return fail("allowlisted picomatch advisory must remain transitive, not a direct app dependency")
         if picomatch.get("severity") != "high":
             return fail("expected the allowlisted picomatch record to remain high severity")
+        if picomatch.get("fixAvailable") != EXPECTED_PICOMATCH_REMEDIATION:
+            return fail("picomatch remediation metadata changed; re-review the dependency upgrade path")
 
         nodes = set(picomatch.get("nodes", []))
         lock_packages = lock.get("packages", {})
