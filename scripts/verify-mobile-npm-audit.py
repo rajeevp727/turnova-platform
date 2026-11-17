@@ -13,6 +13,7 @@ from pathlib import Path
 EXPECTED_PICOMATCH_REMEDIATIONS = (
     {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True},
     {"name": "expo", "version": "58.0.26", "isSemVerMajor": True},
+    {"name": "expo-asset", "version": "58.0.21", "isSemVerMajor": True},
 )
 KNOWN_APP_PACKAGE_NAMES = {"turnova-rider", "turnova-driver"}
 ALLOWED_HIGH_ADVISORY = (
