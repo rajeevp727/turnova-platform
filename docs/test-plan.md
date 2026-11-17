@@ -3303,3 +3303,21 @@ The Rider report on CI #44170775823 changed to `expo-asset@58.0.21`; Driver repo
 Both npm audit inventories contained 34 records (27 high package nodes, 7 moderate, 0 critical). All high records resolved to the sole transitive picomatch GHSA-fc5q-39xc-vjpf. The advisory remains unpatched; it is not suppressed or represented as a clean audit. The contextual gate checks the reviewed dependency parents, rejects direct app imports/unknown high roots, and verifies no picomatch source-map inclusion. Residual build-time denial-of-service risk remains documented.
 
 Artifacts: Rider release [14368397985](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368397985), Driver release [14367803994](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14367803994), Rider emulator smoke [14369920066](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14369920066), Driver emulator smoke [14368548000](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368548000).
+
+
+## Rider Android authentication accessibility — 2026-11-18
+
+**Implementation:** PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), Rider UI only. The API auth contract and session-token lifecycle are unchanged. Deterministic Node coverage is in `src/mobile/shared/riderAuthForm.test.cjs` and is included by the existing `mobile-auth-tests` job via `node --test src/mobile/shared/*.test.cjs`.
+
+| Test ID | Behaviour | Automated evidence |
+|---|---|---|
+| RIDER-AUTH-ACCESS-001 | Registration name has an accessible label/hint, native name autofill and next-key behaviour | Pure helper contract |
+| RIDER-AUTH-ACCESS-002 | Email uses email keyboard/autofill, disables capitalization/correction and advances focus | Pure helper contract |
+| RIDER-AUTH-ACCESS-003 | Login password is secure and advertises current-password autofill | Pure helper contract |
+| RIDER-AUTH-ACCESS-004 | Registration password advertises new-password autofill | Pure helper contract |
+| RIDER-AUTH-ACCESS-005 | Submit action exposes accessible label plus disabled/busy state | Pure helper contract |
+| RIDER-AUTH-ACCESS-006 | Mode toggle announces the destination form | Pure helper contract |
+| RIDER-AUTH-ACCESS-007 | Authentication errors use an assertive alert announcement | Pure helper contract |
+| RIDER-AUTH-ACCESS-008 | Rider App.tsx binds field helpers, focus order, guarded keyboard submit, keyboard-safe taps and stable test IDs | Source-wiring regression |
+
+The source/test commit at handoff is `458b9a73e67fae0f2abb5f11f14dd833afbc72e7`; the final documentation-head CI must execute these cases along with both apps' Expo/TypeScript validation, Android release builds and emulator smoke. Passing deterministic helper/source tests is not physical-device screen-reader/autofill acceptance. Manual TalkBack/VoiceOver, signed-device auth and real API/TriSend validation remain external.
