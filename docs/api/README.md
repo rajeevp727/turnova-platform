@@ -70,6 +70,8 @@ The current adapters are deliberately non-production: automated Testing uses a d
 - `PendingScan` media cannot be used for onboarding approval, Union review or public selfie discovery. The deterministic test adapter simulates Clean only in automated Testing; this is not malware-scan evidence.
 - Production/Staging remain blocked until a real private object-storage provider, malware scanner, managed identity, consent evidence and approved retention/deletion policy are configured. The current unavailable adapter returns 503 rather than persisting Base64 in Cosmos.
 
+**Automated verification note (2026-11-17):** owner media responses are tested for both parsed Cache-Control directives, `private` and `no-store`; HTTP serialization order is not part of the contract. The first exact-head run found two order-sensitive test assertions and the test-only correction is in `1d37d685fdda9b20d8967c887cee9647a60fd5cf`. Corrected CI #44138321351 is running; no passing result is claimed until it completes on the final documentation head.
+
 ### Rider discovery and selected booking
 
 - `GET /api/v1/rider/discovery`
