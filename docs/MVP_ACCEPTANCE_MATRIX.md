@@ -5,7 +5,7 @@
 **Current platform phase:** **Android**. API engineering exit criteria are complete; Rider and Driver Android work is active. iOS remains prohibited until both Android apps pass their exit criteria.
 **API phase exit:** source implementation for all in-scope API flows, deterministic backend/domain/persistence tests, API contracts/docs, auth/authorization/privacy checks, native non-container .NET 10 Release publish and exact-head API CI are complete. This does not claim live Cosmos, production identity/provider, hosting or production readiness.
 **API evidence:** PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e`; exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed **758/758 backend tests** and native non-container API publish. PR #184 merged the phase state at `0992579b76012f24a057ae4842e524927eb9536f`.
-**Current Android PR:** [#186 — Rider authentication accessibility/autofill](https://github.com/rajeevp727/turnova-platform/pull/186), branch `feat/android-rider-auth-accessibility-v2`, source/test head `458b9a73e67fae0f2abb5f11f14dd833afbc72e7`. Rider auth UI tests RIDER-AUTH-ACCESS-001..008 are pending exact-head CI. Driver remains next only after Rider exits; iOS is gated.
+**Current Android PR:** [#186 — Rider authentication accessibility/autofill](https://github.com/rajeevp727/turnova-platform/pull/186), branch `feat/android-rider-auth-accessibility-v2`, source/test head `607a9233845759a12da321a3f8a6e3e1e1c14733`. Rider auth UI tests RIDER-AUTH-ACCESS-001..008 are pending exact-head CI. Driver remains next only after Rider exits; iOS is gated.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## API phase exit audit — 2026-11-18
@@ -1549,7 +1549,7 @@ The audit inventory remains 34 records/app (27 high package nodes, 7 moderate, 0
 
 ## Rider Android authentication accessibility handoff — 2026-11-18
 
-PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), branch `feat/android-rider-auth-accessibility-v2`, source/test head `458b9a73e67fae0f2abb5f11f14dd833afbc72e7` adds:
+PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), branch `feat/android-rider-auth-accessibility-v2`, source/test head `607a9233845759a12da321a3f8a6e3e1e1c14733` adds:
 - Accessible labels/hints for registration name, email and password.
 - Native autofill: name, email, current-password and new-password; Android autofill importance is enabled.
 - Keyboard focus order name → email → password; password submit reuses the existing authenticate handler and cannot submit while disabled/loading.
