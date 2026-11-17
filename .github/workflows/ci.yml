@@ -201,7 +201,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
+          cache-dependency-path: |
+            src/mobile/${{ matrix.app }}/package.json
+            src/mobile/${{ matrix.app }}/package-lock.sha256
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -339,7 +341,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
+          cache-dependency-path: |
+            src/mobile/${{ matrix.app }}/package.json
+            src/mobile/${{ matrix.app }}/package-lock.sha256
 
       - name: Test checksum-pinned mobile dependency bootstrap
         run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
