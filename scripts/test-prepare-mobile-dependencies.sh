@@ -103,6 +103,16 @@ assert_rejected_before_npm "broken package-lock symlink"
 rm "$tmp/app/package-lock.json"
 cp "$tmp/expected-package-lock.json" "$tmp/app/package-lock.json"
 
+# A hardlinked package-lock can alias a file outside the app without a symlink.
+cp "$tmp/app/package-lock.json" "$tmp/outside/lock-hardlink.json"
+rm "$tmp/app/package-lock.json"
+ln "$tmp/outside/lock-hardlink.json" "$tmp/app/package-lock.json"
+cp "$tmp/outside/lock-hardlink.json" "$tmp/outside/lock-hardlink.original"
+assert_rejected_before_npm "hardlinked package-lock"
+cmp "$tmp/outside/lock-hardlink.original" "$tmp/outside/lock-hardlink.json"
+rm "$tmp/app/package-lock.json"
+cp "$tmp/expected-package-lock.json" "$tmp/app/package-lock.json"
+
 # External package.json and digest symlinks are rejected before npm reads them.
 mv "$tmp/app/package.json" "$tmp/app/manifest.original"
 cp "$tmp/app/manifest.original" "$tmp/outside/manifest.json"
