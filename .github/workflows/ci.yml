@@ -209,6 +209,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Test checksum-pinned mobile dependency bootstrap
+        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
 
       - uses: actions/download-artifact@v6
         with:
@@ -351,6 +353,8 @@ jobs:
             src/mobile/${{ matrix.app }}/package.json
             src/mobile/${{ matrix.app }}/package-lock.sha256
 
+      - name: Test checksum-pinned mobile dependency bootstrap
+        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
       - uses: actions/download-artifact@v6
         with:
           name: ${{ matrix.app }}-generated-lockfile
