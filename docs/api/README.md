@@ -137,3 +137,12 @@ Support intake is enabled by default only in Development and Testing. Staging/Pr
 ## Cosmos migration lease safety
 
 The current migration runner uses a 30-minute ETag-protected lease and releases by matching ETag, but does not renew the lease while a migration is running. Existing migrations only create containers idempotently. Before adding non-idempotent data migrations, add a renewal heartbeat, lost-lease cancellation/fencing and deterministic fake-store tests; live multi-instance/restart recovery remains an external Cosmos validation gate.
+
+
+## Cosmos startup migrations
+
+The API creates the `MigrationHistory` and `MigrationLocks` containers before applying ordered schema migrations. A migration runner acquires the `schema-migrations` lease using create-if-absent or expired-lease recovery with an ETag precondition. The lease duration is 30 minutes and the API renews it every 10 minutes using the latest ETag while migrations run.
+
+If renewal loses its ETag race or the lease is replaced, the runner cancels the migration token and does not write a migration-history marker after the loss is observed. The heartbeat stops before release, and release is conditional on the latest ETag so one API instance cannot delete another instance's replacement lease.
+
+Automated fake-store and Cosmos adapter tests cover renewal, expired-lease recovery, lost-lease cancellation, ETag preconditions and latest-ETag release. Live multi-instance contention and process crash/restart recovery still require a configured Cosmos environment and are not claimed by these deterministic tests.
