@@ -36,7 +36,8 @@ public sealed partial class RideApiIntegrationTests
 
         using var ownerRead = await owner.GetAsync($"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(mediaReference)}");
         Assert.Equal(HttpStatusCode.OK, ownerRead.StatusCode);
-        Assert.Equal("private, no-store", ownerRead.Headers.CacheControl?.ToString());
+        Assert.True(ownerRead.Headers.CacheControl?.Private);
+        Assert.True(ownerRead.Headers.CacheControl?.NoStore);
         Assert.Equal("nosniff", ownerRead.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal(pdf, await ownerRead.Content.ReadAsByteArrayAsync());
 
@@ -185,7 +186,8 @@ public sealed partial class RideApiIntegrationTests
         using var ownerRead = await manager.GetAsync(
             "/api/v1/union/drivers/private-media-union-driver/documents/DrivingLicence");
         Assert.Equal(HttpStatusCode.OK, ownerRead.StatusCode);
-        Assert.Equal("private, no-store", ownerRead.Headers.CacheControl?.ToString());
+        Assert.True(ownerRead.Headers.CacheControl?.Private);
+        Assert.True(ownerRead.Headers.CacheControl?.NoStore);
         Assert.Equal(pdf, await ownerRead.Content.ReadAsByteArrayAsync());
 
         using var otherRead = await otherManager.GetAsync(
