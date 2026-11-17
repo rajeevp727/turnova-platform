@@ -10,7 +10,7 @@ mkdir -p "$tmp/bin" "$tmp/app"
 printf '{"name":"lockfile-fixture","lockfileVersion":3}\n' > "$tmp/expected-package-lock.json"
 printf '{"name":"lockfile-fixture"}\n' > "$tmp/app/package.json"
 cp "$tmp/expected-package-lock.json" "$tmp/app/package-lock.json"
-sha256sum "$tmp/expected-package-lock.json" | awk '{print $1}' > "$tmp/app/package-lock.sha256"
+node -e 'const fs = require("node:fs"); const { createHash } = require("node:crypto"); process.stdout.write(createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex") + "\n");' "$tmp/expected-package-lock.json" > "$tmp/app/package-lock.sha256"
 : > "$tmp/npm-calls"
 
 cat > "$tmp/bin/npm" <<'FAKE_NPM'
@@ -53,7 +53,7 @@ fi
 
 # Verify-only mode must validate an existing lockfile without invoking npm.
 cp "$tmp/expected-package-lock.json" "$tmp/app/package-lock.json"
-sha256sum "$tmp/expected-package-lock.json" | awk '{print $1}' > "$tmp/app/package-lock.sha256"
+node -e 'const fs = require("node:fs"); const { createHash } = require("node:crypto"); process.stdout.write(createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex") + "\n");' "$tmp/expected-package-lock.json" > "$tmp/app/package-lock.sha256"
 : > "$NPM_CALL_LOG"
 bash "$prepare_script" "$tmp/app" --verify-only
 [[ ! -s "$NPM_CALL_LOG" ]]
