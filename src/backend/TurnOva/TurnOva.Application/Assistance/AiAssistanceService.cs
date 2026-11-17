@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Text.Json.Serialization;
 
 namespace TurnOva.Application.Assistance;
 
@@ -16,6 +17,7 @@ public sealed class AiAssistantOptions
     public int MaxRequestsPerMinute { get; init; } = 10;
 }
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record TripIntentRequest(string? Text);
 
 public sealed record TripIntentDraftResponse(
@@ -28,6 +30,7 @@ public sealed record TripIntentDraftResponse(
     bool RequiresUserConfirmation,
     string Source);
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record HelpRequest(string? Question, string? RideState = null);
 
 public sealed record HelpResponse(string Answer, string SourceId, bool EscalationRequired, string Source);
