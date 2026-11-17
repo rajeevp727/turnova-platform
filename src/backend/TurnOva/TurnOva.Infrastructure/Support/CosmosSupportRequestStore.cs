@@ -37,9 +37,11 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
                     string.Equals(existing.Subject, request.Subject, StringComparison.Ordinal) &&
                     string.Equals(existing.Description, request.Description, StringComparison.Ordinal);
 
+                // Always return the canonical persisted item after a create conflict.
+                // The API maps Conflict to a generic response and never echoes this content.
                 return new SupportRequestWriteResult(
                     sameSubmission ? SupportRequestWriteStatus.Replayed : SupportRequestWriteStatus.Conflict,
-                    sameSubmission ? existing : request);
+                    existing);
             }
             catch (CosmosException missing) when (missing.StatusCode == HttpStatusCode.NotFound)
             {

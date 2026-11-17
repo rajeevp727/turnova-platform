@@ -193,9 +193,56 @@ public sealed class SupportRequestApiIntegrationTests
             var schemaName = schemaReference.GetString()!.Split('/').Last();
             schema = root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
         }
-        var propertyNames = schema.GetProperty("properties").EnumerateObject()
-            .Select(property => property.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        var propertyNames = GetSchemaPropertyNames(schema, root);
         Assert.Equal(new[] { "description", "subject" }, propertyNames);
+    }
+
+    private static string[] GetSchemaPropertyNames(JsonElement schema, JsonElement documentRoot)
+    {
+        var propertyNames = new HashSet<string>(StringComparer.Ordinal);
+        var visitedReferences = new HashSet<string>(StringComparer.Ordinal);
+
+        Visit(schema);
+        return propertyNames.OrderBy(name => name, StringComparer.Ordinal).ToArray();
+
+        void Visit(JsonElement candidate)
+        {
+            if (candidate.ValueKind != JsonValueKind.Object)
+                return;
+
+            if (candidate.TryGetProperty("$ref", out var referenceElement) &&
+                referenceElement.ValueKind == JsonValueKind.String)
+            {
+                var reference = referenceElement.GetString();
+                const string prefix = "#/components/schemas/";
+                if (reference is not null &&
+                    reference.StartsWith(prefix, StringComparison.Ordinal) &&
+                    visitedReferences.Add(reference))
+                {
+                    var schemaName = reference[prefix.Length..]
+                        .Replace("~1", "/", StringComparison.Ordinal)
+                        .Replace("~0", "~", StringComparison.Ordinal);
+                    Visit(documentRoot.GetProperty("components").GetProperty("schemas").GetProperty(schemaName));
+                }
+            }
+
+            if (candidate.TryGetProperty("properties", out var properties) &&
+                properties.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in properties.EnumerateObject())
+                    propertyNames.Add(property.Name);
+            }
+
+            foreach (var compositionName in new[] { "allOf", "oneOf", "anyOf" })
+            {
+                if (!candidate.TryGetProperty(compositionName, out var composition) ||
+                    composition.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var nestedSchema in composition.EnumerateArray())
+                    Visit(nestedSchema);
+            }
+        }
     }
 
     private static string CreateToken(string role)
