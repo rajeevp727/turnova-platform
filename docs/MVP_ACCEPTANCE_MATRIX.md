@@ -1499,10 +1499,9 @@ PR #185 additionally rejects an existing `package-lock.json` write target unless
 
 ## Android dependency audit scope — PR #185
 
-Both Rider and Driver exact audit artifacts from [CI #44158843845](https://github.com/rajeevp727/turnova-platform/actions/runs/44158843845) report 34 package findings: 27 high nodes, 7 moderate, 0 critical. The 27 high nodes have one direct advisory root, GHSA-fc5q-39xc-vjpf in transitive picomatch build tooling. The advisory has no patched version listed and is disputed by the package maintainer; it is not marked fixed.
+Fresh Rider and Driver audit artifacts from CI #44161191929 each contained 34 vulnerability records (27 high, 7 moderate, 0 critical). Every high record resolved to the single transitive picomatch advisory GHSA-fc5q-39xc-vjpf. The contextual gate passed against both real Android production source maps; verification-only maps were deleted before upload. This is a disclosed build-tooling exception, not a patched dependency.
 
-The replacement CI gate is fail-closed for critical findings, audit execution errors, any additional/unknown high advisory, direct app dependency/import, an unreviewed dependency parent, or picomatch source in the Android bundle source map. Verification-only source maps are removed before artifact upload. Eight deterministic tests cover the gate. Exact-head source-map and Android build/emulator evidence are still pending; PR #185 is not mergeable until the new exact-head CI passes.
-
+The same prior head passed both apps' npm ci, Expo config/typecheck/export, debug and standalone release APK builds, package identity checks and emulator install/launch smoke. The latest follow-up verifier commits add schema/count/exit-status validation and pin the observed major-only react-native@0.88.1 remediation metadata, with 17 deterministic tests. Those commits require fresh exact-head CI before PR #185 can merge.
 ## Android dependency/build evidence — PR #185 (2026-11-18)
 
 The previous PR head `1e09053bb1ec1ba4d31ca0deb4b5b1dcc35808bd` passed [CI #44161191929](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929). Both Rider and Driver completed checksum-pinned lockfile generation and npm ci; passed Expo public configuration, TypeScript checks and Android production JS export; passed the contextual audit gate against their real source maps; built debug and standalone release APKs and verified package identities; and installed/launched the standalone release APK in a hosted Android emulator.
