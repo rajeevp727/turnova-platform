@@ -3342,3 +3342,8 @@ PR #186 source/test head `069882d8846f74ee5404863038f3a34b6c76775b` adds a share
 ## Rider auth epoch-assertion correction — 2026-11-18
 
 CI [#44196954234](https://github.com/rajeevp727/turnova-platform/actions/runs/44196954234) ran 237 Node tests: 236 passed and one existing `AUTH-LOGIN-063` source-wiring assertion failed because the refactor renamed the local epoch variable used by its regression guard. The new `RIDER-AUTH-ACCESS-009` single-flight helper test passed. This was a test-contract mismatch, not a runtime auth failure. App.tsx now retains the `authEpoch` identifier and the existing post-SecureStore-cleanup stale-session check while keeping the new submission lock and releasing it in `finally`. Source/test head `ddd6852d4dbc1f4f5b7cb423d9395446fbe1dc07` requires fresh exact-head CI; no merge is permitted until all required checks pass.
+
+
+## Rider auth single-flight final source handoff — 2026-11-18
+
+Latest source/test head `0e8d2854f9fd6ad38d9feb623732942bf3400f55` initializes the local epoch from `sessionEpoch.current`, then assigns the result of `invalidateSession()` inside the protected try block. This keeps `AUTH-LOGIN-063`'s existing source contract (`clearSessionTokensIfCurrent` is followed by the stale-epoch check before the request; catch only updates the current epoch) while ensuring the single-flight lock is released in `finally` on every normal/async exit. Prior CI #44196954234 had 236/237 Node tests pass; the single-flight regression itself passed, and only the existing source-shape assertion failed. Fresh exact-head CI is required; no merge until green.
