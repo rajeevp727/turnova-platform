@@ -44,7 +44,7 @@ public sealed class SupportRequestAvailabilityTests
         Assert.True(SupportRequestEndpoints.TryGetRequestTtl(environment.Object, configuration, requireRetention: true, out var ttlSeconds));
         Assert.Equal(7 * 86_400, ttlSeconds);
 
-        configuration["SupportRequests:RetentionDays"] = null;
+        configuration["SupportRequests:RetentionDays"] = "0";
         Assert.False(SupportRequestEndpoints.TryGetRequestTtl(environment.Object, configuration, requireRetention: true, out ttlSeconds));
         Assert.Null(ttlSeconds);
 
