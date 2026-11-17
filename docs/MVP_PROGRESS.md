@@ -2476,3 +2476,6 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 - **Strict acceptance: 0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage. **Production readiness is not established.** No live Cosmos, physical-device, signed-production, provider, legal or production-hosting validation is claimed.
 - No secrets, paid providers, Docker/container builds, images, registries or production deployments were added. Fleet/Ops Phase 2 and in-app payment collection remain excluded.
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
+
+
+**CI phase-state hardening:** PR #179 adds `.github/turnova-phase.json` (API in progress; Android/iOS not started), a deterministic event/label phase detector, and iOS-specific file-scope detection. Pull-request labels cannot override an incomplete checked-in phase state, and main pushes no longer unconditionally enable Android. Mobile changes fail CI until API state is complete and Android is active; iOS-specific changes additionally require Android complete and iOS active. This remains API-phase CI infrastructure; no Android/iOS completion jobs run for this API-only PR.

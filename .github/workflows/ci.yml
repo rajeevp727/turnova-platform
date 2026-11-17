@@ -22,6 +22,7 @@ jobs:
       mobile: ${{ steps.detect.outputs.mobile }}
       android_phase: ${{ steps.detect.outputs.android_phase }}
       ios_phase: ${{ steps.detect.outputs.ios_phase }}
+      ios_changes: ${{ steps.detect.outputs.ios_changes }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -48,26 +49,34 @@ jobs:
             mobile="$(bash scripts/detect-mobile-ci-scope.sh "$RUNNER_TEMP/changed-files.txt")"
           fi
 
-          android_phase=false
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            android_phase=true
-          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:api-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:android-phase-approved" or .name == "turnova:android-phase-complete")' "$GITHUB_EVENT_PATH" >/dev/null; then
-            android_phase=true
+          ios_changes=false
+          if [[ -f "$RUNNER_TEMP/changed-files.txt" ]]; then
+            ios_changes="$(bash scripts/detect-ios-ci-scope.sh "$RUNNER_TEMP/changed-files.txt")"
           fi
 
+          phase_output="$(bash scripts/detect-turnova-platform-phase.sh "$GITHUB_EVENT_NAME" "$GITHUB_EVENT_PATH" .github/turnova-phase.json)"
+          android_phase=false
           ios_phase=false
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:api-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:android-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:ios-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
-            ios_phase=true
-          fi
+          while IFS='=' read -r key value; do
+            case "$key" in
+              android_phase) android_phase="$value" ;;
+              ios_phase) ios_phase="$value" ;;
+            esac
+          done <<< "$phase_output"
 
           echo "mobile=$mobile" >> "$GITHUB_OUTPUT"
           echo "android_phase=$android_phase" >> "$GITHUB_OUTPUT"
           echo "ios_phase=$ios_phase" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" && "$mobile" == "true" && "$android_phase" != "true" ]]; then
-            echo "::error::Mobile code changes require turnova:api-phase-complete and turnova:android-phase-approved before Android work can begin."
+          echo "ios_changes=$ios_changes" >> "$GITHUB_OUTPUT"
+          if [[ "$mobile" == "true" && "$android_phase" != "true" ]]; then
+            echo "::error::Mobile code changes require the checked-in API phase state to be complete and the Android phase to be active/complete."
             exit 1
           fi
-          printf 'Mobile CI enabled: %s\nAPI phase complete + Android phase active: %s\niOS phase approved after Android completion: %s\n' "$mobile" "$android_phase" "$ios_phase"
+          if [[ "$ios_changes" == "true" && "$ios_phase" != "true" ]]; then
+            echo "::error::iOS-specific code changes require API complete, Android complete, and turnova:ios-phase-approved."
+            exit 1
+          fi
+          printf 'Mobile CI enabled: %s\nAndroid phase active: %s\niOS-specific files changed: %s\niOS phase active after Android completion: %s\n' "$mobile" "$android_phase" "$ios_changes" "$ios_phase"
 
   backend:
     needs: [scope]

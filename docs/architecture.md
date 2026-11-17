@@ -480,3 +480,8 @@ There is no support-agent read/list surface, attachment upload, category, severi
 The current Driver selfie is Base64 stored inline in the Cosmos Driver profile. Licence/vehicle document references are client-supplied opaque strings and are not verified by a private storage provider. Production requires server-issued Driver-bound references, private object storage, malware scanning/quarantine, consent, retention/deletion and authorized UnionManager retrieval. These provider/legal dependencies are not configured and are not claimed complete.
 
 The Cosmos migration runner uses a 30-minute ETag-protected lease without renewal. Existing migrations are idempotent container creation only; add renewal/lost-lease cancellation and deterministic tests before introducing non-idempotent data migrations. Live multi-instance/restart recovery remains an external gate.
+
+
+## Checked-in platform phase state
+
+`.github/turnova-phase.json` is the source of truth for platform progression. It currently records API `in_progress`, Android `not_started`, iOS `not_started`. Pull-request labels alone cannot bypass the checked-in phase state. Main-branch pushes also consult the same file; Android jobs remain disabled until API is complete and Android is active, and iOS jobs remain disabled until Android is complete and iOS is active. iOS-specific file changes fail scope validation before the iOS phase. This prevents the push-event path from implicitly bypassing API→Android→iOS order.

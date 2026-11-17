@@ -1438,3 +1438,6 @@ Current Rider and Driver CI #1800 npm audit artifacts `14195939928` and `1419611
 - **Strict acceptance: 0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage. **Production readiness is not established.** No live Cosmos, physical-device, signed-production, provider, legal or production-hosting validation is claimed.
 - No secrets, paid providers, Docker/container builds, images, registries or production deployments were added. Fleet/Ops Phase 2 and in-app payment collection remain excluded.
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
+
+
+**CI phase-state enforcement:** `.github/turnova-phase.json` currently says API `in_progress`, Android/iOS `not_started`. CI uses the same checked-in state on pull requests and main pushes; labels cannot bypass it. iOS-specific paths are separately detected and rejected until API complete + Android complete + iOS active. This API-phase change must continue to skip all mobile jobs.

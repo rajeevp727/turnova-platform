@@ -2798,3 +2798,6 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039â€
 - **Strict acceptance: 0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage. **Production readiness is not established.** No live Cosmos, physical-device, signed-production, provider, legal or production-hosting validation is claimed.
 - No secrets, paid providers, Docker/container builds, images, registries or production deployments were added. Fleet/Ops Phase 2 and in-app payment collection remain excluded.
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
+
+
+**Phase gate source of truth:** `.github/turnova-phase.json` currently records API `in_progress`, Android/iOS `not_started`. The phase detector enforces that state for PR labels and main pushes; a push no longer automatically enables Android. iOS-specific path changes require Android complete and iOS active. Deterministic fixtures cover push and PR transitions.
