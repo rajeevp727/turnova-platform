@@ -2805,3 +2805,10 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039â€
 - Rider/Driver audits remain 11 moderate, 0 high, 0 critical. Expo 54 ranges do not accept advisory-fixed major versions; no incompatible overrides or blind Expo upgrade.
 - After PR #177 merges, proceed to RELEASE-01 canonical realpath/symlink/hardlink-safe release preflight and icon generation.
 - Strict acceptance remains **0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established; live Cosmos, production providers, legal/policy, signed-device and physical-device/store gates remain external.
+
+
+## PLATFORM-01 dependency-bootstrap portability correction (2026-11-17)
+
+- SHA-256 verification uses Node's built-in `crypto` API, avoiding the Linux-only `sha256sum` dependency and supporting both Ubuntu and macOS runners.
+- The fixture test runs in all three app CI jobs (Expo validation, Android native and iOS native). All three setup-node caches include the app-specific checksum pin.
+- Local fixture and Rider/Driver artifact checksum tests passed after this change. Exact-head CI remains pending.
