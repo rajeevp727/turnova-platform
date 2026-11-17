@@ -126,6 +126,23 @@ public sealed partial class RideApiIntegrationTests
         Assert.False(profiles.ContainsKey("private-media-onboarding-other"));
     }
 
+
+    [Fact]
+    public async Task PrivateDriverMediaUploadRejectsMismatchedContentSignature()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", "private-media-invalid-signature");
+
+        using var response = await driver.PostAsJsonAsync("/api/v1/driver/onboarding/media", new
+        {
+            documentType = "DrivingLicence",
+            contentType = "application/pdf",
+            contentBase64 = Convert.ToBase64String(Encoding.ASCII.GetBytes("not-a-pdf"))
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task UnionManagerCanReadOnlyCurrentAssignedDriversScanClearedDocuments()
     {
