@@ -154,9 +154,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
-
-      - run: npm install --prefer-offline --no-fund --audit=false
+          cache-dependency-path: |
+            src/mobile/${{ matrix.app }}/package.json
+            src/mobile/${{ matrix.app }}/package-lock.sha256
+      - name: Test mobile dependency bootstrap
+        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
+      - name: Generate checksum-pinned lockfile and install exact dependencies
+        run: bash ../../../scripts/prepare-mobile-dependencies.sh "$PWD" install
       - name: Validate release configuration and report external gates
         run: node ../../../scripts/release-preflight.cjs --app-dir "$PWD" --output "$RUNNER_TEMP/${{ matrix.app }}-release-readiness.json"
       - uses: actions/upload-artifact@v6
@@ -286,20 +290,30 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
+          cache-dependency-path: |
+            src/mobile/${{ matrix.app }}/package.json
+            src/mobile/${{ matrix.app }}/package-lock.sha256
+      - name: Test mobile dependency bootstrap
+        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
-
-      - run: npm install --prefer-offline --no-fund --audit=false
+      - uses: actions/download-artifact@v6
+        with:
+          name: ${{ matrix.app }}-generated-lockfile
+          path: src/mobile/${{ matrix.app }}
+      - name: Verify shared lockfile and install exact dependencies
+        run: |
+          bash ../../../scripts/prepare-mobile-dependencies.sh "$PWD" --verify-only
+          npm ci --prefer-offline --no-fund --audit=false
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
           path: ~/.gradle/caches
-          key: ${{ runner.os }}-${{ runner.arch }}-gradle-deps-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app), format('src/mobile/{0}/android/**/*.gradle*', matrix.app), format('src/mobile/{0}/android/gradle/wrapper/gradle-wrapper.properties', matrix.app)) }}
+          key: ${{ runner.os }}-${{ runner.arch }}-gradle-deps-${{ matrix.app }}-${{ hashFiles(format('src/mobile/{0}/package.json', matrix.app), format('src/mobile/{0}/package-lock.sha256', matrix.app), format('src/mobile/{0}/android/**/*.gradle*', matrix.app), format('src/mobile/{0}/android/gradle/wrapper/gradle-wrapper.properties', matrix.app)) }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-gradle-deps-${{ matrix.app }}-
       - name: Cache Gradle 8.14.3 distribution
