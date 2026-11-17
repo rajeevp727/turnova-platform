@@ -46,8 +46,12 @@ echo "Mobile CI phase-scope fixtures passed."
 
 
 workflow="$root/.github/workflows/ci.yml"
+grep -Fq 'turnova:api-phase-complete' "$workflow"
 grep -Fq 'turnova:android-phase-approved' "$workflow"
 grep -Fq 'turnova:android-phase-complete' "$workflow"
+grep -Fq 'any(.pull_request.labels[]?; .name == "turnova:api-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:android-phase-approved" or .name == "turnova:android-phase-complete")' "$workflow"
+grep -Fq 'any(.pull_request.labels[]?; .name == "turnova:api-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:android-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:ios-phase-approved")' "$workflow"
+grep -Fq 'Mobile code changes require turnova:api-phase-complete' "$workflow"
 grep -Fq 'turnova:ios-phase-approved' "$workflow"
 grep -Fq 'android_phase: ${{ steps.detect.outputs.android_phase }}' "$workflow"
 android_gate_count="$(grep -Fc "needs.scope.outputs.android_phase == 'true'" "$workflow")"

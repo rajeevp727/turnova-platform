@@ -51,19 +51,23 @@ jobs:
           android_phase=false
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             android_phase=true
-          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:android-phase-approved" or .name == "turnova:android-phase-complete")' "$GITHUB_EVENT_PATH" >/dev/null; then
+          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:api-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:android-phase-approved" or .name == "turnova:android-phase-complete")' "$GITHUB_EVENT_PATH" >/dev/null; then
             android_phase=true
           fi
 
           ios_phase=false
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:android-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:ios-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:api-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:android-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:ios-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
             ios_phase=true
           fi
 
           echo "mobile=$mobile" >> "$GITHUB_OUTPUT"
           echo "android_phase=$android_phase" >> "$GITHUB_OUTPUT"
           echo "ios_phase=$ios_phase" >> "$GITHUB_OUTPUT"
-          printf 'Mobile CI enabled: %s\nAndroid phase approved: %s\niOS phase approved: %s\n' "$mobile" "$android_phase" "$ios_phase"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" && "$mobile" == "true" && "$android_phase" != "true" ]]; then
+            echo "::error::Mobile code changes require turnova:api-phase-complete and turnova:android-phase-approved before Android work can begin."
+            exit 1
+          fi
+          printf 'Mobile CI enabled: %s\nAPI phase complete + Android phase active: %s\niOS phase approved after Android completion: %s\n' "$mobile" "$android_phase" "$ios_phase"
 
   backend:
     needs: [scope]
