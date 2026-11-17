@@ -3074,3 +3074,14 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 - **Strict acceptance: 0/19 Verified, 16 In Progress, 3 Blocked** (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence acceptance accounting, not an implementation-completion percentage. **Production readiness is not established.** No live Cosmos, physical-device, signed-production, provider, legal or production-hosting validation is claimed.
 - No secrets, paid providers, Docker/container builds, images, registries or production deployments were added. Fleet/Ops Phase 2 and in-app payment collection remain excluded.
 - This four-document synchronization is documentation-only and creates a new PR head; a fresh exact-head CI is required before marking PR #176 ready or merging.
+
+
+## PLATFORM-NPM-001–004 — deterministic Rider/Driver dependency bootstrap (2026-11-17)
+
+- **PLATFORM-NPM-001:** The Rider generated lockfile must match the committed SHA-256 pin `3a070767e6ba0161ecc0049a63e7cf4170b65f112ab1883e6663e1faadf11acd`; after a match, the helper may invoke `npm ci`.
+- **PLATFORM-NPM-002:** A mismatched or malformed lockfile digest must fail closed before `npm ci` and before package lifecycle scripts execute.
+- **PLATFORM-NPM-003:** `--verify-only` validates an existing lockfile and checksum without invoking npm.
+- **PLATFORM-NPM-004:** The Driver generated lockfile must match its separate committed SHA-256 pin `5e2c19ef6ffe060a9ad2bd5731cf3d848a077b09c8fa1f204fecf14713319`.
+- Shared implementation: `scripts/prepare-mobile-dependencies.sh`; deterministic fixture: `scripts/test-prepare-mobile-dependencies.sh`. Local fixture tests passed for matching, mismatch fail-closed and verify-only; both extracted CI lockfiles passed verify-only.
+- CI #177 will regenerate each lockfile using `npm install --package-lock-only --ignore-scripts`, validate the exact hash, then run `npm ci` in Rider/Driver validation, Android and iOS jobs. This is a hash-pinned generated-lockfile strategy; the JSON lockfiles remain CI artifacts rather than committed source files. No actual CI #177 result is claimed until its exact head completes.
+- Current audits: 11 moderate, 0 high, 0 critical per app. Advisory-fixed major versions remain outside Expo 54 dependency ranges; no incompatible override or blind SDK upgrade.
