@@ -1569,6 +1569,7 @@ onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
         ? Results.NoContent()
         : Results.Ok(profile with
         {
+            ProfilePhotoBase64 = await GetProfilePhotoBase64Async(profile, ct),
             ProfilePhotoOperationsReviewActorId = null,
             ProfilePhotoOperationsReviewUnionId = null,
             ProfilePhotoOperationsReviewUnionName = null,
@@ -1577,12 +1578,63 @@ onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
             ProfilePhotoUnionReviewUnionName = null
         });
 });
+onboarding.MapPost("/media", async (
+    ClaimsPrincipal user, DriverPrivateMediaUploadRequest request, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    if (!TryDecodePrivateMedia(request.ContentBase64, 10 * 1024 * 1024, out var content) ||
+        !IsValidPrivateMediaPayload(request.DocumentType, request.ContentType, content))
+        return Results.BadRequest(new { message = "Provide a supported private Driver document or JPEG selfie with valid content bytes." });
+
+    var stored = await privateDriverMediaStore.StoreAsync(
+        driverId, request.DocumentType, request.ContentType, content, ct);
+    if (stored is null)
+        return Results.Problem("Private Driver media storage is unavailable.", statusCode: 503);
+
+    var location = $"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(stored.Reference)}";
+    var response = new
+    {
+        storageReference = stored.Reference,
+        documentType = stored.MediaType,
+        contentType = stored.ContentType,
+        length = stored.Length,
+        scanStatus = stored.ScanStatus,
+        uploadedAtUtc = stored.UploadedAtUtc
+    };
+    return stored.ScanStatus == "Clean"
+        ? Results.Created(location, response)
+        : Results.Accepted(location, response);
+});
+
+onboarding.MapGet("/media/{reference}", async (
+    ClaimsPrincipal user, string reference, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    var asset = await privateDriverMediaStore.ReadAsync(driverId, reference, ct);
+    return asset is null
+        ? Results.NotFound()
+        : Results.File(asset.Content, asset.Metadata.ContentType, enableRangeProcessing: false);
+});
+
 onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest request, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    var hasInlineSelfie = !string.IsNullOrWhiteSpace(request.ProfilePhotoBase64);
+    var hasSelfieReference = !string.IsNullOrWhiteSpace(request.ProfilePhotoStorageReference);
+    if (hasInlineSelfie == hasSelfieReference)
+        return Results.BadRequest(new { message = "Provide exactly one JPEG selfie payload or server-issued private media reference." });
+    if (hasInlineSelfie && !IsValidDriverSelfie(request.ProfilePhotoBase64))
         return Results.BadRequest(new { message = "Provide a valid JPEG selfie no larger than 300 KB." });
+    if (hasSelfieReference &&
+        !await privateDriverMediaStore.IsOwnedAndCleanAsync(driverId, "ProfilePhoto", request.ProfilePhotoStorageReference!, ct))
+        return Results.BadRequest(new { message = "The selfie reference is not owned by this Driver or is not scan-cleared." });
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "A Driver with an active negotiation or ride cannot replace the discovery selfie." });
 
@@ -1617,6 +1669,17 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         }
 
         var capturedAtUtc = DateTimeOffset.UtcNow;
+        var selfieReference = request.ProfilePhotoStorageReference;
+        string? newlyStoredSelfieReference = null;
+        if (hasInlineSelfie)
+        {
+            var bytes = Convert.FromBase64String(request.ProfilePhotoBase64!);
+            var stored = await privateDriverMediaStore.StoreAsync(driverId, "ProfilePhoto", "image/jpeg", bytes, ct);
+            if (stored is null)
+                return Results.Problem("Private Driver media storage is unavailable.", statusCode: 503);
+            selfieReference = stored.Reference;
+            newlyStoredSelfieReference = stored.Reference;
+        }
         var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         {
             if (!string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
@@ -1624,7 +1687,8 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
 
             return current with
             {
-                ProfilePhotoBase64 = request.ProfilePhotoBase64,
+                ProfilePhotoBase64 = null,
+                ProfilePhotoStorageReference = selfieReference,
                 ProfilePhotoContentType = "image/jpeg",
                 ProfilePhotoCapturedAtUtc = capturedAtUtc,
                 ProfilePhotoApprovalStatus = "Pending",
@@ -1641,12 +1705,14 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         }, ct);
         if (!saved)
             return Results.Conflict(new { message = "Driver profile changed during selfie update. Refresh the profile and retry." });
+        newlyStoredSelfieReference = null;
 
         var updated = await FindDriverProfileAsync(driverId, ct);
         return updated is null
             ? Results.NotFound(new { message = "Driver profile no longer exists." })
             : Results.Ok(updated with
             {
+                ProfilePhotoBase64 = await GetProfilePhotoBase64Async(updated, ct),
                 ProfilePhotoOperationsReviewActorId = null,
                 ProfilePhotoOperationsReviewUnionId = null,
                 ProfilePhotoOperationsReviewUnionName = null,
@@ -1657,6 +1723,8 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
     }
     finally
     {
+        if (newlyStoredSelfieReference is not null)
+            await privateDriverMediaStore.DeleteAsync(driverId, newlyStoredSelfieReference, CancellationToken.None);
         await driverRideReservations.TryReleaseAsync(
             driverId, selfieLeaseId, CancellationToken.None, selfieAuditContext);
     }
