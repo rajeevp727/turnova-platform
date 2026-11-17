@@ -64,7 +64,7 @@ function getRiderAuthSubmitProps(mode, disabled, busy) {
       ? (mode === "login" ? "Signing in to TurnOva" : "Creating your Rider account")
       : action,
     accessibilityHint: mode === "login"
-      ? "Submits your email address and password securely."
+      ? "Submits your email address and password to sign in."
       : "Creates your Rider account using the details provided.",
     accessibilityState: { disabled: Boolean(disabled), busy: Boolean(busy) }
   };
