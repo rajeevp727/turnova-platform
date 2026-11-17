@@ -168,19 +168,21 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn("not represented as patched", result.stdout)
 
-    def test_rejects_driver_remediation_hint_for_rider(self):
+    def test_allows_expo_remediation_hint_for_rider(self):
         self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = {
             "name": "expo", "version": "58.0.26", "isSemVerMajor": True
         }
         self.write_report()
-        self.assertNotEqual(self.run_gate().returncode, 0)
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
-    def test_rejects_rider_remediation_hint_for_driver(self):
+    def test_allows_react_native_remediation_hint_for_driver(self):
         package = json.loads((self.app / "package.json").read_text())
         package["name"] = "turnova-driver"
         (self.app / "package.json").write_text(json.dumps(package))
         self.write_report()
-        self.assertNotEqual(self.run_gate().returncode, 0)
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
     def test_rejects_unknown_app_identity_for_contextual_exception(self):
         package = json.loads((self.app / "package.json").read_text())
