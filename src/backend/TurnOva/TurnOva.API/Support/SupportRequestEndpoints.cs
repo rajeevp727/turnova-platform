@@ -42,7 +42,7 @@ public static class SupportRequestEndpoints
                 title: "Support intake is not enabled for this environment.",
                 statusCode: StatusCodes.Status503ServiceUnavailable))
             .WithSummary("Support intake is disabled pending policy approval")
-            .WithDescription("No request body is accepted or persisted until SupportRequests:PolicyApproved is explicitly enabled after Product/Operations approval of the support intake, privacy and retention policy.")
+            .WithDescription("No request body is accepted or persisted until SupportRequests:PolicyApproved is explicitly enabled, a positive approved SupportRequests:RetentionDays is configured, and durable Cosmos storage is available.")
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         return app;
