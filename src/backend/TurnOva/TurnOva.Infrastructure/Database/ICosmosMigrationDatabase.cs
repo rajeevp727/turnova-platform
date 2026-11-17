@@ -5,5 +5,6 @@ public interface ICosmosMigrationDatabase
     Task CreateContainerIfNotExistsAsync(
         string containerName,
         string partitionKeyPath,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        int? defaultTimeToLive = null);
 }
