@@ -6,7 +6,8 @@ public sealed record SupportRequest(
     string ReporterRole,
     string Subject,
     string Description,
-    DateTimeOffset SubmittedAtUtc);
+    DateTimeOffset SubmittedAtUtc,
+    int? Ttl = null);
 
 public enum SupportRequestWriteStatus
 {
