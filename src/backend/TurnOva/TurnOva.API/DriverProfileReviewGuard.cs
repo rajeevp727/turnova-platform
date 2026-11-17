@@ -19,7 +19,7 @@ public static class DriverProfileReviewGuard
         profile.ProfilePhotoApprovedByUnionId is null &&
         profile.ProfilePhotoReviewedAtUtc is not null &&
         DriverUnionAuditReason.IsNormalizedSafe(profile.ProfilePhotoReviewReason) &&
-        !string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64) &&
+        HasProfilePhoto(profile) &&
         DriverUnionAuditActor.IsSafeOpaqueActor(profile.ProfilePhotoOperationsReviewActorId) &&
         !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionId) &&
         !string.IsNullOrWhiteSpace(profile.ProfilePhotoOperationsReviewUnionName);
@@ -42,7 +42,7 @@ public static class DriverProfileReviewGuard
     {
         if (profile.ProfilePhotoApprovalStatus is not ("Approved" or "Rejected") ||
             profile.ProfilePhotoReviewedAtUtc is null ||
-            string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64) ||
+            !HasProfilePhoto(profile) ||
             !DriverUnionAuditActor.IsSafeOpaqueActor(profile.ProfilePhotoUnionReviewActorId) ||
             string.IsNullOrWhiteSpace(profile.ProfilePhotoUnionReviewUnionId) ||
             string.IsNullOrWhiteSpace(profile.ProfilePhotoUnionReviewUnionName) ||
@@ -80,6 +80,7 @@ public static class DriverProfileReviewGuard
             current.Id == reviewedSnapshot.Id &&
             current.DriverId == reviewedSnapshot.DriverId &&
             current.ProfilePhotoBase64 == reviewedSnapshot.ProfilePhotoBase64 &&
+            current.ProfilePhotoStorageReference == reviewedSnapshot.ProfilePhotoStorageReference &&
             current.ProfilePhotoCapturedAtUtc == reviewedSnapshot.ProfilePhotoCapturedAtUtc &&
             string.Equals(current.ProfilePhotoReviewReason, reason, StringComparison.Ordinal) &&
             (expectedUnionId is null ||
@@ -102,8 +103,13 @@ public static class DriverProfileReviewGuard
             current.SubmittedAtUtc == reviewedSnapshot.SubmittedAtUtc &&
             current.ReviewedAtUtc == reviewedSnapshot.ReviewedAtUtc &&
             current.ReviewReason == reviewedSnapshot.ReviewReason &&
+            current.ProfilePhotoStorageReference == reviewedSnapshot.ProfilePhotoStorageReference &&
             current.Documents is not null &&
             reviewedSnapshot.Documents is not null &&
             current.Documents.SequenceEqual(reviewedSnapshot.Documents);
     }
+
+    private static bool HasProfilePhoto(DriverOnboardingProfile profile) =>
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64) ||
+        !string.IsNullOrWhiteSpace(profile.ProfilePhotoStorageReference);
 }
