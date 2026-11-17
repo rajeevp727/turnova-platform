@@ -287,6 +287,7 @@ public sealed class SupportRequestApiIntegrationTests
             .GetProperty("content").GetProperty("application/json").GetProperty("schema");
         Assert.Equal(new[] { "message" }, GetSchemaPropertyNames(conflictSchema, root));
         Assert.True(operation.GetProperty("responses").TryGetProperty("413", out _));
+        Assert.True(operation.GetProperty("responses").TryGetProperty("503", out _));
     }
 
     [Fact]
