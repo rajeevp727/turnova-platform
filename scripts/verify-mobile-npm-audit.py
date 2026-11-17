@@ -22,10 +22,10 @@ ALLOWED_PICOMATCH_PARENTS = {
 }
 SEVERITIES = ("info", "low", "moderate", "high", "critical")
 IMPORT_PATTERN = re.compile(
-    r"(?:from\\s*|require\\s*\\(|import\\s*\\()\\s*['\\"]picomatch(?:/[^'\\"]*)?['\\"]"
+    r"(?:from\s*|require\s*\(|import\s*\()\s*['\"]picomatch(?:/[^'\"]*)?['\"]"
 )
 SOURCE_PATTERN = re.compile(
-    r"(?:^|[/\\\\])node_modules[/\\\\]picomatch(?:[/\\\\]|$)", re.IGNORECASE
+    r"(?:^|[/\\])node_modules[/\\]picomatch(?:[/\\]|$)", re.IGNORECASE
 )
 SOURCE_EXTENSIONS = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
 
