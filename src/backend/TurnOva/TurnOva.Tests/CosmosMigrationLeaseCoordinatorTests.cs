@@ -89,6 +89,28 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
     }
 
     [Fact]
+    public async Task RenewalLoopPublishesRenewedEtagBeforeTheNextHeartbeat()
+    {
+        var current = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-1", DateTimeOffset.UtcNow.AddMinutes(20));
+        var renewed = current with { ETag = "etag-2" };
+        var store = new FakeLeaseStore { ReplaceResult = renewed };
+        var delay = new TwoStepDelay();
+        var coordinator = CreateCoordinator(store, delay);
+        var state = new CosmosMigrationLeaseState(current);
+        using var cancellation = new CancellationTokenSource();
+        var loop = coordinator.RunRenewalLoopAsync(state, cancellation);
+
+        await delay.WaitForFirstRequestAsync();
+        delay.ReleaseFirst();
+        await delay.WaitForSecondRequestAsync();
+
+        Assert.Equal("etag-2", state.Current.ETag);
+        cancellation.Cancel();
+        await loop;
+    }
+
+    [Fact]
     public async Task ReleaseUsesTheLatestRenewedEtag()
     {
         var current = new CosmosMigrationLease(
@@ -159,6 +181,37 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
         {
             CallCount++;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TwoStepDelay : ICosmosMigrationDelay
+    {
+        private readonly TaskCompletionSource firstRequested =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource secondRequested =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource releaseFirst =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int callCount;
+
+        public Task WaitForFirstRequestAsync() => firstRequested.Task;
+        public Task WaitForSecondRequestAsync() => secondRequested.Task;
+        public void ReleaseFirst() => releaseFirst.TrySetResult();
+
+        public async Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
+        {
+            var call = Interlocked.Increment(ref callCount);
+            if (call == 1)
+            {
+                firstRequested.TrySetResult();
+                await releaseFirst.Task.WaitAsync(cancellationToken);
+                return;
+            }
+
+            if (call == 2)
+                secondRequested.TrySetResult();
+
+            await Task.Delay(Timeout.Infinite, cancellationToken);
         }
     }
 
