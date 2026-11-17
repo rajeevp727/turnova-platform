@@ -7,7 +7,7 @@
 **API evidence:** PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e`; exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed **758/758 backend tests** and native non-container API publish. PR #184 merged the phase state at `0992579b76012f24a057ae4842e524927eb9536f`.
 **Current Android PR:** [#185 — Rider/Driver dependency reproducibility](https://github.com/rajeevp727/turnova-platform/pull/185), branch `build/android-dependency-reproducibility`; source/test commits `b43289ea7db7b49416cea7447a329a9680c6f8c5`, `a39c29d0b4f976c940c6ade6785a92f6a4a164b9`, `388937cfaef95ed4420114e27c313a2d13314d29`, `e3ccadd133634a49cf1a9d0483db0b35cf4efc0e` and `0cf8a0b38d76b74ad0650a2c6047b5ad102e7f3f`.
 **PR #185 scope:** committed Rider/Driver SHA-256 pins; checksum-verified generated lockfile artifacts; npm ci in shared mobile validation and native Android; native Android consumes the same-run artifact. Helper rejects external/broken package and lockfile symlinks and node_modules symlinks while allowing safe in-app file symlinks. iOS jobs/install commands are intentionally unchanged until the iOS phase.
-**Lockfile limitation:** package-lock.json is a generated same-run CI artifact, not a committed source file; the committed SHA-256 pin fails closed if registry resolution drifts. Historical PR #177 audit artifacts showed 11 moderate, 0 high and 0 critical findings per app; fresh Android-phase npm audit is required. No Expo/RN SDK upgrade is included.
+**Lockfile limitation:** package-lock.json is a generated same-run CI artifact, not a committed source file; the committed SHA-256 pin fails closed if registry resolution drifts. Current PR #185 run #44158843845 reports 34 findings per app (27 high package nodes, 7 moderate, 0 critical); all high nodes resolve to one transitive picomatch advisory in build tooling. A narrow fail-closed gate requires the exact advisory, no app import, approved tooling-only parents and source-map proof that picomatch is absent from each Android bundle. This is a contextual exception, not a patch or clean audit. No Expo/RN SDK upgrade is included.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## API phase exit audit — 2026-11-18
@@ -1497,3 +1497,10 @@ The reviewed current generated-lockfile pins are Rider `1d577165033eb4b2a0e12dfa
 ### Android dependency bootstrap hardlink safety — 2026-11-18
 
 PR #185 additionally rejects an existing `package-lock.json` write target unless it is a regular file with `nlink === 1`, checked before and after lockfile generation. This closes the hard-link alias case that realpath checks cannot detect. A deterministic real-filesystem fixture links the app lockfile to an external file, verifies the helper rejects before invoking npm, and verifies the external file is unchanged. This is automated engineering evidence only; exact-head CI remains required.
+
+
+## Android dependency audit scope — PR #185
+
+Both Rider and Driver exact audit artifacts from [CI #44158843845](https://github.com/rajeevp727/turnova-platform/actions/runs/44158843845) report 34 package findings: 27 high nodes, 7 moderate, 0 critical. The 27 high nodes have one direct advisory root, GHSA-fc5q-39xc-vjpf in transitive picomatch build tooling. The advisory has no patched version listed and is disputed by the package maintainer; it is not marked fixed.
+
+The replacement CI gate is fail-closed for critical findings, audit execution errors, any additional/unknown high advisory, direct app dependency/import, an unreviewed dependency parent, or picomatch source in the Android bundle source map. Verification-only source maps are removed before artifact upload. Eight deterministic tests cover the gate. Exact-head source-map and Android build/emulator evidence are still pending; PR #185 is not mergeable until the new exact-head CI passes.

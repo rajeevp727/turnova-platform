@@ -3246,3 +3246,17 @@ The helper's real-filesystem fixture is executed in both Rider and Driver mobile
 | PLATFORM-NPM-008 | Registry metadata advances a transitive patch version after a previously reviewed lockfile pin | Bootstrap generates with lifecycle scripts disabled, computes the actual lockfile digest and fails before `npm ci` when the committed pin is stale; reviewer compares package additions/removals and version changes, then updates the pin only after dependency/audit review | CI regression / supply-chain guard | P0 |
 
 PR #185 run [#44157712885](https://github.com/rajeevp727/turnova-platform/actions/runs/44157712885) exercised this fail-closed path: each app retained its package set and only `electron-to-chromium` and `node-releases` advanced one patch version. Updated per-app pins must be verified by a fresh exact-head run that reaches npm ci and npm audit; no current audit result is inferred from historical artifacts.
+
+
+## Android dependency audit scope verification — 2026-11-18
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| PLATFORM-NPM-009 | Current audit contains only the reviewed transitive picomatch high advisory | The gate accepts only GHSA-fc5q-39xc-vjpf when all high package nodes resolve exclusively to that root; every other high or any critical finding fails | CI/security regression | P0 |
+| PLATFORM-NPM-010 | Picomatch is added as a direct Rider/Driver dependency or imported by app source | The gate fails before Android native build acceptance | CI/security regression | P0 |
+| PLATFORM-NPM-011 | A new package becomes a parent of picomatch outside the reviewed Expo CLI/Metro/Jest tool set | The gate fails and requires renewed threat-model review | CI/supply-chain regression | P0 |
+| PLATFORM-NPM-012 | Android production bundle source map includes picomatch | The gate fails; verification-only source maps are deleted before artifact upload | Bundle security regression | P0 |
+| PLATFORM-NPM-013 | Source maps are missing, malformed, or npm audit exits for an execution error | The gate fails closed | CI/security regression | P0 |
+| PLATFORM-NPM-014 | Unknown high advisory or critical advisory appears in either app | The gate fails; only the exact reviewed advisory may be contextually excepted | CI/security regression | P0 |
+
+The deterministic test script covers the allowlisted transitive build-tool case plus critical/unknown-high, direct dependency, app import, unknown parent, bundle inclusion and missing-source-map failures. The live Rider and Driver audit reports from CI #44158843845 each contain 34 package findings (27 high package nodes, 7 moderate, 0 critical); the high package nodes resolve to one transitive picomatch advisory. This remains a contextual build-tooling exception, not a patched dependency. The exact-head CI must independently prove that picomatch is absent from both Android production bundle source maps.

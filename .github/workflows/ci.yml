@@ -157,8 +157,10 @@ jobs:
           cache-dependency-path: |
             src/mobile/${{ matrix.app }}/package.json
             src/mobile/${{ matrix.app }}/package-lock.sha256
-      - name: Test mobile dependency bootstrap
-        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
+      - name: Test mobile dependency bootstrap and audit gate
+        run: |
+          bash ../../../scripts/test-prepare-mobile-dependencies.sh
+          python3 ../../../scripts/test-verify-mobile-npm-audit.py
       - name: Generate checksum-pinned lockfile and install exact dependencies
         run: bash ../../../scripts/prepare-mobile-dependencies.sh "$PWD" install
       - name: Validate release configuration and report external gates
@@ -179,6 +181,7 @@ jobs:
           path: src/mobile/${{ matrix.app }}/package-lock.json
           if-no-files-found: error
       - name: Audit mobile dependency tree
+        id: audit_mobile_dependencies
         shell: bash
         run: |
           set -euo pipefail
@@ -198,9 +201,9 @@ jobs:
           critical = int(metadata.get("critical", 0))
           high = int(metadata.get("high", 0))
           print(
-              "npm audit: "
+              "npm audit inventory: "
               f"{metadata.get('total', 0)} total; "
-              f"{critical} critical; {high} high; "
+              f"{critical} critical; {high} high package nodes; "
               f"{metadata.get('moderate', 0)} moderate; "
               f"{metadata.get('low', 0)} low."
           )
@@ -219,9 +222,10 @@ jobs:
                       f"fixAvailable={item.get('fixAvailable')}; "
                       f"advisories={titles}"
                   )
-          if critical or high or audit_status not in (0, 1):
-              raise SystemExit("Dependency audit failed: resolve high/critical findings or audit execution errors.")
+          if critical or audit_status not in (0, 1):
+              raise SystemExit("Dependency audit failed: critical findings or npm audit execution error.")
           PY
+          echo "status=$audit_status" >> "$GITHUB_OUTPUT"
       - name: Upload npm audit report
         if: always()
         uses: actions/upload-artifact@v6
@@ -234,9 +238,18 @@ jobs:
       - name: Verify Metro can see shared mobile modules
         run: node -e 'const fs = require("node:fs"); const path = require("node:path"); const config = require("./metro.config.js"); const shared = path.resolve(process.cwd(), "../shared"); if (!config.watchFolders.includes(shared) || !fs.existsSync(path.join(shared, "refreshCoordinator.js"))) throw new Error("Metro shared workspace or refresh module is missing");'
       - name: Export Android production JavaScript bundle
-        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/turnova-${{ matrix.app }}-android"
+        run: npx expo export --platform android --source-maps --output-dir "$RUNNER_TEMP/turnova-${{ matrix.app }}-android"
       - name: Verify Android production bundle
         run: test -s "$RUNNER_TEMP/turnova-${{ matrix.app }}-android/metadata.json"
+      - name: Verify mobile audit findings are confined to reviewed build tooling
+        run: python3 ../../../scripts/verify-mobile-npm-audit.py "$RUNNER_TEMP/npm-audit-${{ matrix.app }}.json" "${{ steps.audit_mobile_dependencies.outputs.status }}" "$PWD" "$RUNNER_TEMP/turnova-${{ matrix.app }}-android"
+      - name: Remove verification-only source maps
+        if: always()
+        run: |
+          bundle_dir="$RUNNER_TEMP/turnova-${{ matrix.app }}-android"
+          if [[ -d "$bundle_dir" ]]; then
+            find "$bundle_dir" -type f -name '*.map' -delete
+          fi
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.app }}-production-js-bundle-android
@@ -293,8 +306,10 @@ jobs:
           cache-dependency-path: |
             src/mobile/${{ matrix.app }}/package.json
             src/mobile/${{ matrix.app }}/package-lock.sha256
-      - name: Test mobile dependency bootstrap
-        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
+      - name: Test mobile dependency bootstrap and audit gate
+        run: |
+          bash ../../../scripts/test-prepare-mobile-dependencies.sh
+          python3 ../../../scripts/test-verify-mobile-npm-audit.py
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
