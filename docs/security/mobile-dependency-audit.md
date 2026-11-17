@@ -66,3 +66,8 @@ The audit verifier validates `package.json.name` is `turnova-rider` or `turnova-
 ## npm remediation metadata drift — 2026-11-18
 
 The exact Rider npm audit artifact from CI #44169775823 reported the same inventory (34 total; 27 high package nodes; 7 moderate; 0 critical) and same GHSA root, but `fixAvailable` changed from `react-native@0.88.1` to `expo@58.0.26` with `isSemVerMajor=true`. This confirms npm's major-migration suggestion is not stable per app/run. The verifier therefore accepts only these two exact reviewed objects for either known app identity, while still rejecting unknown package/version, non-major metadata, unknown app identities, critical/unknown advisories and bundle inclusion. This is not a patched picomatch version.
+
+
+## Third observed major-only remediation hint — 2026-11-18
+
+The Rider audit artifact from CI #44170775823 reports `expo-asset@58.0.21` with `isSemVerMajor=true`; Driver reports `expo@58.0.26`; an earlier Rider report reported `react-native@0.88.1`. All reports retain the same 34-record inventory and sole GHSA root. The allow-list now contains only these three exact major-only hints for either known app identity. A fourth/unreviewed hint, non-major suggestion, unknown app, critical/unknown advisory or bundle inclusion fails. No SDK upgrade is performed and no picomatch patch is claimed. The deterministic audit suite now has 28 cases.
