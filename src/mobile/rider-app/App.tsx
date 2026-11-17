@@ -310,7 +310,7 @@ export default function App() {
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
   const authenticate = async () => {
     if(!tryBeginRiderAuthSubmission(authSubmissionInFlight))return;
-    let authEpoch: number | null = null;
+    let authEpoch = sessionEpoch.current;
     try {
       const credentials = { email: email.trim(), password, name: name.trim(), mode };
       authEpoch = invalidateSession();
@@ -335,15 +335,15 @@ export default function App() {
           name: credentials.name || null
         })
       });
-      const accepted = await accept(result, authEpoch!, true);
+      const accepted = await accept(result, authEpoch, true);
       if (!accepted) throw new Error("Session changed. Please sign in again.");
       setPassword("");
     } catch (e) {
-      if (authEpoch === null || sessionEpoch.current === authEpoch)
+      if (sessionEpoch.current === authEpoch)
         setError(e instanceof Error ? e.message : "Authentication failed.");
     } finally {
       finishRiderAuthSubmission(authSubmissionInFlight);
-      if (authEpoch !== null && sessionEpoch.current === authEpoch) setLoading(false);
+      if (sessionEpoch.current === authEpoch) setLoading(false);
     }
   };
   const draftTripIntent=async()=>{
