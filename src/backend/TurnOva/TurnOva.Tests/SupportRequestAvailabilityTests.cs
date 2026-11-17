@@ -28,6 +28,29 @@ public sealed class SupportRequestAvailabilityTests
         Assert.Equal(expectedTtlSeconds, SupportRequestEndpoints.GetRetentionTtlSeconds(configuration));
     }
 
+    [Fact]
+    public void PersistentSupportIntakeRechecksPolicyAndRetentionAfterConfigurationReload()
+    {
+        var environment = new Mock<IHostEnvironment>();
+        environment.SetupGet(value => value.EnvironmentName).Returns("Staging");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["SupportRequests:PolicyApproved"] = "true",
+                ["SupportRequests:RetentionDays"] = "7"
+            })
+            .Build();
+
+        Assert.True(SupportRequestEndpoints.CanAcceptRequest(environment.Object, configuration, requireRetention: true));
+
+        configuration["SupportRequests:RetentionDays"] = null;
+        Assert.False(SupportRequestEndpoints.CanAcceptRequest(environment.Object, configuration, requireRetention: true));
+
+        configuration["SupportRequests:RetentionDays"] = "7";
+        configuration["SupportRequests:PolicyApproved"] = "false";
+        Assert.False(SupportRequestEndpoints.CanAcceptRequest(environment.Object, configuration, requireRetention: true));
+    }
+
     [Theory]
     [InlineData("Development", false, true)]
     [InlineData("Testing", false, true)]
