@@ -22,6 +22,13 @@ public static class SupportRequestEndpoints
             configuration.GetValue<bool>("SupportRequests:PolicyApproved");
     }
 
+    public static bool CanAcceptRequest(
+        IHostEnvironment environment,
+        IConfiguration configuration,
+        bool requireRetention) =>
+        IsEnabledForEnvironment(environment, configuration) &&
+        (!requireRetention || GetRetentionTtlSeconds(configuration).HasValue);
+
     public static int? GetRetentionTtlSeconds(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -47,8 +54,9 @@ public static class SupportRequestEndpoints
 
         return app;
     }
-    public static WebApplication MapSupportRequestEndpoints(this WebApplication app)
+    public static WebApplication MapSupportRequestEndpoints(this WebApplication app, bool requireRetention)
     {
+        var environment = app.Environment;
         var group = app.MapGroup("/api/v1/support")
             .WithTags("Support")
             .RequireAuthorization(policy => policy.RequireRole("Rider", "Driver"));
@@ -61,6 +69,11 @@ public static class SupportRequestEndpoints
             IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
+            if (!CanAcceptRequest(environment, configuration, requireRetention))
+                return Results.Problem(
+                    title: "Support intake is unavailable until policy approval and durable retention are configured.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+
             if (request is null)
                 return Results.BadRequest(new SupportRequestErrorResponse("A support request body is required."));
 
