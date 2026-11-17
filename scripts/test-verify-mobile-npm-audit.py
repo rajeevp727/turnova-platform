@@ -43,6 +43,7 @@ class MobileNpmAuditGateTests(unittest.TestCase):
                 "picomatch": {
                     "severity": "high", "isDirect": False, "range": "<=4.0.7",
                     "nodes": ["node_modules/picomatch"],
+                    "fixAvailable": {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True},
                     "via": [{"name": "picomatch", "severity": "high", "url": ADVISORY}]
                 },
                 "@expo/cli": {
@@ -153,6 +154,12 @@ class MobileNpmAuditGateTests(unittest.TestCase):
         self.report["vulnerabilities"] = {}
         self.write_report()
         self.assertNotEqual(self.run_gate(audit_status=1).returncode, 0)
+
+
+    def test_rejects_changed_picomatch_remediation_path(self):
+        self.report["vulnerabilities"]["picomatch"]["fixAvailable"] = True
+        self.write_report()
+        self.assertNotEqual(self.run_gate().returncode, 0)
 
 
 if __name__ == "__main__":
