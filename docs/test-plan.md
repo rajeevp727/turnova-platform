@@ -3347,3 +3347,12 @@ CI [#44196954234](https://github.com/rajeevp727/turnova-platform/actions/runs/44
 ## Rider auth single-flight final source handoff — 2026-11-18
 
 Latest source/test head `0e8d2854f9fd6ad38d9feb623732942bf3400f55` initializes the local epoch from `sessionEpoch.current`, then assigns the result of `invalidateSession()` inside the protected try block. This keeps `AUTH-LOGIN-063`'s existing source contract (`clearSessionTokensIfCurrent` is followed by the stale-epoch check before the request; catch only updates the current epoch) while ensuring the single-flight lock is released in `finally` on every normal/async exit. Prior CI #44196954234 had 236/237 Node tests pass; the single-flight regression itself passed, and only the existing source-shape assertion failed. Fresh exact-head CI is required; no merge until green.
+
+
+## Rider Android authentication — final exact-head evidence (2026-11-18)
+
+PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), source/test head `0e8d2854f9fd6ad38d9feb623732942bf3400f55`, final PR head `4723c7403ca027a78620e8bbd032ef2e451d75e1`. Exact-head [CI #44197370084](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084) passed all 9 required API/Android jobs; 3 iOS jobs were correctly skipped. The suite reported 237/237 Node tests, 48/48 Python harness tests and 758/758 backend tests. Both apps passed Expo config, TypeScript, Android production bundle, debug/release APK, package identity and emulator install/launch smoke; native API publish passed.
+
+Artifacts: Rider APK [14379339290](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14379339290), Driver APK [14381230261](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14381230261), Rider smoke [14379978000](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14379978000), Driver smoke [14380083368](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14380083368).
+
+The emulator smoke harness verifies installation, launch, stable process and login-screen presence only. It does not exercise live API/TriSend/Cosmos, TalkBack/VoiceOver, signed SecureStore/Keychain or physical-device acceptance. Keep Rider-first order: complete Rider app flows/tests before Driver; do not enable iOS until both Android apps meet their engineering exit criteria.
