@@ -23,6 +23,7 @@ import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePe
 import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
 import { canStartRiderBooking, hasActiveRiderRide } from "../shared/riderBookingGuard";
+import { getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps } from "../shared/riderAuthForm";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -80,6 +81,7 @@ export default function App() {
   const invalidateSession=useCallback(()=>{const epoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);stopSessionResources();return epoch;},[stopSessionResources]);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
+  const nameInputRef=useRef<TextInput|null>(null); const emailInputRef=useRef<TextInput|null>(null); const passwordInputRef=useRef<TextInput|null>(null);
   const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
   const [tripIntentText,setTripIntentText]=useState(""); const [tripIntentBusy,setTripIntentBusy]=useState(false); const [tripIntentNotice,setTripIntentNotice]=useState("");
   const [helpQuestion,setHelpQuestion]=useState(""); const [helpBusy,setHelpBusy]=useState(false); const [helpAnswer,setHelpAnswer]=useState("");
@@ -437,8 +439,70 @@ export default function App() {
   const themePicker = <View style={styles.themePicker}>
     {(["system", "light", "dark"] as const).map(option => <Pressable key={option} onPress={() => selectTheme(option)} style={[styles.themeOption, themePreference === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, themePreference === option && styles.themeOptionTextSelected]}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</Text></Pressable>)}
   </View>;
-  if(loading&&!user)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}}/></SafeAreaView>;
-  if(!user)return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/><View style={styles.header}><TurnOvaLogo subtitle="Everyone’s Turn Matters." /></View><ScrollView contentContainerStyle={styles.content}><Text style={styles.eyebrow}>RIDER ACCOUNT</Text><Text style={styles.title}>{mode==="login"?"Welcome back":"Create your account"}</Text><Text style={styles.sub}>Sign in securely with your email and password.</Text>{themePicker}<View style={styles.card}>{mode==="register"&&<TextInput value={name} onChangeText={setName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full name"/>}<TextInput value={email} onChangeText={setEmail} style={styles.input} placeholderTextColor={colors.muted} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false}/><TextInput value={password} onChangeText={setPassword} style={styles.input} placeholderTextColor={colors.muted} placeholder="Password" secureTextEntry/><Pressable style={styles.primary} disabled={loading||!email.trim()||!password} onPress={()=>void authenticate()}><Text style={styles.primaryText}>{loading?"Please wait…":mode==="login"?"Sign in":"Create rider account"}</Text></Pressable><Pressable onPress={()=>{setMode(mode==="login"?"register":"login");setError("");}}><Text style={styles.link}>{mode==="login"?"New to TurnOva? Create an account":"Already registered? Sign in"}</Text></Pressable>{!!error&&<Text style={styles.error}>{error}</Text>}</View></ScrollView></SafeAreaView>;
+  const authSubmitDisabled=loading||!email.trim()||!password;
+  if(loading&&!user)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}} accessibilityLabel="Restoring your Rider session"/></SafeAreaView>;
+  if(!user)return <SafeAreaView style={styles.safe}>
+    <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
+    <View style={styles.header}><TurnOvaLogo subtitle="Everyone’s Turn Matters." /></View>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Text style={styles.eyebrow}>RIDER ACCOUNT</Text>
+      <Text style={styles.title}>{mode==="login"?"Welcome back":"Create your account"}</Text>
+      <Text style={styles.sub}>Sign in securely with your email and password.</Text>
+      {themePicker}
+      <View style={styles.card}>
+        {mode==="register"&&<TextInput
+          testID="rider-auth-name"
+          ref={nameInputRef}
+          {...getRiderAuthFieldProps("name",mode)}
+          value={name}
+          onChangeText={setName}
+          onSubmitEditing={()=>emailInputRef.current?.focus()}
+          style={styles.input}
+          placeholderTextColor={colors.muted}
+          placeholder="Full name"
+        />}
+        <TextInput
+          testID="rider-auth-email"
+          ref={emailInputRef}
+          {...getRiderAuthFieldProps("email",mode)}
+          value={email}
+          onChangeText={setEmail}
+          onSubmitEditing={()=>passwordInputRef.current?.focus()}
+          style={styles.input}
+          placeholderTextColor={colors.muted}
+          placeholder="Email address"
+        />
+        <TextInput
+          testID="rider-auth-password"
+          ref={passwordInputRef}
+          {...getRiderAuthFieldProps("password",mode)}
+          value={password}
+          onChangeText={setPassword}
+          onSubmitEditing={()=>{if(!authSubmitDisabled)void authenticate();}}
+          style={styles.input}
+          placeholderTextColor={colors.muted}
+          placeholder="Password"
+        />
+        <Pressable
+          testID="rider-auth-submit"
+          {...getRiderAuthSubmitProps(mode,authSubmitDisabled,loading)}
+          style={styles.primary}
+          disabled={authSubmitDisabled}
+          onPress={()=>void authenticate()}
+        >
+          <Text style={styles.primaryText}>{loading?"Please wait…":mode==="login"?"Sign in":"Create rider account"}</Text>
+        </Pressable>
+        <Pressable
+          testID="rider-auth-mode-toggle"
+          {...getRiderAuthModeToggleProps(mode)}
+          onPress={()=>{setMode(mode==="login"?"register":"login");setError("");}}
+        >
+          <Text style={styles.link}>{mode==="login"?"New to TurnOva? Create an account":"Already registered? Sign in"}</Text>
+        </Pressable>
+        {!!error&&<Text testID="rider-auth-error" {...getRiderAuthErrorProps()} style={styles.error}>{error}</Text>}
+      </View>
+    </ScrollView>
+  </SafeAreaView>;
   const tabs=["Book","Activity","Offers","Profile"] as const;
   return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/><View style={styles.header}><TurnOvaLogo subtitle={`Rider · ${user.name||user.email}`} compact /></View><ScrollView contentContainerStyle={styles.content}>
     {tab==="Book"&&!activeRideStateLoaded&&<View style={styles.card}><Text style={styles.title}>Checking active booking</Text><Text style={styles.muted}>TurnOva is checking your server-owned ride history before enabling another booking.</Text><Pressable style={styles.secondary} disabled={loading} onPress={()=>void loadRideHistory(()=>isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)).catch(e=>setError(e instanceof Error?e.message:"Unable to verify your active booking."))}><Text style={styles.secondaryText}>Retry status check</Text></Pressable></View>}
