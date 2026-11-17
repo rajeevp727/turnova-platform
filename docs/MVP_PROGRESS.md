@@ -1,10 +1,11 @@
-**Last updated:** 2026-11-17; main HEAD `dafb9a39b0e876e65f9c7b8443714cbf0ca646a4` (PR #181 merged).
+**Last updated:** 2026-11-18; main HEAD `ea42ae49f200738316e72a1505d93ab7265bd0e2` (PR #182 merged).
 **Platform phase:** **API first**. Android completion remains prohibited until all in-scope API source, deterministic tests, API contract/docs, auth/privacy, persistence and native non-container publish/CI exit criteria pass. iOS remains gated until both Android apps exit.
-**Merged:** PRs #172–#176 and #178–#181. PR #177 remains closed/unmerged and parked for Android; its mobile CI is not API exit evidence. PR #182 is the sole active feature PR.
-**Current API PR:** [#182 — real Kestrel support payload limit](https://github.com/rajeevp727/turnova-platform/pull/182), branch `feat/api-kestrel-support-body-limit`. Source/test commit `818bf01e453291ca5c954c0015c8157b5c4e4c11`; verified pre-follow-up-docs head `3e6faa1a4f0853c3741c5c7b6869263d142eaa96`. Exact-head API CI [#44143458072](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072) passed on documentation head `3e6faa1a4f0853c3741c5c7b6869263d142eaa96`: scope passed; .NET 10 Release build passed; **754/754 backend tests passed (0 failed, 0 skipped)**; native non-container API publish, publish verifier and artifact upload passed (artifact [14355367845](https://github.com/rajeevp727/turnova-platform/actions/runs/44143458072/artifacts/14355367845)). The new real-Kestrel `SUPPORT-API-017` regression is included in the 754-test suite. All mobile/Android/iOS jobs were correctly skipped while API remains in progress. The earlier source-head run #44143080030 was superseded by documentation commits before its backend test/publish completed and is not counted as passing. This follow-up documentation-only commit requires its own exact-head CI before merge.
-**PR #182 implementation:** real Kestrel listener on an ephemeral loopback port; same `SupportRequestEndpoints.MapSupportRequestEndpoints` extension; deterministic Rider authentication and counting store; known Content-Length above 16 KiB returns HTTP 413 with zero store writes. Existing endpoint metadata and OpenAPI 413 assertions remain.
-**Previous API evidence:** PR #181 merged at `dafb9a39b0e876e65f9c7b8443714cbf0ca646a4`; exact-head CI #44141514282 passed 753/753 backend tests and native .NET 10 publish (artifact 14354467904).
-**Next API work:** complete the full API row-by-row source/auth/privacy/persistence audit and close any safe engineering gaps before API phase exit. Live private object storage/scanning, managed identity, consent/retention/deletion approval, Cosmos multi-instance/restart, production identity and hosted API remain external gates.
+**Merged:** PRs #172–#176 and #178–#182. PR #177 remains closed/unmerged and parked for Android only; its mobile CI is not API exit evidence.
+**Current API PR:** [#183 — AI assistance request input guards](https://github.com/rajeevp727/turnova-platform/pull/183), branch `feat/api-ai-assistance-input-guards`. Source/test head at handoff: `1cc61f270977599809bb00419fe6c922261cdfb4`; final PR head is shown on the linked PR.
+**PR #182 final evidence:** [CI #44144136443](https://github.com/rajeevp727/turnova-platform/actions/runs/44144136443) passed on exact head `97f28d8ead66bd540e63e48f6a0d4a94eb68dfaa`: scope passed; .NET 10 Release build passed; **754/754 backend tests passed (0 failed, 0 skipped)**; native non-container API publish and artifact verification passed. Android/iOS jobs were correctly skipped under API `in_progress`. PR #182 merged at `ea42ae49f200738316e72a1505d93ab7265bd0e2`.
+**PR #183 change:** AI-01 trip-intent and help endpoints now declare a 16 KiB request-size limit and OpenAPI HTTP 413 response. Strict request DTOs reject unknown JSON members so callers cannot attach ride IDs, exact coordinates, fare, contact, payment or token fields. New deterministic tests cover both strict DTOs and real Kestrel rejection before provider invocation. Exact-head API CI is pending.
+**API next:** verify PR #183 exact-head backend tests/native publish, then continue the API acceptance-row source/auth/privacy/persistence audit. Do not start Android until every API phase exit criterion passes.
+**AI-01:** supplemental and outside the 19-row denominator; provider remains disabled by default, no paid provider/model/credential selected, and live provider validation remains external.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation-completion percentage.
 **Production readiness:** Not established. No live private-media provider/scanner, Cosmos multi-instance/restart, production identity, hosted API, legal approval or physical-device validation is claimed.
 
@@ -16,13 +17,13 @@
 
 ## 1. Current step
 
-**API phase — private Driver media boundary (PR #181), followed by Kestrel request-size enforcement and the remaining API acceptance audit.**
+**API phase — AI-01 request input and body-size hardening (PR #183), followed by the complete API acceptance-row audit.**
 
-PR #181 adds server-issued Driver-bound media references, owner-only media/status reads, current active Cab Union document access, scan-state enforcement and historical Base64 compatibility. New selfie writes store references rather than inline Base64. Testing's Clean result is a deterministic fake; Development stays PendingScan; Staging/Production return 503 without a real provider.
+PR #182 is merged. Its real-Kestrel support-request test proves that a request above 16 KiB returns HTTP 413 before support persistence. Exact-head CI #44144136443 passed 754/754 backend tests and native non-container API publishing.
 
-The first exact-head documentation run, CI #44137503480, failed 2 of 753 tests solely because two assertions treated Cache-Control directive order as contractual. The actual header was `no-store, private`, which contains both required directives. Commit `1d37d685fdda9b20d8967c887cee9647a60fd5cf` fixes the tests to assert parsed `Private` and `NoStore` flags; production response code is unchanged. Exact-head CI #44140212462 passed the corrected source and documentation head: 753/753 backend tests (0 failed, 0 skipped), native non-container .NET 10 publish and artifact verification (artifact 14353189121). The current documentation synchronization requires its own final-head CI.
+PR #183 caps both AI assistance routes at 16 KiB, documents 413 in OpenAPI, and rejects unmapped JSON properties. The Kestrel regression exercises both trip-intent and help routes and asserts no provider invocation for oversized requests. Unknown ride/location/fare/contact/payment fields are rejected rather than silently ignored.
 
-**Next exact action:** complete the real Kestrel host-level 16 KiB support-request rejection test, then continue the API-only acceptance audit. Do not start Android until the API phase exit checklist passes.
+**Next exact action:** finish PR #183 final-head Release build, backend tests and native publish; review all changed files and merge only if GitHub policy permits. Then re-read main and continue the API row-by-row audit. Do not start Android before API phase exit.
 
 ## 2. Overall MVP completion
 
@@ -2509,3 +2510,15 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 - Source/test commit: `818bf01e453291ca5c954c0015c8157b5c4e4c11`. Exact-head API CI [#44143080030](https://github.com/rajeevp727/turnova-platform/actions/runs/44143080030) is running; the documentation synchronization requires a fresh final-head run.
 - No support policy, category, severity, SLA, escalation or retention duration is invented. No production middleware or body-size behavior is weakened.
 - API remains the active platform phase. Android/iOS completion remains prohibited until the API exit criteria pass.
+
+ 
+## Latest API execution handoff — AI-01 request input guards (2026-11-18)
+
+- Main at start of this increment: `ea42ae49f200738316e72a1505d93ab7265bd0e2`; PR #182 merged. The sole active feature branch is `feat/api-ai-assistance-input-guards` / PR #183.
+- Source/test commits: `be1f0fd6d8432ba27622ea39fad9952cbe4f2d88` (endpoint body limits), `3baada62fc256458864931d0d13c47e346f48cc4` (strict JSON DTOs), `193e58df8a54c7af486176b83f93df6cac72c68c` (API integration regressions), `1cc61f270977599809bb00419fe6c922261cdfb4` (real Kestrel tests).
+- Both `/api/v1/assistance/trip-intent` and `/api/v1/assistance/help` have a 16 KiB request limit and OpenAPI 413 declaration. Trip-intent accepts only `text`; help accepts only `question` and optional `rideState`. Unknown ride IDs, exact coordinates, fare, contact, payment and token fields return HTTP 400.
+- `AiAssistanceKestrelIntegrationTests` starts real Kestrel on loopback and tests both endpoints with Content-Length above 16 KiB; expected HTTP 413 and zero provider calls.
+- No provider/model/credential selection or provider live validation is included. AI-01 remains supplemental/outside the 19-row denominator.
+- Required checks: exact-head .NET 10 Release build, full backend suite, native non-container API publish and artifact verifier. Android/iOS jobs must remain skipped under API phase.
+- External gates remain Product-approved dispatch radius/freshness, support policies, live Cosmos ETag/multi-instance/restart/retention, production JWT/TriSend identity, private storage/scanning/consent/retention, maps/realtime providers, reconciliation policy, Union legal terms and hosted API.
+- Strict acceptance remains 0/19 Verified, 16 In Progress, 3 Blocked (DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
