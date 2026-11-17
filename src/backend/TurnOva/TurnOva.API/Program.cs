@@ -707,8 +707,8 @@ async Task EnsureOperationsSelfieRejectionAuditAsync(
         ?? throw new InvalidOperationException("A rejected Operations selfie review must retain its reason.");
     var eventId = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
         reviewedProfile.DriverId, unionId, reviewedProfile.ProfilePhotoCapturedAtUtc, reviewedAtUtc,
-        reviewedProfile.ProfilePhotoBase64
-            ?? throw new InvalidOperationException("A rejected selfie review must retain the reviewed selfie content."), reason);
+        reviewedProfile.ProfilePhotoStorageReference ?? reviewedProfile.ProfilePhotoBase64
+            ?? throw new InvalidOperationException("A rejected selfie review must retain its private media reference."), reason);
     await SaveUnionAuditAsync(new DriverUnionAuditEvent(
         eventId, reviewedProfile.DriverId, unionId, unionName, unionId, unionName,
         "SelfieRejectedByOperations", reason, actor, reviewedAtUtc), ct);
@@ -2075,7 +2075,8 @@ opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionI
                 profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
                 profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
                 profile.ServiceClass, profile.PassengerCapacity, profile.Status,
-                ProfilePhotoBase64 = profile.ProfilePhotoApprovalStatus == "Approved" && profile.ProfilePhotoApprovedByUnionId == unionId ? profile.ProfilePhotoBase64 : null,
+                ProfilePhotoBase64 = profile.ProfilePhotoApprovalStatus == "Approved" && profile.ProfilePhotoApprovedByUnionId == unionId
+                    ? await GetProfilePhotoBase64Async(profile, ct) : null,
                 profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
                 profile.ProfilePhotoApprovalStatus
             }
@@ -2114,7 +2115,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         if (assignment is null || assignment.UnionId != unionId || assignment.Status != "Active")
             return Results.Conflict(new { message = "Only the driver's currently assigned union can review this selfie." });
         var profile = await FindDriverProfileAsync(driverId, ct);
-        if (profile is null || string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
+        if (profile is null || string.IsNullOrWhiteSpace(await GetProfilePhotoBase64Async(profile, ct)))
             return Results.NotFound(new { message = "Driver selfie not found." });
         if (request.Status == "Approved" && !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "Legacy non-Cab driver photos cannot be approved for new public discovery." });
@@ -2158,6 +2159,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         {
             if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+                current.ProfilePhotoStorageReference != profile.ProfilePhotoStorageReference ||
                 current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
                 current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
                 current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
@@ -2233,7 +2235,8 @@ opsUnions.MapGet("/{unionId}/drivers/{driverId}", async (HttpContext context, st
             profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
             profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
             profile.ServiceClass, profile.PassengerCapacity, profile.Status,
-            profile.ProfilePhotoBase64, profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
+            ProfilePhotoBase64 = await GetProfilePhotoBase64Async(profile, ct),
+            profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
             profile.ProfilePhotoApprovalStatus, profile.ProfilePhotoApprovedByUnionId,
             profile.ProfilePhotoReviewedAtUtc, profile.ProfilePhotoReviewReason
         }
@@ -2286,7 +2289,7 @@ unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToke
                     document.DocumentType,
                     document.Status
                 }).ToArray() ?? [],
-                profile.ProfilePhotoBase64,
+                ProfilePhotoBase64 = await GetProfilePhotoBase64Async(profile, ct),
                 profile.ProfilePhotoContentType,
                 profile.ProfilePhotoCapturedAtUtc,
                 profile.ProfilePhotoApprovalStatus,
@@ -2414,8 +2417,8 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             return Results.NotFound(new { message = "Active union membership was not found." });
 
         var profile = await FindDriverProfileAsync(driverId, ct);
-        if (profile is null || !IsValidDriverSelfie(profile.ProfilePhotoBase64))
-            return Results.NotFound(new { message = "A valid driver selfie is not available for review." });
+        if (profile is null || !IsValidDriverSelfie(await GetProfilePhotoBase64Async(profile, ct)))
+            return Results.NotFound(new { message = "A valid scan-cleared driver selfie is not available for review." });
         if (profile.Status != "Approved" ||
             !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
             profile.Documents is null ||
@@ -2457,6 +2460,7 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             {
                 // Do not approve a selfie/document/profile snapshot that changed while it was being reviewed.
                 if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+                    current.ProfilePhotoStorageReference != profile.ProfilePhotoStorageReference ||
                     current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
                     current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
                     current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
@@ -2540,8 +2544,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
             !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
             return Results.Conflict(new { message = "Approved driving licence and Cab vehicle registration documents are required before Union assignment." });
-        if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
-            return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
+        if (!await HasUsableProfilePhotoAsync(profile, ct))
+            return Results.Conflict(new { message = "Driver must capture a scan-cleared union-joining selfie before assignment." });
 
         var union = await FindUnionAsync(request.UnionId, ct);
         if (union is null) return Results.NotFound(new { message = "Union not found." });
@@ -2592,6 +2596,7 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             var profileReset = await TryUpdateDriverProfileAsync(driverId, current =>
             {
                 if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+                    current.ProfilePhotoStorageReference != profile.ProfilePhotoStorageReference ||
                     current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
                     current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
                     current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
@@ -3186,37 +3191,42 @@ app.MapGet("/api/v1/rider/discovery", async (
             continue;
         candidates.Add(candidate);
     }
-    var groups = candidates
-        .GroupBy(candidate => candidate.Union.UnionId, StringComparer.Ordinal)
-        .Select(group =>
+    var groups = new List<NearbyUnionDiscoveryGroup>();
+    foreach (var group in candidates.GroupBy(candidate => candidate.Union.UnionId, StringComparer.Ordinal))
+    {
+        var union = group.First().Union;
+        var drivers = new List<NearbyDriverDiscoveryResponse>();
+        foreach (var candidate in group
+            .OrderBy(candidate => candidate.DistanceKm)
+            .ThenBy(candidate => candidate.Profile.DriverId, StringComparer.Ordinal)
+            .Take(3))
         {
-            var union = group.First().Union;
-            var drivers = group
-                .OrderBy(candidate => candidate.DistanceKm)
-                .ThenBy(candidate => candidate.Profile.DriverId, StringComparer.Ordinal)
-                .Take(3)
-                .Select(candidate => new NearbyDriverDiscoveryResponse(
-                    candidate.Profile.DriverId,
-                    candidate.Profile.FullName,
-                    candidate.Profile.VehicleMake,
-                    candidate.Profile.VehicleModel,
-                    "cab",
-                    candidate.Profile.PassengerCapacity,
-                    Math.Round(candidate.DistanceKm, 1),
-                    candidate.Profile.ProfilePhotoApprovalStatus == "Approved" &&
-                        candidate.Profile.ProfilePhotoApprovedByUnionId == union.UnionId
-                            ? candidate.Profile.ProfilePhotoBase64 : null,
-                    candidate.Profile.ProfilePhotoApprovalStatus == "Approved" &&
-                        candidate.Profile.ProfilePhotoApprovedByUnionId == union.UnionId
-                            ? candidate.Profile.ProfilePhotoContentType : null))
-                .ToArray();
-            return new NearbyUnionDiscoveryGroup(union.UnionId, union.Name, drivers);
-        })
+            var approvedForCurrentUnion =
+                candidate.Profile.ProfilePhotoApprovalStatus == "Approved" &&
+                candidate.Profile.ProfilePhotoApprovedByUnionId == union.UnionId;
+            var photo = approvedForCurrentUnion
+                ? await GetProfilePhotoBase64Async(candidate.Profile, ct)
+                : null;
+            drivers.Add(new NearbyDriverDiscoveryResponse(
+                candidate.Profile.DriverId,
+                candidate.Profile.FullName,
+                candidate.Profile.VehicleMake,
+                candidate.Profile.VehicleModel,
+                "cab",
+                candidate.Profile.PassengerCapacity,
+                Math.Round(candidate.DistanceKm, 1),
+                photo,
+                approvedForCurrentUnion && photo is not null
+                    ? candidate.Profile.ProfilePhotoContentType : null));
+        }
+        groups.Add(new NearbyUnionDiscoveryGroup(union.UnionId, union.Name, drivers));
+    }
+    var orderedGroups = groups
         .OrderBy(group => group.UnionName, StringComparer.OrdinalIgnoreCase)
         .ThenBy(group => group.UnionId, StringComparer.Ordinal)
         .ToArray();
 
-    return Results.Ok(new RiderDiscoveryResponse(zoneId, null, groups));
+    return Results.Ok(new RiderDiscoveryResponse(zoneId, null, orderedGroups));
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.MapPost("/api/v1/rider/bookings", async (
@@ -4881,8 +4891,9 @@ app.Run();
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record DriverAvailabilityRequest(bool IsOnline, double? Latitude = null, double? Longitude = null, DateTimeOffset? CapturedAtUtc = null);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
-public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);
-public sealed record DriverSelfieRequest(string ProfilePhotoBase64);
+public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64, string? ProfilePhotoStorageReference = null);
+public sealed record DriverSelfieRequest(string? ProfilePhotoBase64, string? ProfilePhotoStorageReference = null);
+public sealed record DriverPrivateMediaUploadRequest(string DocumentType, string ContentType, string ContentBase64);
 public sealed record DriverSelfieReviewRequest(string Status, string? Reason);
 public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateUnionRequest(string Name, string Code, string? Location, string? ManagerName, string? ManagerPhone, IReadOnlyList<string> ZoneIds, IReadOnlyList<string> ServiceClasses);
