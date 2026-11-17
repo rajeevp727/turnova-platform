@@ -2866,3 +2866,8 @@ The superseded exact-head run #44168024078 had both mobile validation jobs and b
 ## PR #185 npm metadata drift correction — 2026-11-18
 
 Fresh Rider npm audit artifact from CI #44169775823 changed the picomatch `fixAvailable` suggestion to `expo@58.0.26` with `isSemVerMajor=true`; the previous Rider run suggested `react-native@0.88.1`. The inventory stayed at 34 records (27 high, 7 moderate, 0 critical) and the same GHSA root. The per-app mapping was therefore too strict. The verifier now accepts only the two exact reviewed major-only objects for either known app identity and keeps all other fail-closed checks. Test count 27. CI #44169775823 failed at Rider audit metadata before native Android jobs; new exact-head CI required.
+
+
+## PR #185 third npm remediation hint — 2026-11-18
+
+Rider's latest audit artifact on CI #44170775823 reported `expo-asset@58.0.21`; Driver reported `expo@58.0.26`; an earlier Rider report reported `react-native@0.88.1`. All are major-only suggestions, not picomatch patches. The exact allow-list now contains these three values for either known app. Tests: 28. Any fourth/unreviewed suggestion fails and requires re-review.
