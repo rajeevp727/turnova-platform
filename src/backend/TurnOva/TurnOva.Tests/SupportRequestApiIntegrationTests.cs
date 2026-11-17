@@ -170,6 +170,19 @@ public sealed class SupportRequestApiIntegrationTests
     }
 
     [Fact]
+    public async Task StagingSupportIntakeReturns503BeforeParsingMalformedBody()
+    {
+        using var factory = new SupportApiFactory("Staging");
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
+        using var content = new StringContent("{not-json", Encoding.UTF8, "application/json");
+
+        using var response = await client.PostAsync("/api/v1/support/requests", content);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task StagingSupportIntakeCanBeEnabledOnlyWithExplicitPolicyApproval()
     {
         using var factory = new SupportApiFactory("Staging", policyApproved: true);
@@ -244,6 +257,7 @@ public sealed class SupportRequestApiIntegrationTests
         var conflictSchema = operation.GetProperty("responses").GetProperty("409")
             .GetProperty("content").GetProperty("application/json").GetProperty("schema");
         Assert.Equal(new[] { "message" }, GetSchemaPropertyNames(conflictSchema, root));
+        Assert.True(operation.GetProperty("responses").TryGetProperty("413", out _));
     }
 
     [Fact]
