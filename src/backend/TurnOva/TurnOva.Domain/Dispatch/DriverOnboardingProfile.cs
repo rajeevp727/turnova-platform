@@ -42,4 +42,6 @@ public sealed record DriverOnboardingProfile(
     // Private UnionManager review snapshot used only to recover the original audit actor after a partial write.
     string? ProfilePhotoUnionReviewActorId = null,
     string? ProfilePhotoUnionReviewUnionId = null,
-    string? ProfilePhotoUnionReviewUnionName = null);
+    string? ProfilePhotoUnionReviewUnionName = null,
+    // New uploads use a server-issued private-media reference; Base64 remains only for historical records.
+    string? ProfilePhotoStorageReference = null);

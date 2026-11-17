@@ -3150,17 +3150,25 @@ PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), baseline hea
 
 The same suite verifies SUPPORT-API-010 endpoint size-limit metadata/OpenAPI 413, SUPPORT-API-011 Staging malformed-body 503-before-binding and SUPPORT-API-012 Staging no-Cosmos startup rejection. New SUPPORT-API-013–016 cases cover retention-day parsing/overflow, per-item `ttl` serialization, the `DefaultTimeToLive=-1` migration contract and request-time revalidation after configuration reload. The 16 KiB metadata is tested; Kestrel host-level payload rejection still needs a dedicated host integration check.
 
-### Private media/KYC API follow-up (planned; not implemented or passed)
+### Private media/KYC API implementation and external gates
 
-| ID | Scenario | Expected result | Type | Priority |
-|---|---|---|---|---|
-| DRIVER-MEDIA-001 | Driver uploads selfie through provider-agnostic private-media boundary | Raw bytes are stored outside the Cosmos Driver profile; profile stores only a server-issued opaque reference bound to that Driver | API/storage contract | P0 |
-| DRIVER-MEDIA-002 | Driver submits another Driver's, arbitrary, absolute-URL or expired document reference | API rejects it before onboarding/review; no cross-Driver reference is persisted | API security | P0 |
-| DRIVER-MEDIA-003 | Selfie/document scan is pending, rejected or unavailable | Content remains quarantined/private and cannot be approved or exposed in Rider discovery | API/privacy | P0 |
-| DRIVER-MEDIA-004 | UnionManager reviews or retrieves a member document | Only the current signed UnionManager for the Driver's current Union can retrieve the private review asset; Rider and other unions are denied | API authorization | P0 |
-| DRIVER-MEDIA-005 | Consent withdrawal or retention expiry | Private object and reference are deleted/invalidated according to the approved policy; audit retains only the permitted non-content evidence | API/privacy | P1 |
+PR #181 implements the provider-agnostic private Driver media boundary and deterministic test adapters. Automated Testing uses an explicit fake Clean result; Development reports PendingScan; Staging/Production use an unavailable adapter and return 503. This is not production malware-scan or private-storage evidence.
 
-These tests require a provider-agnostic interface and deterministic in-memory fake before live provider integration. Production scanning, managed identity, consent/retention policy and private object-storage credentials remain external.
+| ID | Scenario | Expected result | Automated evidence | Type | Priority |
+|---|---|---|---|---|---|
+| DRIVER-MEDIA-001 | Driver uploads selfie through private-media boundary | Raw bytes are held by the media adapter, not embedded in the new Cosmos Driver profile; the profile stores only a server-issued opaque Driver-bound reference | `PrivateDriverMediaApiIntegrationTests.OnboardingPersistsPrivateSelfieReferenceAndRejectsAnotherDriversDocumentReference`; `PrivateDriverMediaStoreTests.StoredReferenceIsOpaqueAndBoundToDriverAndMediaType` | API integration | P0 |
+| DRIVER-MEDIA-002 | Driver submits another Driver's or wrong-media-type reference | Cross-Driver and wrong-media-type server references are rejected before onboarding; Development/Testing legacy fixture compatibility is not available in Staging/Production | Same onboarding integration test and store ownership/type test | API integration/security | P0 |
+| DRIVER-MEDIA-003 | Scan is pending or provider unavailable | PendingScan cannot satisfy onboarding, Union review or discovery eligibility; Staging/Production without a configured provider return 503 | `PrivateDriverMediaStoreTests.PendingScanCannotBeUsedForOnboardingOrReview`; `PrivateDriverMediaStoreTests.UnconfiguredProviderFailsClosed` | API unit/integration | P0 |
+| DRIVER-MEDIA-004 | UnionManager retrieves a Driver document | Only the current signed UnionManager for the Driver's active Cab Union can retrieve scan-cleared documents; other unions and historical non-Cab records receive 404 | `PrivateDriverMediaApiIntegrationTests.UnionManagerCanReadOnlyCurrentAssignedDriversScanClearedDocuments`; `PrivateDriverMediaApiIntegrationTests.UnionManagerCannotRetrieveDocumentsForHistoricalNonCabDriver` | API integration/security | P0 |
+| DRIVER-MEDIA-005 | Consent withdrawal or retention expiry | Provider deletes/invalidates media and reference according to approved policy; audit retains only permitted non-content evidence | External provider/policy validation; not implemented by the in-memory adapter | External | P1 |
+| DRIVER-MEDIA-006 | Driver retrieves an uploaded private object | Only the owning Driver receives bytes; Cache-Control contains both `private` and `no-store` directives (directive order is not contractual), plus `X-Content-Type-Options: nosniff`; another Driver receives 404 | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadIssuesOpaqueOwnerBoundReferenceAndPrivateRead` asserts parsed `CacheControl.Private` and `CacheControl.NoStore` flags | API integration/security | P0 |
+| DRIVER-MEDIA-007 | Upload declares an unsupported media type or mismatched file signature | API rejects before issuing a reference | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadRejectsMismatchedContentSignature` and `IsValidPrivateMediaPayload` | API integration | P0 |
+| DRIVER-MEDIA-008 | Historical Driver profile contains inline Base64 selfie | Historical record remains readable; new writes leave Base64 null and use `ProfilePhotoStorageReference` | Existing selfie/discovery regression suite plus onboarding reference assertion | API integration | P0 |
+| DRIVER-MEDIA-009 | UnionManager requests a historical non-Cab Driver document | API returns 404 and does not expand Scooty/Bike/Auto access | `PrivateDriverMediaApiIntegrationTests.UnionManagerCannotRetrieveDocumentsForHistoricalNonCabDriver` | API integration/security | P0 |
+
+CI recovery: run #44137503480 executed 753 tests (751 passed, 2 failed) because two assertions compared Cache-Control string ordering. The actual response serialized the same directives as `no-store, private`. The test-only correction in commit `1d37d685fdda9b20d8967c887cee9647a60fd5cf` now checks parsed directive flags; production header behaviour was not changed. Exact documentation-head CI [#44140212462](https://github.com/rajeevp727/turnova-platform/actions/runs/44140212462) passed **753/753 backend tests (0 failed, 0 skipped)** and native non-container .NET 10 publish (artifact [14353189121](https://github.com/rajeevp727/turnova-platform/actions/runs/44140212462/artifacts/14353189121)); all mobile/Android/iOS jobs were correctly skipped under the API phase. CI #44138321351 was cancelled when a later documentation commit superseded its head. This final documentation update requires a new exact-head CI.
+
+**External gate:** Infrastructure/Security must supply private object storage, malware scanning/quarantine, managed identity and provider-backed private retrieval. Product/Legal must approve consent, retention and deletion. Live Cosmos/provider validation remains separate. The Testing Clean result is a deterministic fake, not malware-scan evidence. Staging/Production fail closed until a real provider is configured.
 
 ### Cosmos migration lease follow-up (planned; not implemented or passed)
 
@@ -3191,3 +3199,15 @@ The current checked-in state is API `in_progress`, Android/iOS `not_started`. Ex
 
 - CI recovery note (2026-11-17): #441256 compiled and ran 735 tests; 734 passed and SUPPORT-API-016 failed because the test expected a null TTL when policy alone was disabled. The method correctly returned false for acceptance but preserved the valid 7-day TTL. The test now asserts 604800 seconds in that branch; zero-retention still asserts null. Corrected commit `fb4e0c92a27796d2ec1d5cfbb6b5bc6af4fe1e31`; fresh exact-head CI is pending.
 
+
+### Additional private-media API regressions
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| DRIVER-MEDIA-006 | Driver retrieves an uploaded private object | Only the owning Driver receives bytes; response is `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`; another Driver receives 404 | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadIssuesOpaqueOwnerBoundReferenceAndPrivateRead` (including owner-only status polling) | P0 |
+| DRIVER-MEDIA-007 | Upload declares an unsupported media type or mismatched file signature | API rejects it before storage; no media reference is issued | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadRejectsMismatchedContentSignature` plus `IsValidPrivateMediaPayload`; exact-head CI pending | P0 |
+| DRIVER-MEDIA-008 | Historical Driver profile contains inline Base64 selfie | Historical record remains readable; new writes leave Base64 null and use `ProfilePhotoStorageReference` | Existing selfie/discovery regression suite plus new onboarding reference assertion | P0 |
+
+**External gate:** Real private object storage, malware scanning/quarantine, managed identity, consent, retention/deletion and live authorization integration remain unconfigured. Testing uses a deterministic Clean fake only; Development returns PendingScan; Staging/Production fail closed. No live provider or production media validation is claimed.
+
+| DRIVER-MEDIA-009 | UnionManager requests a historical non-Cab Driver document | API returns 404 and does not expand Scooty/Bike/Auto access | `PrivateDriverMediaApiIntegrationTests.UnionManagerCannotRetrieveDocumentsForHistoricalNonCabDriver` | P0 |

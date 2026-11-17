@@ -18,11 +18,13 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.Application.Dispatch;
 using TurnOva.Application.Support;
+using TurnOva.Application.Media;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Database;
 using TurnOva.Infrastructure.Database.Migrations;
 using TurnOva.Infrastructure.Dispatch;
 using TurnOva.Infrastructure.Support;
+using TurnOva.Infrastructure.Media;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -99,6 +101,12 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
     }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.")
     .ValidateOnStart();
 builder.Services.AddAuthorization();
+if (builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddSingleton<IPrivateDriverMediaStore>(new InMemoryPrivateDriverMediaStore(markUploadsCleanForTests: true));
+else if (builder.Environment.IsDevelopment())
+    builder.Services.AddSingleton<IPrivateDriverMediaStore>(new InMemoryPrivateDriverMediaStore(markUploadsCleanForTests: false));
+else
+    builder.Services.AddSingleton<IPrivateDriverMediaStore, UnavailablePrivateDriverMediaStore>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DemoRide>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, string>>();
@@ -312,6 +320,8 @@ var riderActiveBookingReservations = app.Services.GetRequiredService<IRiderActiv
 Container? idempotencyContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "RideIdempotency") : null;
 Container? driverContainer = useCosmos ? app.Services.GetRequiredService<CosmosClient>().GetContainer(databaseName, "Drivers") : null;
 var driverProfiles = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+var privateDriverMediaStore = app.Services.GetRequiredService<IPrivateDriverMediaStore>();
+var localMediaCompatibility = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing");
 var unions = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
 var unionAssignments = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
 var unionAudit = app.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
@@ -449,6 +459,57 @@ bool IsValidDriverSelfie(string? base64)
             bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
     }
     catch (FormatException) { return false; }
+}
+
+bool TryDecodePrivateMedia(string? base64, int maximumBytes, out byte[] content)
+{
+    content = [];
+    if (string.IsNullOrWhiteSpace(base64) || base64.Length > ((maximumBytes + 2) / 3 * 4) + 8)
+        return false;
+    try
+    {
+        content = Convert.FromBase64String(base64);
+        return content.Length is > 0 && content.Length <= maximumBytes;
+    }
+    catch (FormatException)
+    {
+        content = [];
+        return false;
+    }
+}
+
+bool IsValidPrivateMediaPayload(string mediaType, string contentType, byte[] content)
+{
+    if (mediaType == "ProfilePhoto")
+        return contentType == "image/jpeg" && IsValidDriverSelfie(Convert.ToBase64String(content));
+    if (mediaType is not ("DrivingLicence" or "VehicleRegistration" or "Insurance" or "Permit"))
+        return false;
+    return contentType switch
+    {
+        "application/pdf" => content.Length >= 5 && content.AsSpan(0, 5).SequenceEqual("%PDF-"u8),
+        "image/jpeg" => content.Length >= 3 && content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF,
+        "image/png" => content.Length >= 8 && content.AsSpan(0, 8).SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }),
+        _ => false
+    };
+}
+
+async Task<string?> GetProfilePhotoBase64Async(DriverOnboardingProfile profile, CancellationToken ct)
+{
+    if (string.IsNullOrWhiteSpace(profile.ProfilePhotoStorageReference))
+        return profile.ProfilePhotoBase64;
+    var asset = await privateDriverMediaStore.ReadAsync(profile.DriverId, profile.ProfilePhotoStorageReference, ct);
+    if (asset is null ||
+        asset.Metadata.DriverId != profile.DriverId ||
+        asset.Metadata.MediaType != "ProfilePhoto" ||
+        asset.Metadata.ScanStatus != "Clean")
+        return null;
+    return Convert.ToBase64String(asset.Content);
+}
+
+async Task<bool> HasUsableProfilePhotoAsync(DriverOnboardingProfile profile, CancellationToken ct)
+{
+    var content = await GetProfilePhotoBase64Async(profile, ct);
+    return IsValidDriverSelfie(content);
 }
 
 bool IsValidDriverPhoneNumber(string? phoneNumber)
@@ -647,10 +708,16 @@ async Task EnsureOperationsSelfieRejectionAuditAsync(
         ?? throw new InvalidOperationException("A rejected Operations selfie review must retain its original Union name.");
     var reason = reviewedProfile.ProfilePhotoReviewReason
         ?? throw new InvalidOperationException("A rejected Operations selfie review must retain its reason.");
+    var selfieAuditIdentity = reviewedProfile.ProfilePhotoBase64;
+    if (string.IsNullOrWhiteSpace(selfieAuditIdentity))
+    {
+        var mediaReference = reviewedProfile.ProfilePhotoStorageReference
+            ?? throw new InvalidOperationException("A rejected selfie review must retain its private media reference.");
+        selfieAuditIdentity = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(mediaReference));
+    }
     var eventId = DriverUnionAuditIdentity.CreateSelfieRejectionEventId(
         reviewedProfile.DriverId, unionId, reviewedProfile.ProfilePhotoCapturedAtUtc, reviewedAtUtc,
-        reviewedProfile.ProfilePhotoBase64
-            ?? throw new InvalidOperationException("A rejected selfie review must retain the reviewed selfie content."), reason);
+        selfieAuditIdentity, reason);
     await SaveUnionAuditAsync(new DriverUnionAuditEvent(
         eventId, reviewedProfile.DriverId, unionId, unionName, unionId, unionName,
         "SelfieRejectedByOperations", reason, actor, reviewedAtUtc), ct);
@@ -1511,6 +1578,7 @@ onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
         ? Results.NoContent()
         : Results.Ok(profile with
         {
+            ProfilePhotoBase64 = await GetProfilePhotoBase64Async(profile, ct),
             ProfilePhotoOperationsReviewActorId = null,
             ProfilePhotoOperationsReviewUnionId = null,
             ProfilePhotoOperationsReviewUnionName = null,
@@ -1519,12 +1587,89 @@ onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
             ProfilePhotoUnionReviewUnionName = null
         });
 });
+onboarding.MapPost("/media", async (
+    ClaimsPrincipal user, DriverPrivateMediaUploadRequest request, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    if (!TryDecodePrivateMedia(request.ContentBase64, 10 * 1024 * 1024, out var content) ||
+        !IsValidPrivateMediaPayload(request.DocumentType, request.ContentType, content))
+        return Results.BadRequest(new { message = "Provide a supported private Driver document or JPEG selfie with valid content bytes." });
+
+    var stored = await privateDriverMediaStore.StoreAsync(
+        driverId, request.DocumentType, request.ContentType, content, ct);
+    if (stored is null)
+        return Results.Problem("Private Driver media storage is unavailable.", statusCode: 503);
+
+    var location = $"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(stored.Reference)}";
+    var response = new
+    {
+        storageReference = stored.Reference,
+        documentType = stored.MediaType,
+        contentType = stored.ContentType,
+        length = stored.Length,
+        scanStatus = stored.ScanStatus,
+        uploadedAtUtc = stored.UploadedAtUtc
+    };
+    return stored.ScanStatus == "Clean"
+        ? Results.Created(location, response)
+        : Results.Accepted(location, response);
+});
+
+onboarding.MapGet("/media/{reference}", async (
+    HttpContext context, ClaimsPrincipal user, string reference, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    var asset = await privateDriverMediaStore.ReadAsync(driverId, reference, ct);
+    if (asset is null || asset.Metadata.DriverId != driverId ||
+        !IsValidPrivateMediaPayload(asset.Metadata.MediaType, asset.Metadata.ContentType, asset.Content))
+        return Results.NotFound();
+    context.Response.Headers.CacheControl = "private, no-store";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    return Results.File(asset.Content, asset.Metadata.ContentType, enableRangeProcessing: false);
+});
+
+onboarding.MapGet("/media/{reference}/status", async (
+    HttpContext context, ClaimsPrincipal user, string reference, CancellationToken ct) =>
+{
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    var asset = await privateDriverMediaStore.ReadAsync(driverId, reference, ct);
+    if (asset is null || asset.Metadata.DriverId != driverId) return Results.NotFound();
+    context.Response.Headers.CacheControl = "private, no-store";
+    return Results.Ok(new
+    {
+        storageReference = asset.Metadata.Reference,
+        documentType = asset.Metadata.MediaType,
+        contentType = asset.Metadata.ContentType,
+        length = asset.Metadata.Length,
+        scanStatus = asset.Metadata.ScanStatus,
+        uploadedAtUtc = asset.Metadata.UploadedAtUtc
+    });
+});
+
 onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest request, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    var hasInlineSelfie = !string.IsNullOrWhiteSpace(request.ProfilePhotoBase64);
+    var hasSelfieReference = !string.IsNullOrWhiteSpace(request.ProfilePhotoStorageReference);
+    if (hasInlineSelfie == hasSelfieReference)
+        return Results.BadRequest(new { message = "Provide exactly one JPEG selfie payload or server-issued private media reference." });
+    if (hasInlineSelfie && !IsValidDriverSelfie(request.ProfilePhotoBase64))
         return Results.BadRequest(new { message = "Provide a valid JPEG selfie no larger than 300 KB." });
+    if (hasSelfieReference &&
+        !await privateDriverMediaStore.IsOwnedAndCleanAsync(driverId, "ProfilePhoto", request.ProfilePhotoStorageReference!, ct))
+        return Results.BadRequest(new { message = "The selfie reference is not owned by this Driver or is not scan-cleared." });
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "A Driver with an active negotiation or ride cannot replace the discovery selfie." });
 
@@ -1534,6 +1679,7 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         driverId, selfieLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct, selfieAuditContext))
         return Results.Conflict(new { message = "The Driver is reserved by a booking, ride or Union membership change. Retry after it is resolved." });
 
+    string? newlyStoredSelfieReference = null;
     try
     {
         var profile = await FindDriverProfileAsync(driverId, ct);
@@ -1559,6 +1705,16 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         }
 
         var capturedAtUtc = DateTimeOffset.UtcNow;
+        var selfieReference = request.ProfilePhotoStorageReference;
+        if (hasInlineSelfie)
+        {
+            var bytes = Convert.FromBase64String(request.ProfilePhotoBase64!);
+            var stored = await privateDriverMediaStore.StoreAsync(driverId, "ProfilePhoto", "image/jpeg", bytes, ct);
+            if (stored is null)
+                return Results.Problem("Private Driver media storage is unavailable.", statusCode: 503);
+            selfieReference = stored.Reference;
+            newlyStoredSelfieReference = stored.Reference;
+        }
         var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         {
             if (!string.Equals(current.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
@@ -1566,7 +1722,8 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
 
             return current with
             {
-                ProfilePhotoBase64 = request.ProfilePhotoBase64,
+                ProfilePhotoBase64 = null,
+                ProfilePhotoStorageReference = selfieReference,
                 ProfilePhotoContentType = "image/jpeg",
                 ProfilePhotoCapturedAtUtc = capturedAtUtc,
                 ProfilePhotoApprovalStatus = "Pending",
@@ -1583,12 +1740,14 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         }, ct);
         if (!saved)
             return Results.Conflict(new { message = "Driver profile changed during selfie update. Refresh the profile and retry." });
+        newlyStoredSelfieReference = null;
 
         var updated = await FindDriverProfileAsync(driverId, ct);
         return updated is null
             ? Results.NotFound(new { message = "Driver profile no longer exists." })
             : Results.Ok(updated with
             {
+                ProfilePhotoBase64 = await GetProfilePhotoBase64Async(updated, ct),
                 ProfilePhotoOperationsReviewActorId = null,
                 ProfilePhotoOperationsReviewUnionId = null,
                 ProfilePhotoOperationsReviewUnionName = null,
@@ -1599,6 +1758,8 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
     }
     finally
     {
+        if (newlyStoredSelfieReference is not null)
+            await privateDriverMediaStore.DeleteAsync(driverId, newlyStoredSelfieReference, CancellationToken.None);
         await driverRideReservations.TryReleaseAsync(
             driverId, selfieLeaseId, CancellationToken.None, selfieAuditContext);
     }
@@ -1608,8 +1769,16 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
-    if (!IsValidDriverSelfie(request.ProfilePhotoBase64))
-        return Results.BadRequest(new { message = "A valid JPEG selfie is required. Capture it in the app; maximum decoded size is 300 KB." });
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    var hasInlineSelfie = !string.IsNullOrWhiteSpace(request.ProfilePhotoBase64);
+    var hasSelfieReference = !string.IsNullOrWhiteSpace(request.ProfilePhotoStorageReference);
+    if (hasInlineSelfie == hasSelfieReference ||
+        (hasInlineSelfie && !IsValidDriverSelfie(request.ProfilePhotoBase64)))
+        return Results.BadRequest(new { message = "Provide exactly one valid JPEG selfie payload or server-issued private media reference." });
+    if (hasSelfieReference &&
+        !await privateDriverMediaStore.IsOwnedAndCleanAsync(driverId, "ProfilePhoto", request.ProfilePhotoStorageReference!, ct))
+        return Results.BadRequest(new { message = "The selfie reference is not owned by this Driver or is not scan-cleared." });
     if (request.Documents is null ||
         !request.Documents.Any(document => document is not null && document.DocumentType == "DrivingLicence") ||
         !request.Documents.Any(document => document is not null && document.DocumentType == "VehicleRegistration"))
@@ -1630,6 +1799,16 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
             Uri.TryCreate(document.StorageReference, UriKind.Absolute, out _)))
         return Results.BadRequest(new { message = "Provide valid driver, vehicle and document metadata. Upload files to private object storage and submit opaque storage references only." });
     
+    foreach (var document in request.Documents)
+    {
+        var isServerIssued = document.StorageReference.StartsWith("drvmedia_", StringComparison.Ordinal);
+        if (isServerIssued &&
+            !await privateDriverMediaStore.IsOwnedAndCleanAsync(driverId, document.DocumentType, document.StorageReference, ct))
+            return Results.BadRequest(new { message = "A document reference is not owned by this Driver or is not scan-cleared." });
+        if (!isServerIssued && !localMediaCompatibility)
+            return Results.BadRequest(new { message = "Production onboarding requires server-issued Driver-bound private document references." });
+    }
+
     if (await HasActiveDriverRideAsync(driverId, ct))
         return Results.Conflict(new { message = "A Driver with an active negotiation or ride cannot replace onboarding data." });
 
@@ -1639,10 +1818,21 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         driverId, onboardingLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct, onboardingAuditContext))
         return Results.Conflict(new { message = "The Driver is reserved by a booking, ride or Union membership change. Retry after it is resolved." });
 
+    string? newlyStoredSelfieReference = null;
     try
     {
     var submittedAtUtc = DateTimeOffset.UtcNow;
     var profilePhotoCapturedAtUtc = submittedAtUtc;
+    var selfieReference = request.ProfilePhotoStorageReference;
+    if (hasInlineSelfie)
+    {
+        var bytes = Convert.FromBase64String(request.ProfilePhotoBase64!);
+        var stored = await privateDriverMediaStore.StoreAsync(driverId, "ProfilePhoto", "image/jpeg", bytes, ct);
+        if (stored is null)
+            return Results.Problem("Private Driver media storage is unavailable.", statusCode: 503);
+        selfieReference = stored.Reference;
+        newlyStoredSelfieReference = stored.Reference;
+    }
     var documents = request.Documents
         .Select(document => new DriverDocumentReference(document.DocumentType, document.StorageReference))
         .ToArray();
@@ -1650,7 +1840,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         driverId, driverId, request.ZoneId.Trim(), request.FullName.Trim(), request.PhoneNumber.Trim(),
         request.VehicleMake.Trim(), request.VehicleModel.Trim(), request.VehicleRegistration.Trim().ToUpperInvariant(),
         "cab", request.PassengerCapacity, documents, "Pending", submittedAtUtc,
-        ProfilePhotoBase64: request.ProfilePhotoBase64,
+        ProfilePhotoBase64: null,
+        ProfilePhotoStorageReference: selfieReference,
         ProfilePhotoContentType: "image/jpeg",
         ProfilePhotoCapturedAtUtc: profilePhotoCapturedAtUtc,
         ProfilePhotoApprovalStatus: "Pending");
@@ -1663,7 +1854,13 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
         if (existing is null)
         {
             if (await TryCreateDriverProfileAsync(profile, ct))
-                return Results.Accepted("/api/v1/driver/onboarding/me", profile);
+            {
+                newlyStoredSelfieReference = null;
+                return Results.Accepted("/api/v1/driver/onboarding/me", profile with
+                {
+                    ProfilePhotoBase64 = await GetProfilePhotoBase64Async(profile, ct)
+                });
+            }
             continue;
         }
 
@@ -1711,7 +1908,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
                 SubmittedAtUtc = current.SubmittedAtUtc,
                 ReviewedAtUtc = null,
                 ReviewReason = null,
-                ProfilePhotoBase64 = profile.ProfilePhotoBase64,
+                ProfilePhotoBase64 = null,
+                ProfilePhotoStorageReference = profile.ProfilePhotoStorageReference,
                 ProfilePhotoContentType = profile.ProfilePhotoContentType,
                 ProfilePhotoCapturedAtUtc = profile.ProfilePhotoCapturedAtUtc,
                 ProfilePhotoApprovalStatus = "Pending",
@@ -1729,10 +1927,14 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
 
         if (saved)
         {
+            newlyStoredSelfieReference = null;
             var updated = await FindDriverProfileAsync(driverId, ct);
             return updated is null
                 ? Results.Conflict(new { message = "Driver profile changed during onboarding. Refresh the profile and retry." })
-                : Results.Accepted("/api/v1/driver/onboarding/me", updated);
+                : Results.Accepted("/api/v1/driver/onboarding/me", updated with
+                {
+                    ProfilePhotoBase64 = await GetProfilePhotoBase64Async(updated, ct)
+                });
         }
 
         var latest = await FindDriverProfileAsync(driverId, ct);
@@ -1749,6 +1951,8 @@ onboarding.MapPost("/", async (ClaimsPrincipal user, DriverOnboardingRequest req
     }
     finally
     {
+        if (newlyStoredSelfieReference is not null)
+            await privateDriverMediaStore.DeleteAsync(driverId, newlyStoredSelfieReference, CancellationToken.None);
         await driverRideReservations.TryReleaseAsync(
             driverId, onboardingLeaseId, CancellationToken.None, onboardingAuditContext);
     }
@@ -1906,7 +2110,8 @@ opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionI
                 profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
                 profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
                 profile.ServiceClass, profile.PassengerCapacity, profile.Status,
-                ProfilePhotoBase64 = profile.ProfilePhotoApprovalStatus == "Approved" && profile.ProfilePhotoApprovedByUnionId == unionId ? profile.ProfilePhotoBase64 : null,
+                ProfilePhotoBase64 = profile.ProfilePhotoApprovalStatus == "Approved" && profile.ProfilePhotoApprovedByUnionId == unionId
+                    ? await GetProfilePhotoBase64Async(profile, ct) : null,
                 profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
                 profile.ProfilePhotoApprovalStatus
             }
@@ -1945,7 +2150,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         if (assignment is null || assignment.UnionId != unionId || assignment.Status != "Active")
             return Results.Conflict(new { message = "Only the driver's currently assigned union can review this selfie." });
         var profile = await FindDriverProfileAsync(driverId, ct);
-        if (profile is null || string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
+        if (profile is null || string.IsNullOrWhiteSpace(await GetProfilePhotoBase64Async(profile, ct)))
             return Results.NotFound(new { message = "Driver selfie not found." });
         if (request.Status == "Approved" && !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "Legacy non-Cab driver photos cannot be approved for new public discovery." });
@@ -1989,6 +2194,7 @@ opsUnions.MapPut("/{unionId}/drivers/{driverId}/selfie-review", async (
         var saved = await TryUpdateDriverProfileAsync(driverId, current =>
         {
             if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+                current.ProfilePhotoStorageReference != profile.ProfilePhotoStorageReference ||
                 current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
                 current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
                 current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
@@ -2064,7 +2270,8 @@ opsUnions.MapGet("/{unionId}/drivers/{driverId}", async (HttpContext context, st
             profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
             profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
             profile.ServiceClass, profile.PassengerCapacity, profile.Status,
-            profile.ProfilePhotoBase64, profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
+            ProfilePhotoBase64 = await GetProfilePhotoBase64Async(profile, ct),
+            profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
             profile.ProfilePhotoApprovalStatus, profile.ProfilePhotoApprovedByUnionId,
             profile.ProfilePhotoReviewedAtUtc, profile.ProfilePhotoReviewReason
         }
@@ -2117,7 +2324,7 @@ unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToke
                     document.DocumentType,
                     document.Status
                 }).ToArray() ?? [],
-                profile.ProfilePhotoBase64,
+                ProfilePhotoBase64 = await GetProfilePhotoBase64Async(profile, ct),
                 profile.ProfilePhotoContentType,
                 profile.ProfilePhotoCapturedAtUtc,
                 profile.ProfilePhotoApprovalStatus,
@@ -2132,6 +2339,41 @@ unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToke
     return Results.Ok(drivers);
 });
 
+
+unionManagerApi.MapGet("/drivers/{driverId}/documents/{documentType}", async (
+    HttpContext context, ClaimsPrincipal user, string driverId, string documentType, CancellationToken ct) =>
+{
+    var assignment = await FindUnionAssignmentAsync(driverId, ct);
+    if (assignment is null || assignment.Status != "Active" || !IsUnionManagerFor(user, assignment.UnionId))
+        return Results.NotFound();
+    if (!privateDriverMediaStore.IsConfigured)
+        return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
+    if (documentType is not ("DrivingLicence" or "VehicleRegistration" or "Insurance" or "Permit"))
+        return Results.NotFound();
+    var union = await FindUnionAsync(assignment.UnionId, ct);
+    if (union is null || union.Status != "Active" ||
+        !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
+        return Results.NotFound();
+    var profile = await FindDriverProfileAsync(driverId, ct);
+    if (profile is null || profile.Status != "Approved" ||
+        !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+        !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
+        return Results.NotFound();
+    var document = profile.Documents?.FirstOrDefault(item =>
+        string.Equals(item.DocumentType, documentType, StringComparison.Ordinal));
+    if (document is null || !document.StorageReference.StartsWith("drvmedia_", StringComparison.Ordinal))
+        return Results.NotFound();
+
+    var asset = await privateDriverMediaStore.ReadAsync(driverId, document.StorageReference, ct);
+    if (asset is null || asset.Metadata.DriverId != driverId ||
+        asset.Metadata.MediaType != documentType || asset.Metadata.ScanStatus != "Clean" ||
+        !IsValidPrivateMediaPayload(documentType, asset.Metadata.ContentType, asset.Content))
+        return Results.NotFound();
+
+    context.Response.Headers.CacheControl = "private, no-store";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    return Results.File(asset.Content, asset.Metadata.ContentType, enableRangeProcessing: false);
+});
 
 unionManagerApi.MapGet("/reconciliation", async (ClaimsPrincipal user, CancellationToken ct) =>
 {
@@ -2245,8 +2487,8 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             return Results.NotFound(new { message = "Active union membership was not found." });
 
         var profile = await FindDriverProfileAsync(driverId, ct);
-        if (profile is null || !IsValidDriverSelfie(profile.ProfilePhotoBase64))
-            return Results.NotFound(new { message = "A valid driver selfie is not available for review." });
+        if (profile is null || !IsValidDriverSelfie(await GetProfilePhotoBase64Async(profile, ct)))
+            return Results.NotFound(new { message = "A valid scan-cleared driver selfie is not available for review." });
         if (profile.Status != "Approved" ||
             !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
             profile.Documents is null ||
@@ -2288,6 +2530,7 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             {
                 // Do not approve a selfie/document/profile snapshot that changed while it was being reviewed.
                 if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+                    current.ProfilePhotoStorageReference != profile.ProfilePhotoStorageReference ||
                     current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
                     current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
                     current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
@@ -2371,8 +2614,8 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
             !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved"))
             return Results.Conflict(new { message = "Approved driving licence and Cab vehicle registration documents are required before Union assignment." });
-        if (string.IsNullOrWhiteSpace(profile.ProfilePhotoBase64))
-            return Results.Conflict(new { message = "Driver must capture a union-joining selfie before assignment." });
+        if (!await HasUsableProfilePhotoAsync(profile, ct))
+            return Results.Conflict(new { message = "Driver must capture a scan-cleared union-joining selfie before assignment." });
 
         var union = await FindUnionAsync(request.UnionId, ct);
         if (union is null) return Results.NotFound(new { message = "Union not found." });
@@ -2423,6 +2666,7 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             var profileReset = await TryUpdateDriverProfileAsync(driverId, current =>
             {
                 if (current.ProfilePhotoBase64 != profile.ProfilePhotoBase64 ||
+                    current.ProfilePhotoStorageReference != profile.ProfilePhotoStorageReference ||
                     current.ProfilePhotoCapturedAtUtc != profile.ProfilePhotoCapturedAtUtc ||
                     current.ProfilePhotoApprovalStatus != profile.ProfilePhotoApprovalStatus ||
                     current.ProfilePhotoApprovedByUnionId != profile.ProfilePhotoApprovedByUnionId ||
@@ -3017,37 +3261,42 @@ app.MapGet("/api/v1/rider/discovery", async (
             continue;
         candidates.Add(candidate);
     }
-    var groups = candidates
-        .GroupBy(candidate => candidate.Union.UnionId, StringComparer.Ordinal)
-        .Select(group =>
+    var groups = new List<NearbyUnionDiscoveryGroup>();
+    foreach (var group in candidates.GroupBy(candidate => candidate.Union.UnionId, StringComparer.Ordinal))
+    {
+        var union = group.First().Union;
+        var drivers = new List<NearbyDriverDiscoveryResponse>();
+        foreach (var candidate in group
+            .OrderBy(candidate => candidate.DistanceKm)
+            .ThenBy(candidate => candidate.Profile.DriverId, StringComparer.Ordinal)
+            .Take(3))
         {
-            var union = group.First().Union;
-            var drivers = group
-                .OrderBy(candidate => candidate.DistanceKm)
-                .ThenBy(candidate => candidate.Profile.DriverId, StringComparer.Ordinal)
-                .Take(3)
-                .Select(candidate => new NearbyDriverDiscoveryResponse(
-                    candidate.Profile.DriverId,
-                    candidate.Profile.FullName,
-                    candidate.Profile.VehicleMake,
-                    candidate.Profile.VehicleModel,
-                    "cab",
-                    candidate.Profile.PassengerCapacity,
-                    Math.Round(candidate.DistanceKm, 1),
-                    candidate.Profile.ProfilePhotoApprovalStatus == "Approved" &&
-                        candidate.Profile.ProfilePhotoApprovedByUnionId == union.UnionId
-                            ? candidate.Profile.ProfilePhotoBase64 : null,
-                    candidate.Profile.ProfilePhotoApprovalStatus == "Approved" &&
-                        candidate.Profile.ProfilePhotoApprovedByUnionId == union.UnionId
-                            ? candidate.Profile.ProfilePhotoContentType : null))
-                .ToArray();
-            return new NearbyUnionDiscoveryGroup(union.UnionId, union.Name, drivers);
-        })
+            var approvedForCurrentUnion =
+                candidate.Profile.ProfilePhotoApprovalStatus == "Approved" &&
+                candidate.Profile.ProfilePhotoApprovedByUnionId == union.UnionId;
+            var photo = approvedForCurrentUnion
+                ? await GetProfilePhotoBase64Async(candidate.Profile, ct)
+                : null;
+            drivers.Add(new NearbyDriverDiscoveryResponse(
+                candidate.Profile.DriverId,
+                candidate.Profile.FullName,
+                candidate.Profile.VehicleMake,
+                candidate.Profile.VehicleModel,
+                "cab",
+                candidate.Profile.PassengerCapacity,
+                Math.Round(candidate.DistanceKm, 1),
+                photo,
+                approvedForCurrentUnion && photo is not null
+                    ? candidate.Profile.ProfilePhotoContentType : null));
+        }
+        groups.Add(new NearbyUnionDiscoveryGroup(union.UnionId, union.Name, drivers));
+    }
+    var orderedGroups = groups
         .OrderBy(group => group.UnionName, StringComparer.OrdinalIgnoreCase)
         .ThenBy(group => group.UnionId, StringComparer.Ordinal)
         .ToArray();
 
-    return Results.Ok(new RiderDiscoveryResponse(zoneId, null, groups));
+    return Results.Ok(new RiderDiscoveryResponse(zoneId, null, orderedGroups));
 }).RequireAuthorization(policy => policy.RequireRole("Rider"));
 
 app.MapPost("/api/v1/rider/bookings", async (
@@ -4712,8 +4961,9 @@ app.Run();
 public sealed record JoinQueueRequest(string ZoneId, string? ServiceClass);
 public sealed record DriverAvailabilityRequest(bool IsOnline, double? Latitude = null, double? Longitude = null, DateTimeOffset? CapturedAtUtc = null);
 public sealed record DriverDocumentRequest(string DocumentType, string StorageReference);
-public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64);
-public sealed record DriverSelfieRequest(string ProfilePhotoBase64);
+public sealed record DriverOnboardingRequest(string ZoneId, string FullName, string PhoneNumber, string VehicleMake, string VehicleModel, string VehicleRegistration, string ServiceClass, int PassengerCapacity, IReadOnlyList<DriverDocumentRequest> Documents, string? ProfilePhotoBase64, string? ProfilePhotoStorageReference = null);
+public sealed record DriverSelfieRequest(string? ProfilePhotoBase64, string? ProfilePhotoStorageReference = null);
+public sealed record DriverPrivateMediaUploadRequest(string DocumentType, string ContentType, string ContentBase64);
 public sealed record DriverSelfieReviewRequest(string Status, string? Reason);
 public sealed record DriverReviewRequest(string Status, string? Reason);
 public sealed record CreateUnionRequest(string Name, string Code, string? Location, string? ManagerName, string? ManagerPhone, IReadOnlyList<string> ZoneIds, IReadOnlyList<string> ServiceClasses);
