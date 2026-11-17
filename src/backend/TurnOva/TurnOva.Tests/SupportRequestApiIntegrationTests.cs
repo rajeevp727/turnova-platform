@@ -129,6 +129,32 @@ public sealed class SupportRequestApiIntegrationTests
     }
 
     [Fact]
+    public async Task InvalidSubjectOrDescriptionIsRejected()
+    {
+        using var factory = new SupportApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
+        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-invalid-01");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/support/requests",
+            new { subject = "x", description = "short" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SupportRequestsDoNotExposeAReadOrListEndpoint()
+    {
+        using var factory = new SupportApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
+
+        using var response = await client.GetAsync("/api/v1/support/requests");
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UnknownCategorySeverityAssignmentAndAttachmentFieldsAreRejected()
     {
         using var factory = new SupportApiFactory();

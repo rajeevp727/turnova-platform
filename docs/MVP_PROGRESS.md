@@ -1,8 +1,8 @@
-**Last updated:** 2026-11-17; main HEAD `dbc04619e6e1dce24bf3d965f2488111fdf16090`.
+**Last updated:** 2026-11-17; main HEAD `0ff05f93ce2ea6befae0fda6f8ab7a74e58b843e` (PR #178 merged).
 **Platform phase:** **API first**. Android Rider/Driver completion is gated until API phase exit; iOS Rider/Driver completion is gated until both Android apps exit.
 **Merged:** PRs #172–#176. PR #176 is CORS/readiness hardening merged at `dbc04619e6e1dce24bf3d965f2488111fdf16090`.
 **Parked mobile work:** PR [#177](https://github.com/rajeevp727/turnova-platform/pull/177) was closed unmerged on 2026-11-17 because its dependency/bootstrap work belongs after API phase exit. Its branch `fix/platform-01-mobile-lockfile-reproducibility` and successful exact-head CI [#44080286615](https://github.com/rajeevp727/turnova-platform/actions/runs/44080286615) are preserved for the Android phase; this historical mobile evidence does not satisfy the new API-first gate.
-**Current API work:** neutral Rider/Driver support intake and Cosmos migration/repository contract tests on branch `feat/api-support-intake-cosmos-contracts` (PR number will be recorded after creation). API phase remains active; Android and iOS completion remain gated.
+**Current API PR:** [#179 — neutral Rider/Driver support intake and Cosmos contracts](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`. API-only CI #44097363913 first failed compilation on two Moq expression-tree pattern operators; those were replaced with ordinary comparisons and two missing API validation/privacy tests were added. Fresh exact-head API CI is pending. API phase remains active; Android and iOS completion are gated.
 
 ## Platform phase exit criteria
 

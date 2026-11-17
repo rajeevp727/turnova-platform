@@ -30,10 +30,10 @@ public sealed class CosmosAdapterContractTests
 
         Assert.True(result);
         container.Verify(value => value.ReplaceItemAsync(
-            It.Is<RideOfferState>(item => item.RideId == "ride-1" && item.ETag is null),
+            It.Is<RideOfferState>(item => item.RideId == "ride-1" && item.ETag == null),
             "ride-1",
             It.Is<PartitionKey?>(partitionKey => partitionKey.HasValue && partitionKey.Value.Equals(new PartitionKey("ride-1"))),
-            It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "etag-expected"),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "etag-expected"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
