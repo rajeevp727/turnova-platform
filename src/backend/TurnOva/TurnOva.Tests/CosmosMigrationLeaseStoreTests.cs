@@ -34,7 +34,7 @@ public sealed class CosmosMigrationLeaseStoreTests
             "schema-migrations",
             It.IsAny<PartitionKey?>(),
             It.Is<ItemRequestOptions?>(options =>
-                options is not null && options.IfMatchEtag == "etag-observed"),
+                options != null && options.IfMatchEtag == "etag-observed"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -82,7 +82,7 @@ public sealed class CosmosMigrationLeaseStoreTests
             "schema-migrations",
             It.IsAny<PartitionKey>(),
             It.Is<ItemRequestOptions?>(options =>
-                options is not null && options.IfMatchEtag == "latest-etag"),
+                options != null && options.IfMatchEtag == "latest-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }
