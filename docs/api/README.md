@@ -47,6 +47,7 @@ Only `rider` and `driver` route values are accepted. The API owns `appId=turnova
 - `GET /api/v1/driver/onboarding/me`
 - `POST /api/v1/driver/onboarding/media`
 - `GET /api/v1/driver/onboarding/media/{reference}`
+- `GET /api/v1/driver/onboarding/media/{reference}/status`
 - `POST /api/v1/driver/onboarding`
 - `PUT /api/v1/driver/onboarding/selfie`
 - `GET /api/v1/driver/availability`
@@ -62,7 +63,7 @@ The current adapters are deliberately non-production: automated Testing uses a d
 ### Private Driver media
 
 - `POST /api/v1/driver/onboarding/media` — authenticated Driver upload. Request: `{ documentType, contentType, contentBase64 }`; accepted types are ProfilePhoto, DrivingLicence, VehicleRegistration, Insurance and Permit. The server validates JPEG/PNG/PDF signatures and bounded decoded size, stores through `IPrivateDriverMediaStore`, and returns an opaque Driver-bound reference plus scan status.
-- `GET /api/v1/driver/onboarding/media/{reference}` — authenticated owner-only retrieval; response is `Cache-Control: private, no-store` with `X-Content-Type-Options: nosniff`.
+- `GET /api/v1/driver/onboarding/media/{reference}` — authenticated owner-only retrieval; response is `Cache-Control: private, no-store` with `X-Content-Type-Options: nosniff`. `GET /api/v1/driver/onboarding/media/{reference}/status` returns owner-only scan status and metadata without bytes, also private/no-store.
 - `GET /api/v1/union/drivers/{driverId}/documents/{documentType}` — UnionManager-only retrieval. The handler rechecks the current active Driver-to-Union assignment, active Union and document membership; another Union cannot retrieve the document. Only scan-cleared media is served.
 - `POST /api/v1/driver/onboarding` and `PUT /api/v1/driver/onboarding/selfie` accept exactly one of the legacy Base64 payload or a server-issued reference. Base64 input is immediately written through the private-media boundary; the new profile stores only the reference.
 - A reference is not authorization by itself. Every read checks the authenticated Driver or the current UnionManager assignment. Rider endpoints never receive document references or document bytes.
