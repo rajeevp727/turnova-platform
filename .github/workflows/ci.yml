@@ -88,9 +88,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
+          cache-dependency-path: |
+            src/mobile/${{ matrix.app }}/package.json
+            src/mobile/${{ matrix.app }}/package-lock.sha256
 
-      - run: npm install --prefer-offline --no-fund --audit=false
+      - name: Test checksum-pinned mobile dependency bootstrap
+        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
+      - name: Install checksum-pinned mobile dependencies with npm ci
+        run: bash ../../../scripts/prepare-mobile-dependencies.sh "$PWD" install
       - name: Validate release configuration and report external gates
         run: node ../../../scripts/release-preflight.cjs --app-dir "$PWD" --output "$RUNNER_TEMP/${{ matrix.app }}-release-readiness.json"
       - uses: actions/upload-artifact@v6
@@ -202,7 +207,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - run: npm install --prefer-offline --no-fund --audit=false
+      - name: Test checksum-pinned mobile dependency bootstrap
+        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
+      - name: Install checksum-pinned mobile dependencies with npm ci
+        run: bash ../../../scripts/prepare-mobile-dependencies.sh "$PWD" install
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install --clean
       - name: Cache Gradle dependencies
@@ -333,7 +341,10 @@ jobs:
           cache: npm
           cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
 
-      - run: npm install --prefer-offline --no-fund --audit=false
+      - name: Test checksum-pinned mobile dependency bootstrap
+        run: bash ../../../scripts/test-prepare-mobile-dependencies.sh
+      - name: Install checksum-pinned mobile dependencies with npm ci
+        run: bash ../../../scripts/prepare-mobile-dependencies.sh "$PWD" install
       - name: Generate iOS native project
         run: npx expo prebuild --platform ios --no-install --clean
       - name: Cache CocoaPods dependencies
