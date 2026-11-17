@@ -3,7 +3,8 @@
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Last audited:** 2026-11-17; main HEAD `0ff05f93ce2ea6befae0fda6f8ab7a74e58b843e` (PR #178 merged).
 **Current platform phase:** API. Android completion must not start until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests, native non-container publish and API CI exit criteria pass. iOS completion must not start until both Android apps pass their exit criteria.
-**Current API PR:** [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`; neutral support intake, Cosmos contracts and strict native API→Android→iOS CI gates are in progress. Android native jobs require the Android approval label; iOS requires both phase labels. API phase remains active.
+**Current API PR:** [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`, exact head `d942a40588fe5d97dbf10578f761cbe42daf6df8`. [API-only CI #44102867811](https://github.com/rajeevp727/turnova-platform/actions/runs/44102867811) passed scope and backend build/test/native publish; artifact `14337620550`; all mobile, Android and iOS jobs were correctly skipped.
+**API implementation in current PR:** neutral authenticated Rider/Driver support intake, reporter-partitioned Cosmos persistence, idempotent replay/conflict semantics, policy-gated Staging/Production intake, OpenAPI request/error contract, deterministic Cosmos adapter/migration tests and strict platform-order CI gates. API phase remains active pending the complete API row-by-row source/auth/privacy/persistence audit.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Platform phase gate
@@ -15,7 +16,6 @@
 | iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after Android exit | Not started under the new phase order |
 
 External API gates (live Cosmos ETag/multi-instance/restart, production identity/secrets, hosted endpoint and provider validation) remain explicit and do not stop independent API engineering. External Android/iOS gates include physical devices, signing, TestFlight/store and approved production configuration.
-
 
 ## Status definitions
 

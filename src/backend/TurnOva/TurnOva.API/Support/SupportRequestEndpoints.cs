@@ -91,6 +91,7 @@ public static class SupportRequestEndpoints
                 _ => Results.Conflict(new SupportRequestErrorResponse("This Idempotency-Key was already used for different support content."))
             };
         })
+        .WithMetadata(new RequestSizeLimitAttribute(16 * 1024))
         .WithSummary("Submit a neutral Rider or Driver support request")
         .WithDescription("Accepts only a subject and description. No category, severity, priority, assignment, escalation, response target, attachment or retention policy is inferred. Do not include passwords, tokens or payment credentials. Support content is not logged.")
         .Produces<SupportRequestSubmissionResponse>(StatusCodes.Status202Accepted)
@@ -98,7 +99,8 @@ public static class SupportRequestEndpoints
         .Produces<SupportRequestErrorResponse>(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status401Unauthorized)
         .Produces(StatusCodes.Status403Forbidden)
-        .Produces<SupportRequestErrorResponse>(StatusCodes.Status409Conflict);
+        .Produces<SupportRequestErrorResponse>(StatusCodes.Status409Conflict)
+        .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
         return app;
     }

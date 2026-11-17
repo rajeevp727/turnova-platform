@@ -105,12 +105,14 @@ The zone/queue and `/api/v1/rides/request`, pending-offer, available-ride, accep
 
 ## API phase follow-ups still open
 
-The API phase is not complete. The current audit has identified support-request intake and Cosmos adapter-level deterministic tests as remaining engineering work, in addition to the OpenAPI/auth changes in the current increment. Support categories, severity, assignment, escalation/SLA and retention remain Product/Operations decisions; code must not invent them. Live Cosmos ETag/multi-instance/restart and production TriSend/JWT validation remain external gates.
+The neutral Rider/Driver support intake, reporter-partitioned Cosmos adapter, deterministic Cosmos ETag/transactional-batch contracts, migration container/partition contracts, OpenAPI contract and API-only native publish gate are implemented and have passed API-only CI on PR #179 head `d942a40588fe5d97dbf10578f761cbe42daf6df8` ([CI #44102867811](https://github.com/rajeevp727/turnova-platform/actions/runs/44102867811)). The API phase remains open while the complete API source/auth/privacy/persistence audit is finished across all 19 acceptance rows and any remaining safe deterministic tests or contract documentation are added.
+
+Support categories, severity, assignment, escalation/SLA, attachments and retention remain Product/Operations decisions; code must not invent them. The production/staging support route stays disabled unless `SupportRequests:PolicyApproved=true`; an empty schema container may be provisioned, but no request is accepted or persisted while disabled. Live Cosmos ETag/multi-instance/restart, production TriSend/JWT identity, hosted API and provider validation remain external gates.
 
 
 ## Neutral Rider/Driver support intake
 
-`POST /api/v1/support/requests` accepts a Rider or Driver JWT and an `Idempotency-Key` header. The JSON body contains only `subject` and `description`.
+`POST /api/v1/support/requests` accepts a Rider or Driver JWT and an `Idempotency-Key` header. The JSON body contains only `subject` and `description`, with a 16 KiB maximum request body.
 
 - First submission: HTTP 202 with request ID, server timestamp and `replayed=false`.
 - Same reporter/key/content: HTTP 200 with the original request ID/timestamp and `replayed=true`.

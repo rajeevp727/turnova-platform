@@ -7,6 +7,9 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -241,6 +244,21 @@ public sealed class SupportRequestApiIntegrationTests
         var conflictSchema = operation.GetProperty("responses").GetProperty("409")
             .GetProperty("content").GetProperty("application/json").GetProperty("schema");
         Assert.Equal(new[] { "message" }, GetSchemaPropertyNames(conflictSchema, root));
+    }
+
+    [Fact]
+    public void SupportRequestEndpointDeclaresSixteenKilobyteBodyLimit()
+    {
+        using var factory = new SupportApiFactory();
+        var endpoints = factory.Services.GetServices<EndpointDataSource>()
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>();
+        var endpoint = Assert.Single(endpoints.Where(candidate =>
+            string.Equals(candidate.RoutePattern.RawText, "/api/v1/support/requests", StringComparison.Ordinal)));
+
+        var limit = endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>();
+        Assert.NotNull(limit);
+        Assert.Equal(16 * 1024, limit.MaxRequestBodySize);
     }
 
     private static string[] GetSchemaPropertyNames(JsonElement schema, JsonElement documentRoot)

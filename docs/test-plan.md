@@ -3114,8 +3114,9 @@ Live Cosmos ETag contention, multi-instance migration lease recovery, restart/cr
 | CI-PHASE-001 | Enforce API → Android → iOS native order | Android native build/smoke jobs require `turnova:android-phase-approved`; iOS native build/smoke jobs require both Android and iOS approval labels; main-branch pushes run Android for changed mobile files but not iOS | Workflow contract | P0 |
 
 
-| SUPPORT-API-008 | Staging/Production support intake without explicit policy approval | Authenticated POST returns HTTP 503; no support store or migration is registered and request content is not persisted | API integration | P0 |
+| SUPPORT-API-008 | Staging/Production support intake without explicit policy approval | Authenticated POST returns HTTP 503 before request-body binding; no support request is accepted or persisted. The normal schema migration may provision an empty container. | API integration | P0 |
 | SUPPORT-API-009 | Staging/Production support intake with explicit policy approval | `SupportRequests:PolicyApproved=true` enables the authenticated intake and reporter-partitioned store; the normal idempotency contract applies | API integration | P0 |
+| SUPPORT-API-010 | Support request body exceeds the bounded endpoint limit | Endpoint metadata advertises a 16 KiB maximum request body and documents HTTP 413; oversized content is rejected by the host before handler persistence | API contract | P1 |
 
 | API-PLATFORM-001 | API-only PR changes | Backend/publish runs; all mobile validation, auth harness, Android and iOS jobs are skipped | CI workflow | P0 |
 | API-PLATFORM-002 | Mobile PR without Android approval | Expo/typecheck/Android bundle, shared mobile tests, native Android and smoke jobs are skipped | CI workflow | P0 |
@@ -3123,3 +3124,10 @@ Live Cosmos ETag contention, multi-instance migration lease recovery, restart/cr
 | API-PLATFORM-004 | iOS phase approval | iOS bundle/build/smoke require both Android-complete and iOS-approved labels | CI workflow | P0 |
 
 | API-PLATFORM-008 | Same-head iOS phase sequencing | iOS bundle validation waits for both Android native matrix and Android emulator smoke success on the same head | CI workflow | P0 |
+
+
+## API phase exact-head verification — PR #179 / CI #44102867811 (2026-11-17)
+
+PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`, exact head `d942a40588fe5d97dbf10578f761cbe42daf6df8`, passed [API-only CI #44102867811](https://github.com/rajeevp727/turnova-platform/actions/runs/44102867811). The scope detector and backend build/test/native non-container publish job passed; the API publish artifact is `14337620550`. All mobile-auth, Expo, Android native/emulator and iOS bundle/native/simulator jobs were skipped as required for API-only changes. This is API engineering evidence only; no live Cosmos, production identity, hosted API or provider validation is claimed.
+
+The support intake route now declares a 16 KiB request-body limit and HTTP 413 in OpenAPI metadata. `SUPPORT-API-010` verifies the endpoint metadata deterministically. The production/staging policy-disabled route has no body parameter and returns 503 without accepting or persisting support content; the migration may provision an empty container. Support categories, severity, assignment, escalation/SLA, attachment handling and retention remain Product/Operations decisions.

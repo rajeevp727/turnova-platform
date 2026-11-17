@@ -27,7 +27,7 @@ Use the latest supported .NET 10 servicing patch. Keep secrets out of source con
 
 The .NET API generates its OpenAPI v1 document from endpoint metadata at `/openapi/v1.json` in Development and automated Testing only. JWT-protected endpoints and operations-key routes are represented with distinct security schemes. The production host does not map the OpenAPI endpoint.
 
-Platform completion is sequential: API implementation, API tests/docs and native non-container publish first; both Android apps second; both iOS apps third. CI skips mobile matrices for API-only changes. iOS native/simulator checks require the explicit `turnova:ios-phase-approved` pull-request label, which is applied only after the Android phase exit criteria pass.
+Platform completion is sequential: API implementation, API tests/docs and native non-container publish first; both Android apps second; both iOS apps third. API-only changes run backend tests and native publish while skipping all mobile jobs. Android validation/build/smoke requires both `turnova:api-phase-complete` and `turnova:android-phase-approved`. iOS bundle/native/simulator work requires `turnova:api-phase-complete`, `turnova:android-phase-complete` and `turnova:ios-phase-approved`; the iOS bundle job also waits for same-head Rider/Driver Android native builds and Android emulator smoke to pass.
 
 ## 3. High-level topology
 

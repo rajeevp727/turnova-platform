@@ -5,9 +5,9 @@
 
 **Last verified:** 2026-11-17
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `dbc04619e6e1dce24bf3d965f2488111fdf16090`. PRs #172–#176 are merged. PR #177 is closed unmerged and parked because it contains mobile dependency/bootstrap work that belongs after API phase exit; branch `fix/platform-01-mobile-lockfile-reproducibility` and successful exact-head CI #44080286615 (12/12 jobs, 19/19 artifacts) are preserved for the Android phase.
+**Main HEAD:** `0ff05f93ce2ea6befae0fda6f8ab7a74e58b843e`. PRs #172–#176 and API contract/phase-gate PR #178 are merged. PR #177 is closed unmerged and parked because its mobile dependency/bootstrap work belongs after API phase exit; its branch and successful exact-head CI #44080286615 (12/12 jobs, 19/19 artifacts) are preserved for the Android phase only.
 **Current platform phase:** API. Do not begin Android completion until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests and native non-container publish/API CI are complete. Do not begin iOS completion until Rider and Driver Android exit criteria pass.
-**Current API PR:** [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`; support intake, Cosmos contracts and strict API→Android→iOS native CI gates are in progress. Android native jobs require `turnova:android-phase-approved`; iOS requires both Android and iOS approval labels.
+**Current API PR:** [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`, exact head `d942a40588fe5d97dbf10578f761cbe42daf6df8`. API-only CI [#44102867811](https://github.com/rajeevp727/turnova-platform/actions/runs/44102867811) passed scope, backend build/test and native non-container publish (artifact `14337620550`); all mobile jobs were skipped. Neutral support intake, Cosmos adapter/migration contracts and API docs are implemented; the full API row-by-row audit remains open. Android requires API-complete + Android-approved; iOS requires API-complete + Android-complete + iOS-approved and same-head Android checks.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 
