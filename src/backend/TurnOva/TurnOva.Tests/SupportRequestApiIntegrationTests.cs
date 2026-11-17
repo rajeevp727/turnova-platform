@@ -58,7 +58,7 @@ public sealed class SupportRequestApiIntegrationTests
     }
 
     [Fact]
-    public async Task PersistentSupportRequestUsesConfiguredPerItemTtlSeconds()
+    public async Task SupportRequestUsesConfiguredPerItemTtlSeconds()
     {
         var store = new CapturingSupportRequestStore();
         using var factory = new SupportApiFactory(retentionDays: 7, supportStore: store);
