@@ -236,6 +236,15 @@ builder.Services.AddScoped<QueueService>();
 
 var app = builder.Build();
 var supportRequestsEnabled = SupportRequestEndpoints.IsEnabledForEnvironment(app.Environment, app.Configuration);
+var supportRetentionTtlSeconds = SupportRequestEndpoints.GetRetentionTtlSeconds(app.Configuration);
+var supportPolicyApproved = app.Configuration.GetValue<bool>("SupportRequests:PolicyApproved");
+var localSupportEnvironment = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing");
+
+if (supportPolicyApproved && !localSupportEnvironment && supportRetentionTtlSeconds is null)
+    throw new InvalidOperationException("SupportRequests:RetentionDays must be a positive Product/Operations-approved value that fits Cosmos item TTL seconds before Staging/Production support intake can be enabled.");
+
+if (supportRequestsEnabled && useCosmos && supportRetentionTtlSeconds is null)
+    throw new InvalidOperationException("SupportRequests:RetentionDays must be a positive approved value that fits Cosmos item TTL seconds whenever support requests use persistent Cosmos storage.");
 
 if (app.Environment.IsStaging() && supportRequestsEnabled && !useCosmos)
     throw new InvalidOperationException("Staging support intake requires CosmosDb:Endpoint and CosmosDb:Key. Keep SupportRequests:PolicyApproved=false until durable storage is configured.");
