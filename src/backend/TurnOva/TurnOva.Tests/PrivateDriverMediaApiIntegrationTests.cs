@@ -39,7 +39,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal("private, no-store", ownerRead.Headers.CacheControl?.ToString());
         Assert.Equal(pdf, await ownerRead.Content.ReadAsByteArrayAsync());
 
-        using var otherRead = await other.GetAsync($"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(reference)}");
+        using var otherRead = await other.GetAsync($"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(mediaReference)}");
         Assert.Equal(HttpStatusCode.NotFound, otherRead.StatusCode);
     }
 
