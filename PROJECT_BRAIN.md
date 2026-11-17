@@ -5,12 +5,13 @@
 
 **Last verified:** 2026-11-18
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `dda08764b25f2a2b4f5e7665e85a59e539d8663e`; PR #183 (AI-01 assistance input guards) is merged. PR #177 remains closed/unmerged and parked for Android dependency-reproducibility review.
+**Main HEAD:** `0992579b76012f24a057ae4842e524927eb9536f`; PR #183 (AI-01 assistance input guards) and PR #184 (API phase exit/Android gate) are merged. PR #177 remains closed/unmerged; its dependency approach is being re-audited and reapplied on current main in PR #185.
 **Current platform phase:** Android. API engineering exit criteria are complete; Rider and Driver Android work may begin. iOS remains gated until both Android apps exit.
 **API phase evidence:** PR #183 exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed scope, .NET 10 Release build, **758/758 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact verification (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)).
 **API engineering exit:** in-scope API flows, deterministic backend/domain/persistence tests, API docs, auth/authorization/privacy checks and native publish are complete. Live Cosmos, production identity, private-media provider/scanning, hosting and product/legal decisions remain external; no production readiness is claimed.
 **AI-01:** approved supplemental API scope is implemented/tested and remains outside the 19-row denominator. Provider is disabled by default; no paid provider/model/credential selected.
-**Current Android task:** inspect PR #177 and current Rider/Driver manifests, lockfiles and CI install commands. Complete safe dependency reproducibility, then Rider Android before Driver Android. Do not start iOS until both Android apps exit.
+**Current Android PR:** [#185 — Rider/Driver dependency reproducibility](https://github.com/rajeevp727/turnova-platform/pull/185), exact source/test head `6d02436938f50f98f4463a253fa4ed1a93287c6e`. [CI #44171401948](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948) passed both app dependency/audit/bundle checks, debug and standalone release APKs, package identity checks, and Rider/Driver emulator install/launch smoke. Backend 758/758; mobile auth/native 227/227 Node and 48/48 Python; audit verifier 28 tests per app. iOS jobs skipped. Release artifacts: Rider [14368397985](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368397985), Driver [14367803994](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14367803994); smoke: Rider [14369920066](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14369920066), Driver [14368548000](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368548000). The sole high audit root remains the transitive picomatch GHSA; it is not patched, but dependency-parent/source-map checks confirm build-tool-only containment. Residual build-time DoS risk is disclosed. PR #185 remains open pending final security/merge-policy review.
+
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Product in one line
@@ -2815,3 +2816,66 @@ PR #183 is the sole active API feature increment. It adds 16 KiB request-size me
 ## API phase exit — Android handoff (2026-11-18)
 
 PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e` after exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed 758/758 backend tests and native non-container API publish. API engineering exit is complete; strict 19-row acceptance remains 0/19 and production readiness is not established. Current phase is Android. Re-audit parked PR #177 and current Rider/Driver dependency files before changes; complete Rider Android and Driver Android before iOS.
+
+
+## Android dependency reproducibility — 2026-11-18
+
+PR #185 is the sole active Android-phase increment. The previous PR #177 remains closed/unmerged and is used only as historical implementation/artifact evidence. The current branch reapplies its checksum-pinned generated-lockfile approach on main after API exit, uses npm ci in shared mobile validation and native Android, and adds realpath-safe symlink checks. The package-lock JSON remains a same-run CI artifact rather than a committed source file; the SHA-256 pin is committed and fails closed on registry drift. iOS dependency/build commands are deliberately unchanged until Android Rider and Driver both exit.
+
+
+## Latest Android dependency handoff — 2026-11-18
+
+PR #185 CI [#44157712885](https://github.com/rajeevp727/turnova-platform/actions/runs/44157712885) failed closed because the Driver lockfile generated from the current registry differed from the old SHA pin; Rider was cancelled by fail-fast. The backend build, 758 tests and native API publish passed. Downloaded generated lockfiles were compared with PR #177 artifacts: package counts unchanged (Rider 788, Driver 790), no additions/removals, and only two transitive patch updates in both apps (`electron-to-chromium` 1.5.487→1.5.488; `node-releases` 2.0.64→2.0.65). Direct Expo 54 / React Native 0.81.4 versions remain unchanged.
+
+The branch pins were refreshed to Rider `1d577165033eb4b2a0e12dfa9b35889f474e638225a1c787678eefc4bfabb083` and Driver `d6437f510bbfd01dbb3467688241d03bcb2e4035570c3fe62e31827356134f14`. Current PR #185 head at handoff: `993e19d72331f894a2821aad97ed7d05d840cbe1`. Require fresh exact-head npm audit, Expo validation, Rider/Driver Android debug/release builds and emulator install/launch smoke before merge. Historical audit reports are not current evidence. iOS remains not_started.
+
+
+### Lockfile hardlink guard — 2026-11-18
+
+PR #185 now rejects `package-lock.json` unless its existing write target is a regular file with exactly one hard link. The guard runs before `npm install --package-lock-only` and again after generation; deterministic fixture links the app lockfile to an external file and asserts rejection before npm plus no external mutation. This supplements realpath-based symlink checks and `node_modules` symlink protection. New commits: `c37e0ff6e49eb97dea6f66e33b85eff57647d486`, `3927751df6cf51cea952ab212fcbb22c32a7e667`. Require fresh exact-head CI before merge.
+
+
+## Android dependency audit exception — 2026-11-18
+
+Fresh Rider and Driver audit artifacts from CI #44161191929 each contained 34 vulnerability records (27 high, 7 moderate, 0 critical). All high records resolved to the single transitive picomatch GHSA-fc5q-39xc-vjpf. The exact contextual gate passed against both real Android production source maps, and verification-only source maps were removed before artifact upload. This remains a disclosed build-tooling exception, not a patch.
+
+CI #44161191929 also passed Rider/Driver npm ci, Expo config/typecheck/export, debug/release APK builds, package identity checks and emulator install/launch smoke. Backend 758/758; mobile auth/native 227/227 Node and 48/48 Python; iOS jobs skipped.
+
+The verifier was then hardened to reject missing/malformed audit metadata, severity/total mismatches, invalid package-node lists, inconsistent audit exit status and any change to the observed major-only react-native@0.88.1 remediation path. Its deterministic suite now has 17 cases. Those follow-up commits require fresh exact-head CI; do not merge based on CI #44161191929 alone.
+## Android PR #185 latest execution handoff — 2026-11-18
+
+- Main baseline: `0992579b76012f24a057ae4842e524927eb9536f`; API engineering exit complete; Android in progress; iOS not started.
+- Prior passing head: `1e09053bb1ec1ba4d31ca0deb4b5b1dcc35808bd`, CI [#44161191929](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929).
+- Prior CI: backend 758/758; mobile auth/native tests 227/227 Node and 48/48 Python; Rider/Driver npm ci, Expo validation, contextual audit/source-map checks, debug/release APKs, package identity and Android emulator install/launch smoke all passed. iOS jobs skipped.
+- Release artifacts: Rider [14364856295](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929/artifacts/14364856295); Driver [14364336448](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929/artifacts/14364336448). Emulator smoke artifacts: Rider [14363499225](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929/artifacts/14363499225); Driver [14363638701](https://github.com/rajeevp727/turnova-platform/actions/runs/44161191929/artifacts/14363638701).
+- Latest audit gate hardening: report schema and severity/total consistency, package-node validation, audit exit-status consistency, and exact `react-native@0.88.1` major-only remediation metadata. 17 deterministic audit verifier tests. New commits require fresh exact-head CI; do not merge based on the earlier passing run.
+- Next: verify fresh CI on the latest branch head; review and merge PR #185 only if exact-head checks are green and normal policy permits. Then complete Rider Android AUTH-01/AUTH-02 before Driver Android. No iOS work until both apps exit.
+- External: live production API/Cosmos, Android physical-device acceptance, signing and store privacy/disclosure remain open. The npm advisory is not patched; the exact exception remains temporary and must be re-reviewed when upstream or remediation metadata changes.
+
+## PR #185 audit metadata correction handoff — 2026-11-18
+
+Latest inspected head before correction was `3f6e696e937e4ded6b4b3fd32c87ec2e960dfa5c`. CI [#44166927981](https://github.com/rajeevp727/turnova-platform/actions/runs/44166927981) passed backend build/tests/native API publish and Rider mobile validation; Driver failed the exact picomatch remediation-metadata guard. Fresh Rider and Driver npm reports both contained 34 records (27 high package nodes, 7 moderate, 0 critical) and the same sole high root GHSA-fc5q-39xc-vjpf. Rider suggested major-only `react-native@0.88.1`; Driver suggested major-only `expo@58.0.26`. Both suggestions are unpatched major migrations. The verifier now accepts only these two exact objects and has 20 deterministic tests covering both, plus unknown version/non-major rejection. Require fresh exact-head CI for both apps, Android debug/release APKs, package identity, emulator install/launch smoke, backend and native API publish before merge. After PR #185 merges, finish Rider Android before Driver Android; iOS remains gated. Strict acceptance 0/19; production readiness not established.
+
+
+## PR #185 per-app audit identity correction — 2026-11-18
+
+The mobile npm audit verifier validates the app identity is Rider or Driver and accepts only either exact major-only `fixAvailable` object observed for this advisory (`react-native@0.88.1` or `expo@58.0.26`). The Rider report itself changed from the React Native hint to the Expo hint on a later run, so the suggestion is not stable per app. Unknown app names/packages/versions and non-major metadata fail. It also rejects malformed package/lock roots and detects static side-effect imports and `require.resolve`. The deterministic suite remains 27 cases. This is not a picomatch patch; the high GHSA remains in transitive build tooling and is disclosed.
+
+The superseded exact-head run #44168024078 had both mobile validation jobs and backend build/tests/native API publish pass, and both Android debug APKs generated; Rider and Driver standalone release builds were still running when this correction superseded that SHA. Fresh CI on the new head must produce both standalone release APKs, verify package identities, run Android emulator install/launch smoke for both apps, and pass all backend/mobile checks before PR #185 can merge. The API phase remains engineering-complete; Android Rider is next after the infrastructure PR; Driver follows Rider; iOS remains gated. Strict acceptance 0/19; production readiness not established.
+
+
+## PR #185 npm metadata drift correction — 2026-11-18
+
+Fresh Rider npm audit artifact from CI #44169775823 changed the picomatch `fixAvailable` suggestion to `expo@58.0.26` with `isSemVerMajor=true`; the previous Rider run suggested `react-native@0.88.1`. The inventory stayed at 34 records (27 high, 7 moderate, 0 critical) and the same GHSA root. The per-app mapping was therefore too strict. The verifier now accepts only the two exact reviewed major-only objects for either known app identity and keeps all other fail-closed checks. Test count 27. CI #44169775823 failed at Rider audit metadata before native Android jobs; new exact-head CI required.
+
+
+## PR #185 third npm remediation hint — 2026-11-18
+
+Rider's latest audit artifact on CI #44170775823 reported `expo-asset@58.0.21`; Driver reported `expo@58.0.26`; an earlier Rider report reported `react-native@0.88.1`. All are major-only suggestions, not picomatch patches. The exact allow-list now contains these three values for either known app. Tests: 28. Any fourth/unreviewed suggestion fails and requires re-review.
+
+
+## Android phase handoff — 2026-11-18
+
+PR #185 exact source/test head `6d02436938f50f98f4463a253fa4ed1a93287c6e` passed [CI #44171401948](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948): both apps' checksum-pinned dependencies, npm audit context, Expo config/typecheck/bundle, debug/release APKs, package identities and emulator install/launch smoke; backend 758/758; mobile auth/native 227/227 Node and 48/48 Python; 28 audit tests per app. iOS jobs skipped. Emulator smoke explicitly does not exercise production API/auth. The sole high advisory remains transitive picomatch GHSA-fc5q-39xc-vjpf, unpatched; no app source-map inclusion was found. Treat as disclosed build-time residual, not a clean audit.
+
+Next after PR #185 review/merge: Rider Android AUTH-01/AUTH-02 accessibility, autofill, keyboard and error-announcement work with deterministic tests; finish Rider before Driver. Keep iOS gated until both Android apps exit. External release gates are exact EAS project linkage, approved iOS bundle IDs, build-number policy, production API URL/DNS/TLS/CORS/health, signing credentials, physical-device acceptance and store/legal review.
