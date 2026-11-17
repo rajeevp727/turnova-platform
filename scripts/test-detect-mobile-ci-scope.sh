@@ -47,13 +47,23 @@ echo "Mobile CI phase-scope fixtures passed."
 
 workflow="$root/.github/workflows/ci.yml"
 grep -Fq 'turnova:android-phase-approved' "$workflow"
+grep -Fq 'turnova:android-phase-complete' "$workflow"
 grep -Fq 'turnova:ios-phase-approved' "$workflow"
 grep -Fq 'android_phase: ${{ steps.detect.outputs.android_phase }}' "$workflow"
 android_gate_count="$(grep -Fc "needs.scope.outputs.android_phase == 'true'" "$workflow")"
 ios_gate_count="$(grep -Fc "needs.scope.outputs.ios_phase == 'true'" "$workflow")"
-if [[ "$android_gate_count" -lt 4 || "$ios_gate_count" -lt 2 ]]; then
-  echo "Native platform jobs are not fully gated by API -> Android -> iOS approval labels." >&2
+if [[ "$android_gate_count" -lt 6 || "$ios_gate_count" -lt 3 ]]; then
+  echo "Android validation/native jobs and iOS validation/native jobs are not fully gated by API -> Android complete -> iOS approval labels." >&2
   exit 1
 fi
 grep -Fq 'if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then' "$workflow"
-echo "API -> Android -> iOS native phase gates passed."
+android_job="$(sed -n '/^  mobile:$/,/^  mobile-ios:$/p' "$workflow")"
+if grep -Fq 'Export iOS production JavaScript bundle' <<< "$android_job"; then
+  echo "Android validation job must not export an iOS bundle." >&2
+  exit 1
+fi
+ios_job="$(sed -n '/^  mobile-ios:$/,/^  native-android:$/p' "$workflow")"
+grep -Fq 'Export iOS production JavaScript bundle' <<< "$ios_job"
+grep -Fq "needs.mobile-ios.result == 'success'" "$workflow"
+grep -Fq "needs.mobile-auth-tests.result == 'success'" "$workflow"
+echo "API -> Android -> Android-complete -> iOS validation/native phase gates passed."

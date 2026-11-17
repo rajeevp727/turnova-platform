@@ -3116,3 +3116,8 @@ Live Cosmos ETag contention, multi-instance migration lease recovery, restart/cr
 
 | SUPPORT-API-008 | Staging/Production support intake without explicit policy approval | Authenticated POST returns HTTP 503; no support store or migration is registered and request content is not persisted | API integration | P0 |
 | SUPPORT-API-009 | Staging/Production support intake with explicit policy approval | `SupportRequests:PolicyApproved=true` enables the authenticated intake and reporter-partitioned store; the normal idempotency contract applies | API integration | P0 |
+
+| API-PLATFORM-001 | API-only PR changes | Backend/publish runs; all mobile validation, auth harness, Android and iOS jobs are skipped | CI workflow | P0 |
+| API-PLATFORM-002 | Mobile PR without Android approval | Expo/typecheck/Android bundle, shared mobile tests, native Android and smoke jobs are skipped | CI workflow | P0 |
+| API-PLATFORM-003 | Android-approved PR | Android validation/build/smoke run; iOS bundle/build/smoke remain skipped | CI workflow | P0 |
+| API-PLATFORM-004 | iOS phase approval | iOS bundle/build/smoke require both Android-complete and iOS-approved labels | CI workflow | P0 |

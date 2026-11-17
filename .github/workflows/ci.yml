@@ -51,12 +51,12 @@ jobs:
           android_phase=false
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             android_phase=true
-          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:android-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
+          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:android-phase-approved" or .name == "turnova:android-phase-complete")' "$GITHUB_EVENT_PATH" >/dev/null; then
             android_phase=true
           fi
 
           ios_phase=false
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:ios-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:android-phase-complete") and any(.pull_request.labels[]?; .name == "turnova:ios-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
             ios_phase=true
           fi
 
@@ -127,7 +127,7 @@ jobs:
 
   mobile:
     needs: [scope]
-    if: ${{ needs.scope.outputs.mobile == 'true' }}
+    if: ${{ needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -220,22 +220,44 @@ jobs:
         run: npx expo export --platform android --output-dir "$RUNNER_TEMP/turnova-${{ matrix.app }}-android"
       - name: Verify Android production bundle
         run: test -s "$RUNNER_TEMP/turnova-${{ matrix.app }}-android/metadata.json"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-production-js-bundle-android
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-android/
+          if-no-files-found: error
+
+  mobile-ios:
+    needs: [scope, mobile]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.mobile.result == 'success' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        app: [driver-app, rider-app]
+    defaults:
+      run:
+        working-directory: src/mobile/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/mobile/${{ matrix.app }}/package.json
+      - run: npm install --prefer-offline --no-fund --audit=false
       - name: Export iOS production JavaScript bundle
         run: npx expo export --platform ios --output-dir "$RUNNER_TEMP/turnova-${{ matrix.app }}-ios"
       - name: Verify iOS production bundle
         run: test -s "$RUNNER_TEMP/turnova-${{ matrix.app }}-ios/metadata.json"
       - uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.app }}-production-js-bundles
-          path: |
-            ${{ runner.temp }}/turnova-${{ matrix.app }}-android/
-            ${{ runner.temp }}/turnova-${{ matrix.app }}-ios/
+          name: ${{ matrix.app }}-production-js-bundle-ios
+          path: ${{ runner.temp }}/turnova-${{ matrix.app }}-ios/
           if-no-files-found: error
 
   # Release APKs are built and bundle-verified in the same native Android matrix.
   native-android:
-    needs: [scope, mobile]
-    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.mobile.result == 'success' }}
+    needs: [scope, mobile, mobile-auth-tests]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.mobile.result == 'success' && needs.mobile-auth-tests.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -371,8 +393,8 @@ jobs:
           retention-days: 30
 
   native-ios:
-    needs: [scope, mobile]
-    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.mobile.result == 'success' }}
+    needs: [scope, mobile-ios, mobile-auth-tests]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.mobile-ios.result == 'success' && needs.mobile-auth-tests.result == 'success' }}
     runs-on: macos-15-intel
     timeout-minutes: 90
     strategy:
@@ -560,7 +582,7 @@ jobs:
 
   mobile-auth-tests:
     needs: [scope]
-    if: ${{ needs.scope.outputs.mobile == 'true' }}
+    if: ${{ needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
