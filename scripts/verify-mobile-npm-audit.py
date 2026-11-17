@@ -8,12 +8,12 @@ import re
 import sys
 from pathlib import Path
 
-# npm currently reports one of two equivalent major-only SDK migration paths
-# across Rider and Driver lockfiles. Neither is a patched picomatch release.
-EXPECTED_PICOMATCH_REMEDIATIONS = (
-    {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True},
-    {"name": "expo", "version": "58.0.26", "isSemVerMajor": True},
-)
+# Pin the observed npm remediation hint to the exact app package identity.
+# Both are major SDK migrations, not patched picomatch releases.
+EXPECTED_PICOMATCH_REMEDIATION_BY_APP = {
+    "turnova-rider": {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True},
+    "turnova-driver": {"name": "expo", "version": "58.0.26", "isSemVerMajor": True},
+}
 ALLOWED_HIGH_ADVISORY = (
     "picomatch",
     "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
@@ -28,7 +28,7 @@ ALLOWED_PICOMATCH_PARENTS = {
 }
 SEVERITIES = ("info", "low", "moderate", "high", "critical")
 IMPORT_PATTERN = re.compile(
-    r"(?:from\s*|require\s*\(|import\s*\()\s*['\"]picomatch(?:/[^'\"]*)?['\"]"
+    r"(?:from\s*|require(?:\.resolve)?\s*\(|import\s*(?:\(\s*)?)['\"]picomatch(?:/[^'\"]*)?['\"]"
 )
 SOURCE_PATTERN = re.compile(
     r"(?:^|[/\\])node_modules[/\\]picomatch(?:[/\\]|$)", re.IGNORECASE
@@ -120,6 +120,10 @@ def verify(report_path: Path, audit_status: int, app_dir: Path, bundle_dir: Path
         return fail(f"npm audit execution failed with exit code {audit_status}")
     if not isinstance(report, dict):
         return fail("npm audit report root must be a JSON object.")
+    if not isinstance(package, dict):
+        return fail("app package manifest root must be a JSON object.")
+    if not isinstance(lock, dict):
+        return fail("generated package-lock root must be a JSON object.")
 
     validated = validate_audit_report(report)
     if isinstance(validated, str):
@@ -160,8 +164,12 @@ def verify(report_path: Path, audit_status: int, app_dir: Path, bundle_dir: Path
             return fail("allowlisted picomatch advisory must remain transitive, not a direct app dependency")
         if picomatch.get("severity") != "high":
             return fail("expected the allowlisted picomatch record to remain high severity")
-        if picomatch.get("fixAvailable") not in EXPECTED_PICOMATCH_REMEDIATIONS:
-            return fail("picomatch remediation metadata changed; re-review the dependency upgrade path")
+        app_name = package.get("name")
+        expected_remediation = EXPECTED_PICOMATCH_REMEDIATION_BY_APP.get(app_name)
+        if expected_remediation is None:
+            return fail(f"unsupported app package identity for picomatch exception: {app_name!r}")
+        if picomatch.get("fixAvailable") != expected_remediation:
+            return fail(f"picomatch remediation metadata changed for {app_name}; re-review the dependency upgrade path")
 
         nodes = set(picomatch.get("nodes", []))
         lock_packages = lock.get("packages", {})
