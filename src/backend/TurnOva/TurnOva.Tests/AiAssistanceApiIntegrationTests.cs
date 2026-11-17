@@ -99,6 +99,44 @@ public sealed class AiAssistanceApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, otherCaller.StatusCode);
     }
 
+    [Fact]
+    public async Task TripIntentRejectsUnmappedRideLocationAndFareFields()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var rider = factory.CreateClient("Rider", "ai-strict-trip-request");
+
+        using var response = await rider.PostAsJsonAsync(
+            "/api/v1/assistance/trip-intent",
+            new
+            {
+                text = "Cab from Nizampet to HITEC City",
+                rideId = "must-not-be-accepted",
+                pickupLatitude = 17.5,
+                fareAmount = 500
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task HelpRejectsUnmappedLocationContactAndPaymentFields()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var rider = factory.CreateClient("Rider", "ai-strict-help-request");
+
+        using var response = await rider.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new
+            {
+                question = "What does queue status mean?",
+                exactLocation = "17.5,78.4",
+                customerEmail = "rider@example.test",
+                paymentToken = "must-not-be-accepted"
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private sealed class AiAssistanceApiFactory : WebApplicationFactory<Program>
     {
         private const string Issuer = "turnova-ai-assistance-tests";
