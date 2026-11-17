@@ -1441,3 +1441,6 @@ Current Rider and Driver CI #1800 npm audit artifacts `14195939928` and `1419611
 
 
 **CI phase-state enforcement:** `.github/turnova-phase.json` currently says API `in_progress`, Android/iOS `not_started`. CI uses the same checked-in state on pull requests and main pushes; labels cannot bypass it. iOS-specific paths are separately detected and rejected until API complete + Android complete + iOS active. This API-phase change must continue to skip all mobile jobs.
+
+
+**Support intake durability:** Staging requires both explicit policy approval and Cosmos credentials; policy-approved Staging with no Cosmos fails startup. Production requires Cosmos globally. The route remains 503/no-body-binding while policy is disabled. SUPPORT-API-012 covers the fail-closed startup path.

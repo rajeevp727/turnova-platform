@@ -2479,3 +2479,6 @@ RIDER-02 exact-head CI [#1735 / run 43720789081](https://github.com/rajeevp727/t
 
 
 **CI phase-state hardening:** PR #179 adds `.github/turnova-phase.json` (API in progress; Android/iOS not started), a deterministic event/label phase detector, and iOS-specific file-scope detection. Pull-request labels cannot override an incomplete checked-in phase state, and main pushes no longer unconditionally enable Android. The exact-head scope fixtures passed in CI #44111719737. Mobile changes fail CI until API state is complete and Android is active; iOS-specific changes additionally require Android complete and iOS active. This remains API-phase CI infrastructure; no Android/iOS completion jobs run for this API-only PR.
+
+
+**Support intake durability guard:** PR #179 now fails Staging startup if `SupportRequests:PolicyApproved=true` while Cosmos endpoint/key are absent. Production already fails startup without Cosmos. This prevents policy-approved Staging support requests from being acknowledged into an in-memory store. Deterministic startup regression `SUPPORT-API-012` was added; exact-head CI is pending.

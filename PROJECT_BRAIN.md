@@ -2801,3 +2801,6 @@ Source/test commit `0c6a5b89d1542121980a96221a2edc277c3374f7` adds CAB-AGR-039â€
 
 
 **Phase gate source of truth:** `.github/turnova-phase.json` currently records API `in_progress`, Android/iOS `not_started`. The phase detector enforces that state for PR labels and main pushes; a push no longer automatically enables Android. iOS-specific path changes require Android complete and iOS active. Deterministic fixtures cover push and PR transitions.
+
+
+**Support intake durability:** policy-approved Staging now fails startup unless Cosmos endpoint/key are configured; it cannot acknowledge support requests into an in-memory store. Production already requires Cosmos. Regression: SUPPORT-API-012.

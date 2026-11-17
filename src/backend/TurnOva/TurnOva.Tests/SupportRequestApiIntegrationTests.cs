@@ -170,6 +170,17 @@ public sealed class SupportRequestApiIntegrationTests
     }
 
     [Fact]
+    public void StagingSupportIntakeCannotEnableWithoutCosmosPersistence()
+    {
+        using var factory = new SupportApiFactory("Staging", policyApproved: true);
+
+        var exception = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(exception);
+        Assert.Contains("Staging support intake requires CosmosDb:Endpoint and CosmosDb:Key", exception.ToString());
+    }
+
+    [Fact]
     public async Task StagingSupportIntakeReturns503BeforeParsingMalformedBody()
     {
         using var factory = new SupportApiFactory("Staging");

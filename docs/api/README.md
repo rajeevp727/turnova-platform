@@ -124,7 +124,7 @@ The Cosmos `SupportRequests` container uses partition key `/reporterId`. The ite
 
 There is intentionally no support-request list/read endpoint, attachment upload, category, severity, priority, assignment, escalation, response target or retention setting. Cosmos TTL remains unset until Product/Operations approves a retention policy. Those decisions remain external gates.
 
-Support intake is enabled by default only in Development and Testing. Staging/Production require the explicit `SupportRequests:PolicyApproved=true` setting after Product/Operations has approved the intake, privacy, access and retention policy. Until then the authenticated route returns HTTP 503 without binding or persisting the submitted body. The checked-in default is false.
+Support intake is enabled by default only in Development and Testing. Staging/Production require both the explicit `SupportRequests:PolicyApproved=true` setting and configured Cosmos persistence after Product/Operations has approved the intake, privacy, access and retention policy. If Staging policy is enabled without `CosmosDb:Endpoint` and `CosmosDb:Key`, host startup fails closed instead of accepting requests into an in-memory store. Production already requires Cosmos at startup. Until policy approval, the authenticated route returns HTTP 503 without binding or persisting the submitted body. The checked-in policy default is false.
 
 
 ## Private media and KYC storage — production gate

@@ -237,6 +237,9 @@ builder.Services.AddScoped<QueueService>();
 var app = builder.Build();
 var supportRequestsEnabled = SupportRequestEndpoints.IsEnabledForEnvironment(app.Environment, app.Configuration);
 
+if (app.Environment.IsStaging() && supportRequestsEnabled && !useCosmos)
+    throw new InvalidOperationException("Staging support intake requires CosmosDb:Endpoint and CosmosDb:Key. Keep SupportRequests:PolicyApproved=false until durable storage is configured.");
+
 if (useCosmos)
 {
     // Do not accept traffic until all pending schema migrations have completed.

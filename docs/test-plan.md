@@ -3115,9 +3115,10 @@ Live Cosmos ETag contention, multi-instance migration lease recovery, restart/cr
 
 
 | SUPPORT-API-008 | Staging/Production support intake without explicit policy approval | Authenticated POST returns HTTP 503 before request-body binding; no support request is accepted or persisted. The normal schema migration may provision an empty container. | API integration | P0 |
-| SUPPORT-API-009 | Staging/Production support intake with explicit policy approval | `SupportRequests:PolicyApproved=true` enables the authenticated intake and reporter-partitioned store; the normal idempotency contract applies | API integration | P0 |
+| SUPPORT-API-009 | Staging/Production support intake with explicit policy approval | `SupportRequests:PolicyApproved=true` enables the authenticated intake only when durable Cosmos persistence is configured; the normal idempotency contract applies | API integration | P0 |
 | SUPPORT-API-010 | Support request body exceeds the bounded endpoint limit | Deterministic endpoint metadata asserts a 16 KiB maximum and OpenAPI documents HTTP 413; actual Kestrel host-level rejection still requires a dedicated host integration check | API metadata contract | P1 |
 | SUPPORT-API-011 | Staging/Production support intake is disabled and receives malformed JSON | Authenticated POST returns HTTP 503 before JSON parsing/body binding; no support request is persisted | API integration/privacy | P0 |
+| SUPPORT-API-012 | Staging policy is approved but Cosmos is not configured | Host startup fails closed with a clear configuration error; support requests are never accepted into an in-memory store | API configuration/security | P0 |
 
 | API-PLATFORM-001 | API-only PR changes | Backend/publish runs; all mobile validation, auth harness, Android and iOS jobs are skipped | CI workflow | P0 |
 | API-PLATFORM-002 | Mobile PR without Android approval | Expo/typecheck/Android bundle, shared mobile tests, native Android and smoke jobs are skipped | CI workflow | P0 |
