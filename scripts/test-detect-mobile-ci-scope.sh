@@ -43,3 +43,17 @@ printf '%s\n' 'scripts/ios-simulator-smoke.sh' > "$tmp"
 assert_scope true "iOS simulator smoke tooling"
 
 echo "Mobile CI phase-scope fixtures passed."
+
+
+workflow="$root/.github/workflows/ci.yml"
+grep -Fq 'turnova:android-phase-approved' "$workflow"
+grep -Fq 'turnova:ios-phase-approved' "$workflow"
+grep -Fq 'android_phase: ${{ steps.detect.outputs.android_phase }}' "$workflow"
+android_gate_count="$(grep -Fc "needs.scope.outputs.android_phase == 'true'" "$workflow")"
+ios_gate_count="$(grep -Fc "needs.scope.outputs.ios_phase == 'true'" "$workflow")"
+if [[ "$android_gate_count" -lt 4 || "$ios_gate_count" -lt 2 ]]; then
+  echo "Native platform jobs are not fully gated by API -> Android -> iOS approval labels." >&2
+  exit 1
+fi
+grep -Fq 'if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then' "$workflow"
+echo "API -> Android -> iOS native phase gates passed."

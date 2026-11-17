@@ -3110,3 +3110,5 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 | COSMOS-MIG-006 | Migration schema contract | Every migration ID is unique and every declared container/partition-key pair matches the deterministic schema contract | Migration contract | P0 |
 
 Live Cosmos ETag contention, multi-instance migration lease recovery, restart/crash recovery, cross-partition query/index/RU behaviour and production retention remain external Cosmos integration gates.
+
+| CI-PHASE-001 | Enforce API → Android → iOS native order | Android native build/smoke jobs require `turnova:android-phase-approved`; iOS native build/smoke jobs require both Android and iOS approval labels; main-branch pushes run Android for changed mobile files but not iOS | Workflow contract | P0 |

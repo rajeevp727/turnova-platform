@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       mobile: ${{ steps.detect.outputs.mobile }}
+      android_phase: ${{ steps.detect.outputs.android_phase }}
       ios_phase: ${{ steps.detect.outputs.ios_phase }}
     steps:
       - uses: actions/checkout@v7
@@ -47,14 +48,22 @@ jobs:
             mobile="$(bash scripts/detect-mobile-ci-scope.sh "$RUNNER_TEMP/changed-files.txt")"
           fi
 
+          android_phase=false
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            android_phase=true
+          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:android-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
+            android_phase=true
+          fi
+
           ios_phase=false
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] && jq -e 'any(.pull_request.labels[]?; .name == "turnova:ios-phase-approved")' "$GITHUB_EVENT_PATH" >/dev/null; then
             ios_phase=true
           fi
 
           echo "mobile=$mobile" >> "$GITHUB_OUTPUT"
+          echo "android_phase=$android_phase" >> "$GITHUB_OUTPUT"
           echo "ios_phase=$ios_phase" >> "$GITHUB_OUTPUT"
-          printf 'Mobile CI enabled: %s\niOS phase approved: %s\n' "$mobile" "$ios_phase"
+          printf 'Mobile CI enabled: %s\nAndroid phase approved: %s\niOS phase approved: %s\n' "$mobile" "$android_phase" "$ios_phase"
 
   backend:
     needs: [scope]
@@ -226,7 +235,7 @@ jobs:
   # Release APKs are built and bundle-verified in the same native Android matrix.
   native-android:
     needs: [scope, mobile]
-    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.mobile.result == 'success' }}
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.mobile.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -363,7 +372,7 @@ jobs:
 
   native-ios:
     needs: [scope, mobile]
-    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.mobile.result == 'success' }}
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.mobile.result == 'success' }}
     runs-on: macos-15-intel
     timeout-minutes: 90
     strategy:
@@ -457,7 +466,7 @@ jobs:
 
   android-emulator-smoke:
     needs: [scope, native-android]
-    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.native-android.result == 'success' }}
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.native-android.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -515,7 +524,7 @@ jobs:
 
   ios-simulator-smoke:
     needs: [scope, native-ios]
-    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.native-ios.result == 'success' }}
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.mobile == 'true' && needs.scope.outputs.android_phase == 'true' && needs.scope.outputs.ios_phase == 'true' && needs.native-ios.result == 'success' }}
     runs-on: macos-15-intel
     timeout-minutes: 45
     strategy:

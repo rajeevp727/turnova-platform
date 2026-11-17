@@ -3,7 +3,7 @@
 **Scope:** TurnOva Rider and TurnOva Driver Android/iOS MVP only. Fleet and Ops applications are Phase 2 and excluded.
 **Last audited:** 2026-11-17; main HEAD `0ff05f93ce2ea6befae0fda6f8ab7a74e58b843e` (PR #178 merged).
 **Current platform phase:** API. Android completion must not start until API implementation, deterministic tests, OpenAPI/docs, auth/privacy checks, Cosmos/repository tests, native non-container publish and API CI exit criteria pass. iOS completion must not start until both Android apps pass their exit criteria.
-**Current API PR:** [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`; neutral Rider/Driver support intake and Cosmos migration/repository contracts are in progress. The first compile failure was corrected; fresh exact-head CI is pending. API phase remains active.
+**Current API PR:** [#179](https://github.com/rajeevp727/turnova-platform/pull/179), branch `feat/api-support-intake-cosmos-contracts`; neutral support intake, Cosmos contracts and strict native API→Android→iOS CI gates are in progress. Android native jobs require the Android approval label; iOS requires both phase labels. API phase remains active.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Platform phase gate
