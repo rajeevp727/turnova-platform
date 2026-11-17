@@ -8,12 +8,13 @@ import re
 import sys
 from pathlib import Path
 
-# Pin the observed npm remediation hint to the exact app package identity.
-# Both are major SDK migrations, not patched picomatch releases.
-EXPECTED_PICOMATCH_REMEDIATION_BY_APP = {
-    "turnova-rider": {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True},
-    "turnova-driver": {"name": "expo", "version": "58.0.26", "isSemVerMajor": True},
-}
+# npm has reported either of these exact major-only SDK migration hints
+# for the same transitive advisory across app runs. Neither is a picomatch patch.
+EXPECTED_PICOMATCH_REMEDIATIONS = (
+    {"name": "react-native", "version": "0.88.1", "isSemVerMajor": True},
+    {"name": "expo", "version": "58.0.26", "isSemVerMajor": True},
+)
+KNOWN_APP_PACKAGE_NAMES = {"turnova-rider", "turnova-driver"}
 ALLOWED_HIGH_ADVISORY = (
     "picomatch",
     "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
@@ -165,10 +166,9 @@ def verify(report_path: Path, audit_status: int, app_dir: Path, bundle_dir: Path
         if picomatch.get("severity") != "high":
             return fail("expected the allowlisted picomatch record to remain high severity")
         app_name = package.get("name")
-        expected_remediation = EXPECTED_PICOMATCH_REMEDIATION_BY_APP.get(app_name)
-        if expected_remediation is None:
+        if app_name not in KNOWN_APP_PACKAGE_NAMES:
             return fail(f"unsupported app package identity for picomatch exception: {app_name!r}")
-        if picomatch.get("fixAvailable") != expected_remediation:
+        if picomatch.get("fixAvailable") not in EXPECTED_PICOMATCH_REMEDIATIONS:
             return fail(f"picomatch remediation metadata changed for {app_name}; re-review the dependency upgrade path")
 
         nodes = set(picomatch.get("nodes", []))
