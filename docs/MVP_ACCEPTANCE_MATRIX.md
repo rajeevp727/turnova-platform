@@ -1483,3 +1483,12 @@ Current Rider and Driver CI #1800 npm audit artifacts `14195939928` and `1419611
 | Test-plan ID | Criterion | Current automated evidence | Status |
 |---|---|---|---|
 | SUPPORT-API-017 | A real Kestrel host rejects a support request with Content-Length above 16 KiB before persistence | `SupportRequestKestrelIntegrationTests.KestrelRejectsOversizedSupportRequestBeforeStoreAccess`; asserts HTTP 413 and zero store writes. Exact-head CI is pending. | In progress |
+
+
+## Android dependency resolution follow-up — 2026-11-18
+
+PR #185 exact-head CI [#44157712885](https://github.com/rajeevp727/turnova-platform/actions/runs/44157712885) failed closed on the Driver generated-lockfile digest before `npm ci`; Rider was cancelled by fail-fast. The same run's backend Release build, 758 backend tests and native API publish passed. This does not count as Android build evidence.
+
+The generated Rider/Driver lockfiles were downloaded from that run and compared with the historical PR #177 generated artifacts. Each app retained its full package set (Rider 788 entries; Driver 790); there were zero additions/removals and exactly two transitive patch updates per app: `electron-to-chromium` 1.5.487 → 1.5.488 and `node-releases` 2.0.64 → 2.0.65. Direct Expo 54 and React Native 0.81.4 versions did not change.
+
+The reviewed current generated-lockfile pins are Rider `1d577165033eb4b2a0e12dfa9b35889f474e638225a1c787678eefc4bfabb083` and Driver `d6437f510bbfd01dbb3467688241d03bcb2e4035570c3fe62e31827356134f14`. Fresh exact-head npm audit is still required; historical 11 moderate / 0 high / 0 critical reports are not treated as current evidence. Android debug/release APK and emulator smoke evidence remains pending. iOS stays gated and skipped.
