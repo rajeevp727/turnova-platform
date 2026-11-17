@@ -498,7 +498,10 @@ async Task<string?> GetProfilePhotoBase64Async(DriverOnboardingProfile profile, 
     if (string.IsNullOrWhiteSpace(profile.ProfilePhotoStorageReference))
         return profile.ProfilePhotoBase64;
     var asset = await privateDriverMediaStore.ReadAsync(profile.DriverId, profile.ProfilePhotoStorageReference, ct);
-    if (asset is null || asset.Metadata.MediaType != "ProfilePhoto" || asset.Metadata.ScanStatus != "Clean")
+    if (asset is null ||
+        asset.Metadata.DriverId != profile.DriverId ||
+        asset.Metadata.MediaType != "ProfilePhoto" ||
+        asset.Metadata.ScanStatus != "Clean")
         return null;
     return Convert.ToBase64String(asset.Content);
 }
@@ -1617,7 +1620,7 @@ onboarding.MapGet("/media/{reference}", async (
     if (!privateDriverMediaStore.IsConfigured)
         return Results.Problem("Private Driver media storage is not configured.", statusCode: 503);
     var asset = await privateDriverMediaStore.ReadAsync(driverId, reference, ct);
-    if (asset is null ||
+    if (asset is null || asset.Metadata.DriverId != driverId ||
         !IsValidPrivateMediaPayload(asset.Metadata.MediaType, asset.Metadata.ContentType, asset.Content))
         return Results.NotFound();
     context.Response.Headers.CacheControl = "private, no-store";
@@ -1649,6 +1652,7 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
         driverId, selfieLeaseId, DateTimeOffset.UtcNow.AddMinutes(5), ct, selfieAuditContext))
         return Results.Conflict(new { message = "The Driver is reserved by a booking, ride or Union membership change. Retry after it is resolved." });
 
+    string? newlyStoredSelfieReference = null;
     try
     {
         var profile = await FindDriverProfileAsync(driverId, ct);
@@ -1675,7 +1679,6 @@ onboarding.MapPut("/selfie", async (ClaimsPrincipal user, DriverSelfieRequest re
 
         var capturedAtUtc = DateTimeOffset.UtcNow;
         var selfieReference = request.ProfilePhotoStorageReference;
-        string? newlyStoredSelfieReference = null;
         if (hasInlineSelfie)
         {
             var bytes = Convert.FromBase64String(request.ProfilePhotoBase64!);
@@ -2335,7 +2338,8 @@ unionManagerApi.MapGet("/drivers/{driverId}/documents/{documentType}", async (
         return Results.NotFound();
 
     var asset = await privateDriverMediaStore.ReadAsync(driverId, document.StorageReference, ct);
-    if (asset is null || asset.Metadata.MediaType != documentType || asset.Metadata.ScanStatus != "Clean" ||
+    if (asset is null || asset.Metadata.DriverId != driverId ||
+        asset.Metadata.MediaType != documentType || asset.Metadata.ScanStatus != "Clean" ||
         !IsValidPrivateMediaPayload(documentType, asset.Metadata.ContentType, asset.Content))
         return Results.NotFound();
 
