@@ -3644,3 +3644,12 @@ The Rider history normalizer must not reject a valid immutable agreement snapsho
 | RIDER-SUPPORT-SESSION-001 | Support response returns after auth-session change | Do not display the previous account's request reference/error, clear a newer support attempt, or release its in-flight lock. Session reset invalidates the old response sequence and clears the old attempt. | Automated Node unit + source wiring | P1 |
 
 These are Rider privacy/concurrency safeguards. They do not change the support API contract, support intake policy, retention, assignment or response-time commitments. The two cases are supplemental and do not add acceptance rows to the 19-area denominator.
+
+## Rider strict server timestamp validation — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-BOOKING-RESPONSE-004 | Selected-booking timestamp calendar validity | Reject impossible calendar dates (for example, February 30), invalid clock components and invalid offsets in required request/negotiation timestamps; accept valid leap days and offset-qualified timestamps. | Automated Node unit | P1 |
+| RIDER-AGREEMENT-RESPONSE-002 | Agreement timestamp calendar validity | Reject impossible calendar dates in immutable agreement creation/confirmation timestamps and render malformed negotiation/history dates as unavailable rather than allowing Date.parse normalization. | Automated Node unit | P1 |
+
+The shared Rider timestamp helper validates the actual calendar day, clock and offset before relying on Date.parse. This prevents JavaScript Date.parse from normalizing impossible dates such as 2026-02-30 into a different valid day. API-owned timestamps remain authoritative; this is client response-validation and presentation hardening only.
