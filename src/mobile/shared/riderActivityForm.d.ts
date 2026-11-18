@@ -14,5 +14,9 @@ export interface RiderActivityActionProps {
   accessibilityState: { disabled: boolean; busy: boolean };
 }
 
+export interface RiderActivityActionLock { current: string | null; }
+
+export function tryBeginRiderActivityAction(inFlight: RiderActivityActionLock, key: string): boolean;
+export function finishRiderActivityAction(inFlight: RiderActivityActionLock, key: string): boolean;
 export function getRiderActivityFieldProps(field: RiderActivityField, disabled: boolean): RiderActivityFieldProps;
 export function getRiderActivityActionProps(action: RiderActivityAction, disabled: boolean, busy: boolean, confirmed?: boolean): RiderActivityActionProps;

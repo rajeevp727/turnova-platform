@@ -98,7 +98,8 @@ for (const [role, appPath] of [
     assert.ok(handler.indexOf("loadAgreementHistory") < handler.indexOf("clearPersistentProposalAttempt"),
       "the persisted key must remain until agreement history refresh succeeds");
     assert.match(source, /proposalSubmitting/);
-    assert.match(source, /editable=\{!proposalSubmitting\}/);
+    if (role === "Rider") assert.match(source, /editable=\{!activityActionBusy\}/);
+    else assert.match(source, /editable=\{!proposalSubmitting\}/);
     const resetName = role === "Rider" ? "const clearRiderSessionState" : "const clearDriverSessionState";
     const resetStart = source.indexOf(resetName);
     const resetEnd = source.indexOf("useEffect", resetStart);
