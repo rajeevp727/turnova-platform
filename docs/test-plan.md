@@ -3461,3 +3461,16 @@ This increment deliberately does not invent categories, severity, priority, assi
 | RIDER-ACTIVITY-ACTION-005 | Shared ride-mutation serialization | Proposal, confirmation and cancellation cannot overlap; agreement amount editing and actions expose accessible busy/disabled state during a mutation. | Automated Node source wiring | P1 |
 
 These deterministic helper/source tests do not replace Android TalkBack, full React Native UI interaction, live API/Cosmos/SignalR, or physical-device acceptance. Server-owned transition and agreement rules remain authoritative; this increment changes no API contract or ride lifecycle policy.
+
+
+## Rider Activity mutation single-flight — PR #192 (2026-11-18)
+
+| ID | Scenario | Expected result | Evidence |
+|---|---|---|---|
+| RIDER-ACTIVITY-ACTION-001 | Keyed action lock | Only one Activity mutation owns the lock; duplicate/overlapping actions are rejected and only the matching owner can release it. | Node unit; CI #44273380360, 276/276 |
+| RIDER-ACTIVITY-ACTION-002 | Invalid action keys | Blank, padded, overlong or control-character keys fail closed without acquiring the lock. | Node unit; CI #44273380360, 276/276 |
+| RIDER-ACTIVITY-ACTION-003 | Cancellation response fencing | Cancellation is single-flight; response ride ID/status are validated; late responses from a changed ride/session cannot update current UI state. | Node source-wiring regression; CI #44273380360, 276/276 |
+| RIDER-ACTIVITY-ACTION-004 | Current agreement confirmation | Confirmation is single-flight for the ride/version, skips an already-confirmed version, fences stale responses and reloads server-authoritative agreement history after success. | Node source-wiring regression; CI #44273380360, 276/276 |
+| RIDER-ACTIVITY-ACTION-005 | Shared ride-mutation serialization | Proposal, confirmation and cancellation cannot overlap; agreement amount editing and mutating actions expose busy/disabled state during a mutation. | Node source-wiring regression; CI #44273380360, 276/276 |
+
+Code-bearing head `ea3cae2cba7578206e4160c52fc7c8e09e2e1f67` passed [GitHub Actions run #44273380360](https://github.com/rajeevp727/turnova-platform/actions/runs/44273380360): backend 758/758, shared Node 276/276, Python 48/48; 9 required API/Android jobs passed, and iOS jobs were correctly skipped. Both Android APK variants and emulator install/launch smoke jobs passed for Rider and Driver. These are deterministic helper/source tests and emulator install/launch evidence; they do not replace physical-device, TalkBack, live API/Cosmos or production acceptance. The docs-synchronization head requires a fresh exact-head CI run.
