@@ -434,3 +434,25 @@ test("Rider status update safely preserves a missing ride and narrows the React 
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   assert.match(source, /setRide\(current=>current\?applyRiderRideStatusUpdate\(current,update\):current\)/);
 });
+
+test("RIDER-LOCATION-UI-003: a conflicting terminal history snapshot cannot replace an established terminal outcome", () => {
+  const current = {
+    rideId: "ride-terminal-conflict",
+    status: "Completed",
+    locationSharingActive: false,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4
+  };
+  const staleTerminal = {
+    rideId: "ride-terminal-conflict",
+    status: "Cancelled",
+    locationSharingActive: false,
+    driverLatitude: 17.5,
+    driverLongitude: 78.5
+  };
+  const merged = mergeTripLocationSnapshot(current, staleTerminal);
+  assert.equal(merged.status, "Completed");
+  assert.equal(merged.locationSharingActive, false);
+  assert.equal(merged.driverLatitude, undefined);
+  assert.equal(merged.driverLongitude, undefined);
+});

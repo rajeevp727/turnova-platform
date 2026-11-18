@@ -133,9 +133,9 @@ function mergeTripLocationSnapshot(current, snapshot) {
     return isRiderLocationSharingActive(snapshot) ? snapshot : clearDriverLocation(snapshot);
   }
 
-  // Never resurrect a terminal ride from a stale history snapshot.
-  if (TERMINAL_TRIP_STATUSES.has(current.status) &&
-      !TERMINAL_TRIP_STATUSES.has(snapshot.status)) {
+  // Terminal lifecycle states are immutable. A conflicting terminal snapshot can be
+  // stale or inconsistent too, so it must not replace an already-established outcome.
+  if (TERMINAL_TRIP_STATUSES.has(current.status) && current.status !== snapshot.status) {
     return clearDriverLocation(current);
   }
 
