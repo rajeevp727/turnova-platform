@@ -80,6 +80,20 @@ test("Rider Activity mutation guard rejects malformed lock keys", () => {
   assert.equal(lock.current, null);
 });
 
+test("a stale Rider Activity finalizer cannot release a same-ride/version action after session reset", () => {
+  const lock = { current: null };
+  const previousOwner = "confirm:4:1:ride-1:2";
+  const currentOwner = "confirm:6:2:ride-1:2";
+
+  assert.equal(tryBeginRiderActivityAction(lock, previousOwner), true);
+  lock.current = null; // Session reset invalidates the previous action owner.
+  assert.equal(tryBeginRiderActivityAction(lock, currentOwner), true);
+  assert.equal(finishRiderActivityAction(lock, previousOwner), false);
+  assert.equal(lock.current, currentOwner);
+  assert.equal(finishRiderActivityAction(lock, currentOwner), true);
+  assert.equal(lock.current, null);
+});
+
 test("Rider cancellation is single-flight and ignores stale ride/session responses", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   const start = source.indexOf("const cancelRide=async()=>");
@@ -87,6 +101,7 @@ test("Rider cancellation is single-flight and ignores stale ride/session respons
   assert.ok(start >= 0 && end > start);
   const handler = source.slice(start, end);
   for (const expected of [
+    "const actionKey=`cancel:${requestEpoch}:${++activityActionSequence.current}:${rideId}`",
     "tryBeginRiderActivityAction(activityActionInFlight,actionKey)",
     "currentRideIdRef.current===rideId",
     "isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch)",
@@ -103,7 +118,7 @@ test("Rider agreement confirmation is single-flight per ride/version and refresh
   assert.ok(start >= 0 && end > start);
   const handler = source.slice(start, end);
   for (const expected of [
-    "confirm:${rideId}:${current.version}",
+    "const actionKey=`confirm:${requestEpoch}:${++activityActionSequence.current}:${rideId}:${current.version}`",
     "current.riderConfirmed",
     "tryBeginRiderActivityAction(activityActionInFlight,actionKey)",
     "loadAgreementHistory(rideId,isCurrent)",
