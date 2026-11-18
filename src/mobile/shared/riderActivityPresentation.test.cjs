@@ -12,7 +12,9 @@ const {
   getRiderAgreementVersionRouteLabel,
   getRiderHistoryAccessibilityLabel,
   getRiderRideStatusMessage,
-  isRiderCancellationResponseValid
+  isRiderCancellationResponseValid,
+  normalizeRiderAgreementHistory,
+  shouldApplyRiderAgreementHistoryResponse
 } = require("./riderActivityPresentation.js");
 
 test("Rider Activity status presentation covers the server lifecycle without inventing payment or dispatch outcomes", () => {
@@ -202,4 +204,102 @@ test("Rider history accessibility hides unknown raw lifecycle values", () => {
   });
   assert.match(label, /Status STATUS UNAVAILABLE/);
   assert.doesNotMatch(label, /FutureServerStatus/);
+});
+
+function validRiderAgreementVersion(overrides = {}) {
+  return {
+    rideId: "ride-agreement-123",
+    version: 1,
+    riderId: "private-rider-id",
+    driverId: "private-driver-id",
+    unionId: "private-union-id",
+    amount: 425.5,
+    currency: "INR",
+    pickup: "Nizampet",
+    dropoff: "Gachibowli",
+    stops: ["Miyapur"],
+    proposedBy: "Driver",
+    createdAtUtc: "2026-11-19T00:00:00.000Z",
+    riderConfirmed: false,
+    riderConfirmedAtUtc: null,
+    driverConfirmed: true,
+    driverConfirmedAtUtc: "2026-11-19T00:01:00.000Z",
+    ...overrides
+  };
+}
+
+test("Rider agreement history validates ride identity, immutable versions and projects only public agreement fields", () => {
+  const first = validRiderAgreementVersion();
+  const second = validRiderAgreementVersion({
+    version: 2,
+    amount: 450,
+    proposedBy: "Rider",
+    createdAtUtc: "2026-11-19T00:02:00+00:00",
+    riderConfirmed: true,
+    riderConfirmedAtUtc: "2026-11-19T00:03:00+00:00",
+    driverConfirmed: false,
+    driverConfirmedAtUtc: null
+  });
+  const normalized = normalizeRiderAgreementHistory([first, second], "ride-agreement-123");
+  assert.equal(normalized?.length, 2);
+  assert.equal(normalized?.[1].version, 2);
+  assert.deepEqual(Object.keys(normalized?.[0] ?? {}).sort(), [
+    "amount", "createdAtUtc", "currency", "dropoff", "driverConfirmed",
+    "driverConfirmedAtUtc", "pickup", "proposedBy", "rideId", "riderConfirmed",
+    "riderConfirmedAtUtc", "stops", "version"
+  ]);
+  assert.equal(normalized?.[0].driverConfirmedAtUtc, first.driverConfirmedAtUtc);
+  assert.deepEqual(normalizeRiderAgreementHistory([], "ride-agreement-123"), []);
+});
+
+test("Rider agreement history rejects malformed, cross-ride, duplicate or out-of-order versions", () => {
+  const valid = validRiderAgreementVersion();
+  const invalid = [
+    null,
+    {},
+    [null],
+    [{ ...valid, rideId: "another-ride" }],
+    [{ ...valid, version: 0 }],
+    [{ ...valid, version: 1 }, { ...valid, version: 1 }],
+    [{ ...valid, version: 2 }, { ...valid, version: 1 }],
+    [{ ...valid, amount: 0 }],
+    [{ ...valid, amount: 10.123 }],
+    [{ ...valid, currency: "inr" }],
+    [{ ...valid, pickup: " " }],
+    [{ ...valid, dropoff: "x".repeat(161) }],
+    [{ ...valid, stops: [""] }],
+    [{ ...valid, stops: new Array(11).fill("Stop") }],
+    [{ ...valid, proposedBy: "System" }]
+  ];
+  for (const response of invalid) assert.equal(normalizeRiderAgreementHistory(response, "ride-agreement-123"), null);
+  assert.equal(normalizeRiderAgreementHistory([valid], " ride-agreement-123"), null);
+});
+
+test("Rider agreement history requires consistent confirmation timestamps after immutable creation", () => {
+  const valid = validRiderAgreementVersion();
+  const invalid = [
+    { ...valid, riderConfirmed: true, riderConfirmedAtUtc: null },
+    { ...valid, riderConfirmed: false, riderConfirmedAtUtc: "2026-11-19T00:01:00Z" },
+    { ...valid, driverConfirmed: true, driverConfirmedAtUtc: null },
+    { ...valid, driverConfirmed: false, driverConfirmedAtUtc: "2026-11-19T00:01:00Z" },
+    { ...valid, createdAtUtc: "2026-11-19T00:00:00" },
+    { ...valid, createdAtUtc: "not-a-date" },
+    { ...valid, driverConfirmedAtUtc: "2026-11-18T23:59:00Z" }
+  ];
+  for (const item of invalid) assert.equal(normalizeRiderAgreementHistory([item], "ride-agreement-123"), null);
+});
+
+test("Rider agreement history latest-request sequence rejects stale responses", () => {
+  assert.equal(shouldApplyRiderAgreementHistoryResponse(2, 2), true);
+  assert.equal(shouldApplyRiderAgreementHistoryResponse(1, 2), false);
+  assert.equal(shouldApplyRiderAgreementHistoryResponse(0, 2), false);
+});
+
+test("Rider Activity screen validates agreement history and fences stale agreement reads before state updates", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /agreementHistoryRequestSequence=useRef\(0\)/);
+  assert.match(source, /normalizeRiderAgreementHistory\(response,rideId\)/);
+  assert.match(source, /shouldApplyRiderAgreementHistoryResponse\(requestSequence,agreementHistoryRequestSequence\.current\)/);
+  assert.match(source, /loadAgreementHistory\(ride\.rideId,\(\)=>active\)/);
+  assert.match(source, /agreementHistoryRequestSequence\.current \+= 1/);
 });

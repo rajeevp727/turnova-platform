@@ -3,6 +3,98 @@
 const { agreementConfirmationLabel } = require("./agreementConfirmation");
 const { formatAgreementAmount } = require("./agreementFormatting");
 
+const AGREEMENT_TIMESTAMP_WITH_OFFSET = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/i;
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSafeAgreementText(value, maximumLength = 160) {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= maximumLength &&
+    value === value.trim() &&
+    !/[\\u0000-\\u001f\\u007f-\\u009f]/.test(value);
+}
+
+function normalizeAgreementTimestamp(value) {
+  return isSafeAgreementText(value, 64) &&
+    AGREEMENT_TIMESTAMP_WITH_OFFSET.test(value) &&
+    Number.isFinite(Date.parse(value))
+    ? value
+    : null;
+}
+
+function normalizeOptionalAgreementTimestamp(value) {
+  if (value === null) return null;
+  return normalizeAgreementTimestamp(value);
+}
+
+function normalizeRiderAgreementHistory(value, expectedRideId) {
+  if (!Array.isArray(value) || !isSafeAgreementText(expectedRideId, 128)) return null;
+  const result = [];
+  let previousVersion = 0;
+
+  for (const item of value) {
+    if (!isRecord(item) ||
+        item.rideId !== expectedRideId ||
+        !Number.isSafeInteger(item.version) ||
+        item.version <= previousVersion ||
+        !Number.isFinite(item.amount) ||
+        item.amount <= 0 ||
+        Math.abs(item.amount * 100 - Math.round(item.amount * 100)) > 0.000001 ||
+        typeof item.currency !== "string" ||
+        !/^[A-Z]{3}$/.test(item.currency) ||
+        !isSafeAgreementText(item.pickup) ||
+        !isSafeAgreementText(item.dropoff) ||
+        !Array.isArray(item.stops) ||
+        item.stops.length > 10 ||
+        item.stops.some(stop => !isSafeAgreementText(stop)) ||
+        !["Rider", "Driver"].includes(item.proposedBy) ||
+        typeof item.riderConfirmed !== "boolean" ||
+        typeof item.driverConfirmed !== "boolean") return null;
+
+    const createdAtUtc = normalizeAgreementTimestamp(item.createdAtUtc);
+    const riderConfirmedAtUtc = normalizeOptionalAgreementTimestamp(item.riderConfirmedAtUtc);
+    const driverConfirmedAtUtc = normalizeOptionalAgreementTimestamp(item.driverConfirmedAtUtc);
+    if (!createdAtUtc ||
+        (item.riderConfirmedAtUtc !== null && !riderConfirmedAtUtc) ||
+        (item.driverConfirmedAtUtc !== null && !driverConfirmedAtUtc) ||
+        (item.riderConfirmed && !riderConfirmedAtUtc) ||
+        (!item.riderConfirmed && item.riderConfirmedAtUtc !== null) ||
+        (item.driverConfirmed && !driverConfirmedAtUtc) ||
+        (!item.driverConfirmed && item.driverConfirmedAtUtc !== null) ||
+        (riderConfirmedAtUtc && Date.parse(riderConfirmedAtUtc) < Date.parse(createdAtUtc)) ||
+        (driverConfirmedAtUtc && Date.parse(driverConfirmedAtUtc) < Date.parse(createdAtUtc))) return null;
+
+    result.push({
+      rideId: expectedRideId,
+      version: item.version,
+      amount: item.amount,
+      currency: item.currency,
+      pickup: item.pickup,
+      dropoff: item.dropoff,
+      stops: [...item.stops],
+      proposedBy: item.proposedBy,
+      createdAtUtc,
+      riderConfirmed: item.riderConfirmed,
+      riderConfirmedAtUtc,
+      driverConfirmed: item.driverConfirmed,
+      driverConfirmedAtUtc
+    });
+    previousVersion = item.version;
+  }
+
+  return result;
+}
+
+function shouldApplyRiderAgreementHistoryResponse(requestSequence, currentSequence) {
+  return Number.isSafeInteger(requestSequence) &&
+    requestSequence > 0 &&
+    Number.isSafeInteger(currentSequence) &&
+    requestSequence === currentSequence;
+}
+
 function displayText(value, fallback) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
@@ -124,5 +216,7 @@ module.exports = {
   getRiderAgreementVersionRouteLabel,
   getRiderAgreementVersionCreatedAtLabel,
   getRiderAgreementVersionAccessibilityLabel,
-  isRiderCancellationResponseValid
+  isRiderCancellationResponseValid,
+  normalizeRiderAgreementHistory,
+  shouldApplyRiderAgreementHistoryResponse
 };

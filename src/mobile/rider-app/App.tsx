@@ -27,7 +27,7 @@ import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldPro
 import { canDiscoverRiderTrip, validateRiderBookingText, getRiderDriverOptionProps, getRiderTripActionProps, getRiderTripFieldProps, getVisibleUnionDrivers, normalizeRiderDiscoveryResponse, shouldApplyRiderDiscoveryResponse } from "../shared/riderTripForm";
 import { finishRiderBookingAttempt, tryBeginRiderBookingAttempt } from "../shared/riderBookingAttempt";
 import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
-import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideStatusEventValid } from "../shared/riderActivityPresentation";
+import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideStatusEventValid, normalizeRiderAgreementHistory, shouldApplyRiderAgreementHistoryResponse } from "../shared/riderActivityPresentation";
 import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps } from "../shared/riderProfileForm";
 import { getRiderSupportActionProps, getRiderSupportFieldProps, getRiderSupportRequestAttempt, submitRiderSupportRequest, validateRiderSupportRequest, type RiderSupportRequestAttempt } from "../shared/riderSupportRequest";
 
@@ -93,7 +93,7 @@ export default function App() {
   const [helpQuestion,setHelpQuestion]=useState(""); const [helpBusy,setHelpBusy]=useState(false); const [helpAnswer,setHelpAnswer]=useState(""); const [logoutBusy,setLogoutBusy]=useState(false);
   const [supportSubject,setSupportSubject]=useState(""); const [supportDescription,setSupportDescription]=useState(""); const [supportBusy,setSupportBusy]=useState(false); const [supportNotice,setSupportNotice]=useState(""); const [supportError,setSupportError]=useState("");
   const helpSubmissionInFlight=useRef(false); const logoutInFlight=useRef(false); const supportSubmissionInFlight=useRef(false); const supportAttemptRef=useRef<RiderSupportRequestAttempt|null>(null);
-  const [ride,setRide]=useState<Ride|null>(null); const [rideHistory,setRideHistory]=useState<RideHistoryItem[]>([]); const [activeRideStateLoaded,setActiveRideStateLoaded]=useState(false); const rideHistoryRequestSequence=useRef(0); const riderDiscoveryRequestSequence=useRef(0); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const [ride,setRide]=useState<Ride|null>(null); const [rideHistory,setRideHistory]=useState<RideHistoryItem[]>([]); const [activeRideStateLoaded,setActiveRideStateLoaded]=useState(false); const rideHistoryRequestSequence=useRef(0); const agreementHistoryRequestSequence=useRef(0); const riderDiscoveryRequestSequence=useRef(0); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const rideMapRef=useRef<MapView|null>(null);
   const [followDriverLocation,setFollowDriverLocation]=useState(true);
   const [readyRideMapId,setReadyRideMapId]=useState<string|null>(null);
@@ -146,6 +146,7 @@ export default function App() {
     setActiveRideStateLoaded(false);
     bookingInFlight.current=null;
     rideHistoryRequestSequence.current += 1;
+    agreementHistoryRequestSequence.current += 1;
     riderDiscoveryRequestSequence.current += 1;
     riderTripIntentRequestSequence.current += 1;
     riderTripFormRevision.current += 1;
@@ -539,8 +540,32 @@ export default function App() {
       if(finishRiderBookingAttempt(bookingInFlight,requestKey)&&isCurrent())setLoading(false);
     }
   };
-  const loadAgreementHistory=useCallback(async(rideId:string,isActive:()=>boolean=()=>true)=>{const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);if(!isCurrent())return false;const result=await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];if(!isCurrent())return false;setAgreementHistory(result);return true;},[apiFetch]);
-  useEffect(()=>{if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}if(tab!=="Activity"||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;let active=true;void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(result=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory(result as AgreementVersion[]);}).catch(()=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory([]);});return()=>{active=false;};},[ride?.rideId,tab,apiFetch]);
+  const loadAgreementHistory=useCallback(async(rideId:string,isActive:()=>boolean=()=>true)=>{
+    const requestSequence=++agreementHistoryRequestSequence.current;
+    const isCurrent=()=>isActive()&&
+      isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)&&
+      shouldApplyRiderAgreementHistoryResponse(requestSequence,agreementHistoryRequestSequence.current);
+    if(!isCurrent())return false;
+    const response=await apiFetch(`/api/v1/rides/${encodeURIComponent(rideId)}/agreements`) as unknown;
+    if(!isCurrent())return false;
+    const result=normalizeRiderAgreementHistory(response,rideId);
+    if(!result)throw new Error("Agreement history response is invalid. Refresh Activity before confirming or proposing another version.");
+    if(!isCurrent())return false;
+    setAgreementHistory(result);
+    return true;
+  },[apiFetch]);
+  useEffect(()=>{
+    if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}
+    if(tab!=="Activity"||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;
+    let active=true;
+    void loadAgreementHistory(ride.rideId,()=>active).catch(e=>{
+      if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)){
+        setAgreementHistory([]);
+        setError(e instanceof Error?e.message:"Unable to verify agreement history.");
+      }
+    });
+    return()=>{active=false;};
+  },[ride?.rideId,tab,loadAgreementHistory]);
    const proposeAgreement=async()=>{
      const rideId=ride?.rideId;
      const proposalUserId=user?.id;

@@ -12,14 +12,15 @@ export interface RiderActivityHistoryItem {
   requestedAt: string;
 }
 export interface RiderActivityAgreementVersion {
+  rideId: string;
   version: number;
   amount: number;
   currency: string;
-  pickup?: string;
-  dropoff?: string;
-  stops?: string[];
-  createdAtUtc?: string;
-  proposedBy: string;
+  pickup: string;
+  dropoff: string;
+  stops: string[];
+  createdAtUtc: string;
+  proposedBy: "Rider" | "Driver";
   riderConfirmed: boolean;
   riderConfirmedAtUtc: string | null;
   driverConfirmed: boolean;
@@ -33,3 +34,5 @@ export function getRiderAgreementVersionRouteLabel(item: RiderActivityAgreementV
 export function getRiderAgreementVersionCreatedAtLabel(item: RiderActivityAgreementVersion): string;
 export function getRiderAgreementVersionAccessibilityLabel(item: RiderActivityAgreementVersion): string;
 export function isRiderCancellationResponseValid(response: unknown, expectedRideId: string): boolean;
+export function normalizeRiderAgreementHistory(value: unknown, expectedRideId: string): RiderActivityAgreementVersion[] | null;
+export function shouldApplyRiderAgreementHistoryResponse(requestSequence: number, currentSequence: number): boolean;
