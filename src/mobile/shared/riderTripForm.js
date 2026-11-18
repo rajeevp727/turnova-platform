@@ -62,6 +62,75 @@ function getRiderTripActionProps(action, disabled, busy) {
   };
 }
 
+function normalizeRiderDiscoveryResponse(response) {
+  const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
+  const isTrimmedNonEmptyString = value =>
+    typeof value === "string" && value.length > 0 && value === value.trim();
+
+  if (!isRecord(response) ||
+      !isTrimmedNonEmptyString(response.pickupZoneId) ||
+      !(response.journeyDistanceKm === null ||
+        (Number.isFinite(response.journeyDistanceKm) && response.journeyDistanceKm >= 0)) ||
+      !Array.isArray(response.unions)) return null;
+
+  const seenUnionIds = new Set();
+  const unions = [];
+  for (const union of response.unions) {
+    if (!isRecord(union) ||
+        !isTrimmedNonEmptyString(union.unionId) ||
+        !isTrimmedNonEmptyString(union.unionName) ||
+        !Array.isArray(union.drivers) ||
+        seenUnionIds.has(union.unionId)) return null;
+    seenUnionIds.add(union.unionId);
+
+    const seenDriverIds = new Set();
+    const drivers = [];
+    for (const driver of union.drivers) {
+      if (!isRecord(driver) ||
+          !isTrimmedNonEmptyString(driver.driverId) ||
+          !isTrimmedNonEmptyString(driver.fullName) ||
+          typeof driver.vehicleMake !== "string" ||
+          typeof driver.vehicleModel !== "string" ||
+          driver.serviceClass !== "cab" ||
+          !Number.isInteger(driver.passengerCapacity) ||
+          driver.passengerCapacity < 1 || driver.passengerCapacity > 6 ||
+          !Number.isFinite(driver.distanceToPickupKm) || driver.distanceToPickupKm < 0 ||
+          (driver.profilePhotoBase64 !== undefined && driver.profilePhotoBase64 !== null &&
+            (typeof driver.profilePhotoBase64 !== "string" || driver.profilePhotoBase64.length === 0 || driver.profilePhotoBase64.length > 410000)) ||
+          (driver.profilePhotoContentType !== undefined && driver.profilePhotoContentType !== null &&
+            typeof driver.profilePhotoContentType !== "string") ||
+          seenDriverIds.has(driver.driverId)) return null;
+
+      const photo = driver.profilePhotoBase64 ?? null;
+      const contentType = driver.profilePhotoContentType ?? null;
+      if ((photo === null && contentType !== null) ||
+          (photo !== null && contentType !== "image/jpeg")) return null;
+
+      seenDriverIds.add(driver.driverId);
+      drivers.push({
+        driverId: driver.driverId,
+        fullName: driver.fullName,
+        vehicleMake: driver.vehicleMake.trim(),
+        vehicleModel: driver.vehicleModel.trim(),
+        serviceClass: "cab",
+        passengerCapacity: driver.passengerCapacity,
+        distanceToPickupKm: driver.distanceToPickupKm,
+        profilePhotoBase64: photo,
+        profilePhotoContentType: contentType
+      });
+    }
+
+    unions.push({ unionId: union.unionId, unionName: union.unionName, drivers });
+  }
+
+  // Project only the public Rider discovery contract; ignore unexpected private fields.
+  return {
+    pickupZoneId: response.pickupZoneId,
+    journeyDistanceKm: response.journeyDistanceKm,
+    unions
+  };
+}
+
 function getVisibleUnionDrivers(drivers) {
   return Array.isArray(drivers) ? drivers.slice(0, 3) : [];
 }
@@ -93,6 +162,7 @@ function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
 }
 
 module.exports = {
+  normalizeRiderDiscoveryResponse,
   getVisibleUnionDrivers,
   getRiderDriverOptionProps,
   getRiderTripActionProps,
