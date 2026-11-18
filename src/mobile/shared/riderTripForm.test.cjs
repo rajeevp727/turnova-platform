@@ -128,6 +128,7 @@ test("Rider discovery response rejects malformed public contracts and photo meta
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, passengerCapacity: 7 }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=" }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "text/html" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "image/jpeg" }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "/9j/AA==", profilePhotoContentType: "image/jpeg", profilePhotoApprovalStatus: "Pending" }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "/9j/AA==", profilePhotoContentType: "image/jpeg", profilePhotoApprovalStatus: "Approved", profilePhotoApprovedByUnionId: "other-union" }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [validDriver, validDriver] }] }
