@@ -104,7 +104,9 @@ function normalizeRiderDiscoveryResponse(response) {
       const photo = driver.profilePhotoBase64 ?? null;
       const contentType = driver.profilePhotoContentType ?? null;
       if ((photo === null && contentType !== null) ||
-          (photo !== null && contentType !== "image/jpeg")) return null;
+          (photo !== null && contentType !== null && contentType !== "image/jpeg") ||
+          (photo !== null && driver.profilePhotoApprovalStatus !== undefined && driver.profilePhotoApprovalStatus !== "Approved") ||
+          (photo !== null && driver.profilePhotoApprovedByUnionId !== undefined && driver.profilePhotoApprovedByUnionId !== union.unionId)) return null;
 
       seenDriverIds.add(driver.driverId);
       drivers.push({
@@ -116,7 +118,7 @@ function normalizeRiderDiscoveryResponse(response) {
         passengerCapacity: driver.passengerCapacity,
         distanceToPickupKm: driver.distanceToPickupKm,
         profilePhotoBase64: photo,
-        profilePhotoContentType: contentType
+        profilePhotoContentType: photo === null ? null : (contentType ?? "image/jpeg")
       });
     }
 
