@@ -31,6 +31,8 @@ export function isRiderRideAgreementEventValid(update: unknown, expectedRideId: 
 export function isRiderRideStatusEventValid(update: unknown, expectedRideId: string): boolean;
 export function getRiderRideStatusMessage(ride: RiderActivityRideStatus): string;
 export function getRiderHistoryAccessibilityLabel(item: RiderActivityHistoryItem): string;
+export function getRiderHistoryRequestedAtLabel(item: RiderActivityHistoryItem): string;
+export function isRiderRideLocationTimestampValid(update: unknown): boolean;
 export function getRiderAgreementVersionRouteLabel(item: RiderActivityAgreementVersion): string;
 export function getRiderAgreementVersionCreatedAtLabel(item: RiderActivityAgreementVersion): string;
 export function getRiderAgreementVersionAccessibilityLabel(item: RiderActivityAgreementVersion): string;
