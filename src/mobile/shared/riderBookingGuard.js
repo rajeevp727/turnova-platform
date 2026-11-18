@@ -17,7 +17,7 @@ function normalizeOptionalTimestamp(value) {
   return value;
 }
 
-const ISO_TIMESTAMP_WITH_OFFSET = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/i;
+const ISO_TIMESTAMP_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i;
 const NEGOTIATION_STATUSES = new Set(["Negotiating", "AgreementConfirmed"]);
 
 function normalizeRequiredTimestamp(value) {
