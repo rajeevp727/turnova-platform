@@ -151,7 +151,7 @@ test("Rider support submission is single-flight and preserves the attempt after 
   assert.match(source, /if\(supportSubmissionInFlight\.current\)return/);
   assert.match(source, /supportAttemptRef\.current=attempt/);
   assert.match(source, /supportAttemptRef\.current=null;setSupportSubject\(""\);setSupportDescription\(""\)/);
-  assert.match(source, /finally\{supportSubmissionInFlight\.current=false;setSupportBusy\(false\);\}/);
+  assert.match(source, /if\(isCurrent\(\)\)\{supportSubmissionInFlight\.current=false;setSupportBusy\(false\);\}/);
   assert.match(source, /If you retry without changing the text, the same idempotency key is reused/);
   assert.match(source, /getRiderProfileActionProps\("signOut",logoutBusy\|\|helpBusy\|\|supportBusy,logoutBusy\)/);
   assert.match(source, /disabled=\{logoutBusy\|\|helpBusy\|\|supportBusy\}/);
