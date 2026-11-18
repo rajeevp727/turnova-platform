@@ -240,6 +240,7 @@ export default function App() {
     const body=await readJsonResponseIfCurrent(response,()=>sessionEpoch.current===requestEpoch&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)) as any;if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh,invalidateSession,clearRiderSessionState]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{
+    if(!isActive()||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;
     const requestSequence=++rideHistoryRequestSequence.current;
     const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)&&shouldApplyRideHistoryResponse(requestSequence,rideHistoryRequestSequence.current);
     if(!isCurrent())return;
