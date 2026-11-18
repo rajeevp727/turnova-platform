@@ -2989,3 +2989,5 @@ The support API already has reporter-scoped persistence/idempotency and privacy-
 
 
 **PR #190 CI gate correction:** initial run [#44256896852](https://github.com/rajeevp727/turnova-platform/actions/runs/44256896852) stopped at the scope detector because the API-complete and Android-approved labels were added after the original pull-request event payload. No backend/mobile/native application jobs ran and no application test failed. Both labels are now attached; a fresh synchronize event is required before judging code.
+
+**PR #190 typecheck correction:** initial label-corrected CI #44257031345 reached Rider TypeScript and found TS2339 for an undefined `styles.success` StyleSheet member. Fixed by using `styles.muted` with the existing `colors.success` value and added a source-wiring regression. That run was superseded/cancelled after subsequent branch commits; require a fresh exact-head CI.
