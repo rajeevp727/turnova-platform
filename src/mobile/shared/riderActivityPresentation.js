@@ -12,10 +12,22 @@ function displayText(value, fallback) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
 
+const RIDE_STATUS_LABELS = new Map([
+  ["Requested", "REQUESTED"],
+  ["Matching", "FINDING DRIVER"],
+  ["Offered", "WAITING FOR DRIVER"],
+  ["Negotiating", "NEGOTIATING"],
+  ["AgreementConfirmed", "AGREEMENT CONFIRMED"],
+  ["Accepted", "DRIVER ACCEPTED"],
+  ["Arrived", "DRIVER ARRIVED"],
+  ["InProgress", "IN PROGRESS"],
+  ["Completed", "COMPLETED"],
+  ["Cancelled", "CANCELLED"],
+  ["Expired", "EXPIRED"]
+]);
+
 function getRiderRideStatusLabel(status) {
-  return typeof status === "string" && RIDE_STATUSES.has(status)
-    ? status.toUpperCase()
-    : "STATUS UNAVAILABLE";
+  return RIDE_STATUS_LABELS.get(status) ?? "STATUS UNAVAILABLE";
 }
 
 function isRiderRideStatusEventValid(update, expectedRideId) {
