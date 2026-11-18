@@ -3448,3 +3448,16 @@ RIDER-PROFILE-ACCESS-001..007 cover labelled theme radio state and invalid optio
 The API accepts only Rider/Driver JWT roles and a subject/description body, returns an opaque request reference, uses reporter-scoped idempotency and does not log support content. A 503 means intake is disabled for that environment; the Rider UI retains the draft and does not claim acceptance. Staging/Production require `SupportRequests:PolicyApproved=true`, positive Product/Operations-approved `SupportRequests:RetentionDays`, Cosmos credentials/storage and the support-container TTL migration. Development/Testing in-memory acceptance is not durable-production evidence.
 
 This increment deliberately does not invent categories, severity, priority, assignment, escalation owner/channel, support hours, response targets, attachments, consent/retention policy or SLA. SUPPORT-01 remains blocked until those inputs and end-to-end operational evidence are approved. Injected-client tests exercise exact API request and response validation; source-wiring checks still do not replace full React Native UI, TalkBack, live Cosmos or physical-device acceptance.
+
+
+## Rider Android Activity mutation single-flight and stale-response fencing
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-ACTIVITY-ACTION-001 | Keyed action lock | Only one Activity mutation owns the lock; duplicate/overlapping actions are rejected and only the matching owner can release it. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-ACTION-002 | Invalid action keys | Blank, padded, overlong or control-character action keys fail closed without acquiring the lock. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-ACTION-003 | Cancellation response fencing | Cancellation is single-flight, response ride ID/status are validated, and late responses from a changed ride/session cannot update current UI state. | Automated Node source wiring | P1 |
+| RIDER-ACTIVITY-ACTION-004 | Current agreement confirmation | Confirmation is single-flight for the ride/version, skips an already-confirmed version, fences stale responses and reloads server-authoritative agreement history after success. | Automated Node source wiring | P1 |
+| RIDER-ACTIVITY-ACTION-005 | Shared ride-mutation serialization | Proposal, confirmation and cancellation cannot overlap; agreement amount editing and actions expose accessible busy/disabled state during a mutation. | Automated Node source wiring | P1 |
+
+These deterministic helper/source tests do not replace Android TalkBack, full React Native UI interaction, live API/Cosmos/SignalR, or physical-device acceptance. Server-owned transition and agreement rules remain authoritative; this increment changes no API contract or ride lifecycle policy.
