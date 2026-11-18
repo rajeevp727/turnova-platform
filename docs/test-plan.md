@@ -3605,7 +3605,7 @@ Exact-head [CI #44401573555](https://github.com/rajeevp727/turnova-platform/acti
 
 The npm audit logs for both Rider and Driver in CI #44401573555 reported 0 critical, 0 high, 11 moderate and 0 low package nodes per app. The previously recorded picomatch High advisory was not reproduced in this audit; moderate findings remain for follow-up. This is not a claim that all moderate findings are remediated.
 
-Source-head CI #44408430795 on 26f3dcd8a018c929576947f5cdb21c9c73873704 passed backend 758/758, shared Node 345/345, Python 48/48 and Rider/Driver app validation/bundle jobs. Native Android debug APK compilation was still in progress at last inspection. Latest code head 1e7bf9a83cd1ef8f9422c07b56a82748b7e7aa87 has CI #44409433080 pending; neither prior run is final-head evidence for that commit.
+Previous source-head CI #44411205198 on `804026a63b80e01e1d42439eb9d4a3a40adcab75` passed backend 758/758, shared Node 353/353, Python 48/48, Rider/Driver Expo/config/TypeScript/Android bundle checks and both debug APK builds; both standalone release APK builds were still in progress. Latest source/test head `32391da49ac9c1a77915cb0d5885a74ec683288c` has exact-head CI #44413207399 pending; neither prior run is final-head evidence.
 
 
 ## Rider realtime agreement-history validation — PR #194
@@ -3615,3 +3615,7 @@ Source-head CI #44408430795 on 26f3dcd8a018c929576947f5cdb21c9c73873704 passed b
 | RIDER-AGREEMENT-REALTIME-001 | Validate realtime agreement event and refreshed history | Reject malformed or cross-ride `RideAgreementChanged` events. Normalize the response against the exact ride ID, require strictly increasing immutable versions and consistent confirmation timestamps, project only Rider-visible fields, and commit only if the captured session/connection and shared latest-request sequence remain current. A stale realtime response cannot replace a newer Activity agreement history. | Automated Node unit + source wiring | P1 |
 
 The realtime refresh uses the same sequence as the Activity agreement-history loader. The API remains authoritative for agreement persistence, versioning, actor identity, idempotency and mutual confirmation; this client change does not mutate server agreement state.
+
+## Current PR #194 exact-head handoff — 2026-11-19
+
+Source/test head `32391da49ac9c1a77915cb0d5885a74ec683288c` includes `RIDER-AGREEMENT-REALTIME-001`: exact-ride SignalR agreement-change event validation, immutable agreement-history normalization/projection and shared latest-request sequencing before state commit. Exact-head CI [#44413207399](https://github.com/rajeevp727/turnova-platform/actions/runs/44413207399) is pending. The preceding head `804026a` CI #44411205198 passed backend 758/758, Node 353/353, Python 48/48, both app bundles and both Android debug APKs; release builds were still in progress. Do not infer latest-head release APK or emulator-smoke completion.
