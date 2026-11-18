@@ -3269,7 +3269,7 @@ The deterministic verifier now has 17 cases, including malformed/inconsistent re
 | PLATFORM-NPM-016 | Metadata severity counts or total disagree with vulnerability records | Verifier rejects the inconsistent report before applying any exception | Security regression | P0 |
 | PLATFORM-NPM-017 | Vulnerability record has unknown severity or missing/empty package-node list | Verifier rejects malformed records | Security regression | P0 |
 | PLATFORM-NPM-018 | npm audit exit code contradicts the report inventory | Verifier rejects success with findings and nonzero exit without findings | Security regression | P0 |
-| PLATFORM-NPM-019 | Picomatch fixAvailable does not match the exact app identity mapping (Rider react-native@0.88.1; Driver expo@58.0.26), or the app identity is unknown | Verifier fails and requires a new dependency/remediation review | Supply-chain regression | P0 |
+| PLATFORM-NPM-019 | Picomatch fixAvailable is an unreviewed package/version, is not marked as a major-only suggestion, or the app identity is unknown | Verifier fails and requires a new dependency/remediation review | Supply-chain regression | P0 |
 | PLATFORM-NPM-020 | Audit report root is not a JSON object | Verifier fails closed; no malformed report is treated as clean | Security regression | P0 |
 
 The contextual verifier now has 17 deterministic tests. The real Rider/Driver audit reports from CI #44161191929 showed 34 vulnerability records each (27 high, 7 moderate, 0 critical); metadata severity counts matched all 34 records and each record contained package nodes. The picomatch root record's fixAvailable field recommends react-native@0.88.1 with isSemVerMajor=true; this is a major upgrade path, not a patched picomatch release. The follow-up schema/remediation checks require fresh exact-head CI before PR #185 can merge.
@@ -3303,3 +3303,56 @@ The Rider report on CI #44170775823 changed to `expo-asset@58.0.21`; Driver repo
 Both npm audit inventories contained 34 records (27 high package nodes, 7 moderate, 0 critical). All high records resolved to the sole transitive picomatch GHSA-fc5q-39xc-vjpf. The advisory remains unpatched; it is not suppressed or represented as a clean audit. The contextual gate checks the reviewed dependency parents, rejects direct app imports/unknown high roots, and verifies no picomatch source-map inclusion. Residual build-time denial-of-service risk remains documented.
 
 Artifacts: Rider release [14368397985](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368397985), Driver release [14367803994](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14367803994), Rider emulator smoke [14369920066](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14369920066), Driver emulator smoke [14368548000](https://github.com/rajeevp727/turnova-platform/actions/runs/44171401948/artifacts/14368548000).
+
+
+## Rider Android authentication accessibility — 2026-11-18
+
+**Implementation:** PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), Rider UI only. The API auth contract and session-token lifecycle are unchanged. Deterministic Node coverage is in `src/mobile/shared/riderAuthForm.test.cjs` and is included by the existing `mobile-auth-tests` job via `node --test src/mobile/shared/*.test.cjs`.
+
+| Test ID | Behaviour | Automated evidence |
+|---|---|---|
+| RIDER-AUTH-ACCESS-001 | Registration name has an accessible label/hint, native name autofill and next-key behaviour | Pure helper contract |
+| RIDER-AUTH-ACCESS-002 | Email uses email keyboard/autofill, disables capitalization/correction and advances focus | Pure helper contract |
+| RIDER-AUTH-ACCESS-003 | Login password is secure and advertises current-password autofill | Pure helper contract |
+| RIDER-AUTH-ACCESS-004 | Registration password advertises new-password autofill | Pure helper contract |
+| RIDER-AUTH-ACCESS-005 | Submit action exposes accessible label plus disabled/busy state | Pure helper contract |
+| RIDER-AUTH-ACCESS-006 | Mode toggle announces the destination form | Pure helper contract |
+| RIDER-AUTH-ACCESS-007 | Authentication errors use an assertive alert announcement | Pure helper contract |
+| RIDER-AUTH-ACCESS-008 | Rider App.tsx binds field helpers, focus order, guarded keyboard submit, keyboard-safe taps and stable test IDs | Source-wiring regression |
+| RIDER-AUTH-ACCESS-009 | Rapid button/keyboard double-submit attempts while login or registration is in flight permit only one auth request; a later retry is allowed after completion | Single-flight helper unit test plus Rider App.tsx source-wiring regression |
+
+The source/test commit is `607a9233845759a12da321a3f8a6e3e1e1c14733`; exact final-head CI [#44188275975](https://github.com/rajeevp727/turnova-platform/actions/runs/44188275975) on `60e03c7742352ffbc837bc01a6f21b796acb084b` passed all 12 jobs, including these eight cases within 236/236 Node tests, 48/48 Python harness tests, 758/758 backend tests, both apps' Expo/TypeScript validation, Android release builds/package identity and both emulator install/launch smoke jobs. iOS jobs were correctly skipped. Passing deterministic helper/source tests is not physical-device screen-reader/autofill acceptance. Manual TalkBack/VoiceOver, signed-device auth and real API/TriSend validation remain external.
+
+The accessible submit hint and sign-in subtitle intentionally avoid claiming secure transport; production HTTPS is validated only after the hosted API URL/DNS/TLS configuration is supplied.
+
+
+## Rider Android authentication — exact-head verification (2026-11-18)
+
+PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), branch `feat/android-rider-auth-accessibility-v2`, source/test head `607a9233845759a12da321a3f8a6e3e1e1c14733`, final documentation head `60e03c7742352ffbc837bc01a6f21b796acb084b`. Exact-head [CI #44188275975](https://github.com/rajeevp727/turnova-platform/actions/runs/44188275975) passed all 12 jobs: backend Release tests 758/758; mobile Node tests 236/236 (including RIDER-AUTH-ACCESS-001..008); Python harness 48/48; Rider and Driver Expo/config/typecheck/Android bundle validation; Rider and Driver standalone release APK builds/package identities; and both Android emulator install/launch smoke jobs. API publish passed. iOS jobs were correctly skipped because Android remains active.
+
+Artifacts: Rider release APK [14374779874](https://github.com/rajeevp727/turnova-platform/actions/runs/44188275975/artifacts/14374779874); Driver release APK [14376890376](https://github.com/rajeevp727/turnova-platform/actions/runs/44188275975/artifacts/14376890376); Rider emulator smoke [14375264647](https://github.com/rajeevp727/turnova-platform/actions/runs/44188275975/artifacts/14375264647); Driver emulator smoke [14375449321](https://github.com/rajeevp727/turnova-platform/actions/runs/44188275975/artifacts/14375449321); native API publish [14374808632](https://github.com/rajeevp727/turnova-platform/actions/runs/44188275975/artifacts/14374808632). Smoke proves install/launch/stable process/login-screen presence only; it does not prove production API, TriSend, Cosmos, TalkBack or physical-device acceptance.
+
+The PR diff changes Rider auth UI and adds a pure helper/type declaration/test file plus synchronized docs. No API payload, token/session, role, ride, fare or payment logic changed. Reviews and inline threads are currently empty; no approval is requested from the PR author. Strict acceptance remains 0/19; AUTH-01/AUTH-02 remain In Progress pending Driver parity and external/device evidence. Continue Rider before Driver; iOS remains gated.
+
+## Rider auth single-flight follow-up — 2026-11-18
+
+PR #186 source/test head `069882d8846f74ee5404863038f3a34b6c76775b` adds a shared `authSubmissionInFlight` ref and pure `tryBeginRiderAuthSubmission` / `finishRiderAuthSubmission` helpers. Both keyboard and button submissions use the same guard; only one login/register POST can be initiated at a time. The lock is released in `finally` on success, error, cancellation/epoch mismatch and early return. The auth epoch remains the authority for stale response rejection and token persistence. New deterministic case RIDER-AUTH-ACCESS-009 verifies acquisition, duplicate rejection and retry after release; the App.tsx source-wiring test asserts acquisition occurs before auth work and release occurs in `finally`. Exact-head CI is pending; no API payload or token lifecycle changed.
+
+
+## Rider auth epoch-assertion correction — 2026-11-18
+
+CI [#44196954234](https://github.com/rajeevp727/turnova-platform/actions/runs/44196954234) ran 237 Node tests: 236 passed and one existing `AUTH-LOGIN-063` source-wiring assertion failed because the refactor renamed the local epoch variable used by its regression guard. The new `RIDER-AUTH-ACCESS-009` single-flight helper test passed. This was a test-contract mismatch, not a runtime auth failure. App.tsx now retains the `authEpoch` identifier and the existing post-SecureStore-cleanup stale-session check while keeping the new submission lock and releasing it in `finally`. Source/test head `ddd6852d4dbc1f4f5b7cb423d9395446fbe1dc07` requires fresh exact-head CI; no merge is permitted until all required checks pass.
+
+
+## Rider auth single-flight final source handoff — 2026-11-18
+
+Latest source/test head `0e8d2854f9fd6ad38d9feb623732942bf3400f55` initializes the local epoch from `sessionEpoch.current`, then assigns the result of `invalidateSession()` inside the protected try block. This keeps `AUTH-LOGIN-063`'s existing source contract (`clearSessionTokensIfCurrent` is followed by the stale-epoch check before the request; catch only updates the current epoch) while ensuring the single-flight lock is released in `finally` on every normal/async exit. Prior CI #44196954234 had 236/237 Node tests pass; the single-flight regression itself passed, and only the existing source-shape assertion failed. Fresh exact-head CI is required; no merge until green.
+
+
+## Rider Android authentication — final exact-head evidence (2026-11-18)
+
+PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), source/test head `0e8d2854f9fd6ad38d9feb623732942bf3400f55`, final PR head `4723c7403ca027a78620e8bbd032ef2e451d75e1`. Exact-head [CI #44197370084](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084) passed all 9 required API/Android jobs; 3 iOS jobs were correctly skipped. The suite reported 237/237 Node tests, 48/48 Python harness tests and 758/758 backend tests. Both apps passed Expo config, TypeScript, Android production bundle, debug/release APK, package identity and emulator install/launch smoke; native API publish passed.
+
+Artifacts: Rider APK [14379339290](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14379339290), Driver APK [14381230261](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14381230261), Rider smoke [14379978000](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14379978000), Driver smoke [14380083368](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14380083368).
+
+The emulator smoke harness verifies installation, launch, stable process and login-screen presence only. It does not exercise live API/TriSend/Cosmos, TalkBack/VoiceOver, signed SecureStore/Keychain or physical-device acceptance. Keep Rider-first order: complete Rider app flows/tests before Driver; do not enable iOS until both Android apps meet their engineering exit criteria.
