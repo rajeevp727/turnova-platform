@@ -52,6 +52,8 @@ export interface RiderDiscoveryResponse {
   journeyDistanceKm: number | null;
   unions: RiderDiscoveryUnion[];
 }
+export function canDiscoverRiderTrip(pickup: unknown, dropoff: unknown, passengerCount: number | null): boolean;
+export function shouldApplyRiderDiscoveryResponse(requestSequence: number, currentSequence: number): boolean;
 export function normalizeRiderDiscoveryResponse(response: unknown): RiderDiscoveryResponse | null;
 
 export function getVisibleUnionDrivers<T>(drivers: readonly T[] | null | undefined): T[];
