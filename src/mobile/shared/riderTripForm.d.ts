@@ -31,4 +31,6 @@ export interface RiderDriverOptionProps {
 
 export function getRiderTripFieldProps(field: RiderTripField, disabled: boolean): RiderTripFieldProps;
 export function getRiderTripActionProps(action: RiderTripAction, disabled: boolean, busy: boolean): RiderTripActionProps;
+export function getVisibleUnionDrivers<T>(drivers: readonly T[] | null | undefined): T[];
+
 export function getRiderDriverOptionProps(driver: RiderDriverOption, selected: boolean, disabled: boolean, unionName?: string): RiderDriverOptionProps;
