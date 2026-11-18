@@ -34,6 +34,29 @@ test("terminal-only or empty history clears stale active ride state", () => {
   assert.equal(findActiveRide([], "rider"), null);
 });
 
+test("Rider recovery retains unknown future lifecycle records until the server confirms a known terminal state", () => {
+  const unknown = { rideId: "future-status", status: "FutureServerStatus" };
+  assert.equal(findActiveRide([unknown], "rider"), unknown);
+});
+
+test("Rider recovery prefers a known active ride over an unknown future history value", () => {
+  const unknown = { rideId: "future-status", status: "FutureServerStatus" };
+  const active = { rideId: "active", status: "InProgress" };
+  assert.equal(findActiveRide([unknown, active], "rider"), active);
+});
+
+test("Rider recovery fails closed for a malformed lifecycle value", () => {
+  const malformed = { rideId: "missing-status" };
+  assert.equal(findActiveRide([malformed], "rider"), malformed);
+});
+
+test("Driver legacy Offered exclusion is unchanged by Rider unknown-status fallback", () => {
+  const legacyOffer = { rideId: "legacy-offer", status: "Offered" };
+  const unknown = { rideId: "future-status", status: "FutureServerStatus" };
+  assert.equal(findActiveRide([legacyOffer], "driver"), null);
+  assert.equal(findActiveRide([unknown], "driver"), null);
+});
+
 test("ride status events apply only to the current ride while its screen effect is active", () => {
   assert.equal(shouldApplyRideStatusUpdate("ride-1", "ride-1", true), true);
   assert.equal(shouldApplyRideStatusUpdate("ride-1", "ride-2", true), false);
