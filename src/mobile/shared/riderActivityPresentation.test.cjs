@@ -337,5 +337,5 @@ test("RIDER-AGREEMENT-REALTIME-001: SignalR agreement refresh validates and sequ
   const sequence = refresh.indexOf("shouldApplyRiderAgreementHistoryResponse(");
   const normalization = refresh.indexOf("normalizeRiderAgreementHistory(response,ride.rideId)");
   const commit = refresh.indexOf("setAgreementHistory(history)");
-  assert.ok(request >= 0 && sequence > request && normalization > sequence && commit > normalization);
+  assert.ok(sequence >= 0 && sequence < request && normalization > request && commit > normalization);
 });
