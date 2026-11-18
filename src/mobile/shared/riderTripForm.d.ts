@@ -31,6 +31,29 @@ export interface RiderDriverOptionProps {
 
 export function getRiderTripFieldProps(field: RiderTripField, disabled: boolean): RiderTripFieldProps;
 export function getRiderTripActionProps(action: RiderTripAction, disabled: boolean, busy: boolean): RiderTripActionProps;
+export interface RiderDiscoveryDriver {
+  driverId: string;
+  fullName: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  serviceClass: "cab";
+  passengerCapacity: number;
+  distanceToPickupKm: number;
+  profilePhotoBase64: string | null;
+  profilePhotoContentType: string | null;
+}
+export interface RiderDiscoveryUnion {
+  unionId: string;
+  unionName: string;
+  drivers: RiderDiscoveryDriver[];
+}
+export interface RiderDiscoveryResponse {
+  pickupZoneId: string;
+  journeyDistanceKm: number | null;
+  unions: RiderDiscoveryUnion[];
+}
+export function normalizeRiderDiscoveryResponse(response: unknown): RiderDiscoveryResponse | null;
+
 export function getVisibleUnionDrivers<T>(drivers: readonly T[] | null | undefined): T[];
 
 export function getRiderDriverOptionProps(driver: RiderDriverOption, selected: boolean, disabled: boolean, unionName?: string): RiderDriverOptionProps;
