@@ -246,7 +246,7 @@ test("Rider destination starts empty so discovery cannot use an assumed demo des
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   assert.ok(source.includes('const [dropoff,setDropoff]=useState("");'));
   assert.ok(!source.includes('useState("HITEC City, Hyderabad")'));
-  assert.match(source, /!dropoff\.trim\(\)/);
+  assert.match(source, /canDiscoverRiderTrip\(pickup,dropoff,parsePassengerCountInput\(passengers\)\)/);\n  assert.match(source, /disabled=\{loading\|\|!canDiscoverTrip\}/);
 });
 test("Rider booking screen wires accessible trip fields, actions and explicit driver selection", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
