@@ -11,6 +11,7 @@ const {
   getRiderTripActionProps,
   getRiderTripFieldProps,
   canDiscoverRiderTrip,
+  validateRiderBookingText,
   shouldApplyRiderDiscoveryResponse
 } = require("./riderTripForm.js");
 
@@ -34,6 +35,18 @@ test("RIDER-DISCOVERY-PREFLIGHT-001: require pickup, destination and whole passe
   }
 });
 
+test("RIDER-BOOKING-TEXT-001: enforce pickup, destination and optional stop limits before booking", () => {
+  assert.equal(validateRiderBookingText("Nizampet", "HITEC City", "Kukatpally\nMiyapur"), null);
+  assert.equal(validateRiderBookingText("Nizampet", "HITEC City", "  \nKukatpally\n\n"), null);
+  assert.match(validateRiderBookingText("", "HITEC City", ""), /pickup note or landmark/);
+  assert.match(validateRiderBookingText("Nizampet", "", ""), /destination note or landmark/);
+  assert.match(validateRiderBookingText("x".repeat(251), "HITEC City", ""), /Pickup note must be 250/);
+  assert.match(validateRiderBookingText("Nizampet", "x".repeat(251), ""), /Destination note must be 250/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City", Array(11).fill("Stop").join("\n")), /no more than 10/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City", "x".repeat(251)), /Each optional stop must be 250/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City", null), /stops must be entered as text/);
+});
+
 test("RIDER-DISCOVERY-SEQUENCE-001: apply only the latest safe discovery request sequence", () => {
   assert.equal(shouldApplyRiderDiscoveryResponse(1, 1), true);
   assert.equal(shouldApplyRiderDiscoveryResponse(2, 2), true);
@@ -42,6 +55,19 @@ test("RIDER-DISCOVERY-SEQUENCE-001: apply only the latest safe discovery request
   assert.equal(shouldApplyRiderDiscoveryResponse(-1, -1), false);
   assert.equal(shouldApplyRiderDiscoveryResponse(Number.NaN, Number.NaN), false);
   assert.equal(shouldApplyRiderDiscoveryResponse(Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 1), false);
+});
+
+test("RIDER-BOOKING-TEXT-001: validate booking text in the handler and expose field limits", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /validateRiderBookingText\(pickupForRequest,dropoffForRequest,stopsTextForRequest\)/);
+  assert.match(source, /maxLength=\{250\}/);
+  assert.match(source, /rider-booking-text-error/);
+  const requestStart = source.indexOf("const requestSelectedDriver=async()=>{");
+  const requestEnd = source.indexOf("const loadAgreementHistory", requestStart);
+  assert.ok(requestStart >= 0 && requestEnd > requestStart);
+  const requestSource = source.slice(requestStart, requestEnd);
+  assert.ok(requestSource.indexOf("validateRiderBookingText") < requestSource.indexOf("bookingInFlight.current=true"));
+  assert.ok(requestSource.indexOf("validateRiderBookingText") < requestSource.indexOf("selectedBookingLocation.current.capture"));
 });
 
 test("RIDER-DISCOVERY-SESSION-001: fence discovery UI state by session and request sequence", () => {
