@@ -120,7 +120,7 @@ test("Rider pickup and destination labels distinguish landmark text from GPS and
 test("Rider intermediate stops and passenger count provide ordered and bounded instructions", () => {
   const stops = getRiderTripFieldProps("stops", true);
   const passengers = getRiderTripFieldProps("passengers", false);
-  assert.match(stops.accessibilityHint, /one stop per line in the order/);
+  assert.match(stops.accessibilityHint, /up to 10 stops, one per line, maximum 250 characters per stop, in visit order/);
   assert.deepEqual(stops.accessibilityState, { disabled: true });
   assert.equal(passengers.accessibilityLabel, "Passenger count");
   assert.match(passengers.accessibilityHint, /whole number from 1 to 6/);
