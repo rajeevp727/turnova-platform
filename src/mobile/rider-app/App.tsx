@@ -9,7 +9,7 @@ import { readAccessTokenIfCurrent, readSessionTokens, saveSessionTokensIfCurrent
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { formatAgreementAmount } from "../shared/agreementFormatting";
-import { findActiveRide, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
+import { findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
@@ -248,16 +248,19 @@ export default function App() {
     if(!isCurrent())return;
     if(!isRiderRideHistoryShapeValid(historyResponse))throw new Error("Ride history response is invalid. Booking remains disabled until the server status can be verified.");
     const history=historyResponse as RideHistoryItem[];
-    setRideHistory(history);
     const active=findActiveRide(history, "rider");
+    let activeDetails: Ride | null = null;
     if(active){
-      const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));
+      const detailsResponse=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId)) as unknown;
       if(!isCurrent())return;
-      setRide(current=>current&&current.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);
-    }else if(isCurrent()){
-      setRide(null);
+      if(!isRiderRideDetailsResponseValid(detailsResponse,active.rideId))throw new Error("Ride details response did not match the active history record. Booking remains disabled until the server status can be verified.");
+      activeDetails=detailsResponse as Ride;
     }
-    if(isCurrent())setActiveRideStateLoaded(true);
+    if(!isCurrent())return;
+    setRideHistory(history);
+    if(activeDetails)setRide(current=>current&&current.rideId===activeDetails!.rideId?mergeTripLocationSnapshot(current,activeDetails!):activeDetails!);
+    else setRide(null);
+    setActiveRideStateLoaded(true);
   },[apiFetch]);
   useEffect(()=>{let active=true;let restoreEpoch=sessionEpoch.current;const isRestoreCurrent=()=>active&&sessionEpoch.current===restoreEpoch;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request,isRestoreCurrent);if(isRestoreCurrent()&&restored){const restoredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);restoreEpoch=restoredEpoch;const restoredUser=requireAppRole<User>(restored.user,"Rider");authenticatedSessionEpoch.current=restoredEpoch;setTokens(restored.tokens);setUser(restoredUser);}}catch{if(isRestoreCurrent())setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(isRestoreCurrent())setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{

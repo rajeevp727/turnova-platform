@@ -1,5 +1,14 @@
 export type RideRecoveryRole = "rider" | "driver";
 
+export function isRiderRideHistoryShapeValid(
+  history: unknown
+): history is readonly { rideId: string; status?: unknown }[];
+
+export function isRiderRideDetailsResponseValid(
+  response: unknown,
+  expectedRideId: string
+): boolean;
+
 export function findActiveRide<T extends { status: string }>(
   history: readonly T[],
   role: RideRecoveryRole

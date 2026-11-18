@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { applyRideStatusUpdate, findActiveRide, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
+const { applyRideStatusUpdate, findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
 
 test("Rider ride-history shape accepts an empty list and uniquely identified records", () => {
   assert.equal(isRiderRideHistoryShapeValid([]), true);
@@ -26,6 +26,16 @@ test("Rider ride-history shape rejects malformed rows, invalid IDs and duplicate
   ]) {
     assert.equal(isRiderRideHistoryShapeValid(invalid), false);
   }
+});
+
+test("Rider ride-details response must match the active history identity", () => {
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "InProgress" }, "ride-1"), true);
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "FutureServerStatus" }, "ride-1"), true);
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-2", status: "Completed" }, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid({ status: "Completed" }, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid([], "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid(null, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1" }, " ride-1"), false);
 });
 
 test("Rider recovery includes selected negotiation and active trip states", () => {
