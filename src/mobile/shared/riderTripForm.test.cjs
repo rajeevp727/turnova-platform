@@ -214,7 +214,7 @@ test("RIDER-DISCOVERY-RESPONSE-003: default JPEG content type only for a server-
   assert.equal(result.unions[0].drivers[0].profilePhotoContentType, "image/jpeg");
 });
 
-test("Rider union display keeps at most the first three server-ordered drivers", () => {
+test("RIDER-DISCOVERY-UI-001: cap visible drivers at the first three server-ordered results", () => {
   const drivers = [{ driverId: "d1" }, { driverId: "d2" }, { driverId: "d3" }, { driverId: "d4" }];
   assert.deepEqual(getVisibleUnionDrivers(drivers), drivers.slice(0, 3));
   assert.deepEqual(getVisibleUnionDrivers([drivers[2], drivers[0]]), [drivers[2], drivers[0]]);
