@@ -66,7 +66,7 @@ type DiscoveryDriver = { driverId: string; fullName: string; vehicleMake: string
 type DiscoveryUnion = { unionId: string; unionName: string; drivers: DiscoveryDriver[] };
 type DiscoveryResult = { pickupZoneId: string; journeyDistanceKm: number | null; unions: DiscoveryUnion[] };
 type RideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt?: string | null };
-type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
+type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: "Rider" | "Driver"; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
 async function saveTokens(t: Tokens, isCurrent: () => boolean) { return saveSessionTokensIfCurrent(SecureStore, t, isCurrent); }
 async function clearTokens() { await clearSessionTokens(SecureStore); }
