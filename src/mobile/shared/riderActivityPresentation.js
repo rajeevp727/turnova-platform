@@ -17,7 +17,7 @@ function getRiderRideStatusMessage(ride) {
       const expiry = expiryValue ? new Date(expiryValue) : null;
       const deadline = expiry && Number.isFinite(expiry.getTime())
         ? "Negotiation expires at " + expiry.toLocaleTimeString() + "."
-        : "A configured negotiation deadline applies.";
+        : "Negotiation deadline is unavailable.";
       return "Your selected driver is negotiating the fare with you. " + deadline;
     }
     case "AgreementConfirmed":
