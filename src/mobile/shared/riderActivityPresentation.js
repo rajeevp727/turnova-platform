@@ -3,7 +3,7 @@
 const { agreementConfirmationLabel } = require("./agreementConfirmation");
 const { formatAgreementAmount } = require("./agreementFormatting");
 
-const AGREEMENT_TIMESTAMP_WITH_OFFSET = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/i;
+const AGREEMENT_TIMESTAMP_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i;
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -14,7 +14,7 @@ function isSafeAgreementText(value, maximumLength = 160) {
     value.length > 0 &&
     value.length <= maximumLength &&
     value === value.trim() &&
-    !/[\\u0000-\\u001f\\u007f-\\u009f]/.test(value);
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value);
 }
 
 function normalizeAgreementTimestamp(value) {
