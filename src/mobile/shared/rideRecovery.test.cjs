@@ -30,6 +30,17 @@ test("Rider ride-history shape rejects malformed rows, invalid IDs and duplicate
 
 test("Rider ride-details response must match the active history identity", () => {
   assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "InProgress" }, "ride-1"), true);
+  assert.equal(isRiderRideDetailsResponseValid({
+    rideId: "ride-1",
+    requestedAt: "2026-11-19T00:00:00Z",
+    locationCapturedAtUtc: "2026-11-19T00:00:01Z"
+  }, "ride-1"), true);
+  for (const field of ["requestedAt", "acceptedAt", "negotiationExpiresAtUtc", "locationUpdatedAt", "locationCapturedAtUtc", "driverLocationCapturedAtUtc"]) {
+    assert.equal(isRiderRideDetailsResponseValid({
+      rideId: "ride-1",
+      [field]: "2026-11-31T00:00:00Z"
+    }, "ride-1"), false, field);
+  }
   assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "FutureServerStatus" }, "ride-1"), true);
   assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-2", status: "Completed" }, "ride-1"), false);
   assert.equal(isRiderRideDetailsResponseValid({ status: "Completed" }, "ride-1"), false);
