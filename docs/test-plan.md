@@ -3605,7 +3605,7 @@ Exact-head [CI #44401573555](https://github.com/rajeevp727/turnova-platform/acti
 
 The npm audit logs for both Rider and Driver in CI #44401573555 reported 0 critical, 0 high, 11 moderate and 0 low package nodes per app. The previously recorded picomatch High advisory was not reproduced in this audit; moderate findings remain for follow-up. This is not a claim that all moderate findings are remediated.
 
-Previous source-head CI #44411205198 on `804026a63b80e01e1d42439eb9d4a3a40adcab75` passed backend 758/758, shared Node 353/353, Python 48/48, Rider/Driver Expo/config/TypeScript/Android bundle checks and both debug APK builds; both standalone release APK builds were still in progress. Latest source/test head `32391da49ac9c1a77915cb0d5885a74ec683288c` has exact-head CI #44413207399 pending; neither prior run is final-head evidence.
+Previous source-head CI #44411205198 on `804026a63b80e01e1d42439eb9d4a3a40adcab75` passed backend 758/758, shared Node 353/353, Python 48/48, Rider/Driver Expo/config/TypeScript/Android bundle checks and both debug APK builds; both standalone release APK builds were still in progress. Documentation-bearing CI #44413434931 on `363caf0` exposed one failed Node source-wiring assertion (354/355): the test expected the fetch before request-sequence capture, but the implementation correctly captures the sequence first. The assertion was corrected in source/test head `01c615b36a9b9391f218972c7962fed3b38454c4`; fresh exact-head CI on the final documentation-bearing head is required.
 
 
 ## Rider realtime agreement-history validation — PR #194
@@ -3619,3 +3619,7 @@ The realtime refresh uses the same sequence as the Activity agreement-history lo
 ## Current PR #194 exact-head handoff — 2026-11-19
 
 Source/test head `32391da49ac9c1a77915cb0d5885a74ec683288c` includes `RIDER-AGREEMENT-REALTIME-001`: exact-ride SignalR agreement-change event validation, immutable agreement-history normalization/projection and shared latest-request sequencing before state commit. Exact-head CI [#44413207399](https://github.com/rajeevp727/turnova-platform/actions/runs/44413207399) is pending. The preceding head `804026a` CI #44411205198 passed backend 758/758, Node 353/353, Python 48/48, both app bundles and both Android debug APKs; release builds were still in progress. Do not infer latest-head release APK or emulator-smoke completion.
+
+## Current PR #194 exact-head handoff — 2026-11-19
+
+Source/test head `01c615b36a9b9391f218972c7962fed3b38454c4` includes `RIDER-AGREEMENT-REALTIME-001`. CI #44413434931 found one failed source-wiring assertion (354/355 Node tests): it expected request-before-sequence ordering. The implementation correctly captures the request sequence before the fetch, and the assertion was corrected in this head. Other jobs in #444134 were still running. Fresh exact-head CI on the final documentation-bearing PR head is required; no release APK or emulator-smoke result is inferred from the failed run.
