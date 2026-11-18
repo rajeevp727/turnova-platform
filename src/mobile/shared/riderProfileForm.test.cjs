@@ -101,7 +101,7 @@ test("Rider profile, help, theme and tab controls are wired to accessible helper
 
 test("Rider help and sign-out handlers prevent overlapping submissions", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
-  assert.match(source, /if\(helpSubmissionInFlight\.current\)return;helpSubmissionInFlight\.current=true/);
+  assert.match(source, /if\(helpSubmissionInFlight\.current\)return;[\s\S]*helpSubmissionInFlight\.current=true/);
   assert.match(source, /if\(isCurrent\(\)\)\{helpSubmissionInFlight\.current=false;setHelpBusy\(false\);\}/);
   assert.match(source, /if\(logoutInFlight\.current\)return;logoutInFlight\.current=true/);
   assert.match(source, /finally\{logoutInFlight\.current=false;setLogoutBusy\(false\);\}/);
@@ -121,6 +121,8 @@ test("RIDER-HELP-SESSION-001 and RIDER-SUPPORT-SESSION-001: profile responses ca
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   assert.match(source, /riderHelpRequestSequence\.current \+= 1/);
   assert.match(source, /riderSupportRequestSequence\.current \+= 1/);
+  assert.match(source, /helpSubmissionInFlight\.current = false/);
+  assert.match(source, /supportSubmissionInFlight\.current = false/);
   const helpStart = source.indexOf("const askHelp=async()=>{");
   const supportStart = source.indexOf("const submitSupportRequest=async()=>{", helpStart);
   const logoutStart = source.indexOf("const logout=async()=>{", supportStart);
