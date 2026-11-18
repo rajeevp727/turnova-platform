@@ -37,11 +37,11 @@ test("Rider negotiation status announces a valid deadline and fails safely for i
   );
   assert.equal(
     getRiderRideStatusMessage({ status: "Negotiating", negotiationExpiresAtUtc: "not-a-date" }),
-    "Your selected driver is negotiating the fare with you. A configured negotiation deadline applies."
+    "Your selected driver is negotiating the fare with you. Negotiation deadline is unavailable."
   );
   assert.equal(
     getRiderRideStatusMessage({ status: "Negotiating", negotiationExpiresAtUtc: null }),
-    "Your selected driver is negotiating the fare with you. A configured negotiation deadline applies."
+    "Your selected driver is negotiating the fare with you. Negotiation deadline is unavailable."
   );
 });
 
