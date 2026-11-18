@@ -62,6 +62,17 @@ function getRiderTripActionProps(action, disabled, busy) {
   };
 }
 
+function canDiscoverRiderTrip(pickup, dropoff, passengerCount) {
+  return typeof pickup === "string" && pickup.trim().length > 0 &&
+    typeof dropoff === "string" && dropoff.trim().length > 0 &&
+    Number.isInteger(passengerCount) && passengerCount >= 1 && passengerCount <= 6;
+}
+
+function shouldApplyRiderDiscoveryResponse(requestSequence, currentSequence) {
+  return Number.isSafeInteger(requestSequence) && requestSequence > 0 &&
+    Number.isSafeInteger(currentSequence) && requestSequence === currentSequence;
+}
+
 function normalizeRiderDiscoveryResponse(response) {
   const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
   const isTrimmedNonEmptyString = value =>
@@ -165,6 +176,8 @@ function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
 }
 
 module.exports = {
+  canDiscoverRiderTrip,
+  shouldApplyRiderDiscoveryResponse,
   normalizeRiderDiscoveryResponse,
   getVisibleUnionDrivers,
   getRiderDriverOptionProps,
