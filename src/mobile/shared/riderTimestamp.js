@@ -1,6 +1,6 @@
 "use strict";
 
-const ISO_TIMESTAMP_WITH_OFFSET = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d+))?(Z|([+-])(\\d{2}):(\\d{2}))$/i;
+const ISO_TIMESTAMP_WITH_OFFSET = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))$/i;
 
 /**
  * Validate an offset-qualified ISO-8601 timestamp without Date.parse's
