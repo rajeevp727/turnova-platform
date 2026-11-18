@@ -88,6 +88,7 @@ test("Rider profile, help, theme and tab controls are wired to accessible helper
     assert.ok(source.includes(id), "Missing Rider profile/navigation test ID fragment: " + id);
   }
   assert.match(source, /getRiderProfileFieldProps\("helpQuestion",helpBusy\)/);
+  assert.match(source, /editable={!helpBusy}/);
   assert.match(source, /getRiderProfileActionProps\("askHelp"/);
   assert.match(source, /getRiderProfileActionProps\("signOut"/);
   assert.match(source, /getRiderThemeOptionProps\(option,themePreference===option\)/);
