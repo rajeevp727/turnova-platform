@@ -315,7 +315,7 @@ test("Rider agreement realtime events require an exact ride identity and object 
     {},
     { rideId: "ride-2" },
     { rideId: " ride-1" },
-    { rideId: "ride-1\\n" }
+    { rideId: "ride-1\n" }
   ]) {
     assert.equal(isRiderRideAgreementEventValid(invalid, "ride-1"), false);
   }
@@ -327,7 +327,7 @@ test("RIDER-AGREEMENT-REALTIME-001: SignalR agreement refresh validates and sequ
   const eventEnd = source.indexOf("connection.onreconnected", eventStart);
   assert.ok(eventStart >= 0 && eventEnd > eventStart);
   const eventHandler = source.slice(eventStart, eventEnd);
-  assert.match(eventHandler, /isRiderRideAgreementEventValid\\(update,ride\\.rideId\\)/);
+  assert.match(eventHandler, /isRiderRideAgreementEventValid\(update,ride\.rideId\)/);
 
   const refreshStart = source.indexOf("const refreshAgreements=async()=>{");
   const refreshEnd = source.indexOf("const refreshRiderState", refreshStart);
