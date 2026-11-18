@@ -318,7 +318,7 @@ export default function App() {
       if(active&&isConnectionCurrent()&&isRiderRideStatusEventValid(update,ride.rideId)&&shouldApplyRideStatusUpdate(ride.rideId,update.rideId,true)){
         // Invalidate any history read started before this newer live lifecycle event.
         rideHistoryRequestSequence.current+=1;
-        setRide(current=>applyRiderRideStatusUpdate(current,update));
+        setRide(current=>current?applyRiderRideStatusUpdate(current,update):current);
       }
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
