@@ -62,7 +62,7 @@ test("Rider trip-history accessibility summary includes route, status, passenger
   };
   assert.equal(
     getRiderHistoryAccessibilityLabel(item),
-    "Trip from Nizampet to Gachibowli. Status Completed. 2 passengers. Service class CAB. Requested " +
+    "Trip from Nizampet to Gachibowli. Status COMPLETED. 2 passengers. Service class CAB. Requested " +
       new Date(item.requestedAt).toLocaleString() + ". Reference ride-123."
   );
 });
@@ -70,7 +70,7 @@ test("Rider trip-history accessibility summary includes route, status, passenger
 test("Rider trip-history accessibility summary handles missing display values without crashing", () => {
   assert.equal(
     getRiderHistoryAccessibilityLabel({ rideId: "", pickup: "", dropoff: "", passengers: null, serviceClass: "", status: "", requestedAt: "bad-date" }),
-    "Trip from Pickup unavailable to Drop-off unavailable. Status Unavailable. Unknown passengers. Service class UNKNOWN. Requested Date unavailable. Reference Unavailable."
+    "Trip from Pickup unavailable to Drop-off unavailable. Status STATUS UNAVAILABLE. Unknown passengers. Service class UNKNOWN. Requested Date unavailable. Reference Unavailable."
   );
 });
 
@@ -164,5 +164,20 @@ test("Rider Activity uses safe labels and validates live status events before ap
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   assert.ok(source.includes("getRiderRideStatusLabel(ride.status)"));
   assert.ok(source.includes("getRiderRideStatusLabel(item.status)"));
+  assert.ok(source.includes("accessibilityLabel={`Ride status ${getRiderRideStatusLabel(ride.status)}`}"));
   assert.ok(source.includes("isRiderRideStatusEventValid(update,ride.rideId)"));
+});
+
+test("Rider history accessibility hides unknown raw lifecycle values", () => {
+  const label = getRiderHistoryAccessibilityLabel({
+    rideId: "ride-unknown",
+    pickup: "Pickup",
+    dropoff: "Destination",
+    passengers: 1,
+    serviceClass: "cab",
+    status: "FutureServerStatus",
+    requestedAt: "2026-11-18T10:15:00.000Z"
+  });
+  assert.match(label, /Status STATUS UNAVAILABLE/);
+  assert.doesNotMatch(label, /FutureServerStatus/);
 });
