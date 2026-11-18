@@ -70,6 +70,34 @@ function getRiderSupportRequestAttempt(currentAttempt, subject, description, cre
   });
 }
 
+function parseRiderSupportRequestResponse(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Support service returned an invalid response.");
+  const requestId = typeof value.requestId === "string" ? value.requestId.trim() : "";
+  const submittedAtUtc = value.submittedAtUtc;
+  const replayed = value.replayed;
+  if (!requestId || requestId.length > 128 || typeof submittedAtUtc !== "string" ||
+      !Number.isFinite(Date.parse(submittedAtUtc)) || typeof replayed !== "boolean") {
+    throw new TypeError("Support service returned an invalid response.");
+  }
+  return Object.freeze({ requestId, submittedAtUtc, replayed });
+}
+
+async function submitRiderSupportRequest(apiFetch, attempt) {
+  if (typeof apiFetch !== "function") throw new TypeError("Support request API client is unavailable.");
+  if (!attempt || !isValidIdempotencyKey(attempt.idempotencyKey) ||
+      attempt.subject !== normalizeText(attempt.subject) ||
+      attempt.description !== normalizeText(attempt.description) ||
+      validateRiderSupportRequest(attempt.subject, attempt.description) !== null) {
+    throw new TypeError("A valid Rider support request attempt is required.");
+  }
+  const response = await apiFetch("/api/v1/support/requests", {
+    method: "POST",
+    headers: { "Idempotency-Key": attempt.idempotencyKey },
+    body: JSON.stringify({ subject: attempt.subject, description: attempt.description })
+  });
+  return parseRiderSupportRequestResponse(response);
+}
+
 function getRiderSupportFieldProps(field, disabled) {
   const definition = SUPPORT_FIELDS[field];
   if (!definition) throw new RangeError("Unknown Rider support field.");
@@ -90,6 +118,8 @@ function getRiderSupportActionProps(disabled, busy) {
 }
 
 module.exports = {
+  parseRiderSupportRequestResponse,
+  submitRiderSupportRequest,
   getRiderSupportActionProps,
   getRiderSupportFieldProps,
   getRiderSupportRequestAttempt,
