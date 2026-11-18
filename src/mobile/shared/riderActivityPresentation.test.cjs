@@ -48,6 +48,10 @@ test("Rider negotiation status announces a valid deadline and fails safely for i
     "Your selected driver is negotiating the fare with you. Negotiation deadline is unavailable."
   );
   assert.equal(
+    getRiderRideStatusMessage({ status: "Negotiating", negotiationExpiresAtUtc: "2026-02-30T00:15:00Z" }),
+    "Your selected driver is negotiating the fare with you. Negotiation deadline is unavailable."
+  );
+  assert.equal(
     getRiderRideStatusMessage({ status: "Negotiating", negotiationExpiresAtUtc: null }),
     "Your selected driver is negotiating the fare with you. Negotiation deadline is unavailable."
   );
@@ -74,6 +78,10 @@ test("Rider trip-history accessibility summary handles missing display values wi
   assert.equal(
     getRiderHistoryAccessibilityLabel({ rideId: "", pickup: "", dropoff: "", passengers: null, serviceClass: "", status: "", requestedAt: "bad-date" }),
     "Trip from Pickup unavailable to Drop-off unavailable. Status STATUS UNAVAILABLE. Unknown passengers. Service class UNKNOWN. Requested Date unavailable. Reference Unavailable."
+  );
+  assert.equal(
+    getRiderHistoryAccessibilityLabel({ rideId: "ride-123", pickup: "A", dropoff: "B", passengers: 1, serviceClass: "cab", status: "Completed", requestedAt: "2026-02-30T10:15:00Z" }),
+    "Trip from A to B. Status COMPLETED. 1 passengers. Service class CAB. Requested Date unavailable. Reference ride-123."
   );
 });
 
@@ -112,6 +120,7 @@ test("Rider agreement version route and creation-time helpers fail safely for ma
   const item = { pickup: " ", dropoff: "", stops: [null, 3, "  "], createdAtUtc: "not-a-date" };
   assert.equal(getRiderAgreementVersionRouteLabel(item), "Route: Pickup unavailable to Drop-off unavailable.");
   assert.equal(getRiderAgreementVersionCreatedAtLabel(item), "Creation time unavailable.");
+  assert.equal(getRiderAgreementVersionCreatedAtLabel({ ...item, createdAtUtc: "2026-04-31T10:00:00Z" }), "Creation time unavailable.");
 });
 
 test("Rider cancellation response requires the exact ride and Cancelled terminal status", () => {
@@ -304,6 +313,8 @@ test("Rider agreement history requires consistent confirmation timestamps after 
     { ...valid, driverConfirmed: false, driverConfirmedAtUtc: "2026-11-19T00:01:00Z" },
     { ...valid, createdAtUtc: "2026-11-19T00:00:00" },
     { ...valid, createdAtUtc: "not-a-date" },
+    { ...valid, createdAtUtc: "2026-02-30T00:00:00Z" },
+    { ...valid, driverConfirmedAtUtc: "2026-04-31T00:01:00Z" },
     { ...valid, driverConfirmedAtUtc: "2026-11-18T23:59:00Z" }
   ];
   for (const item of invalid) assert.equal(normalizeRiderAgreementHistory([item], "ride-agreement-123"), null);
