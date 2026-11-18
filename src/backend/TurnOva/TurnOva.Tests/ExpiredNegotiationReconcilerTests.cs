@@ -1,0 +1,375 @@
+using TurnOva.API;
+using TurnOva.Domain.Dispatch;
+
+namespace TurnOva.Tests;
+
+public sealed class ExpiredNegotiationReconcilerTests
+{
+    [Fact]
+    public async Task EtagConflictRereadsLatestTerminalRideBeforeReleasingMatchingReservation()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide("Negotiating", now, now.AddMinutes(-1));
+        var latest = current with { Status = RideLifecycle.Expired, NegotiationExpiresAtUtc = null };
+        var releasedRideIds = new List<string>();
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(null),
+            (rideId, _) => Task.FromResult<DemoRide?>(latest),
+            (ride, _) =>
+            {
+                releasedRideIds.Add(ride.RideId);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Equal(latest, result.Ride);
+        Assert.Equal(new[] { current.RideId }, releasedRideIds);
+    }
+
+    [Fact]
+    public async Task EtagConflictWithLatestActiveRideDoesNotReleaseOrUnblockDriver()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide("AgreementConfirmed", now, now.AddMinutes(-1));
+        var latest = current with { NegotiationExpiresAtUtc = now.AddMinutes(2) };
+        var releaseCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(null),
+            (rideId, _) => Task.FromResult<DemoRide?>(latest),
+            (_, _) =>
+            {
+                releaseCount++;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Equal(latest, result.Ride);
+        Assert.Equal(0, releaseCount);
+    }
+
+    [Fact]
+    public async Task UnexpiredNegotiationDoesNotAttemptTransitionOrRelease()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide("Negotiating", now, now.AddMinutes(1));
+        var transitionCount = 0;
+        var readCount = 0;
+        var releaseCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) =>
+            {
+                transitionCount++;
+                return Task.FromResult<DemoRide?>(null);
+            },
+            (_, _) =>
+            {
+                readCount++;
+                return Task.FromResult<DemoRide?>(current);
+            },
+            (_, _) =>
+            {
+                releaseCount++;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.False(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Equal(current, result.Ride);
+        Assert.Equal(0, transitionCount);
+        Assert.Equal(0, readCount);
+        Assert.Equal(0, releaseCount);
+    }
+
+    [Fact]
+    public async Task SuccessfulExpiryTransitionReleasesOnlyTheTransitionedTerminalRide()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide("Negotiating", now, now.AddMinutes(-1));
+        var expired = current with { Status = RideLifecycle.Expired, NegotiationExpiresAtUtc = null };
+        var releasedRideIds = new List<string>();
+        var readCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(expired),
+            (_, _) =>
+            {
+                readCount++;
+                return Task.FromResult<DemoRide?>(null);
+            },
+            (ride, _) =>
+            {
+                releasedRideIds.Add(ride.RideId);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.True(result.Transitioned);
+        Assert.Equal(expired, result.Ride);
+        Assert.Equal(new[] { current.RideId }, releasedRideIds);
+        Assert.Equal(0, readCount);
+    }
+
+
+    [Fact]
+    public void MissingLatestAggregateAfterObservedExpiryCandidateKeepsDriverBlocked()
+    {
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "observed-expired-ride",
+            RideId = "observed-expired-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+
+        Assert.Equal("observed-driver",
+            ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, null, null));
+    }
+
+    [Fact]
+    public void LatestTerminalAggregateAllowsDriverToBeReleased()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "observed-terminal-ride",
+            RideId = "observed-terminal-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+
+        var latest = CreateRide(RideLifecycle.Expired, now, null) with { RideId = candidate.RideId };
+        Assert.Null(ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
+    }
+
+    [Fact]
+    public void LatestActiveAggregateUsesItsAuthoritativeDriverAssignment()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "observed-active-ride",
+            RideId = "observed-active-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+
+        var latest = CreateRide(RideLifecycle.InProgress, now, null) with { RideId = candidate.RideId, DriverId = "current-driver" };
+        Assert.Equal("current-driver",
+            ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
+    }
+
+    [Fact]
+    public void MismatchedLatestAggregateFailsClosedToObservedDriver()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "observed-expired-ride",
+            RideId = "observed-expired-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+
+        var mismatched = CreateRide(RideLifecycle.Completed, now, null) with { RideId = "different-ride" };
+        Assert.Equal("observed-driver",
+            ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, mismatched, null));
+    }
+
+    [Fact]
+    public void SameIdempotentRideIsNotExcludedWhenLatestAggregateIsMissing()
+    {
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "idempotent-own-ride",
+            RideId = "idempotent-own-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+
+        Assert.Equal("observed-driver", ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
+            candidate, null, candidate.RideId));
+    }
+
+
+    [Fact]
+    public async Task EtagConflictWithMissingLatestAggregateDoesNotReleaseReservation()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide(RideLifecycle.Negotiating, now, now.AddMinutes(-1));
+        var releaseCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(null),
+            (_, _) => Task.FromResult<DemoRide?>(null),
+            (_, _) =>
+            {
+                releaseCount++;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Null(result.Ride);
+        Assert.Equal(0, releaseCount);
+    }
+
+    [Fact]
+    public void UnrecognisedLatestStatusFailsClosedToObservedDriver()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "observed-unknown-ride",
+            RideId = "observed-unknown-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+
+        var latest = CreateRide("UnknownLegacyStatus", now, null) with { RideId = candidate.RideId };
+        Assert.Equal("observed-driver",
+            ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(candidate, latest, null));
+    }
+
+
+    [Fact]
+    public async Task EtagConflictWithMismatchedLatestAggregateDoesNotReleaseReservation()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide(RideLifecycle.Negotiating, now, now.AddMinutes(-1));
+        var mismatchedTerminal = current with
+        {
+            RideId = "different-ride",
+            Status = RideLifecycle.Expired,
+            NegotiationExpiresAtUtc = null
+        };
+        var releaseCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(null),
+            (_, _) => Task.FromResult<DemoRide?>(mismatchedTerminal),
+            (_, _) =>
+            {
+                releaseCount++;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Null(result.Ride);
+        Assert.Equal(0, releaseCount);
+    }
+
+    [Fact]
+    public async Task MismatchedExpiryTransitionResultIsRereadWithoutReleasingReservation()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var current = CreateRide(RideLifecycle.Negotiating, now, now.AddMinutes(-1));
+        var mismatchedTerminal = current with
+        {
+            RideId = "different-ride",
+            Status = RideLifecycle.Expired,
+            NegotiationExpiresAtUtc = null
+        };
+        var latestCurrent = current with { NegotiationExpiresAtUtc = now.AddMinutes(1) };
+        var releaseCount = 0;
+        var readCount = 0;
+
+        var result = await ExpiredNegotiationReconciler.ReconcileAsync(
+            current,
+            now,
+            (_, _) => Task.FromResult<DemoRide?>(mismatchedTerminal),
+            (_, _) =>
+            {
+                readCount++;
+                return Task.FromResult<DemoRide?>(latestCurrent);
+            },
+            (_, _) =>
+            {
+                releaseCount++;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Attempted);
+        Assert.False(result.Transitioned);
+        Assert.Equal(latestCurrent, result.Ride);
+        Assert.Equal(1, readCount);
+        Assert.Equal(0, releaseCount);
+    }
+
+
+    [Fact]
+    public void SameIdempotentRideIsExcludedOnlyWhenLatestAggregateIdentityIsConfirmed()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "idempotent-own-ride",
+            RideId = "idempotent-own-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = now.AddMinutes(-1)
+        };
+        var latest = CreateRide(RideLifecycle.Negotiating, now, now.AddMinutes(1)) with
+        {
+            RideId = candidate.RideId,
+            DriverId = candidate.DriverId
+        };
+
+        Assert.Null(ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
+            candidate, latest, candidate.RideId));
+    }
+
+    [Fact]
+    public void MismatchedStoredItemIdentityFailsClosedEvenForSameIdempotentRide()
+    {
+        var candidate = new ActiveDriverRideProjection
+        {
+            ItemId = "different-item-id",
+            RideId = "idempotent-own-ride",
+            DriverId = "observed-driver",
+            Status = RideLifecycle.Negotiating,
+            NegotiationExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+
+        Assert.Equal("observed-driver", ExpiredNegotiationReconciler.ResolveBlockingDriverIdAfterExpiry(
+            candidate, null, candidate.RideId));
+    }
+
+    private static DemoRide CreateRide(string status, DateTimeOffset now, DateTimeOffset? expiresAtUtc) =>
+        new(
+            "etag-conflict-ride", "KPHB", "HITEC City", 1, status, now.AddMinutes(-5), null,
+            "etag-conflict-rider", "etag-conflict-driver", 17.493, 78.399, null, null,
+            null, now, false, "cab", "hyderabad-central",
+            UnionId: "etag-conflict-union",
+            NegotiationExpiresAtUtc: expiresAtUtc);
+}

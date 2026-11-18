@@ -1,0 +1,22 @@
+<Project>
+  <!--
+    PDFsharp 6.2.4's core package carries PdfSharp.WPFonts.dll, which embeds
+    six Segoe WP font subsets. TurnOva always supplies its own OFL-licensed
+    Noto font resolver, so this optional quick-start font assembly is unused.
+    Exclude it from build and publish outputs; the CI/test guard verifies that
+    no bundled Segoe font assembly is redistributed.
+  -->
+  <Target Name="ExcludeUnusedPdfSharpWpFontsFromBuildOutput" AfterTargets="ResolveReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
+                              Condition="'%(Filename)' == 'PdfSharp.WPFonts'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="ExcludeUnusedPdfSharpWpFontsFromPublish" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(Filename)' == 'PdfSharp.WPFonts'" />
+    </ItemGroup>
+  </Target>
+</Project>
