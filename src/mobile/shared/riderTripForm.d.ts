@@ -53,6 +53,7 @@ export interface RiderDiscoveryResponse {
   unions: RiderDiscoveryUnion[];
 }
 export function canDiscoverRiderTrip(pickup: unknown, dropoff: unknown, passengerCount: number | null): boolean;
+export function validateRiderBookingText(pickup: unknown, dropoff: unknown, stopsText: unknown): string | null;
 export function shouldApplyRiderDiscoveryResponse(requestSequence: number, currentSequence: number): boolean;
 export function normalizeRiderDiscoveryResponse(response: unknown): RiderDiscoveryResponse | null;
 
