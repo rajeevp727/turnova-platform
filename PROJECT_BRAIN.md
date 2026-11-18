@@ -3049,7 +3049,7 @@ Artifacts: Rider debug APK [14430354079](https://github.com/rajeevp727/turnova-p
 
 The CI smoke is install/cold-launch/foreground-process evidence only. It does not prove full React Native UI interaction, TalkBack, live API/Cosmos/SignalR/TriSend, production authentication or physical-device acceptance. The inherited High picomatch GHSA-fc5q-39xc-vjpf remains unpatched in reviewed transitive Expo/Metro/Jest build tooling; it is disclosed, not represented as a clean audit or vulnerability fix.
 
-PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
+Historical pre-merge PR #193 handoff; superseded by the merged status and exact-head evidence in the current Rider handoff above.
 
 **Next:** recheck PR #193 head/checks after this documentation-only synchronization. Merge only if the latest documentation-bearing head has all required API/Android jobs green and GitHub still permits the merge without self-approval or bypass. Re-read main after merge and continue Rider-only work. Strict acceptance remains 0/19 Verified; production readiness is not established.
 
