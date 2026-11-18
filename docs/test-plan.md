@@ -3576,3 +3576,33 @@ Current source/test commits `4d4c0a3`, `c481309` and `9de6ed9` add exact selecte
 | RIDER-DISCOVERY-SESSION-001 | Fence discovery results across session changes | Discovery success/error/finally continuations update state only while the captured session epoch and request sequence remain current. Session reset invalidates pending discovery and clears loading so an old account cannot repopulate a signed-out or replacement session. | Automated Node source wiring + helper unit | P1 |
 
 These are client-side race and input safeguards. The API remains authoritative for eligibility, location, radius, union approval and ride reservations. No server contract, booking, fare or dispatch state is changed.
+
+
+## Rider AI-01 trip-draft response and asynchronous fencing — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-01-RIDER-DRAFT-RESPONSE-001 | Approved Rider draft response | Accept only a bounded Cab draft with nullable pickup/drop-off, passenger count 1–6 or null, consistent clarification/missing fields, a known source and mandatory user confirmation. Project only approved draft fields; ignore unrelated metadata. | Automated Node unit | P1 |
+| AI-01-RIDER-DRAFT-RESPONSE-002 | Malformed or inconsistent draft | Reject non-record responses, blank/padded/oversized route text, non-Cab service, invalid passenger count, mismatched/duplicate/unknown missing fields, false confirmation and unknown provider source. | Automated Node unit | P1 |
+| AI-01-RIDER-DRAFT-ASYNC-001 | Latest request and authenticated session | Only the latest request sequence captured in the same authenticated session owns the draft request. A prior sequence or different session epoch cannot apply or clear the current request state. | Automated Node unit | P1 |
+| AI-01-RIDER-DRAFT-ASYNC-002 | User edits while draft is pending | A response is applied only when the trip-form revision is unchanged. Editing prompt, pickup, destination, stops or passengers prevents an older draft from overwriting the user's newer values. | Automated Node unit | P1 |
+| AI-01-RIDER-DRAFT-ASYNC-003 | Rider screen wiring and session reset | Snapshot the prompt at request start; validate the response; fence success/error/finally; session reset invalidates pending requests; an older finalizer cannot clear a newer request's busy state. | Automated Node source wiring + TypeScript | P1 |
+
+AI-01 is supplemental and outside the 19-row acceptance denominator. The Rider draft is editable only and requires explicit review; it does not create a booking, set a fare, charge or mutate ride state. The provider receives only the server-approved sanitized prompt; precise location, identity/KYC, contacts, payment details and tokens remain excluded.
+
+## Rider selected-booking negotiation expiry and terminal snapshot consistency — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-BOOKING-RESPONSE-003 | Server-approved negotiation expiry | For Negotiating or AgreementConfirmed selected-booking responses, require timezone-qualified requestedAt and negotiationExpiresAtUtc, with expiry strictly after request creation. Reject missing, malformed, timezone-less, equal or earlier expiry. A cleared null expiry is permitted after the server advances beyond negotiation (for example Accepted). | Automated Node unit | P1 |
+| RIDER-LOCATION-UI-003 | Conflicting terminal history snapshot | A stale/inconsistent terminal snapshot (for example Cancelled after an established Completed outcome) cannot replace the already-established terminal outcome; cached Driver coordinates remain cleared. | Automated Node unit | P1 |
+
+The API fails closed when the approved selected-driver negotiation lifetime is not configured. This Rider check is defense in depth: it rejects a malformed selected-booking response rather than displaying a negotiation with an invented or missing deadline. The API remains authoritative for lifecycle and expiry. Terminal ride states are immutable; a conflicting terminal snapshot is treated as stale/inconsistent and cannot regress or replace the established outcome.
+
+## CI and dependency audit evidence — 2026-11-19
+
+Exact-head [CI #44401573555](https://github.com/rajeevp727/turnova-platform/actions/runs/44401573555) passed all 9 required API/Android jobs on superseded head aa283ad5c61bdc6e334af0ac12d2cb8c5c7484b3: backend Release tests 758/758, shared mobile Node tests 339/339, Python harness 48/48, Rider/Driver Expo/config/TypeScript/Android bundles, debug and standalone release APKs, package identity, Android emulator install/launch smoke and native non-container .NET 10 API publish/artifact verification. Three iOS jobs were correctly skipped under the platform gate.
+
+The npm audit logs for both Rider and Driver in CI #44401573555 reported 0 critical, 0 high, 11 moderate and 0 low package nodes per app. The previously recorded picomatch High advisory was not reproduced in this audit; moderate findings remain for follow-up. This is not a claim that all moderate findings are remediated.
+
+Source-head CI #44408430795 on 26f3dcd8a018c929576947f5cdb21c9c73873704 passed backend 758/758, shared Node 345/345, Python 48/48 and Rider/Driver app validation/bundle jobs. Native Android debug APK compilation was still in progress at last inspection. Latest code head 1e7bf9a83cd1ef8f9422c07b56a82748b7e7aa87 has CI #44409433080 pending; neither prior run is final-head evidence for that commit.
