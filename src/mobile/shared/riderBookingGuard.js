@@ -13,7 +13,7 @@ function isSafeTrimmedText(value, maxLength = 256) {
 
 function normalizeOptionalTimestamp(value) {
   if (value === null || value === undefined) return null;
-  if (!isSafeTrimmedText(value, 64) || !Number.isFinite(Date.parse(value))) return null;
+  if (!isSafeTrimmedText(value, 64) || !isStrictIsoTimestampWithOffset(value)) return null;
   return value;
 }
 
@@ -21,9 +21,7 @@ const ISO_TIMESTAMP_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)
 const NEGOTIATION_STATUSES = new Set(["Negotiating", "AgreementConfirmed"]);
 
 function normalizeRequiredTimestamp(value) {
-  if (!isSafeTrimmedText(value, 64) ||
-      !ISO_TIMESTAMP_WITH_OFFSET.test(value) ||
-      !Number.isFinite(Date.parse(value))) return null;
+  if (!isSafeTrimmedText(value, 64) || !isStrictIsoTimestampWithOffset(value)) return null;
   return value;
 }
 
