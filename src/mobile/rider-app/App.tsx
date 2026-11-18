@@ -27,7 +27,7 @@ import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldPro
 import { getRiderDriverOptionProps, getRiderTripActionProps, getRiderTripFieldProps } from "../shared/riderTripForm";
 import { getRiderActivityActionProps, getRiderActivityFieldProps } from "../shared/riderActivityForm";
 import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps } from "../shared/riderProfileForm";
-import { getRiderSupportActionProps, getRiderSupportFieldProps, getRiderSupportRequestAttempt, validateRiderSupportRequest, type RiderSupportRequestAttempt } from "../shared/riderSupportRequest";
+import { getRiderSupportActionProps, getRiderSupportFieldProps, getRiderSupportRequestAttempt, submitRiderSupportRequest, validateRiderSupportRequest, type RiderSupportRequestAttempt } from "../shared/riderSupportRequest";
 
 type ThemePreference = "light" | "dark" | "system";
 type ThemeColors = {
@@ -67,7 +67,6 @@ type RideHistoryItem = { rideId: string; pickup: string; dropoff: string; passen
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
 type TripIntentDraft = { pickup: string | null; dropoff: string | null; serviceClass: string; passengerCount: number | null; needsClarification: boolean; missingFields: string[]; requiresUserConfirmation: boolean; source: string };
 type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
-type SupportRequestResponse = { requestId: string; submittedAtUtc: string; replayed: boolean };
 async function saveTokens(t: Tokens, isCurrent: () => boolean) { return saveSessionTokensIfCurrent(SecureStore, t, isCurrent); }
 async function clearTokens() { await clearSessionTokens(SecureStore); }
 async function request(path: string, init: RequestInit = {}, token?: string) {
@@ -384,7 +383,7 @@ export default function App() {
     supportAttemptRef.current=attempt;
     supportSubmissionInFlight.current=true;setSupportBusy(true);setSupportNotice("");setSupportError("");
     try{
-      const result=await apiFetch("/api/v1/support/requests",{method:"POST",headers:{"Idempotency-Key":attempt.idempotencyKey},body:JSON.stringify({subject:attempt.subject,description:attempt.description})}) as SupportRequestResponse;
+      const result=await submitRiderSupportRequest(apiFetch,attempt);
       setSupportNotice(`${result.replayed?"Your earlier support request was already accepted.":"Your support request was accepted."} Reference ${result.requestId}. This form does not assign a category, priority or response-time target.`);
       supportAttemptRef.current=null;setSupportSubject("");setSupportDescription("");
     }catch(e){
