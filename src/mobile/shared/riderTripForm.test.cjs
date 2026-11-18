@@ -91,10 +91,12 @@ test("RIDER-DISCOVERY-SESSION-001: fence discovery UI state by session and reque
   const searchEnd = source.indexOf("const cancelRide=async()=>{", searchStart);
   assert.ok(searchStart >= 0 && searchEnd > searchStart);
   const searchSource = source.slice(searchStart, searchEnd);
-  assert.match(searchSource, /const requestEpoch=sessionEpoch\.current/);
+  assert.match(searchSource, /const requestEpoch=renderedSessionEpoch/);
+  const initialSessionGuard = searchSource.indexOf("if(!isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch))return;");
+  const requestSequenceStart = searchSource.indexOf("const requestSequence=++riderDiscoveryRequestSequence.current");
+  assert.ok(initialSessionGuard >= 0 && requestSequenceStart > initialSessionGuard);
   assert.match(searchSource, /const requestSequence=\+\+riderDiscoveryRequestSequence\.current/);
-  assert.match(searchSource, /sessionEpoch\.current===requestEpoch/);
-  assert.match(searchSource, /isAuthenticatedSessionCurrent\(sessionEpoch,authenticatedSessionEpoch\)/);
+  assert.match(searchSource, /isSessionEpochCurrent\(sessionEpoch,authenticatedSessionEpoch,requestEpoch\)/);
   assert.match(searchSource, /shouldApplyRiderDiscoveryResponse\(requestSequence,riderDiscoveryRequestSequence\.current\)/);
   assert.match(searchSource, /canDiscoverRiderTrip\(pickup,dropoff,passengerCount\)/);
   assert.match(searchSource, /if\(!isCurrent\(\)\)return/);

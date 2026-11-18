@@ -25,6 +25,7 @@ import { passengerCountInputFromDraft, parsePassengerCountInput } from "../share
 import { canStartRiderBooking, hasActiveRiderRide } from "../shared/riderBookingGuard";
 import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps, tryBeginRiderAuthSubmission } from "../shared/riderAuthForm";
 import { canDiscoverRiderTrip, validateRiderBookingText, getRiderDriverOptionProps, getRiderTripActionProps, getRiderTripFieldProps, getVisibleUnionDrivers, normalizeRiderDiscoveryResponse, shouldApplyRiderDiscoveryResponse } from "../shared/riderTripForm";
+import { finishRiderBookingAttempt, tryBeginRiderBookingAttempt } from "../shared/riderBookingAttempt";
 import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
 import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideStatusEventValid } from "../shared/riderActivityPresentation";
 import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps } from "../shared/riderProfileForm";
@@ -81,6 +82,7 @@ export default function App() {
   const [user,setUser]=useState<User|null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0); const authenticatedSessionEpoch=useRef<number|null>(null);
+  const renderedSessionEpoch=sessionEpoch.current;
   const activeSessionStops=useRef<Set<() => unknown>>(new Set());
   const stopSessionResources=useCallback(()=>stopRegisteredConnections(activeSessionStops.current),[]);
   const invalidateSession=useCallback(()=>{const epoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);stopSessionResources();return epoch;},[stopSessionResources]);
@@ -127,7 +129,7 @@ export default function App() {
   const [bookingRequestKey,setBookingRequestKey]=useState(()=>`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const bookingRequestKeyRef=useRef(bookingRequestKey);
   const selectedBookingLocation=useRef(createSelectedBookingLocation(Location));
-  const bookingInFlight=useRef(false);
+  const bookingInFlight=useRef<string|null>(null);
   const resetSelectedBookingAttempt=useCallback(()=>{
     selectedBookingLocation.current.reset();
     const nextKey=`${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -143,6 +145,7 @@ export default function App() {
     setCancelBusy(false);
     setConfirmBusyVersion(null);
     setActiveRideStateLoaded(false);
+    bookingInFlight.current=null;
     riderDiscoveryRequestSequence.current += 1;
     setLoading(false);
     authenticatedSessionEpoch.current = null;
@@ -412,10 +415,10 @@ export default function App() {
   };
   const logout=async()=>{if(logoutInFlight.current)return;logoutInFlight.current=true;setLogoutBusy(true);const logoutEpoch=invalidateSession();try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}finally{logoutInFlight.current=false;setLogoutBusy(false);}if(sessionEpoch.current!==logoutEpoch)return;clearRiderSessionState();};
   const findNearbyVehicles=async()=>{
-    const requestEpoch=sessionEpoch.current;
+    const requestEpoch=renderedSessionEpoch;
+    if(!isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch))return;
     const requestSequence=++riderDiscoveryRequestSequence.current;
-    const isCurrent=()=>sessionEpoch.current===requestEpoch&&
-      isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)&&
+    const isCurrent=()=>isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch)&&
       shouldApplyRiderDiscoveryResponse(requestSequence,riderDiscoveryRequestSequence.current);
     if(!isCurrent())return;
     if(!canStartRiderBooking(activeRideStateLoaded,ride)){setLoading(false);if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before searching for another Driver.");}else{setError("Your active booking status is still being verified. Retry after the status check completes.");}return;}
@@ -451,7 +454,50 @@ export default function App() {
     }catch(e){if(isCurrent())setError(e instanceof Error?e.message:"Unable to cancel ride.");}
     finally{if(finishRiderActivityAction(activityActionInFlight,actionKey))setCancelBusy(false);}
   };
-   const requestSelectedDriver=async()=>{if(!canStartRiderBooking(activeRideStateLoaded,ride)){if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before requesting another Driver.");}else{setError("Your active booking status is still being verified. Retry after the status check completes.");}return;}if(!selectedDriver||!selectedUnion||bookingInFlight.current)return;const requestKey=bookingRequestKey;const selectedDriverIdForRequest=selectedDriver.driverId;const unionIdForRequest=selectedUnion.unionId;const pickupForRequest=pickup;const dropoffForRequest=dropoff;const stopsTextForRequest=stopsText;const bookingTextError=validateRiderBookingText(pickupForRequest,dropoffForRequest,stopsTextForRequest);if(bookingTextError!==null){setError(bookingTextError);return;}const stops=stopsTextForRequest.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean);const passengerCount=parsePassengerCountInput(passengers);if(passengerCount===null){setError("Enter a passenger count from 1 to 6 before requesting a driver.");return;}bookingInFlight.current=true;setLoading(true);setError("");try{const coordinates=await selectedBookingLocation.current.capture();if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");const created=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});setRide(created as Ride);setRideHistory(current=>[created as RideHistoryItem,...current.filter(item=>item.rideId!==created.rideId)]);setAgreementHistory([]);setAgreementAmount("");setTab("Activity");setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}catch(e){setError(e instanceof Error?e.message:"Unable to request the selected driver.");}finally{bookingInFlight.current=false;setLoading(false);}};
+   const requestSelectedDriver=async()=>{
+    const requestEpoch=renderedSessionEpoch;
+    const isCurrent=()=>isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch);
+    if(!isCurrent())return;
+    if(!canStartRiderBooking(activeRideStateLoaded,ride)){
+      if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before requesting another Driver.");}
+      else{setError("Your active booking status is still being verified. Retry after the status check completes.");}
+      return;
+    }
+    if(!selectedDriver||!selectedUnion)return;
+    const requestKey=bookingRequestKey;
+    const selectedDriverIdForRequest=selectedDriver.driverId;
+    const unionIdForRequest=selectedUnion.unionId;
+    const pickupForRequest=pickup;
+    const dropoffForRequest=dropoff;
+    const stopsTextForRequest=stopsText;
+    const bookingTextError=validateRiderBookingText(pickupForRequest,dropoffForRequest,stopsTextForRequest);
+    if(bookingTextError!==null){setError(bookingTextError);return;}
+    const stops=stopsTextForRequest.split(/\\r?\\n/).map(stop=>stop.trim()).filter(Boolean);
+    const passengerCount=parsePassengerCountInput(passengers);
+    if(passengerCount===null){setError("Enter a passenger count from 1 to 6 before requesting a driver.");return;}
+    if(!tryBeginRiderBookingAttempt(bookingInFlight,requestKey))return;
+    setLoading(true);
+    setError("");
+    try{
+      const coordinates=await selectedBookingLocation.current.capture();
+      if(!isCurrent())return;
+      if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");
+      const created=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});
+      if(!isCurrent())return;
+      setRide(created as Ride);
+      setRideHistory(current=>[created as RideHistoryItem,...current.filter(item=>item.rideId!==created.rideId)]);
+      setAgreementHistory([]);
+      setAgreementAmount("");
+      setTab("Activity");
+      setDiscovery(null);
+      setSelectedDriverId(null);
+      resetSelectedBookingAttempt();
+    }catch(e){
+      if(isCurrent())setError(e instanceof Error?e.message:"Unable to request the selected driver.");
+    }finally{
+      if(finishRiderBookingAttempt(bookingInFlight,requestKey)&&isCurrent())setLoading(false);
+    }
+  };
   const loadAgreementHistory=useCallback(async(rideId:string,isActive:()=>boolean=()=>true)=>{const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);if(!isCurrent())return false;const result=await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];if(!isCurrent())return false;setAgreementHistory(result);return true;},[apiFetch]);
   useEffect(()=>{if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}if(tab!=="Activity"||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;let active=true;void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(result=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory(result as AgreementVersion[]);}).catch(()=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory([]);});return()=>{active=false;};},[ride?.rideId,tab,apiFetch]);
    const proposeAgreement=async()=>{
