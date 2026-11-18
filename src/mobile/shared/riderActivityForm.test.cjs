@@ -119,7 +119,8 @@ test("Rider proposal, confirmation and cancellation serialize shared ride mutati
     "const activityActionBusy=cancelBusy||confirmBusyVersion!==null||proposalSubmitting;",
     'getRiderActivityActionProps("confirm",loading||activityActionBusy',
     'getRiderActivityActionProps("cancel",loading||activityActionBusy,cancelBusy)',
-    'getRiderActivityFieldProps("agreementAmount",activityActionBusy)'
+    'getRiderActivityFieldProps("agreementAmount",activityActionBusy)',
+    "editable={!activityActionBusy}"
   ]) assert.ok(source.includes(expected), "Missing shared action serialization: " + expected);
 });
 test("Rider map follow control announces resuming and pausing location following", () => {
