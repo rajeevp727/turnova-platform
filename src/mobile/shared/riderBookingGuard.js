@@ -1,4 +1,5 @@
 const TERMINAL_RIDE_STATUSES = new Set(["Completed", "Cancelled", "Expired"]);
+const ACTIVE_RIDE_STATUSES = new Set(["Accepted", "Arrived", "InProgress"]);
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
 
@@ -60,6 +61,8 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
       response.passengers !== expected.passengers ||
       response.serviceClass !== "cab" ||
       !isSafeTrimmedText(response.status, 64) ||
+      typeof response.locationSharingActive !== "boolean" ||
+      (response.locationSharingActive === true && !ACTIVE_RIDE_STATUSES.has(response.status)) ||
       (response.estimatedFareInr !== undefined && response.estimatedFareInr !== null) ||
       !Array.isArray(response.stops) ||
       response.stops.length !== expectedStops.length ||
@@ -81,9 +84,12 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
       pickupLatitude !== expectedPickupLatitude ||
       pickupLongitude !== expectedPickupLongitude) return null;
 
+  const locationSharingActive = response.locationSharingActive === true &&
+    ACTIVE_RIDE_STATUSES.has(response.status);
   const driverLatitude = normalizeCoordinate(response.driverLatitude, -90, 90);
   const driverLongitude = normalizeCoordinate(response.driverLongitude, -180, 180);
-  const hasDriverLocation = driverLatitude !== null && driverLongitude !== null;
+  const hasDriverLocation = locationSharingActive &&
+    driverLatitude !== null && driverLongitude !== null;
 
   const locationUpdatedAt = normalizeOptionalTimestamp(response.locationUpdatedAt);
   return {
@@ -93,6 +99,7 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
     passengers: response.passengers,
     serviceClass: "cab",
     status: response.status,
+    locationSharingActive,
     estimatedFareInr: null,
     stops: [...response.stops],
     unionId: response.unionId,

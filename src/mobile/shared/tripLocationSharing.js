@@ -51,8 +51,56 @@ function areValidCoordinates(latitude, longitude) {
     Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
 }
 
-function shouldApplyTripLocationUpdate(current, update) {
+const TERMINAL_TRIP_STATUSES = new Set(["Completed", "Cancelled", "Expired"]);
+
+function isRiderLocationSharingActive(ride) {
+  return Boolean(
+    ride &&
+    ACTIVE_TRIP_STATUSES.has(ride.status) &&
+    ride.locationSharingActive === true
+  );
+}
+
+function canShowRiderDriverLocation(ride) {
+  return Boolean(
+    isRiderLocationSharingActive(ride) &&
+    areValidCoordinates(ride.driverLatitude, ride.driverLongitude)
+  );
+}
+
+function clearDriverLocation(ride) {
+  return {
+    ...ride,
+    locationSharingActive: false,
+    driverLatitude: undefined,
+    driverLongitude: undefined,
+    driverLocationCapturedAtUtc: null,
+    locationCapturedAtUtc: null,
+    locationUpdatedAt: undefined
+  };
+}
+
+function applyRiderRideStatusUpdate(current, update) {
   if (!current || !update ||
+      typeof current.rideId !== "string" ||
+      current.rideId !== update.rideId ||
+      typeof update.status !== "string") return current;
+
+  // Terminal states cannot be regressed by a late/out-of-order SignalR event.
+  if (TERMINAL_TRIP_STATUSES.has(current.status) && current.status !== update.status) {
+    return clearDriverLocation(current);
+  }
+
+  if (isRiderLocationSharingActive(current) && ACTIVE_TRIP_STATUSES.has(update.status)) {
+    return { ...current, status: update.status, locationSharingActive: true };
+  }
+
+  return clearDriverLocation({ ...current, status: update.status });
+}
+
+function shouldApplyTripLocationUpdate(current, update) {
+  if (!isRiderLocationSharingActive(current) ||
+      !update ||
       typeof current.rideId !== "string" || !current.rideId ||
       update.rideId !== current.rideId ||
       !areValidCoordinates(update.latitude, update.longitude)) return false;
@@ -81,7 +129,20 @@ function shouldApplyTripLocationUpdate(current, update) {
 
 function mergeTripLocationSnapshot(current, snapshot) {
   if (!snapshot) return current;
-  if (!current || current.rideId !== snapshot.rideId) return snapshot;
+  if (!current || current.rideId !== snapshot.rideId) {
+    return isRiderLocationSharingActive(snapshot) ? snapshot : clearDriverLocation(snapshot);
+  }
+
+  // Never resurrect a terminal ride from a stale history snapshot.
+  if (TERMINAL_TRIP_STATUSES.has(current.status) &&
+      !TERMINAL_TRIP_STATUSES.has(snapshot.status)) {
+    return clearDriverLocation(current);
+  }
+
+  // Server-authoritative pause/terminal state clears any previously cached Driver GPS.
+  if (!isRiderLocationSharingActive(snapshot)) {
+    return clearDriverLocation({ ...current, ...snapshot });
+  }
 
   const captureTimestamp = snapshot.driverLocationCapturedAtUtc ??
     snapshot.locationCapturedAtUtc;
@@ -121,7 +182,7 @@ function mergeTripLocationSnapshot(current, snapshot) {
 function getRideMapFitCoordinates(ride) {
   if (!ride) return [];
   const coordinates = [];
-  if (areValidCoordinates(ride.driverLatitude, ride.driverLongitude)) {
+  if (canShowRiderDriverLocation(ride)) {
     coordinates.push({ latitude: ride.driverLatitude, longitude: ride.driverLongitude });
   }
   if (areValidCoordinates(ride.pickupLatitude, ride.pickupLongitude)) {
@@ -144,6 +205,8 @@ module.exports = {
   findAuthoritativeActiveTrip,
   shouldApplyTripLocationUpdate,
   mergeTripLocationSnapshot,
+  applyRiderRideStatusUpdate,
+  canShowRiderDriverLocation,
   getRideMapFitCoordinates,
   shouldFitRideMap
 };

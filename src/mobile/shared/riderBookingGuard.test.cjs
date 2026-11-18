@@ -154,6 +154,7 @@ const validSelectedBookingResponse = {
   passengers: 2,
   serviceClass: "cab",
   status: "Negotiating",
+  locationSharingActive: false,
   estimatedFareInr: null,
   stops: ["Madhapur"],
   requestedAt: "2026-11-19T00:00:00Z",
@@ -189,6 +190,7 @@ test("selected booking response matches the authenticated Rider, selected Driver
   assert.deepEqual(normalized.stops, ["Madhapur"]);
   assert.equal(normalized.requestedAt, validSelectedBookingResponse.requestedAt);
   assert.equal(normalized.estimatedFareInr, null);
+  assert.equal(normalized.locationSharingActive, false);
   assert.equal("auditEvents" in normalized, false);
   assert.equal("agreementVersions" in normalized, false);
   assert.equal("paymentReconciliation" in normalized, false);
@@ -221,6 +223,39 @@ for (const [name, override] of [
     );
   });
 }
+
+test("selected booking response exposes Driver coordinates only while an active ride shares location", () => {
+  const active = normalizeRiderSelectedBookingResponse({
+    ...validSelectedBookingResponse,
+    status: "InProgress",
+    locationSharingActive: true,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    driverLocationCapturedAtUtc: "2026-11-19T00:01:00Z"
+  }, validSelectedBookingExpected);
+  assert.ok(active);
+  assert.equal(active.locationSharingActive, true);
+  assert.equal(active.driverLatitude, 17.4);
+  assert.equal(active.driverLongitude, 78.4);
+
+  const paused = normalizeRiderSelectedBookingResponse({
+    ...validSelectedBookingResponse,
+    status: "InProgress",
+    locationSharingActive: false,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4
+  }, validSelectedBookingExpected);
+  assert.ok(paused);
+  assert.equal(paused.locationSharingActive, false);
+  assert.equal(paused.driverLatitude, undefined);
+  assert.equal(paused.driverLongitude, undefined);
+
+  assert.equal(normalizeRiderSelectedBookingResponse({
+    ...validSelectedBookingResponse,
+    status: "Negotiating",
+    locationSharingActive: true
+  }, validSelectedBookingExpected), null);
+});
 
 test("selected booking response requires a valid exact echo of the captured foreground pickup coordinates", () => {
   assert.equal(

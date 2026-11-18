@@ -30,6 +30,7 @@ export interface RiderSelectedBookingResult {
   passengers: number;
   serviceClass: "cab";
   status: string;
+  locationSharingActive: boolean;
   requestedAt: string;
   acceptedAt: string | null;
   estimatedFareInr: null;
