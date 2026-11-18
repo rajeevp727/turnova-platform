@@ -31,6 +31,26 @@ const ACTIVITY_ACTIONS = Object.freeze({
   }
 });
 
+function tryBeginRiderActivityAction(inFlight, key) {
+  if (!inFlight || typeof inFlight !== "object" || !("current" in inFlight)) throw new TypeError("A Rider activity action lock is required.");
+  if (typeof key !== "string" || !key || key !== key.trim() || key.length > 256 || /[\\u0000-\\u001f\\u007f]/.test(key)) {
+    throw new TypeError("A valid Rider activity action key is required.");
+  }
+  if (inFlight.current !== null) return false;
+  inFlight.current = key;
+  return true;
+}
+
+function finishRiderActivityAction(inFlight, key) {
+  if (!inFlight || typeof inFlight !== "object" || !("current" in inFlight)) throw new TypeError("A Rider activity action lock is required.");
+  if (typeof key !== "string" || !key || key !== key.trim() || key.length > 256 || /[\\u0000-\\u001f\\u007f]/.test(key)) {
+    throw new TypeError("A valid Rider activity action key is required.");
+  }
+  if (inFlight.current !== key) return false;
+  inFlight.current = null;
+  return true;
+}
+
 function getRiderActivityFieldProps(field, disabled) {
   const definition = ACTIVITY_FIELDS[field];
   if (!definition) throw new RangeError("Unknown Rider activity field.");
@@ -58,6 +78,8 @@ function getRiderActivityActionProps(action, disabled, busy, confirmed = false) 
 }
 
 module.exports = {
+  finishRiderActivityAction,
+  tryBeginRiderActivityAction,
   getRiderActivityActionProps,
   getRiderActivityFieldProps
 };
