@@ -138,9 +138,23 @@ test("Rider Activity screen wires tested status, agreement, history and cancella
 });
 
 
-test("Rider active and historical status labels expose only known lifecycle values", () => {
-  assert.equal(getRiderRideStatusLabel("InProgress"), "INPROGRESS");
-  assert.equal(getRiderRideStatusLabel("Completed"), "COMPLETED");
+test("Rider lifecycle labels are readable and expose only known lifecycle values", () => {
+  const expected = {
+    Requested: "REQUESTED",
+    Matching: "FINDING DRIVER",
+    Offered: "WAITING FOR DRIVER",
+    Negotiating: "NEGOTIATING",
+    AgreementConfirmed: "AGREEMENT CONFIRMED",
+    Accepted: "DRIVER ACCEPTED",
+    Arrived: "DRIVER ARRIVED",
+    InProgress: "IN PROGRESS",
+    Completed: "COMPLETED",
+    Cancelled: "CANCELLED",
+    Expired: "EXPIRED"
+  };
+  for (const [status, label] of Object.entries(expected)) {
+    assert.equal(getRiderRideStatusLabel(status), label);
+  }
   assert.equal(getRiderRideStatusLabel("FutureServerStatus"), "STATUS UNAVAILABLE");
   assert.equal(getRiderRideStatusLabel(""), "STATUS UNAVAILABLE");
   assert.equal(getRiderRideStatusLabel(null), "STATUS UNAVAILABLE");
