@@ -117,6 +117,12 @@ function getRiderRideStatusLabel(status) {
   return RIDE_STATUS_LABELS.get(status) ?? "STATUS UNAVAILABLE";
 }
 
+function isRiderRideAgreementEventValid(update, expectedRideId) {
+  return isSafeAgreementText(expectedRideId, 128) &&
+    isRecord(update) &&
+    update.rideId === expectedRideId;
+}
+
 function isRiderRideStatusEventValid(update, expectedRideId) {
   if (typeof expectedRideId !== "string" || expectedRideId.length === 0 || expectedRideId !== expectedRideId.trim()) return false;
   if (!update || typeof update !== "object" || Array.isArray(update)) return false;
@@ -210,6 +216,7 @@ function isRiderCancellationResponseValid(response, expectedRideId) {
 
 module.exports = {
   getRiderRideStatusLabel,
+  isRiderRideAgreementEventValid,
   isRiderRideStatusEventValid,
   getRiderRideStatusMessage,
   getRiderHistoryAccessibilityLabel,

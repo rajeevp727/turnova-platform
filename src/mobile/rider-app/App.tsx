@@ -27,7 +27,7 @@ import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldPro
 import { canDiscoverRiderTrip, validateRiderBookingText, getRiderDriverOptionProps, getRiderTripActionProps, getRiderTripFieldProps, getVisibleUnionDrivers, normalizeRiderDiscoveryResponse, shouldApplyRiderDiscoveryResponse } from "../shared/riderTripForm";
 import { finishRiderBookingAttempt, tryBeginRiderBookingAttempt } from "../shared/riderBookingAttempt";
 import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
-import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideStatusEventValid, normalizeRiderAgreementHistory, shouldApplyRiderAgreementHistoryResponse } from "../shared/riderActivityPresentation";
+import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideAgreementEventValid, isRiderRideStatusEventValid, normalizeRiderAgreementHistory, shouldApplyRiderAgreementHistoryResponse } from "../shared/riderActivityPresentation";
 import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps } from "../shared/riderProfileForm";
 import { getRiderSupportActionProps, getRiderSupportFieldProps, getRiderSupportRequestAttempt, submitRiderSupportRequest, validateRiderSupportRequest, type RiderSupportRequestAttempt } from "../shared/riderSupportRequest";
 
@@ -294,8 +294,14 @@ export default function App() {
     activeSessionStops.current.add(stopConnection);
     const refreshAgreements=async()=>{
       if(!active||!isConnectionCurrent())return;
-      const history=await apiFetch(`/api/v1/rides/${ride.rideId}/agreements`) as AgreementVersion[];
-      if(active&&isConnectionCurrent())setAgreementHistory(history);
+      const requestSequence=++agreementHistoryRequestSequence.current;
+      const isCurrent=()=>active&&isConnectionCurrent()&&
+        shouldApplyRiderAgreementHistoryResponse(requestSequence,agreementHistoryRequestSequence.current);
+      const response=await apiFetch(`/api/v1/rides/${encodeURIComponent(ride.rideId)}/agreements`) as unknown;
+      if(!isCurrent())return;
+      const history=normalizeRiderAgreementHistory(response,ride.rideId);
+      if(!history)throw new Error("Agreement history response is invalid. Refresh Activity before confirming or proposing another version.");
+      if(isCurrent())setAgreementHistory(history);
     };
     const refreshRiderState=async()=>{
       if(!active||!isConnectionCurrent())return;
@@ -324,7 +330,7 @@ export default function App() {
       }
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
-      if(active&&isConnectionCurrent()&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>{if(active&&isConnectionCurrent())setError(e instanceof Error?e.message:"Unable to refresh fare agreement.");});
+      if(active&&isConnectionCurrent()&&isRiderRideAgreementEventValid(update,ride.rideId))void refreshAgreements().catch(e=>{if(active&&isConnectionCurrent())setError(e instanceof Error?e.message:"Unable to refresh fare agreement.");});
     });
     connection.onreconnected(()=>{if(active&&isConnectionCurrent())void refreshRiderState();});
     void startSignalRConnection(connection, () => active&&isConnectionCurrent(), () => {

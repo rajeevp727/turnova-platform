@@ -7,6 +7,7 @@ const test = require("node:test");
 const {
   getRiderAgreementVersionAccessibilityLabel,
   getRiderRideStatusLabel,
+  isRiderRideAgreementEventValid,
   isRiderRideStatusEventValid,
   getRiderAgreementVersionCreatedAtLabel,
   getRiderAgreementVersionRouteLabel,
@@ -302,4 +303,39 @@ test("Rider Activity screen validates agreement history and fences stale agreeme
   assert.match(source, /shouldApplyRiderAgreementHistoryResponse\(requestSequence,agreementHistoryRequestSequence\.current\)/);
   assert.match(source, /loadAgreementHistory\(ride\.rideId,\(\)=>active\)/);
   assert.match(source, /agreementHistoryRequestSequence\.current \+= 1/);
+});
+
+
+test("Rider agreement realtime events require an exact ride identity and object payload", () => {
+  assert.equal(isRiderRideAgreementEventValid({ rideId: "ride-1" }, "ride-1"), true);
+  for (const invalid of [
+    null,
+    [],
+    "ride-1",
+    {},
+    { rideId: "ride-2" },
+    { rideId: " ride-1" },
+    { rideId: "ride-1\\n" }
+  ]) {
+    assert.equal(isRiderRideAgreementEventValid(invalid, "ride-1"), false);
+  }
+});
+
+test("RIDER-AGREEMENT-REALTIME-001: SignalR agreement refresh validates and sequences history before state commit", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const eventStart = source.indexOf('connection.on("RideAgreementChanged"');
+  const eventEnd = source.indexOf("connection.onreconnected", eventStart);
+  assert.ok(eventStart >= 0 && eventEnd > eventStart);
+  const eventHandler = source.slice(eventStart, eventEnd);
+  assert.match(eventHandler, /isRiderRideAgreementEventValid\\(update,ride\\.rideId\\)/);
+
+  const refreshStart = source.indexOf("const refreshAgreements=async()=>{");
+  const refreshEnd = source.indexOf("const refreshRiderState", refreshStart);
+  assert.ok(refreshStart >= 0 && refreshEnd > refreshStart);
+  const refresh = source.slice(refreshStart, refreshEnd);
+  const request = refresh.indexOf("apiFetch(");
+  const sequence = refresh.indexOf("shouldApplyRiderAgreementHistoryResponse(");
+  const normalization = refresh.indexOf("normalizeRiderAgreementHistory(response,ride.rideId)");
+  const commit = refresh.indexOf("setAgreementHistory(history)");
+  assert.ok(request >= 0 && sequence > request && normalization > sequence && commit > normalization);
 });
