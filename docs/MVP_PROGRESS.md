@@ -2764,7 +2764,7 @@ PR [#191](https://github.com/rajeevp727/turnova-platform/pull/191), final docume
 
 The PR #191 boundary sends only support subject/description with the existing reporter-scoped Idempotency-Key, validates requestId/submittedAtUtc/replayed before announcing acceptance, and retains the same attempt on network/503/malformed success. SUPPORT-01 remains Blocked: Product/Operations policy, positive approved retention/consent, Cosmos configuration/TTL migration and operational handoff are not complete. The unpatched High picomatch advisory remains disclosed in reviewed transitive build/test tooling; it is not a clean audit or a vulnerability fix.
 
-## Current Rider Android handoff — PR #192
+## Historical Rider Android handoff — PR #192 (superseded)
 
 PR [#192](https://github.com/rajeevp727/turnova-platform/pull/192) is the sole active feature PR. The change serializes Rider proposal, confirmation and cancellation actions with a keyed lock. Cancellation and confirmation responses are applied only while both the authenticated session epoch and current ride ID still match; cancellation response ride identity/status is validated, and successful confirmation reloads the server-authoritative agreement history. Busy/disabled accessibility state is exposed and agreement amount editing is disabled while a ride mutation is active. The server remains authoritative; no API, agreement, fare, payment or ride-state contract changed.
 
@@ -2841,7 +2841,7 @@ Artifacts: Rider debug APK [14430354079](https://github.com/rajeevp727/turnova-p
 
 The CI smoke is install/cold-launch/foreground-process evidence only. It does not prove full React Native UI interaction, TalkBack, live API/Cosmos/SignalR/TriSend, production authentication or physical-device acceptance. The inherited High picomatch GHSA-fc5q-39xc-vjpf remains unpatched in reviewed transitive Expo/Metro/Jest build tooling; it is disclosed, not represented as a clean audit or vulnerability fix.
 
-PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
+Historical pre-merge PR #193 handoff; superseded by the merged status and exact-head evidence in the current-step section above.
 
 **Next exact action:** complete the documented source/diff review, verify PR head and CI remain unchanged, then merge only if repository policy still permits without self-approval or bypass. After merge, re-read `main` and continue Rider-only gap audit. Do not start Driver feature completion until Rider's in-scope implementation, tests, builds, emulator smoke and available Rider-specific acceptance checks exit. Do not start iOS until both Android apps exit.
 
