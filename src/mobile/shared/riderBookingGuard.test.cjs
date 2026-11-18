@@ -12,16 +12,25 @@ for (const status of [
   });
 }
 
-for (const status of ["Completed", "Cancelled", "Expired", "Unknown"]) {
+for (const status of ["Completed", "Cancelled", "Expired"]) {
   test("active Rider booking guard permits a new booking after " + status, () => {
     assert.equal(hasActiveRiderRide({ status }), false);
   });
 }
 
-test("active Rider booking guard fails closed for missing ride state", () => {
+test("active Rider booking guard distinguishes absent ride state from malformed ride records", () => {
   assert.equal(hasActiveRiderRide(null), false);
   assert.equal(hasActiveRiderRide(undefined), false);
-  assert.equal(hasActiveRiderRide({}), false);
+  assert.equal(hasActiveRiderRide({}), true);
+  assert.equal(hasActiveRiderRide({ status: null }), true);
+  assert.equal(hasActiveRiderRide({ status: "" }), true);
+  assert.equal(hasActiveRiderRide({ status: 42 }), true);
+});
+
+test("unknown future Rider lifecycle status blocks a new booking until known terminal confirmation", () => {
+  const ride = { status: "FutureServerStatus" };
+  assert.equal(hasActiveRiderRide(ride), true);
+  assert.equal(canStartRiderBooking(true, ride), false);
 });
 
 test("Rider app loads the server-owned active ride before enabling booking", () => {
