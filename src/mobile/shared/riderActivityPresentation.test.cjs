@@ -155,6 +155,7 @@ test("Rider status events reject malformed identity/status but allow unknown fut
   assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed " }, "ride-123"), false);
   assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "x".repeat(65) }, "ride-123"), false);
   assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed\n" }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed\u0085" }, "ride-123"), false);
   assert.equal(isRiderRideStatusEventValid(null, "ride-123"), false);
   assert.equal(isRiderRideStatusEventValid([], "ride-123"), false);
   assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed" }, " ride-123"), false);
