@@ -3466,9 +3466,9 @@ These deterministic helper/source tests do not replace Android TalkBack, full Re
 
 ## Rider Activity mutation single-flight — PR #192 execution evidence (2026-11-18)
 
-The six cases RIDER-ACTIVITY-ACTION-001..006 are defined in the Rider Activity test table above and were executed on code-bearing head `ea3cae2cba7578206e4160c52fc7c8e09e2e1f67` in [CI #44273380360](https://github.com/rajeevp727/turnova-platform/actions/runs/44273380360). The shared Node suite passed **276/276** (0 failed, 0 skipped); backend Release tests passed **758/758**; Python harness passed **48/48**. All 9 required API/Android jobs passed and iOS jobs were correctly skipped. Both Android APK variants and emulator install/launch smoke jobs passed for Rider and Driver; native non-container API publish/artifact validation passed.
+The first five cases RIDER-ACTIVITY-ACTION-001..005 were executed on code-bearing head `ea3cae2cba7578206e4160c52fc7c8e09e2e1f67` in [CI #44273380360](https://github.com/rajeevp727/turnova-platform/actions/runs/44273380360). The shared Node suite passed **276/276** (0 failed, 0 skipped); backend Release tests passed **758/758**; Python harness passed **48/48**. All 9 required API/Android jobs passed and iOS jobs were correctly skipped. Both Android APK variants and emulator install/launch smoke jobs passed for Rider and Driver; native non-container API publish/artifact validation passed.
 
-These cases include deterministic lock-helper unit tests and App.tsx source-wiring regressions. They do not replace physical-device, TalkBack, live API/Cosmos, or production acceptance. The later documentation synchronization requires a fresh exact-head CI run.
+RIDER-ACTIVITY-ACTION-006 was added in follow-up source/test head `1d9f07a5b7cf9bf581111009c2a1092a6e3c1ddc` after review found a session-reset stale-finalizer collision. It has not yet passed CI. These cases include deterministic lock-helper unit tests and App.tsx source-wiring regressions; they do not replace physical-device, TalkBack, live API/Cosmos, or production acceptance.
 
 
 ## Rider Activity action-owner isolation follow-up — PR #192
