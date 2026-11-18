@@ -25,6 +25,8 @@ export interface RiderActivityAgreementVersion {
   driverConfirmed: boolean;
   driverConfirmedAtUtc: string | null;
 }
+export function getRiderRideStatusLabel(status: unknown): string;
+export function isRiderRideStatusEventValid(update: unknown, expectedRideId: string): boolean;
 export function getRiderRideStatusMessage(ride: RiderActivityRideStatus): string;
 export function getRiderHistoryAccessibilityLabel(item: RiderActivityHistoryItem): string;
 export function getRiderAgreementVersionRouteLabel(item: RiderActivityAgreementVersion): string;
