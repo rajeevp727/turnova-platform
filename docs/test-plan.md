@@ -3400,3 +3400,18 @@ These deterministic helper/source tests do not replace TalkBack, full UI interac
 PR [#188](https://github.com/rajeevp727/turnova-platform/pull/188), source/test head `deb9ced3f56bdadeaef6ec1cc48f0d6a1a3f44cf`, documentation head `b52f2d2e7613fe1747863e6bc906185e5625edf5`, passed exact-head [CI #44228346853](https://github.com/rajeevp727/turnova-platform/actions/runs/44228346853). The shared Node suite passed **252/252** (RIDER-ACTIVITY-ACCESS-001..007 included); backend passed **758/758** and Python harness **48/48**. All 9 required API/Android jobs passed; 3 iOS jobs were correctly skipped. Rider and Driver Expo config/TypeScript/Android bundle, debug/release APK, package identity and emulator install/launch smoke passed; native non-container API publish passed.
 
 Artifacts: Rider debug 14394701203, release 14393927609, smoke 14394677620; Driver debug 14393787652, release 14393689801, smoke 14393823572; API publish 14394280934. These are deterministic helper/source tests and emulator install/launch evidence, not TalkBack/full UI interaction, live API/Cosmos/SignalR or physical-device acceptance. No server-side agreement, cancellation, tracking or payment behavior changed.
+
+
+## Rider Android profile/help/theme/navigation accessibility
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-PROFILE-ACCESS-001 | Theme options | System/light/dark choices expose a labelled radio group and the selected option is announced. Unknown options fail closed. | Automated Node unit | P1 |
+| RIDER-PROFILE-ACCESS-002 | Help question input | Field exposes an accessible label/hint explaining approved help content and possible support escalation; input is disabled while a request is active. | Automated Node unit/source wiring | P1 |
+| RIDER-PROFILE-ACCESS-003 | Help action | Announces approved-help request and busy/disabled state; explicitly cannot book, charge or change a ride. | Automated Node unit | P1 |
+| RIDER-PROFILE-ACCESS-004 | Help answer | Returned answer is exposed as polite screen-reader text and retains escalation notice. | Automated Node source wiring | P1 |
+| RIDER-PROFILE-ACCESS-005 | Sign-out | Sign-out action announces busy state, disables repeated taps and preserves the existing session invalidation/secure logout flow. | Automated Node unit/source wiring | P1 |
+| RIDER-PROFILE-ACCESS-006 | Rider navigation | Book/Activity/Offers/Profile tabs expose tab role, accessible label, selected state and disabled state. | Automated Node unit | P1 |
+| RIDER-PROFILE-ACCESS-007 | Profile screen wiring | Profile identity, help, theme, navigation, global error announcements and single-flight guards are wired to stable test IDs/helpers. | Automated Node source wiring | P1 |
+
+These deterministic helper/source tests do not replace TalkBack, full UI interaction, live API/Cosmos/TriSend, signed-device or physical-device acceptance. No API, auth token contract, fare, booking, ride or dispatch behavior is changed by this accessibility increment.
