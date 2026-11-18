@@ -6,6 +6,8 @@ const path = require("node:path");
 const test = require("node:test");
 const {
   getRiderAgreementVersionAccessibilityLabel,
+  getRiderRideStatusLabel,
+  isRiderRideStatusEventValid,
   getRiderAgreementVersionCreatedAtLabel,
   getRiderAgreementVersionRouteLabel,
   getRiderHistoryAccessibilityLabel,
@@ -133,4 +135,34 @@ test("Rider Activity screen wires tested status, agreement, history and cancella
   assert.ok(source.includes("getRiderAgreementVersionCreatedAtLabel(item)"));
   assert.ok(source.includes("accessibilityLabel={getRiderHistoryAccessibilityLabel(item)}"));
   assert.ok(source.includes("isRiderCancellationResponseValid(updated,rideId)"));
+});
+
+
+test("Rider active and historical status labels expose only known lifecycle values", () => {
+  assert.equal(getRiderRideStatusLabel("InProgress"), "INPROGRESS");
+  assert.equal(getRiderRideStatusLabel("Completed"), "COMPLETED");
+  assert.equal(getRiderRideStatusLabel("FutureServerStatus"), "STATUS UNAVAILABLE");
+  assert.equal(getRiderRideStatusLabel(""), "STATUS UNAVAILABLE");
+  assert.equal(getRiderRideStatusLabel(null), "STATUS UNAVAILABLE");
+});
+
+test("Rider status events reject malformed identity/status but allow unknown future lifecycle values", () => {
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "InProgress" }, "ride-123"), true);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "FutureServerStatus" }, "ride-123"), true);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-other", status: "Completed" }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "" }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "  " }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed " }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "x".repeat(65) }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed\n" }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid(null, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid([], "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed" }, " ride-123"), false);
+});
+
+test("Rider Activity uses safe labels and validates live status events before applying them", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.ok(source.includes("getRiderRideStatusLabel(ride.status)"));
+  assert.ok(source.includes("getRiderRideStatusLabel(item.status)"));
+  assert.ok(source.includes("isRiderRideStatusEventValid(update,ride.rideId)"));
 });
