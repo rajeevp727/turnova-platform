@@ -3664,3 +3664,17 @@ The shared Rider timestamp helper validates the actual calendar day, clock and o
 | RIDER-LOCATION-UI-004 | SignalR Driver-location timestamp validation | Reject impossible/malformed capture or receipt timestamps before the Rider invokes shared location-ordering logic; valid offset-qualified timestamps continue to use the existing monotonic freshness rules. | Automated Node unit + source wiring | P1 |
 
 These are Rider-only response/event validation changes. The shared Driver location workflow and server-owned GPS timestamps are unchanged; the API remains authoritative for ride state and location-sharing permission.
+
+
+## Rider DateTimeOffset timestamp boundary regressions — PR #194
+
+The Rider response timestamp validator now mirrors the range representable by the API's .NET `DateTimeOffset` values: calendar years 0001–9999, offsets no greater than exactly ±14:00, at most seven fractional-second digits (100 ns tick precision), and a UTC-normalized instant that remains within the .NET date range.
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-TIMESTAMP-001 | Valid DateTimeOffset boundaries | Accept the minimum UTC instant expressed as `0001-01-01T14:00:00+14:00`, the maximum boundary sample `9999-12-31T09:59:59-14:00`, and seven fractional digits | Automated Node unit | P1 |
+| RIDER-TIMESTAMP-002 | Year and fractional precision | Reject year 0000 and more than seven fractional-second digits | Automated Node unit | P1 |
+| RIDER-TIMESTAMP-003 | Offset range | Reject offsets beyond ±14:00, including ±14:01 | Automated Node unit | P1 |
+| RIDER-TIMESTAMP-004 | UTC range after offset normalization | Reject local timestamps whose offset moves the UTC instant before year 0001 or after year 9999 | Automated Node unit | P1 |
+
+These are response-validation regressions only. They do not change API timestamp serialization, ride lifecycle, agreement writes, location authority or persistence. The exact documentation-bearing PR head requires fresh CI; no result from a superseded head is substituted.
