@@ -3372,3 +3372,10 @@ The emulator smoke harness verifies installation, launch, stable process and log
 | RIDER-BOOK-ACCESS-008 | Rider booking screen wiring | Stable test IDs and accessible helper props are wired to every trip input, draft/discovery/request action and explicit Driver option. | Automated Node source wiring | P1 |
 
 These tests are deterministic helper/source tests; they do not replace Android TalkBack testing, full screen interaction tests, live API/Cosmos validation or physical-device acceptance. Rider remains the active Android app until its in-scope implementation and evidence exit; Driver feature completion follows, and iOS remains gated.
+
+
+## Rider Android trip-form and Driver-selection accessibility — exact-head verification
+
+PR [#187](https://github.com/rajeevp727/turnova-platform/pull/187), source/test head `6aa02c2041cc1d6722d4609749f4e1139b428f8c`, exact-head CI [#44213341447](https://github.com/rajeevp727/turnova-platform/actions/runs/44213341447) passed all 9 required API/Android jobs; the 3 iOS jobs were correctly skipped. The shared Node suite passed **245/245**, including RIDER-BOOK-ACCESS-001..008; backend passed 758/758 and Python harness passed 48/48. Rider and Driver Expo config/TypeScript/Android production bundle, debug/release APK, package identity and emulator install/launch smoke passed. Native non-container API publish passed.
+
+Artifacts: Rider debug 14386729590, release 14387099487, emulator smoke 14387603510; Driver debug 14387770989, release 14388565215, emulator smoke 14387692092; API publish 14386583968. The eight new cases are deterministic helper/source-wiring tests; they do not replace TalkBack, full UI interaction, live API/Cosmos/TriSend or physical-device acceptance. Finish remaining Rider work before Driver; do not start iOS until both Android apps exit.
