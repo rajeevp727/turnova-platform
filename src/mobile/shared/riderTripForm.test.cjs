@@ -82,10 +82,9 @@ test("Rider trip helpers reject unknown fields and actions", () => {
 
 test("Rider destination starts empty so discovery cannot use an assumed demo destination", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
-  assert.match(source, /const \\[dropoff,setDropoff\\]=useState\\("\\?"?\\)/);
-  assert.doesNotMatch(source, /useState\\("HITEC City, Hyderabad"\\)/);
+  assert.ok(source.includes('const [dropoff,setDropoff]=useState("");'));
+  assert.ok(!source.includes('useState("HITEC City, Hyderabad")'));
 });
-
 test("Rider booking screen wires accessible trip fields, actions and explicit driver selection", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   for (const id of [
