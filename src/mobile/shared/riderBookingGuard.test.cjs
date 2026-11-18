@@ -353,3 +353,40 @@ test("Rider selected-booking response requires timezone-qualified server timesta
     requestedAt: "2026-11-19T00:00:00"
   }, validSelectedBookingExpected), null);
 });
+
+
+test("RIDER-BOOKING-RESPONSE-004: rejects impossible calendar dates, invalid clock values and invalid offsets", () => {
+  for (const requestedAt of [
+    "2026-11-31T00:00:00Z",
+    "2026-02-30T00:00:00Z",
+    "2026-11-19T25:00:00Z",
+    "2026-11-19T00:00:00+24:00",
+    "2026-11-19T00:00:00+05:60"
+  ]) {
+    assert.equal(normalizeRiderSelectedBookingResponse({
+      ...validSelectedBookingResponse,
+      requestedAt
+    }, validSelectedBookingExpected), null, requestedAt);
+  }
+
+  for (const negotiationExpiresAtUtc of [
+    "2026-11-31T00:15:00Z",
+    "2026-11-19T25:15:00Z",
+    "2026-11-19T00:15:00+24:00",
+    "2026-11-19T00:15:00+05:60"
+  ]) {
+    assert.equal(normalizeRiderSelectedBookingResponse({
+      ...validSelectedBookingResponse,
+      status: "Negotiating",
+      negotiationExpiresAtUtc
+    }, validSelectedBookingExpected), null, negotiationExpiresAtUtc);
+  }
+
+  const leapDay = normalizeRiderSelectedBookingResponse({
+    ...validSelectedBookingResponse,
+    requestedAt: "2024-02-29T00:00:00Z",
+    status: "Negotiating",
+    negotiationExpiresAtUtc: "2024-02-29T00:15:00Z"
+  }, validSelectedBookingExpected);
+  assert.ok(leapDay);
+});
