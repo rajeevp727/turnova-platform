@@ -3551,4 +3551,15 @@ The emulator evidence is install/cold-launch/foreground-process smoke only. It d
 
 The UI cap is defense in depth; the API already orders by driver-to-pickup proximity and applies `Take(3)`. The client does not sort, assign or rank by FIFO. The destination guard prevents the previous demo destination from being used without Rider input.
 
-Current source/test head `2479acb4c7f9055107c7c6cbe447614336cd23ad` is newer than the in-progress [CI #44353987443](https://github.com/rajeevp727/turnova-platform/actions/runs/44353987443), which started on the earlier source head `02fd57d40b8a774d91c30d649fa945ac352da1b1`; that run is not final-head evidence. The prior documentation-bearing head `c2af86de8eae82b9b53464caa1a0b33796096991` passed [CI #44345673098](https://github.com/rajeevp727/turnova-platform/actions/runs/44345673098) (backend 758/758, Node 298/298, Python 48/48, all 9 required API/Android jobs green; 3 iOS jobs skipped), but the later Rider UI changes require fresh exact-head CI.
+Code/test head `97e9e05d8f88bd1010eca6faf72f8acd177c1c8a` triggered [CI #44360041638](https://github.com/rajeevp727/turnova-platform/actions/runs/44360041638), which is pending. The documentation synchronization will trigger a new final-head CI run. Earlier [CI #44345673098](https://github.com/rajeevp727/turnova-platform/actions/runs/44345673098) passed on superseded head `c2af86de8eae82b9b53464caa1a0b33796096991` (backend 758/758, Node 298/298, Python 48/48, all 9 required API/Android jobs green; 3 iOS jobs skipped); it is not evidence for the latest code.
+
+
+## Rider discovery request preflight and stale-response fencing
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-DISCOVERY-PREFLIGHT-001 | Validate trip input before discovery | Both pickup and destination must be non-empty after trimming, and passenger count must be a whole number from 1 to 6. The handler rejects invalid input before requesting GPS or calling the discovery API; the UI uses the same helper for its disabled state. | Automated Node unit + source wiring | P1 |
+| RIDER-DISCOVERY-SEQUENCE-001 | Ignore stale discovery responses | Only the latest safe request sequence may apply; stale, zero, negative, non-integer and unsafe sequences are rejected. | Automated Node unit | P1 |
+| RIDER-DISCOVERY-SESSION-001 | Fence discovery results across session changes | Discovery success/error/finally continuations update state only while the captured session epoch and request sequence remain current. Session reset invalidates pending discovery and clears loading so an old account cannot repopulate a signed-out or replacement session. | Automated Node source wiring + helper unit | P1 |
+
+These are client-side race and input safeguards. The API remains authoritative for eligibility, location, radius, union approval and ride reservations. No server contract, booking, fare or dispatch state is changed.
