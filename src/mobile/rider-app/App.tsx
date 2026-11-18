@@ -104,6 +104,7 @@ export default function App() {
   const proposalSubmissionSequence=useRef(0);
   const [proposalSubmitting,setProposalSubmitting]=useState(false);
   const activityActionInFlight=useRef<string|null>(null);
+  const activityActionSequence=useRef(0);
   const [cancelBusy,setCancelBusy]=useState(false);
   const [confirmBusyVersion,setConfirmBusyVersion]=useState<number|null>(null);
   const currentRideIdRef=useRef<string|null>(null);
@@ -417,9 +418,9 @@ export default function App() {
   const cancelRide=async()=>{
     const rideId=ride?.rideId;
     if(!rideId||proposalSubmissionInFlight.current)return;
-    const actionKey=`cancel:${rideId}`;
-    if(!tryBeginRiderActivityAction(activityActionInFlight,actionKey))return;
     const requestEpoch=sessionEpoch.current;
+    const actionKey=`cancel:${requestEpoch}:${++activityActionSequence.current}:${rideId}`;
+    if(!tryBeginRiderActivityAction(activityActionInFlight,actionKey))return;
     const isCurrent=()=>currentRideIdRef.current===rideId&&isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch);
     setCancelBusy(true);setError("");
     try{
@@ -481,9 +482,9 @@ export default function App() {
     const rideId=ride?.rideId;
     const current=agreementHistory[agreementHistory.length-1];
     if(!rideId||!current||current.riderConfirmed||proposalSubmissionInFlight.current)return;
-    const actionKey=`confirm:${rideId}:${current.version}`;
-    if(!tryBeginRiderActivityAction(activityActionInFlight,actionKey))return;
     const requestEpoch=sessionEpoch.current;
+    const actionKey=`confirm:${requestEpoch}:${++activityActionSequence.current}:${rideId}:${current.version}`;
+    if(!tryBeginRiderActivityAction(activityActionInFlight,actionKey))return;
     const isCurrent=()=>currentRideIdRef.current===rideId&&isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch);
     setConfirmBusyVersion(current.version);setError("");
     try{
