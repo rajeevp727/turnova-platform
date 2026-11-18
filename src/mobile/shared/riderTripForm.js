@@ -62,6 +62,10 @@ function getRiderTripActionProps(action, disabled, busy) {
   };
 }
 
+function getVisibleUnionDrivers(drivers) {
+  return Array.isArray(drivers) ? drivers.slice(0, 3) : [];
+}
+
 function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
   const name = typeof driver?.fullName === "string" && driver.fullName.trim()
     ? driver.fullName.trim()
@@ -89,6 +93,7 @@ function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
 }
 
 module.exports = {
+  getVisibleUnionDrivers,
   getRiderDriverOptionProps,
   getRiderTripActionProps,
   getRiderTripFieldProps
