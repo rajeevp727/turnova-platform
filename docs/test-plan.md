@@ -3653,3 +3653,14 @@ These are Rider privacy/concurrency safeguards. They do not change the support A
 | RIDER-AGREEMENT-RESPONSE-002 | Agreement timestamp calendar validity | Reject impossible calendar dates in immutable agreement creation/confirmation timestamps and render malformed negotiation/history dates as unavailable rather than allowing Date.parse normalization. | Automated Node unit | P1 |
 
 The shared Rider timestamp helper validates the actual calendar day, clock and offset before relying on Date.parse. This prevents JavaScript Date.parse from normalizing impossible dates such as 2026-02-30 into a different valid day. API-owned timestamps remain authoritative; this is client response-validation and presentation hardening only.
+
+
+## Rider history and live-location timestamp validation — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-HISTORY-010 | Visible trip-history date formatting | Impossible calendar dates are shown as `Date unavailable` in visible and accessibility labels; they are never normalized to a different day. | Automated Node unit + source wiring | P1 |
+| RIDER-HISTORY-011 | Active ride-detail timestamp contract | Reject active ride details containing impossible non-null request, acceptance, negotiation-expiry, location-receipt or location-capture timestamps; booking remains disabled until valid server state is recovered. Missing optional legacy timestamps remain compatible. | Automated Node unit | P1 |
+| RIDER-LOCATION-UI-004 | SignalR Driver-location timestamp validation | Reject impossible/malformed capture or receipt timestamps before the Rider invokes shared location-ordering logic; valid offset-qualified timestamps continue to use the existing monotonic freshness rules. | Automated Node unit + source wiring | P1 |
+
+These are Rider-only response/event validation changes. The shared Driver location workflow and server-owned GPS timestamps are unchanged; the API remains authoritative for ride state and location-sharing permission.
