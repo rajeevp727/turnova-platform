@@ -420,7 +420,7 @@ export default function App() {
     if(!isCurrent())return;
     if(!canStartRiderBooking(activeRideStateLoaded,ride)){setLoading(false);if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before searching for another Driver.");}else{setError("Your active booking status is still being verified. Retry after the status check completes.");}return;}
     const passengerCount=parsePassengerCountInput(passengers);
-    if(!canDiscoverRiderTrip(pickup,dropoff,passengerCount)){setLoading(false);setDiscovery(null);setSelectedDriverId(null);setError("Enter a pickup, destination and passenger count from 1 to 6 before searching.");return;}
+    if(passengerCount===null||!canDiscoverRiderTrip(pickup,dropoff,passengerCount)){setLoading(false);setDiscovery(null);setSelectedDriverId(null);setError("Enter a pickup, destination and passenger count from 1 to 6 before searching.");return;}
     setLoading(true);setError("");setSelectedDriverId(null);setDiscovery(null);resetSelectedBookingAttempt();
     try {
       const {discovery:rawResult}=await discoverNearbyCabDrivers(Location,apiFetch,passengerCount);
