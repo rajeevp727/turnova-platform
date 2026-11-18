@@ -3356,3 +3356,19 @@ PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), source/test 
 Artifacts: Rider APK [14379339290](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14379339290), Driver APK [14381230261](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14381230261), Rider smoke [14379978000](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14379978000), Driver smoke [14380083368](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14380083368).
 
 The emulator smoke harness verifies installation, launch, stable process and login-screen presence only. It does not exercise live API/TriSend/Cosmos, TalkBack/VoiceOver, signed SecureStore/Keychain or physical-device acceptance. Keep Rider-first order: complete Rider app flows/tests before Driver; do not enable iOS until both Android apps meet their engineering exit criteria.
+
+
+## Rider Android trip-form and Driver-selection accessibility
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-BOOK-ACCESS-001 | Trip-intent draft input | Accessible label/hint states the input is optional and creates an editable draft only; it never books or charges. | Automated Node unit/source wiring | P1 |
+| RIDER-BOOK-ACCESS-002 | Pickup and destination notes | Accessible labels distinguish pickup landmark text from GPS pickup-zone matching and destination text from journey routing/distance. | Automated Node unit/source wiring | P1 |
+| RIDER-BOOK-ACCESS-003 | Stops and passenger count | Stops announce one-per-line order; passenger input announces the 1–6 whole-number range and disabled state. | Automated Node unit/source wiring | P1 |
+| RIDER-BOOK-ACCESS-004 | Draft/discovery action state | Actions expose button role, clear label, hint, disabled/busy state; discovery states the Rider chooses and no automatic assignment occurs. | Automated Node unit | P1 |
+| RIDER-BOOK-ACCESS-005 | Selected-driver request action | Announces direct fare negotiation only and explicitly states TurnOva does not quote or collect payment. | Automated Node unit | P1 |
+| RIDER-BOOK-ACCESS-006 | Driver option accessibility | Each option exposes radio checked/disabled state and announces Driver, approved Union, verified Cab vehicle, capacity and distance-to-pickup (not journey distance). | Automated Node unit | P1 |
+| RIDER-BOOK-ACCESS-007 | Invalid helper inputs | Unknown trip fields/actions fail closed with RangeError. | Automated Node unit | P2 |
+| RIDER-BOOK-ACCESS-008 | Rider booking screen wiring | Stable test IDs and accessible helper props are wired to every trip input, draft/discovery/request action and explicit Driver option. | Automated Node source wiring | P1 |
+
+These tests are deterministic helper/source tests; they do not replace Android TalkBack testing, full screen interaction tests, live API/Cosmos validation or physical-device acceptance. Rider remains the active Android app until its in-scope implementation and evidence exit; Driver feature completion follows, and iOS remains gated.
