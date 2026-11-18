@@ -73,7 +73,7 @@ test("Rider Activity mutation guard allows one action and only its owner can rel
 test("Rider Activity mutation guard rejects malformed lock keys", () => {
   const lock = { current: null };
   assert.throws(() => tryBeginRiderActivityAction(lock, " bad "), /valid Rider activity action key/);
-  assert.throws(() => tryBeginRiderActivityAction(lock, "bad\\r\\nkey"), /valid Rider activity action key/);
+  assert.throws(() => tryBeginRiderActivityAction(lock, "bad\r\nkey"), /valid Rider activity action key/);
   assert.throws(() => tryBeginRiderActivityAction(null, "cancel:ride-1"), /lock is required/);
   assert.equal(lock.current, null);
 });
@@ -84,12 +84,14 @@ test("Rider cancellation is single-flight and ignores stale ride/session respons
   const end = source.indexOf("const requestSelectedDriver", start);
   assert.ok(start >= 0 && end > start);
   const handler = source.slice(start, end);
-  assert.match(handler, /tryBeginRiderActivityAction\\(activityActionInFlight,actionKey\\)/);
-  assert.match(handler, /currentRideIdRef\\.current===rideId/);
-  assert.match(handler, /isSessionEpochCurrent\\(sessionEpoch,authenticatedSessionEpoch,requestEpoch\\)/);
-  assert.match(handler, /finishRiderActivityAction\\(activityActionInFlight,actionKey\\)/);
-  assert.match(handler, /setCancelBusy\\(false\\)/);
-  assert.match(handler, /updated\\.rideId!==rideId/);
+  for (const expected of [
+    "tryBeginRiderActivityAction(activityActionInFlight,actionKey)",
+    "currentRideIdRef.current===rideId",
+    "isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch)",
+    "finishRiderActivityAction(activityActionInFlight,actionKey)",
+    "setCancelBusy(false)",
+    "updated.rideId!==rideId"
+  ]) assert.ok(handler.includes(expected), "Missing cancellation guard: " + expected);
 });
 
 test("Rider agreement confirmation is single-flight per ride/version and refreshes authoritative history", () => {
@@ -98,25 +100,28 @@ test("Rider agreement confirmation is single-flight per ride/version and refresh
   const end = source.indexOf("useEffect(()=>{if(!user", start);
   assert.ok(start >= 0 && end > start);
   const handler = source.slice(start, end);
-  assert.match(handler, /const actionKey=\x60confirm:\$\\{rideId\\}:\$\\{current\\.version\\}\x60/);
-  assert.match(handler, /current\\.riderConfirmed/);
-  assert.match(handler, /tryBeginRiderActivityAction\\(activityActionInFlight,actionKey\\)/);
-  assert.match(handler, /loadAgreementHistory\\(rideId,isCurrent\\)/);
-  assert.match(handler, /finishRiderActivityAction\\(activityActionInFlight,actionKey\\)/);
-  assert.match(handler, /setConfirmBusyVersion\\(null\\)/);
+  for (const expected of [
+    "confirm:${rideId}:${current.version}",
+    "current.riderConfirmed",
+    "tryBeginRiderActivityAction(activityActionInFlight,actionKey)",
+    "loadAgreementHistory(rideId,isCurrent)",
+    "finishRiderActivityAction(activityActionInFlight,actionKey)",
+    "setConfirmBusyVersion(null)"
+  ]) assert.ok(handler.includes(expected), "Missing confirmation guard: " + expected);
 });
 
 test("Rider proposal, confirmation and cancellation serialize shared ride mutations", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
-  assert.match(source, /if\\(!rideId\\|\\|!proposalUserId\\|\\|proposalSubmissionInFlight\\.current\\|\\|activityActionInFlight\\.current\\)return/);
-  assert.match(source, /if\\(!rideId\\|\\|proposalSubmissionInFlight\\.current\\)return/);
-  assert.match(source, /if\\(!rideId\\|\\|!current\\|\\|current\\.riderConfirmed\\|\\|proposalSubmissionInFlight\\.current\\)return/);
-  assert.match(source, /const activityActionBusy=cancelBusy\\|\\|confirmBusyVersion!==null\\|\\|proposalSubmitting/);
-  assert.match(source, /getRiderActivityActionProps\\("confirm",loading\\|\\|activityActionBusy/);
-  assert.match(source, /getRiderActivityActionProps\\("cancel",loading\\|\\|activityActionBusy,cancelBusy/);
-  assert.match(source, /getRiderActivityFieldProps\\("agreementAmount",activityActionBusy\\)/);
+  for (const expected of [
+    "if(!rideId||!proposalUserId||proposalSubmissionInFlight.current||activityActionInFlight.current)return;",
+    "if(!rideId||proposalSubmissionInFlight.current)return;",
+    "if(!rideId||!current||current.riderConfirmed||proposalSubmissionInFlight.current)return;",
+    "const activityActionBusy=cancelBusy||confirmBusyVersion!==null||proposalSubmitting;",
+    'getRiderActivityActionProps("confirm",loading||activityActionBusy',
+    'getRiderActivityActionProps("cancel",loading||activityActionBusy,cancelBusy)',
+    'getRiderActivityFieldProps("agreementAmount",activityActionBusy)'
+  ]) assert.ok(source.includes(expected), "Missing shared action serialization: " + expected);
 });
-
 test("Rider map follow control announces resuming and pausing location following", () => {
   const props = getRiderActivityActionProps("followDriver", false, false);
   assert.equal(props.accessibilityLabel, "Follow driver on map");
@@ -143,10 +148,10 @@ test("Rider Activity screen wires agreement, status, cancellation, tracking and 
   ]) {
     assert.ok(source.includes('testID="' + id + '"'), "Missing Rider Activity testID: " + id);
   }
-  assert.match(source, /getRiderActivityFieldProps\("agreementAmount",proposalSubmitting\)/);
+  assert.ok(source.includes('getRiderActivityFieldProps("agreementAmount",activityActionBusy)'));
   assert.match(source, /getRiderActivityActionProps\("propose"/);
   assert.match(source, /getRiderActivityActionProps\("confirm"/);
-  assert.match(source, /getRiderActivityActionProps\("cancel",loading,loading\)/);
+  assert.ok(source.includes('getRiderActivityActionProps("cancel",loading||activityActionBusy,cancelBusy)'));
   assert.match(source, /getRiderActivityActionProps\("followDriver",false,false\)/);
   assert.ok(source.includes("rider-agreement-version-"));
   assert.ok(source.includes("rider-history-"));
