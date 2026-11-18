@@ -127,10 +127,26 @@ test("Rider discovery response rejects malformed public contracts and photo meta
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, distanceToPickupKm: Infinity }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, passengerCapacity: 7 }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=" }] }] },
-    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "text/html" }] }] }
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "text/html" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "/9j/AA==", profilePhotoContentType: "image/jpeg", profilePhotoApprovalStatus: "Pending" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "/9j/AA==", profilePhotoContentType: "image/jpeg", profilePhotoApprovalStatus: "Approved", profilePhotoApprovedByUnionId: "other-union" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [validDriver, validDriver] }] }
   ]) {
     assert.equal(normalizeRiderDiscoveryResponse(invalid), null);
   }
+});
+
+test("Rider discovery defaults a validated JPEG photo type only when server approval metadata is absent", () => {
+  const driver = {
+    driverId: "driver-photo", fullName: "Asha Rao", vehicleMake: "Maruti", vehicleModel: "Dzire",
+    serviceClass: "cab", passengerCapacity: 4, distanceToPickupKm: 1.2,
+    profilePhotoBase64: "/9j/AA==", profilePhotoContentType: null
+  };
+  const result = normalizeRiderDiscoveryResponse({
+    pickupZoneId: "zone-hyd-1", journeyDistanceKm: null,
+    unions: [{ unionId: "union-1", unionName: "Green Cab Union", drivers: [driver] }]
+  });
+  assert.equal(result.unions[0].drivers[0].profilePhotoContentType, "image/jpeg");
 });
 
 test("Rider union display keeps at most the first three server-ordered drivers", () => {
