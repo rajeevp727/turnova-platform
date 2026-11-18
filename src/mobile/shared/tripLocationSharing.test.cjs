@@ -133,6 +133,13 @@ test("history snapshot that disables sharing clears cached Driver coordinates", 
   assert.equal(merged.driverLatitude, undefined);
   assert.equal(merged.driverLongitude, undefined);
   assert.equal(merged.locationUpdatedAt, undefined);
+
+  const terminalCurrent = { ...current, status: "Completed", locationSharingActive: false, driverLatitude: undefined, driverLongitude: undefined };
+  const staleActiveSnapshot = { ...current, status: "InProgress", locationSharingActive: true };
+  const noResurrection = mergeTripLocationSnapshot(terminalCurrent, staleActiveSnapshot);
+  assert.equal(noResurrection.status, "Completed");
+  assert.equal(noResurrection.locationSharingActive, false);
+  assert.equal(noResurrection.driverLatitude, undefined);
 });
 
 test("Rider accepts only a strictly newer capture timestamp for the same ride", () => {
@@ -295,7 +302,7 @@ test("Rider status events invalidate pending history and use the location-cleari
   const invalidation = handler.indexOf("rideHistoryRequestSequence.current+=1");
   const statusUpdate = handler.indexOf("applyRiderRideStatusUpdate(current,update)");
   assert.ok(invalidation >= 0 && statusUpdate > invalidation);
-  assert.match(source, /canShowRiderDriverLocation\\(ride\\)/);
+  assert.ok(source.includes("canShowRiderDriverLocation(ride)"));
 });
 
 test("Rider camera follows only after the matching map is ready and follow is enabled", () => {
