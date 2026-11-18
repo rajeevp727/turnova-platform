@@ -3480,10 +3480,21 @@ A code review identified a stale-finalizer collision if an Activity action is in
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| RIDER-ACTIVITY-HISTORY-001 | Ride status presentation | Requested/Matching/Offered, Negotiating with valid/invalid deadline, AgreementConfirmed, Accepted, Arrived, InProgress, Completed, Expired and Cancelled map to accurate Rider-facing status text without adding payment, dispute or dispatch outcomes. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-001 | Ride status presentation | Known RideLifecycle statuses use truthful Rider-facing messages; unknown future values say the status is unavailable rather than implying a driver/dispatch outcome. | Automated Node unit | P1 |
 | RIDER-ACTIVITY-HISTORY-002 | Trip-history accessibility summary | Screen-reader label includes pickup, destination, status, passenger count, historical service class, request time and ride reference; missing values fail safely. | Automated Node unit | P1 |
-| RIDER-ACTIVITY-HISTORY-003 | Immutable agreement accessibility summary | Screen-reader label includes agreement version, persisted currency/amount, proposer and both parties' confirmation states/timestamps. | Automated Node unit | P1 |
-| RIDER-ACTIVITY-HISTORY-004 | Cancellation response validation | Client applies a cancellation response only when its ride ID matches and status is a non-empty string; malformed/mismatched responses are rejected. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-003 | Immutable agreement accessibility summary | Screen-reader label includes agreement version, persisted currency/amount, pickup, destination, optional stops, creation time, proposer and both parties' confirmation states/timestamps; route/time are also visible per version. | Automated Node unit + source wiring | P1 |
+| RIDER-ACTIVITY-HISTORY-004 | Cancellation response validation | Client applies a cancellation response only when its ride ID matches and status is an exact known RideLifecycle value; blank, padded, unknown and mismatched responses are rejected. | Automated Node unit | P1 |
 | RIDER-ACTIVITY-HISTORY-005 | Rider Activity source wiring | Activity status, agreement rows, history rows and cancellation response path use the tested presentation/validation helpers. | Automated Node source wiring | P1 |
+| RIDER-ACTIVITY-HISTORY-006 | Unknown lifecycle status fallback | An unrecognized future status announces that the status is unavailable and does not imply FIFO, automatic assignment or payment outcome. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-007 | Agreement route/time fallback | Missing pickup/drop-off/stops and invalid creation timestamps produce safe labels without throwing or showing an invalid date. | Automated Node unit | P1 |
 
 This is a Rider-only presentation/validation increment. It does not change API contracts, ride lifecycle, agreement confirmation, fare, payment or reconciliation policy. Server-owned lifecycle status remains authoritative. The history summary preserves the stored service class so historical non-Cab records remain readable. Full React Native interaction, TalkBack on physical devices and live API/Cosmos/SignalR acceptance remain separate evidence gates.
+
+
+## Rider Activity/history follow-up — PR #193 validation snapshot (2026-11-18)
+
+The previous code/test head `be8d8bb5f28a85de67b70efb51e47bfe8e10e6f5` passed [CI #44299657489](https://github.com/rajeevp727/turnova-platform/actions/runs/44299657489): backend Release **758/758**, shared mobile Node **284/284**, Python **48/48**; all 9 required API/Android jobs passed, including Rider and Driver Expo/config/TypeScript/Android bundle checks, debug and standalone release APKs, package identity and both emulator install/launch smoke jobs, plus native non-container API Release publish. The three iOS jobs were correctly skipped by the platform gate.
+
+A final source review tightened cancellation-response validation to the exact known server lifecycle values and made unknown status text fail safely. Agreement-version rows now expose their immutable pickup/drop-off/stops snapshot and creation time visibly and in the screen-reader label. Fresh exact-head CI is required for this follow-up and documentation synchronization; the prior successful run is not substituted for the new head.
+
+This remains Rider-only client presentation/response validation. It does not alter server lifecycle, agreement persistence, fare, payment, dispatch, FIFO or reconciliation policy. Physical-device TalkBack, live API/Cosmos/SignalR/TriSend and production authentication remain external gates.
