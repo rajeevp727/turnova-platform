@@ -3511,3 +3511,14 @@ The CI smoke is install/cold-launch/foreground-process evidence only. It does no
 PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
 
 The deterministic cases RIDER-ACTIVITY-HISTORY-001..007 are recorded above. This run validates the API/Android CI pipeline and emulator install/launch only; it does not close manual accessibility, live-service or physical-device acceptance.
+
+
+## Rider Android live status-event validation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-ACTIVITY-STATUS-001 | Active and historical status labels | Known server lifecycle values display their canonical label; unknown, blank or malformed values display "STATUS UNAVAILABLE". | Automated Node unit | P1 |
+| RIDER-ACTIVITY-STATUS-002 | SignalR status-event validation | Exact current ride ID and a non-empty, trimmed, bounded status are required; malformed events are ignored while unknown future values remain eligible for the neutral unavailable fallback. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-STATUS-003 | Rider Activity source wiring | Active ride and history labels use the safe formatter; the live RideStatusChanged handler validates event identity/status and session ownership before applying an update. | Automated Node source wiring | P1 |
+
+Unknown future server values are deliberately not mapped to a guessed lifecycle outcome. The Rider may retain the unknown value internally so the Activity message can say the status is unavailable, but the visible status label never renders an unrecognized raw value. Empty, padded, control-character, oversized and cross-ride status events fail closed. Server lifecycle remains authoritative; this is client-side validation/presentation only.
