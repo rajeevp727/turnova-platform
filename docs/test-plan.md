@@ -3379,3 +3379,24 @@ These tests are deterministic helper/source tests; they do not replace Android T
 PR [#187](https://github.com/rajeevp727/turnova-platform/pull/187), source/test head `6aa02c2041cc1d6722d4609749f4e1139b428f8c`, exact-head CI [#44213341447](https://github.com/rajeevp727/turnova-platform/actions/runs/44213341447) passed all 9 required API/Android jobs; the 3 iOS jobs were correctly skipped. The shared Node suite passed **245/245**, including RIDER-BOOK-ACCESS-001..008; backend passed 758/758 and Python harness passed 48/48. Rider and Driver Expo config/TypeScript/Android production bundle, debug/release APK, package identity and emulator install/launch smoke passed. Native non-container API publish passed.
 
 Artifacts: Rider debug 14386729590, release 14387099487, emulator smoke 14387603510; Driver debug 14387770989, release 14388565215, emulator smoke 14387692092; API publish 14386583968. The eight new cases are deterministic helper/source-wiring tests; they do not replace TalkBack, full UI interaction, live API/Cosmos/TriSend or physical-device acceptance. Finish remaining Rider work before Driver; do not start iOS until both Android apps exit.
+
+## Rider Android Activity, agreement and tracking accessibility
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-ACTIVITY-ACCESS-001 | Agreement amount input | Accessible label/hint describes direct proposal/counterproposal and explicitly states TurnOva does not estimate, set or collect fares; disabled state follows submission state. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-ACCESS-002 | Proposal action | Announces proposal/counter action, busy/disabled state and mutual confirmation requirement without implying platform pricing or collection. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-ACCESS-003 | Current agreement confirmation | Distinguishes unconfirmed from already-confirmed current version; changed terms require a new version and both parties' confirmation. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-ACCESS-004 | Cancellation action | Announces a server-owned cancellation request and busy/disabled state; client does not claim final status. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-ACCESS-005 | Map follow action | Announces resuming follow of the latest shared Driver location and explains map panning pauses following. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-ACCESS-006 | Invalid helper inputs | Unknown activity fields/actions fail closed with RangeError. | Automated Node unit | P2 |
+| RIDER-ACTIVITY-ACCESS-007 | Activity screen wiring | Stable test IDs and helper props are wired to agreement, status, cancellation, follow and trip-history controls. | Automated Node source wiring | P1 |
+
+These deterministic helper/source tests do not replace TalkBack, full UI interaction, live SignalR/API/Cosmos, or physical-device acceptance. No server-side agreement, cancellation or tracking behavior is changed by this accessibility increment.
+
+
+## Rider Android Activity/agreement/tracking accessibility — exact-head execution evidence (2026-11-18)
+
+PR [#188](https://github.com/rajeevp727/turnova-platform/pull/188), source/test head `deb9ced3f56bdadeaef6ec1cc48f0d6a1a3f44cf`, documentation head `b52f2d2e7613fe1747863e6bc906185e5625edf5`, passed exact-head [CI #44228346853](https://github.com/rajeevp727/turnova-platform/actions/runs/44228346853). The shared Node suite passed **252/252** (RIDER-ACTIVITY-ACCESS-001..007 included); backend passed **758/758** and Python harness **48/48**. All 9 required API/Android jobs passed; 3 iOS jobs were correctly skipped. Rider and Driver Expo config/TypeScript/Android bundle, debug/release APK, package identity and emulator install/launch smoke passed; native non-container API publish passed.
+
+Artifacts: Rider debug 14394701203, release 14393927609, smoke 14394677620; Driver debug 14393787652, release 14393689801, smoke 14393823572; API publish 14394280934. These are deterministic helper/source tests and emulator install/launch evidence, not TalkBack/full UI interaction, live API/Cosmos/SignalR or physical-device acceptance. No server-side agreement, cancellation, tracking or payment behavior changed.
