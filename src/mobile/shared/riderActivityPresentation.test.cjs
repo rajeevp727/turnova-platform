@@ -369,3 +369,27 @@ test("RIDER-AGREEMENT-REALTIME-001: SignalR agreement refresh validates and sequ
   const commit = refresh.indexOf("setAgreementHistory(history)");
   assert.ok(sequence >= 0 && sequence < request && normalization > request && commit > normalization);
 });
+
+
+test("RIDER-AGREEMENT-RESPONSE-002: rejects impossible calendar dates in immutable agreement timestamps", () => {
+  const valid = validRiderAgreementVersion();
+  for (const item of [
+    { ...valid, createdAtUtc: "2026-11-31T00:00:00Z" },
+    { ...valid, riderConfirmed: true, riderConfirmedAtUtc: "2026-11-31T00:01:00Z" },
+    { ...valid, driverConfirmed: true, driverConfirmedAtUtc: "2026-11-31T00:01:00Z" },
+    { ...valid, createdAtUtc: "2026-11-19T25:00:00Z" },
+    { ...valid, createdAtUtc: "2026-11-19T00:00:00+24:00" }
+  ]) {
+    assert.equal(normalizeRiderAgreementHistory([item], "ride-agreement-123"), null);
+  }
+
+  const leapDay = {
+    ...valid,
+    createdAtUtc: "2024-02-29T00:00:00Z",
+    riderConfirmed: true,
+    riderConfirmedAtUtc: "2024-02-29T00:01:00Z",
+    driverConfirmed: true,
+    driverConfirmedAtUtc: "2024-02-29T00:02:00Z"
+  };
+  assert.ok(normalizeRiderAgreementHistory([leapDay], "ride-agreement-123"));
+});
