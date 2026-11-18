@@ -1,14 +1,3 @@
-const ACTIVE_RIDE_STATUSES = new Set([
-  "Requested",
-  "Matching",
-  "Offered",
-  "Negotiating",
-  "AgreementConfirmed",
-  "Accepted",
-  "Arrived",
-  "InProgress"
-]);
-
 const TERMINAL_RIDE_STATUSES = new Set(["Completed", "Cancelled", "Expired"]);
 
 function hasActiveRiderRide(ride) {
