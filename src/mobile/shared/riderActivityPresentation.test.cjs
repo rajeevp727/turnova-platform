@@ -8,10 +8,12 @@ const {
   getRiderAgreementVersionAccessibilityLabel,
   getRiderRideStatusLabel,
   isRiderRideAgreementEventValid,
+  isRiderRideLocationTimestampValid,
   isRiderRideStatusEventValid,
   getRiderAgreementVersionCreatedAtLabel,
   getRiderAgreementVersionRouteLabel,
   getRiderHistoryAccessibilityLabel,
+  getRiderHistoryRequestedAtLabel,
   getRiderRideStatusMessage,
   isRiderCancellationResponseValid,
   normalizeRiderAgreementHistory,
@@ -393,3 +395,33 @@ test("RIDER-AGREEMENT-RESPONSE-002: rejects impossible calendar dates in immutab
   };
   assert.ok(normalizeRiderAgreementHistory([leapDay], "ride-agreement-123"));
 });
+
+test("Rider visible trip-history date uses strict calendar validation", () => {
+  const valid = "2026-11-18T10:15:00.000Z";
+  assert.equal(getRiderHistoryRequestedAtLabel({ requestedAt: valid }), new Date(valid).toLocaleString());
+  assert.equal(getRiderHistoryRequestedAtLabel({ requestedAt: "2026-11-31T10:15:00Z" }), "Date unavailable");
+  assert.equal(getRiderHistoryRequestedAtLabel({ requestedAt: "not-a-date" }), "Date unavailable");
+});
+
+test("RIDER-LOCATION-UI-004: reject impossible or malformed SignalR location timestamps before shared ordering", () => {
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationCapturedAtUtc: "2026-11-19T00:00:00Z",
+    locationUpdatedAt: "2026-11-19T00:00:01Z"
+  }), true);
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationCapturedAtUtc: "2026-11-31T00:00:00Z",
+    locationUpdatedAt: "2026-12-01T00:00:01Z"
+  }), false);
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationUpdatedAt: "2026-11-31T00:00:01Z"
+  }), false);
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationCapturedAtUtc: "2026-11-19T00:00:00+24:00"
+  }), false);
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationCapturedAtUtc: null,
+    locationUpdatedAt: "2026-11-19T00:00:01Z"
+  }), true);
+  assert.equal(isRiderRideLocationTimestampValid(null), false);
+});
+
