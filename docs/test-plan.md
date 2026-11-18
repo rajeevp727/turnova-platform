@@ -3474,3 +3474,16 @@ RIDER-ACTIVITY-ACTION-006 was added in follow-up source/test head `1d9f07a5b7cf9
 ## Rider Activity action-owner isolation follow-up — PR #192
 
 A code review identified a stale-finalizer collision if an Activity action is invalidated by session reset and the same ride/version is then reacquired: a static `cancel:{rideId}` or `confirm:{rideId}:{version}` key could be reused. Action owner tokens now include the captured session epoch and a monotonically increasing component-local sequence, so a prior request's `finally` cannot release a later owner's lock even when the ride and agreement version are identical. RIDER-ACTIVITY-ACTION-006 covers this reset/reacquire scenario and passed on final documentation-bearing head CI #44290908866. This is client-side coordination only; server-owned transitions and mutual confirmation remain authoritative.
+
+
+## Rider Android Activity/history presentation and accessibility — 2026-11-18
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-ACTIVITY-HISTORY-001 | Ride status presentation | Requested/Matching/Offered, Negotiating with valid/invalid deadline, AgreementConfirmed, Accepted, Arrived, InProgress, Completed, Expired and Cancelled map to accurate Rider-facing status text without adding payment, dispute or dispatch outcomes. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-002 | Trip-history accessibility summary | Screen-reader label includes pickup, destination, status, passenger count, historical service class, request time and ride reference; missing values fail safely. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-003 | Immutable agreement accessibility summary | Screen-reader label includes agreement version, persisted currency/amount, proposer and both parties' confirmation states/timestamps. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-004 | Cancellation response validation | Client applies a cancellation response only when its ride ID matches and status is a non-empty string; malformed/mismatched responses are rejected. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-005 | Rider Activity source wiring | Activity status, agreement rows, history rows and cancellation response path use the tested presentation/validation helpers. | Automated Node source wiring | P1 |
+
+This is a Rider-only presentation/validation increment. It does not change API contracts, ride lifecycle, agreement confirmation, fare, payment or reconciliation policy. Server-owned lifecycle status remains authoritative. The history summary preserves the stored service class so historical non-Cab records remain readable. Full React Native interaction, TalkBack on physical devices and live API/Cosmos/SignalR acceptance remain separate evidence gates.
