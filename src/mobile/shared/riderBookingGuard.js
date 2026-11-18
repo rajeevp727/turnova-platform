@@ -28,7 +28,7 @@ function normalizeCoordinate(value, minimum, maximum) {
  *
  * @param {unknown} response
  * @param {{ riderId: string, driverId: string, unionId: string, pickup: string, dropoff: string, stops: string[], passengers: number, pickupLatitude: number, pickupLongitude: number }} expected
- * @returns {null | { rideId: string, pickup: string, dropoff: string, passengers: number, serviceClass: "cab", status: string, estimatedFareInr: null, stops: string[], unionId: string, unionName: string, driverDisplayName: string, driverVehicleMake: string, driverVehicleModel: string, driverDistanceToPickupKm: number, negotiationExpiresAtUtc: string | null, pickupLatitude: number, pickupLongitude: number, driverLatitude?: number, driverLongitude?: number, locationCapturedAtUtc: string | null, driverLocationCapturedAtUtc: string | null, locationUpdatedAt?: string, requestedAt: string, acceptedAt: string | null }}
+ * @returns {null | { rideId: string, pickup: string, dropoff: string, passengers: number, serviceClass: "cab", status: string, locationSharingActive: boolean, estimatedFareInr: null, stops: string[], unionId: string, unionName: string, driverDisplayName: string, driverVehicleMake: string, driverVehicleModel: string, driverDistanceToPickupKm: number, negotiationExpiresAtUtc: string | null, pickupLatitude: number, pickupLongitude: number, driverLatitude?: number, driverLongitude?: number, locationCapturedAtUtc: string | null, driverLocationCapturedAtUtc: string | null, locationUpdatedAt?: string, requestedAt: string, acceptedAt: string | null }}
  */
 function normalizeRiderSelectedBookingResponse(response, expected) {
   const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
