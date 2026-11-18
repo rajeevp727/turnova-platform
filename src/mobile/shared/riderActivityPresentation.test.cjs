@@ -396,7 +396,7 @@ test("RIDER-AGREEMENT-RESPONSE-002: rejects impossible calendar dates in immutab
   assert.ok(normalizeRiderAgreementHistory([leapDay], "ride-agreement-123"));
 });
 
-test("Rider visible trip-history date uses strict calendar validation", () => {
+test("RIDER-HISTORY-010: visible trip-history date uses strict calendar validation", () => {
   const valid = "2026-11-18T10:15:00.000Z";
   assert.equal(getRiderHistoryRequestedAtLabel({ requestedAt: valid }), new Date(valid).toLocaleString());
   assert.equal(getRiderHistoryRequestedAtLabel({ requestedAt: "2026-11-31T10:15:00Z" }), "Date unavailable");
@@ -423,5 +423,15 @@ test("RIDER-LOCATION-UI-004: reject impossible or malformed SignalR location tim
     locationUpdatedAt: "2026-11-19T00:00:01Z"
   }), true);
   assert.equal(isRiderRideLocationTimestampValid(null), false);
+
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const eventStart = source.indexOf('connection.on("DriverLocationUpdated"');
+  const eventEnd = source.indexOf('connection.on("RideStatusChanged"', eventStart);
+  assert.ok(eventStart >= 0 && eventEnd > eventStart);
+  const eventSource = source.slice(eventStart, eventEnd);
+  const timestampGuard = eventSource.indexOf("isRiderRideLocationTimestampValid(update)");
+  const sharedOrdering = eventSource.indexOf("shouldApplyTripLocationUpdate(current,update)");
+  assert.ok(timestampGuard >= 0 && sharedOrdering > timestampGuard);
+  assert.match(source, /getRiderHistoryRequestedAtLabel\(item\)/);
 });
 
