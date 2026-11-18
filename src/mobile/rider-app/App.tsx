@@ -24,7 +24,7 @@ import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLoc
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
 import { canStartRiderBooking, hasActiveRiderRide } from "../shared/riderBookingGuard";
 import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps, tryBeginRiderAuthSubmission } from "../shared/riderAuthForm";
-import { getRiderDriverOptionProps, getRiderTripActionProps, getRiderTripFieldProps, getVisibleUnionDrivers } from "../shared/riderTripForm";
+import { getRiderDriverOptionProps, getRiderTripActionProps, getRiderTripFieldProps, getVisibleUnionDrivers, normalizeRiderDiscoveryResponse } from "../shared/riderTripForm";
 import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
 import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideStatusEventValid } from "../shared/riderActivityPresentation";
 import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps } from "../shared/riderProfileForm";
@@ -415,7 +415,9 @@ export default function App() {
     if(passengerCount===null){setDiscovery(null);setError("Enter a passenger count from 1 to 6 before searching.");return;}
     setLoading(true);setError("");setSelectedDriverId(null);resetSelectedBookingAttempt();
     try {
-      const {discovery:result}=await discoverNearbyCabDrivers(Location,apiFetch,passengerCount);
+      const {discovery:rawResult}=await discoverNearbyCabDrivers(Location,apiFetch,passengerCount);
+      const result=normalizeRiderDiscoveryResponse(rawResult);
+      if(!result)throw new Error("The discovery response is invalid. Refresh and try again.");
       setDiscovery(result as DiscoveryResult);
     } catch(e) {
       setDiscovery(null);setError(e instanceof Error?e.message:"Unable to discover nearby Cab drivers.");
