@@ -90,7 +90,6 @@ test("Rider support request screen wiring uses only the neutral authenticated AP
   assert.match(source, /submitRiderSupportRequest\(apiFetch,attempt\)/);
   assert.doesNotMatch(source, /apiFetch\("\/api\/v1\/support\/requests"/);
   assert.doesNotMatch(source, /supportCategory|supportPriority|supportSeverity|responseTimeTarget/);
-  assert.doesNotMatch(source, /supportCategory|supportPriority|supportSeverity|responseTimeTarget/);
 });
 
 
@@ -140,7 +139,7 @@ test("Rider support API failure preserves the unchanged attempt and reuses its k
 test("Rider support API boundary rejects invalid attempts before making a request", async () => {
   let calls = 0;
   await assert.rejects(submitRiderSupportRequest(async () => { calls += 1; return {}; }, {
-    idempotencyKey: "bad\\r\\nkey",
+    idempotencyKey: "bad" + String.fromCharCode(13, 10) + "key",
     subject: "Trip issue",
     description: "The trip status did not refresh after reconnecting."
   }), /valid Rider support request attempt/);
