@@ -3426,3 +3426,21 @@ Both Rider and Driver passed Expo/config/TypeScript/Android bundle validation, d
 RIDER-PROFILE-ACCESS-001..007 cover labelled theme radio state and invalid options; approved-help input/copy and busy state; help/sign-out action busy state; tab role/selected/disabled state; App.tsx helper/testID wiring; and duplicate help/sign-out submission guards. The help request contains only the user's question and current ride status; no precise location, identity/KYC, contacts, payment data or token is included. Sign-out retains existing token invalidation, SecureStore cleanup and API logout. No API, session contract, fare, booking, dispatch or ride lifecycle behavior changed. The inherited picomatch GHSA-fc5q-39xc-vjpf remains High and unpatched in transitive build/test tooling; this is a disclosed residual, not a clean audit or vulnerability fix.
 
 **Next:** finish Rider functional coverage and available Android acceptance checks before Driver feature completion. iOS remains gated until both Android apps exit. Strict acceptance remains 0/19 (16 In Progress, 3 Blocked); production readiness is not established.
+
+
+## Rider neutral support request intake
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-SUPPORT-ACCESS-001 | Validate subject and description | Trim values; subject 3–120 characters; description 10–4000 characters; invalid lengths fail before API submission | Automated Node unit | P1 |
+| RIDER-SUPPORT-ACCESS-002 | Accessible support fields | Subject/description expose labels, hints, disabled state and password/token/payment-credential warning | Automated Node unit/source | P1 |
+| RIDER-SUPPORT-ACCESS-003 | Neutral submit action | Button exposes busy/disabled state and explicitly avoids category, priority, assignment or response-time promises | Automated Node unit/source | P1 |
+| RIDER-SUPPORT-ACCESS-004 | Retry unchanged request | Reuse the same Idempotency-Key for the same normalized subject/description in the current app session | Automated Node unit | P1 |
+| RIDER-SUPPORT-ACCESS-005 | Edit after failed request | A changed subject or description receives a new Idempotency-Key | Automated Node unit | P1 |
+| RIDER-SUPPORT-ACCESS-006 | Reject malformed generated key | Empty, overlong, trimmed-different or control-character key is rejected before POST | Automated Node unit | P1 |
+| RIDER-SUPPORT-ACCESS-007 | API contract and UI wiring | Rider sends only subject/description to authenticated `POST /api/v1/support/requests`, with Idempotency-Key; no category/priority/severity/SLA field is sent | Automated Node source wiring | P1 |
+| RIDER-SUPPORT-ACCESS-008 | Single-flight and failure retention | Duplicate submit is blocked; busy state always clears; failed/ambiguous response retains draft and same key for retry | Automated Node source wiring | P1 |
+
+The API accepts only Rider/Driver JWT roles and a subject/description body, returns an opaque request reference, uses reporter-scoped idempotency and does not log support content. A 503 means intake is disabled for that environment; the Rider UI retains the draft and does not claim acceptance. Staging/Production require `SupportRequests:PolicyApproved=true`, positive Product/Operations-approved `SupportRequests:RetentionDays`, Cosmos credentials/storage and the support-container TTL migration. Development/Testing in-memory acceptance is not durable-production evidence.
+
+This increment deliberately does not invent categories, severity, priority, assignment, escalation owner/channel, support hours, response targets, attachments, consent/retention policy or SLA. SUPPORT-01 remains blocked until those inputs and end-to-end operational evidence are approved. The helper/source tests do not replace full React Native UI, TalkBack, live Cosmos or physical-device acceptance.
