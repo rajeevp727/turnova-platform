@@ -127,6 +127,6 @@ test("Rider session reset invalidates pending history and discovery responses", 
   const resetEnd = source.indexOf("useEffect", resetStart);
   assert.ok(resetStart >= 0 && resetEnd > resetStart);
   const resetSource = source.slice(resetStart, resetEnd);
-  assert.match(resetSource, /rideHistoryRequestSequence\\.current\\s*\\+=\\s*1/);
-  assert.match(resetSource, /riderDiscoveryRequestSequence\\.current\\s*\\+=\\s*1/);
+  assert.ok(resetSource.includes("rideHistoryRequestSequence.current += 1;"));
+  assert.ok(resetSource.includes("riderDiscoveryRequestSequence.current += 1;"));
 });
