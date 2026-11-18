@@ -1779,3 +1779,9 @@ The Rider discovery normalizer now rejects JPEG-prefixed photo strings with inva
 ## Supplemental Rider profile request isolation — PR #194
 
 AI-01/help and support UI responses are now fenced by both request sequence and authenticated session epoch. Session reset invalidates pending help/support responses and resets their in-flight guards; stale completions cannot update a replacement account's UI or clear a newer request lock. Deterministic cases `RIDER-HELP-SESSION-001` and `RIDER-SUPPORT-SESSION-001` are supplemental; they do not add rows to the 19-area acceptance denominator. Support policy and durable intake approval remain external.
+
+## PR #194 — Rider DateTimeOffset serialization-boundary validation
+
+Source/test head: `7e7649761d102646415997dc622ad2bc1ea34f3f`. The shared Rider timestamp validator now enforces the .NET `DateTimeOffset` response range: years 0001–9999, maximum offset ±14:00, no more than seven fractional-second digits, and a UTC-normalized instant within years 0001–9999. Deterministic cases `RIDER-TIMESTAMP-001..004` cover valid minimum/maximum boundary samples, year/fraction precision, offset limits and UTC underflow/overflow.
+
+This supplements the existing `RIDER-BOOKING-RESPONSE-004`, `RIDER-AGREEMENT-RESPONSE-002`, `RIDER-HISTORY-010..011` and `RIDER-LOCATION-UI-004` timestamp checks. It is client response validation only; no API, Cosmos, Driver or iOS behaviour changed. Acceptance-row statuses and the 19-row denominator are unchanged. Fresh exact-head CI and independent maintainer review are still required before PR #194 can merge.
