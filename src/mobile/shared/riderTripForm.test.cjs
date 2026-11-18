@@ -316,3 +316,19 @@ test("Rider booking screen wires accessible trip fields, actions and explicit dr
   assert.match(source, /accessibilityLiveRegion="polite"/);
   assert.match(source, /accessibilityLiveRegion="assertive"/);
 });
+
+
+test("RIDER-DISCOVERY-RESPONSE-003 rejects invalid base64 even when the JPEG marker and MIME type match", () => {
+  const driver = {
+    driverId: "driver-photo", fullName: "Asha Rao", vehicleMake: "Maruti", vehicleModel: "Dzire",
+    serviceClass: "cab", passengerCapacity: 4, distanceToPickupKm: 1.2,
+    profilePhotoContentType: "image/jpeg"
+  };
+  for (const profilePhotoBase64 of ["/9j/@@==", "/9j/AA==AAAA", "/9j/", "/9j/AA"]) {
+    const result = normalizeRiderDiscoveryResponse({
+      pickupZoneId: "zone-hyd-1", journeyDistanceKm: null,
+      unions: [{ unionId: "union-1", unionName: "Green Cab Union", drivers: [{ ...driver, profilePhotoBase64 }] }]
+    });
+    assert.equal(result, null, profilePhotoBase64);
+  }
+});

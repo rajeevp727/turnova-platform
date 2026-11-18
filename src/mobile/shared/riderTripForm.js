@@ -1,4 +1,6 @@
 "use strict";
+const JPEG_BASE64_PATTERN = /^\/9j\/(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/;
+
 
 const TRIP_FIELDS = Object.freeze({
   tripIntent: {
@@ -133,7 +135,7 @@ function normalizeRiderDiscoveryResponse(response) {
 
       const photo = driver.profilePhotoBase64 ?? null;
       const contentType = driver.profilePhotoContentType ?? null;
-      if (photo !== null && (!photo.startsWith("/9j/") || photo.length % 4 !== 0)) return null;
+      if (photo !== null && (!JPEG_BASE64_PATTERN.test(photo) || photo.length % 4 !== 0)) return null;
       if ((photo === null && contentType !== null) ||
           (photo !== null && contentType !== null && contentType !== "image/jpeg") ||
           (photo !== null && driver.profilePhotoApprovalStatus !== undefined && driver.profilePhotoApprovalStatus !== "Approved") ||
