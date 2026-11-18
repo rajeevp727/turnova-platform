@@ -26,7 +26,7 @@ function isRiderRideStatusEventValid(update, expectedRideId) {
     update.status.length > 0 &&
     update.status.length <= 64 &&
     update.status === update.status.trim() &&
-    !/[\u0000-\u001f\u007f]/.test(update.status);
+    !/[\u0000-\u001f\u007f-\u009f]/.test(update.status);
 }
 
 function getRiderRideStatusMessage(ride) {
