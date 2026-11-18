@@ -12,7 +12,7 @@
 **AI-01:** approved supplemental API scope is implemented/tested and remains outside the 19-row denominator. Provider is disabled by default; no paid provider/model/credential selected.
 **Latest merged Android Rider increment:** PR #191 (support request API/response validation) merged at `525b76e7062f7278c1bcc388183bc0a5ed63a85f` after final-head CI #44266907910 passed backend 758/758, Node 271/271, Python 48/48, both Android debug/release APKs, package identity, emulator install/launch smoke and native API publish.
 
-**Current Android Rider PR:** [#192](https://github.com/rajeevp727/turnova-platform/pull/192) — keyed single-flight for Activity cancellation and agreement confirmation. It serializes proposal/confirmation/cancellation, fences async responses by session epoch and current ride ID, validates cancellation response identity/status, refreshes agreement history after confirmation and exposes accessible busy states. Deterministic tests RIDER-ACTIVITY-ACTION-001..005 are included. Exact-head CI is pending. Driver and iOS remain gated.
+**Current Android Rider PR:** [#192](https://github.com/rajeevp727/turnova-platform/pull/192) — keyed single-flight for Activity cancellation and agreement confirmation. It serializes proposal/confirmation/cancellation, fences async responses by session epoch and current ride ID, validates cancellation response identity/status, refreshes agreement history after confirmation and exposes accessible busy states. Deterministic tests RIDER-ACTIVITY-ACTION-001..005 are included. Code-bearing head `ea3cae2cba7578206e4160c52fc7c8e09e2e1f67` passed exact-head CI [#44273380360](https://github.com/rajeevp727/turnova-platform/actions/runs/44273380360): backend 758/758, Node 276/276, Python 48/48, 9 required API/Android jobs passed and 3 iOS jobs correctly skipped. The documentation-sync head requires a fresh exact-head CI run before merge. Driver and iOS remain gated.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
 ## Product in one line
@@ -3008,3 +3008,8 @@ PR [#191](https://github.com/rajeevp727/turnova-platform/pull/191) merged at `52
 ## Current Rider Android handoff — PR #192
 
 PR [#192](https://github.com/rajeevp727/turnova-platform/pull/192) is the only active feature PR. Activity proposal, confirmation and cancellation are serialized; confirmation is scoped to the current ride/version; cancellation/confirmation responses are fenced by session epoch and ride ID; busy states are accessible. Deterministic cases RIDER-ACTIVITY-ACTION-001..005 cover the guard and source wiring. Exact-head CI pending. Keep Driver and iOS gated until Rider then Driver Android exit criteria pass. Strict acceptance remains 0/19; production readiness is not established.
+
+
+## PR #192 — code-bearing CI checkpoint (2026-11-18)
+
+Rider Activity mutation serialization passed exact code-bearing CI #44273380360 on `ea3cae2cba7578206e4160c52fc7c8e09e2e1f67`: backend 758/758, shared Node 276/276, Python 48/48; both Android debug/release APKs, package identity and emulator install/launch smoke passed; native non-container API publish passed. All 9 required API/Android jobs green; 3 iOS jobs correctly skipped. Progress/matrix/test-plan synchronization commits now require a new final-head CI run. No independent approval is recorded; do not self-approve. Keep Android Rider active until its phase exit criteria are met, then Driver Android, then iOS.
