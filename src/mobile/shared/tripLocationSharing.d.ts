@@ -33,6 +33,8 @@ export function findAuthoritativeActiveTrip<T extends AuthoritativeTripLocationS
 
 export interface TripLocationSnapshot {
   rideId: string;
+  status: string;
+  locationSharingActive?: boolean | null;
   driverLatitude?: number | null;
   driverLongitude?: number | null;
   locationCapturedAtUtc?: string | null;
@@ -48,10 +50,24 @@ export interface TripLocationUpdate {
   locationUpdatedAt?: string | null;
 }
 
+export interface RiderLocationVisibilityState extends TripLocationSnapshot {
+  status: string;
+  locationSharingActive?: boolean | null;
+}
+
 export function shouldApplyTripLocationUpdate(
-  current: TripLocationSnapshot,
+  current: RiderLocationVisibilityState,
   update: TripLocationUpdate
 ): boolean;
+
+export function applyRiderRideStatusUpdate<T extends RiderLocationVisibilityState>(
+  current: T,
+  update: { rideId: string; status: string }
+): T;
+
+export function canShowRiderDriverLocation(
+  ride: RiderLocationVisibilityState | null | undefined
+): ride is RiderLocationVisibilityState & { driverLatitude: number; driverLongitude: number };
 
 export function mergeTripLocationSnapshot<T extends TripLocationSnapshot & { driverLocationCapturedAtUtc?: string | null }>(
   current: TripLocationSnapshot,
@@ -59,7 +75,7 @@ export function mergeTripLocationSnapshot<T extends TripLocationSnapshot & { dri
 ): T & TripLocationSnapshot;
 
 export function getRideMapFitCoordinates(
-  ride: TripLocationSnapshot & { pickupLatitude?: number | null; pickupLongitude?: number | null }
+  ride: RiderLocationVisibilityState & { pickupLatitude?: number | null; pickupLongitude?: number | null }
 ): Array<{ latitude: number; longitude: number }>;
 
 export function shouldFitRideMap(options: {
