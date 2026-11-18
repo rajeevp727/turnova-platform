@@ -182,3 +182,18 @@ test("live terminal status events update only the matching Driver history row", 
   assert.equal(updated[1], history[1]);
   assert.equal(history[0].status, "InProgress");
 });
+
+
+test("RIDER-HISTORY-011: active ride details reject impossible optional server timestamps", () => {
+  for (const field of ["requestedAt", "acceptedAt", "negotiationExpiresAtUtc", "locationUpdatedAt", "locationCapturedAtUtc", "driverLocationCapturedAtUtc"]) {
+    assert.equal(isRiderRideDetailsResponseValid({
+      rideId: "ride-1",
+      [field]: "2026-11-31T00:00:00Z"
+    }, "ride-1"), false, field);
+  }
+  assert.equal(isRiderRideDetailsResponseValid({
+    rideId: "ride-1",
+    requestedAt: "2024-02-29T00:00:00Z",
+    locationCapturedAtUtc: null
+  }, "ride-1"), true);
+});
