@@ -38,6 +38,7 @@ test("RIDER-DISCOVERY-PREFLIGHT-001: require pickup, destination and whole passe
 test("RIDER-BOOKING-TEXT-001: enforce pickup, destination and optional stop limits before booking", () => {
   assert.equal(validateRiderBookingText("Nizampet", "HITEC City", "Kukatpally\nMiyapur"), null);
   assert.equal(validateRiderBookingText("Nizampet", "HITEC City", "  \nKukatpally\n\n"), null);
+  assert.equal(validateRiderBookingText("x".repeat(250), "y".repeat(250), Array(10).fill("s".repeat(250)).join("\n")), null);
   assert.match(validateRiderBookingText("", "HITEC City", ""), /pickup note or landmark/);
   assert.match(validateRiderBookingText("Nizampet", "", ""), /destination note or landmark/);
   assert.match(validateRiderBookingText("x".repeat(251), "HITEC City", ""), /Pickup note must be 250/);
@@ -62,6 +63,8 @@ test("RIDER-BOOKING-TEXT-001: validate booking text in the handler and expose fi
   assert.match(source, /validateRiderBookingText\(pickupForRequest,dropoffForRequest,stopsTextForRequest\)/);
   assert.match(source, /maxLength=\{250\}/);
   assert.match(source, /rider-booking-text-error/);
+  assert.match(source, /getRiderTripActionProps\("requestDriver",loading\|\|bookingTextError!==null,loading\)/);
+  assert.match(source, /disabled=\{loading\|\|bookingTextError!==null\}/);
   const requestStart = source.indexOf("const requestSelectedDriver=async()=>{");
   const requestEnd = source.indexOf("const loadAgreementHistory", requestStart);
   assert.ok(requestStart >= 0 && requestEnd > requestStart);
