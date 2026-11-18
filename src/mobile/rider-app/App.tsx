@@ -146,6 +146,7 @@ export default function App() {
     setConfirmBusyVersion(null);
     setActiveRideStateLoaded(false);
     bookingInFlight.current=null;
+    rideHistoryRequestSequence.current += 1;
     riderDiscoveryRequestSequence.current += 1;
     setLoading(false);
     authenticatedSessionEpoch.current = null;

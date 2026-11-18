@@ -119,3 +119,14 @@ test("Rider booking guard blocks a hydrated active ride", () => {
   assert.equal(canStartRiderBooking(true, { status: "Negotiating" }), false);
   assert.equal(canStartRiderBooking(true, { status: "InProgress" }), false);
 });
+
+
+test("Rider session reset invalidates pending history and discovery responses", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const resetStart = source.indexOf("const clearRiderSessionState");
+  const resetEnd = source.indexOf("useEffect", resetStart);
+  assert.ok(resetStart >= 0 && resetEnd > resetStart);
+  const resetSource = source.slice(resetStart, resetEnd);
+  assert.match(resetSource, /rideHistoryRequestSequence\\.current\\s*\\+=\\s*1/);
+  assert.match(resetSource, /riderDiscoveryRequestSequence\\.current\\s*\\+=\\s*1/);
+});
