@@ -100,8 +100,8 @@ function normalizeRiderDiscoveryResponse(response) {
       if (!isRecord(driver) ||
           !isTrimmedNonEmptyString(driver.driverId) ||
           !isTrimmedNonEmptyString(driver.fullName) ||
-          typeof driver.vehicleMake !== "string" ||
-          typeof driver.vehicleModel !== "string" ||
+          typeof driver.vehicleMake !== "string" || driver.vehicleMake.trim().length === 0 || driver.vehicleMake.trim().length > 60 ||
+          typeof driver.vehicleModel !== "string" || driver.vehicleModel.trim().length === 0 || driver.vehicleModel.trim().length > 60 ||
           driver.serviceClass !== "cab" ||
           !Number.isInteger(driver.passengerCapacity) ||
           driver.passengerCapacity < 1 || driver.passengerCapacity > 6 ||
