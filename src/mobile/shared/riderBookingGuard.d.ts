@@ -1,3 +1,16 @@
+export type RiderBookingStatus =
+  | "Requested"
+  | "Matching"
+  | "Offered"
+  | "Negotiating"
+  | "AgreementConfirmed"
+  | "Accepted"
+  | "Arrived"
+  | "InProgress"
+  | "Completed"
+  | "Cancelled"
+  | "Expired";
+
 export interface RiderSelectedBookingExpected {
   riderId: string;
   driverId: string;
@@ -39,5 +52,10 @@ export function normalizeRiderSelectedBookingResponse(
   response: unknown,
   expected: RiderSelectedBookingExpected
 ): RiderSelectedBookingResult | null;
-export function hasActiveRiderRide(ride: unknown): boolean;
-export function canStartRiderBooking(rideStateLoaded: boolean, ride: unknown): boolean;
+export function hasActiveRiderRide(
+  ride: { status: string } | null | undefined
+): boolean;
+export function canStartRiderBooking(
+  rideStateLoaded: boolean,
+  ride: { status: string } | null | undefined
+): boolean;
