@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const {
+  normalizeRiderDiscoveryResponse,
   getVisibleUnionDrivers,
   getRiderDriverOptionProps,
   getRiderTripActionProps,
@@ -55,6 +56,81 @@ test("Rider trip draft and selected-driver request actions preserve direct negot
   assert.equal(request.accessibilityLabel, "Request this driver");
   assert.match(request.accessibilityHint, /direct fare negotiation/);
   assert.match(request.accessibilityHint, /does not quote or collect payment/);
+});
+
+test("Rider discovery response is validated and projected to public Cab fields", () => {
+  const raw = {
+    pickupZoneId: "zone-hyd-1",
+    journeyDistanceKm: null,
+    privateRootField: "must not survive",
+    unions: [{
+      unionId: "union-1",
+      unionName: "Green Cab Union",
+      privateUnionField: "must not survive",
+      drivers: [{
+        driverId: "driver-1",
+        fullName: "Asha Rao",
+        vehicleMake: "Maruti",
+        vehicleModel: "Dzire",
+        serviceClass: "cab",
+        passengerCapacity: 4,
+        distanceToPickupKm: 2.4,
+        profilePhotoBase64: null,
+        profilePhotoContentType: null,
+        phoneNumber: "+910000000000",
+        latitude: 17.4,
+        longitude: 78.4,
+        profilePhotoApprovalStatus: "Pending"
+      }]
+    }]
+  };
+  const result = normalizeRiderDiscoveryResponse(raw);
+  assert.deepEqual(result, {
+    pickupZoneId: "zone-hyd-1",
+    journeyDistanceKm: null,
+    unions: [{
+      unionId: "union-1",
+      unionName: "Green Cab Union",
+      drivers: [{
+        driverId: "driver-1",
+        fullName: "Asha Rao",
+        vehicleMake: "Maruti",
+        vehicleModel: "Dzire",
+        serviceClass: "cab",
+        passengerCapacity: 4,
+        distanceToPickupKm: 2.4,
+        profilePhotoBase64: null,
+        profilePhotoContentType: null
+      }]
+    }]
+  });
+  assert.equal("phoneNumber" in result.unions[0].drivers[0], false);
+  assert.equal("latitude" in result.unions[0].drivers[0], false);
+  assert.equal("privateRootField" in result, false);
+});
+
+test("Rider discovery response rejects malformed public contracts and photo metadata", () => {
+  const validDriver = {
+    driverId: "driver-1", fullName: "Asha Rao", vehicleMake: "Maruti", vehicleModel: "Dzire",
+    serviceClass: "cab", passengerCapacity: 4, distanceToPickupKm: 2.4,
+    profilePhotoBase64: null, profilePhotoContentType: null
+  };
+  const validUnion = { unionId: "union-1", unionName: "Green Cab Union", drivers: [validDriver] };
+  const valid = { pickupZoneId: "zone-hyd-1", journeyDistanceKm: null, unions: [validUnion] };
+  for (const invalid of [
+    null, [], {}, { ...valid, pickupZoneId: " " }, { ...valid, journeyDistanceKm: -1 },
+    { ...valid, journeyDistanceKm: Number.NaN }, { ...valid, unions: {} },
+    { ...valid, unions: [{ ...validUnion, drivers: null }] },
+    { ...valid, unions: [validUnion, validUnion] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, driverId: " " }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, serviceClass: "bike" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, distanceToPickupKm: Infinity }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, passengerCapacity: 7 }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "text/html" }] }] }
+  ]) {
+    assert.equal(normalizeRiderDiscoveryResponse(invalid), null);
+  }
 });
 
 test("Rider union display keeps at most the first three server-ordered drivers", () => {
