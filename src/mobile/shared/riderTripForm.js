@@ -103,6 +103,7 @@ function normalizeRiderDiscoveryResponse(response) {
 
       const photo = driver.profilePhotoBase64 ?? null;
       const contentType = driver.profilePhotoContentType ?? null;
+      if (photo !== null && (!photo.startsWith("/9j/") || photo.length % 4 !== 0)) return null;
       if ((photo === null && contentType !== null) ||
           (photo !== null && contentType !== null && contentType !== "image/jpeg") ||
           (photo !== null && driver.profilePhotoApprovalStatus !== undefined && driver.profilePhotoApprovalStatus !== "Approved") ||
