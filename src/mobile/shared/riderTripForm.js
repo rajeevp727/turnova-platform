@@ -7,15 +7,15 @@ const TRIP_FIELDS = Object.freeze({
   },
   pickup: {
     accessibilityLabel: "Pickup landmark or note",
-    accessibilityHint: "Enter a pickup landmark or instruction. Device GPS is used for pickup-zone matching and driver-to-pickup proximity."
+    accessibilityHint: "Enter a pickup landmark or instruction, maximum 250 characters. Device GPS is used for pickup-zone matching and driver-to-pickup proximity."
   },
   dropoff: {
     accessibilityLabel: "Destination landmark or note",
-    accessibilityHint: "Enter the destination landmark or instruction. This text is not used to estimate the journey distance."
+    accessibilityHint: "Enter the destination landmark or instruction, maximum 250 characters. This text is not used to estimate the journey distance."
   },
   stops: {
     accessibilityLabel: "Optional intermediate stops",
-    accessibilityHint: "Optional. Enter one stop per line in the order you want to visit them."
+    accessibilityHint: "Optional. Enter up to 10 stops, one per line, maximum 250 characters per stop, in visit order."
   },
   passengers: {
     accessibilityLabel: "Passenger count",
@@ -66,6 +66,25 @@ function canDiscoverRiderTrip(pickup, dropoff, passengerCount) {
   return typeof pickup === "string" && pickup.trim().length > 0 &&
     typeof dropoff === "string" && dropoff.trim().length > 0 &&
     Number.isInteger(passengerCount) && passengerCount >= 1 && passengerCount <= 6;
+}
+
+function validateRiderBookingText(pickup, dropoff, stopsText) {
+  if (typeof pickup !== "string" || pickup.trim().length === 0)
+    return "Enter a pickup note or landmark.";
+  if (pickup.trim().length > 250)
+    return "Pickup note must be 250 characters or fewer.";
+  if (typeof dropoff !== "string" || dropoff.trim().length === 0)
+    return "Enter a destination note or landmark.";
+  if (dropoff.trim().length > 250)
+    return "Destination note must be 250 characters or fewer.";
+  if (typeof stopsText !== "string")
+    return "Optional stops must be entered as text.";
+  const stops = stopsText.split(/\r?\n/).map(stop => stop.trim()).filter(Boolean);
+  if (stops.length > 10)
+    return "Enter no more than 10 optional stops.";
+  if (stops.some(stop => stop.length > 250))
+    return "Each optional stop must be 250 characters or fewer.";
+  return null;
 }
 
 function shouldApplyRiderDiscoveryResponse(requestSequence, currentSequence) {
@@ -177,6 +196,7 @@ function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
 
 module.exports = {
   canDiscoverRiderTrip,
+  validateRiderBookingText,
   shouldApplyRiderDiscoveryResponse,
   normalizeRiderDiscoveryResponse,
   getVisibleUnionDrivers,
