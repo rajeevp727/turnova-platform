@@ -7,8 +7,12 @@ function validateLock(inFlight) {
 }
 
 function validateOwner(owner) {
+  const hasControlCharacter = typeof owner === "string" && [...owner].some(character => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || (code >= 0x7f && code <= 0x9f);
+  });
   if (typeof owner !== "string" || owner.length === 0 || owner !== owner.trim() ||
-      owner.length > 256 || /[\\u0000-\\u001f\\u007f-\\u009f]/.test(owner)) {
+      owner.length > 256 || hasControlCharacter) {
     throw new TypeError("A valid Rider booking attempt owner is required.");
   }
 }

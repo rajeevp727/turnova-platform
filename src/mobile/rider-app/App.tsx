@@ -472,7 +472,7 @@ export default function App() {
     const stopsTextForRequest=stopsText;
     const bookingTextError=validateRiderBookingText(pickupForRequest,dropoffForRequest,stopsTextForRequest);
     if(bookingTextError!==null){setError(bookingTextError);return;}
-    const stops=stopsTextForRequest.split(/\\r?\\n/).map(stop=>stop.trim()).filter(Boolean);
+    const stops=stopsTextForRequest.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean);
     const passengerCount=parsePassengerCountInput(passengers);
     if(passengerCount===null){setError("Enter a passenger count from 1 to 6 before requesting a driver.");return;}
     if(!tryBeginRiderBookingAttempt(bookingInFlight,requestKey))return;
