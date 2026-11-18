@@ -2977,3 +2977,15 @@ These safeguards do not change support intake policy, retention, categories, pri
 - Previous exact-head CI [#44419147639](https://github.com/rajeevp727/turnova-platform/actions/runs/44419147639) passed all 9 required API/Android jobs on superseded head `9395000e2c24bced22a4c37716f74bd841cb7a1e`: backend 758/758, Node 359/359, Python 48/48, both app validation/bundles, Rider/Driver debug/release APKs, package identity and both emulator install/launch smoke jobs. Three iOS jobs were skipped. It does not validate the timestamp patch; fresh exact-head CI is required.
 - No API, Cosmos, Driver, iOS, fare, payment, dispatch, reconciliation or container behavior changed. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 - Independent maintainer review remains outstanding; no self-approval or merge.
+
+
+## Latest Rider timestamp contract boundary — PR #194 (2026-11-19)
+
+- **Phase:** Android — Rider first. API engineering exit remains complete; Driver Android feature work and iOS remain gated by the strict platform order.
+- **Current task:** align client response timestamp validation with the API's .NET `DateTimeOffset` range.
+- **Implementation:** reject year 0000/out-of-range years, offsets beyond exactly ±14:00, fractional precision above seven digits, and UTC instants that underflow/overflow the .NET date range.
+- **Deterministic evidence:** `RIDER-TIMESTAMP-001..004` added to `src/mobile/shared/riderTimestamp.test.cjs`; source/test head `7e7649761d102646415997dc622ad2bc1ea34f3f`.
+- **CI:** fresh exact-head API/Android CI is required for the new code and documentation-bearing branch. Do not reuse prior-head CI. Android release APK and emulator-smoke results are not claimed until the current run completes.
+- **Review:** no self-approval; existing PR reviews are author COMMENT-only. Independent maintainer review remains outstanding. No merge until exact-head required checks and repository review policy are satisfied.
+- **Acceptance:** strict 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This does not mean implementation is empty. Production readiness is not established.
+- **Next exact action:** inspect the new exact-head CI, then continue the next Rider Android acceptance gap; do not start Driver features or iOS before the Rider and Android phase gates exit.
