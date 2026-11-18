@@ -3439,7 +3439,7 @@ RIDER-PROFILE-ACCESS-001..007 cover labelled theme radio state and invalid optio
 | RIDER-SUPPORT-ACCESS-005 | Edit after failed request | A changed subject or description receives a new Idempotency-Key | Automated Node unit | P1 |
 | RIDER-SUPPORT-ACCESS-006 | Reject malformed generated key | Empty, overlong, trimmed-different or control-character key is rejected before POST | Automated Node unit | P1 |
 | RIDER-SUPPORT-ACCESS-007 | API contract and UI wiring | Rider sends only subject/description to authenticated `POST /api/v1/support/requests`, with Idempotency-Key; no category/priority/severity/SLA field is sent | Automated Node source wiring | P1 |
-| RIDER-SUPPORT-ACCESS-008 | Single-flight and failure retention | Duplicate submit is blocked; busy state always clears; failed/ambiguous response retains draft and same key for retry | Automated Node source wiring | P1 |
+| RIDER-SUPPORT-ACCESS-008 | Single-flight and failure retention | Duplicate submit is blocked; busy state always clears; failed/ambiguous response retains draft and same key for retry; sign-out is disabled while Help/support requests are in flight | Automated Node source wiring | P1 |
 
 The API accepts only Rider/Driver JWT roles and a subject/description body, returns an opaque request reference, uses reporter-scoped idempotency and does not log support content. A 503 means intake is disabled for that environment; the Rider UI retains the draft and does not claim acceptance. Staging/Production require `SupportRequests:PolicyApproved=true`, positive Product/Operations-approved `SupportRequests:RetentionDays`, Cosmos credentials/storage and the support-container TTL migration. Development/Testing in-memory acceptance is not durable-production evidence.
 
