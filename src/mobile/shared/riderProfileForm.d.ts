@@ -34,3 +34,5 @@ export function getRiderThemeOptionProps(option: RiderThemeOption, selected: boo
 export function getRiderProfileFieldProps(field: RiderProfileField, disabled: boolean): RiderProfileFieldProps;
 export function getRiderProfileActionProps(action: RiderProfileAction, disabled: boolean, busy: boolean): RiderProfileActionProps;
 export function getRiderTabProps(tab: RiderNavigationTab, selected: boolean, disabled: boolean): RiderTabProps;
+
+export function shouldApplyRiderProfileRequestResponse(requestSequence: number, currentSequence: number, requestSessionEpoch: number, currentSessionEpoch: number): boolean;

@@ -76,7 +76,15 @@ function getRiderTabProps(tab, selected, disabled) {
   };
 }
 
+function shouldApplyRiderProfileRequestResponse(requestSequence, currentSequence, requestSessionEpoch, currentSessionEpoch) {
+  return Number.isSafeInteger(requestSequence) && requestSequence > 0 &&
+    Number.isSafeInteger(currentSequence) && requestSequence === currentSequence &&
+    Number.isSafeInteger(requestSessionEpoch) && requestSessionEpoch >= 0 &&
+    Number.isSafeInteger(currentSessionEpoch) && requestSessionEpoch === currentSessionEpoch;
+}
+
 module.exports = {
+  shouldApplyRiderProfileRequestResponse,
   getRiderProfileActionProps,
   getRiderProfileFieldProps,
   getRiderTabProps,

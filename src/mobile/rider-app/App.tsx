@@ -28,7 +28,7 @@ import { canDiscoverRiderTrip, validateRiderBookingText, getRiderDriverOptionPro
 import { finishRiderBookingAttempt, tryBeginRiderBookingAttempt } from "../shared/riderBookingAttempt";
 import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
 import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideAgreementEventValid, isRiderRideStatusEventValid, normalizeRiderAgreementHistory, shouldApplyRiderAgreementHistoryResponse } from "../shared/riderActivityPresentation";
-import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps } from "../shared/riderProfileForm";
+import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps, shouldApplyRiderProfileRequestResponse } from "../shared/riderProfileForm";
 import { getRiderSupportActionProps, getRiderSupportFieldProps, getRiderSupportRequestAttempt, submitRiderSupportRequest, validateRiderSupportRequest, type RiderSupportRequestAttempt } from "../shared/riderSupportRequest";
 
 type ThemePreference = "light" | "dark" | "system";
@@ -93,6 +93,7 @@ export default function App() {
   const [helpQuestion,setHelpQuestion]=useState(""); const [helpBusy,setHelpBusy]=useState(false); const [helpAnswer,setHelpAnswer]=useState(""); const [logoutBusy,setLogoutBusy]=useState(false);
   const [supportSubject,setSupportSubject]=useState(""); const [supportDescription,setSupportDescription]=useState(""); const [supportBusy,setSupportBusy]=useState(false); const [supportNotice,setSupportNotice]=useState(""); const [supportError,setSupportError]=useState("");
   const helpSubmissionInFlight=useRef(false); const logoutInFlight=useRef(false); const supportSubmissionInFlight=useRef(false); const supportAttemptRef=useRef<RiderSupportRequestAttempt|null>(null);
+  const riderHelpRequestSequence=useRef(0); const riderSupportRequestSequence=useRef(0);
   const [ride,setRide]=useState<Ride|null>(null); const [rideHistory,setRideHistory]=useState<RideHistoryItem[]>([]); const [activeRideStateLoaded,setActiveRideStateLoaded]=useState(false); const rideHistoryRequestSequence=useRef(0); const agreementHistoryRequestSequence=useRef(0); const riderDiscoveryRequestSequence=useRef(0); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const rideMapRef=useRef<MapView|null>(null);
   const [followDriverLocation,setFollowDriverLocation]=useState(true);
@@ -150,6 +151,10 @@ export default function App() {
     riderDiscoveryRequestSequence.current += 1;
     riderTripIntentRequestSequence.current += 1;
     riderTripFormRevision.current += 1;
+    riderHelpRequestSequence.current += 1;
+    riderSupportRequestSequence.current += 1;
+    helpSubmissionInFlight.current = false;
+    supportSubmissionInFlight.current = false;
     setLoading(false);
     authenticatedSessionEpoch.current = null;
     resetSelectedBookingAttempt();
@@ -162,7 +167,7 @@ export default function App() {
       agreementHistory: setAgreementHistory, agreementAmount: setAgreementAmount,
       followDriverLocation: setFollowDriverLocation, readyRideMapId: setReadyRideMapId
     });
-    supportAttemptRef.current=null;supportSubmissionInFlight.current=false;setSupportSubject("");setSupportDescription("");setSupportBusy(false);setSupportNotice("");setSupportError("");
+    supportAttemptRef.current=null;setSupportSubject("");setSupportDescription("");setSupportBusy(false);setSupportNotice("");setSupportError("");
     if (preserveAuthInput) {
       setEmail(preserveAuthInput.email);
       setPassword(preserveAuthInput.password);
@@ -431,23 +436,48 @@ export default function App() {
       if(ownsRequest())setTripIntentBusy(false);
     }
   };
-  const askHelp=async()=>{if(helpSubmissionInFlight.current)return;helpSubmissionInFlight.current=true;setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{helpSubmissionInFlight.current=false;setHelpBusy(false);}};
+  const askHelp=async()=>{
+    if(helpSubmissionInFlight.current)return;
+    const requestEpoch=sessionEpoch.current;
+    if(!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)){setError("Please sign in again.");return;}
+    const requestSequence=++riderHelpRequestSequence.current;
+    const question=helpQuestion;
+    const rideState=ride?.status??null;
+    const isCurrent=()=>shouldApplyRiderProfileRequestResponse(requestSequence,riderHelpRequestSequence.current,requestEpoch,sessionEpoch.current)&&
+      isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
+    helpSubmissionInFlight.current=true;setHelpBusy(true);setHelpAnswer("");setError("");
+    try{
+      const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question,rideState})}) as AssistantHelp;
+      if(!isCurrent())return;
+      const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";
+      setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);
+    }catch(e){if(isCurrent())setError(e instanceof Error?e.message:"Unable to load approved help content.");}
+    finally{if(isCurrent()){helpSubmissionInFlight.current=false;setHelpBusy(false);}}
+  };
   const submitSupportRequest=async()=>{
     if(supportSubmissionInFlight.current)return;
-    const validation=validateRiderSupportRequest(supportSubject,supportDescription);
+    const requestEpoch=sessionEpoch.current;
+    if(!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)){setSupportError("Please sign in again.");return;}
+    const requestSequence=++riderSupportRequestSequence.current;
+    const subject=supportSubject;
+    const description=supportDescription;
+    const isCurrent=()=>shouldApplyRiderProfileRequestResponse(requestSequence,riderSupportRequestSequence.current,requestEpoch,sessionEpoch.current)&&
+      isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
+    const validation=validateRiderSupportRequest(subject,description);
     if(validation){setSupportError(validation);setSupportNotice("");return;}
     let attempt:RiderSupportRequestAttempt;
-    try{attempt=getRiderSupportRequestAttempt(supportAttemptRef.current,supportSubject,supportDescription);}
-    catch(e){setSupportError(e instanceof Error?e.message:"Unable to prepare support request.");return;}
+    try{attempt=getRiderSupportRequestAttempt(supportAttemptRef.current,subject,description);}
+    catch(e){if(isCurrent())setSupportError(e instanceof Error?e.message:"Unable to prepare support request.");return;}
     supportAttemptRef.current=attempt;
     supportSubmissionInFlight.current=true;setSupportBusy(true);setSupportNotice("");setSupportError("");
     try{
       const result=await submitRiderSupportRequest(apiFetch,attempt);
+      if(!isCurrent())return;
       setSupportNotice(`${result.replayed?"Your earlier support request was already accepted.":"Your support request was accepted."} Reference ${result.requestId}. This form does not assign a category, priority or response-time target.`);
       supportAttemptRef.current=null;setSupportSubject("");setSupportDescription("");
     }catch(e){
-      setSupportError(`${e instanceof Error?e.message:"Unable to submit support request."} Your draft remains available. If you retry without changing the text, the same idempotency key is reused.`);
-    }finally{supportSubmissionInFlight.current=false;setSupportBusy(false);}
+      if(isCurrent())setSupportError(`${e instanceof Error?e.message:"Unable to submit support request."} Your draft remains available. If you retry without changing the text, the same idempotency key is reused.`);
+    }finally{if(isCurrent()){supportSubmissionInFlight.current=false;setSupportBusy(false);}}
   };
   const logout=async()=>{if(logoutInFlight.current)return;logoutInFlight.current=true;setLogoutBusy(true);const logoutEpoch=invalidateSession();try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}finally{logoutInFlight.current=false;setLogoutBusy(false);}if(sessionEpoch.current!==logoutEpoch)return;clearRiderSessionState();};
   const findNearbyVehicles=async()=>{

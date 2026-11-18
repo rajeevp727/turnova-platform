@@ -3635,3 +3635,12 @@ Source/test head `e91284ff1757ad65cc6921d0405ec84efa70fd08` adds canonical JPEG 
 | RIDER-AGREEMENT-RESPONSE-001 | Agreement route text bounds | Accept pickup, destination and each optional stop at the API 250-character maximum; reject any route field over 250 characters. Preserve immutable agreement versions and reject malformed/cross-ride history as before. | Automated Node unit | P1 |
 
 The Rider history normalizer must not reject a valid immutable agreement snapshot that passed the same 250-character route validation used by selected booking. This is client response validation only; the API remains authoritative for persisted route snapshots.
+
+## Rider profile help/support session isolation — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-HELP-SESSION-001 | Help response returns after auth-session change | Discard the stale answer/error and do not let the old request clear a newer session's in-flight lock. A new session can submit help after reset. | Automated Node unit + source wiring | P1 |
+| RIDER-SUPPORT-SESSION-001 | Support response returns after auth-session change | Do not display the previous account's request reference/error, clear a newer support attempt, or release its in-flight lock. Session reset invalidates the old response sequence and clears the old attempt. | Automated Node unit + source wiring | P1 |
+
+These are Rider privacy/concurrency safeguards. They do not change the support API contract, support intake policy, retention, assignment or response-time commitments. The two cases are supplemental and do not add acceptance rows to the 19-area denominator.

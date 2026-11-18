@@ -8,7 +8,8 @@ const {
   getRiderProfileActionProps,
   getRiderProfileFieldProps,
   getRiderTabProps,
-  getRiderThemeOptionProps
+  getRiderThemeOptionProps,
+  shouldApplyRiderProfileRequestResponse
 } = require("./riderProfileForm.js");
 
 test("Rider theme options expose a labelled radio group state", () => {
@@ -101,7 +102,39 @@ test("Rider profile, help, theme and tab controls are wired to accessible helper
 test("Rider help and sign-out handlers prevent overlapping submissions", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   assert.match(source, /if\(helpSubmissionInFlight\.current\)return;helpSubmissionInFlight\.current=true/);
-  assert.match(source, /finally\{helpSubmissionInFlight\.current=false;setHelpBusy\(false\);\}/);
+  assert.match(source, /if\(isCurrent\(\)\)\{helpSubmissionInFlight\.current=false;setHelpBusy\(false\);\}/);
   assert.match(source, /if\(logoutInFlight\.current\)return;logoutInFlight\.current=true/);
   assert.match(source, /finally\{logoutInFlight\.current=false;setLogoutBusy\(false\);\}/);
+});
+
+
+test("Rider profile async responses require the latest request and the same authenticated session", () => {
+  assert.equal(shouldApplyRiderProfileRequestResponse(2, 2, 7, 7), true);
+  assert.equal(shouldApplyRiderProfileRequestResponse(1, 2, 7, 7), false);
+  assert.equal(shouldApplyRiderProfileRequestResponse(2, 2, 7, 8), false);
+  assert.equal(shouldApplyRiderProfileRequestResponse(0, 0, 7, 7), false);
+  assert.equal(shouldApplyRiderProfileRequestResponse(Number.NaN, 1, 7, 7), false);
+  assert.equal(shouldApplyRiderProfileRequestResponse(1, 1, -1, -1), false);
+});
+
+test("RIDER-HELP-SESSION-001 and RIDER-SUPPORT-SESSION-001: profile responses cannot update or unlock a replacement session", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /riderHelpRequestSequence\.current \+= 1/);
+  assert.match(source, /riderSupportRequestSequence\.current \+= 1/);
+  const helpStart = source.indexOf("const askHelp=async()=>{");
+  const supportStart = source.indexOf("const submitSupportRequest=async()=>{", helpStart);
+  const logoutStart = source.indexOf("const logout=async()=>{", supportStart);
+  assert.ok(helpStart >= 0 && supportStart > helpStart && logoutStart > supportStart);
+  const help = source.slice(helpStart, supportStart);
+  const support = source.slice(supportStart, logoutStart);
+  for (const [handler, sequenceName, commitMarker, lockMarker] of [
+    [help, "riderHelpRequestSequence", "setHelpAnswer(`${result.answer}", "helpSubmissionInFlight.current=false;setHelpBusy(false);"],
+    [support, "riderSupportRequestSequence", "setSupportNotice(`${result.replayed", "supportSubmissionInFlight.current=false;setSupportBusy(false);"]
+  ]) {
+    assert.match(handler, /const requestEpoch=sessionEpoch\.current/);
+    assert.match(handler, new RegExp("const requestSequence=\\+\\+" + sequenceName + "\\.current"));
+    assert.ok(handler.includes("shouldApplyRiderProfileRequestResponse(requestSequence," + sequenceName + ".current,requestEpoch,sessionEpoch.current)"));
+    assert.ok(handler.indexOf("if(!isCurrent())return;") < handler.indexOf(commitMarker));
+    assert.ok(handler.includes("if(isCurrent()){"+lockMarker+"}"));
+  }
 });
