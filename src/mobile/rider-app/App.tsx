@@ -9,7 +9,7 @@ import { readAccessTokenIfCurrent, readSessionTokens, saveSessionTokensIfCurrent
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { formatAgreementAmount } from "../shared/agreementFormatting";
-import { findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
+import { findActiveRide, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
@@ -244,8 +244,10 @@ export default function App() {
     if(!isCurrent())return;
     // A failed or in-flight server read must never make the Book tab appear available.
     setActiveRideStateLoaded(false);
-    const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];
+    const historyResponse=await apiFetch("/api/v1/rides/mine") as unknown;
     if(!isCurrent())return;
+    if(!isRiderRideHistoryShapeValid(historyResponse))throw new Error("Ride history response is invalid. Booking remains disabled until the server status can be verified.");
+    const history=historyResponse as RideHistoryItem[];
     setRideHistory(history);
     const active=findActiveRide(history, "rider");
     if(active){

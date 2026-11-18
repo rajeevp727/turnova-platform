@@ -1,6 +1,32 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
+const { applyRideStatusUpdate, findActiveRide, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
+
+test("Rider ride-history shape accepts an empty list and uniquely identified records", () => {
+  assert.equal(isRiderRideHistoryShapeValid([]), true);
+  assert.equal(isRiderRideHistoryShapeValid([
+    { rideId: "ride-1", status: "Completed" },
+    { rideId: "ride-2", status: "FutureServerStatus" }
+  ]), true);
+});
+
+test("Rider ride-history shape rejects malformed rows, invalid IDs and duplicate IDs", () => {
+  for (const invalid of [
+    null,
+    {},
+    "not-an-array",
+    [null],
+    [42],
+    [[]],
+    [{}],
+    [{ rideId: "" }],
+    [{ rideId: " ride-1" }],
+    [{ rideId: "ride-1 " }],
+    [{ rideId: "ride-1" }, { rideId: "ride-1" }]
+  ]) {
+    assert.equal(isRiderRideHistoryShapeValid(invalid), false);
+  }
+});
 
 test("Rider recovery includes selected negotiation and active trip states", () => {
   const history = [

@@ -23,6 +23,20 @@ const KNOWN_RIDE_STATUSES = new Set([
   "Accepted", "Arrived", "InProgress", "Completed", "Cancelled", "Expired"
 ]);
 
+function isRiderRideHistoryShapeValid(history) {
+  if (!Array.isArray(history)) return false;
+
+  const seenRideIds = new Set();
+  for (const ride of history) {
+    if (!ride || typeof ride !== "object" || Array.isArray(ride)) return false;
+    if (typeof ride.rideId !== "string" || ride.rideId.length === 0 || ride.rideId !== ride.rideId.trim()) return false;
+    if (seenRideIds.has(ride.rideId)) return false;
+    seenRideIds.add(ride.rideId);
+  }
+
+  return true;
+}
+
 function findActiveRide(history, role) {
   const allowedStatuses = ACTIVE_RIDE_STATUSES[role];
   if (!allowedStatuses) throw new TypeError("Unsupported ride recovery role.");
@@ -62,4 +76,4 @@ function shouldApplyRideStatusUpdate(currentRideId, updateRideId, isActive) {
     typeof updateRideId === "string" && updateRideId === currentRideId;
 }
 
-module.exports = { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate };
+module.exports = { applyRideStatusUpdate, findActiveRide, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate };
