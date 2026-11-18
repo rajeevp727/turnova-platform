@@ -69,7 +69,7 @@ test("RIDER-BOOKING-TEXT-001: validate booking text in the handler and expose fi
   const requestEnd = source.indexOf("const loadAgreementHistory", requestStart);
   assert.ok(requestStart >= 0 && requestEnd > requestStart);
   const requestSource = source.slice(requestStart, requestEnd);
-  assert.ok(requestSource.indexOf("validateRiderBookingText") < requestSource.indexOf("bookingInFlight.current=true"));
+  assert.ok(requestSource.indexOf("validateRiderBookingText") < requestSource.indexOf("tryBeginRiderBookingAttempt(bookingInFlight,requestKey)"));
   assert.ok(requestSource.indexOf("validateRiderBookingText") < requestSource.indexOf("selectedBookingLocation.current.capture"));
 });
 
