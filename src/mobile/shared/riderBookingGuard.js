@@ -26,7 +26,7 @@ function normalizeCoordinate(value, minimum, maximum) {
  * for neutral presentation; the booking guard still treats them as unresolved.
  *
  * @param {unknown} response
- * @param {{ riderId: string, driverId: string, unionId: string, pickup: string, dropoff: string, stops: string[], passengers: number }} expected
+ * @param {{ riderId: string, driverId: string, unionId: string, pickup: string, dropoff: string, stops: string[], passengers: number, pickupLatitude: number, pickupLongitude: number }} expected
  * @returns {null | { rideId: string, pickup: string, dropoff: string, passengers: number, serviceClass: "cab", status: string, estimatedFareInr: null, stops: string[], unionId: string, unionName: string, driverDisplayName: string, driverVehicleMake: string, driverVehicleModel: string, driverDistanceToPickupKm: number, negotiationExpiresAtUtc: string | null, pickupLatitude: number, pickupLongitude: number, driverLatitude?: number, driverLongitude?: number, locationCapturedAtUtc: string | null, driverLocationCapturedAtUtc: string | null, locationUpdatedAt?: string, requestedAt: string, acceptedAt: string | null }}
  */
 function normalizeRiderSelectedBookingResponse(response, expected) {
