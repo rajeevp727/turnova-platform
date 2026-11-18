@@ -6,6 +6,18 @@ export interface RiderSupportRequestAttempt {
   description: string;
 }
 
+export interface RiderSupportRequestResponse {
+  requestId: string;
+  submittedAtUtc: string;
+  replayed: boolean;
+}
+export interface RiderSupportRequestApiInit {
+  method: "POST";
+  headers: { "Idempotency-Key": string };
+  body: string;
+}
+export type RiderSupportRequestApiFetch = (path: string, init: RiderSupportRequestApiInit) => Promise<unknown>;
+
 export interface RiderSupportFieldProps {
   accessibilityLabel: string;
   accessibilityHint: string;
@@ -28,3 +40,6 @@ export function getRiderSupportRequestAttempt(
 ): RiderSupportRequestAttempt;
 export function getRiderSupportFieldProps(field: RiderSupportRequestField, disabled: boolean): RiderSupportFieldProps;
 export function getRiderSupportActionProps(disabled: boolean, busy: boolean): RiderSupportActionProps;
+
+export function parseRiderSupportRequestResponse(value: unknown): RiderSupportRequestResponse;
+export function submitRiderSupportRequest(apiFetch: RiderSupportRequestApiFetch, attempt: RiderSupportRequestAttempt): Promise<RiderSupportRequestResponse>;
