@@ -48,6 +48,8 @@ test("Rider app loads the server-owned active ride before enabling booking", () 
   const historyEnd = source.indexOf("useEffect", historyStart);
   assert.ok(historyStart >= 0 && historyEnd > historyStart);
   const historySource = source.slice(historyStart, historyEnd);
+  assert.match(historySource, /const requestSequence=\+\+rideHistoryRequestSequence\.current/);
+  assert.match(historySource, /shouldApplyRideHistoryResponse\(requestSequence,rideHistoryRequestSequence\.current\)/);
   const loadingReset = historySource.indexOf("setActiveRideStateLoaded(false)");
   const historyRead = historySource.indexOf('apiFetch("/api/v1/rides/mine")');
   const detailRead = historySource.indexOf('apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId))');

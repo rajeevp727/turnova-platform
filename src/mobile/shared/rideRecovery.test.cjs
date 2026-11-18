@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { applyRideStatusUpdate, findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
+const { applyRideStatusUpdate, findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
 
 test("Rider ride-history shape accepts an empty list and uniquely identified records", () => {
   assert.equal(isRiderRideHistoryShapeValid([]), true);
@@ -36,6 +36,16 @@ test("Rider ride-details response must match the active history identity", () =>
   assert.equal(isRiderRideDetailsResponseValid([], "ride-1"), false);
   assert.equal(isRiderRideDetailsResponseValid(null, "ride-1"), false);
   assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1" }, " ride-1"), false);
+});
+
+test("only the newest Rider history hydration request may apply its response", () => {
+  assert.equal(shouldApplyRideHistoryResponse(1, 1), true);
+  assert.equal(shouldApplyRideHistoryResponse(1, 2), false);
+  assert.equal(shouldApplyRideHistoryResponse(2, 2), true);
+  assert.equal(shouldApplyRideHistoryResponse(0, 0), false);
+  assert.equal(shouldApplyRideHistoryResponse(-1, -1), false);
+  assert.equal(shouldApplyRideHistoryResponse(Number.NaN, Number.NaN), false);
+  assert.equal(shouldApplyRideHistoryResponse(Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 1), false);
 });
 
 test("Rider recovery includes selected negotiation and active trip states", () => {

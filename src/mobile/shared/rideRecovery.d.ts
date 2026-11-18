@@ -9,6 +9,11 @@ export function isRiderRideDetailsResponseValid(
   expectedRideId: string
 ): boolean;
 
+export function shouldApplyRideHistoryResponse(
+  requestSequence: number,
+  currentSequence: number
+): boolean;
+
 export function findActiveRide<T extends { status: string }>(
   history: readonly T[],
   role: RideRecoveryRole

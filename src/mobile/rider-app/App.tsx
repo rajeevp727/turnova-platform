@@ -9,7 +9,7 @@ import { readAccessTokenIfCurrent, readSessionTokens, saveSessionTokensIfCurrent
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { formatAgreementAmount } from "../shared/agreementFormatting";
-import { findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
+import { findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
@@ -92,7 +92,7 @@ export default function App() {
   const [helpQuestion,setHelpQuestion]=useState(""); const [helpBusy,setHelpBusy]=useState(false); const [helpAnswer,setHelpAnswer]=useState(""); const [logoutBusy,setLogoutBusy]=useState(false);
   const [supportSubject,setSupportSubject]=useState(""); const [supportDescription,setSupportDescription]=useState(""); const [supportBusy,setSupportBusy]=useState(false); const [supportNotice,setSupportNotice]=useState(""); const [supportError,setSupportError]=useState("");
   const helpSubmissionInFlight=useRef(false); const logoutInFlight=useRef(false); const supportSubmissionInFlight=useRef(false); const supportAttemptRef=useRef<RiderSupportRequestAttempt|null>(null);
-  const [ride,setRide]=useState<Ride|null>(null); const [rideHistory,setRideHistory]=useState<RideHistoryItem[]>([]); const [activeRideStateLoaded,setActiveRideStateLoaded]=useState(false); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const [ride,setRide]=useState<Ride|null>(null); const [rideHistory,setRideHistory]=useState<RideHistoryItem[]>([]); const [activeRideStateLoaded,setActiveRideStateLoaded]=useState(false); const rideHistoryRequestSequence=useRef(0); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const rideMapRef=useRef<MapView|null>(null);
   const [followDriverLocation,setFollowDriverLocation]=useState(true);
   const [readyRideMapId,setReadyRideMapId]=useState<string|null>(null);
@@ -240,7 +240,8 @@ export default function App() {
     const body=await readJsonResponseIfCurrent(response,()=>sessionEpoch.current===requestEpoch&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)) as any;if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh,invalidateSession,clearRiderSessionState]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{
-    const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
+    const requestSequence=++rideHistoryRequestSequence.current;
+    const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)&&shouldApplyRideHistoryResponse(requestSequence,rideHistoryRequestSequence.current);
     if(!isCurrent())return;
     // A failed or in-flight server read must never make the Book tab appear available.
     setActiveRideStateLoaded(false);

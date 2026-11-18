@@ -43,6 +43,13 @@ function isRiderRideDetailsResponseValid(response, expectedRideId) {
   return typeof response.rideId === "string" && response.rideId === expectedRideId;
 }
 
+function shouldApplyRideHistoryResponse(requestSequence, currentSequence) {
+  return Number.isSafeInteger(requestSequence) &&
+    requestSequence > 0 &&
+    Number.isSafeInteger(currentSequence) &&
+    requestSequence === currentSequence;
+}
+
 function findActiveRide(history, role) {
   const allowedStatuses = ACTIVE_RIDE_STATUSES[role];
   if (!allowedStatuses) throw new TypeError("Unsupported ride recovery role.");
@@ -82,4 +89,4 @@ function shouldApplyRideStatusUpdate(currentRideId, updateRideId, isActive) {
     typeof updateRideId === "string" && updateRideId === currentRideId;
 }
 
-module.exports = { applyRideStatusUpdate, findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideStatusUpdate };
+module.exports = { applyRideStatusUpdate, findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate };
