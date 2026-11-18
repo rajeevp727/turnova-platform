@@ -309,3 +309,45 @@ test("Rider validates and projects the selected booking response before committi
   assert.ok(catchStart >= 0 && finallyStart > catchStart);
   assert.match(bookingSource.slice(catchStart, finallyStart), /await loadRideHistory\(\(\)=>isCurrent\(\)\)/);
 });
+
+test("RIDER-BOOKING-RESPONSE-003: Negotiating and AgreementConfirmed responses require a server expiry after request creation", () => {
+  for (const status of ["Negotiating", "AgreementConfirmed"]) {
+    for (const expiry of [
+      null,
+      "not-a-date",
+      "2026-11-19T00:00:00Z",
+      "2026-11-18T23:59:59Z",
+      "2026-11-19T00:15:00"
+    ]) {
+      assert.equal(normalizeRiderSelectedBookingResponse({
+        ...validSelectedBookingResponse,
+        status,
+        negotiationExpiresAtUtc: expiry
+      }, validSelectedBookingExpected), null, status + " / " + String(expiry));
+    }
+    const valid = normalizeRiderSelectedBookingResponse({
+      ...validSelectedBookingResponse,
+      status,
+      negotiationExpiresAtUtc: "2026-11-19T00:15:00+00:00"
+    }, validSelectedBookingExpected);
+    assert.ok(valid);
+    assert.equal(valid.negotiationExpiresAtUtc, "2026-11-19T00:15:00+00:00");
+  }
+});
+
+test("Rider selected-booking recovery permits a cleared expiry after the server advances beyond negotiation", () => {
+  const accepted = normalizeRiderSelectedBookingResponse({
+    ...validSelectedBookingResponse,
+    status: "Accepted",
+    negotiationExpiresAtUtc: null
+  }, validSelectedBookingExpected);
+  assert.ok(accepted);
+  assert.equal(accepted.negotiationExpiresAtUtc, null);
+});
+
+test("Rider selected-booking response requires timezone-qualified server timestamps", () => {
+  assert.equal(normalizeRiderSelectedBookingResponse({
+    ...validSelectedBookingResponse,
+    requestedAt: "2026-11-19T00:00:00"
+  }, validSelectedBookingExpected), null);
+});

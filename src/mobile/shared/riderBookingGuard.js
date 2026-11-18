@@ -17,6 +17,16 @@ function normalizeOptionalTimestamp(value) {
   return value;
 }
 
+const ISO_TIMESTAMP_WITH_OFFSET = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/i;
+const NEGOTIATION_STATUSES = new Set(["Negotiating", "AgreementConfirmed"]);
+
+function normalizeRequiredTimestamp(value) {
+  if (!isSafeTrimmedText(value, 64) ||
+      !ISO_TIMESTAMP_WITH_OFFSET.test(value) ||
+      !Number.isFinite(Date.parse(value))) return null;
+  return value;
+}
+
 function normalizeCoordinate(value, minimum, maximum) {
   return Number.isFinite(value) && value >= minimum && value <= maximum ? value : null;
 }
@@ -75,8 +85,16 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
       !Number.isFinite(response.driverDistanceToPickupKm) ||
       response.driverDistanceToPickupKm < 0) return null;
 
-  const requestedAt = normalizeOptionalTimestamp(response.requestedAt);
+  const requestedAt = normalizeRequiredTimestamp(response.requestedAt);
   if (!requestedAt) return null;
+
+  const rawNegotiationExpiry = response.negotiationExpiresAtUtc;
+  const negotiationExpiresAtUtc = rawNegotiationExpiry === null || rawNegotiationExpiry === undefined
+    ? null
+    : normalizeRequiredTimestamp(rawNegotiationExpiry);
+  if ((rawNegotiationExpiry !== null && rawNegotiationExpiry !== undefined && !negotiationExpiresAtUtc) ||
+      (NEGOTIATION_STATUSES.has(response.status) && !negotiationExpiresAtUtc) ||
+      (negotiationExpiresAtUtc && Date.parse(negotiationExpiresAtUtc) <= Date.parse(requestedAt))) return null;
 
   const pickupLatitude = normalizeCoordinate(response.pickupLatitude, -90, 90);
   const pickupLongitude = normalizeCoordinate(response.pickupLongitude, -180, 180);
@@ -108,7 +126,7 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
     driverVehicleMake: response.driverVehicleMake,
     driverVehicleModel: response.driverVehicleModel,
     driverDistanceToPickupKm: response.driverDistanceToPickupKm,
-    negotiationExpiresAtUtc: normalizeOptionalTimestamp(response.negotiationExpiresAtUtc),
+    negotiationExpiresAtUtc,
     pickupLatitude,
     pickupLongitude,
     ...(hasDriverLocation ? { driverLatitude, driverLongitude } : {}),
