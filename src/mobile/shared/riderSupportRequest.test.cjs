@@ -8,6 +8,8 @@ const {
   getRiderSupportActionProps,
   getRiderSupportFieldProps,
   getRiderSupportRequestAttempt,
+  parseRiderSupportRequestResponse,
+  submitRiderSupportRequest,
   validateRiderSupportRequest
 } = require("./riderSupportRequest.js");
 
@@ -85,10 +87,63 @@ test("Rider support request screen wiring uses only the neutral authenticated AP
   ]) {
     assert.ok(source.includes(id), "Missing Rider support test ID: " + id);
   }
-  assert.match(source, /apiFetch\("\/api\/v1\/support\/requests"/);
-  assert.match(source, /"Idempotency-Key":attempt\.idempotencyKey/);
-  assert.match(source, /JSON\.stringify\(\{subject:attempt\.subject,description:attempt\.description\}\)/);
+  assert.match(source, /submitRiderSupportRequest\(apiFetch,attempt\)/);
+  assert.doesNotMatch(source, /apiFetch\("\/api\/v1\/support\/requests"/);
   assert.doesNotMatch(source, /supportCategory|supportPriority|supportSeverity|responseTimeTarget/);
+});
+
+
+test("Rider support API boundary sends only subject and description with the idempotency header", async () => {
+  const attempt = getRiderSupportRequestAttempt(null, "Trip issue", "The trip status did not refresh after reconnecting.", () => "rider-support-test-api-contract");
+  let captured;
+  const result = await submitRiderSupportRequest(async (requestPath, init) => {
+    captured = { requestPath, init };
+    return { requestId: "a".repeat(64), submittedAtUtc: "2026-11-18T08:00:00.000Z", replayed: false };
+  }, attempt);
+  assert.deepEqual(captured, {
+    requestPath: "/api/v1/support/requests",
+    init: {
+      method: "POST",
+      headers: { "Idempotency-Key": "rider-support-test-api-contract" },
+      body: JSON.stringify({ subject: "Trip issue", description: "The trip status did not refresh after reconnecting." })
+    }
+  });
+  assert.deepEqual(result, { requestId: "a".repeat(64), submittedAtUtc: "2026-11-18T08:00:00.000Z", replayed: false });
+});
+
+test("Rider support response validation accepts created/replayed results and rejects malformed success bodies", () => {
+  const created = { requestId: "b".repeat(64), submittedAtUtc: "2026-11-18T08:00:00.000Z", replayed: false };
+  assert.deepEqual(parseRiderSupportRequestResponse(created), created);
+  assert.deepEqual(parseRiderSupportRequestResponse({ ...created, replayed: true }), { ...created, replayed: true });
+  for (const invalid of [null, [], {}, { ...created, requestId: " " }, { ...created, submittedAtUtc: "not-a-date" }, { ...created, replayed: "false" }]) {
+    assert.throws(() => parseRiderSupportRequestResponse(invalid), /invalid response/);
+  }
+});
+
+test("Rider support API failure preserves the unchanged attempt and reuses its key on retry", async () => {
+  let generated = 0;
+  const createKey = () => "rider-support-test-retry-" + (++generated);
+  const attempt = getRiderSupportRequestAttempt(null, "Trip issue", "The trip status did not refresh after reconnecting.", createKey);
+  await assert.rejects(submitRiderSupportRequest(async () => { throw new Error("Support intake unavailable."); }, attempt), /Support intake unavailable/);
+  const retry = getRiderSupportRequestAttempt(attempt, "Trip issue", "The trip status did not refresh after reconnecting.", createKey);
+  assert.strictEqual(retry, attempt);
+  let retryKey;
+  await submitRiderSupportRequest(async (_requestPath, init) => {
+    retryKey = init.headers["Idempotency-Key"];
+    return { requestId: "c".repeat(64), submittedAtUtc: "2026-11-18T08:01:00.000Z", replayed: true };
+  }, retry);
+  assert.equal(retryKey, attempt.idempotencyKey);
+  assert.equal(generated, 1);
+});
+
+test("Rider support API boundary rejects invalid attempts before making a request", async () => {
+  let calls = 0;
+  await assert.rejects(submitRiderSupportRequest(async () => { calls += 1; return {}; }, {
+    idempotencyKey: "bad" + String.fromCharCode(13, 10) + "key",
+    subject: "Trip issue",
+    description: "The trip status did not refresh after reconnecting."
+  }), /valid Rider support request attempt/);
+  assert.equal(calls, 0);
 });
 
 test("Rider support submission is single-flight and preserves the attempt after failure", () => {
