@@ -72,7 +72,9 @@ test("Rider Activity mutation guard allows one action and only its owner can rel
 
 test("Rider Activity mutation guard rejects malformed lock keys", () => {
   const lock = { current: null };
+  assert.throws(() => tryBeginRiderActivityAction(lock, ""), /valid Rider activity action key/);
   assert.throws(() => tryBeginRiderActivityAction(lock, " bad "), /valid Rider activity action key/);
+  assert.throws(() => tryBeginRiderActivityAction(lock, "x".repeat(257)), /valid Rider activity action key/);
   assert.throws(() => tryBeginRiderActivityAction(lock, "bad\r\nkey"), /valid Rider activity action key/);
   assert.throws(() => tryBeginRiderActivityAction(null, "cancel:ride-1"), /lock is required/);
   assert.equal(lock.current, null);
