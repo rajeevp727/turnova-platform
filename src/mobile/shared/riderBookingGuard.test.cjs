@@ -209,6 +209,7 @@ for (const [name, override] of [
   ["ride ID", { rideId: " " }],
   ["lifecycle control characters", { status: "Negotiating\n" }],
   ["request timestamp", { requestedAt: "not-a-date" }],
+  ["impossible request calendar date", { requestedAt: "2026-02-30T00:00:00Z" }],
   ["pickup latitude", { pickupLatitude: 91 }],
   ["pickup latitude echo", { pickupLatitude: 17.494 }],
   ["pickup longitude echo", { pickupLongitude: 78.4 }]
@@ -315,6 +316,7 @@ test("RIDER-BOOKING-RESPONSE-003: Negotiating and AgreementConfirmed responses r
     for (const expiry of [
       null,
       "not-a-date",
+      "2026-02-30T00:15:00Z",
       "2026-11-19T00:00:00Z",
       "2026-11-18T23:59:59Z",
       "2026-11-19T00:15:00"
