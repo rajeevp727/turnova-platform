@@ -3415,3 +3415,14 @@ Artifacts: Rider debug 14394701203, release 14393927609, smoke 14394677620; Driv
 | RIDER-PROFILE-ACCESS-007 | Profile screen wiring | Profile identity, help, theme, navigation, global error announcements and single-flight guards are wired to stable test IDs/helpers. | Automated Node source wiring | P1 |
 
 These deterministic helper/source tests do not replace TalkBack, full UI interaction, live API/Cosmos/TriSend, signed-device or physical-device acceptance. No API, auth token contract, fare, booking, ride or dispatch behavior is changed by this accessibility increment.
+
+
+## PR #189 — Rider profile/help/theme/navigation accessibility — exact-head verification (2026-11-18)
+
+Source/test head: `ce61175d0a037e7ef796b66cf9fa69321a46d6c2`; final documentation-bearing head: `6b3ed319a55f4d684266880a508f6eb4056b3d3a`. Exact-head [CI #44241258272](https://github.com/rajeevp727/turnova-platform/actions/runs/44241258272) passed all 9 required API/Android jobs; 3 iOS jobs were correctly skipped. Shared Node tests: **259/259** (includes RIDER-PROFILE-ACCESS-001..007); backend: **758/758** (0 failed, 0 skipped); Python harness: **48/48**.
+
+Both Rider and Driver passed Expo/config/TypeScript/Android bundle validation, debug and standalone release APKs, package identity checks and emulator install/launch smoke. Native non-container API publish and artifact verification passed. Artifacts: Rider debug 14400670148, release 14399792321, smoke 14399968172; Driver debug 14399374277, release 14400391265, smoke 14400371784; API publish 14400135955. Emulator smoke is install/launch/process evidence only; it does not prove TalkBack, full UI interaction, live API/Cosmos/TriSend, signed-device storage or physical-device acceptance.
+
+RIDER-PROFILE-ACCESS-001..007 cover labelled theme radio state and invalid options; approved-help input/copy and busy state; help/sign-out action busy state; tab role/selected/disabled state; App.tsx helper/testID wiring; and duplicate help/sign-out submission guards. The help request contains only the user's question and current ride status; no precise location, identity/KYC, contacts, payment data or token is included. Sign-out retains existing token invalidation, SecureStore cleanup and API logout. No API, session contract, fare, booking, dispatch or ride lifecycle behavior changed. The inherited picomatch GHSA-fc5q-39xc-vjpf remains High and unpatched in transitive build/test tooling; this is a disclosed residual, not a clean audit or vulnerability fix.
+
+**Next:** finish Rider functional coverage and available Android acceptance checks before Driver feature completion. iOS remains gated until both Android apps exit. Strict acceptance remains 0/19 (16 In Progress, 3 Blocked); production readiness is not established.
