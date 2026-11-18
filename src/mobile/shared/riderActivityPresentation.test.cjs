@@ -244,9 +244,9 @@ test("Rider agreement history validates ride identity, immutable versions and pr
   assert.equal(normalized?.length, 2);
   assert.equal(normalized?.[1].version, 2);
   assert.deepEqual(Object.keys(normalized?.[0] ?? {}).sort(), [
-    "amount", "createdAtUtc", "currency", "dropoff", "driverConfirmed",
-    "driverConfirmedAtUtc", "pickup", "proposedBy", "rideId", "riderConfirmed",
-    "riderConfirmedAtUtc", "stops", "version"
+    "amount", "createdAtUtc", "currency", "driverConfirmed",
+    "driverConfirmedAtUtc", "dropoff", "pickup", "proposedBy", "rideId",
+    "riderConfirmed", "riderConfirmedAtUtc", "stops", "version"
   ]);
   assert.equal(normalized?.[0].driverConfirmedAtUtc, first.driverConfirmedAtUtc);
   assert.deepEqual(normalizeRiderAgreementHistory([], "ride-agreement-123"), []);
