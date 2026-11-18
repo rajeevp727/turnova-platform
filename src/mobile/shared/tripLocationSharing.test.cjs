@@ -428,3 +428,9 @@ test("Driver foreground resume rechecks authoritative history before recreating 
   assert.ok(historyRead >= 0 && authoritativeCheck > historyRead && watcherStart > authoritativeCheck);
   assert.match(effect, /if \(state === "active"\) void startWatching\(\)/);
 });
+
+test("Rider status update safely preserves a missing ride and narrows the React state updater", () => {
+  assert.equal(applyRiderRideStatusUpdate(null, { rideId: "ride-missing", status: "Completed" }), null);
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /setRide\(current=>current\?applyRiderRideStatusUpdate\(current,update\):current\)/);
+});
