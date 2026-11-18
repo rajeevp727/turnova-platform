@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const { canStartRiderBooking, hasActiveRiderRide } = require("./riderBookingGuard.js");
+const { canStartRiderBooking, hasActiveRiderRide, normalizeRiderSelectedBookingResponse } = require("./riderBookingGuard.js");
 
 for (const status of [
   "Requested", "Matching", "Offered", "Negotiating", "AgreementConfirmed", "Accepted", "Arrived", "InProgress"
@@ -129,4 +129,126 @@ test("Rider session reset invalidates pending history and discovery responses", 
   const resetSource = source.slice(resetStart, resetEnd);
   assert.ok(resetSource.includes("rideHistoryRequestSequence.current += 1;"));
   assert.ok(resetSource.includes("riderDiscoveryRequestSequence.current += 1;"));
+});
+
+
+const validSelectedBookingExpected = {
+  riderId: "rider-1",
+  driverId: "driver-1",
+  unionId: "union-1",
+  pickup: "KPHB",
+  dropoff: "HITEC City",
+  stops: ["Madhapur"],
+  passengers: 2
+};
+
+const validSelectedBookingResponse = {
+  rideId: "RIDE-SEL-0123456789",
+  riderId: "rider-1",
+  driverId: "driver-1",
+  unionId: "union-1",
+  pickup: "KPHB",
+  dropoff: "HITEC City",
+  passengers: 2,
+  serviceClass: "cab",
+  status: "Negotiating",
+  estimatedFareInr: null,
+  stops: ["Madhapur"],
+  requestedAt: "2026-11-19T00:00:00Z",
+  acceptedAt: null,
+  unionName: "Union One",
+  driverDisplayName: "Driver One",
+  driverVehicleMake: "Toyota",
+  driverVehicleModel: "Etios",
+  driverDistanceToPickupKm: 2.5,
+  negotiationExpiresAtUtc: "2026-11-19T00:15:00Z",
+  pickupLatitude: 17.493,
+  pickupLongitude: 78.399,
+  driverLatitude: null,
+  driverLongitude: null,
+  auditEvents: [{ actorId: "internal-actor" }],
+  agreementVersions: [{ amount: 999999 }],
+  paymentReconciliation: { amountReceived: 1 },
+  dispatchZoneId: "internal-zone"
+};
+
+test("selected booking response matches the authenticated Rider, selected Driver, Union and exact trip", () => {
+  const normalized = normalizeRiderSelectedBookingResponse(
+    validSelectedBookingResponse,
+    validSelectedBookingExpected
+  );
+  assert.ok(normalized);
+  assert.equal(normalized.rideId, validSelectedBookingResponse.rideId);
+  assert.equal(normalized.riderId, undefined);
+  assert.equal(normalized.driverId, undefined);
+  assert.equal(normalized.unionId, "union-1");
+  assert.equal(normalized.pickup, "KPHB");
+  assert.equal(normalized.dropoff, "HITEC City");
+  assert.deepEqual(normalized.stops, ["Madhapur"]);
+  assert.equal(normalized.requestedAt, validSelectedBookingResponse.requestedAt);
+  assert.equal(normalized.estimatedFareInr, null);
+  assert.equal("auditEvents" in normalized, false);
+  assert.equal("agreementVersions" in normalized, false);
+  assert.equal("paymentReconciliation" in normalized, false);
+  assert.equal("dispatchZoneId" in normalized, false);
+});
+
+for (const [name, override] of [
+  ["Rider identity", { riderId: "another-rider" }],
+  ["Driver identity", { driverId: "another-driver" }],
+  ["Union identity", { unionId: "another-union" }],
+  ["pickup", { pickup: "Other pickup" }],
+  ["destination", { dropoff: "Other destination" }],
+  ["passenger count", { passengers: 3 }],
+  ["service class", { serviceClass: "bike" }],
+  ["stops", { stops: [] }],
+  ["ride ID", { rideId: " " }],
+  ["lifecycle control characters", { status: "Negotiating\n" }],
+  ["request timestamp", { requestedAt: "not-a-date" }],
+  ["pickup latitude", { pickupLatitude: 91 }]
+]) {
+  test("selected booking response rejects mismatched " + name, () => {
+    assert.equal(
+      normalizeRiderSelectedBookingResponse(
+        { ...validSelectedBookingResponse, ...override },
+        validSelectedBookingExpected
+      ),
+      null
+    );
+  });
+}
+
+test("selected booking response rejects a non-null platform fare estimate", () => {
+  assert.equal(
+    normalizeRiderSelectedBookingResponse(
+      { ...validSelectedBookingResponse, estimatedFareInr: 125 },
+      validSelectedBookingExpected
+    ),
+    null
+  );
+});
+
+test("unknown future booking status remains unresolved and blocks another booking", () => {
+  const normalized = normalizeRiderSelectedBookingResponse(
+    { ...validSelectedBookingResponse, status: "FutureServerStatus" },
+    validSelectedBookingExpected
+  );
+  assert.ok(normalized);
+  assert.equal(normalized.status, "FutureServerStatus");
+  assert.equal(canStartRiderBooking(true, normalized), false);
+});
+
+test("Rider validates and projects the selected booking response before committing state and rehydrates after uncertainty", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const bookingStart = source.indexOf("const requestSelectedDriver");
+  const bookingEnd = source.indexOf("const loadAgreementHistory", bookingStart);
+  assert.ok(bookingStart >= 0 && bookingEnd > bookingStart);
+  const bookingSource = source.slice(bookingStart, bookingEnd);
+  const responseValidation = bookingSource.indexOf("normalizeRiderSelectedBookingResponse(createdResponse,");
+  const rideCommit = bookingSource.indexOf("setRide(created)");
+  assert.ok(responseValidation >= 0 && rideCommit > responseValidation);
+  const catchStart = bookingSource.indexOf("catch(e){", rideCommit);
+  const finallyStart = bookingSource.indexOf("finally{", catchStart);
+  assert.ok(catchStart >= 0 && finallyStart > catchStart);
+  assert.match(bookingSource.slice(catchStart, finallyStart), /await loadRideHistory\(\(\)=>isCurrent\(\)\)/);
 });

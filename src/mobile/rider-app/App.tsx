@@ -22,7 +22,7 @@ import { resetRiderSessionState } from "../shared/sessionStateReset";
 import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePersistentProposalAttempt, type PersistentProposalAttempt } from "../shared/proposalAttempt";
 import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
 import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
-import { canStartRiderBooking, hasActiveRiderRide } from "../shared/riderBookingGuard";
+import { canStartRiderBooking, hasActiveRiderRide, normalizeRiderSelectedBookingResponse } from "../shared/riderBookingGuard";
 import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps, tryBeginRiderAuthSubmission } from "../shared/riderAuthForm";
 import { canDiscoverRiderTrip, validateRiderBookingText, getRiderDriverOptionProps, getRiderTripActionProps, getRiderTripFieldProps, getVisibleUnionDrivers, normalizeRiderDiscoveryResponse, shouldApplyRiderDiscoveryResponse } from "../shared/riderTripForm";
 import { finishRiderBookingAttempt, tryBeginRiderBookingAttempt } from "../shared/riderBookingAttempt";
@@ -61,7 +61,7 @@ const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
 type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type ServiceClass = "cab";
-type Ride = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: ServiceClass; status: string; estimatedFareInr: number | null; stops?: string[]; unionId?: string; unionName?: string; driverDisplayName?: string; driverVehicleMake?: string; driverVehicleModel?: string; driverDistanceToPickupKm?: number | null; negotiationExpiresAtUtc?: string | null; pickupLatitude?: number; pickupLongitude?: number; driverLatitude?: number; driverLongitude?: number; locationCapturedAtUtc?: string | null; driverLocationCapturedAtUtc?: string | null; locationUpdatedAt?: string };
+type Ride = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: ServiceClass; status: string; requestedAt?: string; acceptedAt?: string | null; estimatedFareInr: number | null; stops?: string[]; unionId?: string; unionName?: string; driverDisplayName?: string; driverVehicleMake?: string; driverVehicleModel?: string; driverDistanceToPickupKm?: number | null; negotiationExpiresAtUtc?: string | null; pickupLatitude?: number; pickupLongitude?: number; driverLatitude?: number; driverLongitude?: number; locationCapturedAtUtc?: string | null; driverLocationCapturedAtUtc?: string | null; locationUpdatedAt?: string };
 type DiscoveryDriver = { driverId: string; fullName: string; vehicleMake: string; vehicleModel: string; serviceClass: ServiceClass; passengerCapacity: number; distanceToPickupKm: number; profilePhotoBase64?: string | null; profilePhotoContentType?: string | null };
 type DiscoveryUnion = { unionId: string; unionName: string; drivers: DiscoveryDriver[] };
 type DiscoveryResult = { pickupZoneId: string; journeyDistanceKm: number | null; unions: DiscoveryUnion[] };
@@ -457,6 +457,7 @@ export default function App() {
   };
    const requestSelectedDriver=async()=>{
     const requestEpoch=renderedSessionEpoch;
+    const riderIdForRequest=user?.id??"";
     const isCurrent=()=>isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch);
     if(!isCurrent())return;
     if(!canStartRiderBooking(activeRideStateLoaded,ride)){
@@ -483,10 +484,12 @@ export default function App() {
       const coordinates=await selectedBookingLocation.current.capture();
       if(!isCurrent())return;
       if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");
-      const created=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});
+      const createdResponse=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});
       if(!isCurrent())return;
-      setRide(created as Ride);
-      setRideHistory(current=>[created as RideHistoryItem,...current.filter(item=>item.rideId!==created.rideId)]);
+      const created=normalizeRiderSelectedBookingResponse(createdResponse,{riderId:riderIdForRequest,driverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest.trim(),dropoff:dropoffForRequest.trim(),stops,passengers:passengerCount});
+      if(!created)throw new Error("The booking response could not be verified. Refreshing server ride state before another booking is enabled.");
+      setRide(created);
+      setRideHistory(current=>[created,...current.filter(item=>item.rideId!==created.rideId)]);
       setAgreementHistory([]);
       setAgreementAmount("");
       setTab("Activity");
@@ -494,7 +497,10 @@ export default function App() {
       setSelectedDriverId(null);
       resetSelectedBookingAttempt();
     }catch(e){
-      if(isCurrent())setError(e instanceof Error?e.message:"Unable to request the selected driver.");
+      if(isCurrent()){
+        try{await loadRideHistory(()=>isCurrent());}catch{}
+        if(isCurrent())setError(e instanceof Error?e.message:"Unable to request the selected driver.");
+      }
     }finally{
       if(finishRiderBookingAttempt(bookingInFlight,requestKey)&&isCurrent())setLoading(false);
     }
