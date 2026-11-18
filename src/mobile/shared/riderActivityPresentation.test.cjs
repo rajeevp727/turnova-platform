@@ -85,7 +85,7 @@ test("Rider agreement-version accessibility summary exposes immutable version, c
   assert.match(label, /INR 425\.00/);
   assert.match(label, /Proposed by Driver/);
   assert.match(label, /Rider: Pending/);
-  assert.match(label, new RegExp("Driver: Confirmed at " + new Date(confirmedAt).toLocaleString().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.ok(label.includes("Driver: Confirmed at " + new Date(confirmedAt).toLocaleString()));
 });
 
 test("Rider cancellation response validation requires the exact ride and a non-empty status", () => {
