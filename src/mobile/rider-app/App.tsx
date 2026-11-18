@@ -87,7 +87,7 @@ export default function App() {
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
   const nameInputRef=useRef<TextInput|null>(null); const emailInputRef=useRef<TextInput|null>(null); const passwordInputRef=useRef<TextInput|null>(null); const authSubmissionInFlight=useRef(false);
-  const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
+  const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState(""); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
   const [tripIntentText,setTripIntentText]=useState(""); const [tripIntentBusy,setTripIntentBusy]=useState(false); const [tripIntentNotice,setTripIntentNotice]=useState("");
   const [helpQuestion,setHelpQuestion]=useState(""); const [helpBusy,setHelpBusy]=useState(false); const [helpAnswer,setHelpAnswer]=useState(""); const [logoutBusy,setLogoutBusy]=useState(false);
   const [supportSubject,setSupportSubject]=useState(""); const [supportDescription,setSupportDescription]=useState(""); const [supportBusy,setSupportBusy]=useState(false); const [supportNotice,setSupportNotice]=useState(""); const [supportError,setSupportError]=useState("");
