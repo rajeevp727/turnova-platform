@@ -3459,12 +3459,18 @@ This increment deliberately does not invent categories, severity, priority, assi
 | RIDER-ACTIVITY-ACTION-003 | Cancellation response fencing | Cancellation is single-flight, response ride ID/status are validated, and late responses from a changed ride/session cannot update current UI state. | Automated Node source wiring | P1 |
 | RIDER-ACTIVITY-ACTION-004 | Current agreement confirmation | Confirmation is single-flight for the ride/version, skips an already-confirmed version, fences stale responses and reloads server-authoritative agreement history after success. | Automated Node source wiring | P1 |
 | RIDER-ACTIVITY-ACTION-005 | Shared ride-mutation serialization | Proposal, confirmation and cancellation cannot overlap; agreement amount editing and actions expose accessible busy/disabled state during a mutation. | Automated Node source wiring | P1 |
+| RIDER-ACTIVITY-ACTION-006 | Session-reset owner isolation | After a session reset invalidates an in-flight action, a new action for the same ride/version receives a distinct owner token; the old finalizer cannot release the new lock. | Automated Node unit + source wiring | P1 |
 
 These deterministic helper/source tests do not replace Android TalkBack, full React Native UI interaction, live API/Cosmos/SignalR, or physical-device acceptance. Server-owned transition and agreement rules remain authoritative; this increment changes no API contract or ride lifecycle policy.
 
 
 ## Rider Activity mutation single-flight — PR #192 execution evidence (2026-11-18)
 
-The five cases RIDER-ACTIVITY-ACTION-001..005 are defined in the Rider Activity test table above and were executed on code-bearing head `ea3cae2cba7578206e4160c52fc7c8e09e2e1f67` in [CI #44273380360](https://github.com/rajeevp727/turnova-platform/actions/runs/44273380360). The shared Node suite passed **276/276** (0 failed, 0 skipped); backend Release tests passed **758/758**; Python harness passed **48/48**. All 9 required API/Android jobs passed and iOS jobs were correctly skipped. Both Android APK variants and emulator install/launch smoke jobs passed for Rider and Driver; native non-container API publish/artifact validation passed.
+The six cases RIDER-ACTIVITY-ACTION-001..006 are defined in the Rider Activity test table above and were executed on code-bearing head `ea3cae2cba7578206e4160c52fc7c8e09e2e1f67` in [CI #44273380360](https://github.com/rajeevp727/turnova-platform/actions/runs/44273380360). The shared Node suite passed **276/276** (0 failed, 0 skipped); backend Release tests passed **758/758**; Python harness passed **48/48**. All 9 required API/Android jobs passed and iOS jobs were correctly skipped. Both Android APK variants and emulator install/launch smoke jobs passed for Rider and Driver; native non-container API publish/artifact validation passed.
 
 These cases include deterministic lock-helper unit tests and App.tsx source-wiring regressions. They do not replace physical-device, TalkBack, live API/Cosmos, or production acceptance. The later documentation synchronization requires a fresh exact-head CI run.
+
+
+## Rider Activity action-owner isolation follow-up — PR #192
+
+A code review identified a stale-finalizer collision if an Activity action is invalidated by session reset and the same ride/version is then reacquired: a static `cancel:{rideId}` or `confirm:{rideId}:{version}` key could be reused. Action owner tokens now include the captured session epoch and a monotonically increasing component-local sequence, so a prior request's `finally` cannot release a later owner's lock even when the ride and agreement version are identical. RIDER-ACTIVITY-ACTION-006 covers this reset/reacquire scenario; exact-head CI is pending. This is client-side coordination only; server-owned transitions and mutual confirmation remain authoritative.
