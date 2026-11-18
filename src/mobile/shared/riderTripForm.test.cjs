@@ -214,6 +214,8 @@ test("Rider booking screen wires accessible trip fields, actions and explicit dr
   assert.match(source, /getRiderTripActionProps\("requestDriver"/);
   assert.match(source, /getRiderDriverOptionProps\(driver,selected,loading,union\.unionName\)/);
   assert.match(source, /getVisibleUnionDrivers\(union\.drivers\)\.map/);
+  assert.match(source, /normalizeRiderDiscoveryResponse\(rawResult\)/);
+  assert.match(source, /The discovery response is invalid/);
   assert.match(source, /testID=\{`rider-driver-option-\$\{driver\.driverId\}`\}/);
   assert.match(source, /accessibilityLiveRegion="polite"/);
   assert.match(source, /accessibilityLiveRegion="assertive"/);
