@@ -1,5 +1,6 @@
 "use strict";
 
+const { isStrictIsoTimestampWithOffset } = require("./riderTimestamp");
 const { agreementConfirmationLabel } = require("./agreementConfirmation");
 const { formatAgreementAmount } = require("./agreementFormatting");
 
@@ -18,9 +19,7 @@ function isSafeAgreementText(value, maximumLength = 250) {
 }
 
 function normalizeAgreementTimestamp(value) {
-  return isSafeAgreementText(value, 64) &&
-    AGREEMENT_TIMESTAMP_WITH_OFFSET.test(value) &&
-    Number.isFinite(Date.parse(value))
+  return isSafeAgreementText(value, 64) && isStrictIsoTimestampWithOffset(value)
     ? value
     : null;
 }
@@ -143,7 +142,7 @@ function getRiderRideStatusMessage(ride) {
       return "Your ride request is waiting for a Driver response.";
     case "Negotiating": {
       const expiryValue = typeof ride.negotiationExpiresAtUtc === "string" ? ride.negotiationExpiresAtUtc.trim() : "";
-      const expiry = expiryValue ? new Date(expiryValue) : null;
+      const expiry = isStrictIsoTimestampWithOffset(expiryValue) ? new Date(expiryValue) : null;
       const deadline = expiry && Number.isFinite(expiry.getTime())
         ? "Negotiation expires at " + expiry.toLocaleTimeString() + "."
         : "Negotiation deadline is unavailable.";
@@ -169,7 +168,7 @@ function getRiderRideStatusMessage(ride) {
 }
 
 function getRiderHistoryAccessibilityLabel(item) {
-  const requestedAt = typeof item?.requestedAt === "string" ? new Date(item.requestedAt) : null;
+  const requestedAt = isStrictIsoTimestampWithOffset(item?.requestedAt) ? new Date(item.requestedAt) : null;
   const requestedAtLabel = requestedAt && Number.isFinite(requestedAt.getTime()) ? requestedAt.toLocaleString() : "Date unavailable";
   const passengers = Number.isInteger(item?.passengers) && item.passengers >= 0 ? item.passengers : "Unknown";
   return "Trip from " + displayText(item?.pickup, "Pickup unavailable") +
@@ -192,7 +191,7 @@ function getRiderAgreementVersionRouteLabel(item) {
 
 function getRiderAgreementVersionCreatedAtLabel(item) {
   const value = typeof item?.createdAtUtc === "string" ? item.createdAtUtc.trim() : "";
-  const createdAt = value ? new Date(value) : null;
+  const createdAt = isStrictIsoTimestampWithOffset(value) ? new Date(value) : null;
   return createdAt && Number.isFinite(createdAt.getTime())
     ? "Created " + createdAt.toLocaleString() + "."
     : "Creation time unavailable.";
