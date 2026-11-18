@@ -486,7 +486,7 @@ export default function App() {
       if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");
       const createdResponse=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});
       if(!isCurrent())return;
-      const created=normalizeRiderSelectedBookingResponse(createdResponse,{riderId:riderIdForRequest,driverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest.trim(),dropoff:dropoffForRequest.trim(),stops,passengers:passengerCount});
+      const created=normalizeRiderSelectedBookingResponse(createdResponse,{riderId:riderIdForRequest,driverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest.trim(),dropoff:dropoffForRequest.trim(),stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude});
       if(!created)throw new Error("The booking response could not be verified. Refreshing server ride state before another booking is enabled.");
       setRide(created);
       setRideHistory(current=>[created,...current.filter(item=>item.rideId!==created.rideId)]);

@@ -19,6 +19,8 @@ export interface RiderSelectedBookingExpected {
   dropoff: string;
   stops: string[];
   passengers: number;
+  pickupLatitude: number;
+  pickupLongitude: number;
 }
 
 export interface RiderSelectedBookingResult {

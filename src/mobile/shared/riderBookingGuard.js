@@ -45,6 +45,12 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
       !Number.isInteger(expected.passengers) ||
       expected.passengers < 1 || expected.passengers > 6) return null;
 
+  // The server must echo the exact foreground GPS fix used in the selected-booking POST.
+  // A merely valid but different coordinate pair is not the Rider's submitted pickup.
+  const expectedPickupLatitude = normalizeCoordinate(expected.pickupLatitude, -90, 90);
+  const expectedPickupLongitude = normalizeCoordinate(expected.pickupLongitude, -180, 180);
+  if (expectedPickupLatitude === null || expectedPickupLongitude === null) return null;
+
   if (!isSafeTrimmedText(response.rideId, 128) ||
       !isSafeTrimmedText(response.riderId) || response.riderId !== expected.riderId ||
       !isSafeTrimmedText(response.driverId, 128) || response.driverId !== expected.driverId ||
@@ -71,7 +77,9 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
 
   const pickupLatitude = normalizeCoordinate(response.pickupLatitude, -90, 90);
   const pickupLongitude = normalizeCoordinate(response.pickupLongitude, -180, 180);
-  if (pickupLatitude === null || pickupLongitude === null) return null;
+  if (pickupLatitude === null || pickupLongitude === null ||
+      pickupLatitude !== expectedPickupLatitude ||
+      pickupLongitude !== expectedPickupLongitude) return null;
 
   const driverLatitude = normalizeCoordinate(response.driverLatitude, -90, 90);
   const driverLongitude = normalizeCoordinate(response.driverLongitude, -180, 180);

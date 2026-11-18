@@ -139,7 +139,9 @@ const validSelectedBookingExpected = {
   pickup: "KPHB",
   dropoff: "HITEC City",
   stops: ["Madhapur"],
-  passengers: 2
+  passengers: 2,
+  pickupLatitude: 17.493,
+  pickupLongitude: 78.399
 };
 
 const validSelectedBookingResponse = {
@@ -205,7 +207,9 @@ for (const [name, override] of [
   ["ride ID", { rideId: " " }],
   ["lifecycle control characters", { status: "Negotiating\n" }],
   ["request timestamp", { requestedAt: "not-a-date" }],
-  ["pickup latitude", { pickupLatitude: 91 }]
+  ["pickup latitude", { pickupLatitude: 91 }],
+  ["pickup latitude echo", { pickupLatitude: 17.494 }],
+  ["pickup longitude echo", { pickupLongitude: 78.4 }]
 ]) {
   test("selected booking response rejects mismatched " + name, () => {
     assert.equal(
@@ -217,6 +221,23 @@ for (const [name, override] of [
     );
   });
 }
+
+test("selected booking response requires a valid exact echo of the captured foreground pickup coordinates", () => {
+  assert.equal(
+    normalizeRiderSelectedBookingResponse(
+      validSelectedBookingResponse,
+      { ...validSelectedBookingExpected, pickupLatitude: 91 }
+    ),
+    null
+  );
+  assert.equal(
+    normalizeRiderSelectedBookingResponse(
+      validSelectedBookingResponse,
+      { ...validSelectedBookingExpected, pickupLongitude: 181 }
+    ),
+    null
+  );
+});
 
 test("selected booking response rejects a non-null platform fare estimate", () => {
   assert.equal(
@@ -247,6 +268,7 @@ test("Rider validates and projects the selected booking response before committi
   const responseValidation = bookingSource.indexOf("normalizeRiderSelectedBookingResponse(createdResponse,");
   const rideCommit = bookingSource.indexOf("setRide(created)");
   assert.ok(responseValidation >= 0 && rideCommit > responseValidation);
+  assert.match(bookingSource, /pickupLatitude:coordinates\.latitude,pickupLongitude:coordinates\.longitude/);
   const catchStart = bookingSource.indexOf("catch(e){", rideCommit);
   const finallyStart = bookingSource.indexOf("finally{", catchStart);
   assert.ok(catchStart >= 0 && finallyStart > catchStart);
