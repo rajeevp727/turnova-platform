@@ -1,3 +1,5 @@
+const { isStrictIsoTimestampWithOffset } = require("./riderTimestamp");
+
 const ACTIVE_RIDE_STATUSES = {
   rider: new Set([
     "Requested",
@@ -39,8 +41,21 @@ function isRiderRideHistoryShapeValid(history) {
 
 function isRiderRideDetailsResponseValid(response, expectedRideId) {
   if (typeof expectedRideId !== "string" || expectedRideId.length === 0 || expectedRideId !== expectedRideId.trim()) return false;
-  if (!response || typeof response !== "object" || Array.isArray(response)) return false;
-  return typeof response.rideId === "string" && response.rideId === expectedRideId;
+  if (!response || typeof response !== "object" || Array.isArray(response) ||
+      typeof response.rideId !== "string" || response.rideId !== expectedRideId) return false;
+
+  const optionalTimestampFields = [
+    "requestedAt",
+    "acceptedAt",
+    "negotiationExpiresAtUtc",
+    "locationUpdatedAt",
+    "locationCapturedAtUtc",
+    "driverLocationCapturedAtUtc"
+  ];
+  return optionalTimestampFields.every(field => {
+    const value = response[field];
+    return value === undefined || value === null || isStrictIsoTimestampWithOffset(value);
+  });
 }
 
 function shouldApplyRideHistoryResponse(requestSequence, currentSequence) {
