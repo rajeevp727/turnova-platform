@@ -118,7 +118,7 @@ test("Rider trip draft and selected-driver request actions preserve direct negot
   assert.match(request.accessibilityHint, /does not quote or collect payment/);
 });
 
-test("Rider discovery response is validated and projected to public Cab fields", () => {
+test("RIDER-DISCOVERY-RESPONSE-001: project only validated public Cab discovery fields", () => {
   const raw = {
     pickupZoneId: "zone-hyd-1",
     journeyDistanceKm: null,
@@ -169,7 +169,7 @@ test("Rider discovery response is validated and projected to public Cab fields",
   assert.equal("privateRootField" in result, false);
 });
 
-test("Rider discovery response rejects malformed public contracts and photo metadata", () => {
+test("RIDER-DISCOVERY-RESPONSE-002: reject malformed contracts, incomplete vehicle details and photo metadata", () => {
   const validDriver = {
     driverId: "driver-1", fullName: "Asha Rao", vehicleMake: "Maruti", vehicleModel: "Dzire",
     serviceClass: "cab", passengerCapacity: 4, distanceToPickupKm: 2.4,
@@ -183,6 +183,10 @@ test("Rider discovery response rejects malformed public contracts and photo meta
     { ...valid, unions: [{ ...validUnion, drivers: null }] },
     { ...valid, unions: [validUnion, validUnion] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, driverId: " " }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleMake: " " }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleModel: "" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleMake: "x".repeat(61) }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleModel: "x".repeat(61) }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, serviceClass: "bike" }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, distanceToPickupKm: Infinity }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, passengerCapacity: 7 }] }] },
@@ -197,7 +201,7 @@ test("Rider discovery response rejects malformed public contracts and photo meta
   }
 });
 
-test("Rider discovery defaults a validated JPEG photo type only when server approval metadata is absent", () => {
+test("RIDER-DISCOVERY-RESPONSE-003: default JPEG content type only for a server-filtered approved photo", () => {
   const driver = {
     driverId: "driver-photo", fullName: "Asha Rao", vehicleMake: "Maruti", vehicleModel: "Dzire",
     serviceClass: "cab", passengerCapacity: 4, distanceToPickupKm: 1.2,
