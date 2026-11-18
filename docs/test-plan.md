@@ -3606,3 +3606,12 @@ Exact-head [CI #44401573555](https://github.com/rajeevp727/turnova-platform/acti
 The npm audit logs for both Rider and Driver in CI #44401573555 reported 0 critical, 0 high, 11 moderate and 0 low package nodes per app. The previously recorded picomatch High advisory was not reproduced in this audit; moderate findings remain for follow-up. This is not a claim that all moderate findings are remediated.
 
 Source-head CI #44408430795 on 26f3dcd8a018c929576947f5cdb21c9c73873704 passed backend 758/758, shared Node 345/345, Python 48/48 and Rider/Driver app validation/bundle jobs. Native Android debug APK compilation was still in progress at last inspection. Latest code head 1e7bf9a83cd1ef8f9422c07b56a82748b7e7aa87 has CI #44409433080 pending; neither prior run is final-head evidence for that commit.
+
+
+## Rider realtime agreement-history validation — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-AGREEMENT-REALTIME-001 | Validate realtime agreement event and refreshed history | Reject malformed or cross-ride `RideAgreementChanged` events. Normalize the response against the exact ride ID, require strictly increasing immutable versions and consistent confirmation timestamps, project only Rider-visible fields, and commit only if the captured session/connection and shared latest-request sequence remain current. A stale realtime response cannot replace a newer Activity agreement history. | Automated Node unit + source wiring | P1 |
+
+The realtime refresh uses the same sequence as the Activity agreement-history loader. The API remains authoritative for agreement persistence, versioning, actor identity, idempotency and mutual confirmation; this client change does not mutate server agreement state.
