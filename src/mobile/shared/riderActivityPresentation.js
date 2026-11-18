@@ -12,6 +12,23 @@ function displayText(value, fallback) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
 
+function getRiderRideStatusLabel(status) {
+  return typeof status === "string" && RIDE_STATUSES.has(status)
+    ? status.toUpperCase()
+    : "STATUS UNAVAILABLE";
+}
+
+function isRiderRideStatusEventValid(update, expectedRideId) {
+  if (typeof expectedRideId !== "string" || expectedRideId.length === 0 || expectedRideId !== expectedRideId.trim()) return false;
+  if (!update || typeof update !== "object" || Array.isArray(update)) return false;
+  return update.rideId === expectedRideId &&
+    typeof update.status === "string" &&
+    update.status.length > 0 &&
+    update.status.length <= 64 &&
+    update.status === update.status.trim() &&
+    !/[\u0000-\u001f\u007f]/.test(update.status);
+}
+
 function getRiderRideStatusMessage(ride) {
   const status = typeof ride?.status === "string" ? ride.status : "";
   switch (status) {
@@ -96,6 +113,8 @@ function isRiderCancellationResponseValid(response, expectedRideId) {
 }
 
 module.exports = {
+  getRiderRideStatusLabel,
+  isRiderRideStatusEventValid,
   getRiderRideStatusMessage,
   getRiderHistoryAccessibilityLabel,
   getRiderAgreementVersionRouteLabel,
