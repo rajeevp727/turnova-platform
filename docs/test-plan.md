@@ -3474,3 +3474,40 @@ RIDER-ACTIVITY-ACTION-006 was added in follow-up source/test head `1d9f07a5b7cf9
 ## Rider Activity action-owner isolation follow-up — PR #192
 
 A code review identified a stale-finalizer collision if an Activity action is invalidated by session reset and the same ride/version is then reacquired: a static `cancel:{rideId}` or `confirm:{rideId}:{version}` key could be reused. Action owner tokens now include the captured session epoch and a monotonically increasing component-local sequence, so a prior request's `finally` cannot release a later owner's lock even when the ride and agreement version are identical. RIDER-ACTIVITY-ACTION-006 covers this reset/reacquire scenario and passed on final documentation-bearing head CI #44290908866. This is client-side coordination only; server-owned transitions and mutual confirmation remain authoritative.
+
+
+## Rider Android Activity/history presentation and accessibility — 2026-11-18
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-ACTIVITY-HISTORY-001 | Ride status presentation | Known RideLifecycle statuses use truthful Rider-facing messages; unknown future values say the status is unavailable rather than implying a driver/dispatch outcome. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-002 | Trip-history accessibility summary | Screen-reader label includes pickup, destination, status, passenger count, historical service class, request time and ride reference; missing values fail safely. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-003 | Immutable agreement accessibility summary | Screen-reader label includes agreement version, persisted currency/amount, pickup, destination, optional stops, creation time, proposer and both parties' confirmation states/timestamps; route/time are also visible per version. | Automated Node unit + source wiring | P1 |
+| RIDER-ACTIVITY-HISTORY-004 | Cancellation response validation | Client applies a cancellation response only when its ride ID matches and status is an exact known RideLifecycle value; blank, padded, unknown and mismatched responses are rejected. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-005 | Rider Activity source wiring | Activity status, agreement rows, history rows and cancellation response path use the tested presentation/validation helpers. | Automated Node source wiring | P1 |
+| RIDER-ACTIVITY-HISTORY-006 | Unknown lifecycle status fallback | An unrecognized future status announces that the status is unavailable and does not imply FIFO, automatic assignment or payment outcome. | Automated Node unit | P1 |
+| RIDER-ACTIVITY-HISTORY-007 | Agreement route/time fallback | Missing pickup/drop-off/stops and invalid creation timestamps produce safe labels without throwing or showing an invalid date. | Automated Node unit | P1 |
+
+This is a Rider-only presentation/validation increment. It does not change API contracts, ride lifecycle, agreement confirmation, fare, payment or reconciliation policy. Server-owned lifecycle status remains authoritative. The history summary preserves the stored service class so historical non-Cab records remain readable. Full React Native interaction, TalkBack on physical devices and live API/Cosmos/SignalR acceptance remain separate evidence gates.
+
+
+## Rider Activity/history follow-up — PR #193 validation snapshot (2026-11-18)
+
+The previous code/test head `be8d8bb5f28a85de67b70efb51e47bfe8e10e6f5` passed [CI #44299657489](https://github.com/rajeevp727/turnova-platform/actions/runs/44299657489): backend Release **758/758**, shared mobile Node **284/284**, Python **48/48**; all 9 required API/Android jobs passed, including Rider and Driver Expo/config/TypeScript/Android bundle checks, debug and standalone release APKs, package identity and both emulator install/launch smoke jobs, plus native non-container API Release publish. The three iOS jobs were correctly skipped by the platform gate.
+
+A final source review tightened cancellation-response validation to the exact known server lifecycle values and made unknown status text fail safely. Agreement-version rows now expose their immutable pickup/drop-off/stops snapshot and creation time visibly and in the screen-reader label. Fresh exact-head CI is required for this follow-up and documentation synchronization; the prior successful run is not substituted for the new head.
+
+This remains Rider-only client presentation/response validation. It does not alter server lifecycle, agreement persistence, fare, payment, dispatch, FIFO or reconciliation policy. Physical-device TalkBack, live API/Cosmos/SignalR/TriSend and production authentication remain external gates.
+
+
+## Rider Activity/history follow-up — PR #193 final exact-head evidence (2026-11-18)
+
+PR [#193](https://github.com/rajeevp727/turnova-platform/pull/193) exact head `b62706460c22e4fbb76121c86f3c623dfe0f6cf4` passed [CI #44312015022](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022) on 2026-11-18. The run completed successfully: all 9 required API/Android jobs passed; the 3 iOS jobs were correctly skipped. Backend Release tests: 758/758 (0 failed, 0 skipped); shared mobile Node tests: 286/286 (0 failed, 0 skipped); Python harness: 48/48. Rider and Driver Expo config, TypeScript, Android production JS bundle, debug APK, standalone release APK, package identity and Android emulator install/launch smoke all passed. Native non-container .NET 10 API Release publish and artifact verification passed.
+
+Artifacts: Rider debug APK [14430354079](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022/artifacts/14430354079), release APK [14431656436](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022/artifacts/14431656436), emulator smoke [14432191861](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022/artifacts/14432191861); Driver debug APK [14430668241](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022/artifacts/14430668241), release APK [14430853010](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022/artifacts/14430853010), emulator smoke [14431028469](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022/artifacts/14431028469); native API publish [14429954901](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022/artifacts/14429954901).
+
+The CI smoke is install/cold-launch/foreground-process evidence only. It does not prove full React Native UI interaction, TalkBack, live API/Cosmos/SignalR/TriSend, production authentication or physical-device acceptance. The inherited High picomatch GHSA-fc5q-39xc-vjpf remains unpatched in reviewed transitive Expo/Metro/Jest build tooling; it is disclosed, not represented as a clean audit or vulnerability fix.
+
+PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
+
+The deterministic cases RIDER-ACTIVITY-HISTORY-001..007 are recorded above. This run validates the API/Android CI pipeline and emulator install/launch only; it does not close manual accessibility, live-service or physical-device acceptance.

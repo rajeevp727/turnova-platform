@@ -107,7 +107,7 @@ test("Rider cancellation is single-flight and ignores stale ride/session respons
     "isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch)",
     "finishRiderActivityAction(activityActionInFlight,actionKey)",
     "setCancelBusy(false)",
-    "updated.rideId!==rideId"
+    "isRiderCancellationResponseValid(updated,rideId)"
   ]) assert.ok(handler.includes(expected), "Missing cancellation guard: " + expected);
 });
 
