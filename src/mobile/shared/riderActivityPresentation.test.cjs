@@ -111,7 +111,7 @@ test("Rider agreement version route and creation-time helpers fail safely for ma
   assert.equal(getRiderAgreementVersionCreatedAtLabel(item), "Creation time unavailable.");
 });
 
-test("Rider cancellation response validation requires the exact ride and a non-empty status", () => {
+test("Rider cancellation response requires the exact ride and Cancelled terminal status", () => {
   assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "Cancelled" }, "ride-123"), true);
   assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "Requested" }, "ride-123"), false);
   assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "InProgress" }, "ride-123"), false);
@@ -141,7 +141,7 @@ test("Rider Activity screen wires tested status, agreement, history and cancella
   const cancelEnd = source.indexOf("const requestSelectedDriver", cancelStart);
   assert.ok(cancelStart >= 0 && cancelEnd > cancelStart);
   const cancelSource = source.slice(cancelStart, cancelEnd);
-  assert.match(cancelSource, /await loadRideHistory\\(\\(\\)=>isCurrent\\(\\)\\)/);
+  assert.ok(cancelSource.includes("await loadRideHistory(()=>isCurrent())"));
 });
 
 
