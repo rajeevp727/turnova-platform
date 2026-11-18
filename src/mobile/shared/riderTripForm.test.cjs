@@ -14,7 +14,7 @@ const {
   shouldApplyRiderDiscoveryResponse
 } = require("./riderTripForm.js");
 
-test("Rider discovery preflight requires a pickup, destination and whole passenger count from 1 to 6", () => {
+test("RIDER-DISCOVERY-PREFLIGHT-001: require pickup, destination and whole passenger count from 1 to 6", () => {
   assert.equal(canDiscoverRiderTrip("Nizampet", "HITEC City", 1), true);
   assert.equal(canDiscoverRiderTrip(" Nizampet ", " HITEC City ", 6), true);
   for (const [pickup, dropoff, passengers] of [
@@ -34,7 +34,7 @@ test("Rider discovery preflight requires a pickup, destination and whole passeng
   }
 });
 
-test("Rider discovery responses apply only for the latest safe request sequence", () => {
+test("RIDER-DISCOVERY-SEQUENCE-001: apply only the latest safe discovery request sequence", () => {
   assert.equal(shouldApplyRiderDiscoveryResponse(1, 1), true);
   assert.equal(shouldApplyRiderDiscoveryResponse(2, 2), true);
   assert.equal(shouldApplyRiderDiscoveryResponse(1, 2), false);
@@ -44,7 +44,7 @@ test("Rider discovery responses apply only for the latest safe request sequence"
   assert.equal(shouldApplyRiderDiscoveryResponse(Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 1), false);
 });
 
-test("Rider discovery UI and async handler share preflight validation and session/request fencing", () => {
+test("RIDER-DISCOVERY-SESSION-001: fence discovery UI state by session and request sequence", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   assert.match(source, /const riderDiscoveryRequestSequence=useRef\(0\)/);
   assert.match(source, /const canDiscoverTrip=canDiscoverRiderTrip\(pickup,dropoff,parsePassengerCountInput\(passengers\)\)/);
