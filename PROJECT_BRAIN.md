@@ -5,11 +5,11 @@
 
 **Last verified:** 2026-11-18
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `8af9f7a922b2b0d061ccb5e548cadef5f7153bbd`; PR #192 merged after exact-head CI #44293755167 passed all 9 required API/Android jobs.
-**Latest PR #193 CI evidence:** final source/test head `b62706460c22e4fbb76121c86f3c623dfe0f6cf4` passed [CI #44312015022](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022): backend 758/758, Node 286/286, Python 48/48; all 9 required API/Android jobs, both apps' Expo/TypeScript/Android bundles, debug/release APKs, package identity, emulator install/launch smoke and native API publish passed; 3 iOS jobs correctly skipped.
-**Current Rider task:** Activity/history presentation, screen-reader summaries, immutable agreement route/stops/creation-time visibility, exact known RideLifecycle cancellation-response validation and deterministic cases RIDER-ACTIVITY-HISTORY-001..007. The exact source/test head passed CI #44312015022; docs are being synchronized on the same PR branch. Keep Driver feature work gated until Rider exits; keep iOS gated until both Android apps exit.
-**Current Rider task:** Activity/history presentation, screen-reader summaries, immutable agreement route/stops/creation-time visibility, exact known RideLifecycle cancellation-response validation and deterministic cases RIDER-ACTIVITY-HISTORY-001..007. The final source/test and documentation synchronization requires fresh exact-head CI; the previous run does not substitute.
-**API engineering exit:** in-scope API flows, deterministic backend/domain/persistence tests, API docs, auth/authorization/privacy checks and native publish are complete. Live Cosmos, production identity, private-media provider/scanning, hosting and product/legal decisions remain external; no production readiness is claimed.
+**Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`; PR #193 merged after final documentation-bearing CI [#44315335224](https://github.com/rajeevp727/turnova-platform/actions/runs/44315335224) passed all 9 required API/Android jobs (3 iOS jobs correctly skipped).
+**Latest Rider Android increment:** PR #193 merged Rider Activity/history accessible presentation, immutable agreement route/stops/creation-time visibility and exact cancellation response validation. Backend 758/758, Node 286/286, Python 48/48; both Android debug/release APKs, package identity, emulator install/launch smoke and native non-container API publish passed on the final documentation-bearing head.
+**Current platform phase:** Android — Rider first. API engineering exit criteria are complete. Driver feature work remains gated until Rider exits; iOS remains gated until both Android apps exit.
+**Current Rider task:** PR #194 — validate Rider live status events and prevent unknown raw lifecycle values from appearing as active/history labels. Deterministic cases RIDER-ACTIVITY-STATUS-001..003 are being added on `fix/android-rider-status-event-fallback`; exact-head CI is pending.
+**API engineering exit:** in-scope API flows, deterministic backend/domain/persistence tests, API docs, auth/authorization/privacy checks and native non-container .NET 10 Release publish are complete. Live Cosmos, production identity, private-media provider/scanning, hosting and product/legal decisions remain external; no production readiness is claimed.
 **AI-01:** approved supplemental API scope is implemented/tested and remains outside the 19-row denominator. Provider is disabled by default; no paid provider/model/credential selected.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 
@@ -3052,3 +3052,10 @@ The CI smoke is install/cold-launch/foreground-process evidence only. It does no
 PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
 
 **Next:** recheck PR #193 head/checks after this documentation-only synchronization. Merge only if the latest documentation-bearing head has all required API/Android jobs green and GitHub still permits the merge without self-approval or bypass. Re-read main after merge and continue Rider-only work. Strict acceptance remains 0/19 Verified; production readiness is not established.
+
+
+## PR #193 merged and current Rider handoff — 2026-11-18
+
+PR #193 merged at 7f64c67f8ac0d65254898d62520a1028e3ae56ce after final documentation-bearing CI #44315335224 passed all 9 required API/Android jobs. The 3 iOS jobs were correctly skipped. No production readiness or strict acceptance closure is claimed.
+
+PR #194 is the sole active Rider Android increment. It validates live RideStatusChanged event ride identity and bounded status shape, displays unknown active/history lifecycle values as STATUS UNAVAILABLE, and adds deterministic cases RIDER-ACTIVITY-STATUS-001..003. Driver feature work and iOS remain gated until Rider, then Driver Android, exit criteria pass.
