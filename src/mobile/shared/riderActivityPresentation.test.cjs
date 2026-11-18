@@ -253,6 +253,23 @@ test("Rider agreement history validates ride identity, immutable versions and pr
   assert.deepEqual(normalizeRiderAgreementHistory([], "ride-agreement-123"), []);
 });
 
+test("RIDER-AGREEMENT-RESPONSE-001: agreement route snapshots accept the API 250-character text limit", () => {
+  const maximumRouteText = "x".repeat(250);
+  const response = validRiderAgreementVersion({
+    pickup: maximumRouteText,
+    dropoff: maximumRouteText,
+    stops: [maximumRouteText]
+  });
+  const normalized = normalizeRiderAgreementHistory([response], "ride-agreement-123");
+  assert.equal(normalized?.[0].pickup, maximumRouteText);
+  assert.equal(normalized?.[0].dropoff, maximumRouteText);
+  assert.deepEqual(normalized?.[0].stops, [maximumRouteText]);
+  assert.equal(
+    normalizeRiderAgreementHistory([validRiderAgreementVersion({ dropoff: "x".repeat(251) })], "ride-agreement-123"),
+    null
+  );
+});
+
 test("Rider agreement history rejects malformed, cross-ride, duplicate or out-of-order versions", () => {
   const valid = validRiderAgreementVersion();
   const invalid = [
@@ -267,7 +284,9 @@ test("Rider agreement history rejects malformed, cross-ride, duplicate or out-of
     [{ ...valid, amount: 10.123 }],
     [{ ...valid, currency: "inr" }],
     [{ ...valid, pickup: " " }],
-    [{ ...valid, dropoff: "x".repeat(161) }],
+    [{ ...valid, pickup: "x".repeat(251) }],
+    [{ ...valid, dropoff: "x".repeat(251) }],
+    [{ ...valid, stops: ["x".repeat(251)] }],
     [{ ...valid, stops: [""] }],
     [{ ...valid, stops: new Array(11).fill("Stop") }],
     [{ ...valid, proposedBy: "System" }]

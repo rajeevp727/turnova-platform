@@ -3627,3 +3627,11 @@ Source/test head `01c615b36a9b9391f218972c7962fed3b38454c4` includes `RIDER-AGRE
 ## Current PR #194 source/test handoff — 2026-11-19
 
 Source/test head `e91284ff1757ad65cc6921d0405ec84efa70fd08` adds canonical JPEG base64 validation to `RIDER-DISCOVERY-RESPONSE-003`; malformed alphabet, interior padding, empty and incomplete payloads are rejected before the Rider UI receives photo data. The API remains authoritative for current-Union approval and private-media scan status. Fresh exact-head CI is required on the final documentation-bearing PR head; prior CI #44413795412 is superseded by this source change.
+
+## Rider agreement-history route text compatibility — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-AGREEMENT-RESPONSE-001 | Agreement route text bounds | Accept pickup, destination and each optional stop at the API 250-character maximum; reject any route field over 250 characters. Preserve immutable agreement versions and reject malformed/cross-ride history as before. | Automated Node unit | P1 |
+
+The Rider history normalizer must not reject a valid immutable agreement snapshot that passed the same 250-character route validation used by selected booking. This is client response validation only; the API remains authoritative for persisted route snapshots.

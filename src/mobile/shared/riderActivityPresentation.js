@@ -9,7 +9,7 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function isSafeAgreementText(value, maximumLength = 160) {
+function isSafeAgreementText(value, maximumLength = 250) {
   return typeof value === "string" &&
     value.length > 0 &&
     value.length <= maximumLength &&
