@@ -33,7 +33,7 @@ const ACTIVITY_ACTIONS = Object.freeze({
 
 function tryBeginRiderActivityAction(inFlight, key) {
   if (!inFlight || typeof inFlight !== "object" || !("current" in inFlight)) throw new TypeError("A Rider activity action lock is required.");
-  if (typeof key !== "string" || !key || key !== key.trim() || key.length > 256 || /[\\u0000-\\u001f\\u007f]/.test(key)) {
+  if (typeof key !== "string" || !key || key !== key.trim() || key.length > 256 || /[\u0000-\u001f\u007f]/.test(key)) {
     throw new TypeError("A valid Rider activity action key is required.");
   }
   if (inFlight.current !== null) return false;
@@ -43,7 +43,7 @@ function tryBeginRiderActivityAction(inFlight, key) {
 
 function finishRiderActivityAction(inFlight, key) {
   if (!inFlight || typeof inFlight !== "object" || !("current" in inFlight)) throw new TypeError("A Rider activity action lock is required.");
-  if (typeof key !== "string" || !key || key !== key.trim() || key.length > 256 || /[\\u0000-\\u001f\\u007f]/.test(key)) {
+  if (typeof key !== "string" || !key || key !== key.trim() || key.length > 256 || /[\u0000-\u001f\u007f]/.test(key)) {
     throw new TypeError("A valid Rider activity action key is required.");
   }
   if (inFlight.current !== key) return false;
