@@ -121,6 +121,14 @@ function isRiderRideAgreementEventValid(update, expectedRideId) {
     update.rideId === expectedRideId;
 }
 
+function isRiderRideLocationTimestampValid(update) {
+  return isRecord(update) &&
+    (update.locationCapturedAtUtc === undefined || update.locationCapturedAtUtc === null ||
+      isStrictIsoTimestampWithOffset(update.locationCapturedAtUtc)) &&
+    (update.locationUpdatedAt === undefined || update.locationUpdatedAt === null ||
+      isStrictIsoTimestampWithOffset(update.locationUpdatedAt));
+}
+
 function isRiderRideStatusEventValid(update, expectedRideId) {
   if (typeof expectedRideId !== "string" || expectedRideId.length === 0 || expectedRideId !== expectedRideId.trim()) return false;
   if (!update || typeof update !== "object" || Array.isArray(update)) return false;
@@ -166,9 +174,13 @@ function getRiderRideStatusMessage(ride) {
   }
 }
 
-function getRiderHistoryAccessibilityLabel(item) {
+function getRiderHistoryRequestedAtLabel(item) {
   const requestedAt = isStrictIsoTimestampWithOffset(item?.requestedAt) ? new Date(item.requestedAt) : null;
-  const requestedAtLabel = requestedAt && Number.isFinite(requestedAt.getTime()) ? requestedAt.toLocaleString() : "Date unavailable";
+  return requestedAt && Number.isFinite(requestedAt.getTime()) ? requestedAt.toLocaleString() : "Date unavailable";
+}
+
+function getRiderHistoryAccessibilityLabel(item) {
+  const requestedAtLabel = getRiderHistoryRequestedAtLabel(item);
   const passengers = Number.isInteger(item?.passengers) && item.passengers >= 0 ? item.passengers : "Unknown";
   return "Trip from " + displayText(item?.pickup, "Pickup unavailable") +
     " to " + displayText(item?.dropoff, "Drop-off unavailable") +
@@ -215,9 +227,11 @@ function isRiderCancellationResponseValid(response, expectedRideId) {
 module.exports = {
   getRiderRideStatusLabel,
   isRiderRideAgreementEventValid,
+  isRiderRideLocationTimestampValid,
   isRiderRideStatusEventValid,
   getRiderRideStatusMessage,
   getRiderHistoryAccessibilityLabel,
+  getRiderHistoryRequestedAtLabel,
   getRiderAgreementVersionRouteLabel,
   getRiderAgreementVersionCreatedAtLabel,
   getRiderAgreementVersionAccessibilityLabel,
