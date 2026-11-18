@@ -3,11 +3,6 @@
 const { agreementConfirmationLabel } = require("./agreementConfirmation");
 const { formatAgreementAmount } = require("./agreementFormatting");
 
-const RIDE_STATUSES = new Set([
-  "Requested", "Matching", "Offered", "Negotiating", "AgreementConfirmed",
-  "Accepted", "Arrived", "InProgress", "Completed", "Cancelled", "Expired"
-]);
-
 function displayText(value, fallback) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
@@ -118,10 +113,7 @@ function getRiderAgreementVersionAccessibilityLabel(item) {
 function isRiderCancellationResponseValid(response, expectedRideId) {
   if (typeof expectedRideId !== "string" || expectedRideId.length === 0 || expectedRideId !== expectedRideId.trim()) return false;
   if (!response || typeof response !== "object" || Array.isArray(response)) return false;
-  return response.rideId === expectedRideId &&
-    typeof response.status === "string" &&
-    response.status === response.status.trim() &&
-    RIDE_STATUSES.has(response.status);
+  return response.rideId === expectedRideId && response.status === "Cancelled";
 }
 
 module.exports = {

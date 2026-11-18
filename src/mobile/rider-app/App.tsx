@@ -452,8 +452,14 @@ export default function App() {
       if(!isCurrent())return;
       if(!isRiderCancellationResponseValid(updated,rideId))throw new Error("Ride service returned an invalid cancellation response.");
       setRide(updated);
-    }catch(e){if(isCurrent())setError(e instanceof Error?e.message:"Unable to cancel ride.");}
-    finally{if(finishRiderActivityAction(activityActionInFlight,actionKey))setCancelBusy(false);}
+    }catch(e){
+      if(isCurrent()){
+        // Cancellation may have committed even when its response was lost or malformed.
+        // Re-read server-owned history before presenting the state as current.
+        try{await loadRideHistory(()=>isCurrent());}catch{}
+        if(isCurrent())setError(e instanceof Error?e.message:"Unable to cancel ride.");
+      }
+    }finally{if(finishRiderActivityAction(activityActionInFlight,actionKey))setCancelBusy(false);}
   };
    const requestSelectedDriver=async()=>{
     const requestEpoch=renderedSessionEpoch;
