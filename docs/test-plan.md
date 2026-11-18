@@ -3356,3 +3356,26 @@ PR [#186](https://github.com/rajeevp727/turnova-platform/pull/186), source/test 
 Artifacts: Rider APK [14379339290](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14379339290), Driver APK [14381230261](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14381230261), Rider smoke [14379978000](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14379978000), Driver smoke [14380083368](https://github.com/rajeevp727/turnova-platform/actions/runs/44197370084/artifacts/14380083368).
 
 The emulator smoke harness verifies installation, launch, stable process and login-screen presence only. It does not exercise live API/TriSend/Cosmos, TalkBack/VoiceOver, signed SecureStore/Keychain or physical-device acceptance. Keep Rider-first order: complete Rider app flows/tests before Driver; do not enable iOS until both Android apps meet their engineering exit criteria.
+
+
+## Rider Android trip-form and Driver-selection accessibility
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-BOOK-ACCESS-001 | Trip-intent draft input | Accessible label/hint states the input is optional and creates an editable draft only; it never books or charges. | Automated Node unit/source wiring | P1 |
+| RIDER-BOOK-ACCESS-002 | Pickup and destination notes | Accessible labels distinguish pickup landmark text from GPS pickup-zone matching and destination text from journey routing/distance. | Automated Node unit/source wiring | P1 |
+| RIDER-BOOK-ACCESS-003 | Stops and passenger count | Stops announce one-per-line order; passenger input announces the 1–6 whole-number range and disabled state. | Automated Node unit/source wiring | P1 |
+| RIDER-BOOK-ACCESS-004 | Draft/discovery action state | Actions expose button role, clear label, hint, disabled/busy state; discovery states the Rider chooses and no automatic assignment occurs. | Automated Node unit | P1 |
+| RIDER-BOOK-ACCESS-005 | Selected-driver request action | Announces direct fare negotiation only and explicitly states TurnOva does not quote or collect payment. | Automated Node unit | P1 |
+| RIDER-BOOK-ACCESS-006 | Driver option accessibility | Each option exposes radio checked/disabled state and announces Driver, approved Union, verified Cab vehicle, capacity and distance-to-pickup (not journey distance). | Automated Node unit | P1 |
+| RIDER-BOOK-ACCESS-007 | Invalid helper inputs | Unknown trip fields/actions fail closed with RangeError. | Automated Node unit | P2 |
+| RIDER-BOOK-ACCESS-008 | Rider booking screen wiring | Stable test IDs and accessible helper props are wired to every trip input, draft/discovery/request action and explicit Driver option. | Automated Node source wiring | P1 |
+
+These tests are deterministic helper/source tests; they do not replace Android TalkBack testing, full screen interaction tests, live API/Cosmos validation or physical-device acceptance. Rider remains the active Android app until its in-scope implementation and evidence exit; Driver feature completion follows, and iOS remains gated.
+
+
+## Rider Android trip-form and Driver-selection accessibility — exact-head verification
+
+PR [#187](https://github.com/rajeevp727/turnova-platform/pull/187), source/test head `6aa02c2041cc1d6722d4609749f4e1139b428f8c`, exact-head CI [#44213341447](https://github.com/rajeevp727/turnova-platform/actions/runs/44213341447) passed all 9 required API/Android jobs; the 3 iOS jobs were correctly skipped. The shared Node suite passed **245/245**, including RIDER-BOOK-ACCESS-001..008; backend passed 758/758 and Python harness passed 48/48. Rider and Driver Expo config/TypeScript/Android production bundle, debug/release APK, package identity and emulator install/launch smoke passed. Native non-container API publish passed.
+
+Artifacts: Rider debug 14386729590, release 14387099487, emulator smoke 14387603510; Driver debug 14387770989, release 14388565215, emulator smoke 14387692092; API publish 14386583968. The eight new cases are deterministic helper/source-wiring tests; they do not replace TalkBack, full UI interaction, live API/Cosmos/TriSend or physical-device acceptance. Finish remaining Rider work before Driver; do not start iOS until both Android apps exit.
