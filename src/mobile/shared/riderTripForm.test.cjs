@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const {
+  getVisibleUnionDrivers,
   getRiderDriverOptionProps,
   getRiderTripActionProps,
   getRiderTripFieldProps
@@ -54,6 +55,14 @@ test("Rider trip draft and selected-driver request actions preserve direct negot
   assert.equal(request.accessibilityLabel, "Request this driver");
   assert.match(request.accessibilityHint, /direct fare negotiation/);
   assert.match(request.accessibilityHint, /does not quote or collect payment/);
+});
+
+test("Rider union display keeps at most the first three server-ordered drivers", () => {
+  const drivers = [{ driverId: "d1" }, { driverId: "d2" }, { driverId: "d3" }, { driverId: "d4" }];
+  assert.deepEqual(getVisibleUnionDrivers(drivers), drivers.slice(0, 3));
+  assert.deepEqual(getVisibleUnionDrivers([drivers[2], drivers[0]]), [drivers[2], drivers[0]]);
+  assert.deepEqual(getVisibleUnionDrivers(null), []);
+  assert.deepEqual(getVisibleUnionDrivers({}), []);
 });
 
 test("Rider driver option exposes radio selection, union, Cab details and pickup-only proximity", () => {
