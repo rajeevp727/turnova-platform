@@ -55,7 +55,7 @@ test("Rider app loads the server-owned active ride before enabling booking", () 
   const loadingReset = historySource.indexOf("setActiveRideStateLoaded(false)");
   const historyRead = historySource.indexOf('apiFetch("/api/v1/rides/mine")');
   const detailRead = historySource.indexOf('apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId))');
-  const historyShapeValidation = historySource.indexOf("isRiderRideHistoryShapeValid(historyResponse)");
+  const historyShapeValidation = historySource.indexOf("normalizeRiderRideHistory(historyResponse)");
   const detailShapeValidation = historySource.indexOf("isRiderRideDetailsResponseValid(detailsResponse,active.rideId)");
   const historyStored = historySource.lastIndexOf("setRideHistory(history)");
   const loaded = historySource.indexOf("setActiveRideStateLoaded(true)");
