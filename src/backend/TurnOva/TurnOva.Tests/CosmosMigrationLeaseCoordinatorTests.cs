@@ -30,6 +30,30 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
     }
 
     [Fact]
+    public async Task AcquireRetriesCreateWhenExpiredLeaseDisappearsBeforeReplace()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var expired = new CosmosMigrationLease(
+            "schema-migrations", "previous-owner", "etag-old", now.AddMinutes(-1));
+        var created = new CosmosMigrationLease(
+            "schema-migrations", "new-owner", "etag-created", now.AddMinutes(30));
+        var store = new FakeLeaseStore
+        {
+            ReadResult = expired,
+            ReplaceResult = null
+        };
+        store.CreateResults.Enqueue(null);
+        store.CreateResults.Enqueue(created);
+        var coordinator = CreateCoordinator(store, new ImmediateDelay());
+
+        var acquired = await coordinator.AcquireAsync(CancellationToken.None);
+
+        Assert.Equal(created, acquired);
+        Assert.Equal(expired, store.LastExpectedLease);
+        Assert.Equal(acquired.Owner, store.LastReplacementOwner);
+    }
+
+    [Fact]
     public async Task AcquireWaitsForAnUnexpiredLeaseThenRetriesCreate()
     {
         var active = new CosmosMigrationLease(
