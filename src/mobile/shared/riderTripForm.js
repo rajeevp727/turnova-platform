@@ -175,7 +175,7 @@ function getRiderUnionDriverGroupProps(unionName) {
     unionName.length > 0 &&
     unionName.length <= 120 &&
     unionName === unionName.trim() &&
-    !/[\\u0000-\\u001f\\u007f-\\u009f]/.test(unionName)
+    !/[\u0000-\u001f\u007f-\u009f]/.test(unionName)
     ? unionName
     : "Approved";
   return {
