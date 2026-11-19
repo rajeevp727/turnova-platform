@@ -1817,3 +1817,8 @@ The Rider union radio-group accessible label now rejects actual C0/C1 control ch
 ## Union radio-group source-wiring test correction — PR #194 (2026-11-19)
 
 The helper behavior passed CI; the single Node failure in #44441520440 was a doubled-escape regex in the test's source-wiring assertion, not a runtime implementation failure. Corrected the assertion in test commit `c210d508b68d19564ecd9923bdc7551af8d6aa07`. Re-run exact-head CI before considering the increment verified.
+
+
+## PR #194 — Rider active-booking recovery accessibility (2026-11-19)
+
+The Book screen's unresolved-active-booking recovery controls now expose explicit accessible button labels and hints, with stable test IDs. “Retry active booking check” describes its server-owned history refresh; “View active ride” describes navigation to Activity and explicitly does not imply a new booking. Deterministic case `RIDER-ACTIVE-BOOKING-UI-001` verifies helper state and App wiring. This is a Rider UI/accessibility increment under the existing selected-booking/recovery acceptance scope; no API, persistence, lifecycle, reservation, fare, Driver or iOS behavior changed. Strict acceptance remains 0/19 Verified; this evidence does not close an acceptance row or establish production readiness.
