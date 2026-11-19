@@ -193,7 +193,7 @@ The 16 KiB request-body limit is declared through endpoint metadata and document
 
 `POST /api/v1/rides/request` is retained only for Development/Testing compatibility regressions. It returns HTTP 409 outside those local/test environments even if `Dispatch:LegacyFifoRiderRequestsEnabled` is set. The current Rider flow is Union-grouped discovery followed by explicit `POST /api/v1/rider/bookings`; no customer-facing FIFO ranking or automatic Driver assignment is part of the MVP.
 
-When the compatibility route is enabled in Development/Testing, it uses full GUID ride IDs, create-if-absent persistence and Rider-owner-scoped idempotency replay. A stale/corrupt idempotency mapping cannot return another Rider's ride, and a ride-ID collision cannot overwrite an existing ride.
+When the compatibility route is enabled in Development/Testing, it uses full GUID ride IDs, create-if-absent persistence and Rider-owner-scoped idempotency replay. Both selected-booking and legacy replay lookups verify the referenced ride belongs to the authenticated Rider before returning a response. A stale/corrupt mapping cannot return another Rider's ride, and a ride-ID collision cannot overwrite an existing ride.
 
 ## Cosmos startup migration lease
 
