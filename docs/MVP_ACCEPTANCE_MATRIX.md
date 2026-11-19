@@ -1857,3 +1857,10 @@ Rider Profile help placeholder now refers to ride statuses rather than “ride/q
 ## Supplemental AI-01 evidence — Rider help response contract (outside the 19-row denominator)
 
 PR #194 now validates the /api/v1/assistance/help response before rendering it. The Rider client accepts only the API's bounded answer, known approved help-entry ID, known source enum and consistent escalation flag, then projects only those fields. Unknown IDs/sources, control characters, empty/oversized answers and inconsistent escalation states fail closed. Source labels distinguish in-repository approved content, provider selection of approved content and deterministic fallback. Tests: RIDER-HELP-RESPONSE-001..002 plus App source wiring. This supplemental work does not change any of the 19 acceptance-row statuses or denominator.
+
+
+## PR #194 exact-head Rider Android evidence — 2026-11-19
+
+The Rider-only branch head 8caf2c57f85afa5ba8e7c0aa09ed65d4a8c90661 passed [CI #44463524066](https://github.com/rajeevp727/turnova-platform/actions/runs/44463524066): all 9 required API/Android jobs green; iOS jobs skipped in accordance with platform order. Backend .NET 10 Release 758/758, shared Node 383/383, Python harness 48/48, both apps' Expo/config/typecheck/Android bundle checks, native debug and standalone release APK builds, package identity checks and emulator install/launch smoke passed. Native non-container API publish passed. Artifacts: API 14500847639; Rider debug/release/smoke 14501631319 / 14501538304 / 14501168807; Driver debug/release/smoke 14501745671 / 14500674581 / 14501946754. npm audit for each app: 0 critical, 0 high, 11 moderate, 0 low package nodes. Driver build/smoke is regression coverage only; no Driver feature completion is claimed. Emulator smoke is not full UI/TalkBack, live backend or physical-device acceptance.
+
+No 19-row status changes: strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This evidence does not establish production readiness. Documentation sync requires a new exact-head CI run.
