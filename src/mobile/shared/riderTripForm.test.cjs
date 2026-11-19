@@ -29,6 +29,8 @@ test("RIDER-DISCOVERY-PREFLIGHT-001: require pickup, destination and whole passe
     ["Nizampet", "HITEC City", null],
     ["Nizampet", "HITEC City", 0],
     ["Nizampet", "HITEC City", 7],
+    ["Nizampet\nKukatpally", "HITEC City", 1],
+    ["Nizampet", "HITEC City\u0085", 1],
     ["Nizampet", "HITEC City", 1.5],
     ["Nizampet", "HITEC City", Number.NaN]
   ]) {
@@ -47,6 +49,9 @@ test("RIDER-BOOKING-TEXT-001: enforce pickup, destination and optional stop limi
   assert.match(validateRiderBookingText("Nizampet", "HITEC City", Array(11).fill("Stop").join("\n")), /no more than 10/);
   assert.match(validateRiderBookingText("Nizampet", "HITEC City", "x".repeat(251)), /Each optional stop must be 250/);
   assert.match(validateRiderBookingText("Nizampet", "HITEC City", null), /stops must be entered as text/);
+  assert.match(validateRiderBookingText("Nizampet\nKukatpally", "HITEC City", ""), /Pickup note must not contain control characters/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City\u0085", ""), /Destination note must not contain control characters/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City", "Kukatpally\u0085Miyapur"), /Each optional stop must not contain control characters/);
 });
 
 test("RIDER-DISCOVERY-SEQUENCE-001: apply only the latest safe discovery request sequence", () => {
