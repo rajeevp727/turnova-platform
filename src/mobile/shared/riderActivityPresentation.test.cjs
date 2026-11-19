@@ -281,7 +281,7 @@ test("RIDER-AGREEMENT-RESPONSE-001: agreement route snapshots accept the API 250
   );
 });
 
-test("Rider agreement history rejects malformed, cross-ride, duplicate or out-of-order versions", () => {
+test("Rider agreement history rejects malformed, cross-ride, duplicate, skipped or out-of-order versions", () => {
   const valid = validRiderAgreementVersion();
   const invalid = [
     null,
@@ -289,7 +289,9 @@ test("Rider agreement history rejects malformed, cross-ride, duplicate or out-of
     [null],
     [{ ...valid, rideId: "another-ride" }],
     [{ ...valid, version: 0 }],
+    [{ ...valid, version: 2 }],
     [{ ...valid, version: 1 }, { ...valid, version: 1 }],
+    [{ ...valid, version: 1 }, { ...valid, version: 3 }],
     [{ ...valid, version: 2 }, { ...valid, version: 1 }],
     [{ ...valid, amount: 0 }],
     [{ ...valid, amount: 10.123 }],
