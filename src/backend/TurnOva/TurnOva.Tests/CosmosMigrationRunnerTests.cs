@@ -57,8 +57,8 @@ public sealed class CosmosMigrationRunnerTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await run);
 
-        historyContainer.Verify(container => container.CreateItemAsync<It.IsAnyType>(
-            It.IsAny<It.IsAnyType>(),
+        historyContainer.Verify(container => container.CreateItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
             It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Never);
@@ -95,7 +95,7 @@ public sealed class CosmosMigrationRunnerTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(containerResponse.Object);
 
-        historyContainer.Setup(value => value.ReadItemAsync<It.IsAnyType>(
+        historyContainer.Setup(value => value.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
                 It.IsAny<string>(),
                 It.IsAny<PartitionKey>(),
                 It.IsAny<ItemRequestOptions?>(),
