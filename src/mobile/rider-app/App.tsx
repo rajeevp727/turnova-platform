@@ -56,7 +56,7 @@ const darkMapStyle = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#0F1722" }] },
   { featureType: "poi", elementType: "geometry", stylers: [{ color: "#1D2C3E" }] }
 ];
-const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
+const API = (process.env.EXPO_PUBLIC_API_BASE_URL ?? "https://turnova.onrender.com").replace(/\/$/, "");
 type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type ServiceClass = "cab";
