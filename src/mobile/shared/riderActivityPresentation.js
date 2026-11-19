@@ -37,7 +37,7 @@ function normalizeRiderAgreementHistory(value, expectedRideId) {
     if (!isRecord(item) ||
         item.rideId !== expectedRideId ||
         !Number.isSafeInteger(item.version) ||
-        item.version <= previousVersion ||
+        item.version !== previousVersion + 1 ||
         !Number.isFinite(item.amount) ||
         item.amount <= 0 ||
         Math.abs(item.amount * 100 - Math.round(item.amount * 100)) > 0.000001 ||
