@@ -2703,7 +2703,7 @@ Automated implementation: InvalidDispatchZoneConfigurationFailsClosedAcrossRider
 
 - DISPATCH-02: approved Cab unions, active approved Driver membership, max-three per Union, pickup-proximity ordering, minimal Union-approved selfie/Cab projection and explicit Rider selection are implemented/tested. No FIFO ranking or auto-assignment. No new source gap; live Cosmos/device acceptance remains.
 - DISPATCH-03/04: selected-negotiation expiry/read repair, no legacy FIFO advancement, decline/expiry rejection, per-Driver reservation leases and concurrent booking/availability/Union-transfer guards are implemented/tested. Live Cosmos ETag/transactional-batch/multi-instance/restart evidence remains.
-- REALTIME-01: SignalR Hub group authorization, exact RideId matching, JWT expiry/rotation, reconnect retry, session-epoch fencing and history refresh are implemented/tested. Planned safe follow-up: Rider/Driver agreement-history UI hardcodes INR/₹ although the API persists the agreement currency; display each stored currency code. Keep new proposals INR-only until Product confirms multi-currency policy.
+- REALTIME-01: SignalR Hub group authorization, exact RideId matching, JWT expiry/rotation, reconnect retry, session-epoch fencing and history refresh are implemented/tested. Persisted agreement-currency display is also implemented in PR #172: Rider/Driver history uses the API currency for each immutable version; five shared formatter tests and one API integration test cover USD/EUR history and reject silent INR fallback. Proposal entry remains INR-only pending Product policy; see the REALTIME-01 exact-head evidence below.
 - TRIP-01: server-owned lifecycle, mutual-confirmation start gate, foreground-only location sharing, persisted GPS watermark, stale/future rejection, history ownership, stale event fencing and Rider map follow/recenter are implemented/tested. Live routing and device GPS/map acceptance remain.
 - DRIVER-01/02: Cab onboarding/Union approval, verified vehicle/document metadata, approved selfie visibility, availability and location are implemented/tested. Private document storage/scanning/retention/consent, phone OTP provider, live Cosmos and signed-device evidence remain.
 - DRIVER-03: IST work metrics and immutable monthly payslip PDF are implemented. PDF explicitly states earnings/deductions/net payable are not calculated; no compensation policy is introduced. Product must confirm distinct-IST-date DaysWorked semantics.
@@ -2784,12 +2784,17 @@ This run validates the exact pre-documentation-sync head only. The current docum
 
 REALTIME-01 runtime scope remains agreement-history presentation: display each immutable version's persisted currency; never infer or default missing/malformed currency to INR; proposal entry remains INR-only pending Product policy. No fare, conversion, payment, reconciliation, auth, API production contract or ride-state behaviour changed.
 
-## DRIVER-01 next sequential engineering audit — Union code uniqueness
+## DRIVER-01 Union code uniqueness — implemented (PR #173)
 
-Main-branch `POST /api/v1/ops/unions` normalizes the code and checks `ListUnionsAsync`, then creates a random GUID and persists through `UpsertItemAsync`. This check-then-upsert sequence is race-prone: concurrent Ops requests can both pass and create duplicate active normalized codes. Planned safe correction after REALTIME-01 merges: deterministic ID for newly created normalized codes, create-if-absent semantics in the existing `Unions` container partitioned by `/unionId`, HTTP 409 translation for duplicate conflicts, and concurrent case/whitespace-normalization tests. Existing Union IDs and historical records must remain unchanged.
+`POST /api/v1/ops/unions` now normalizes codes by trimming and uppercasing, derives a deterministic SHA-256-based Union ID for new records, and uses create-if-absent semantics in the existing `Unions` container partitioned by `/unionId`. The in-memory adapter uses `ConcurrentDictionary.TryAdd`; duplicate conflicts return HTTP 409. Existing legacy Union IDs and historical records are preserved.
 
-A separate Product/Safety decision is required for Ops rejection/suspension during active negotiation/ride; do not invent a policy or mutate active rides until Product defines the outcome.
+Automated integration regressions:
+- `ConcurrentUnionCreationWithEquivalentNormalizedCodesCreatesExactlyOneUnion` races `  hyd-race  ` against `HYD-RACE`, verifies exactly one HTTP 201 and one HTTP 409, checks the deterministic normalized ID, and confirms only one Union is stored.
+- `UnionCreationConflictPreservesExistingLegacyUnionIdAndRecord` verifies a normalized-code collision returns HTTP 409 without replacing the existing legacy ID or record.
 
+PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173) merged at `b0014139f849408e838c67df13f05722dc9b7afe`. Exact source/test-head CI [#43906366037](https://github.com/rajeevp727/turnova-platform/actions/runs/43906366037) passed **671/671 backend tests (0 failed, 0 skipped)** and all 12 required CI jobs. These deterministic in-memory integration tests do not replace live Cosmos cross-instance create-conflict, ETag or restart validation.
+
+A separate Product/Safety decision is still required for Ops rejection/suspension during an active negotiation or ride; do not invent a policy or mutate active rides until Product defines the outcome.
 
 ## Exact-head verification record — REALTIME-01 CI #1799 (2026-11-16)
 
@@ -2799,7 +2804,7 @@ This evidence is limited to CI, Android emulators and unsigned iOS Simulators. I
 
 REALTIME-01 regression coverage includes five deterministic shared formatter tests and one API integration test proving immutable USD v1/EUR v2 history is returned in order to both Rider and Driver. Proposal entry remains INR-only.
 
-Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged.
+The DRIVER-01 normalized Union-code concurrency work was completed in PR #173; see the implementation and exact-head CI evidence above.
 
 ## REALTIME-01 exact-head executed verification — CI #1800 (2026-11-16)
 
