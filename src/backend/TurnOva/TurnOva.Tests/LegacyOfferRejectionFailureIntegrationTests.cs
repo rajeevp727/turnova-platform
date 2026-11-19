@@ -81,6 +81,63 @@ public sealed partial class RideApiIntegrationTests
             item.DriverId == firstDriverId && item.ActivityType == "Rejected");
     }
 
+    [Fact]
+    public async Task LegacyExpiredOfferRejectionReturnsConflictWithoutQueueRotation()
+    {
+        const string riderId = "legacy-expired-reject-rider";
+        const string firstDriverId = "legacy-expired-reject-first";
+        const string secondDriverId = "legacy-expired-reject-second";
+        var queueStore = new InMemoryQueueStore();
+        var advancer = new RecordingRideOfferAdvancer();
+
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: true,
+            rideOfferAdvancer: advancer,
+            queueStore: queueStore);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var firstDriver = factory.CreateClient("Driver", firstDriverId);
+        using var secondDriver = factory.CreateClient("Driver", secondDriverId);
+
+        await EnqueueLegacyDriverAsync(factory, firstDriverId);
+        await EnqueueLegacyDriverAsync(factory, secondDriverId);
+        var ride = await CreateRideAsync(rider, "legacy-expired-reject-request");
+        var offerStore = factory.Services.GetRequiredService<IRideOfferStore>();
+        var offer = await offerStore.GetByRideAsync(ride.RideId, CancellationToken.None);
+
+        Assert.NotNull(offer);
+        Assert.Equal(firstDriverId, offer!.DriverId);
+        var expiredAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var expiredOffer = offer with
+        {
+            ExpiresAtUtc = expiredAt,
+            Attempts = offer.Attempts.Select(attempt => attempt with { ExpiresAtUtc = expiredAt }).ToArray()
+        };
+        Assert.True(await offerStore.TryReplaceAsync(expiredOffer, offer.ETag!, CancellationToken.None));
+
+        var queueBefore = await queueStore.GetEligibleAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        using var response = await firstDriver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var queueAfter = await queueStore.GetEligibleAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(queueBefore.Select(entry => entry.DriverId), queueAfter.Select(entry => entry.DriverId));
+
+        var persistedOffer = await offerStore.GetByRideAsync(ride.RideId, CancellationToken.None);
+        Assert.Equal(RideOfferStatuses.Pending, persistedOffer?.Status);
+        Assert.True(persistedOffer!.IsExpiredAt(DateTimeOffset.UtcNow));
+        var auditEvents = await queueStore.GetAuditEventsAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.DoesNotContain(auditEvents, item =>
+            item.EventType == QueueAuditEventTypes.RotatedToBack &&
+            item.OfferId == offer.CurrentOfferId);
+        Assert.Empty(advancer.AdvancedRideIds);
+
+        var activityLedger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        Assert.DoesNotContain(activityLedger.Values, item =>
+            item.DriverId == firstDriverId && item.ActivityType == "Rejected");
+    }
+
     private sealed class CrashAfterFirstRotationQueueStore(IQueueStore inner) : IQueueStore
     {
         private int _crashAfterNextSuccessfulRotation = 1;
