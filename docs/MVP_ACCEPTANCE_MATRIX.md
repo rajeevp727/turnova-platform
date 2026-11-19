@@ -1791,3 +1791,8 @@ This tracker/API-document synchronization is documentation-only. Exact-head CI #
 ## Selected-booking actor-ID minimization — 2026-11-19
 
 RiderSelectedBookingResponse no longer echoes RiderId or DriverId. The current Rider app supplies the selected Driver in the booking request and does not consume actor IDs from the response. API-PRIV-001 now asserts both properties are absent. Code-bearing commit `b699453202064fcdb99ba4cf66cdbbb78a96ed07`; exact-head CI #44512060615 is in progress. Latest docs-bearing head `aef80d214837c301392ee94a00e929495d1676a6`; CI #44512177250 is pending. No ride lifecycle, authorization, reservation, idempotency or persistence behavior changed.
+
+
+## Latest API CI correction — 2026-11-19
+
+CI [#44512525481](https://github.com/rajeevp727/turnova-platform/actions/runs/44512525481) failed 762/763 because one concurrency/cancellation integration test still read the intentionally removed `riderId` response property. The test now asserts actor-ID absence and resolves the owner from the test-only stored ride. This is a test-only correction; await fresh exact-head CI before merge or API phase exit.

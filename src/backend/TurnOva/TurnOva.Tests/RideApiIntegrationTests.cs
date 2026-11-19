@@ -4947,7 +4947,9 @@ public sealed partial class RideApiIntegrationTests
         var rideId = createdJson.RootElement.GetProperty("rideId").GetString()!;
         foreach (var response in responses) response.Dispose();
 
-        var owner = createdJson.RootElement.GetProperty("riderId").GetString();
+        AssertNoRideActorIdentifiers(createdJson.RootElement);
+        var storedRide = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId];
+        var owner = storedRide.RiderId;
         var ownerClient = owner == "selected-rider-a" ? riderA : riderB;
         Assert.Equal(HttpStatusCode.OK,
             (await ownerClient.PostAsync($"/api/v1/rides/{rideId}/cancel", null)).StatusCode);

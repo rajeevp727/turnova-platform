@@ -3086,3 +3086,8 @@ The Rider app's `Ride` contract and selected-booking flow do not consume `RiderI
 ## Current API response-minimization checkpoint — 2026-11-19
 
 RiderSelectedBookingResponse no longer echoes RiderId or DriverId. The current Rider app sends the selected Driver ID in its booking request and does not consume actor IDs from the response. API-PRIV-001 asserts both properties are absent. Code-bearing commit `b699453202064fcdb99ba4cf66cdbbb78a96ed07`; exact-head CI #44512060615 is in progress. Latest docs head `aef80d214837c301392ee94a00e929495d1676a6`; exact-head CI #44512177250 is pending. PR #195 remains open and requires independent human approval; do not self-approve or merge without approval.
+
+
+## Latest API test handoff — 2026-11-19
+
+CI #44512525481 failed 762/763 because `SelectedBookingReservationPreventsConcurrentBookingsAndRiderCancelReleasesIt` still depended on `riderId` in the selected-booking response. The test now asserts `riderId`/`driverId` absence and reads the owner from the test-only in-memory `DemoRide` store before checking cancellation audit. Production API code is unchanged by this correction. Fresh exact-head CI is required; do not merge or advance to Android until it passes and independent human approval is recorded.

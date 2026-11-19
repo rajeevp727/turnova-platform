@@ -2910,3 +2910,10 @@ This tracker/API-document synchronization is documentation-only. Exact-head CI #
 - `API-PRIV-001` now asserts that the selected-booking response omits both actor IDs. No booking ownership, authorization, reservation, idempotency, lifecycle, fare or persistence behavior changed.
 - Code-bearing commit: `b699453202064fcdb99ba4cf66cdbbb78a96ed07`; exact-head CI [#44512060615](https://github.com/rajeevp727/turnova-platform/actions/runs/44512060615) is in progress. Latest documentation-bearing head: `aef80d214837c301392ee94a00e929495d1676a6`; exact-head CI [#44512177250](https://github.com/rajeevp727/turnova-platform/actions/runs/44512177250) is pending.
 - PR #195 remains the only active feature PR and requires independent human approval before merge. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established.
+
+
+## CI failure and test correction — 2026-11-19
+
+- Exact-head CI [#44512525481](https://github.com/rajeevp727/turnova-platform/actions/runs/44512525481) on `fa76fdfd8b6cb8834f6f0891521faa8a50951b2d` failed **762/763** backend tests. The single failure was `SelectedBookingReservationPreventsConcurrentBookingsAndRiderCancelReleasesIt`, which still read `riderId` from the selected-booking HTTP response after API-PRIV-001 deliberately removed actor IDs.
+- Corrected the test to assert both actor IDs are absent and derive the owning Rider from the test-only in-memory ride store, then exercise cancellation and audit ownership as before. This changes test setup only; production behavior is unchanged.
+- New exact-head CI will verify the corrected test and native API publish. API phase remains current; Android/iOS jobs remain gated. No merge or phase advancement.
