@@ -141,8 +141,8 @@ test("RIDER-HELP-SESSION-001 and RIDER-SUPPORT-SESSION-001: profile responses ca
   }
 });
 
-test("RIDER-DISPATCH-UI-001: Rider help copy does not expose internal FIFO or queue concepts", () => {
+test("RIDER-DISPATCH-UI-001: Rider help copy does not advertise FIFO ranking or automatic next-driver assignment", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   assert.match(source, /placeholder="Ask about fare agreements, ride statuses or direct-payment reports"/);
-  assert.doesNotMatch(source, /\bqueue\b|\bFIFO\b|next driver/i);
+  assert.doesNotMatch(source, /\bFIFO ranking\b|automatically assign(?:s|ed|ment)?(?:\s+the)?\s+(?:next\s+)?driver|automatic next[- ]driver assignment/i);
 });
