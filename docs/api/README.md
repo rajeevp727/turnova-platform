@@ -121,6 +121,30 @@ The Cosmos create-if-absent boundary treats only HTTP 409 as a duplicate result.
 
 The zone/queue and `/api/v1/rides/request`, pending-offer, available-ride, accept/reject and offer-timeout endpoints remain legacy compatibility surfaces. They must not introduce customer-facing FIFO ranking, automatic assignment or automatic next-driver advancement into the approved Rider-selected Cab flow. Existing non-Cab history is preserved and is not converted to Cab.
 
+## Approved AI assistance (AI-01 supplemental)
+
+AI-01 is approved supplemental Rider/Driver functionality and is outside the 19-row acceptance denominator.
+
+### Rider trip-intent draft
+
+- `POST /api/v1/assistance/trip-intent` requires a Rider JWT and accepts only `{ "text": "..." }`. The response contains `pickup`, `dropoff`, `serviceClass` (always `Cab`), nullable `passengerCount`, `needsClarification`, `missingFields`, `requiresUserConfirmation` (always `true`) and `source`.
+- Route and passenger fields are parsed locally. The response is an editable draft only; it does not create a ride, invoke discovery, select a Driver, propose/confirm an agreement or change ride state.
+- If a future provider adapter is enabled, it receives fixed pickup/drop-off placeholders and a minimized allow-list of generic trip-action words. It cannot replace the locally parsed route or supply a passenger count. Exact route text, passenger count and arbitrary personal context remain local.
+
+### Approved-content help
+
+- `POST /api/v1/assistance/help` requires a Rider or Driver JWT and accepts only `{ "question": "...", "rideState": "Completed" }`; `rideState` is optional and must match a known ride state. Unknown states return the safe escalation response.
+- The response contains `answer`, `sourceId`, `escalationRequired` and `source`. Help text is selected from approved in-repository content or a deterministic escalation response. A provider may select only an approved source ID; provider-generated free text is never returned.
+- Provider prompts contain only allow-listed generic keywords and approved source IDs. Raw questions, ride identifiers, precise locations, identity/KYC data, contacts, payment details, tokens and private chat are not provider inputs.
+
+### Shared controls and limits
+
+- Both routes require authentication and apply a fixed-window rate limit partitioned by authenticated subject. `AiAssistant:MaxRequestsPerMinute` defaults to 10 and is validated from 1 to 60.
+- Request bodies are limited to 16 KiB before service/provider processing. `AiAssistant:MaxInputCharacters` defaults to 1000 and is validated from 64 to 2000. Provider timeout defaults to four seconds and is validated from one to ten seconds; caller cancellation is propagated.
+- Endpoint logs contain use-case/source/outcome metadata only; prompt text and user-supplied values are not logged.
+- Assistance is disabled by default. The checked-in configuration has empty provider/model/endpoint/credential-reference placeholders and the API registers `UnavailableAiAssistantProvider`; no paid provider, model, credentials or live provider integration is selected or claimed. Deterministic fallback remains available.
+- AI-01 cannot set/recommend fares, book, charge, approve KYC/selfies, change eligibility/dispatch/ride state, or make safety/legal decisions. A separate Driver offer-explanation route is optional and is not part of this delivered increment.
+
 ## Health and error behavior
 
 - `GET /health/live` reports process liveness.
