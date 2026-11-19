@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { applyRideStatusUpdate, findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
+const { applyRideStatusUpdate, findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
 
 test("Rider ride-history shape accepts an empty list and uniquely identified records", () => {
   assert.equal(isRiderRideHistoryShapeValid([]), true);
@@ -196,4 +196,35 @@ test("RIDER-HISTORY-011: active ride details reject impossible optional server t
     requestedAt: "2024-02-29T00:00:00Z",
     locationCapturedAtUtc: null
   }, "ride-1"), true);
+});
+
+
+test("RIDER-HISTORY-012: unknown or malformed history remains unresolved alongside known active rows", () => {
+  const active = { rideId: "active", status: "InProgress" };
+  const unknown = { rideId: "future-status", status: "FutureServerStatus" };
+  const malformed = { rideId: "missing-status" };
+
+  assert.equal(hasUnresolvedRiderRideHistory([]), false);
+  assert.equal(hasUnresolvedRiderRideHistory([{ rideId: "completed", status: "Completed" }]), false);
+  assert.equal(hasUnresolvedRiderRideHistory([unknown]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([active, unknown]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([unknown, active]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([active, malformed]), true);
+  assert.equal(hasUnresolvedRiderRideHistory(null), true);
+});
+
+test("RIDER-HISTORY-012: Rider hydration checks all lifecycle values before detail lookup or success", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const loadRideHistory=useCallback");
+  const end = source.indexOf("useEffect(()=>", start);
+  assert.ok(start >= 0 && end > start);
+  const hydration = source.slice(start, end);
+  const shape = hydration.indexOf("isRiderRideHistoryShapeValid(historyResponse)");
+  const unresolved = hydration.indexOf("hasUnresolvedRiderRideHistory(history)");
+  const active = hydration.indexOf('findActiveRide(history, "rider")');
+  const detail = hydration.indexOf('apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId))');
+  const loaded = hydration.indexOf("setActiveRideStateLoaded(true)");
+  assert.ok(shape >= 0 && unresolved > shape && active > unresolved);
+  assert.ok(detail > active && loaded > detail);
+  assert.match(hydration, /if\(hasUnresolvedRiderRideHistory\(history\)\)\{[\s\S]*?setRideHistory\(history\);[\s\S]*?Booking remains disabled/);
 });
