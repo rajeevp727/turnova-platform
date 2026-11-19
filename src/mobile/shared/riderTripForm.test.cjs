@@ -284,7 +284,7 @@ test("Rider discovery groups each union's driver radio options with a safe acces
   });
 
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
-  assert.match(source, /getRiderUnionDriverGroupProps\\(union\\.unionName\\)/);
+  assert.match(source, /getRiderUnionDriverGroupProps\(union\.unionName\)/);
   assert.match(source, /rider-union-driver-group-/);
 });
 
