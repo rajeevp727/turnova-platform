@@ -473,3 +473,21 @@ test("RIDER-LOCATION-UI-005: live driver map and markers expose accessible conte
   assert.match(map, /title="Your driver" description="Latest location shared by your selected driver during this active ride\."/);
   assert.match(map, /title="Pickup" description="Your selected pickup location\."/);
 });
+
+test("RIDER-LOCATION-UI-006: Rider status events rehydrate server-owned sharing state before location updates", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const statusStart = source.indexOf('connection.on("RideStatusChanged"');
+  const statusEnd = source.indexOf('connection.on("RideAgreementChanged"', statusStart);
+  assert.ok(statusStart >= 0 && statusEnd > statusStart);
+  const handler = source.slice(statusStart, statusEnd);
+  const stateUpdate = handler.indexOf("setRide(current=>current?applyRiderRideStatusUpdate(current,update):current)");
+  const refresh = handler.indexOf("void refreshRiderState()");
+  assert.ok(stateUpdate >= 0 && refresh > stateUpdate);
+
+  const refreshStart = source.indexOf("const refreshRiderState=async()=>{");
+  const refreshEnd = source.indexOf('connection.on("DriverLocationUpdated"', refreshStart);
+  assert.ok(refreshStart >= 0 && refreshEnd > refreshStart);
+  const refreshBody = source.slice(refreshStart, refreshEnd);
+  assert.ok(refreshBody.indexOf("await loadRideHistory") >= 0);
+  assert.ok(refreshBody.indexOf("await refreshAgreements") > refreshBody.indexOf("await loadRideHistory"));
+});
