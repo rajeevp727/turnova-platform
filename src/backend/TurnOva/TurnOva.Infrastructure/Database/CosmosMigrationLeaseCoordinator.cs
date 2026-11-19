@@ -88,7 +88,12 @@ public sealed class CosmosMigrationLeaseCoordinator(
 
             var current = await store.ReadAsync(cancellationToken);
             if (current is null)
+            {
+                // The conflicting lease may have been released between Create and Read.
+                // Back off before retrying instead of spinning on a disappearing lease.
+                await delay.DelayAsync(options.RetryDelay, cancellationToken);
                 continue;
+            }
 
             if (current.ExpiresAtUtc <= now)
             {
