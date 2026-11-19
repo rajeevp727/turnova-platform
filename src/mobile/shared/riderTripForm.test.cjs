@@ -278,7 +278,7 @@ test("Rider discovery groups each union's driver radio options with a safe acces
     accessibilityRole: "radiogroup",
     accessibilityLabel: "Green Cab Union union Cab drivers"
   });
-  assert.deepEqual(getRiderUnionDriverGroupProps("bad\\nunion"), {
+  assert.deepEqual(getRiderUnionDriverGroupProps("bad\nunion"), {
     accessibilityRole: "radiogroup",
     accessibilityLabel: "Approved union Cab drivers"
   });
