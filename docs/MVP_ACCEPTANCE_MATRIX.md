@@ -1869,3 +1869,8 @@ No 19-row status changes: strict acceptance remains 0/19 Verified (16 In Progres
 ## Rider location visibility on unverified history — PR #194 (2026-11-19)
 
 Rider now clears cached Driver GPS and disables local location sharing whenever the current authenticated history/detail refresh fails, returns an ambiguous lifecycle, or fails exact-detail validation. Ride identity/status and Activity context remain visible, but the map falls back to pickup-only until a later validated server snapshot authorizes active sharing. The request/session ownership guard prevents a stale failure from clearing a newer session. Deterministic case `RIDER-LOCATION-UI-007` covers helper behavior and App catch-path wiring. This is client-side privacy hardening; API permission, Driver GPS, lifecycle and all other server behavior are unchanged. No acceptance-row status changes; strict acceptance remains 0/19 Verified.
+
+
+## Supplemental AI-01 Rider draft route validation — PR #194 (2026-11-19)
+
+The Rider client now rejects C0/C1 control characters in AI trip-intent pickup/drop-off draft fields before updating the editable form. Existing Cab-only, bounded-text, missing-field consistency and explicit-confirmation checks remain. Deterministic test `AI-01-RIDER-DRAFT-RESPONSE-003` covers both fields and NUL/C1/newline inputs. This is supplemental AI-01 work outside the 19-row denominator; no 19-row status changes.

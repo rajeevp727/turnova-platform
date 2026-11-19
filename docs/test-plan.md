@@ -3760,3 +3760,12 @@ The documentation-bearing head 8caf2c57f85afa5ba8e7c0aa09ed65d4a8c90661 passed [
 | RIDER-LOCATION-UI-007 | History/detail verification failure | If the current Rider history/detail request fails, is malformed or has an unresolved lifecycle, clear cached Driver coordinates and local sharing permission while preserving ride/history context. Keep booking disabled. Only a later validated server snapshot can restore Driver location visibility. A stale request/session must not clear a newer session. | Automated Node helper + App source wiring | P0 |
 
 This is client-side fail-closed visibility behavior. The API remains authoritative for location-sharing permission and ride state; no location-freshness threshold is inferred.
+
+
+## AI-01 Rider trip-intent route text validation (supplemental; outside the 19-row denominator)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-01-RIDER-DRAFT-RESPONSE-003 | Control characters in route fields | Reject C0/C1 control characters and newline values in AI-proposed pickup or drop-off before populating the editable Rider form. | Automated Node helper | P1 |
+
+AI output remains an editable Cab-only draft requiring explicit Rider confirmation; it cannot book or mutate ride state.

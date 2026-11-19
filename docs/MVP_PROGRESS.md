@@ -3146,3 +3146,13 @@ CI #44441520440 passed 371/372 Node tests and identified one test-only failure: 
 - **Source/test commit:** `653b749966afde5a90453afc6cfe39541fed3fd8`. Fresh exact-head CI is pending for the documentation-bearing head; no new build/test pass is claimed yet.
 - **Phase/acceptance:** Android — Rider remains current. Driver feature work and iOS remain gated. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 - **Next exact action:** verify fresh exact-head CI for PR #194 after documentation sync; inspect any failures and continue Rider-only functional/build/accessibility audit. Do not start Driver or iOS early.
+
+
+## Rider AI-01 draft route-text validation — PR #194 (2026-11-19)
+
+- **Finding:** the Rider trip-intent normalizer bounded and trimmed returned pickup/drop-off strings but did not reject embedded C0/C1 control characters. The values are editable text, not trusted provider output.
+- **Change:** `normalizeRiderTripIntentDraft` now rejects control characters in both route fields while retaining the existing Cab-only, length, missing-field and explicit-confirmation checks. No prompt, route or identity data is newly sent to a provider.
+- **Tests:** supplemental `AI-01-RIDER-DRAFT-RESPONSE-003` covers NUL, C1 and newline values in both pickup and drop-off. AI-01 remains outside the 19-row denominator.
+- **Source/test commit:** `fe9cfb5723bd711ef8e65587523403040d64cfc0`. The earlier CI #44470887160 was triggered before this follow-up and does not verify the current source/test head. Fresh exact-head CI is pending after documentation sync.
+- **Phase/acceptance:** Android — Rider remains current; Driver and iOS remain gated. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked). Production readiness is not established.
+- **Next exact action:** verify the final documentation-bearing CI on PR #194; then continue Rider-only audit and do not advance to Driver until Rider engineering exit criteria are met.
