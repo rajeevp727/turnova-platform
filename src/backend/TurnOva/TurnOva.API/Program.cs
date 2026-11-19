@@ -556,22 +556,8 @@ static string NormalizeUnionCode(string? code) =>
 static string CreateUnionId(string normalizedCode) =>
     "union-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedCode))).ToLowerInvariant();
 
-async Task<bool> TryCreateUnionIfAbsentAsync(DriverUnion union, CancellationToken ct)
-{
-    if (unionContainer is null)
-        return unions.TryAdd(union.UnionId, union);
-
-    try
-    {
-        await unionContainer.CreateItemAsync(
-            union, new PartitionKey(union.UnionId), cancellationToken: ct);
-        return true;
-    }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-    {
-        return false;
-    }
-}
+Task<bool> TryCreateUnionIfAbsentAsync(DriverUnion union, CancellationToken ct) =>
+    UnionCreateIfAbsent.TryCreateAsync(unionContainer, unions, union, ct);
 
 async Task<DriverUnionAssignment?> FindUnionAssignmentAsync(string driverId, CancellationToken ct)
 {
