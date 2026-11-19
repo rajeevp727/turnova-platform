@@ -14,7 +14,7 @@ export interface RiderRideHistoryRecord {
 
 export function normalizeRiderRideHistory(
   history: unknown
-): readonly RiderRideHistoryRecord[] | null;
+): RiderRideHistoryRecord[] | null;
 
 export function isRiderRideHistoryShapeValid(
   history: unknown
