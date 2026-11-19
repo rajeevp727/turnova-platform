@@ -210,6 +210,14 @@ test("RIDER-HISTORY-012: unknown or malformed history remains unresolved alongsi
   assert.equal(hasUnresolvedRiderRideHistory([active, unknown]), true);
   assert.equal(hasUnresolvedRiderRideHistory([unknown, active]), true);
   assert.equal(hasUnresolvedRiderRideHistory([active, malformed]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([
+    { rideId: "legacy-offer", status: "Offered" },
+    { rideId: "selected-negotiation", status: "Negotiating" }
+  ]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([
+    { rideId: "active-one", status: "InProgress" },
+    { rideId: "active-two", status: "Accepted" }
+  ]), true);
   assert.equal(hasUnresolvedRiderRideHistory(null), true);
 });
 
