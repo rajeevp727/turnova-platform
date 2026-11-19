@@ -65,6 +65,20 @@ function shouldApplyRideHistoryResponse(requestSequence, currentSequence) {
     requestSequence === currentSequence;
 }
 
+function hasUnresolvedRiderRideHistory(history) {
+  if (!Array.isArray(history)) return true;
+
+  // A known active row must not mask a second row whose future/malformed lifecycle
+  // could also be active. The client cannot prove that an unknown status is terminal.
+  return history.some(ride =>
+    !ride ||
+    typeof ride !== "object" ||
+    Array.isArray(ride) ||
+    typeof ride.status !== "string" ||
+    !KNOWN_RIDE_STATUSES.has(ride.status)
+  );
+}
+
 function findActiveRide(history, role) {
   const allowedStatuses = ACTIVE_RIDE_STATUSES[role];
   if (!allowedStatuses) throw new TypeError("Unsupported ride recovery role.");
@@ -104,4 +118,4 @@ function shouldApplyRideStatusUpdate(currentRideId, updateRideId, isActive) {
     typeof updateRideId === "string" && updateRideId === currentRideId;
 }
 
-module.exports = { applyRideStatusUpdate, findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate };
+module.exports = { applyRideStatusUpdate, findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate };
