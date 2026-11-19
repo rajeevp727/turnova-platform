@@ -103,7 +103,7 @@ public sealed class CosmosMigrationRunner(
         }
     }
 
-    private sealed class MigrationHistoryDocument
+    internal sealed class MigrationHistoryDocument
     {
         public string Id { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
