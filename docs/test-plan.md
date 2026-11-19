@@ -3710,6 +3710,6 @@ The map remains rendered only while the server-authorised ride is actively shari
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| RIDER-HISTORY-012 | Mixed known and unknown lifecycle rows | If any history row has a missing or unknown lifecycle value, Rider preserves the returned rows for Activity but does not mark recovery successful or enable another booking, even when a separate row has a known active status. | Automated Node unit + source wiring | P0 |
+| RIDER-HISTORY-012 | Mixed known and unknown lifecycle rows | If any history row has a missing or unknown lifecycle value, or more than one known active row exists, Rider preserves the returned rows for Activity but does not mark recovery successful or enable another booking. This includes legacy Offered records coexisting with a selected negotiation. | Automated Node unit + source wiring | P0 |
 
 This prevents a known active row from masking another unresolved record. The API remains authoritative; this client guard only fails closed until every returned lifecycle value is understood.
