@@ -3736,3 +3736,13 @@ The code/test head `b8559d47b60971e544300f1684c99992e7d2a464` passed [CI #444501
 | RIDER-DISPATCH-UI-001 | Rider help copy does not advertise customer-facing FIFO ranking or automatic next-driver assignment | Rider Profile help prompt refers to ride statuses; Rider App source does not advertise FIFO ranking or automatic next-driver assignment. Approved explanations of legacy queue/availability states remain permissible under PRD §AI-01. Internal legacy FIFO compatibility is unchanged. | Automated Node source wiring | P1 |
 
 This protects the PRD boundary that FIFO cannot rank Rider discovery or automatically assign/advance a Driver. It does not prohibit approved help explanations of legacy queue/availability states and does not alter discovery ordering, explicit driver selection or server-owned assignment.
+
+
+## AI-01 Rider approved-help response validation (supplemental; outside the 19-row denominator)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-HELP-RESPONSE-001 | Approved help response contract | Accept only a non-empty, bounded answer, known approved source ID, known source label and consistent escalation state; project only approved response fields. | Automated Node helper + App source wiring | P1 |
+| RIDER-HELP-RESPONSE-002 | Malformed or untrusted help response | Reject malformed objects, unknown source IDs/sources, control characters, oversized answers and inconsistent escalation flags before rendering. | Automated Node helper + App source wiring | P1 |
+
+The API currently allows up to 1,000 output characters and returns only the approved help-entry IDs. The Rider client treats this as untrusted transport data and does not render provider metadata or unknown source text. This is supplemental AI-01 evidence and does not change the 19-row denominator.

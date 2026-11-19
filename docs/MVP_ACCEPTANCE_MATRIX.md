@@ -1852,3 +1852,8 @@ Rider history recovery now checks every returned lifecycle value before resolvin
 ## DISPATCH-02 — Rider help copy FIFO boundary (PR #194, 2026-11-19)
 
 Rider Profile help placeholder now refers to ride statuses rather than “ride/queue states”. Added deterministic RIDER-DISPATCH-UI-001, which fails if the Rider App advertises FIFO ranking or automatic next-driver assignment; approved queue/availability-state explanations remain allowed by PRD §AI-01. This is a small customer-facing scope guard only; internal legacy FIFO behavior, discovery order, selection and server assignment were not changed. Prior code/test head b8559d47b60971e544300f1684c99992e7d2a464 passed CI #44450139254; the new source/test/docs head requires fresh exact-head CI. DISPATCH-02 remains In Progress; strict acceptance remains 0/19 Verified.
+
+
+## Supplemental AI-01 evidence — Rider help response contract (outside the 19-row denominator)
+
+PR #194 now validates the /api/v1/assistance/help response before rendering it. The Rider client accepts only the API's bounded answer, known approved help-entry ID, known source enum and consistent escalation flag, then projects only those fields. Unknown IDs/sources, control characters, empty/oversized answers and inconsistent escalation states fail closed. Source labels distinguish in-repository approved content, provider selection of approved content and deterministic fallback. Tests: RIDER-HELP-RESPONSE-001..002 plus App source wiring. This supplemental work does not change any of the 19 acceptance-row statuses or denominator.

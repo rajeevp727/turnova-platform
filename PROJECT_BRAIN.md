@@ -3190,3 +3190,10 @@ PR #194 remains the only active feature PR in Android Rider phase. Exact code/te
 ## Rider DISPATCH-02 customer-facing FIFO guard — 2026-11-19
 
 PR #194 changes the Rider Profile help placeholder from “ride/queue states” to “ride statuses”. Deterministic test RIDER-DISPATCH-UI-001 asserts no FIFO-ranking or automatic-next-driver-assignment language appears in Rider App source while leaving approved queue/availability-state help permissible. Source commit 465f1b40a5cc9c7524c6998424dee12cad5b0a99; corrected test commit 2b437be2f3f399904e4da91b2879b044762df9ed. No ranking, assignment, API or lifecycle behavior changed. Fresh exact-head CI is required; Android Rider remains the current phase, Driver/iOS remain gated, and strict acceptance remains 0/19 Verified.
+
+
+## PR #194 — Rider AI-01 help response contract validation (2026-11-19)
+
+The Rider help handler now validates the response from /api/v1/assistance/help rather than trusting a TypeScript cast. The helper accepts only a 1–1,000 character answer, one of the API's approved help-entry IDs, one of the three current source values and a boolean escalation flag consistent with the unsupported entry. It returns an allow-listed projection and source-specific labels; malformed or unknown responses are not rendered. Deterministic cases RIDER-HELP-RESPONSE-001..002 cover valid provider/fallback/approved sources, escalation consistency, unknown IDs/sources, oversized/control-character answers and App validation-before-render wiring. This is supplemental AI-01, outside the 19-row denominator.
+
+Source/test commits: 75aa93192dc8ef3883c705ae1ca1ec4b945786f9 and follow-ups 82ae882d67919e33a9c4fc3609614a665cb12541 / b4fba578dd728926374271a73c52f59f2b591a3e. CI #44463013092 found one source-order test assertion issue (382/383), corrected before the current run. Exact-head CI #44463330466 is pending. No API, Cosmos, Driver, iOS, fare, payment, booking, dispatch, lifecycle, provider, dependency or container behavior changed. Keep Android Rider active; Driver and iOS remain gated. Strict acceptance remains 0/19 Verified; production readiness is not established.
