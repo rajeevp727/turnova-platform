@@ -38,7 +38,7 @@ public sealed partial class RideApiIntegrationTests
             $"{otherRiderId}:{replayKeyId}",
             new RideIdempotencyRecord(
                 replayKeyId, otherRiderId, ownedRideId,
-                originalRecord.RequestHash, originalRecord.CreatedAtUtc)));
+                originalRecord.RequestHash, DateTimeOffset.UtcNow)));
 
         using var replayRequest = CreateSelectedBookingRequest(
             replayKey, driverId, unionId, "KPHB", "HITEC City", []);
