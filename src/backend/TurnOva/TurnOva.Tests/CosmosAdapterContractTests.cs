@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.Azure.Cosmos;
 using Moq;
 using TurnOva.Domain.Dispatch;
@@ -34,6 +35,78 @@ public sealed class CosmosAdapterContractTests
             "ride-1",
             It.Is<PartitionKey?>(partitionKey => partitionKey.HasValue && partitionKey.Value.Equals(new PartitionKey("ride-1"))),
             It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "etag-expected"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RideOfferCreateConflictReturnsFalseWithoutOverwritingTheExistingAggregate()
+    {
+        var state = CreateRideOfferState() with { ETag = "stale-etag" };
+        var container = new Mock<Container>();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<RideOfferState>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException(
+                "ride offer already exists", HttpStatusCode.Conflict, 0, "ride-offer-create-test", 0));
+
+        var result = await new CosmosRideOfferStore(container.Object).TryCreateAsync(state);
+
+        Assert.False(result);
+        container.Verify(value => value.CreateItemAsync(
+            It.Is<RideOfferState>(item => item.RideId == state.RideId && item.ETag == null),
+            It.Is<PartitionKey?>(partitionKey =>
+                partitionKey.HasValue && partitionKey.Value.Equals(new PartitionKey(state.RideId))),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RideOfferCreatePropagatesNonConflictCosmosFailures()
+    {
+        var state = CreateRideOfferState();
+        var container = new Mock<Container>();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<RideOfferState>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException(
+                "cosmos unavailable", HttpStatusCode.ServiceUnavailable, 0, "ride-offer-create-test", 0));
+
+        var exception = await Assert.ThrowsAsync<CosmosException>(() =>
+            new CosmosRideOfferStore(container.Object).TryCreateAsync(state));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, exception.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.PreconditionFailed)]
+    [InlineData(HttpStatusCode.NotFound)]
+    public async Task RideOfferReplacementReturnsFalseForStaleEtagOrMissingItem(HttpStatusCode statusCode)
+    {
+        var state = CreateRideOfferState() with { Status = RideOfferStatuses.Rejected };
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<RideOfferState>(),
+                It.IsAny<string>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException(
+                "ride offer changed", statusCode, 0, "ride-offer-replace-test", 0));
+
+        var result = await new CosmosRideOfferStore(container.Object)
+            .TryReplaceAsync(state, "expected-etag");
+
+        Assert.False(result);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.Is<RideOfferState>(item => item.RideId == state.RideId && item.ETag == null),
+            state.RideId,
+            It.Is<PartitionKey?>(partitionKey =>
+                partitionKey.HasValue && partitionKey.Value.Equals(new PartitionKey(state.RideId))),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "expected-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -98,6 +171,22 @@ public sealed class CosmosAdapterContractTests
                 item.EventType == RiderActiveBookingReservationAuditEventTypes.Acquired),
             It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
         batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static RideOfferState CreateRideOfferState()
+    {
+        var offeredAt = DateTimeOffset.UtcNow;
+        var expiresAt = offeredAt.AddMinutes(10);
+        return new RideOfferState(
+            "ride-cosmos-offer",
+            "zone-1",
+            "Cab",
+            "offer-cosmos-offer",
+            "driver-1",
+            offeredAt,
+            expiresAt,
+            RideOfferStatuses.Pending,
+            [new RideOfferAttempt("offer-cosmos-offer", "driver-1", offeredAt, expiresAt, RideOfferStatuses.Pending)]);
     }
 
     private static (
