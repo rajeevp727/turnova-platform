@@ -7651,6 +7651,49 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderRideDetailsResponseHidesLegacyNonCabAndUnapprovedDriverDetails()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "legacy-private-rider");
+        const string rideId = "RIDE-LEGACY-NONCAB";
+        SeedAgreementRide(factory, rideId, "legacy-private-rider", "legacy-unverified-driver");
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var now = DateTimeOffset.UtcNow;
+        rides[rideId] = rides[rideId] with
+        {
+            UnionId = null,
+            UnionName = "Unapproved Legacy Union",
+            ServiceClass = "bike",
+            DriverDisplayName = "Unverified Legacy Driver",
+            DriverVehicleMake = "Unverified Make",
+            DriverVehicleModel = "Unverified Model",
+            DriverLatitude = 17.496,
+            DriverLongitude = 78.402,
+            LocationUpdatedAt = now,
+            DriverLocationCapturedAtUtc = now,
+            LocationSharingActive = true
+        };
+
+        using var response = await rider.GetAsync($"/api/v1/rides/{rideId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var body = json.RootElement;
+
+        Assert.Equal("bike", body.GetProperty("serviceClass").GetString());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("unionId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("unionName").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("driverDisplayName").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("driverVehicleMake").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("driverVehicleModel").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("driverLatitude").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("driverLongitude").ValueKind);
+        Assert.False(body.GetProperty("locationSharingActive").GetBoolean());
+        AssertNoRiderAggregateFields(body);
+        AssertNoRideActorIdentifiers(body);
+    }
+
+    [Fact]
     public async Task DriverRideActionResponsesUseRoleScopedProjectionWithoutRiderOrAggregateIdentifiers()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);

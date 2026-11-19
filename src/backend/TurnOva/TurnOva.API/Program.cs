@@ -4765,7 +4765,11 @@ RidePaymentReconciliationResponse? ToPaymentReconciliationResponse(RidePaymentRe
 
 RiderRideDetailsResponse ToRiderRideDetailsResponse(DemoRide ride)
 {
-    var locationSharingActive = ride.LocationSharingActive && RideLifecycle.IsLocationSharingActive(ride.Status);
+    var hasApprovedUnionCabDriver = !string.IsNullOrWhiteSpace(ride.DriverId) &&
+        !string.IsNullOrWhiteSpace(ride.UnionId) &&
+        string.Equals(ride.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase);
+    var locationSharingActive = hasApprovedUnionCabDriver &&
+        ride.LocationSharingActive && RideLifecycle.IsLocationSharingActive(ride.Status);
     var pickupCoordinatesValid = ride.PickupLatitude is double pickupLatitude &&
         ride.PickupLongitude is double pickupLongitude &&
         RideLifecycle.AreCoordinatesValid(pickupLatitude, pickupLongitude);
@@ -4784,15 +4788,15 @@ RiderRideDetailsResponse ToRiderRideDetailsResponse(DemoRide ride)
         driverCoordinatesValid ? ride.LocationUpdatedAt : null,
         locationSharingActive,
         ride.ServiceClass,
-        ride.UnionId,
+        hasApprovedUnionCabDriver ? ride.UnionId : null,
         ride.Stops ?? [],
         ride.NegotiationExpiresAtUtc,
-        ride.DriverDisplayName,
-        ride.DriverVehicleMake,
-        ride.DriverVehicleModel,
-        ride.DriverDistanceToPickupKm is double distance && double.IsFinite(distance) && distance >= 0
+        hasApprovedUnionCabDriver ? ride.DriverDisplayName : null,
+        hasApprovedUnionCabDriver ? ride.DriverVehicleMake : null,
+        hasApprovedUnionCabDriver ? ride.DriverVehicleModel : null,
+        hasApprovedUnionCabDriver && ride.DriverDistanceToPickupKm is double distance && double.IsFinite(distance) && distance >= 0
             ? distance : null,
-        ride.UnionName,
+        hasApprovedUnionCabDriver ? ride.UnionName : null,
         driverCoordinatesValid ? ride.DriverLocationCapturedAtUtc : null);
 }
 
