@@ -100,8 +100,10 @@ public sealed class CosmosMigrationLeaseStoreTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
-    public async Task ReleaseUsesTheLatestEtagAndDoesNotDeleteAReplacementLease()
+    [Theory]
+    [InlineData(HttpStatusCode.PreconditionFailed)]
+    [InlineData(HttpStatusCode.NotFound)]
+    public async Task ReleaseReturnsFalseWhenLeaseIsMissingOrReplaced(HttpStatusCode statusCode)
     {
         var container = new Mock<Container>();
         container.Setup(value => value.DeleteItemAsync<CosmosMigrationLeaseDocument>(
@@ -110,7 +112,7 @@ public sealed class CosmosMigrationLeaseStoreTests
                 It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new CosmosException(
-                "lease replaced", HttpStatusCode.PreconditionFailed, 0, "activity", 0));
+                "lease is missing or replaced", statusCode, 0, "activity", 0));
         var store = new CosmosMigrationLeaseStore(container.Object);
         var expected = new CosmosMigrationLease(
             "schema-migrations", "owner-1", "latest-etag", DateTimeOffset.UtcNow.AddMinutes(10));
