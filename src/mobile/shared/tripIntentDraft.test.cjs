@@ -140,7 +140,7 @@ test("AI-01-RIDER-DRAFT-RESPONSE-003: reject control characters in editable rout
     source: "deterministic-fallback"
   };
   for (const field of ["pickup", "dropoff"]) {
-    for (const value of ["Nizampet\\u0000", "HITEC\\u0085City", "HITEC\\nCity"]) {
+    for (const value of ["Nizampet\u0000", "HITEC\u0085City", "HITEC\nCity"]) {
       assert.equal(normalizeRiderTripIntentDraft({ ...valid, [field]: value }), null, field);
     }
   }
