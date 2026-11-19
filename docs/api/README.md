@@ -180,9 +180,9 @@ AI-01 is an approved supplemental requirement and remains outside the 19-row acc
 - PR [#183](https://github.com/rajeevp727/turnova-platform/pull/183) merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e`. Exact-head CI [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed **758/758 backend tests (0 failed, 0 skipped)** and native non-container API publish/artifact validation (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)).
 
 
-## API engineering phase exit — 2026-11-18
+## API engineering phase exit — 2026-11-18 (superseded 2026-11-19)
 
-The API engineering phase is complete. All in-scope API flows, deterministic backend/domain/persistence tests, auth/authorization/privacy checks, API contracts/docs, native non-container .NET 10 Release publish and exact-head CI are present. This is not strict acceptance or production readiness. Live Cosmos ETag/multi-instance/restart, production JWT/TriSend identity, private object storage/scanning/managed identity, consent/retention/deletion, maps/realtime providers, product support/dispatch/reconciliation policies, legal terms and hosted API remain external. Android is now the active engineering phase; iOS remains gated until both Android apps exit.
+A prior audit marked the API engineering phase complete. That claim is withdrawn pending the role-scoped response correction in PR #195: mobile endpoints were returning the internal DemoRide aggregate and agreement persistence metadata. The API phase is reopened. Android must not resume until PR #195's exact-head CI, API contract/auth tests, native non-container .NET Release publish and persistence/repository evidence pass. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, private object storage/scanning/consent, product support/dispatch/reconciliation policies and legal terms remain external; no production readiness is claimed.
 
 
 ## Role-scoped ride response contracts (2026-11-19)

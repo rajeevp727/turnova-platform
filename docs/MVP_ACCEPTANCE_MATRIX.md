@@ -1,12 +1,14 @@
+# TurnOva MVP Acceptance Matrix
+
 **Last updated:** 2026-11-19. **Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`. **Current platform phase:** API — role-scoped ride response/privacy audit (reopened).
 
-**Active API branch:** `fix/api-role-scoped-ride-responses`, current code/test head `cccde26270d31aaea394b74500949171f72668d9`. PR #195 is being prepared for review after the full diff audit. **Rider PR #194 is Draft** while the API privacy gap is corrected; it contains Rider Android client work including history projection RIDER-HISTORY-014 and must not advance to Driver/iOS.
+**Active API PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`, current head `427ed65316351058b837f62f341ca5ca8638a88b`. Exact-head CI [#44495982367](https://github.com/rajeevp727/turnova-platform/actions/runs/44495982367) is pending; no pass is claimed. **Rider PR #194 is Draft** while the API correction is reviewed; it contains Rider Android client work including RIDER-HISTORY-014 and must not advance to Driver/iOS.
 
 **API gap found:** several Rider/Driver endpoints returned the full DemoRide aggregate, including actor IDs, dispatch-zone data, agreement persistence internals, audit events and reconciliation state. Agreement endpoints also returned internal RiderId/DriverId/UnionId and idempotency metadata. Client-side projection alone was insufficient because these fields crossed the API boundary.
 
-**Engineering change:** API now maps Rider detail/cancel/legacy-request responses to RiderRideDetailsResponse; selected booking responses to RiderSelectedBookingResponse (only authenticated rider/selected driver identifiers are retained for response validation); Driver action/history/legacy-available responses to DriverRideHistoryItem; and proposal/history endpoints to role-safe agreement response records. Driver coordinates are emitted only while the stored location-sharing flag and lifecycle status both permit sharing and the coordinates are valid. estimatedFareInr is always null. The aggregate, audit and unrelated actor fields are not serialized to Rider/Driver clients.
+**Engineering change:** Rider detail/cancel/legacy-request responses use RiderRideDetailsResponse; selected booking uses RiderSelectedBookingResponse with only the authenticated Rider and selected Driver IDs required by the current response validator; Driver action/history/legacy-available responses use DriverRideHistoryItem; agreement proposal/history endpoints use role-safe agreement response records. Driver coordinates are emitted only while an approved Union Cab driver snapshot, stored location-sharing flag, lifecycle status and coordinate validation all permit it. Historical non-Cab or unionless rides retain their service-class label but do not expose unverified driver/vehicle/union details or location. estimatedFareInr is always null.
 
-**Tests added:** role-scoped Rider detail, selected booking, cancellation, legacy request, Driver action and legacy available-list responses; agreement POST/GET actor-field omission; hidden Driver coordinates when sharing is inactive; existing active-sharing location test remains in place. CI has not yet run on this API branch; open PR #195 to trigger the required API workflow.
+**Tests added:** Rider booking/detail/cancel and legacy request projections; Driver action and legacy available-list projections; agreement POST/GET actor-field omission; inactive-sharing coordinate suppression; legacy non-Cab/unionless detail suppression; existing active-sharing location coverage remains. CI #44495982367 is pending on this head.
 
 **API phase exit:** reopened. Do not advance to Android until API response/privacy contracts, deterministic tests, API docs, native non-container publish/build evidence, auth checks and API CI are complete. Live Cosmos ETag/multi-instance/restart, production identity, hosting and live providers remain external gates.
 
@@ -1734,3 +1736,16 @@ PR #193 remains open at the verified head. No approval was submitted; branch `ma
 | API-PRIV-003 | Agreement proposal/history endpoints use response records without RiderId/DriverId/UnionId/idempotency key/request hash while retaining versioned terms and both confirmations. | API engineering evidence only; strict row verification remains unchanged. |
 
 Current phase is API — response privacy audit. PR #194 is Draft; PR #195 is being prepared. No Android or iOS completion work may begin until API exit criteria pass.
+
+
+## API response privacy projection — 2026-11-19 (latest)
+
+| Evidence ID | Engineering implementation/evidence | Acceptance effect |
+|---|---|---|
+| API-PRIV-001 | Rider detail/cancel/legacy request use RiderRideDetailsResponse; selected booking uses RiderSelectedBookingResponse with only authenticated Rider/selected Driver IDs needed for response validation. No raw aggregate, dispatch zone, agreement collections/revision, payment reconciliation or audit events. Fare remains null. | API engineering evidence only; strict acceptance unchanged. |
+| API-PRIV-002 | Driver accept/arrive/start/complete and legacy available-list use DriverRideHistoryItem; no RiderId/DriverId/dispatch zone/raw agreement collections/revision/audit events. Driver's own current-agreement and reconciliation summary remains. | API engineering evidence only; strict acceptance unchanged. |
+| API-PRIV-003 | Agreement proposal/history responses omit actor IDs, UnionId, idempotency key and request hash while preserving versioned terms and both confirmations. | API engineering evidence only; strict acceptance unchanged. |
+| API-PRIV-004 | Driver coordinates/timestamps are emitted only with approved Union Cab snapshot, active sharing, permitted lifecycle and valid coordinates; inactive sharing suppresses location. | API engineering evidence only; strict acceptance unchanged. |
+| API-PRIV-005 | Historical non-Cab/unionless rides retain service-class history but suppress driver name, vehicle, union details and location from Rider detail responses. | API engineering evidence only; strict acceptance unchanged. |
+
+Current phase is API — response privacy audit. PR #195 is the only active feature PR; PR #194 is Draft. Android and iOS remain gated by API → Android Rider → Android Driver → iOS Rider → iOS Driver.
