@@ -90,9 +90,11 @@ function normalizeRiderHelpResponse(value) {
 }
 
 function getRiderHelpSourceLabel(source) {
-  const label = HELP_SOURCE_LABELS[source];
-  if (!label) throw new RangeError("Unknown Rider help response source.");
-  return label;
+  if (typeof source !== "string" ||
+      !Object.prototype.hasOwnProperty.call(HELP_SOURCE_LABELS, source)) {
+    throw new RangeError("Unknown Rider help response source.");
+  }
+  return HELP_SOURCE_LABELS[source];
 }
 
 function getRiderThemeOptionProps(option, selected) {

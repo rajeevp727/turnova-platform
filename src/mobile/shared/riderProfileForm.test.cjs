@@ -213,6 +213,7 @@ test("Rider help source labels distinguish approved content, provider selection 
   assert.equal(getRiderHelpSourceLabel("provider-approved-content"), "AI-selected approved help content");
   assert.equal(getRiderHelpSourceLabel("deterministic-fallback"), "Deterministic fallback from approved help content");
   assert.throws(() => getRiderHelpSourceLabel("unknown"), /Unknown Rider help response source/);
+  assert.throws(() => getRiderHelpSourceLabel("toString"), /Unknown Rider help response source/);
 });
 
 test("RIDER-HELP-RESPONSE-001..002: App validates the help contract before rendering answer or source", () => {
