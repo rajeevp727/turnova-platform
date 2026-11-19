@@ -582,10 +582,12 @@ Cross-document atomicity, outbox retries, and next-driver progression after reje
 | OFFER-REJECT-003 | Driver retries after queue rotation succeeded but offer update failed | Same offer ID is recognized; driver is not rotated twice and offer can be resolved | API/store | P0 |
 
 Deterministic API failure-injection evidence: `RideApiIntegrationTests.LegacyOfferRejectionRetryAfterRotationInterruptionDoesNotRotateTwice` commits one in-memory queue rotation, simulates interruption before offer resolution, then retries the same endpoint and verifies one rotation audit, a resolved offer, one work-activity record and one post-resolution advancement signal. This is legacy FIFO compatibility coverage only; it does not enable customer-facing FIFO ranking/assignment or prove Cosmos multi-instance behavior.
-| OFFER-REJECT-004 | Driver rejects an expired or already-resolved offer | HTTP 409; no new queue rotation | API | P0 |
+| OFFER-REJECT-004 | Driver rejects an expired or non-rejected resolved offer | HTTP 409; no new queue rotation | API | P0 |
 | OFFER-REJECT-005 | Driver repeats a successfully recorded rejection | HTTP 204; no duplicate rotation or work activity | API | P1 |
 
 This retry path depends on the driver retrying after an interrupted response. Automatic reconciliation and next-driver offer issuance remain separate work.
+
+`OFFER-REJECT-003` is exercised by `RideApiIntegrationTests.LegacyOfferRejectionRetryAfterRotationInterruptionDoesNotRotateTwice`; `OFFER-REJECT-004` is exercised by `RideApiIntegrationTests.LegacyExpiredOfferRejectionReturnsConflictWithoutQueueRotation`. Both are deterministic legacy compatibility tests using in-memory stores; neither enables customer-facing FIFO ranking/assignment nor proves live Cosmos multi-instance behavior. A replay of the same already-rejected offer is the separate idempotent `OFFER-REJECT-005` case and returns HTTP 204 without a second rotation or work-activity record.
 
 
 ## Idempotent FIFO queue rotation
