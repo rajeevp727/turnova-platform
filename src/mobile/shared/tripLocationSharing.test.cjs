@@ -456,3 +456,20 @@ test("RIDER-LOCATION-UI-003: a conflicting terminal history snapshot cannot repl
   assert.equal(merged.driverLatitude, undefined);
   assert.equal(merged.driverLongitude, undefined);
 });
+
+
+test("RIDER-LOCATION-UI-005: live driver map and markers expose accessible context", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const mapStart = source.indexOf("<MapView");
+  const mapEnd = source.indexOf("</MapView>", mapStart);
+  assert.ok(mapStart >= 0 && mapEnd > mapStart);
+  const map = source.slice(mapStart, mapEnd);
+
+  assert.match(map, /testID="rider-live-driver-map"/);
+  assert.match(map, /accessible=\{true\}/);
+  assert.match(map, /accessibilityLabel="Live driver location map"/);
+  assert.match(map, /accessibilityHint="Shows your driver's latest shared location and your pickup point\. Moving the map pauses automatic following\."/);
+  assert.match(map, /onPanDrag=\{\(\)=>setFollowDriverLocation\(false\)\}/);
+  assert.match(map, /title="Your driver" description="Latest location shared by your selected driver during this active ride\."/);
+  assert.match(map, /title="Pickup" description="Your selected pickup location\."/);
+});
