@@ -300,7 +300,7 @@ test("RIDER-DISCOVERY-RESPONSE-004: accept API Cab capacity 7–8 and reject uns
     vehicleMake: "Maruti\u0085",
     vehicleModel: "Dzire"
   }, false, false, "Green\nUnion");
-  assert.match(option.accessibilityLabel, /^Cab, verified Cab vehicle, Cab, capacity 8 passengers/);
+  assert.match(option.accessibilityLabel, /^Cab driver, verified Cab vehicle, Cab, capacity 8 passengers/);
   assert.doesNotMatch(option.accessibilityLabel, /[\u0000-\u001f\u007f-\u009f]/);
 });
 
