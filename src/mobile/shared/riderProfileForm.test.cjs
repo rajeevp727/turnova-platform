@@ -223,7 +223,7 @@ test("RIDER-HELP-RESPONSE-001..002: App validates the help contract before rende
   const handler = source.slice(start, end);
   const fetchIndex = handler.indexOf('const response=await apiFetch("/api/v1/assistance/help"');
   const normalizeIndex = handler.indexOf("normalizeRiderHelpResponse(response)");
-  const answerIndex = handler.indexOf("setHelpAnswer(");
+  const answerIndex = handler.indexOf("setHelpAnswer(", normalizeIndex);
   assert.ok(fetchIndex >= 0 && normalizeIndex > fetchIndex && answerIndex > normalizeIndex);
   assert.match(handler, /if\(!result\)throw new Error\("Help service returned an invalid response/);
   assert.match(handler, /getRiderHelpSourceLabel\(result\.source\)/);
