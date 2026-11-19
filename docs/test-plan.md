@@ -587,7 +587,7 @@ This retry path depends on the driver retrying after an interrupted response. Au
 
 `OFFER-REJECT-003` is exercised by `RideApiIntegrationTests.LegacyOfferRejectionRetryAfterRotationInterruptionDoesNotRotateTwice`, which simulates interruption after a durable in-memory queue rotation and verifies same-offer retry does not rotate twice, work activity is recorded once, and advancement is signalled only after offer resolution. `OFFER-REJECT-004` is exercised by `RideApiIntegrationTests.LegacyExpiredOfferRejectionReturnsConflictWithoutQueueRotation`, which verifies an expired offer returns HTTP 409 without queue rotation, work activity or advancement. Both are deterministic legacy compatibility tests using in-memory stores; neither enables customer-facing FIFO ranking/assignment nor proves live Cosmos multi-instance behavior. A replay of the same already-rejected offer is the separate idempotent `OFFER-REJECT-005` case and returns HTTP 204 without a second rotation or work-activity record.
 
-`OFFER-REJECT-003` is exercised by `RideApiIntegrationTests.LegacyOfferRejectionRetryAfterRotationInterruptionDoesNotRotateTwice`; `OFFER-REJECT-004` is exercised by `RideApiIntegrationTests.LegacyExpiredOfferRejectionReturnsConflictWithoutQueueRotation`. Both are deterministic legacy compatibility tests using in-memory stores; neither enables customer-facing FIFO ranking/assignment nor proves live Cosmos multi-instance behavior. A replay of the same already-rejected offer is the separate idempotent `OFFER-REJECT-005` case and returns HTTP 204 without a second rotation or work-activity record.
+
 
 
 ## Idempotent FIFO queue rotation
