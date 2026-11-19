@@ -989,11 +989,6 @@ async Task<DriverOnboardingProfile?> GetApprovedDriverProfileAsync(string driver
     return profile?.Status == "Approved" ? profile : null;
 }
 
-async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
-{
-    if (rideContainer is null) { rides[ride.RideId] = ride; return; }
-    await rideContainer.UpsertItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
-}
 
 async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
 {
@@ -3339,7 +3334,9 @@ app.MapPost("/api/v1/rider/bookings", async (
         if (prior.RequestHash != requestFingerprint)
             return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
 
-        var priorRide = await FindRideAsync(prior.rideId, ct);
+        var priorRide = await FindRideAsync(
+            prior.rideId, ct,
+            ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
         if (priorRide is not null)
         {
             if (!string.IsNullOrWhiteSpace(priorRide.UnionId) &&
@@ -3355,7 +3352,9 @@ app.MapPost("/api/v1/rider/bookings", async (
 
                 // The overlap check can reconcile an expired negotiation. Re-read before
                 // restoring the Rider reservation or replaying a Driver notification.
-                priorRide = await FindRideAsync(priorRide.RideId, ct);
+                priorRide = await FindRideAsync(
+                    priorRide.RideId, ct,
+                    ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
             }
 
             if (priorRide is not null)
@@ -3712,8 +3711,9 @@ app.MapGet("/api/v1/rides/nearby", () =>
 
 app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal user, CreateRideRequest request, QueueService queueService, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
-    if (!app.Configuration.GetValue<bool>("Dispatch:LegacyFifoRiderRequestsEnabled"))
-        return Results.Conflict(new { message = "Customer-facing FIFO ride requests are disabled. Select a driver through Rider discovery." });
+    if (!app.Configuration.GetValue<bool>("Dispatch:LegacyFifoRiderRequestsEnabled") ||
+        (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")))
+        return Results.Conflict(new { message = "Legacy FIFO compatibility requests are disabled outside Development/Testing. Select a driver through Rider discovery." });
     if (string.IsNullOrWhiteSpace(request.Pickup) || string.IsNullOrWhiteSpace(request.Dropoff))
         return Results.BadRequest(new { message = "Pickup and drop-off are required." });
     if (request.Passengers is < 1 or > 6)
@@ -3737,14 +3737,16 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
 
     var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
-    var rideId = $"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+    var rideId = $"RIDE-{Guid.NewGuid().ToString("N").ToUpperInvariant()}";
     var reservation = new RideIdempotencyRecord(keyId, riderId, rideId);
     if (idempotencyContainer is null)
     {
         if (!idempotencyKeys.TryAdd($"{riderId}:{keyId}", rideId))
         {
             var existingId = idempotencyKeys[$"{riderId}:{keyId}"];
-            var existingRide = await FindRideAsync(existingId, ct);
+            var existingRide = await FindRideAsync(
+                existingId, ct,
+                ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
             return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(ToRiderRideDetailsResponse(existingRide));
         }
     }
@@ -3768,11 +3770,50 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         AuditEvents = AppendRideAuditEvent(ride, "RideRequested", riderId, "Rider",
             newStatus: ride.Status, occurredAtUtc: requestedAtUtc)
     };
-    try { await SaveRideAsync(ride, ct); }
+    async Task ReleaseIdempotencyReservationAsync()
+    {
+        var reservationKey = $"{riderId}:{keyId}";
+        if (idempotencyContainer is null)
+        {
+            if (idempotencyKeys.TryGetValue(reservationKey, out var currentRideId) &&
+                string.Equals(currentRideId, rideId, StringComparison.Ordinal))
+                idempotencyKeys.TryRemove(reservationKey, out _);
+            return;
+        }
+
+        try
+        {
+            var current = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
+                keyId, new PartitionKey(riderId), cancellationToken: CancellationToken.None);
+            if (!string.Equals(current.Resource.rideId, rideId, StringComparison.Ordinal))
+                return;
+
+            await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(
+                keyId, new PartitionKey(riderId),
+                new ItemRequestOptions { IfMatchEtag = current.ETag },
+                CancellationToken.None);
+        }
+        catch (CosmosException ex) when (
+            ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+        {
+            // The exact reservation is already absent or has changed; never delete a replacement.
+        }
+    }
+
+    try
+    {
+        if (!await TryCreateRideAsync(ride, ct))
+        {
+            await ReleaseIdempotencyReservationAsync();
+            return Results.Conflict(new
+            {
+                message = "The ride identifier is already in use. Retry with a new Idempotency-Key."
+            });
+        }
+    }
     catch
     {
-        if (idempotencyContainer is null) idempotencyKeys.TryRemove($"{riderId}:{keyId}", out _);
-        else await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
+        await ReleaseIdempotencyReservationAsync();
         throw;
     }
 
