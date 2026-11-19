@@ -22,6 +22,11 @@ export interface RiderDriverOption {
   distanceToPickupKm: number;
 }
 
+export interface RiderUnionDriverGroupProps {
+  accessibilityRole: "radiogroup";
+  accessibilityLabel: string;
+}
+
 export interface RiderDriverOptionProps {
   accessibilityRole: "radio";
   accessibilityLabel: string;
@@ -60,3 +65,4 @@ export function normalizeRiderDiscoveryResponse(response: unknown): RiderDiscove
 export function getVisibleUnionDrivers<T>(drivers: readonly T[] | null | undefined): T[];
 
 export function getRiderDriverOptionProps(driver: RiderDriverOption, selected: boolean, disabled: boolean, unionName?: string): RiderDriverOptionProps;
+export function getRiderUnionDriverGroupProps(unionName: string): RiderUnionDriverGroupProps;
