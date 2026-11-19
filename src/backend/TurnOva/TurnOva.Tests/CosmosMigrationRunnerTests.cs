@@ -67,6 +67,58 @@ public sealed class CosmosMigrationRunnerTests
         Assert.Equal("lease-etag-1", leaseStore.ReleasedLease.ETag);
     }
 
+    [Fact]
+    public async Task LeaseReleaseStillRunsWhenMigrationCancellationCallbackThrowsDuringShutdown()
+    {
+        var migrationStarted = NewSignal();
+        var completeMigration = NewSignal();
+        var migration = new CancellationCallbackThrowingMigration(migrationStarted, completeMigration);
+        var leaseStore = new LeaseLostStore();
+        var delay = new ControlledDelay();
+        var coordinator = new CosmosMigrationLeaseCoordinator(
+            leaseStore,
+            TimeProvider.System,
+            delay,
+            new CosmosMigrationLeaseOptions(
+                TimeSpan.FromMinutes(30),
+                TimeSpan.FromMinutes(10),
+                TimeSpan.FromMilliseconds(1)),
+            NullLogger<CosmosMigrationLeaseCoordinator>.Instance);
+        var (client, historyContainer) = CreateCosmosClient();
+        var historyResponse = new Mock<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>();
+        historyContainer.Setup(container => container.CreateItemAsync(
+                It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(historyResponse.Object);
+
+        var runner = new CosmosMigrationRunner(
+            client,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [migration],
+            coordinator,
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        var run = runner.RunAsync();
+        await migrationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await delay.WaitUntilRequestedAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        migration.Complete();
+
+        var exception = await Record.ExceptionAsync(async () => await run);
+
+        Assert.NotNull(exception);
+        Assert.Contains("test cancellation callback failure", exception.ToString());
+        historyContainer.Verify(container => container.CreateItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(leaseStore.ReleasedLease);
+        Assert.Equal("schema-migrations", leaseStore.ReleasedLease!.Id);
+        Assert.Equal("lease-etag-1", leaseStore.ReleasedLease.ETag);
+    }
+
     private static TaskCompletionSource NewSignal() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -128,6 +180,26 @@ public sealed class CosmosMigrationRunnerTests
 
             // Deliberately ignore cancellation until the test releases this in-flight
             // operation so the runner's post-migration ownership check is exercised.
+            await completed.Task;
+        }
+
+        public void Complete() => completed.TrySetResult();
+    }
+
+    private sealed class CancellationCallbackThrowingMigration(
+        TaskCompletionSource started,
+        TaskCompletionSource completed) : ICosmosMigration
+    {
+        public string Id => "test-cancellation-callback";
+        public string Description => "Throws from a cancellation callback during shutdown.";
+
+        public async Task UpAsync(
+            ICosmosMigrationDatabase database,
+            CancellationToken cancellationToken)
+        {
+            _ = cancellationToken.Register(
+                static () => throw new InvalidOperationException("test cancellation callback failure"));
+            started.TrySetResult();
             await completed.Task;
         }
 
