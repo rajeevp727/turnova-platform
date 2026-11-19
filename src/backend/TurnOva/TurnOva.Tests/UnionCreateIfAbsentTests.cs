@@ -10,6 +10,24 @@ namespace TurnOva.Tests;
 public sealed class UnionCreateIfAbsentTests
 {
     [Fact]
+    public async Task InMemoryCreateHonorsCancellationBeforeMutatingStore()
+    {
+        var union = CreateUnion();
+        var inMemoryUnions = new ConcurrentDictionary<string, DriverUnion>();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UnionCreateIfAbsent.TryCreateAsync(
+                null,
+                inMemoryUnions,
+                union,
+                cancellation.Token));
+
+        Assert.Empty(inMemoryUnions);
+    }
+
+    [Fact]
     public async Task CosmosCreateConflictReturnsFalseWithoutFallingBackToInMemoryStore()
     {
         var union = CreateUnion();
