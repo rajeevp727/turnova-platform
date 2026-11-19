@@ -1,13 +1,19 @@
 # TurnOva MVP Acceptance Matrix
 
-**Last audited:** 2026-11-18; main HEAD `8af9f7a922b2b0d061ccb5e548cadef5f7153bbd`; PR #192 merged. PR #193 exact-head CI [#44312015022](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022) passed all 9 required API/Android jobs (3 iOS jobs correctly skipped): backend 758/758, Node 286/286, Python 48/48, both apps' Android debug/release APKs, package identity, emulator install/launch smoke and native API publish.
-**Current platform phase:** **Android — Rider first**. PR [#193](https://github.com/rajeevp727/turnova-platform/pull/193) adds Rider Activity/history accessibility, immutable agreement route/stops/creation-time display and exact known RideLifecycle cancellation-response validation. Exact-head CI #44312015022 passed; keep Rider active until review/merge and Rider-specific exit criteria are complete. Driver feature work remains gated; iOS remains gated until both Android apps exit.
-**Current platform phase:** **Android — Rider first**. API engineering exit criteria are complete. Current Rider PR is [#193](https://github.com/rajeevp727/turnova-platform/pull/193), branch `feat/android-rider-activity-history-accessibility`; it adds Activity/history accessibility, immutable agreement route/time display and exact RideLifecycle cancellation-response validation. Driver feature completion remains gated until Rider exits; iOS remains gated until both Android apps exit.
-**API phase exit:** source implementation for all in-scope API flows, deterministic backend/domain/persistence tests, API contracts/docs, auth/authorization/privacy checks, native non-container .NET 10 Release publish and exact-head API CI are complete. This does not claim live Cosmos, production identity/provider, hosting or production readiness.
-**PR #193 final exact-head evidence:** `b62706460c22e4fbb76121c86f3c623dfe0f6cf4` passed [CI #44312015022](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022): backend 758/758, Node 286/286, Python 48/48; all 9 required API/Android jobs passed, 3 iOS jobs skipped; both apps' Expo/config/TypeScript/Android bundle, debug/release APK, package identity and emulator install/launch smoke passed; native non-container API publish passed.
-**Current Android Rider work item:** Activity/history status messages, screen-reader summaries, immutable agreement route/stops/creation-time visibility, exact known RideLifecycle cancellation-response validation and deterministic tests RIDER-ACTIVITY-HISTORY-001..007. This PR changes Rider presentation/response validation only; no API, persistence, fare, payment, dispatch, FIFO or reconciliation policy changes.
-**Current Android Rider work item:** Activity/history presentation, screen-reader summaries, immutable agreement route/stops/creation-time visibility, known lifecycle response validation and deterministic tests RIDER-ACTIVITY-HISTORY-001..007. No API, persistence, fare, payment, dispatch, FIFO or reconciliation policy change.
-**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). A row is Verified only after every required acceptance item, including external gates, passes.
+**Last updated:** 2026-11-19. **Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`. **Current platform phase:** API — role-scoped ride response/privacy audit (reopened).
+
+**Active API PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`. Verified source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed [exact-head CI #44497833447](https://github.com/rajeevp727/turnova-platform/actions/runs/44497833447): scope + backend green, **763/763 backend tests**, native .NET 10 Release linux-x64 publish, verifier 11 negative cases plus valid fixture, [publish artifact 14516745376](https://github.com/rajeevp727/turnova-platform/actions/runs/44497833447/artifacts/14516745376). The scope job confirmed mobile CI disabled, Android phase inactive and iOS phase inactive. Documentation-only head `f9552687b765c5f624c9ccb1e2586d472368f966` passed exact-head CI [#44498641812](https://github.com/rajeevp727/turnova-platform/actions/runs/44498641812) on retry attempt 2: 763/763 backend tests, native .NET 10 Release publish, verifier 11 negative cases plus valid fixture, artifact [14515833633](https://github.com/rajeevp727/turnova-platform/actions/runs/44498641812/artifacts/14515833633). Attempt 1 had one intermittent AuthApiIntegrationTests startup-validation failure (762/763); retry passed. The selected-booking response minimization source/test correction at `b699453202064fcdb99ba4cf66cdbbb78a96ed07` removes unused RiderId/DriverId and adds an API-PRIV-001 actor-ID absence assertion. Test-only follow-up `c211fa03` corrected one stale concurrency test; exact-head CI #44513190938 passed 763/763 and native publish.
+
+Latest completed exact-head run on documentation-bearing head `9c50d518e319b589125e9d042fe65cd33e3a2e13` passed CI [#44503744740](https://github.com/rajeevp727/turnova-platform/actions/runs/44503744740): scope/backend success, **763/763 backend tests**, native non-container .NET 10 Release linux-x64 publish, verifier 11 negative cases plus valid fixture, artifact [14518836325](https://github.com/rajeevp727/turnova-platform/actions/runs/44503744740/artifacts/14518836325). Mobile, Android and iOS jobs were skipped by the API-only phase gate. The selected-booking response minimization source/test correction is commit `b699453202064fcdb99ba4cf66cdbbb78a96ed07`; test-only compatibility correction is `c211fa03f7b40e042376c0d701efa988b17f684b`. Exact-head CI #44513190938 passed 763/763 backend tests, native non-container .NET 10 Release publish and verifier; mobile/Android/iOS jobs were skipped by the API-only gate.
+
+**Phase state:** `.github/turnova-phase.json` now matches `docs/architecture.md`: API `in_progress`, Android `not_started`, iOS `not_started`. This keeps Android/iOS CI and work gated until their ordered exits.
+
+**Review/merge:** PR #195 has no independent review recorded. Repository `.github/copilot-instructions.md` explicitly requires human approval before merge; the PR author is `rajeevp727`, so no self-review is possible. GitHub branch metadata reports `main` as unprotected and the repository rulesets query returned an empty list. Nevertheless, `.github/copilot-instructions.md` explicitly requires human approval before merge. Do not self-approve or merge without that approval.
+
+**Parked Rider PR:** [#194](https://github.com/rajeevp727/turnova-platform/pull/194) remains Draft at `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`. Runs [#44493716559](https://github.com/rajeevp727/turnova-platform/actions/runs/44493716559) and [#44494246556](https://github.com/rajeevp727/turnova-platform/actions/runs/44494246556) failed; exact fixes are recorded below. No Driver or iOS completion work has started.
+
+**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). **Production readiness:** not established. Live Cosmos, identity, hosting, providers, product policy, legal and physical-device gates remain external. No Docker/container work.
+
 
 ## PR #189 — exact-head Android verification (2026-11-18)
 
@@ -22,9 +28,9 @@ The 7 Rider profile/help/theme/navigation cases are deterministic helper/source-
 **Next:** finish Rider functional coverage and available Android acceptance checks before starting Driver feature completion. Driver feature work remains gated until Rider exits; iOS remains gated until both Android apps exit. Strict acceptance remains **0/19** (16 In Progress, 3 Blocked); production readiness is not established.
 
 
-## API phase exit audit — 2026-11-18
+## API phase exit audit — 2026-11-18 (superseded 2026-11-19)
 
-**Engineering exit:** Complete. This is a platform-phase gate, not strict MVP acceptance or production readiness. API source/contracts, deterministic backend and repository tests, auth/authorization/privacy checks, native non-container .NET 10 publish, API documentation and exact-head API CI are complete. Mobile client completion is deliberately deferred to Android and then iOS.
+**Prior engineering exit:** Complete at the 2026-11-18 snapshot; superseded by the 2026-11-19 role-scoped response audit. The API phase is reopened until PR #195 is independently reviewed or repository merge policy is confirmed, merged and main is re-audited. This is a platform-phase gate, not strict MVP acceptance or production readiness. The new response DTOs, tests and documentation are on PR #195.
 
 | Acceptance row | API engineering disposition | Remaining gate or later-platform work |
 |---|---|---|
@@ -50,15 +56,17 @@ The 7 Rider profile/help/theme/navigation cases are deterministic helper/source-
 
 **API CI evidence:** PR #183 exact-head run [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed the scope detector, .NET 10 Release build, **758/758 backend tests (0 failed, 0 skipped)**, native non-container API publish, publish verifier and artifact validation (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)). Android/iOS jobs were correctly skipped while the API phase was active. PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e`.
 
+**Current API privacy correction:** PR #195 verified source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed run [#44497833447](https://github.com/rajeevp727/turnova-platform/actions/runs/44497833447). Documentation-only head `f9552687b765c5f624c9ccb1e2586d472368f966` passed exact-head run [#44498641812](https://github.com/rajeevp727/turnova-platform/actions/runs/44498641812) on retry attempt 2: **763/763 backend tests**, native .NET 10 Release publish, publish verifier (11 negative cases plus valid fixture), artifact [14515833633](https://github.com/rajeevp727/turnova-platform/actions/runs/44498641812/artifacts/14515833633). Attempt 1 had one intermittent AuthApiIntegrationTests startup-validation failure (762/763); retry passed. Scope confirmed mobile CI, Android and iOS phases inactive. The selected-booking response minimization source/test commit `b699453` follows `ef1fed`; test-only correction `c211fa03` passed exact-head CI #44513190938 (763/763, native publish and verifier). Repository instructions require explicit human approval before merge; PR #195 remains unmerged, so the platform gate is not yet exited.
+
 External gates above are not reported as completed. Strict acceptance remains 0/19 until each row's full external and platform evidence passes; production readiness is not established. AI-01 is supplemental and outside the denominator.
 
 ## Platform phase gate
 
 | Phase | Exit evidence | State |
 |---|---|---|
-| API | In-scope API implementation, auth/authorization/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and final-head API CI | **Engineering exit complete** |
-| Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | **Current phase — Rider first, Driver second** |
-| iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after Android exit | Not started under the new phase order |
+| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and final-head API CI; PR #195 must be reviewed/merged and main re-audited | **Current phase — reopened; PR #195 CI passed, explicit human approval/merge pending** |
+| Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | **Gated — Rider first, Driver second** |
+| iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after both Android apps exit | **Gated — not started** |
 
 External API gates (live Cosmos ETag/multi-instance/restart, production identity/secrets, hosted endpoint and provider validation) remain explicit and do not stop independent API engineering. External Android/iOS gates include physical devices, signing, TestFlight/store and approved production configuration.
 
@@ -138,11 +146,13 @@ External API gates (live Cosmos ETag/multi-instance/restart, production identity
 
 ## Highest-priority next work
 
-1. **Current P0 — Android Rider Activity/history:** complete `feat/android-rider-activity-history-accessibility`, covering RIDER-ACTIVITY-HISTORY-001..005. Keep the PR Rider-only; require exact-head API/Android CI, both Android debug/release builds and both emulator install/launch smoke jobs.
-2. **Next — Android Driver:** only after Rider engineering and available Rider-specific Android acceptance checks exit. Audit Driver screens/flows against the approved API contracts, union/selfie/vehicle eligibility, availability, payslips, trip lifecycle, reconciliation and support; add deterministic tests/build/emulator evidence.
-3. **Then — iOS Rider and Driver:** only after both Android apps exit. Complete each app's in-scope screens/flows, deterministic tests, native simulator builds and install/launch smoke before any physical-device/signing/TestFlight gate is called complete.
-4. **Blocked product rows:** DISPATCH-01 requires Product-approved positive pickup radius, location freshness and global zone-overlap policy. DRIVER-04 and SUPPORT-01 require Product/Operations decisions for support/reconciliation policy, escalation, privacy/retention and operational handoff. Keep safe code/test work moving without inventing those decisions.
-5. **Production/release gates:** live Cosmos ETag/multi-instance/restart, production identity/TriSend, API hosting, routing/maps/SignalR/call/chat/push, private media storage/scanning/retention/consent, Union legal terms, physical-device acceptance and signing remain external. No Docker/container deployment.
+1. **Current P0 — API PR #195:** Original source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed CI #44497833447. The follow-up selected-booking actor-ID minimization source/test commit `b699453202064fcdb99ba4cf66cdbbb78a96ed07` adds API-PRIV-001 absence coverage; CI #44512060615 is in progress. Latest docs-only head `aef80d2` CI #44512177250 is pending.
+2. **Human merge gate:** repository `.github/copilot-instructions.md` explicitly requires human approval before merge. PR #195 has no independent review recorded; do not self-approve or bypass. Re-read main after approval/merge and repeat the API phase exit audit.
+3. **Then Android Rider:** resume Draft PR #194 only after API exit. Fix the invalid control-character regex, stale history source-order assertion and nullable passengers activity/accessibility type mismatch; then complete Rider tests, debug/release builds and emulator smoke.
+4. **Then Android Driver:** only after Rider exits; complete Driver-specific flows/tests/builds/emulator smoke.
+5. **Then iOS Rider and Driver:** only after both Android apps exit; complete simulator builds and launch smoke in order.
+6. **Blocked product rows:** DISPATCH-01 requires Product-approved positive radius, location freshness and global zone-overlap policy. DRIVER-04 and SUPPORT-01 require Product/Operations support-policy decisions. Continue safe code/test work without inventing those decisions.
+7. **Production/release gates:** live Cosmos ETag/multi-instance/restart, production identity/TriSend, API hosting, routing/maps/SignalR/call/chat/push, private media storage/scanning/retention/consent, Union legal terms, physical-device acceptance and signing remain external. No Docker/container deployment.
 
 ## Deployment constraint
 
@@ -1719,3 +1729,96 @@ Artifacts: Rider debug APK [14430354079](https://github.com/rajeevp727/turnova-p
 The CI smoke is install/cold-launch/foreground-process evidence only. It does not prove full React Native UI interaction, TalkBack, live API/Cosmos/SignalR/TriSend, production authentication or physical-device acceptance. The inherited High picomatch GHSA-fc5q-39xc-vjpf remains unpatched in reviewed transitive Expo/Metro/Jest build tooling; it is disclosed, not represented as a clean audit or vulnerability fix.
 
 PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
+
+
+## API response privacy projection — 2026-11-19
+
+| Evidence ID | Engineering implementation/evidence | Acceptance effect |
+|---|---|---|
+| API-PRIV-001 | Rider detail, cancel and legacy request use RiderRideDetailsResponse; selected booking uses RiderSelectedBookingResponse without echoing RiderId/DriverId; the Rider already supplied the selected Driver in its request and does not consume actor IDs from the response. No raw aggregate, dispatch zone, agreement collection/revision, payment reconciliation or audit event is returned. Fare remains null; Driver coordinates are gated by active sharing, lifecycle and coordinate validity. | API engineering evidence only; strict row verification remains unchanged until all 19 areas and external evidence pass. |
+| API-PRIV-002 | Driver accept/arrive/start/complete and legacy available-list responses use DriverRideHistoryItem; no RiderId/DriverId/dispatch zone/raw agreement collections/revision/audit events. Driver's own reconciliation/current-agreement summary remains available. | API engineering evidence only; strict row verification remains unchanged. |
+| API-PRIV-003 | Agreement proposal/history endpoints use response records without RiderId/DriverId/UnionId/idempotency key/request hash while retaining versioned terms and both confirmations. | API engineering evidence only; strict row verification remains unchanged. |
+
+Current phase is API — response privacy audit. PR #194 is Draft; PR #195 is being prepared. No Android or iOS completion work may begin until API exit criteria pass.
+
+
+## API response privacy projection — 2026-11-19 (latest)
+
+| Evidence ID | Engineering implementation/evidence | Acceptance effect |
+|---|---|---|
+| API-PRIV-001 | Rider detail/cancel/legacy request use RiderRideDetailsResponse; selected booking uses RiderSelectedBookingResponse with only authenticated Rider/selected Driver IDs needed for response validation. No raw aggregate, dispatch zone, agreement collections/revision, payment reconciliation or audit events. Fare remains null. | API engineering evidence only; strict acceptance unchanged. |
+| API-PRIV-002 | Driver accept/arrive/start/complete and legacy available-list use DriverRideHistoryItem; no RiderId/DriverId/dispatch zone/raw agreement collections/revision/audit events. Driver's own current-agreement and reconciliation summary remains. | API engineering evidence only; strict acceptance unchanged. |
+| API-PRIV-003 | Agreement proposal/history responses omit actor IDs, UnionId, idempotency key and request hash while preserving versioned terms and both confirmations. | API engineering evidence only; strict acceptance unchanged. |
+| API-PRIV-004 | Driver coordinates/timestamps are emitted only with approved Union Cab snapshot, active sharing, permitted lifecycle and valid coordinates; inactive sharing suppresses location. | API engineering evidence only; strict acceptance unchanged. |
+| API-PRIV-005 | Historical non-Cab/unionless rides retain service-class history but suppress driver name, vehicle, union details and location from Rider detail responses. | API engineering evidence only; strict acceptance unchanged. |
+
+Current phase is API — response privacy audit. PR #195 is the only active feature PR; PR #194 is Draft. Android and iOS remain gated by API → Android Rider → Android Driver → iOS Rider → iOS Driver.
+
+
+## Parked Android Rider handoff — PR #194 Draft (2026-11-19)
+
+- PR #194 head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`; runs [#44493716559](https://github.com/rajeevp727/turnova-platform/actions/runs/44493716559) and [#44494246556](https://github.com/rajeevp727/turnova-platform/actions/runs/44494246556) failed.
+- Failures to fix only after API exit: invalid double-escaped control-character regex in `src/mobile/shared/rideRecovery.js`; stale source-order assertion in `rideRecovery.test.cjs`; nullable `passengers` type mismatch in `src/mobile/rider-app/App.tsx` activity/accessibility item at two call sites.
+- Rider remains first Android task; Driver and iOS are not started. Strict acceptance remains 0/19.
+
+
+
+## Latest API PR #195 verification checkpoint — 2026-11-19
+
+- Current platform phase remains **API**. PR [#195](https://github.com/rajeevp727/turnova-platform/pull/195) is open on `fix/api-role-scoped-ride-responses`; verified head `9c50d518e319b589125e9d042fe65cd33e3a2e13` passed exact-head [CI #44503744740](https://github.com/rajeevp727/turnova-platform/actions/runs/44503744740).
+- Scope and backend jobs passed. Backend Release suite executed **763/763 tests, 0 failed, 0 skipped**; native non-container .NET 10 Release linux-x64 publish and artifact validation passed; publish verifier passed 11 negative fixtures plus the valid fixture. API publish artifact: [14518836325](https://github.com/rajeevp727/turnova-platform/actions/runs/44503744740/artifacts/14518836325).
+- Mobile-auth, mobile, Android native/emulator and iOS native/simulator jobs were **skipped** by the API-only phase gate; they are not represented as passed. Source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed CI #44497833447. All commits after `ef1fed` through `9c50d51` were documentation-only.
+- The API response audit covers Rider detail/cancel/legacy request, selected booking, Driver action/history/legacy available-list, agreement proposal/history and location suppression. Role/ownership authorization remains in place; no raw DemoRide aggregate or agreement persistence record is intentionally serialized to Rider/Driver clients.
+- **Review/merge:** PR #195 has no independent review recorded. `.github/copilot-instructions.md` requires explicit human approval before merge. Do not self-approve, merge without that approval, or bypass repository policy. PR #194 remains Draft; Android work must remain gated until PR #195 is approved/merged and `main` is re-audited.
+- **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not a measure of implementation emptiness. Production readiness is not established.
+- **Next exact action:** obtain independent maintainer review and explicit human approval; then re-check PR head and required CI, merge only if repository policy permits, and re-read `main` before opening the Android Rider phase.
+- **External gates remain open:** live Cosmos ETag/multi-instance/restart; production identity/JWT, secrets, hosting and provider validation; product-approved radius/location freshness and negotiation expiry; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support and reconciliation policy; Union legal terms; physical-device and signing evidence.
+
+This tracker/API-document synchronization is documentation-only. Exact-head CI #44504446025 subsequently passed on `38dc6d8`; see the latest checkpoint below.
+
+
+## PR #195 exact-head CI checkpoint — 2026-11-19 (run 44504446025)
+
+- PR #195 documentation-bearing head `38dc6d8eb4bdeec075ea7fe995f1d1f3b82fbf6f` passed exact-head [CI #44504446025](https://github.com/rajeevp727/turnova-platform/actions/runs/44504446025).
+- Scope and backend jobs succeeded. Backend Release tests: **763/763 passed, 0 failed, 0 skipped**. Native non-container .NET 10 Release linux-x64 publish and artifact validation passed; publish verifier passed 11 negative fixtures plus the valid fixture. API publish artifact: [14520060067](https://github.com/rajeevp727/turnova-platform/actions/runs/44504446025).
+- Mobile-auth, mobile, Android native/emulator, iOS native and simulator jobs were **skipped** by the checked-in API-only phase gate. Skipped jobs are not reported as passed.
+- No API source, test or phase-config changes followed verified code/config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e`; commits through `38dc6d8` are documentation-only.
+- PR #195 remains open and unmerged. GitHub currently records no independent reviews or inline review threads; repository `.github/copilot-instructions.md` requires explicit human approval. Do not self-approve, merge without approval or bypass policy. PR #194 remains Draft; Android work stays gated until API exit and main re-audit.
+- **Next exact action:** obtain independent maintainer review/approval; then re-check the latest PR head and exact-head CI, merge only if policy permits, and re-read `main` before advancing to Android Rider.
+- **Acceptance/production:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is complete-evidence accounting, not an implementation score. Production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, product radius/location freshness and negotiation expiry, maps/routing/SignalR, private-media scanning/consent/retention, support/reconciliation policy, Union legal terms and physical-device/signing evidence remain external gates.
+
+
+## Selected-booking actor-ID minimization — 2026-11-19
+
+RiderSelectedBookingResponse no longer echoes RiderId or DriverId. The current Rider app supplies the selected Driver in the booking request and does not consume actor IDs from the response. API-PRIV-001 now asserts both properties are absent. Code-bearing privacy correction `b699453202064fcdb99ba4cf66cdbbb78a96ed07`; test-only compatibility correction `c211fa03f7b40e042376c0d701efa988b17f684b` passed exact-head CI #44513190938 (763/763 tests, native publish, verifier 11 negative fixtures plus valid fixture). No ride lifecycle, authorization, reservation, idempotency or persistence behavior changed.
+
+
+## Latest API CI correction — 2026-11-19
+
+CI [#44512525481](https://github.com/rajeevp727/turnova-platform/actions/runs/44512525481) failed 762/763 because one concurrency/cancellation integration test still read the intentionally removed `riderId` response property. The test now asserts actor-ID absence and resolves the owner from the test-only stored ride. This is a test-only correction; await fresh exact-head CI before merge or API phase exit.
+
+
+## PR #195 latest exact-head API verification — 2026-11-19
+
+- Latest source/test-bearing head `c211fa03f7b40e042376c0d701efa988b17f684b` passed exact-head [CI #44513190938](https://github.com/rajeevp727/turnova-platform/actions/runs/44513190938).
+- Scope and backend jobs succeeded. Backend Release tests: **763/763 passed, 0 failed, 0 skipped**. Native non-container .NET 10 Release linux-x64 publish and artifact validation passed; publish verifier passed 11 negative fixtures plus the valid fixture. API publish artifact: [14523623180](https://github.com/rajeevp727/turnova-platform/actions/runs/44513190938/artifacts/14523623180).
+- Mobile-auth, mobile, Android native/emulator, iOS native and simulator jobs were **skipped** by the API-only phase gate; they are not reported as passed.
+- CI #44512525481 had failed 762/763 because one concurrency/cancellation test still read `riderId` from the selected-booking response. Test-only commit `c211fa03` now asserts actor-ID absence and obtains the owning Rider from the test-only ride store. The corrected exact-head run passed.
+- PR #195 remains open and unmerged. No independent reviews or inline review threads are recorded; repository instructions require explicit human approval. Do not self-approve, bypass or merge without approval. API phase remains current pending approval, merge and main re-audit.
+- Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, approved radius/location freshness and negotiation expiry, maps/routing/SignalR, private-media scanning/consent/retention, support/reconciliation policy, Union legal terms and physical-device/signing evidence remain external gates.
+
+## PR #195 latest exact-head verification — 2026-11-19 (run 44513877029)
+
+- Documentation-bearing head `2ba41b55b901595e05489458690a2205db5eaa83` passed exact-head [CI #44513877029](https://github.com/rajeevp727/turnova-platform/actions/runs/44513877029). The scope and backend jobs succeeded; backend Release tests passed **763/763 (0 failed, 0 skipped)**.
+- Native non-container .NET 10 Release linux-x64 publish and artifact validation passed. The publish verifier passed 11 negative fixtures plus the valid fixture. Artifact: [14525350285](https://github.com/rajeevp727/turnova-platform/actions/runs/44513877029/artifacts/14525350285).
+- Mobile-auth, mobile, Android native/emulator, iOS native and simulator jobs were **skipped** by the API-only phase gate; they are not reported as passed. The Release build emitted 25 xUnit analyzer warnings and 0 errors.
+- No API source/test changes followed the privacy correction `b699453202064fcdb99ba4cf66cdbbb78a96ed07` and test compatibility correction `c211fa03f7b40e042376c0d701efa988b17f684b`; this checkpoint verifies the latest documentation-bearing PR head.
+- PR #195 remains open/unmerged with no independent review or inline review threads. Repository instructions require explicit human approval; do not self-approve, bypass or merge without approval. API remains the current phase; re-read `main` after the approved merge before advancing to Android Rider.
+- PR #194 remains Draft and parked. Its latest observed head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52` has failing Rider/mobile-auth jobs in CI #44494246556; the known regex escaping, stale source-order assertion and nullable-passenger type issues remain deferred until API exit.
+- Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, product radius/location freshness, maps/routing/SignalR, private-media scanning/consent/retention, support/reconciliation policy, Union legal terms and physical-device/signing remain external gates.
+
+## Downstream Android Rider contract handoff — 2026-11-19
+
+The API privacy correction intentionally removes `riderId` and `driverId` from `RiderSelectedBookingResponse`. A cross-branch audit found that parked Draft PR [#194](https://github.com/rajeevp727/turnova-platform/pull/194), head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`, currently has `normalizeRiderSelectedBookingResponse` in `src/mobile/shared/riderBookingGuard.js` requiring `response.riderId === expected.riderId` and `response.driverId === expected.driverId` (current helper lines 72–73). The current mainline Rider app does not make this check, but PR #194 will reject the new API response until reconciled. This is a known downstream Draft-branch contract mismatch, not a defect in the role-scoped API contract.
+
+**After API PR #195 is approved/merged and main is re-audited:** resume Android Rider first; update the Rider normalizer and its fixtures/tests so authenticated Rider identity and selected Driver identity are checked from the current session and original booking request context, while the response is validated only against fields the API actually returns (ride ID, Union ID, route/stops, passenger count, Cab class, fare-null, timestamps and approved display fields). Do not reintroduce RiderId/DriverId into the API response. Re-run the full Rider mobile-auth/Node suite, TypeScript/Expo checks, Android debug/release builds and emulator install/launch smoke before advancing to Android Driver.
