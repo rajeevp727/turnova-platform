@@ -1203,6 +1203,7 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-036 | Provider options are disabled or enabled with incomplete/invalid settings | Disabled provider accepts empty placeholders; enabled provider requires provider/model/HTTPS endpoint/managed credential reference; numeric limits remain enforced and error messages never echo endpoint/secret values | Options validation + DI | P0 |
 | AI-037 | Oversized trip-intent or help JSON body exceeds 16 KiB | Real Kestrel returns HTTP 413 before the assistance service/provider is invoked; both endpoints declare the same request-size limit and OpenAPI response | Real Kestrel host integration | P0 |
 | AI-038 | Assistance request contains unknown ride, location, fare, contact or payment properties | HTTP 400; strict request DTOs accept only text for trip intent and question/optional approved rideState for help | API integration/security | P0 |
+| AI-039 | Caller supplies a ride state to help while provider is enabled | A known state returns only its approved in-repository explanation and an unknown state escalates; neither path invokes the provider or forwards caller-supplied rideState | Unit/security | P0 |
 
 **AI-01 test-helper correction:** `ValidateOptionsResult.Failures` may be null on success; assertions must use a null-safe empty sequence when constructing failure diagnostics. The first CI run caught this test-only failure (627/632 passed after Release build); corrected helper is in PR #165 source/test head `1289297e68297da2ab3629d820c3445bd39187cd`.
 
