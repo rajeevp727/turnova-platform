@@ -40,6 +40,16 @@ const TRIP_ACTIONS = Object.freeze({
     label: "Request this driver",
     busyLabel: "Requesting selected driver",
     hint: "Sends the selected Cab driver a request for direct fare negotiation. TurnOva does not quote or collect payment."
+  },
+  retryStatus: {
+    label: "Retry active booking check",
+    busyLabel: "Checking active booking status",
+    hint: "Reloads your server-owned ride history. A new booking stays unavailable until the server confirms there is no active selected booking or ride."
+  },
+  viewActiveRide: {
+    label: "View active ride",
+    busyLabel: "Opening active ride",
+    hint: "Opens Activity for your current selected-driver negotiation or ride. It does not create or submit another booking."
   }
 });
 
