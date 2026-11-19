@@ -7,6 +7,7 @@ const test = require("node:test");
 const {
   finishRiderActivityAction,
   getRiderActivityActionProps,
+  parseRiderAgreementAmount,
   getRiderActivityFieldProps,
   tryBeginRiderActivityAction
 } = require("./riderActivityForm.js");
@@ -174,4 +175,45 @@ test("Rider Activity screen wires agreement, status, cancellation, tracking and 
   assert.ok(source.includes("rider-agreement-version-"));
   assert.ok(source.includes("rider-history-"));
   assert.match(source, /accessibilityLiveRegion="polite"/);
+});
+
+
+test("RIDER-AGREEMENT-INPUT-001: accept positive plain-decimal INR amounts with at most two fractional digits", () => {
+  const accepted = new Map([
+    ["450", 450],
+    ["450.0", 450],
+    ["450.00", 450],
+    ["0.01", 0.01],
+    [".5", 0.5],
+    ["450.", 450],
+    [" 450.25 ", 450.25],
+    ["0007.50", 7.5]
+  ]);
+  for (const [input, expected] of accepted) {
+    assert.equal(parseRiderAgreementAmount(input), expected, input);
+  }
+});
+
+test("RIDER-AGREEMENT-INPUT-001: reject zero, negative, signed, exponent, hex, locale and over-precision amounts", () => {
+  const rejected = [
+    null, undefined, 450, {}, "", " ", "0", "0.00", "-1", "+1",
+    "1.001", "1.234", "1e3", "0x10", "Infinity", "NaN",
+    "1,000", "₹450", ".", "--1", "1 0", "1\n0",
+    "9".repeat(400)
+  ];
+  for (const input of rejected) {
+    assert.equal(parseRiderAgreementAmount(input), null, String(input));
+  }
+});
+
+test("RIDER-AGREEMENT-INPUT-001: App validates proposal text before creating its durable idempotency attempt", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const proposeAgreement=async()=>{");
+  const end = source.indexOf("const confirmAgreement=async()=>{", start);
+  assert.ok(start >= 0 && end > start);
+  const handler = source.slice(start, end);
+  const parse = handler.indexOf("parseRiderAgreementAmount(agreementAmount)");
+  const persist = handler.indexOf("getOrCreatePersistentProposalAttempt(");
+  assert.ok(parse >= 0 && persist > parse);
+  assert.ok(handler.includes('if(amount===null){setError("Enter a positive INR amount using no more than two decimal places.");return;}'));
 });

@@ -3771,3 +3771,12 @@ This is client-side fail-closed visibility behavior. The API remains authoritati
 AI output remains an editable Cab-only draft requiring explicit Rider confirmation; it cannot book or mutate ride state.
 
 The `AI-01-RIDER-DRAFT-RESPONSE-003` test fixture uses actual JavaScript `\u0000`, `\u0085` and `\n` escape sequences so the normalizer receives real control characters. The prior CI #44471177028 predates the fixture correction; fresh exact-head CI is required.
+
+
+## Rider agreement amount client preflight — PR #194 (2026-11-19)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-AGREEMENT-INPUT-001 | Rider enters an invalid proposal amount | Accept only a positive plain base-10 decimal with at most two fractional digits; reject zero, negative, signed, exponent, hexadecimal, locale-formatted and over-precision input before a persistent retry record or POST is created | Automated Node helper + App source wiring | P1 |
+
+This mirrors API contract case CAB-AGR-012. It is client-side preflight only: the API remains authoritative, the Rider proposal remains INR-only pending Product policy, and no fare estimate, price cap, conversion or payment behavior is added.

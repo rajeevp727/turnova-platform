@@ -1,3 +1,4 @@
+export function parseRiderAgreementAmount(value: string): number | null;
 export type RiderActivityField = "agreementAmount";
 export type RiderActivityAction = "propose" | "confirm" | "cancel" | "followDriver";
 

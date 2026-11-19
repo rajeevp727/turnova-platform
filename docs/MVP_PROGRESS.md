@@ -3158,3 +3158,13 @@ CI #44441520440 passed 371/372 Node tests and identified one test-only failure: 
 - **Next exact action:** verify the final documentation-bearing CI on PR #194; then continue Rider-only audit and do not advance to Driver until Rider engineering exit criteria are met.
 
 - **Test-fixture correction:** follow-up commit `197fdfeebbb929ada784bffab331f7ffb2d1e68e` corrected the new case to construct actual NUL/C1/newline values (not literal backslash text). CI #44471177028 began before this correction and is superseded; fresh exact-head CI is required.
+
+
+## Rider agreement amount input preflight — PR #194 (2026-11-19)
+
+- **Finding:** the Rider proposal handler used JavaScript Number(...) directly. That accepts numeric syntaxes such as exponent and hexadecimal notation and forwards amounts with more than two decimal places to the API, even though API case CAB-AGR-012 rejects zero/negative amounts, over-precision and malformed currency.
+- **Change:** parseRiderAgreementAmount now accepts only a positive plain base-10 decimal with at most two fractional digits. It rejects blank, zero, negative, signed, exponent, hexadecimal, locale-formatted and over-precision input before a durable proposal retry record is created or the API is called.
+- **Tests:** RIDER-AGREEMENT-INPUT-001 covers accepted decimal forms, rejected numeric syntaxes and App preflight ordering.
+- **Scope:** Rider Android client only. No API/Cosmos, Driver, iOS, agreement persistence, fare policy, currency conversion, payment or container behavior changed. Proposal entry remains INR-only pending Product policy; no price cap or fare recommendation was added.
+- **Phase/acceptance:** Android — Rider remains current. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked); production readiness is not established.
+- **Next exact action:** inspect fresh exact-head CI for this source/test/documentation commit; fix any failures, then continue Rider-only functional/accessibility audit. Driver Android and iOS remain gated by the sequential platform order. Independent maintainer review remains outstanding; no self-approval or merge.

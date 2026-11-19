@@ -26,7 +26,7 @@ import { canStartRiderBooking, hasActiveRiderRide, normalizeRiderSelectedBooking
 import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps, tryBeginRiderAuthSubmission } from "../shared/riderAuthForm";
 import { canDiscoverRiderTrip, validateRiderBookingText, getRiderDriverOptionProps, getRiderUnionDriverGroupProps, getRiderTripActionProps, getRiderTripFieldProps, getVisibleUnionDrivers, normalizeRiderDiscoveryResponse, shouldApplyRiderDiscoveryResponse } from "../shared/riderTripForm";
 import { finishRiderBookingAttempt, tryBeginRiderBookingAttempt } from "../shared/riderBookingAttempt";
-import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
+import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, parseRiderAgreementAmount, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
 import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderHistoryRequestedAtLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideAgreementEventValid, isRiderRideLocationTimestampValid, isRiderRideStatusEventValid, normalizeRiderAgreementHistory, shouldApplyRiderAgreementHistoryResponse } from "../shared/riderActivityPresentation";
 import { getRiderHelpSourceLabel, getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps, normalizeRiderHelpResponse, shouldApplyRiderProfileRequestResponse } from "../shared/riderProfileForm";
 import { getRiderSupportActionProps, getRiderSupportFieldProps, getRiderSupportRequestAttempt, submitRiderSupportRequest, validateRiderSupportRequest, type RiderSupportRequestAttempt } from "../shared/riderSupportRequest";
@@ -628,8 +628,8 @@ export default function App() {
      const proposalUserId=user?.id;
      const requestEpoch=sessionEpoch.current;
      if(!rideId||!proposalUserId||proposalSubmissionInFlight.current||activityActionInFlight.current)return;
-     const amount=Number(agreementAmount);
-     if(!Number.isFinite(amount)||amount<=0){setError("Enter a positive agreed amount in INR.");return;}
+     const amount=parseRiderAgreementAmount(agreementAmount);
+     if(amount===null){setError("Enter a positive INR amount using no more than two decimal places.");return;}
      const pendingLock="pending-"+(++proposalSubmissionSequence.current);
      proposalSubmissionInFlight.current=pendingLock;
      let ownedSubmissionLock=pendingLock;

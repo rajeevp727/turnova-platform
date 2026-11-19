@@ -1876,3 +1876,8 @@ Rider now clears cached Driver GPS and disables local location sharing whenever 
 The Rider client now rejects C0/C1 control characters in AI trip-intent pickup/drop-off draft fields before updating the editable form. Existing Cab-only, bounded-text, missing-field consistency and explicit-confirmation checks remain. Deterministic test `AI-01-RIDER-DRAFT-RESPONSE-003` covers both fields and NUL/C1/newline inputs. This is supplemental AI-01 work outside the 19-row denominator; no 19-row status changes.
 
 The `AI-01-RIDER-DRAFT-RESPONSE-003` fixture was corrected in commit `197fdfeebbb929ada784bffab331f7ffb2d1e68e` to exercise actual runtime control characters rather than literal backslash sequences. The prior CI #44471177028 predates this correction; fresh exact-head CI is required.
+
+
+## RIDER-02 — Rider proposal amount preflight (PR #194, 2026-11-19)
+
+The Rider client now mirrors API case CAB-AGR-012 before persisting a retry key or sending a proposal: positive plain base-10 decimal input, no more than two fractional digits, and rejection of exponent/hexadecimal/locale/signed/zero/negative/over-precision forms. Deterministic RIDER-AGREEMENT-INPUT-001 covers helper behavior and App preflight ordering. This supplements Rider UI evidence only; the RIDER-02 row remains In Progress until all platform and external acceptance evidence passes. No 19-row status or denominator change.
