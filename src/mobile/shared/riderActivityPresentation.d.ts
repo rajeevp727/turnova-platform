@@ -6,7 +6,7 @@ export interface RiderActivityHistoryItem {
   rideId: string;
   pickup: string;
   dropoff: string;
-  passengers: number;
+  passengers: number | null;
   serviceClass: string;
   status: string;
   requestedAt: string;
