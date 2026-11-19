@@ -1774,4 +1774,15 @@ Current phase is API — response privacy audit. PR #195 is the only active feat
 - **Next exact action:** obtain independent maintainer review and explicit human approval; then re-check PR head and required CI, merge only if repository policy permits, and re-read `main` before opening the Android Rider phase.
 - **External gates remain open:** live Cosmos ETag/multi-instance/restart; production identity/JWT, secrets, hosting and provider validation; product-approved radius/location freshness and negotiation expiry; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support and reconciliation policy; Union legal terms; physical-device and signing evidence.
 
-This final tracker/API-document synchronization changes documentation only. The new head requires its own exact-head CI; the successful run above applies to `9c50d51`.
+This tracker/API-document synchronization is documentation-only. Exact-head CI #44504446025 subsequently passed on `38dc6d8`; see the latest checkpoint below.
+
+
+## PR #195 exact-head CI checkpoint — 2026-11-19 (run 44504446025)
+
+- PR #195 documentation-bearing head `38dc6d8eb4bdeec075ea7fe995f1d1f3b82fbf6f` passed exact-head [CI #44504446025](https://github.com/rajeevp727/turnova-platform/actions/runs/44504446025).
+- Scope and backend jobs succeeded. Backend Release tests: **763/763 passed, 0 failed, 0 skipped**. Native non-container .NET 10 Release linux-x64 publish and artifact validation passed; publish verifier passed 11 negative fixtures plus the valid fixture. API publish artifact: [14520060067](https://github.com/rajeevp727/turnova-platform/actions/runs/44504446025).
+- Mobile-auth, mobile, Android native/emulator, iOS native and simulator jobs were **skipped** by the checked-in API-only phase gate. Skipped jobs are not reported as passed.
+- No API source, test or phase-config changes followed verified code/config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e`; commits through `38dc6d8` are documentation-only.
+- PR #195 remains open and unmerged. GitHub currently records no independent reviews or inline review threads; repository `.github/copilot-instructions.md` requires explicit human approval. Do not self-approve, merge without approval or bypass policy. PR #194 remains Draft; Android work stays gated until API exit and main re-audit.
+- **Next exact action:** obtain independent maintainer review/approval; then re-check the latest PR head and exact-head CI, merge only if policy permits, and re-read `main` before advancing to Android Rider.
+- **Acceptance/production:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is complete-evidence accounting, not an implementation score. Production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, product radius/location freshness and negotiation expiry, maps/routing/SignalR, private-media scanning/consent/retention, support/reconciliation policy, Union legal terms and physical-device/signing evidence remain external gates.
