@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
@@ -79,6 +81,44 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(new[] { ride.RideId }, advancer.AdvancedRideIds.ToArray());
         Assert.Single(activityLedger.Values, item =>
             item.DriverId == firstDriverId && item.ActivityType == "Rejected");
+    }
+
+
+    [Fact]
+    public async Task LegacyIdempotencyReplayCannotReturnAnotherRidersRide()
+    {
+        const string ownerId = "legacy-idempotency-owner";
+        const string otherRiderId = "legacy-idempotency-other";
+        const string replayKey = "cross-rider-legacy-replay";
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: true);
+        using var owner = factory.CreateClient("Rider", ownerId);
+        using var otherRider = factory.CreateClient("Rider", otherRiderId);
+
+        var ownedRide = await CreateRideAsync(owner, "legacy-idempotency-owner-request");
+        Assert.Equal(37, ownedRide.RideId.Length); // RIDE- plus the full 128-bit GUID.
+
+        var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(replayKey)));
+        var idempotencyKeys = factory.Services.GetRequiredService<ConcurrentDictionary<string, string>>();
+        Assert.True(idempotencyKeys.TryAdd($"{otherRiderId}:{keyId}", ownedRide.RideId));
+
+        using var response = await otherRider.SendAsync(CreateRideRequest(replayKey));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(ownedRide.RideId, body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LegacyFifoRiderRequestsRemainDisabledOutsideDevelopmentAndTesting()
+    {
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: true,
+            environmentName: "Staging");
+        using var rider = factory.CreateClient("Rider", "legacy-fifo-staging-rider");
+
+        using var response = await rider.SendAsync(CreateRideRequest("legacy-fifo-staging-request"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
     [Fact]
