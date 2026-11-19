@@ -11,9 +11,13 @@ public sealed class CosmosMigrationRunnerTests
     [Fact]
     public async Task LeaseRenewalLossCancelsMigrationBeforeHistoryMarkerIsWritten()
     {
-        var migrationStarted = new TaskCompletionSource(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-        var migration = new BlockingMigration(migrationStarted);
+        var migrationStarted = NewSignal();
+        var migrationCancellationObserved = NewSignal();
+        var completeMigration = NewSignal();
+        var migration = new BlockingMigration(
+            migrationStarted,
+            migrationCancellationObserved,
+            completeMigration);
         var leaseStore = new LeaseLostStore();
         var delay = new ControlledDelay();
         var coordinator = new CosmosMigrationLeaseCoordinator(
@@ -34,10 +38,22 @@ public sealed class CosmosMigrationRunnerTests
             NullLogger<CosmosMigrationRunner>.Instance);
 
         var run = runner.RunAsync();
+        var first = await Task.WhenAny(migrationStarted.Task, run)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        if (first == run)
+        {
+            await run;
+            Assert.Fail("The migration runner completed before starting the test migration.");
+        }
 
-        await migrationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await delay.WaitUntilRequestedAsync().WaitAsync(TimeSpan.FromSeconds(5));
         delay.Release();
+        await migrationCancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Model an in-flight migration operation that cannot stop immediately when its
+        // token is cancelled. The runner must re-check ownership after it returns and
+        // before it writes the MigrationHistory marker.
+        migration.Complete();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await run);
 
@@ -50,6 +66,9 @@ public sealed class CosmosMigrationRunnerTests
         Assert.Equal("schema-migrations", leaseStore.ReleasedLease!.Id);
         Assert.Equal("lease-etag-1", leaseStore.ReleasedLease.ETag);
     }
+
+    private static TaskCompletionSource NewSignal() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static (CosmosClient Client, Mock<Container> HistoryContainer) CreateCosmosClient()
     {
@@ -91,18 +110,28 @@ public sealed class CosmosMigrationRunnerTests
         return (client.Object, historyContainer);
     }
 
-    private sealed class BlockingMigration(TaskCompletionSource started) : ICosmosMigration
+    private sealed class BlockingMigration(
+        TaskCompletionSource started,
+        TaskCompletionSource cancellationObserved,
+        TaskCompletionSource completed) : ICosmosMigration
     {
         public string Id => "test-blocking-migration";
-        public string Description => "Blocks until the lease is lost.";
+        public string Description => "Completes after its lease is lost.";
 
         public async Task UpAsync(
             ICosmosMigrationDatabase database,
             CancellationToken cancellationToken)
         {
+            using var registration = cancellationToken.Register(
+                () => cancellationObserved.TrySetResult());
             started.TrySetResult();
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+            // Deliberately ignore cancellation until the test releases this in-flight
+            // operation so the runner's post-migration ownership check is exercised.
+            await completed.Task;
         }
+
+        public void Complete() => completed.TrySetResult();
     }
 
     private sealed class LeaseLostStore : ICosmosMigrationLeaseStore
@@ -137,10 +166,8 @@ public sealed class CosmosMigrationRunnerTests
 
     private sealed class ControlledDelay : ICosmosMigrationDelay
     {
-        private readonly TaskCompletionSource requested =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly TaskCompletionSource released =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource requested = NewSignal();
+        private readonly TaskCompletionSource released = NewSignal();
 
         public Task WaitUntilRequestedAsync() => requested.Task;
 
