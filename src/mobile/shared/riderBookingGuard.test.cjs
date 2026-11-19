@@ -133,8 +133,6 @@ test("Rider session reset invalidates pending history and discovery responses", 
 
 
 const validSelectedBookingExpected = {
-  riderId: "rider-1",
-  driverId: "driver-1",
   unionId: "union-1",
   pickup: "KPHB",
   dropoff: "HITEC City",
@@ -146,8 +144,6 @@ const validSelectedBookingExpected = {
 
 const validSelectedBookingResponse = {
   rideId: "RIDE-SEL-0123456789",
-  riderId: "rider-1",
-  driverId: "driver-1",
   unionId: "union-1",
   pickup: "KPHB",
   dropoff: "HITEC City",
@@ -198,8 +194,6 @@ test("selected booking response matches the authenticated Rider, selected Driver
 });
 
 for (const [name, override] of [
-  ["Rider identity", { riderId: "another-rider" }],
-  ["Driver identity", { driverId: "another-driver" }],
   ["Union identity", { unionId: "another-union" }],
   ["pickup", { pickup: "Other pickup" }],
   ["destination", { dropoff: "Other destination" }],
@@ -227,6 +221,18 @@ for (const [name, override] of [
   });
 }
 
+
+
+test("RIDER-BOOKING-RESPONSE-006: role-scoped API response needs no private RiderId or DriverId", () => {
+  const normalized = normalizeRiderSelectedBookingResponse(validSelectedBookingResponse, validSelectedBookingExpected);
+  assert.ok(normalized);
+  assert.equal("riderId" in normalized, false);
+  assert.equal("driverId" in normalized, false);
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /riderId:riderIdForRequest,driverId:selectedDriverIdForRequest/);
+  assert.match(source, /const riderIdForRequest=user\?\.id\?\?""/);
+  assert.match(source, /const selectedDriverIdForRequest=selectedDriver\.driverId/);
+});
 test("selected booking response exposes Driver coordinates only while an active ride shares location", () => {
   const active = normalizeRiderSelectedBookingResponse({
     ...validSelectedBookingResponse,
