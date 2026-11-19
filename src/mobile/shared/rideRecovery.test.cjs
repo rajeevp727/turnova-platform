@@ -1,16 +1,71 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { applyRideStatusUpdate, findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
+const { applyRideStatusUpdate, findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, normalizeRiderRideHistory, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
 
-test("Rider ride-history shape accepts an empty list and uniquely identified records", () => {
-  assert.equal(isRiderRideHistoryShapeValid([]), true);
-  assert.equal(isRiderRideHistoryShapeValid([
-    { rideId: "ride-1", status: "Completed" },
-    { rideId: "ride-2", status: "FutureServerStatus" }
-  ]), true);
+const validHistoryItem = (overrides = {}) => ({
+  rideId: "ride-1",
+  pickup: "Nizampet",
+  dropoff: "HITEC City",
+  passengers: 2,
+  serviceClass: "cab",
+  status: "Completed",
+  requestedAt: "2026-11-19T00:00:00Z",
+  acceptedAt: null,
+  stops: [],
+  ...overrides
 });
 
-test("Rider ride-history shape rejects malformed rows, invalid IDs and duplicate IDs", () => {
+test("RIDER-HISTORY-014: normalize empty and valid Rider history while preserving legacy service classes", () => {
+  assert.deepEqual(normalizeRiderRideHistory([]), []);
+  const normalized = normalizeRiderRideHistory([
+    validHistoryItem({ riderId: "private-rider", driverId: "private-driver", phoneNumber: "+910000000000", pickupLatitude: 17.4 }),
+    validHistoryItem({ rideId: "legacy-scooty", serviceClass: "Scooty" }),
+    validHistoryItem({ rideId: "legacy-bike", serviceClass: "Bike" }),
+    validHistoryItem({ rideId: "legacy-auto", serviceClass: "Auto" })
+  ]);
+  assert.ok(normalized);
+  assert.equal(normalized.length, 4);
+  assert.equal(normalized[0].serviceClass, "cab");
+  assert.equal(normalized[1].serviceClass, "Scooty");
+  assert.equal(normalized[2].serviceClass, "Bike");
+  assert.equal(normalized[3].serviceClass, "Auto");
+  assert.deepEqual(Object.keys(normalized[0]).sort(), [
+    "acceptedAt", "dropoff", "passengers", "pickup", "requestedAt",
+    "rideId", "serviceClass", "status", "stops"
+  ]);
+  assert.equal(normalized[0].riderId, undefined);
+  assert.equal(normalized[0].driverId, undefined);
+  assert.equal(normalized[0].phoneNumber, undefined);
+  assert.equal(isRiderRideHistoryShapeValid(normalized), true);
+});
+
+test("RIDER-HISTORY-014: malformed display fields use safe fallbacks and unknown states fail closed", () => {
+  const normalized = normalizeRiderRideHistory([validHistoryItem({
+    pickup: { unexpected: "private" },
+    dropoff: "  ",
+    passengers: "two",
+    serviceClass: "bike<script>",
+    status: "FutureServerStatus",
+    requestedAt: "not-a-date",
+    acceptedAt: "not-a-date",
+    stops: { unexpected: true },
+    riderId: "private-rider"
+  })]);
+  assert.deepEqual(normalized, [{
+    rideId: "ride-1",
+    pickup: "Pickup unavailable",
+    dropoff: "Drop-off unavailable",
+    passengers: null,
+    serviceClass: "unknown",
+    status: "Unknown",
+    requestedAt: "",
+    acceptedAt: null,
+    stops: []
+  }]);
+  assert.equal(hasUnresolvedRiderRideHistory(normalized), true);
+});
+
+test("Rider ride-history normalization rejects invalid and duplicate ride identities", () => {
   for (const invalid of [
     null,
     {},
@@ -19,11 +74,12 @@ test("Rider ride-history shape rejects malformed rows, invalid IDs and duplicate
     [42],
     [[]],
     [{}],
-    [{ rideId: "" }],
-    [{ rideId: " ride-1" }],
-    [{ rideId: "ride-1 " }],
-    [{ rideId: "ride-1" }, { rideId: "ride-1" }]
+    [validHistoryItem({ rideId: "" })],
+    [validHistoryItem({ rideId: " ride-1" })],
+    [validHistoryItem({ rideId: "ride-1 " })],
+    [validHistoryItem({ rideId: "ride-1" }), validHistoryItem({ rideId: "ride-1" })]
   ]) {
+    assert.equal(normalizeRiderRideHistory(invalid), null);
     assert.equal(isRiderRideHistoryShapeValid(invalid), false);
   }
 });
@@ -231,12 +287,12 @@ test("RIDER-HISTORY-012: Rider hydration checks all lifecycle values before deta
   const end = source.indexOf("useEffect(()=>", start);
   assert.ok(start >= 0 && end > start);
   const hydration = source.slice(start, end);
-  const shape = hydration.indexOf("isRiderRideHistoryShapeValid(historyResponse)");
+  const normalized = hydration.indexOf("normalizeRiderRideHistory(historyResponse)");
   const unresolved = hydration.indexOf("hasUnresolvedRiderRideHistory(history)");
   const active = hydration.indexOf('findActiveRide(history, "rider")');
   const detail = hydration.indexOf('apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId))');
   const loaded = hydration.indexOf("setActiveRideStateLoaded(true)");
-  assert.ok(shape >= 0 && unresolved > shape && active > unresolved);
+  assert.ok(normalized >= 0 && unresolved > normalized && active > unresolved);
   assert.ok(detail > active && loaded > detail);
   assert.match(hydration, /if\(hasUnresolvedRiderRideHistory\(history\)\)\{[\s\S]*?setRideHistory\(history\);[\s\S]*?Booking remains disabled/);
 });

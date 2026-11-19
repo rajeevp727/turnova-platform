@@ -1,8 +1,24 @@
 export type RideRecoveryRole = "rider" | "driver";
 
+export interface RiderRideHistoryRecord {
+  rideId: string;
+  pickup: string;
+  dropoff: string;
+  passengers: number | null;
+  serviceClass: string;
+  status: string;
+  requestedAt: string;
+  acceptedAt: string | null;
+  stops: string[];
+}
+
+export function normalizeRiderRideHistory(
+  history: unknown
+): readonly RiderRideHistoryRecord[] | null;
+
 export function isRiderRideHistoryShapeValid(
   history: unknown
-): history is readonly { rideId: string; status?: unknown }[];
+): boolean;
 
 export function hasUnresolvedRiderRideHistory(
   history: unknown

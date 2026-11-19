@@ -25,18 +25,71 @@ const KNOWN_RIDE_STATUSES = new Set([
   "Accepted", "Arrived", "InProgress", "Completed", "Cancelled", "Expired"
 ]);
 
-function isRiderRideHistoryShapeValid(history) {
-  if (!Array.isArray(history)) return false;
+function isSafeHistoryText(value, maximumLength = 1000) {
+  return typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.length <= maximumLength &&
+    !/[\\u0000-\\u001f\\u007f-\\u009f]/.test(value);
+}
+
+function normalizeRiderRideHistory(history) {
+  if (!Array.isArray(history)) return null;
 
   const seenRideIds = new Set();
-  for (const ride of history) {
-    if (!ride || typeof ride !== "object" || Array.isArray(ride)) return false;
-    if (typeof ride.rideId !== "string" || ride.rideId.length === 0 || ride.rideId !== ride.rideId.trim()) return false;
-    if (seenRideIds.has(ride.rideId)) return false;
-    seenRideIds.add(ride.rideId);
+  const normalized = [];
+  for (const item of history) {
+    if (!item || typeof item !== "object" || Array.isArray(item) ||
+        typeof item.rideId !== "string" ||
+        item.rideId.length === 0 ||
+        item.rideId.length > 128 ||
+        item.rideId !== item.rideId.trim() ||
+        /[\\u0000-\\u001f\\u007f-\\u009f]/.test(item.rideId) ||
+        seenRideIds.has(item.rideId)) return null;
+    seenRideIds.add(item.rideId);
+
+    const serviceClass = typeof item.serviceClass === "string" &&
+      /^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(item.serviceClass)
+      ? item.serviceClass
+      : "unknown";
+    const status = typeof item.status === "string" &&
+      item.status.length <= 64 &&
+      item.status === item.status.trim() &&
+      KNOWN_RIDE_STATUSES.has(item.status) &&
+      !/[\\u0000-\\u001f\\u007f-\\u009f]/.test(item.status)
+      ? item.status
+      : "Unknown";
+    const requestedAt = typeof item.requestedAt === "string" &&
+      isStrictIsoTimestampWithOffset(item.requestedAt)
+      ? item.requestedAt
+      : "";
+    const acceptedAt = typeof item.acceptedAt === "string" &&
+      isStrictIsoTimestampWithOffset(item.acceptedAt)
+      ? item.acceptedAt
+      : null;
+    const stops = Array.isArray(item.stops) && item.stops.length <= 10
+      ? item.stops.filter(stop => isSafeHistoryText(stop, 250)).map(stop => stop.trim())
+      : [];
+
+    normalized.push({
+      rideId: item.rideId,
+      pickup: isSafeHistoryText(item.pickup) ? item.pickup.trim() : "Pickup unavailable",
+      dropoff: isSafeHistoryText(item.dropoff) ? item.dropoff.trim() : "Drop-off unavailable",
+      passengers: Number.isInteger(item.passengers) && item.passengers >= 0 && item.passengers <= 8
+        ? item.passengers
+        : null,
+      serviceClass,
+      status,
+      requestedAt,
+      acceptedAt,
+      stops
+    });
   }
 
-  return true;
+  return normalized;
+}
+
+function isRiderRideHistoryShapeValid(history) {
+  return normalizeRiderRideHistory(history) !== null;
 }
 
 function isRiderRideDetailsResponseValid(response, expectedRideId) {
@@ -133,4 +186,4 @@ function shouldApplyRideStatusUpdate(currentRideId, updateRideId, isActive) {
     typeof updateRideId === "string" && updateRideId === currentRideId;
 }
 
-module.exports = { applyRideStatusUpdate, findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate };
+module.exports = { applyRideStatusUpdate, findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, normalizeRiderRideHistory, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate };
