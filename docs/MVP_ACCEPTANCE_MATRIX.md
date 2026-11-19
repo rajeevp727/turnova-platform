@@ -1,13 +1,17 @@
-# TurnOva MVP Acceptance Matrix
+**Last updated:** 2026-11-19. **Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`. **Current platform phase:** API — role-scoped ride response/privacy audit (reopened).
 
-**Last audited:** 2026-11-18; main HEAD `8af9f7a922b2b0d061ccb5e548cadef5f7153bbd`; PR #192 merged. PR #193 exact-head CI [#44312015022](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022) passed all 9 required API/Android jobs (3 iOS jobs correctly skipped): backend 758/758, Node 286/286, Python 48/48, both apps' Android debug/release APKs, package identity, emulator install/launch smoke and native API publish.
-**Current platform phase:** **Android — Rider first**. PR [#193](https://github.com/rajeevp727/turnova-platform/pull/193) adds Rider Activity/history accessibility, immutable agreement route/stops/creation-time display and exact known RideLifecycle cancellation-response validation. Exact-head CI #44312015022 passed; keep Rider active until review/merge and Rider-specific exit criteria are complete. Driver feature work remains gated; iOS remains gated until both Android apps exit.
-**Current platform phase:** **Android — Rider first**. API engineering exit criteria are complete. Current Rider PR is [#193](https://github.com/rajeevp727/turnova-platform/pull/193), branch `feat/android-rider-activity-history-accessibility`; it adds Activity/history accessibility, immutable agreement route/time display and exact RideLifecycle cancellation-response validation. Driver feature completion remains gated until Rider exits; iOS remains gated until both Android apps exit.
-**API phase exit:** source implementation for all in-scope API flows, deterministic backend/domain/persistence tests, API contracts/docs, auth/authorization/privacy checks, native non-container .NET 10 Release publish and exact-head API CI are complete. This does not claim live Cosmos, production identity/provider, hosting or production readiness.
-**PR #193 final exact-head evidence:** `b62706460c22e4fbb76121c86f3c623dfe0f6cf4` passed [CI #44312015022](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022): backend 758/758, Node 286/286, Python 48/48; all 9 required API/Android jobs passed, 3 iOS jobs skipped; both apps' Expo/config/TypeScript/Android bundle, debug/release APK, package identity and emulator install/launch smoke passed; native non-container API publish passed.
-**Current Android Rider work item:** Activity/history status messages, screen-reader summaries, immutable agreement route/stops/creation-time visibility, exact known RideLifecycle cancellation-response validation and deterministic tests RIDER-ACTIVITY-HISTORY-001..007. This PR changes Rider presentation/response validation only; no API, persistence, fare, payment, dispatch, FIFO or reconciliation policy changes.
-**Current Android Rider work item:** Activity/history presentation, screen-reader summaries, immutable agreement route/stops/creation-time visibility, known lifecycle response validation and deterministic tests RIDER-ACTIVITY-HISTORY-001..007. No API, persistence, fare, payment, dispatch, FIFO or reconciliation policy change.
-**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). A row is Verified only after every required acceptance item, including external gates, passes.
+**Active API branch:** `fix/api-role-scoped-ride-responses`, current code/test head `cccde26270d31aaea394b74500949171f72668d9`. PR #195 is being prepared for review after the full diff audit. **Rider PR #194 is Draft** while the API privacy gap is corrected; it contains Rider Android client work including history projection RIDER-HISTORY-014 and must not advance to Driver/iOS.
+
+**API gap found:** several Rider/Driver endpoints returned the full DemoRide aggregate, including actor IDs, dispatch-zone data, agreement persistence internals, audit events and reconciliation state. Agreement endpoints also returned internal RiderId/DriverId/UnionId and idempotency metadata. Client-side projection alone was insufficient because these fields crossed the API boundary.
+
+**Engineering change:** API now maps Rider detail/cancel/legacy-request responses to RiderRideDetailsResponse; selected booking responses to RiderSelectedBookingResponse (only authenticated rider/selected driver identifiers are retained for response validation); Driver action/history/legacy-available responses to DriverRideHistoryItem; and proposal/history endpoints to role-safe agreement response records. Driver coordinates are emitted only while the stored location-sharing flag and lifecycle status both permit sharing and the coordinates are valid. estimatedFareInr is always null. The aggregate, audit and unrelated actor fields are not serialized to Rider/Driver clients.
+
+**Tests added:** role-scoped Rider detail, selected booking, cancellation, legacy request, Driver action and legacy available-list responses; agreement POST/GET actor-field omission; hidden Driver coordinates when sharing is inactive; existing active-sharing location test remains in place. CI has not yet run on this API branch; open PR #195 to trigger the required API workflow.
+
+**API phase exit:** reopened. Do not advance to Android until API response/privacy contracts, deterministic tests, API docs, native non-container publish/build evidence, auth checks and API CI are complete. Live Cosmos ETag/multi-instance/restart, production identity, hosting and live providers remain external gates.
+
+**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). **Production readiness:** not established. No Docker/container work.
+
 
 ## PR #189 — exact-head Android verification (2026-11-18)
 
@@ -1719,3 +1723,14 @@ Artifacts: Rider debug APK [14430354079](https://github.com/rajeevp727/turnova-p
 The CI smoke is install/cold-launch/foreground-process evidence only. It does not prove full React Native UI interaction, TalkBack, live API/Cosmos/SignalR/TriSend, production authentication or physical-device acceptance. The inherited High picomatch GHSA-fc5q-39xc-vjpf remains unpatched in reviewed transitive Expo/Metro/Jest build tooling; it is disclosed, not represented as a clean audit or vulnerability fix.
 
 PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
+
+
+## API response privacy projection — 2026-11-19
+
+| Evidence ID | Engineering implementation/evidence | Acceptance effect |
+|---|---|---|
+| API-PRIV-001 | Rider detail, cancel and legacy request use RiderRideDetailsResponse; selected booking uses RiderSelectedBookingResponse with only the two client-verification actor IDs. No raw aggregate, dispatch zone, agreement collection/revision, payment reconciliation or audit event is returned. Fare remains null; Driver coordinates are gated by active sharing, lifecycle and coordinate validity. | API engineering evidence only; strict row verification remains unchanged until all 19 areas and external evidence pass. |
+| API-PRIV-002 | Driver accept/arrive/start/complete and legacy available-list responses use DriverRideHistoryItem; no RiderId/DriverId/dispatch zone/raw agreement collections/revision/audit events. Driver's own reconciliation/current-agreement summary remains available. | API engineering evidence only; strict row verification remains unchanged. |
+| API-PRIV-003 | Agreement proposal/history endpoints use response records without RiderId/DriverId/UnionId/idempotency key/request hash while retaining versioned terms and both confirmations. | API engineering evidence only; strict row verification remains unchanged. |
+
+Current phase is API — response privacy audit. PR #194 is Draft; PR #195 is being prepared. No Android or iOS completion work may begin until API exit criteria pass.

@@ -1,17 +1,14 @@
-# TurnOva Project Brain
-
-> Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
-> Full requirements remain in `PRD.md`, `docs/architecture.md`, and `docs/test-plan.md`.
-
-**Last verified:** 2026-11-18
+**Last verified:** 2026-11-19
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `8af9f7a922b2b0d061ccb5e548cadef5f7153bbd`; PR #192 merged after exact-head CI #44293755167 passed all 9 required API/Android jobs.
-**Latest PR #193 CI evidence:** final source/test head `b62706460c22e4fbb76121c86f3c623dfe0f6cf4` passed [CI #44312015022](https://github.com/rajeevp727/turnova-platform/actions/runs/44312015022): backend 758/758, Node 286/286, Python 48/48; all 9 required API/Android jobs, both apps' Expo/TypeScript/Android bundles, debug/release APKs, package identity, emulator install/launch smoke and native API publish passed; 3 iOS jobs correctly skipped.
-**Current Rider task:** Activity/history presentation, screen-reader summaries, immutable agreement route/stops/creation-time visibility, exact known RideLifecycle cancellation-response validation and deterministic cases RIDER-ACTIVITY-HISTORY-001..007. The exact source/test head passed CI #44312015022; docs are being synchronized on the same PR branch. Keep Driver feature work gated until Rider exits; keep iOS gated until both Android apps exit.
-**Current Rider task:** Activity/history presentation, screen-reader summaries, immutable agreement route/stops/creation-time visibility, exact known RideLifecycle cancellation-response validation and deterministic cases RIDER-ACTIVITY-HISTORY-001..007. The final source/test and documentation synchronization requires fresh exact-head CI; the previous run does not substitute.
-**API engineering exit:** in-scope API flows, deterministic backend/domain/persistence tests, API docs, auth/authorization/privacy checks and native publish are complete. Live Cosmos, production identity, private-media provider/scanning, hosting and product/legal decisions remain external; no production readiness is claimed.
-**AI-01:** approved supplemental API scope is implemented/tested and remains outside the 19-row denominator. Provider is disabled by default; no paid provider/model/credential selected.
+**Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`; PR #193 is merged.
+**Current phase:** API — role-scoped response/privacy audit reopened. A previous API exit claim is withdrawn until the response projection gap is closed and API checks pass.
+**Only active feature PR:** branch `fix/api-role-scoped-ride-responses`, current code/test head `cccde26270d31aaea394b74500949171f72668d9`; PR #195 is being prepared. PR #194 is Draft while Rider Android work waits for API exit.
+**Security finding:** raw DemoRide and internal agreement records were returned to Rider/Driver mobile endpoints, exposing unnecessary actor IDs, dispatch-zone data, agreement persistence internals, audit events and payment reconciliation to the wrong role.
+**Current fix:** RiderRideDetailsResponse/RiderSelectedBookingResponse, DriverRideHistoryItem and RideAgreementVersionResponse/RideAgreementProposalResponse now define role-scoped response contracts. Driver coordinates are lifecycle/sharing/coordinate gated; estimatedFareInr is always null. New API integration tests cover Rider, Driver, legacy and agreement projections plus location suppression.
+**CI:** no API branch workflow result is claimed yet; PR creation is required to trigger exact-head checks. **Review/merge:** do not self-approve; wait for required independent review and green final-head checks. No merge.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
+**External gates:** live Cosmos ETag/multi-instance/restart, production identity/hosting/provider access, approved radius/location freshness, routing/maps/SignalR, private-media scanning/retention/consent, support/reconciliation policy, Union legal approval, Android/iOS physical-device tests and signing.
+
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -3052,3 +3049,8 @@ The CI smoke is install/cold-launch/foreground-process evidence only. It does no
 PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
 
 **Next:** recheck PR #193 head/checks after this documentation-only synchronization. Merge only if the latest documentation-bearing head has all required API/Android jobs green and GitHub still permits the merge without self-approval or bypass. Re-read main after merge and continue Rider-only work. Strict acceptance remains 0/19 Verified; production readiness is not established.
+
+
+## API role-scoped response privacy audit — 2026-11-19
+
+API phase was reopened after an audit found that several Rider/Driver endpoints returned the full DemoRide aggregate and agreement records with internal actor/idempotency metadata. The current API branch replaces those responses with explicit Rider, Driver and agreement DTOs, preserving only the fields required by each role. Driver coordinates are returned only during permitted location sharing; platform fare remains null. New integration tests assert response allow-lists and legacy compatibility. Branch fix/api-role-scoped-ride-responses at cccde26270d31aaea394b74500949171f72668d9; PR #194 remains Draft. PR #195 must pass exact-head CI, native non-container publish, contract/auth and persistence checks before Android can resume.

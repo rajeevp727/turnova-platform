@@ -3511,3 +3511,13 @@ The CI smoke is install/cold-launch/foreground-process evidence only. It does no
 PR #193 remains open at the verified head. No approval was submitted; branch `main` is unprotected and the repository exposes no rulesets, so no mandatory review gate was observed. Merge still requires a fresh final-head check after documentation synchronization and must not use self-approval or bypass. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established. Keep Android Rider active; Driver feature work remains gated until Rider exits, and iOS remains gated until both Android apps exit.
 
 The deterministic cases RIDER-ACTIVITY-HISTORY-001..007 are recorded above. This run validates the API/Android CI pipeline and emulator install/launch only; it does not close manual accessibility, live-service or physical-device acceptance.
+
+
+## API role-scoped response projection and privacy tests — 2026-11-19
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| API-PRIV-001 | Rider response projection | Booking response contains only rider/selected-driver IDs needed for client verification and Rider-visible fields; detail/cancel/legacy request responses omit actor IDs, dispatch zone, agreement collections/revision, payment reconciliation and audit events; fare remains null. | API integration | P0 |
+| API-PRIV-002 | Driver response projection | Accept/arrive/start/complete and legacy available-list responses omit RiderId, DriverId, dispatch zone, raw agreement collections/revision and audit events while retaining Driver-visible route/state/current agreement/payment report data. | API integration | P0 |
+| API-PRIV-003 | Agreement response projection | POST proposal, idempotent replay and GET history omit RiderId, DriverId, UnionId, idempotency key and request hash; preserve version, amount, currency, route/stops, proposer and both confirmation timestamps. | API integration | P0 |
+| API-PRIV-004 | Driver location privacy | Driver coordinates/capture/update timestamps are null unless the persisted sharing flag and ride lifecycle both permit sharing and coordinates are valid; valid active-sharing coordinates remain visible to the owning Rider. | API integration | P0 |

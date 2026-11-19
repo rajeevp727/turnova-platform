@@ -183,3 +183,15 @@ AI-01 is an approved supplemental requirement and remains outside the 19-row acc
 ## API engineering phase exit — 2026-11-18
 
 The API engineering phase is complete. All in-scope API flows, deterministic backend/domain/persistence tests, auth/authorization/privacy checks, API contracts/docs, native non-container .NET 10 Release publish and exact-head CI are present. This is not strict acceptance or production readiness. Live Cosmos ETag/multi-instance/restart, production JWT/TriSend identity, private object storage/scanning/managed identity, consent/retention/deletion, maps/realtime providers, product support/dispatch/reconciliation policies, legal terms and hosted API remain external. Android is now the active engineering phase; iOS remains gated until both Android apps exit.
+
+
+## Role-scoped ride response contracts (2026-11-19)
+
+Mobile-facing ride endpoints return explicit role-scoped DTOs rather than the internal DemoRide aggregate:
+
+- Rider POST /api/v1/rider/bookings returns RiderSelectedBookingResponse. It includes RiderId and the selected DriverId only because the current Rider client verifies the authenticated owner and explicitly selected driver against the response. It omits DispatchZoneId, agreement collections/revision, payment reconciliation and audit events.
+- Rider GET /api/v1/rides/{rideId}, POST /api/v1/rides/{rideId}/cancel, and the legacy POST /api/v1/rides/request return RiderRideDetailsResponse. It omits RiderId, DriverId, DispatchZoneId, agreement persistence internals, payment reconciliation and audit events. Pickup coordinates are returned only when valid. Driver coordinates and their timestamps are returned only when the stored sharing flag and lifecycle status permit sharing and the coordinates are valid. EstimatedFareInr is always null.
+- Driver POST /api/v1/rides/{rideId}/accept, /arrive, /start and /complete, plus the legacy GET /api/v1/driver/rides/available, return DriverRideHistoryItem. It omits RiderId, DriverId, DispatchZoneId, raw agreement collections/revision and audit events while retaining the Driver-visible route/status, current agreement summary and reconciliation record.
+- GET /api/v1/rides/{rideId}/agreements and POST /api/v1/rides/{rideId}/agreements return RideAgreementVersionResponse / RideAgreementProposalResponse. They expose versioned terms and both confirmations without actor IDs, UnionId, idempotency key or request hash.
+
+These projections reduce API disclosure; they do not replace authorization. Every route retains its existing Rider/Driver role and ownership checks. API integration tests cover both role projections, legacy compatibility, agreement responses and location-sharing suppression. This API phase remains open until exact-head CI, native non-container .NET publish, API contract/auth tests and persistence/repository evidence pass. Live Cosmos ETag/multi-instance/restart and production integrations remain external gates.
