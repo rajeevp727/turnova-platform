@@ -3048,7 +3048,10 @@ public sealed partial class RideApiIntegrationTests
 
         var cancelled = await rider.PostAsync($"/api/v1/rides/{cancelBefore.RideId}/cancel", null);
         Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
-        Assert.Equal("Cancelled", (await ReadRideAsync(cancelled)).Status);
+        using var cancelledJson = JsonDocument.Parse(await cancelled.Content.ReadAsStringAsync());
+        Assert.Equal("Cancelled", cancelledJson.RootElement.GetProperty("status").GetString());
+        AssertNoInternalRideAggregateFields(cancelledJson.RootElement);
+        AssertNoRideActorIdentifiers(cancelledJson.RootElement);
 
         var secondRide = await CreateRideAsync(rider, "request-cancel-after-001");
         await driver.PostAsync($"/api/v1/rides/{secondRide.RideId}/accept", null);
@@ -4417,6 +4420,10 @@ public sealed partial class RideApiIntegrationTests
         var rideId = json.RootElement.GetProperty("rideId").GetString()!;
         Assert.Equal("Negotiating", json.RootElement.GetProperty("status").GetString());
         Assert.Equal("selected-booking-union", json.RootElement.GetProperty("unionId").GetString());
+        Assert.Equal("selected-booking-rider", json.RootElement.GetProperty("riderId").GetString());
+        Assert.Equal("selected-booking-driver", json.RootElement.GetProperty("driverId").GetString());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("estimatedFareInr").ValueKind);
+        AssertNoInternalRideAggregateFields(json.RootElement);
         Assert.Equal(2, json.RootElement.GetProperty("stops").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("driverLatitude").ValueKind);
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("driverLongitude").ValueKind);
@@ -6743,9 +6750,22 @@ public sealed partial class RideApiIntegrationTests
             Content = JsonContent.Create(new { amount = 250m, currency = "INR" })
         };
         request.Headers.Add("Idempotency-Key", "agreement-private-001");
-        Assert.Equal(HttpStatusCode.Created, (await rider.SendAsync(request)).StatusCode);
+        using var proposal = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, proposal.StatusCode);
+        using var proposalJson = JsonDocument.Parse(await proposal.Content.ReadAsStringAsync());
+        AssertNoAgreementActorIdentifiers(proposalJson.RootElement.GetProperty("agreement"));
+
+        using var riderHistoryResponse = await rider.GetAsync($"/api/v1/rides/{rideId}/agreements");
+        Assert.Equal(HttpStatusCode.OK, riderHistoryResponse.StatusCode);
+        using var riderHistory = JsonDocument.Parse(await riderHistoryResponse.Content.ReadAsStringAsync());
+        AssertNoAgreementActorIdentifiers(Assert.Single(riderHistory.RootElement.EnumerateArray()));
+
+        using var driverHistoryResponse = await driver.GetAsync($"/api/v1/rides/{rideId}/agreements");
+        Assert.Equal(HttpStatusCode.OK, driverHistoryResponse.StatusCode);
+        using var driverHistory = JsonDocument.Parse(await driverHistoryResponse.Content.ReadAsStringAsync());
+        AssertNoAgreementActorIdentifiers(Assert.Single(driverHistory.RootElement.EnumerateArray()));
+
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/v1/rides/{rideId}/agreements")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await driver.GetAsync($"/api/v1/rides/{rideId}/agreements")).StatusCode);
     }
 
 
@@ -7584,7 +7604,137 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
     }
 
-    private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key)
+    
+    [Fact]
+    public async Task RiderRideDetailsResponseIsMinimalAndSuppressesDriverCoordinatesWhenSharingIsInactive()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "ride-details-private-rider");
+        const string rideId = "RIDE-DETAILS-PRIVATE";
+        SeedAgreementRide(factory, rideId, "ride-details-private-rider", "ride-details-private-driver");
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var now = DateTimeOffset.UtcNow;
+        rides[rideId] = rides[rideId] with
+        {
+            DispatchZoneId = "private-dispatch-zone",
+            EstimatedFareInr = 999m,
+            DriverLatitude = 17.496,
+            DriverLongitude = 78.402,
+            LocationUpdatedAt = now,
+            DriverLocationCapturedAtUtc = now,
+            LocationSharingActive = false,
+            AgreementStateRevision = 12
+        };
+
+        using var response = await rider.GetAsync($"/api/v1/rides/{rideId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var body = json.RootElement;
+
+        Assert.Equal(rideId, body.GetProperty("rideId").GetString());
+        Assert.Equal("KPHB", body.GetProperty("pickup").GetString());
+        Assert.Equal("HITEC City", body.GetProperty("dropoff").GetString());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("estimatedFareInr").ValueKind);
+        Assert.Equal(17.493, body.GetProperty("pickupLatitude").GetDouble(), 6);
+        Assert.Equal(78.399, body.GetProperty("pickupLongitude").GetDouble(), 6);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("driverLatitude").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("driverLongitude").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("locationUpdatedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("driverLocationCapturedAtUtc").ValueKind);
+        Assert.False(body.GetProperty("locationSharingActive").GetBoolean());
+        AssertNoInternalRideAggregateFields(body);
+        AssertNoRideActorIdentifiers(body);
+        Assert.False(body.TryGetProperty("dispatchZoneId", out _));
+        Assert.False(body.TryGetProperty("agreementStateRevision", out _));
+    }
+
+    [Fact]
+    public async Task DriverRideActionResponsesUseRoleScopedProjectionWithoutRiderOrAggregateIdentifiers()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "response-projection-driver";
+        const string unionId = "response-projection-union";
+        using var rider = factory.CreateClient("Rider", "response-projection-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        var rideId = await CreateSelectedRideWithConfirmedAgreementAsync(
+            factory, rider, driver, driverId, unionId, "response-projection-booking", 420m);
+
+        async Task AssertDriverResponse(HttpResponseMessage response, string expectedStatus)
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(rideId, json.RootElement.GetProperty("rideId").GetString());
+            Assert.Equal(expectedStatus, json.RootElement.GetProperty("status").GetString());
+            AssertNoInternalRideAggregateFields(json.RootElement);
+            AssertNoRideActorIdentifiers(json.RootElement);
+        }
+
+        await AssertDriverResponse(
+            await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null), "Accepted");
+        await AssertDriverResponse(
+            await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null), "Arrived");
+        await AssertDriverResponse(
+            await driver.PostAsync($"/api/v1/rides/{rideId}/start", null), "InProgress");
+        await AssertDriverResponse(
+            await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null), "Completed");
+    }
+
+    [Fact]
+    public async Task LegacyRiderRequestResponseIsProjectedWithoutAggregateOrActorIdentifiers()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: true);
+        using var rider = factory.CreateClient("Rider", "legacy-response-projection-rider");
+        using var request = CreateRideRequest("legacy-response-projection");
+        using var response = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertNoInternalRideAggregateFields(json.RootElement);
+        AssertNoRideActorIdentifiers(json.RootElement);
+    }
+
+    [Fact]
+    public async Task LegacyDriverAvailableRideListUsesDriverProjectionWithoutRiderIdentifiers()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: true);
+        using var rider = factory.CreateClient("Rider", "legacy-driver-list-rider");
+        using var driver = factory.CreateClient("Driver", "legacy-driver-list-driver");
+        await EnqueueLegacyDriverAsync(factory, "legacy-driver-list-driver");
+        var ride = await CreateRideAsync(rider, "legacy-driver-list-booking");
+
+        using var response = await driver.GetAsync("/api/v1/driver/rides/available");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var item = Assert.Single(json.RootElement.EnumerateArray());
+        Assert.Equal(ride.RideId, item.GetProperty("rideId").GetString());
+        AssertNoInternalRideAggregateFields(item);
+        AssertNoRideActorIdentifiers(item);
+    }
+
+    private static void AssertNoInternalRideAggregateFields(JsonElement payload)
+    {
+        foreach (var property in new[]
+        {
+            "dispatchZoneId", "agreementVersions", "agreementConfirmations",
+            "agreementStateRevision", "auditEvents"
+        })
+            Assert.False(payload.TryGetProperty(property, out _), $"Response unexpectedly exposed {property}.");
+    }
+
+    private static void AssertNoRideActorIdentifiers(JsonElement payload)
+    {
+        Assert.False(payload.TryGetProperty("riderId", out _), "Response unexpectedly exposed riderId.");
+        Assert.False(payload.TryGetProperty("driverId", out _), "Response unexpectedly exposed driverId.");
+    }
+
+    private static void AssertNoAgreementActorIdentifiers(JsonElement payload)
+    {
+        AssertNoRideActorIdentifiers(payload);
+        foreach (var property in new[] { "unionId", "idempotencyKey", "requestHash" })
+            Assert.False(payload.TryGetProperty(property, out _), $"Agreement response unexpectedly exposed {property}.");
+    }
+
+private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key)
     {
         using var response = await rider.SendAsync(CreateRideRequest(key));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

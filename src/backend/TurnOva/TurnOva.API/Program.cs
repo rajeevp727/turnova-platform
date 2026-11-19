@@ -3769,7 +3769,7 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         {
             var existing = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
             var existingRide = await FindRideAsync(existing.Resource.rideId, ct);
-            return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(existingRide);
+            return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(ToRiderRideDetailsResponse(existingRide));
         }
     }
 
