@@ -13,10 +13,14 @@ function isSafeTrimmedText(value, maxLength = 256) {
     !CONTROL_CHARACTERS.test(value);
 }
 
+function isValidOptionalTimestamp(value) {
+  return value === null || value === undefined ||
+    (isSafeTrimmedText(value, 64) && isStrictIsoTimestampWithOffset(value));
+}
+
 function normalizeOptionalTimestamp(value) {
   if (value === null || value === undefined) return null;
-  if (!isSafeTrimmedText(value, 64) || !isStrictIsoTimestampWithOffset(value)) return null;
-  return value;
+  return isValidOptionalTimestamp(value) ? value : null;
 }
 
 const NEGOTIATION_STATUSES = new Set(["Negotiating", "AgreementConfirmed"]);
@@ -42,6 +46,9 @@ function normalizeCoordinate(value, minimum, maximum) {
 function normalizeRiderSelectedBookingResponse(response, expected) {
   const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
   if (!isRecord(response) || !isRecord(expected)) return null;
+  for (const field of ["acceptedAt", "locationUpdatedAt", "locationCapturedAtUtc", "driverLocationCapturedAtUtc"]) {
+    if (!isValidOptionalTimestamp(response[field])) return null;
+  }
 
   const expectedStops = expected.stops;
   if (!isSafeTrimmedText(expected.riderId) ||
@@ -77,8 +84,8 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
       response.stops.length !== expectedStops.length ||
       response.stops.some((stop, index) =>
         !isSafeTrimmedText(stop, 250) || stop !== expectedStops[index]) ||
-      !isSafeTrimmedText(response.unionName) ||
-      !isSafeTrimmedText(response.driverDisplayName) ||
+      !isSafeTrimmedText(response.unionName, 120) ||
+      !isSafeTrimmedText(response.driverDisplayName, 120) ||
       !isSafeTrimmedText(response.driverVehicleMake, 60) ||
       !isSafeTrimmedText(response.driverVehicleModel, 60) ||
       !Number.isFinite(response.driverDistanceToPickupKm) ||
