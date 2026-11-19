@@ -3123,6 +3123,8 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 | COSMOS-STORE-002 | Duplicate support item | Same content replays; different content conflicts; a missing item after conflict fails closed | Repository contract | P0 |
 | COSMOS-STORE-003 | Ride offer state replacement | Cosmos adapter sends the expected ETag as IfMatchEtag | Repository contract | P0 |
 | COSMOS-STORE-004 | Driver/Rider reservation acquisition | Reservation and append-only audit event are created in one same-partition transactional batch | Repository contract | P0 |
+| COSMOS-STORE-005 | Cosmos RideOffer create returns HTTP 409 | Create-if-absent returns false, clears any client ETag, uses the rideId partition and does not overwrite the existing aggregate; non-conflict Cosmos failures propagate | `CosmosAdapterContractTests.RideOfferCreateConflictReturnsFalseWithoutOverwritingTheExistingAggregate`, `RideOfferCreatePropagatesNonConflictCosmosFailures` | P0 |
+| COSMOS-STORE-006 | Cosmos RideOffer replacement returns HTTP 412 or 404 | Stale/missing replacement returns false and the expected ETag is sent as `IfMatchEtag` | `CosmosAdapterContractTests.RideOfferReplacementReturnsFalseForStaleEtagOrMissingItem` | P0 |
 | COSMOS-MIG-006 | Migration schema contract | Every migration ID is unique and every declared container/partition-key pair matches the deterministic schema contract | Migration contract | P0 |
 
 Live Cosmos ETag contention, multi-instance migration lease recovery, restart/crash recovery, cross-partition query/index/RU behaviour and production retention remain external Cosmos integration gates.
