@@ -3751,3 +3751,12 @@ The API currently allows up to 1,000 output characters and returns only the appr
 ## PR #194 exact-head Android verification — 2026-11-19
 
 The documentation-bearing head 8caf2c57f85afa5ba8e7c0aa09ed65d4a8c90661 passed [CI #44463524066](https://github.com/rajeevp727/turnova-platform/actions/runs/44463524066). All 9 required API/Android jobs passed; iOS build/simulator jobs were skipped by the Android-first platform gate. Evidence: backend .NET 10 Release 758/758; shared Node 383/383; Python harness 48/48; Rider/Driver Expo config, TypeScript checks and Android JS bundles; both native Android debug APKs, standalone release APKs, embedded package identities and emulator install/launch smoke. API native non-container publish passed. Artifacts: API 14500847639; Rider debug/release/smoke 14501631319 / 14501538304 / 14501168807; Driver debug/release/smoke 14501745671 / 14500674581 / 14501946754. Both app npm audits reported 0 critical, 0 high, 11 moderate and 0 low package nodes. Driver app build/smoke is unchanged-app regression evidence, not Driver feature completion. Emulator smoke is install/cold-launch evidence only, not full UI/TalkBack, live API/Cosmos/SignalR/TriSend or physical-device acceptance. A documentation sync commit follows; re-run exact-head CI on that new head.
+
+
+## Rider location suspension when history cannot be verified — PR #194 (2026-11-19)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-LOCATION-UI-007 | History/detail verification failure | If the current Rider history/detail request fails, is malformed or has an unresolved lifecycle, clear cached Driver coordinates and local sharing permission while preserving ride/history context. Keep booking disabled. Only a later validated server snapshot can restore Driver location visibility. A stale request/session must not clear a newer session. | Automated Node helper + App source wiring | P0 |
+
+This is client-side fail-closed visibility behavior. The API remains authoritative for location-sharing permission and ride state; no location-freshness threshold is inferred.
