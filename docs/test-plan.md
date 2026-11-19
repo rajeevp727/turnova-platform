@@ -580,6 +580,8 @@ Cross-document atomicity, outbox retries, and next-driver progression after reje
 | OFFER-REJECT-001 | Assigned driver rejects a pending, unexpired offer | Queue rotation uses the offer ID; offer and current attempt become Rejected | API/store | P0 |
 | OFFER-REJECT-002 | Another driver rejects the offer | HTTP 409; queue and offer remain unchanged | API/security | P0 |
 | OFFER-REJECT-003 | Driver retries after queue rotation succeeded but offer update failed | Same offer ID is recognized; driver is not rotated twice and offer can be resolved | API/store | P0 |
+
+Deterministic API failure-injection evidence: `RideApiIntegrationTests.LegacyOfferRejectionRetryAfterRotationInterruptionDoesNotRotateTwice` commits one in-memory queue rotation, simulates interruption before offer resolution, then retries the same endpoint and verifies one rotation audit, a resolved offer, one work-activity record and one post-resolution advancement signal. This is legacy FIFO compatibility coverage only; it does not enable customer-facing FIFO ranking/assignment or prove Cosmos multi-instance behavior.
 | OFFER-REJECT-004 | Driver rejects an expired or already-resolved offer | HTTP 409; no new queue rotation | API | P0 |
 | OFFER-REJECT-005 | Driver repeats a successfully recorded rejection | HTTP 204; no duplicate rotation or work activity | API | P1 |
 
