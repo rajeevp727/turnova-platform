@@ -3733,6 +3733,6 @@ The code/test head `b8559d47b60971e544300f1684c99992e7d2a464` passed [CI #444501
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| RIDER-DISPATCH-UI-001 | Rider help copy does not expose internal FIFO or queue concepts | Rider Profile help prompt refers to ride statuses, not queue/FIFO; Rider App source contains no customer-facing queue, FIFO or next-driver wording. Internal legacy FIFO compatibility is unchanged. | Automated Node source wiring | P1 |
+| RIDER-DISPATCH-UI-001 | Rider help copy does not advertise customer-facing FIFO ranking or automatic next-driver assignment | Rider Profile help prompt refers to ride statuses; Rider App source does not advertise FIFO ranking or automatic next-driver assignment. Approved explanations of legacy queue/availability states remain permissible under PRD §AI-01. Internal legacy FIFO compatibility is unchanged. | Automated Node source wiring | P1 |
 
-This protects the PRD boundary that FIFO fairness remains internal and unresolved. It does not alter Rider discovery ordering, explicit driver selection or server-owned assignment.
+This protects the PRD boundary that FIFO cannot rank Rider discovery or automatically assign/advance a Driver. It does not prohibit approved help explanations of legacy queue/availability states and does not alter discovery ordering, explicit driver selection or server-owned assignment.
