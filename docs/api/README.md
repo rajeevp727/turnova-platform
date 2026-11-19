@@ -115,7 +115,7 @@ Operations-only routes require `X-Driver-Admin-Key`; they are controlled integra
 - `GET /api/v1/ops/unions/{unionId}/drivers` — read the Union's assigned Driver members.
 - `PUT /api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review` — controlled Operations review path; public Rider visibility still requires approval by the Driver's current authenticated UnionManager.
 
-The Cosmos create-if-absent boundary treats only HTTP 409 as a duplicate result. Other provider failures propagate and are not misreported as duplicate Union codes. Deterministic mocked-container tests cover this mapping; live Cosmos cross-instance contention, ETag and restart validation remain external. Operations may manage Union records, assignments and history; public selfie approval remains reserved for the current authenticated UnionManager.
+The Cosmos create-if-absent boundary treats only HTTP 409 as a duplicate result. The in-memory adapter checks cancellation before ConcurrentDictionary.TryAdd; the Cosmos adapter forwards the caller's token. Other provider failures propagate and are not misreported as duplicate Union codes. Deterministic mocked-container tests cover these mappings; live Cosmos cross-instance contention, ETag and restart validation remain external.
 
 ### Legacy compatibility
 
@@ -192,9 +192,9 @@ The 16 KiB request-body limit is declared through endpoint metadata and document
 
 The API creates the `MigrationHistory` and `MigrationLocks` containers before applying ordered schema migrations. A runner acquires the `schema-migrations` lease using create-if-absent or expired-lease recovery with an ETag precondition. The lease lasts 30 minutes and is renewed every 10 minutes using the latest ETag while migrations run.
 
-Every renewal preserves the current owner and uses `IfMatchEtag`. If renewal loses its ETag race or the lease is replaced, the coordinator cancels the migration token. The runner checks cancellation after each migration before writing its history marker. The heartbeat is stopped and awaited before release; nested cleanup still attempts release with the latest ETag if a cancellation callback or heartbeat task faults; cleanup failures are not silently swallowed. Release cannot delete another instance's replacement lease.
+Every renewal preserves the current owner and uses `IfMatchEtag`. If renewal loses its ETag race or the lease is replaced, the coordinator cancels the migration token. The runner checks cancellation after each migration before writing its history marker. The heartbeat is stopped and awaited before release; nested cleanup still attempts release with the latest ETag if a cancellation callback or heartbeat task faults; cleanup failures are not silently swallowed. Release cannot delete another instance's replacement lease. A conditional replace that returns HTTP 404 (the lease disappeared after the point read) or HTTP 412 (the ETag changed) is treated as a lost race and the coordinator retries acquisition. If create reports HTTP 409 but the following point read returns 404, the coordinator waits the configured retry delay before retrying rather than hot-spinning. Non-race provider failures such as HTTP 503 propagate.
 
-Automated fake-store and Cosmos adapter tests cover expired-lease recovery, active-lease retry, renewal, lost-lease cancellation, ETag preconditions and latest-ETag release. Live multi-instance contention and process crash/restart recovery still require a configured Cosmos environment and are not claimed by deterministic tests.
+Automated fake-store and Cosmos adapter tests cover expired-lease recovery, active-lease retry, renewal, lost-lease cancellation, ETag preconditions and latest-ETag release, including 404/412 replace races, 503 propagation, disappearing-lease retry/backoff and cancellation-before-in-memory-Union-mutation. Live multi-instance contention and process crash/restart recovery still require a configured Cosmos environment and are not claimed by deterministic tests.
 
 
 ## Approved AI assistance — AI-01 supplemental API contract
@@ -214,7 +214,7 @@ AI-01 is an approved supplemental requirement and remains outside the 19-row acc
 
 ## API engineering phase exit — 2026-11-18 (superseded 2026-11-19)
 
-A prior audit marked the API engineering phase complete. That claim is withdrawn pending the role-scoped response correction in PR #195: mobile endpoints were returning the internal DemoRide aggregate and agreement persistence metadata. The API phase is reopened. Android must not resume until PR #195's exact-head CI, API contract/auth tests, native non-container .NET Release publish and persistence/repository evidence pass. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, private object storage/scanning/consent, product support/dispatch/reconciliation policies and legal terms remain external; no production readiness is claimed.
+The API engineering phase remains in_progress pending the sole ready API PR #197, independent human approval and a fresh main-branch exit audit. PR #195 already merged the role-scoped response correction, but its merge lacked independent review and remains a documented process exception. PR #197's latest source/test head 85c812068bda0f002b329560ec7a03ba0d208caf passed API-only CI #44616358336: 806/806 backend tests, native non-container .NET 10 Release linux-x64 publish and publish verifier. Android must not resume until PR #197 is independently reviewed/approved, merged and main is re-audited against the API exit criteria. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, private object storage/scanning/consent, product support/dispatch/reconciliation policies and legal terms remain external; no production readiness is claimed.
 
 
 ## Role-scoped ride response contracts (2026-11-19)
