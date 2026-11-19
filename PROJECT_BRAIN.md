@@ -3076,3 +3076,8 @@ This final tracker/API-document synchronization changes documentation only. The 
 
 
 **Latest exact-head checkpoint:** PR #195 head `38dc6d8eb4bdeec075ea7fe995f1d1f3b82fbf6f` passed [CI #44504446025](https://github.com/rajeevp727/turnova-platform/actions/runs/44504446025): scope/backend success, 763/763 tests, native non-container .NET 10 Release publish, verifier 11 negative fixtures plus valid fixture, artifact 14520060067. Mobile/Android/iOS jobs skipped by API phase gate. No source/test/phase-config changes after `ef1feddb`. PR #195 still requires independent human approval and merge before API phase exit.
+
+
+## API response minimization follow-up — 2026-11-19
+
+The Rider app's `Ride` contract and selected-booking flow do not consume `RiderId` or `DriverId` from the booking response. PR #195 therefore removes those two actor identifiers from `RiderSelectedBookingResponse`; the Rider already supplied the selected Driver in the booking request. API-PRIV-001 now asserts that the booking response omits both actor IDs. This is a response-only minimization; booking identity, ownership authorization, reservation and idempotency behavior are unchanged.

@@ -3517,7 +3517,7 @@ The deterministic cases RIDER-ACTIVITY-HISTORY-001..007 are recorded above. This
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| API-PRIV-001 | Rider response projection | Booking response contains only rider/selected-driver IDs needed for client verification and Rider-visible fields; detail/cancel/legacy request responses omit actor IDs, dispatch zone, agreement collections/revision, payment reconciliation and audit events; fare remains null. | API integration | P0 |
+| API-PRIV-001 | Rider response projection | Booking response contains Rider-visible booking and approved Cab/Union display fields only and omits RiderId/DriverId; detail/cancel/legacy request responses also omit actor IDs, dispatch zone, agreement collections/revision, payment reconciliation and audit events; fare remains null. | API integration | P0 |
 | API-PRIV-002 | Driver response projection | Accept/arrive/start/complete and legacy available-list responses omit RiderId, DriverId, dispatch zone, raw agreement collections/revision and audit events while retaining Driver-visible route/state/current agreement/payment report data. | API integration | P0 |
 | API-PRIV-003 | Agreement response projection | POST proposal, idempotent replay and GET history omit RiderId, DriverId, UnionId, idempotency key and request hash; preserve version, amount, currency, route/stops, proposer and both confirmation timestamps. | API integration | P0 |
 | API-PRIV-004 | Driver location privacy | Driver coordinates/capture/update timestamps are null unless the persisted sharing flag and ride lifecycle both permit sharing and coordinates are valid; valid active-sharing coordinates remain visible to the owning Rider. | API integration | P0 |
@@ -3527,7 +3527,7 @@ The deterministic cases RIDER-ACTIVITY-HISTORY-001..007 are recorded above. This
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| API-PRIV-001 | Rider response projection | Booking response contains only rider/selected-driver IDs needed for client verification and Rider-visible fields; detail/cancel/legacy request responses omit actor IDs, dispatch zone, agreement collections/revision, payment reconciliation and audit events; fare remains null. | API integration | P0 |
+| API-PRIV-001 | Rider response projection | Booking response contains Rider-visible booking and approved Cab/Union display fields only and omits RiderId/DriverId; detail/cancel/legacy request responses also omit actor IDs, dispatch zone, agreement collections/revision, payment reconciliation and audit events; fare remains null. | API integration | P0 |
 | API-PRIV-002 | Driver response projection | Accept/arrive/start/complete and legacy available-list responses omit RiderId, DriverId, dispatch zone, raw agreement collections/revision and audit events while retaining Driver-visible route/state/current agreement/payment report data. | API integration | P0 |
 | API-PRIV-003 | Agreement response projection | POST proposal, idempotent replay and GET history omit RiderId, DriverId, UnionId, idempotency key and request hash; preserve version, amount, currency, route/stops, proposer and both confirmation timestamps. | API integration | P0 |
 | API-PRIV-004 | Driver location privacy | Driver coordinates/capture/update timestamps are null unless the approved Union Cab snapshot, persisted sharing flag and ride lifecycle all permit sharing and coordinates are valid; valid active-sharing coordinates remain visible to the owning Rider. | API integration | P0 |

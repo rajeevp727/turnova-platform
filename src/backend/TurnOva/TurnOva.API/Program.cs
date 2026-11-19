@@ -4804,7 +4804,6 @@ RiderSelectedBookingResponse ToRiderSelectedBookingResponse(DemoRide ride)
 {
     var details = ToRiderRideDetailsResponse(ride);
     return new RiderSelectedBookingResponse(
-        ride.RiderId, ride.DriverId ?? string.Empty,
         details.RideId, details.Pickup, details.Dropoff, details.Passengers, details.Status,
         details.RequestedAt, details.EstimatedFareInr, details.PickupLatitude, details.PickupLongitude,
         details.DriverLatitude, details.DriverLongitude, details.AcceptedAt, details.LocationUpdatedAt,
@@ -5033,7 +5032,7 @@ public sealed record RiderRideDetailsResponse(
     string? DriverVehicleModel, double? DriverDistanceToPickupKm, string? UnionName,
     DateTimeOffset? DriverLocationCapturedAtUtc);
 public sealed record RiderSelectedBookingResponse(
-    string RiderId, string DriverId, string RideId, string Pickup, string Dropoff, int Passengers,
+    string RideId, string Pickup, string Dropoff, int Passengers,
     string Status, DateTimeOffset RequestedAt, decimal? EstimatedFareInr, double? PickupLatitude,
     double? PickupLongitude, double? DriverLatitude, double? DriverLongitude, DateTimeOffset? AcceptedAt,
     DateTimeOffset? LocationUpdatedAt, bool LocationSharingActive, string ServiceClass, string? UnionId,

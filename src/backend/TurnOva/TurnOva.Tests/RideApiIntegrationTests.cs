@@ -4420,10 +4420,9 @@ public sealed partial class RideApiIntegrationTests
         var rideId = json.RootElement.GetProperty("rideId").GetString()!;
         Assert.Equal("Negotiating", json.RootElement.GetProperty("status").GetString());
         Assert.Equal("selected-booking-union", json.RootElement.GetProperty("unionId").GetString());
-        Assert.Equal("selected-booking-rider", json.RootElement.GetProperty("riderId").GetString());
-        Assert.Equal("selected-booking-driver", json.RootElement.GetProperty("driverId").GetString());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("estimatedFareInr").ValueKind);
         AssertNoRiderAggregateFields(json.RootElement);
+        AssertNoRideActorIdentifiers(json.RootElement);
         Assert.Equal(2, json.RootElement.GetProperty("stops").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("driverLatitude").ValueKind);
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("driverLongitude").ValueKind);
