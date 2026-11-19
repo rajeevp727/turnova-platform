@@ -85,8 +85,7 @@ function getRiderTripActionProps(action, disabled, busy) {
 }
 
 function canDiscoverRiderTrip(pickup, dropoff, passengerCount) {
-  return typeof pickup === "string" && pickup.trim().length > 0 &&
-    typeof dropoff === "string" && dropoff.trim().length > 0 &&
+  return validateRiderBookingText(pickup, dropoff, "") === null &&
     Number.isInteger(passengerCount) && passengerCount >= 1 && passengerCount <= 6;
 }
 
@@ -95,10 +94,14 @@ function validateRiderBookingText(pickup, dropoff, stopsText) {
     return "Enter a pickup note or landmark.";
   if (pickup.trim().length > 250)
     return "Pickup note must be 250 characters or fewer.";
+  if (CONTROL_CHARACTERS.test(pickup))
+    return "Pickup note must not contain control characters.";
   if (typeof dropoff !== "string" || dropoff.trim().length === 0)
     return "Enter a destination note or landmark.";
   if (dropoff.trim().length > 250)
     return "Destination note must be 250 characters or fewer.";
+  if (CONTROL_CHARACTERS.test(dropoff))
+    return "Destination note must not contain control characters.";
   if (typeof stopsText !== "string")
     return "Optional stops must be entered as text.";
   const stops = stopsText.split(/\r?\n/).map(stop => stop.trim()).filter(Boolean);
@@ -106,6 +109,8 @@ function validateRiderBookingText(pickup, dropoff, stopsText) {
     return "Enter no more than 10 optional stops.";
   if (stops.some(stop => stop.length > 250))
     return "Each optional stop must be 250 characters or fewer.";
+  if (stops.some(stop => CONTROL_CHARACTERS.test(stop)))
+    return "Each optional stop must not contain control characters.";
   return null;
 }
 
