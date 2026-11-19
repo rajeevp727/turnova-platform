@@ -15,6 +15,7 @@ public static class UnionCreateIfAbsent
     {
         ArgumentNullException.ThrowIfNull(inMemoryUnions);
         ArgumentNullException.ThrowIfNull(union);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (unionContainer is null)
             return inMemoryUnions.TryAdd(union.UnionId, union);
