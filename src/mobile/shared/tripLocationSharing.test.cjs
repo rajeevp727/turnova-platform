@@ -197,6 +197,41 @@ test("Rider rejects mismatched ride, invalid coordinates and invalid timestamps"
   }), false);
 });
 
+test("RIDER-LOCATION-UI-008: reject impossible and timezone-less timestamps before location ordering", () => {
+  const currentCapture = {
+    rideId: "ride-strict-time",
+    status: "InProgress",
+    locationSharingActive: true,
+    locationCapturedAtUtc: "2026-11-08T12:00:10.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:11.000Z"
+  };
+  for (const locationCapturedAtUtc of [
+    "2026-02-30T12:00:00Z",
+    "2026-11-08T12:00:12",
+    "2026-11-08T12:00:12+05:60"
+  ]) {
+    assert.equal(shouldApplyTripLocationUpdate(currentCapture, {
+      rideId: "ride-strict-time",
+      latitude: 17.4,
+      longitude: 78.4,
+      locationCapturedAtUtc
+    }), false, locationCapturedAtUtc);
+  }
+
+  const currentReceipt = {
+    rideId: "ride-strict-receipt",
+    status: "Accepted",
+    locationSharingActive: true,
+    locationUpdatedAt: "2026-11-08T12:00:10.000Z"
+  };
+  assert.equal(shouldApplyTripLocationUpdate(currentReceipt, {
+    rideId: "ride-strict-receipt",
+    latitude: 17.4,
+    longitude: 78.4,
+    locationUpdatedAt: "2026-11-08T12:00:12"
+  }), false);
+});
+
 test("first capture watermark upgrades a legacy receipt-only snapshot without mixing clock semantics", () => {
   const legacy = {
     rideId: "ride-legacy",
