@@ -173,6 +173,178 @@ public sealed class CosmosAdapterContractTests
         batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task DriverReservationPromotionUsesObservedEtagAndAppendsAuditAtomically()
+    {
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        var reservation = new DriverRideReservation("driver-1", "ride-1", DateTimeOffset.UtcNow, expiresAt);
+        var read = new Mock<ItemResponse<DriverRideReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns("driver-reservation-etag");
+        var (container, batch, getPartitionKey) = CreateSuccessfulBatch();
+        container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
+                "driver-1",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        batch.Setup(value => value.ReplaceItem(
+                "driver-1",
+                It.IsAny<DriverRideReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosDriverRideReservationStore(container.Object)
+            .TryMakePermanentAsync("driver-1", "ride-1");
+
+        Assert.True(result);
+        Assert.Equal(new PartitionKey("driver-1"), getPartitionKey());
+        batch.Verify(value => value.ReplaceItem(
+            "driver-1",
+            It.Is<DriverRideReservation>(item =>
+                item.DriverId == "driver-1" && item.RideId == "ride-1" && item.ExpiresAtUtc is null),
+            It.Is<TransactionalBatchItemRequestOptions>(options =>
+                options.IfMatchEtag == "driver-reservation-etag")), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<DriverRideReservationAuditEvent>(item =>
+                item.EventType == DriverRideReservationAuditEventTypes.MadePermanent &&
+                item.PreviousExpiresAtUtc == expiresAt &&
+                item.ExpiresAtUtc is null),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DriverReservationReleaseUsesObservedEtagAndAppendsAuditAtomically()
+    {
+        var reservation = new DriverRideReservation("driver-1", "ride-1", DateTimeOffset.UtcNow);
+        var read = new Mock<ItemResponse<DriverRideReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns("driver-release-etag");
+        var (container, batch, getPartitionKey) = CreateSuccessfulBatch();
+        container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
+                "driver-1",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        batch.Setup(value => value.DeleteItem(
+                "driver-1",
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosDriverRideReservationStore(container.Object)
+            .TryReleaseAsync("driver-1", "ride-1");
+
+        Assert.True(result);
+        Assert.Equal(new PartitionKey("driver-1"), getPartitionKey());
+        batch.Verify(value => value.DeleteItem(
+            "driver-1",
+            It.Is<TransactionalBatchItemRequestOptions>(options =>
+                options.IfMatchEtag == "driver-release-etag")), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<DriverRideReservationAuditEvent>(item =>
+                item.EventType == DriverRideReservationAuditEventTypes.Released &&
+                item.DriverId == "driver-1" && item.ReservationId == "ride-1"),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RiderReservationPromotionUsesObservedEtagAndAppendsAuditAtomically()
+    {
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        var reservation = new RiderActiveBookingReservation(
+            "rider-1", "ride-1", "request-hash", DateTimeOffset.UtcNow, expiresAt);
+        var read = new Mock<ItemResponse<RiderActiveBookingReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns("rider-reservation-etag");
+        var (container, batch, getPartitionKey) = CreateSuccessfulBatch();
+        container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+                RiderActiveBookingReservation.DocumentId,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        batch.Setup(value => value.ReplaceItem(
+                RiderActiveBookingReservation.DocumentId,
+                It.IsAny<RiderActiveBookingReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosRiderActiveBookingReservationStore(container.Object)
+            .TryMakePermanentAsync("rider-1", "ride-1");
+
+        Assert.True(result);
+        Assert.Equal(new PartitionKey("rider-1"), getPartitionKey());
+        batch.Verify(value => value.ReplaceItem(
+            RiderActiveBookingReservation.DocumentId,
+            It.Is<RiderActiveBookingReservation>(item =>
+                item.RiderId == "rider-1" && item.RideId == "ride-1" && item.ExpiresAtUtc is null),
+            It.Is<TransactionalBatchItemRequestOptions>(options =>
+                options.IfMatchEtag == "rider-reservation-etag")), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<RiderActiveBookingReservationAuditEvent>(item =>
+                item.EventType == RiderActiveBookingReservationAuditEventTypes.MadePermanent &&
+                item.PreviousExpiresAtUtc == expiresAt &&
+                item.ExpiresAtUtc is null),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RiderReservationReleaseUsesObservedEtagAndAppendsAuditAtomically()
+    {
+        var reservation = new RiderActiveBookingReservation(
+            "rider-1", "ride-1", "request-hash", DateTimeOffset.UtcNow, null);
+        var read = new Mock<ItemResponse<RiderActiveBookingReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns("rider-release-etag");
+        var (container, batch, getPartitionKey) = CreateSuccessfulBatch();
+        container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+                RiderActiveBookingReservation.DocumentId,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        batch.Setup(value => value.DeleteItem(
+                RiderActiveBookingReservation.DocumentId,
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosRiderActiveBookingReservationStore(container.Object)
+            .TryReleaseAsync("rider-1", "ride-1");
+
+        Assert.True(result);
+        Assert.Equal(new PartitionKey("rider-1"), getPartitionKey());
+        batch.Verify(value => value.DeleteItem(
+            RiderActiveBookingReservation.DocumentId,
+            It.Is<TransactionalBatchItemRequestOptions>(options =>
+                options.IfMatchEtag == "rider-release-etag")), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<RiderActiveBookingReservationAuditEvent>(item =>
+                item.EventType == RiderActiveBookingReservationAuditEventTypes.Released &&
+                item.RiderId == "rider-1" && item.RideId == "ride-1"),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static RideOfferState CreateRideOfferState()
     {
         var offeredAt = DateTimeOffset.UtcNow;
