@@ -107,6 +107,9 @@ public sealed class CosmosMigrationLeaseCoordinator(
                     return recovered;
                 }
 
+                // Another runner changed or removed the expired lease after the point read.
+                // Back off before retrying create so repeated ETag races cannot spin tightly.
+                await delay.DelayAsync(options.RetryDelay, cancellationToken);
                 continue;
             }
 
