@@ -3158,3 +3158,8 @@ The union label helper now checks actual C0/C1 control characters; the regressio
 ## Union radio-group source assertion correction — PR #194 (2026-11-19)
 
 The failed check was a test regex escaping mismatch; the helper's direct assertions passed. Corrected the source-wiring expression in `c210d508b68d19564ecd9923bdc7551af8d6aa07`. Re-run exact-head CI; do not infer success from the partial prior run.
+
+
+## Rider active-booking recovery accessibility — PR #194 (2026-11-19)
+
+The Book screen's retry-status and View active ride actions now expose explicit accessible button names/hints and stable test IDs. Deterministic `RIDER-ACTIVE-BOOKING-UI-001` covers idle/busy helper state and source wiring. The retry still calls the existing authenticated server-history refresh; View active ride only switches to Activity. No booking, reservation, API, lifecycle, fare, Driver or iOS behavior changed. Android Rider remains the current platform phase; do not start Driver until Rider's implementation, tests, debug/release builds and emulator smoke exit. iOS remains gated behind both Android apps.
