@@ -3713,3 +3713,12 @@ The map remains rendered only while the server-authorised ride is actively shari
 | RIDER-HISTORY-012 | Mixed known and unknown lifecycle rows | If any history row has a missing or unknown lifecycle value, or more than one known active row exists, Rider preserves the returned rows for Activity but does not mark recovery successful or enable another booking. This includes legacy Offered records coexisting with a selected negotiation. | Automated Node unit + source wiring | P0 |
 
 This prevents a known active row from masking another unresolved record. The API remains authoritative; this client guard only fails closed until every returned lifecycle value is understood.
+
+## Rider discovery preflight and realtime location rehydration — PR #194 (2026-11-19)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-TRIP-INPUT-002 | Discovery trip-text preflight | Pickup and destination are non-empty and within 250 characters; no more than 10 optional stops are allowed, each within 250 characters. Invalid input is rejected before discovery requests GPS or calls the discovery API. | Automated Node source wiring | P1 |
+| RIDER-LOCATION-UI-006 | Rider status event refreshes location permission | After a matching authenticated RideStatusChanged event, Rider refreshes the server-owned ride history/detail before accepting Driver location updates. Location-sharing permission is read from the API snapshot, not inferred from a status-only event. | Automated Node source wiring | P1 |
+
+These are client preflight/recovery checks only. API lifecycle and location-sharing authorization remain authoritative; no product freshness threshold is inferred.
