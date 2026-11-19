@@ -3737,13 +3737,19 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
 
     var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+    var reservationKey = $"{riderId}:{keyId}";
     var rideId = $"RIDE-{Guid.NewGuid().ToString("N").ToUpperInvariant()}";
     var reservation = new RideIdempotencyRecord(keyId, riderId, rideId);
     if (idempotencyContainer is null)
     {
-        if (!idempotencyKeys.TryAdd($"{riderId}:{keyId}", rideId))
+        if (!idempotencyKeys.TryAdd(reservationKey, rideId))
         {
-            var existingId = idempotencyKeys[$"{riderId}:{keyId}"];
+            // The original request may release its reservation between TryAdd and this read.
+            // A missing key is a retryable in-flight/cleanup race, not an indexer exception.
+            if (!InMemoryRideIdempotencyReservations.TryGetRideId(
+                    idempotencyKeys, reservationKey, out var existingId))
+                return Results.Conflict(new { message = "The original request is still being processed. Retry shortly." });
+
             var existingRide = await FindRideAsync(
                 existingId, ct,
                 ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
@@ -3774,12 +3780,11 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
     };
     async Task ReleaseIdempotencyReservationAsync()
     {
-        var reservationKey = $"{riderId}:{keyId}";
         if (idempotencyContainer is null)
         {
-            if (idempotencyKeys.TryGetValue(reservationKey, out var currentRideId) &&
-                string.Equals(currentRideId, rideId, StringComparison.Ordinal))
-                idempotencyKeys.TryRemove(reservationKey, out _);
+            // Compare-and-remove the exact key/value pair atomically. A stale cleanup
+            // must never remove a newer request's replacement reservation.
+            InMemoryRideIdempotencyReservations.TryRemoveExact(idempotencyKeys, reservationKey, rideId);
             return;
         }
 
