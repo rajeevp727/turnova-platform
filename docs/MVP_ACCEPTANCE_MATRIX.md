@@ -1831,3 +1831,9 @@ The active Rider map now exposes an accessible name/hint and stable test ID; Dri
 ## PR #194 — mixed-status Rider history recovery (2026-11-19)
 
 Rider history recovery now checks every returned lifecycle value before resolving the active record. A missing or unknown status, or multiple known active rows, keeps recovery unresolved; the response remains available to Activity, but Book stays disabled. This prevents a legacy Offered record or a second active row from being masked by whichever record is selected first. Added RIDER-HISTORY-012 unit/source-wiring coverage. This is client-side fail-closed behavior under the existing Rider booking/history acceptance scope; no API, persistence, Driver, fare, payment or iOS behavior changed. No acceptance-row status changes; strict acceptance remains 0/19 Verified.
+
+## Latest Android Rider evidence — PR #194 (2026-11-19)
+
+- **RIDER-01 / trip input and discovery:** RIDER-TRIP-INPUT-002 verifies pickup, destination and optional-stop bounds are checked before discovery GPS/API work; RIDER-DISCOVERY-UI-001 verifies labelled per-Union radio-group semantics while preserving the first-three server-ordered Driver projection.
+- **TRIP-01 / tracking and recovery:** RIDER-LOCATION-UI-006 verifies a matching authenticated status event triggers a server-history/detail refresh before Rider relies on location-sharing permission. The status-only event is not treated as permission to expose GPS.
+- These are additional deterministic client-side evidence cases. No acceptance-row status changes: strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Physical-device accessibility, live SignalR/backplane, live Cosmos and approved location freshness remain external gates.
