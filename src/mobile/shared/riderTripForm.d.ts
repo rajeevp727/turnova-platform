@@ -1,5 +1,5 @@
 export type RiderTripField = "tripIntent" | "pickup" | "dropoff" | "stops" | "passengers";
-export type RiderTripAction = "draft" | "discover" | "requestDriver";
+export type RiderTripAction = "draft" | "discover" | "requestDriver" | "retryStatus" | "viewActiveRide";
 
 export interface RiderTripFieldProps {
   accessibilityLabel: string;
