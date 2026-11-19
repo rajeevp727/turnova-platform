@@ -121,8 +121,6 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, string>>());
-        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
-        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, string>>());
     }
 
     [Fact]
