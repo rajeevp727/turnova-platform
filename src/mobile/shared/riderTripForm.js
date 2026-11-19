@@ -170,6 +170,20 @@ function getVisibleUnionDrivers(drivers) {
   return Array.isArray(drivers) ? drivers.slice(0, 3) : [];
 }
 
+function getRiderUnionDriverGroupProps(unionName) {
+  const safeUnionName = typeof unionName === "string" &&
+    unionName.length > 0 &&
+    unionName.length <= 120 &&
+    unionName === unionName.trim() &&
+    !/[\\u0000-\\u001f\\u007f-\\u009f]/.test(unionName)
+    ? unionName
+    : "Approved";
+  return {
+    accessibilityRole: "radiogroup",
+    accessibilityLabel: safeUnionName + " union Cab drivers"
+  };
+}
+
 function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
   const name = typeof driver?.fullName === "string" && driver.fullName.trim()
     ? driver.fullName.trim()
@@ -203,6 +217,7 @@ module.exports = {
   normalizeRiderDiscoveryResponse,
   getVisibleUnionDrivers,
   getRiderDriverOptionProps,
+  getRiderUnionDriverGroupProps,
   getRiderTripActionProps,
   getRiderTripFieldProps
 };
