@@ -119,6 +119,8 @@ public sealed partial class RideApiIntegrationTests
         using var response = await rider.SendAsync(CreateRideRequest("legacy-fifo-staging-request"));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, string>>());
     }
 
     [Fact]
