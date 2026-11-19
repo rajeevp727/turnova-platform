@@ -1822,3 +1822,8 @@ The helper behavior passed CI; the single Node failure in #44441520440 was a dou
 ## PR #194 — Rider active-booking recovery accessibility (2026-11-19)
 
 The Book screen's unresolved-active-booking recovery controls now expose explicit accessible button labels and hints, with stable test IDs. “Retry active booking check” describes its server-owned history refresh; “View active ride” describes navigation to Activity and explicitly does not imply a new booking. Deterministic case `RIDER-ACTIVE-BOOKING-UI-001` verifies helper state and App wiring. This is a Rider UI/accessibility increment under the existing selected-booking/recovery acceptance scope; no API, persistence, lifecycle, reservation, fare, Driver or iOS behavior changed. Strict acceptance remains 0/19 Verified; this evidence does not close an acceptance row or establish production readiness.
+
+
+## PR #194 — Rider live trip-map accessibility (2026-11-19)
+
+The active Rider map now exposes an accessible name/hint and stable test ID; Driver and pickup markers have descriptions for assistive technology. Deterministic `RIDER-LOCATION-UI-005` checks the map/marker labels and preserves the existing pan-to-pause-follow handler. Existing map visibility and camera-follow guards remain unchanged. This is additional Android Rider evidence under TRIP-01; it does not close TRIP-01 or alter location authority. Strict acceptance remains 0/19 Verified; live SignalR/Cosmos/maps and physical-device accessibility remain external.
