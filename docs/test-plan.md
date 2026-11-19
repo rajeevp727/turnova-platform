@@ -230,7 +230,7 @@ The GitHub Actions workflow currently runs:
 - Driver app TypeScript typecheck.
 - Rider app TypeScript typecheck.
 
-**Important:** The CI workflow passing confirms compilation and the existing automated tests/typechecks only. The API integration, TriSend contract, mobile runtime, JWT security and end-to-end scenarios above still require automated coverage or execution against test environments. Cases marked Planned have not been executed.
+**Important:** A green CI run proves only the jobs and tests executed by that run. The backend suite includes deterministic API integration and JWT authorization coverage; it does not prove live TriSend/provider identity, live Cosmos multi-instance/restart, mobile runtime, physical-device or production end-to-end behavior. Rows marked Planned are not implemented or passed. Record external evidence separately.
 
 ## 9. Recommended execution order
 
