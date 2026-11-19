@@ -76,14 +76,14 @@ test("Rider trip-history accessibility summary includes route, status, passenger
   );
 });
 
-test("Rider trip-history accessibility summary handles missing display values without crashing", () => {
+test("Rider trip-history accessibility summary handles missing values and singular passenger grammar", () => {
   assert.equal(
     getRiderHistoryAccessibilityLabel({ rideId: "", pickup: "", dropoff: "", passengers: null, serviceClass: "", status: "", requestedAt: "bad-date" }),
     "Trip from Pickup unavailable to Drop-off unavailable. Status STATUS UNAVAILABLE. Unknown passengers. Service class UNKNOWN. Requested Date unavailable. Reference Unavailable."
   );
   assert.equal(
     getRiderHistoryAccessibilityLabel({ rideId: "ride-123", pickup: "A", dropoff: "B", passengers: 1, serviceClass: "cab", status: "Completed", requestedAt: "2026-02-30T10:15:00Z" }),
-    "Trip from A to B. Status COMPLETED. 1 passengers. Service class CAB. Requested Date unavailable. Reference ride-123."
+    "Trip from A to B. Status COMPLETED. 1 passenger. Service class CAB. Requested Date unavailable. Reference ride-123."
   );
 });
 
