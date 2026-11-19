@@ -375,3 +375,14 @@ test("RIDER-ACTIVE-BOOKING-UI-001: recovery controls expose named accessible act
   assert.match(source, /getRiderTripActionProps\("viewActiveRide",false,false\)/);
   assert.match(source, /onPress=\{\(\)=>setTab\("Activity"\)\}/);
 });
+
+test("RIDER-TRIP-INPUT-002: pickup, destination and stop bounds are checked before discovery GPS", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const findNearbyVehicles=async()=>{");
+  const end = source.indexOf("const cancelRide=async()=>{", start);
+  assert.ok(start >= 0 && end > start);
+  const flow = source.slice(start, end);
+  const validation = flow.indexOf("validateRiderBookingText(pickup,dropoff,stopsText)");
+  const discovery = flow.indexOf("discoverNearbyCabDrivers(Location,apiFetch,passengerCount)");
+  assert.ok(validation >= 0 && discovery > validation);
+});
