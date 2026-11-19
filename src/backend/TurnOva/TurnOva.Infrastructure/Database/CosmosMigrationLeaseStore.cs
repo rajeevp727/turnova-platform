@@ -58,7 +58,9 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(expected);
         if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(expected.Owner) ||
             string.IsNullOrWhiteSpace(expected.ETag) ||
             string.IsNullOrWhiteSpace(newOwner))
             throw new ArgumentException("A valid expected migration lease and owner are required.", nameof(expected));
@@ -90,6 +92,12 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         CosmosMigrationLease expected,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(expected);
+        if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(expected.Owner) ||
+            string.IsNullOrWhiteSpace(expected.ETag))
+            throw new ArgumentException("A valid expected migration lease is required.", nameof(expected));
+
         try
         {
             await locks.DeleteItemAsync<CosmosMigrationLeaseDocument>(
