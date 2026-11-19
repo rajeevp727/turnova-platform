@@ -296,4 +296,22 @@ public sealed class CosmosMigrationLeaseStoreTests
         container.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task CreateRejectsBlankOwnerBeforeCallingCosmos(string owner)
+    {
+        var container = new Mock<Container>();
+        var store = new CosmosMigrationLeaseStore(container.Object);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.TryCreateAsync(
+                owner,
+                DateTimeOffset.UtcNow.AddMinutes(30),
+                CancellationToken.None));
+
+        container.VerifyNoOtherCalls();
+    }
+
 }
