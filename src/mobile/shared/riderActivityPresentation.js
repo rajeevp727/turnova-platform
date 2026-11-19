@@ -181,11 +181,14 @@ function getRiderHistoryRequestedAtLabel(item) {
 
 function getRiderHistoryAccessibilityLabel(item) {
   const requestedAtLabel = getRiderHistoryRequestedAtLabel(item);
-  const passengers = Number.isInteger(item?.passengers) && item.passengers >= 0 ? item.passengers : "Unknown";
+  const passengerCount = Number.isInteger(item?.passengers) && item.passengers >= 0 ? item.passengers : null;
+  const passengerLabel = passengerCount === null
+    ? "Unknown passengers"
+    : passengerCount === 1 ? "1 passenger" : passengerCount + " passengers";
   return "Trip from " + displayText(item?.pickup, "Pickup unavailable") +
     " to " + displayText(item?.dropoff, "Drop-off unavailable") +
     ". Status " + getRiderRideStatusLabel(item?.status) +
-    ". " + passengers + " passengers. Service class " +
+    ". " + passengerLabel + ". Service class " +
     displayText(item?.serviceClass, "Unknown").toUpperCase() +
     ". Requested " + requestedAtLabel +
     ". Reference " + displayText(item?.rideId, "Unavailable") + ".";
