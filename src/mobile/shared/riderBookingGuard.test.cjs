@@ -133,6 +133,8 @@ test("Rider session reset invalidates pending history and discovery responses", 
 
 
 const validSelectedBookingExpected = {
+  riderId: "rider-1",
+  driverId: "driver-1",
   unionId: "union-1",
   pickup: "KPHB",
   dropoff: "HITEC City",
