@@ -3107,8 +3107,8 @@ CI #44441520440 passed 371/372 Node tests and identified one test-only failure: 
 
 ## Rider customer-facing FIFO wording guard — PR #194 (2026-11-19)
 
-- Finding: the Rider Profile help prompt referred to “ride/queue states”. Internal FIFO fairness remains unresolved and must not be surfaced as a customer-facing queue or ranking concept.
+- Finding: the Rider Profile help prompt referred to “ride/queue states”. PRD §AI-01 allows approved queue/availability-state explanations, but help must not imply customer-facing FIFO ranking or automatic next-driver assignment. The prompt was clarified to “ride statuses”.
 - Change: Rider help prompt now says “ride statuses”; no booking, discovery, ranking, assignment, API or server lifecycle behavior changed.
-- Deterministic evidence: RIDER-DISPATCH-UI-001 asserts the Rider App help prompt uses ride-status wording and contains no queue, FIFO or next-driver text. Source commit 465f1b40a5cc9c7524c6998424dee12cad5b0a99; final corrected test commit 0e61a646769b9551131659031f13f0f381f3a927 (the immediately preceding test commit's regex escaping was corrected before verification).
+- Deterministic evidence: RIDER-DISPATCH-UI-001 asserts the Rider App help prompt uses ride-status wording and contains no FIFO-ranking or automatic-next-driver-assignment language; approved queue/availability-state explanations remain allowed by PRD §AI-01. Source commit 465f1b40a5cc9c7524c6998424dee12cad5b0a99; final corrected test commit 0e61a646769b9551131659031f13f0f381f3a927 (the immediately preceding test commit's regex escaping was corrected before verification).
 - CI: previous code/test head b8559d47b60971e544300f1684c99992e7d2a464 passed CI #44450139254; the new source/test increment and documentation sync require fresh exact-head CI. No new pass is claimed.
 - Phase/acceptance: Android — Rider remains current; Driver feature work and iOS remain gated. DISPATCH-02 remains In Progress, not Verified. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). No self-approval or merge.
