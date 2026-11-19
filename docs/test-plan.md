@@ -2796,6 +2796,15 @@ PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173) merged at `b0
 
 A separate Product/Safety decision is still required for Ops rejection/suspension during an active negotiation or ride; do not invent a policy or mutate active rides until Product defines the outcome.
 
+### Cosmos Union create-if-absent adapter regression — PR #197
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-UNION-001 | Cosmos reports HTTP 409 for a deterministic normalized Union ID | The persistence boundary returns a duplicate result; it does not fall back to the in-memory dictionary, overwrite the legacy record, or swallow the caller's cancellation token | `UnionCreateIfAbsentTests.CosmosCreateConflictReturnsFalseWithoutFallingBackToInMemoryStore` with mocked Cosmos Container | P0 |
+| COSMOS-UNION-002 | Cosmos create fails for a reason other than HTTP 409 | The provider failure propagates; it is not misreported as a duplicate Union | `UnionCreateIfAbsentTests.CosmosCreatePropagatesNonConflictFailures` with mocked Cosmos Container | P1 |
+
+The Operations endpoint maps the persistence boundary's duplicate result to HTTP 409. The existing concurrent API integration test covers the in-memory `ConcurrentDictionary.TryAdd` path; the new mocked-container tests exercise the production Cosmos `CreateItemAsync` conflict mapping and verify the `/unionId` partition key/cancellation forwarding. They are deterministic adapter evidence only; live Cosmos cross-instance create conflict, ETag, consistency and restart behavior remain external infrastructure validation.
+
 ## Exact-head verification record — REALTIME-01 CI #1799 (2026-11-16)
 
 CI #1799 / run 43795581881 (https://github.com/rajeevp727/turnova-platform/actions/runs/43795581881) completed 12/12 jobs successfully on PR #172 documentation HEAD e05412dbe9bd0e5d16aa9fbecf0b7a132133ef90: .NET 10 Release build and 666/666 backend tests; shared mobile/auth tests; Python harness 48/48; Rider and Driver Expo config/typecheck/production bundles; native API publish with 11 negative verifier fixtures plus a valid fixture; Rider/Driver Android debug and standalone release APKs; Rider/Driver unsigned iOS Simulator apps; and four same-run emulator/Simulator install-launch smoke tests.
