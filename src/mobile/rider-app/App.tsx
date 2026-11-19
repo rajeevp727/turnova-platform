@@ -20,7 +20,7 @@ import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { resetRiderSessionState } from "../shared/sessionStateReset";
 import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePersistentProposalAttempt, type PersistentProposalAttempt } from "../shared/proposalAttempt";
-import { applyRiderRideStatusUpdate, canShowRiderDriverLocation, getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
+import { applyRiderRideStatusUpdate, canShowRiderDriverLocation, getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap, suspendRiderLocationSharing } from "../shared/tripLocationSharing";
 import { normalizeRiderTripIntentDraft, ownsRiderTripIntentRequest, passengerCountInputFromDraft, parsePassengerCountInput, shouldApplyRiderTripIntentResponse } from "../shared/tripIntentDraft";
 import { canStartRiderBooking, hasActiveRiderRide, normalizeRiderSelectedBookingResponse } from "../shared/riderBookingGuard";
 import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps, tryBeginRiderAuthSubmission } from "../shared/riderAuthForm";
@@ -259,29 +259,37 @@ export default function App() {
     if(!isCurrent())return;
     // A failed or in-flight server read must never make the Book tab appear available.
     setActiveRideStateLoaded(false);
-    const historyResponse=await apiFetch("/api/v1/rides/mine") as unknown;
-    if(!isCurrent())return;
-    if(!isRiderRideHistoryShapeValid(historyResponse))throw new Error("Ride history response is invalid. Booking remains disabled until the server status can be verified.");
-    const history=historyResponse as RideHistoryItem[];
-    if(hasUnresolvedRiderRideHistory(history)){
-      // Keep history readable, but do not let a known active row mask an
-      // unknown/malformed record that could still represent another active booking.
-      setRideHistory(history);
-      throw new Error("Ride history contains an unsupported or malformed lifecycle status. Booking remains disabled until the server confirms known statuses.");
-    }
-    const active=findActiveRide(history, "rider");
-    let activeDetails: Ride | null = null;
-    if(active){
-      const detailsResponse=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId)) as unknown;
+    try{
+      const historyResponse=await apiFetch("/api/v1/rides/mine") as unknown;
       if(!isCurrent())return;
-      if(!isRiderRideDetailsResponseValid(detailsResponse,active.rideId))throw new Error("Ride details response did not match the active history record. Booking remains disabled until the server status can be verified.");
-      activeDetails=detailsResponse as Ride;
+      if(!isRiderRideHistoryShapeValid(historyResponse))throw new Error("Ride history response is invalid. Booking remains disabled until the server status can be verified.");
+      const history=historyResponse as RideHistoryItem[];
+      if(hasUnresolvedRiderRideHistory(history)){
+        // Keep history readable, but do not let a known active row mask an
+        // unknown/malformed record that could still represent another active booking.
+        setRideHistory(history);
+        throw new Error("Ride history contains an unsupported or malformed lifecycle status. Booking remains disabled until the server confirms known statuses.");
+      }
+      const active=findActiveRide(history, "rider");
+      let activeDetails: Ride | null = null;
+      if(active){
+        const detailsResponse=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId)) as unknown;
+        if(!isCurrent())return;
+        if(!isRiderRideDetailsResponseValid(detailsResponse,active.rideId))throw new Error("Ride details response did not match the active history record. Booking remains disabled until the server status can be verified.");
+        activeDetails=detailsResponse as Ride;
+      }
+      if(!isCurrent())return;
+      setRideHistory(history);
+      if(activeDetails)setRide(current=>current&&current.rideId===activeDetails!.rideId?mergeTripLocationSnapshot(current,activeDetails!):activeDetails!);
+      else setRide(null);
+      setActiveRideStateLoaded(true);
+    }catch(error){
+      // A failed, malformed or ambiguous history/detail read cannot authorize cached GPS.
+      // Keep the ride card/history visible, but suspend Driver location until a later
+      // server snapshot has been validated for the current authenticated session.
+      if(isCurrent())setRide(current=>current?suspendRiderLocationSharing(current):current);
+      throw error;
     }
-    if(!isCurrent())return;
-    setRideHistory(history);
-    if(activeDetails)setRide(current=>current&&current.rideId===activeDetails!.rideId?mergeTripLocationSnapshot(current,activeDetails!):activeDetails!);
-    else setRide(null);
-    setActiveRideStateLoaded(true);
   },[apiFetch]);
   useEffect(()=>{let active=true;let restoreEpoch=sessionEpoch.current;const isRestoreCurrent=()=>active&&sessionEpoch.current===restoreEpoch;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request,isRestoreCurrent);if(isRestoreCurrent()&&restored){const restoredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);restoreEpoch=restoredEpoch;const restoredUser=requireAppRole<User>(restored.user,"Rider");authenticatedSessionEpoch.current=restoredEpoch;setTokens(restored.tokens);setUser(restoredUser);}}catch{if(isRestoreCurrent())setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(isRestoreCurrent())setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{

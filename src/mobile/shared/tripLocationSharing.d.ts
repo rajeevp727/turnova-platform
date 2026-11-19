@@ -69,6 +69,8 @@ export function canShowRiderDriverLocation(
   ride: RiderLocationVisibilityState | null | undefined
 ): ride is RiderLocationVisibilityState & { driverLatitude: number; driverLongitude: number };
 
+export function suspendRiderLocationSharing<T extends RiderLocationVisibilityState>(ride: T): T;
+
 export function mergeTripLocationSnapshot<T extends TripLocationSnapshot & { driverLocationCapturedAtUtc?: string | null }>(
   current: TripLocationSnapshot,
   snapshot: T

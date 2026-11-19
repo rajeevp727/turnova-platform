@@ -80,6 +80,11 @@ function clearDriverLocation(ride) {
   };
 }
 
+function suspendRiderLocationSharing(ride) {
+  if (!ride || typeof ride !== "object" || Array.isArray(ride)) return ride;
+  return clearDriverLocation(ride);
+}
+
 function applyRiderRideStatusUpdate(current, update) {
   if (!current || !update ||
       typeof current.rideId !== "string" ||
@@ -206,6 +211,7 @@ module.exports = {
   shouldApplyTripLocationUpdate,
   mergeTripLocationSnapshot,
   applyRiderRideStatusUpdate,
+  suspendRiderLocationSharing,
   canShowRiderDriverLocation,
   getRideMapFitCoordinates,
   shouldFitRideMap

@@ -10,6 +10,7 @@ const {
   shouldApplyTripLocationUpdate,
   mergeTripLocationSnapshot,
   applyRiderRideStatusUpdate,
+  suspendRiderLocationSharing,
   canShowRiderDriverLocation,
   getRideMapFitCoordinates,
   shouldFitRideMap
@@ -490,4 +491,48 @@ test("RIDER-LOCATION-UI-006: Rider status events rehydrate server-owned sharing 
   const refreshBody = source.slice(refreshStart, refreshEnd);
   assert.ok(refreshBody.indexOf("await loadRideHistory") >= 0);
   assert.ok(refreshBody.indexOf("await refreshAgreements") > refreshBody.indexOf("await loadRideHistory"));
+});
+
+
+test("RIDER-LOCATION-UI-007: failed or ambiguous Rider history verification suspends cached Driver GPS", () => {
+  const ride = {
+    rideId: "ride-unverified",
+    status: "InProgress",
+    locationSharingActive: true,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    driverLocationCapturedAtUtc: "2026-11-19T05:00:00Z",
+    locationCapturedAtUtc: "2026-11-19T05:00:00Z",
+    locationUpdatedAt: "2026-11-19T05:00:01Z",
+    pickupLatitude: 17.5,
+    pickupLongitude: 78.5
+  };
+  const suspended = suspendRiderLocationSharing(ride);
+
+  assert.notEqual(suspended, ride);
+  assert.equal(suspended.rideId, ride.rideId);
+  assert.equal(suspended.status, ride.status);
+  assert.equal(suspended.locationSharingActive, false);
+  assert.equal(suspended.driverLatitude, undefined);
+  assert.equal(suspended.driverLongitude, undefined);
+  assert.equal(suspended.driverLocationCapturedAtUtc, null);
+  assert.equal(suspended.locationCapturedAtUtc, null);
+  assert.equal(suspended.locationUpdatedAt, undefined);
+  assert.deepEqual(getRideMapFitCoordinates(suspended), [
+    { latitude: 17.5, longitude: 78.5 }
+  ]);
+  assert.equal(suspendRiderLocationSharing(null), null);
+
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const loadRideHistory=useCallback");
+  const end = source.indexOf("useEffect(()=>{let active=true;let restoreEpoch", start);
+  assert.ok(start >= 0 && end > start);
+  const loader = source.slice(start, end);
+  const historyRead = loader.indexOf('apiFetch("/api/v1/rides/mine")');
+  const catchBlock = loader.indexOf("}catch(error){", historyRead);
+  const suspension = loader.indexOf("suspendRiderLocationSharing(current)", catchBlock);
+  const rethrow = loader.indexOf("throw error;", suspension);
+  assert.ok(historyRead >= 0 && catchBlock > historyRead);
+  assert.ok(suspension > catchBlock && rethrow > suspension);
+  assert.match(loader, /if\(isCurrent\(\)\)setRide\(current=>current\?suspendRiderLocationSharing\(current\):current\)/);
 });
