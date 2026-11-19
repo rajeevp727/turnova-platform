@@ -348,3 +348,30 @@ test("RIDER-DISCOVERY-RESPONSE-003 rejects invalid base64 even when the JPEG mar
     assert.equal(result, null, profilePhotoBase64);
   }
 });
+
+
+test("RIDER-ACTIVE-BOOKING-UI-001: recovery controls expose named accessible actions", () => {
+  const retry = getRiderTripActionProps("retryStatus", false, false);
+  assert.equal(retry.accessibilityRole, "button");
+  assert.equal(retry.accessibilityLabel, "Retry active booking check");
+  assert.match(retry.accessibilityHint, /server-owned ride history/);
+  assert.deepEqual(retry.accessibilityState, { disabled: false, busy: false });
+
+  const busyRetry = getRiderTripActionProps("retryStatus", true, true);
+  assert.equal(busyRetry.accessibilityLabel, "Checking active booking status");
+  assert.deepEqual(busyRetry.accessibilityState, { disabled: true, busy: true });
+
+  const view = getRiderTripActionProps("viewActiveRide", false, false);
+  assert.equal(view.accessibilityRole, "button");
+  assert.equal(view.accessibilityLabel, "View active ride");
+  assert.match(view.accessibilityHint, /does not create or submit another booking/);
+  assert.deepEqual(view.accessibilityState, { disabled: false, busy: false });
+
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /testID="rider-retry-active-booking"/);
+  assert.match(source, /getRiderTripActionProps\("retryStatus",loading,loading\)/);
+  assert.match(source, /onPress=\{\(\)=>void loadRideHistory/);
+  assert.match(source, /testID="rider-view-active-ride"/);
+  assert.match(source, /getRiderTripActionProps\("viewActiveRide",false,false\)/);
+  assert.match(source, /onPress=\{\(\)=>setTab\("Activity"\)\}/);
+});
