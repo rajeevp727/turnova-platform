@@ -357,8 +357,12 @@ export default function App() {
       if (!accepted) throw new Error("Session changed. Please sign in again.");
       setPassword("");
     } catch (e) {
-      if (sessionEpoch.current === authEpoch)
-        setError(e instanceof Error ? e.message : "Authentication failed.");
+      if (sessionEpoch.current === authEpoch) {
+        const message = e instanceof Error ? e.message : "Authentication failed.";
+        setError(/network request failed|failed to fetch|networkerror/i.test(message)
+          ? "Unable to reach the TurnOva API. Check that EXPO_PUBLIC_API_BASE_URL points to the live HTTPS API and that the service is running."
+          : message);
+      }
     } finally {
       finishRiderAuthSubmission(authSubmissionInFlight);
       if (sessionEpoch.current === authEpoch) setLoading(false);
