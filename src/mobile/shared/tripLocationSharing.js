@@ -1,3 +1,5 @@
+const { isStrictIsoTimestampWithOffset } = require("./riderTimestamp");
+
 const ACTIVE_TRIP_STATUSES = new Set(["Accepted", "Arrived", "InProgress"]);
 const DRIVER_RIDE_LIFECYCLE_STATUSES = new Set(["Negotiating", "AgreementConfirmed", ...ACTIVE_TRIP_STATUSES]);
 
@@ -41,7 +43,7 @@ function findAuthoritativeActiveTrip(history, rideId) {
 }
 
 function parseUtcTimestamp(value) {
-  if (typeof value !== "string" || value.trim().length === 0) return null;
+  if (!isStrictIsoTimestampWithOffset(value)) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
