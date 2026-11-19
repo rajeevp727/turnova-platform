@@ -3218,6 +3218,17 @@ CI recovery: initial test attempt #44540542579 timed out before the migration be
 ## COSMOS-MIG-012/013 deterministic adapter coverage — PR #197
 
 Source/test commit `0c24310df160367229a6e321a7e211bfb166eb2d` extends the mocked Cosmos lease-store contract suite: create success/conflict mapping, read success/not-found mapping, response ETag propagation, invalid expected-lease rejection before SDK access and missing-lease release. Follow-up source/test commit `4dbfa5fe0d9a90f71f6734cfc02e8f1a2f484d9a` adds COSMOS-MIG-014/015 for fail-closed lease timing validation and immutable lease ID/owner state updates. These deterministic tests complement COSMOS-MIG-007–011 coordinator and runner coverage. They do not simulate a real Cosmos data plane, multi-instance ETag contention, process crash or restart. Final documentation-bearing PR #197 head `756053040777832a786b350d585ddcf035df81e7` passed exact-head CI [#44546455130](https://github.com/rajeevp727/turnova-platform/actions/runs/44546455130): scope/backend success, **779/779 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, verifier 11 negative fixtures plus valid fixture, artifact [14540308108](https://github.com/rajeevp727/turnova-platform/actions/runs/44546455130/artifacts/14540308108). Mobile, Android and iOS jobs were skipped by the API-only phase gate; this is not later-platform completion evidence. Live Cosmos multi-instance contention, process crash/restart and production persistence remain external.
+## COSMOS selected-reservation adapter ETag contract — PR #197
+
+| ID | Scenario | Expected result | Deterministic automated evidence | Priority |
+|---|---|---|---|---|
+| COSMOS-RES-001 | Promote a temporary Driver reservation | Read the current Driver partition item; replace it with no expiry using the observed ETag; append the MadePermanent audit fact in the same Driver partition batch | `CosmosAdapterContractTests.DriverReservationPromotionUsesObservedEtagAndAppendsAuditAtomically` | P0 |
+| COSMOS-RES-002 | Release a Driver reservation | Delete only the matching RideId using the observed ETag and append the Released audit fact atomically in the same Driver partition | `CosmosAdapterContractTests.DriverReservationReleaseUsesObservedEtagAndAppendsAuditAtomically` | P0 |
+| COSMOS-RES-003 | Promote a temporary Rider active-booking reservation | Replace the active reservation with no expiry using the observed ETag and append the MadePermanent audit fact in the same Rider partition batch | `CosmosAdapterContractTests.RiderReservationPromotionUsesObservedEtagAndAppendsAuditAtomically` | P0 |
+| COSMOS-RES-004 | Release a Rider active-booking reservation | Delete only the matching RideId using the observed ETag and append the Released audit fact atomically in the same Rider partition | `CosmosAdapterContractTests.RiderReservationReleaseUsesObservedEtagAndAppendsAuditAtomically` | P0 |
+
+These are mocked Cosmos SDK contract tests. They verify partition choice, conditional ETag options, matching aggregate identity and atomic audit composition; they do not prove live Cosmos transactional-batch contention or crash recovery.
+
 ### Platform phase-state CI fixtures (implemented in PR #179; API-only CI #44111719737 passed)
 
 | ID | Scenario | Expected result | Type | Priority |
