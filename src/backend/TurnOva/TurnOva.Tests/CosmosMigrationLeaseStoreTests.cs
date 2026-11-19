@@ -71,6 +71,36 @@ public sealed class CosmosMigrationLeaseStoreTests
     }
 
     [Fact]
+    public async Task ReplacePropagatesNonRaceCosmosFailures()
+    {
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosMigrationLeaseDocument>(),
+                It.IsAny<string>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException(
+                "cosmos unavailable", HttpStatusCode.ServiceUnavailable, 0, "activity", 0));
+        var store = new CosmosMigrationLeaseStore(container.Object);
+        var expected = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-observed", DateTimeOffset.UtcNow.AddMinutes(10));
+
+        var exception = await Assert.ThrowsAsync<CosmosException>(() =>
+            store.TryReplaceAsync(
+                expected, "owner-1", DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, exception.StatusCode);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosMigrationLeaseDocument>(),
+            "schema-migrations",
+            It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(options =>
+                options != null && options.IfMatchEtag == "etag-observed"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task ReleaseUsesTheLatestEtagAndDoesNotDeleteAReplacementLease()
     {
         var container = new Mock<Container>();
