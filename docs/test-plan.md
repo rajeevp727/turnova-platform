@@ -3696,3 +3696,12 @@ The support response parser reuses the shared Rider timestamp validator. This is
 | RIDER-ACTIVE-BOOKING-UI-001 | Active booking recovery controls | Retry status check and View active ride are exposed as named buttons with truthful hints; retry reflects the auth-loading disabled/busy state; View active ride opens Activity without submitting another booking. | Automated Node helper + source wiring | P1 |
 
 This is an Android Rider accessibility/source-wiring increment under the existing selected-booking and recovery requirements. It does not change server ride state, booking eligibility, API requests or reservation behavior.
+
+
+## Rider live trip-map accessibility — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-LOCATION-UI-005 | Live driver map accessibility | The active-ride map exposes a stable test ID, accessible name and hint; the Driver marker describes the latest shared active-ride location; the pickup marker describes the selected pickup; panning still pauses automatic follow. | Automated Node source wiring | P1 |
+
+The map remains rendered only while the server-authorised ride is actively sharing valid Driver coordinates. This is presentation/accessibility only; it does not change location collection, sharing eligibility, GPS payloads or map-follow state transitions.
