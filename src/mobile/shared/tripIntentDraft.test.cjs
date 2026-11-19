@@ -126,3 +126,22 @@ test("AI-01-RIDER-DRAFT-ASYNC-003: Rider screen snapshots prompt and fences sess
     assert.match(app, new RegExp("markRiderTripFormEdited\\(\\);set" + field[0].toUpperCase() + field.slice(1) + "\\("));
   }
 });
+
+
+test("AI-01-RIDER-DRAFT-RESPONSE-003: reject control characters in editable route fields", () => {
+  const valid = {
+    pickup: "Nizampet",
+    dropoff: "HITEC City",
+    serviceClass: "Cab",
+    passengerCount: 2,
+    needsClarification: false,
+    missingFields: [],
+    requiresUserConfirmation: true,
+    source: "deterministic-fallback"
+  };
+  for (const field of ["pickup", "dropoff"]) {
+    for (const value of ["Nizampet\\u0000", "HITEC\\u0085City", "HITEC\\nCity"]) {
+      assert.equal(normalizeRiderTripIntentDraft({ ...valid, [field]: value }), null, field);
+    }
+  }
+});

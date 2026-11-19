@@ -1,6 +1,7 @@
 "use strict";
 
 const ALLOWED_MISSING_FIELDS = Object.freeze(["pickup", "dropoff", "passengerCount"]);
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
 const ALLOWED_SOURCES = new Set(["provider", "deterministic-fallback"]);
 
 function isRecord(value) {
@@ -22,7 +23,8 @@ function normalizeRiderTripIntentDraft(value) {
   if (!isRecord(value)) return null;
 
   const validRouteText = item => item === null ||
-    (typeof item === "string" && item.length > 0 && item.length <= 160 && item === item.trim());
+    (typeof item === "string" && item.length > 0 && item.length <= 160 &&
+      item === item.trim() && !CONTROL_CHARACTERS.test(item));
   if (!validRouteText(value.pickup) || !validRouteText(value.dropoff)) return null;
   if (value.serviceClass !== "Cab") return null;
   if (!(value.passengerCount === null ||
