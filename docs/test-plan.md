@@ -3789,3 +3789,12 @@ This mirrors API contract case CAB-AGR-012. It is client-side preflight only: th
 | RIDER-HISTORY-013 | Active ride detail lifecycle validation | When history identifies an active Rider ride, accept the detail snapshot only if its lifecycle is one of the known nonterminal Rider states. Reject missing, malformed, unknown or terminal detail states before committing active ride state or enabling another booking. On rejection, retain the fail-closed history state and suspend cached Driver location until a later valid server snapshot. | Automated Node helper + App source-wiring | P0 |
 
 This protects recovery from inconsistent history/detail reads. It does not change server lifecycle or reservation behavior; the API remains authoritative and must still reject overlapping active bookings.
+
+
+## Rider history response projection and safe Activity rendering — PR #194 (2026-11-19)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-HISTORY-014 | Normalize Rider history before Activity hydration | Require unique bounded ride IDs; project only approved Rider-visible history fields; preserve legacy service-class labels in historical records; replace malformed route/passenger/date/service-class display values with safe fallbacks; map unknown lifecycle values to a neutral state that keeps booking disabled; reject invalid or duplicate ride identities. | Automated Node helper + App source wiring | P0 |
+
+This is a Rider client privacy/rendering boundary. It does not change API authorization or create new Scooty/Bike/Auto workflows; historical records remain readable where their display values are safe.

@@ -325,3 +325,11 @@ test("RIDER-HISTORY-013: Rider hydration validates detail lifecycle before commi
   assert.ok(detailFetch >= 0 && validation > detailFetch);
   assert.ok(detailCommit > validation && bookingReady > detailCommit);
 });
+
+
+test("RIDER-HISTORY-014: Rider Activity renders only normalized history and safe passenger fallbacks", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /normalizeRiderRideHistory\\(historyResponse\\)/);
+  assert.match(source, /item\\.passengers===null\\?"Passenger count unavailable"/);
+  assert.match(source, /getRiderRideStatusLabel\\(item\\.status\\)/);
+});
