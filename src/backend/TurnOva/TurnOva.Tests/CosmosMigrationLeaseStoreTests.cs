@@ -85,4 +85,152 @@ public sealed class CosmosMigrationLeaseStoreTests
                 options != null && options.IfMatchEtag == "latest-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task CreateUsesTheMigrationLeaseIdentityAndReturnsCreatedEtag()
+    {
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+        var container = new Mock<Container>();
+        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>();
+        response.SetupGet(value => value.ETag).Returns("etag-created");
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<CosmosMigrationLeaseDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        var store = new CosmosMigrationLeaseStore(container.Object);
+
+        var created = await store.TryCreateAsync("owner-1", expiresAt, CancellationToken.None);
+
+        Assert.NotNull(created);
+        Assert.Equal("schema-migrations", created!.Id);
+        Assert.Equal("owner-1", created.Owner);
+        Assert.Equal("etag-created", created.ETag);
+        Assert.Equal(expiresAt, created.ExpiresAtUtc);
+        container.Verify(value => value.CreateItemAsync(
+            It.Is<CosmosMigrationLeaseDocument>(document =>
+                document.Id == "schema-migrations" &&
+                document.Owner == "owner-1" &&
+                document.ExpiresAtUtc == expiresAt),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateReturnsNullWhenTheLeaseAlreadyExists()
+    {
+        var container = new Mock<Container>();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<CosmosMigrationLeaseDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException(
+                "lease already exists", HttpStatusCode.Conflict, 0, "migration-lease-test", 0));
+        var store = new CosmosMigrationLeaseStore(container.Object);
+
+        var created = await store.TryCreateAsync(
+            "owner-1", DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None);
+
+        Assert.Null(created);
+    }
+
+    [Fact]
+    public async Task ReadReturnsLeaseMetadataAndTheObservedEtag()
+    {
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(20);
+        var document = new CosmosMigrationLeaseDocument
+        {
+            Id = "schema-migrations",
+            Owner = "owner-1",
+            ExpiresAtUtc = expiresAt
+        };
+        var container = new Mock<Container>();
+        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>();
+        response.SetupGet(value => value.Resource).Returns(document);
+        response.SetupGet(value => value.ETag).Returns("etag-read");
+        container.Setup(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        var store = new CosmosMigrationLeaseStore(container.Object);
+
+        var lease = await store.ReadAsync(CancellationToken.None);
+
+        Assert.NotNull(lease);
+        Assert.Equal("schema-migrations", lease!.Id);
+        Assert.Equal("owner-1", lease.Owner);
+        Assert.Equal("etag-read", lease.ETag);
+        Assert.Equal(expiresAt, lease.ExpiresAtUtc);
+        container.Verify(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+            "schema-migrations",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReadReturnsNullWhenNoLeaseDocumentExists()
+    {
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException(
+                "lease not found", HttpStatusCode.NotFound, 0, "migration-lease-test", 0));
+        var store = new CosmosMigrationLeaseStore(container.Object);
+
+        var lease = await store.ReadAsync(CancellationToken.None);
+
+        Assert.Null(lease);
+    }
+
+    [Fact]
+    public async Task ReleaseReturnsFalseWhenTheLeaseDocumentNoLongerExists()
+    {
+        var container = new Mock<Container>();
+        container.Setup(value => value.DeleteItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException(
+                "lease not found", HttpStatusCode.NotFound, 0, "migration-lease-test", 0));
+        var store = new CosmosMigrationLeaseStore(container.Object);
+        var expected = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-current", DateTimeOffset.UtcNow.AddMinutes(10));
+
+        var released = await store.TryReleaseAsync(expected, CancellationToken.None);
+
+        Assert.False(released);
+    }
+
+    [Theory]
+    [InlineData("", "etag-1", "owner-2")]
+    [InlineData("other-id", "etag-1", "owner-2")]
+    [InlineData("schema-migrations", "", "owner-2")]
+    [InlineData("schema-migrations", "etag-1", " ")]
+    public async Task ReplaceRejectsAnInvalidExpectedLeaseBeforeCallingCosmos(
+        string id,
+        string etag,
+        string newOwner)
+    {
+        var container = new Mock<Container>();
+        var store = new CosmosMigrationLeaseStore(container.Object);
+        var expected = new CosmosMigrationLease(
+            id, "owner-1", etag, DateTimeOffset.UtcNow.AddMinutes(10));
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.TryReplaceAsync(
+                expected, newOwner, DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None));
+
+        container.VerifyNoOtherCalls();
+    }
+
 }
