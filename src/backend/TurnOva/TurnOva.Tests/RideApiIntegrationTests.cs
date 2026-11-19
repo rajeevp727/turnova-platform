@@ -7725,8 +7725,8 @@ public sealed partial class RideApiIntegrationTests
     private static void AssertNoRiderAggregateFields(JsonElement payload)
     {
         AssertNoInternalRideAggregateFields(payload);
-        Assert.False(payload.TryGetProperty("paymentReconciliation", out _), "Rider response unexpectedly exposed payment reconciliation.");
-        Assert.False(payload.TryGetProperty("reportedByDriverId", out _), "Rider response unexpectedly exposed the Driver reporter ID.");
+        foreach (var property in new[] { "paymentReconciliation", "reportedByDriverId", "currentAgreement" })
+            Assert.False(payload.TryGetProperty(property, out _), $"Rider response unexpectedly exposed {property}.");
     }
 
     private static void AssertNoRideActorIdentifiers(JsonElement payload)
