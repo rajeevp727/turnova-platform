@@ -206,14 +206,14 @@ public sealed class CosmosAdapterContractTests
         batch.Verify(value => value.ReplaceItem(
             "driver-1",
             It.Is<DriverRideReservation>(item =>
-                item.DriverId == "driver-1" && item.RideId == "ride-1" && item.ExpiresAtUtc is null),
+                item.DriverId == "driver-1" && item.RideId == "ride-1" && item.ExpiresAtUtc == null),
             It.Is<TransactionalBatchItemRequestOptions>(options =>
                 options.IfMatchEtag == "driver-reservation-etag")), Times.Once);
         batch.Verify(value => value.CreateItem(
             It.Is<DriverRideReservationAuditEvent>(item =>
                 item.EventType == DriverRideReservationAuditEventTypes.MadePermanent &&
                 item.PreviousExpiresAtUtc == expiresAt &&
-                item.ExpiresAtUtc is null),
+                item.ExpiresAtUtc == null),
             It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
         batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -292,14 +292,14 @@ public sealed class CosmosAdapterContractTests
         batch.Verify(value => value.ReplaceItem(
             RiderActiveBookingReservation.DocumentId,
             It.Is<RiderActiveBookingReservation>(item =>
-                item.RiderId == "rider-1" && item.RideId == "ride-1" && item.ExpiresAtUtc is null),
+                item.RiderId == "rider-1" && item.RideId == "ride-1" && item.ExpiresAtUtc == null),
             It.Is<TransactionalBatchItemRequestOptions>(options =>
                 options.IfMatchEtag == "rider-reservation-etag")), Times.Once);
         batch.Verify(value => value.CreateItem(
             It.Is<RiderActiveBookingReservationAuditEvent>(item =>
                 item.EventType == RiderActiveBookingReservationAuditEventTypes.MadePermanent &&
                 item.PreviousExpiresAtUtc == expiresAt &&
-                item.ExpiresAtUtc is null),
+                item.ExpiresAtUtc == null),
             It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
         batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
