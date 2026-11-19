@@ -3050,7 +3050,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
         using var cancelledJson = JsonDocument.Parse(await cancelled.Content.ReadAsStringAsync());
         Assert.Equal("Cancelled", cancelledJson.RootElement.GetProperty("status").GetString());
-        AssertNoInternalRideAggregateFields(cancelledJson.RootElement);
+        AssertNoRiderAggregateFields(cancelledJson.RootElement);
         AssertNoRideActorIdentifiers(cancelledJson.RootElement);
 
         var secondRide = await CreateRideAsync(rider, "request-cancel-after-001");
@@ -4423,7 +4423,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal("selected-booking-rider", json.RootElement.GetProperty("riderId").GetString());
         Assert.Equal("selected-booking-driver", json.RootElement.GetProperty("driverId").GetString());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("estimatedFareInr").ValueKind);
-        AssertNoInternalRideAggregateFields(json.RootElement);
+        AssertNoRiderAggregateFields(json.RootElement);
         Assert.Equal(2, json.RootElement.GetProperty("stops").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("driverLatitude").ValueKind);
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("driverLongitude").ValueKind);
@@ -6376,6 +6376,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
         using var retryJson = JsonDocument.Parse(await retryResponse.Content.ReadAsStringAsync());
         Assert.Equal(1, retryJson.RootElement.GetProperty("agreement").GetProperty("version").GetInt32());
+        AssertNoAgreementActorIdentifiers(retryJson.RootElement.GetProperty("agreement"));
 
         using var counter = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
         {
@@ -7643,7 +7644,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(JsonValueKind.Null, body.GetProperty("locationUpdatedAt").ValueKind);
         Assert.Equal(JsonValueKind.Null, body.GetProperty("driverLocationCapturedAtUtc").ValueKind);
         Assert.False(body.GetProperty("locationSharingActive").GetBoolean());
-        AssertNoInternalRideAggregateFields(body);
+        AssertNoRiderAggregateFields(body);
         AssertNoRideActorIdentifiers(body);
         Assert.False(body.TryGetProperty("dispatchZoneId", out _));
         Assert.False(body.TryGetProperty("agreementStateRevision", out _));
@@ -7670,14 +7671,14 @@ public sealed partial class RideApiIntegrationTests
             AssertNoRideActorIdentifiers(json.RootElement);
         }
 
-        await AssertDriverResponse(
-            await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null), "Accepted");
-        await AssertDriverResponse(
-            await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null), "Arrived");
-        await AssertDriverResponse(
-            await driver.PostAsync($"/api/v1/rides/{rideId}/start", null), "InProgress");
-        await AssertDriverResponse(
-            await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null), "Completed");
+        using var accepted = await driver.PostAsync($"/api/v1/rides/{rideId}/accept", null);
+        await AssertDriverResponse(accepted, "Accepted");
+        using var arrived = await driver.PostAsync($"/api/v1/rides/{rideId}/arrive", null);
+        await AssertDriverResponse(arrived, "Arrived");
+        using var started = await driver.PostAsync($"/api/v1/rides/{rideId}/start", null);
+        await AssertDriverResponse(started, "InProgress");
+        using var completed = await driver.PostAsync($"/api/v1/rides/{rideId}/complete", null);
+        await AssertDriverResponse(completed, "Completed");
     }
 
     [Fact]
@@ -7689,7 +7690,7 @@ public sealed partial class RideApiIntegrationTests
         using var response = await rider.SendAsync(request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        AssertNoInternalRideAggregateFields(json.RootElement);
+        AssertNoRiderAggregateFields(json.RootElement);
         AssertNoRideActorIdentifiers(json.RootElement);
     }
 
@@ -7719,6 +7720,13 @@ public sealed partial class RideApiIntegrationTests
             "agreementStateRevision", "auditEvents"
         })
             Assert.False(payload.TryGetProperty(property, out _), $"Response unexpectedly exposed {property}.");
+    }
+
+    private static void AssertNoRiderAggregateFields(JsonElement payload)
+    {
+        AssertNoInternalRideAggregateFields(payload);
+        Assert.False(payload.TryGetProperty("paymentReconciliation", out _), "Rider response unexpectedly exposed payment reconciliation.");
+        Assert.False(payload.TryGetProperty("reportedByDriverId", out _), "Rider response unexpectedly exposed the Driver reporter ID.");
     }
 
     private static void AssertNoRideActorIdentifiers(JsonElement payload)
