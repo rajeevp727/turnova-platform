@@ -1874,3 +1874,5 @@ Rider now clears cached Driver GPS and disables local location sharing whenever 
 ## Supplemental AI-01 Rider draft route validation — PR #194 (2026-11-19)
 
 The Rider client now rejects C0/C1 control characters in AI trip-intent pickup/drop-off draft fields before updating the editable form. Existing Cab-only, bounded-text, missing-field consistency and explicit-confirmation checks remain. Deterministic test `AI-01-RIDER-DRAFT-RESPONSE-003` covers both fields and NUL/C1/newline inputs. This is supplemental AI-01 work outside the 19-row denominator; no 19-row status changes.
+
+The `AI-01-RIDER-DRAFT-RESPONSE-003` fixture was corrected in commit `197fdfeebbb929ada784bffab331f7ffb2d1e68e` to exercise actual runtime control characters rather than literal backslash sequences. The prior CI #44471177028 predates this correction; fresh exact-head CI is required.

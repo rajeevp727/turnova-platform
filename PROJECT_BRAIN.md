@@ -3214,3 +3214,5 @@ A Rider source audit found that a failed or ambiguous history/detail refresh lef
 ## PR #194 — AI-01 Rider draft route-text validation (2026-11-19)
 
 The Rider trip-intent response normalizer previously checked route-field type, trim and length but allowed embedded C0/C1 controls. It now rejects control characters for both pickup and drop-off before writing to the editable form. Added `AI-01-RIDER-DRAFT-RESPONSE-003` for NUL, C1 and newline values in both fields. This is supplemental AI-01, outside the 19-row denominator; it does not change API/provider behavior, fare, booking or ride state. Source/test commit `fe9cfb5723bd711ef8e65587523403040d64cfc0`; exact documentation-bearing CI pending. Android Rider remains current; Driver and iOS remain gated.
+
+Follow-up test commit `197fdfeebbb929ada784bffab331f7ffb2d1e68e` corrected the AI draft control-character test fixture to exercise actual runtime characters. CI #44471177028 started before that correction and is not final-head evidence.

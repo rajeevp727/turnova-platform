@@ -3156,3 +3156,5 @@ CI #44441520440 passed 371/372 Node tests and identified one test-only failure: 
 - **Source/test commit:** `fe9cfb5723bd711ef8e65587523403040d64cfc0`. The earlier CI #44470887160 was triggered before this follow-up and does not verify the current source/test head. Fresh exact-head CI is pending after documentation sync.
 - **Phase/acceptance:** Android — Rider remains current; Driver and iOS remain gated. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked). Production readiness is not established.
 - **Next exact action:** verify the final documentation-bearing CI on PR #194; then continue Rider-only audit and do not advance to Driver until Rider engineering exit criteria are met.
+
+- **Test-fixture correction:** follow-up commit `197fdfeebbb929ada784bffab331f7ffb2d1e68e` corrected the new case to construct actual NUL/C1/newline values (not literal backslash text). CI #44471177028 began before this correction and is superseded; fresh exact-head CI is required.

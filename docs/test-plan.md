@@ -3769,3 +3769,5 @@ This is client-side fail-closed visibility behavior. The API remains authoritati
 | AI-01-RIDER-DRAFT-RESPONSE-003 | Control characters in route fields | Reject C0/C1 control characters and newline values in AI-proposed pickup or drop-off before populating the editable Rider form. | Automated Node helper | P1 |
 
 AI output remains an editable Cab-only draft requiring explicit Rider confirmation; it cannot book or mutate ride state.
+
+The `AI-01-RIDER-DRAFT-RESPONSE-003` test fixture uses actual JavaScript `\u0000`, `\u0085` and `\n` escape sequences so the normalizer receives real control characters. The prior CI #44471177028 predates the fixture correction; fresh exact-head CI is required.
