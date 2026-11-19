@@ -68,15 +68,25 @@ function shouldApplyRideHistoryResponse(requestSequence, currentSequence) {
 function hasUnresolvedRiderRideHistory(history) {
   if (!Array.isArray(history)) return true;
 
-  // A known active row must not mask a second row whose future/malformed lifecycle
-  // could also be active. The client cannot prove that an unknown status is terminal.
-  return history.some(ride =>
-    !ride ||
-    typeof ride !== "object" ||
-    Array.isArray(ride) ||
-    typeof ride.status !== "string" ||
-    !KNOWN_RIDE_STATUSES.has(ride.status)
-  );
+  let activeRiderRideCount = 0;
+  for (const ride of history) {
+    // Unknown/malformed lifecycle values cannot be assumed terminal, even when a
+    // different row has a known active status.
+    if (!ride ||
+        typeof ride !== "object" ||
+        Array.isArray(ride) ||
+        typeof ride.status !== "string" ||
+        !KNOWN_RIDE_STATUSES.has(ride.status)) return true;
+
+    // Multiple known active records are also ambiguous (for example, a legacy
+    // Offered record alongside a selected negotiation). Never pick one arbitrarily.
+    if (ACTIVE_RIDE_STATUSES.rider.has(ride.status)) {
+      activeRiderRideCount += 1;
+      if (activeRiderRideCount > 1) return true;
+    }
+  }
+
+  return false;
 }
 
 function findActiveRide(history, role) {
