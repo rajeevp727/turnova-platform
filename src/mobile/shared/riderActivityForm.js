@@ -31,6 +31,16 @@ const ACTIVITY_ACTIONS = Object.freeze({
   }
 });
 
+const AMOUNT_PATTERN = /^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/;
+
+function parseRiderAgreementAmount(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (!AMOUNT_PATTERN.test(normalized)) return null;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 function tryBeginRiderActivityAction(inFlight, key) {
   if (!inFlight || typeof inFlight !== "object" || !("current" in inFlight)) throw new TypeError("A Rider activity action lock is required.");
   if (typeof key !== "string" || !key || key !== key.trim() || key.length > 256 || /[\u0000-\u001f\u007f]/.test(key)) {
@@ -78,6 +88,7 @@ function getRiderActivityActionProps(action, disabled, busy, confirmed = false) 
 }
 
 module.exports = {
+  parseRiderAgreementAmount,
   finishRiderActivityAction,
   tryBeginRiderActivityAction,
   getRiderActivityActionProps,
