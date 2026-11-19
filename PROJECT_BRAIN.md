@@ -3172,3 +3172,12 @@ The active-ride `MapView` now has an accessible label/hint and stable test ID. D
 ## Rider mixed-status history fail-closed follow-up — PR #194 (2026-11-19)
 
 A recovery audit found that findActiveRide selected a known active row before considering unknown/malformed lifecycle rows. A later terminal detail response for the known row could therefore mask another unresolved history record. hasUnresolvedRiderRideHistory now checks every row; Rider preserves history for Activity but keeps activeRideStateLoaded false whenever any lifecycle value is unknown/malformed or multiple known active rows coexist, including a legacy Offered row beside a selected negotiation. RIDER-HISTORY-012 covers mixed known-active/unknown rows and App source ordering. This is a conservative client guard only; server reservation/lifecycle authority is unchanged. Source/test commits include helper `43f3bac8de3d106f60fa25498e03499a932a1eee`, test `043ace01a89876e202a776357849c6a8a1f644b5`, declaration `263b60357dca2760eac7c8bb5034502508b57d7a` and source-order assertion `4c7398688444d26e362ae4acf29de04e9812c679`. CI #44449696945 found the missing declaration and the test's success-path index assumption; both are corrected. Fresh exact-head CI is required. Keep Android Rider active; Driver waits for Rider exit, iOS waits for both Android apps. Strict acceptance remains 0/19 Verified; production readiness is not established.
+
+## PR #194 — Rider discovery preflight and status/location recovery (2026-11-19)
+
+A source audit found two client gaps and closed them in the active Rider-only Android PR:
+
+- findNearbyVehicles now runs the shared pickup/drop-off/stops validator before calling the discovery GPS helper. Invalid or over-limit trip text therefore does not trigger GPS/discovery work. Added RIDER-TRIP-INPUT-002.
+- A RideStatusChanged event carries lifecycle only. After validating the exact ride and authenticated session, Rider now refreshes server-owned history/detail before relying on location-sharing permission. This prevents a Negotiating-to-Accepted transition from leaving the local locationSharingActive flag false indefinitely, while still not inferring permission from the status event. Added RIDER-LOCATION-UI-006.
+
+API, Cosmos, Driver, iOS, fare, payment and server lifecycle writes are unchanged. Product-approved location freshness, live SignalR/backplane, Cosmos and physical-device checks remain external. API phase exit is complete; continue Android Rider until its full engineering exit, then Driver Android, then iOS.
