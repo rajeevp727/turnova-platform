@@ -48,9 +48,10 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
 
         var acquired = await coordinator.AcquireAsync(CancellationToken.None);
 
-        Assert.Equal(created, acquired);
+        Assert.Equal("etag-created", acquired.ETag);
         Assert.Equal(expired, store.LastExpectedLease);
-        Assert.Equal(acquired.Owner, store.LastReplacementOwner);
+        Assert.NotEqual(expired.Owner, store.LastReplacementOwner);
+        Assert.Equal(2, store.CreateCallCount);
     }
 
     [Fact]
@@ -68,6 +69,7 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
 
         Assert.Equal(created, acquired);
         Assert.Equal(1, delay.CallCount);
+        Assert.Equal(2, store.CreateCallCount);
     }
 
     [Fact]
@@ -227,6 +229,7 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
     private sealed class FakeLeaseStore : ICosmosMigrationLeaseStore
     {
         public Queue<CosmosMigrationLease?> CreateResults { get; } = new();
+        public int CreateCallCount { get; private set; }
         public CosmosMigrationLease? ReadResult { get; init; }
         public CosmosMigrationLease? ReplaceResult { get; init; }
         public CosmosMigrationLease? LastExpectedLease { get; private set; }
@@ -234,8 +237,11 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
         public CosmosMigrationLease? ReleasedLease { get; private set; }
 
         public Task<CosmosMigrationLease?> TryCreateAsync(
-            string owner, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken) =>
-            Task.FromResult(CreateResults.Count == 0 ? null : CreateResults.Dequeue());
+            string owner, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken)
+        {
+            CreateCallCount++;
+            return Task.FromResult(CreateResults.Count == 0 ? null : CreateResults.Dequeue());
+        }
 
         public Task<CosmosMigrationLease?> ReadAsync(CancellationToken cancellationToken) =>
             Task.FromResult(ReadResult);
