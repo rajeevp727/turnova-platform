@@ -3163,3 +3163,8 @@ The failed check was a test regex escaping mismatch; the helper's direct asserti
 ## Rider active-booking recovery accessibility — PR #194 (2026-11-19)
 
 The Book screen's retry-status and View active ride actions now expose explicit accessible button names/hints and stable test IDs. Deterministic `RIDER-ACTIVE-BOOKING-UI-001` covers idle/busy helper state and source wiring. The retry still calls the existing authenticated server-history refresh; View active ride only switches to Activity. No booking, reservation, API, lifecycle, fare, Driver or iOS behavior changed. Android Rider remains the current platform phase; do not start Driver until Rider's implementation, tests, debug/release builds and emulator smoke exit. iOS remains gated behind both Android apps.
+
+
+## Rider live trip-map accessibility — PR #194 (2026-11-19)
+
+The active-ride `MapView` now has an accessible label/hint and stable test ID. Driver and pickup markers describe their meaning; panning still pauses automatic follow. `RIDER-LOCATION-UI-005` checks source wiring. The map's existing server-authorised active-sharing and valid-coordinate guard remains unchanged. No GPS, API, SignalR, Driver or iOS behavior changed. Android Rider remains the current phase; Driver and iOS stay gated.
