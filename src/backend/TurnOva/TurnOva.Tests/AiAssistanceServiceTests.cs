@@ -616,6 +616,35 @@ public sealed class AiAssistanceServiceTests
             service.ExplainHelpAsync(new string('x', 1001), null, CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData("InProgress", "state-in-progress")]
+    [InlineData("Unknown", "unsupported")]
+    public async Task ExplicitRideStateNeverReachesProvider(
+        string rideState,
+        string expectedSourceId)
+    {
+        var providerCalls = 0;
+        var provider = new FakeProvider
+        {
+            HelpHandler = (_, _) =>
+            {
+                providerCalls++;
+                return Task.FromResult<HelpProviderResult?>(new HelpProviderResult("made-up-policy"));
+            }
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.ExplainHelpAsync(
+            "What is happening with my trip?",
+            rideState,
+            CancellationToken.None);
+
+        Assert.Equal(expectedSourceId, result.SourceId);
+        Assert.Equal(0, providerCalls);
+        Assert.NotEqual("provider-approved-content", result.Source);
+        Assert.NotEqual("made-up-policy", result.SourceId);
+    }
+
     private static AiAssistanceService CreateService(
         IAiAssistantProvider provider,
         bool enabled = false,
