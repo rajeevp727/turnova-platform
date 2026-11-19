@@ -85,13 +85,12 @@ public sealed class CosmosMigrationRunnerTests
                 TimeSpan.FromMilliseconds(1)),
             NullLogger<CosmosMigrationLeaseCoordinator>.Instance);
         var (client, historyContainer) = CreateCosmosClient();
-        var historyResponse = new Mock<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>();
         historyContainer.Setup(container => container.CreateItemAsync(
                 It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
                 It.IsAny<PartitionKey?>(),
                 It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(historyResponse.Object);
+            .Returns(Task.FromResult<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>(null!));
 
         var runner = new CosmosMigrationRunner(
             client,
