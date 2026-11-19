@@ -54,6 +54,23 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
     }
 
     [Fact]
+    public async Task AcquireBacksOffWhenLeaseDisappearsBetweenCreateAndRead()
+    {
+        var created = new CosmosMigrationLease(
+            "schema-migrations", "new-owner", "etag-created", DateTimeOffset.UtcNow.AddMinutes(30));
+        var store = new FakeLeaseStore();
+        store.CreateResults.Enqueue(null);
+        store.CreateResults.Enqueue(created);
+        var delay = new ImmediateDelay();
+        var coordinator = CreateCoordinator(store, delay);
+
+        var acquired = await coordinator.AcquireAsync(CancellationToken.None);
+
+        Assert.Equal(created, acquired);
+        Assert.Equal(1, delay.CallCount);
+    }
+
+    [Fact]
     public async Task AcquireWaitsForAnUnexpiredLeaseThenRetriesCreate()
     {
         var active = new CosmosMigrationLease(
