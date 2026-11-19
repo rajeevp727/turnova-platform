@@ -1785,3 +1785,15 @@ AI-01/help and support UI responses are now fenced by both request sequence and 
 Source/test head: `7e7649761d102646415997dc622ad2bc1ea34f3f`. The shared Rider timestamp validator now enforces the .NET `DateTimeOffset` response range: years 0001–9999, maximum offset ±14:00, no more than seven fractional-second digits, and a UTC-normalized instant within years 0001–9999. Deterministic cases `RIDER-TIMESTAMP-001..004` cover valid minimum/maximum boundary samples, year/fraction precision, offset limits and UTC underflow/overflow.
 
 This supplements the existing `RIDER-BOOKING-RESPONSE-004`, `RIDER-AGREEMENT-RESPONSE-002`, `RIDER-HISTORY-010..011` and `RIDER-LOCATION-UI-004` timestamp checks. It is client response validation only; no API, Cosmos, Driver or iOS behaviour changed. Acceptance-row statuses and the 19-row denominator are unchanged. Fresh exact-head CI and independent maintainer review are still required before PR #194 can merge.
+
+
+## Rider support response timestamp validation — PR #194 (2026-11-19)
+
+- **Phase:** Android — Rider first. API engineering exit remains complete; Driver Android remains gated until Rider exits, and iOS remains gated until both Android apps exit.
+- **Finding:** the Rider support response parser used permissive JavaScript `Date.parse`, even though the same client now has a strict validator aligned to the API's .NET `DateTimeOffset` representation. Impossible dates could therefore be normalized and accepted in this response path.
+- **Change:** `parseRiderSupportRequestResponse` now uses `isStrictIsoTimestampWithOffset`. Added `RIDER-SUPPORT-RESPONSE-001` for a valid seven-digit offset-qualified timestamp, impossible calendar dates, missing timezone, offsets beyond ±14:00, UTC underflow/overflow and excessive fractional precision.
+- **Source/test commit:** [c5d3660](https://github.com/rajeevp727/turnova-platform/commit/c5d36606eaedf93c035123e01a0eb0ff0759c931). The test plan was updated in the same commit.
+- **CI:** exact-head CI [#44425734899](https://github.com/rajeevp727/turnova-platform/actions/runs/44425734899) passed all 9 required API/Android jobs on the preceding head `a11196fa4fa034ea5a5a806e1d15eee3b62a314d`; 3 iOS jobs were correctly skipped. That run predates this parser/test change. Fresh exact-head CI is required; no result is inferred for this commit.
+- **Scope:** Rider client response validation only. No API, Cosmos, support policy, retention, Driver, iOS, fare, payment, dispatch or lifecycle write path changed. No secrets or containers added.
+- **Acceptance:** strict 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established.
+- **Next exact action:** run/inspect all required API/Android checks on the final documentation-bearing PR head, then continue Rider Android gaps. Do not start Driver or iOS early and do not merge on superseded checks or author-only COMMENT reviews.
