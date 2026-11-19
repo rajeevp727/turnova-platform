@@ -2800,7 +2800,7 @@ A separate Product/Safety decision is still required for Ops rejection/suspensio
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
-| COSMOS-UNION-001 | Cosmos reports HTTP 409 for a deterministic normalized Union ID | The persistence boundary returns a duplicate result; it does not fall back to the in-memory dictionary, overwrite the legacy record, or swallow the caller's cancellation token | `UnionCreateIfAbsentTests.CosmosCreateConflictReturnsFalseWithoutFallingBackToInMemoryStore` with mocked Cosmos Container | P0 |
+| COSMOS-UNION-001 | Cosmos reports HTTP 409 for a deterministic normalized Union ID | The persistence boundary returns a duplicate result; it does not fall back to the in-memory dictionary, overwrite the legacy record, and forwards the caller's cancellation token to Cosmos | `UnionCreateIfAbsentTests.CosmosCreateConflictReturnsFalseWithoutFallingBackToInMemoryStore` with mocked Cosmos Container | P0 |
 | COSMOS-UNION-002 | Cosmos create fails for a reason other than HTTP 409 | The provider failure propagates; it is not misreported as a duplicate Union | `UnionCreateIfAbsentTests.CosmosCreatePropagatesNonConflictFailures` with mocked Cosmos Container | P1 |
 
 The Operations endpoint maps the persistence boundary's duplicate result to HTTP 409. The existing concurrent API integration test covers the in-memory `ConcurrentDictionary.TryAdd` path; the new mocked-container tests exercise the production Cosmos `CreateItemAsync` conflict mapping and verify the `/unionId` partition key/cancellation forwarding. They are deterministic adapter evidence only; live Cosmos cross-instance create conflict, ETag, consistency and restart behavior remain external infrastructure validation.
