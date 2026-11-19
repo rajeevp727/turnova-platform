@@ -3172,7 +3172,7 @@ CI recovery: run #44137503480 executed 753 tests (751 passed, 2 failed) because 
 
 **External gate:** Infrastructure/Security must supply private object storage, malware scanning/quarantine, managed identity and provider-backed private retrieval. Product/Legal must approve consent, retention and deletion. Live Cosmos/provider validation remains separate. The Testing Clean result is a deterministic fake, not malware-scan evidence. Staging/Production fail closed until a real provider is configured.
 
-### Cosmos migration lease follow-up (planned; not implemented or passed)
+### Cosmos migration lease lifecycle and runner-fencing coverage
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
@@ -3180,6 +3180,7 @@ CI recovery: run #44137503480 executed 753 tests (751 passed, 2 failed) because 
 | COSMOS-MIG-008 | Lease renewal loses an ETag race or a renewal request fails | Renewal fails closed, cancels the migration token, and the runner checks cancellation after migration work before writing the history marker | Deterministic fake-store concurrency and runner cancellation boundary | P0 |
 | COSMOS-MIG-009 | Runner finishes or is cancelled while holding a renewed lease | Heartbeat is stopped and awaited before release; release uses the latest ETag and cannot delete a replacement owner's lease | Deterministic lifecycle and Cosmos adapter contract | P0 |
 | COSMOS-MIG-010 | Two runners acquire/recover an active or expired lease | Active lease is retried; expired lease takeover uses the observed ETag; only one owner can renew/release the current lease | Deterministic coordinator and Cosmos adapter ETag tests; live two-instance gate remains | P0 |
+| COSMOS-MIG-011 | Lease renewal loses ownership while a migration is running | Renewal conflict cancels migration execution; no MigrationHistory marker is written; runner releases only the observed lease | `CosmosMigrationRunnerTests.LeaseRenewalLossCancelsMigrationBeforeHistoryMarkerIsWritten` with mocked Cosmos bootstrap/history and deterministic fake lease store/delay | P0 |
 
 The runner now renews a 30-minute ETag-protected lease every 10 minutes and cancels migration work when renewal loses ownership. Current migrations create containers idempotently and receive the cancellation token. Future non-idempotent migrations must remain cancellation-aware and resumable. Live Cosmos multi-instance contention, process suspension/crash and restart remain external. Source/test CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Final documentation-head CI #44130301238 also passed 744/744 backend tests and native publish (artifact 14348249426). The current documentation-only sync requires its own exact-head CI before merge; live two-instance contention, process suspension/crash and restart remain external. Final PR #180 exact-head CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Live two-instance contention, process suspension/crash and restart remain external.
 
