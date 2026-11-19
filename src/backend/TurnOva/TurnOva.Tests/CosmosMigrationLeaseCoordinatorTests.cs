@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Tests;
@@ -125,6 +126,48 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
 
         Assert.Equal("etag-2", store.ReleasedLease?.ETag);
         Assert.Equal("owner-1", store.ReleasedLease?.Owner);
+    }
+
+    [Theory]
+    [InlineData(0, 10, 1)]
+    [InlineData(30, 0, 1)]
+    [InlineData(30, 30, 1)]
+    [InlineData(30, 10, 0)]
+    public async Task AcquireRejectsInvalidLeaseTimingBeforeStoreAccess(
+        int leaseMinutes,
+        int renewalMinutes,
+        int retrySeconds)
+    {
+        var store = new Mock<ICosmosMigrationLeaseStore>(MockBehavior.Strict);
+        var coordinator = new CosmosMigrationLeaseCoordinator(
+            store.Object,
+            TimeProvider.System,
+            new ImmediateDelay(),
+            new CosmosMigrationLeaseOptions(
+                TimeSpan.FromMinutes(leaseMinutes),
+                TimeSpan.FromMinutes(renewalMinutes),
+                TimeSpan.FromSeconds(retrySeconds)),
+            NullLogger<CosmosMigrationLeaseCoordinator>.Instance);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.AcquireAsync(CancellationToken.None));
+
+        store.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("other-id", "owner-1")]
+    [InlineData("schema-migrations", "other-owner")]
+    public void LeaseStateRejectsAnUpdateFromAnotherLeaseIdentity(string id, string owner)
+    {
+        var initial = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-1", DateTimeOffset.UtcNow.AddMinutes(10));
+        var state = new CosmosMigrationLeaseState(initial);
+
+        Assert.Throws<InvalidOperationException>(() => state.Update(
+            new CosmosMigrationLease(id, owner, "etag-2", DateTimeOffset.UtcNow.AddMinutes(30))));
+
+        Assert.Equal(initial, state.Current);
     }
 
     private static CosmosMigrationLeaseCoordinator CreateCoordinator(
