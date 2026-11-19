@@ -67,7 +67,7 @@ External gates above are not reported as completed. Strict acceptance remains 0/
 
 | Phase | Exit evidence | State |
 |---|---|---|
-| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and exact-head API CI; PR #195 is merged but its missing independent review is a documented process exception; PR #197 requires independent review and main re-audit before phase exit | **Current phase — API active; PR #197 exact-head CI #44562777292 passed 794/794 and native publish** |
+| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and exact-head API CI; PR #195 is merged but its missing independent review is a documented process exception; PR #197 requires independent review and main re-audit before phase exit | **Current phase — API active; code/test head `37b151a5fa8628f48215b9fe7db7dd8451a3c5f8` passed CI #44585851675 with 797/797 backend tests and native publish** |
 | Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | **Gated — Rider first, Driver second** |
 | iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after both Android apps exit | **Gated — not started** |
 
