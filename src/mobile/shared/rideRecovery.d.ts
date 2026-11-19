@@ -4,6 +4,10 @@ export function isRiderRideHistoryShapeValid(
   history: unknown
 ): history is readonly { rideId: string; status?: unknown }[];
 
+export function hasUnresolvedRiderRideHistory(
+  history: unknown
+): boolean;
+
 export function isRiderRideDetailsResponseValid(
   response: unknown,
   expectedRideId: string
