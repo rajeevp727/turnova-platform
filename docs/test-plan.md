@@ -1181,6 +1181,7 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-017 | Rider/Driver asks what queue status means | Approved answer states Rider discovery is not FIFO-ranked or auto-assigned and leaves the internal FIFO role unresolved | Unit | P0 |
 | AI-018 | Driver asks about Online/Offline eligibility | Approved answer explains availability as one server-side eligibility input without promising discovery or assignment | Unit | P1 |
 | AI-019 | Provider attempts to supply a passenger count absent from Rider text | Provider contract cannot supply passenger count; response keeps it null and lists passengerCount for manual completion. No default is invented | Unit + API | P0 |
+| AI-020 | Assistance request logging privacy | Trip-intent/help logs contain only use-case/source/outcome metadata; route, raw prompt, contact and payment values are absent | API integration security | P0 |
 | AI-020 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
 | AI-021 | AI trip draft omits passenger count while Rider form previously contains its default | Rider form clears the stale/default passenger value; discovery and booking remain blocked until the Rider manually enters an integer from 1 through 6 | Shared mobile helper + Rider UI | P0 |
 
