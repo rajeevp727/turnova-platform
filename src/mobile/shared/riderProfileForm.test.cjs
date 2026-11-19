@@ -5,10 +5,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const {
+  getRiderHelpSourceLabel,
   getRiderProfileActionProps,
   getRiderProfileFieldProps,
   getRiderTabProps,
   getRiderThemeOptionProps,
+  normalizeRiderHelpResponse,
   shouldApplyRiderProfileRequestResponse
 } = require("./riderProfileForm.js");
 
@@ -145,4 +147,85 @@ test("RIDER-DISPATCH-UI-001: Rider help copy does not advertise FIFO ranking or 
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   assert.match(source, /placeholder="Ask about fare agreements, ride statuses or direct-payment reports"/);
   assert.doesNotMatch(source, /\bFIFO ranking\b|automatically assign(?:s|ed|ment)?(?:\s+the)?\s+(?:next\s+)?driver|automatic next[- ]driver assignment/i);
+});
+
+
+test("RIDER-HELP-RESPONSE-001: accept only bounded, allow-listed approved help responses", () => {
+  const supported = {
+    answer: "The Rider and selected Driver negotiate the fare directly.",
+    sourceId: "fare-negotiation",
+    escalationRequired: false,
+    source: "approved-content",
+    providerMetadata: { ignored: true },
+    privateReference: "must-not-be-projected"
+  };
+  assert.deepEqual(normalizeRiderHelpResponse(supported), {
+    answer: supported.answer,
+    sourceId: "fare-negotiation",
+    escalationRequired: false,
+    source: "approved-content"
+  });
+  assert.equal(
+    normalizeRiderHelpResponse({ ...supported, source: "provider-approved-content" }).source,
+    "provider-approved-content"
+  );
+  assert.equal(
+    normalizeRiderHelpResponse({ ...supported, source: "deterministic-fallback" }).source,
+    "deterministic-fallback"
+  );
+  const unsupported = normalizeRiderHelpResponse({
+    answer: "This is outside approved help. Please use the support contact.",
+    sourceId: "unsupported",
+    escalationRequired: true,
+    source: "deterministic-fallback"
+  });
+  assert.equal(unsupported?.escalationRequired, true);
+  assert.equal(unsupported?.sourceId, "unsupported");
+});
+
+test("RIDER-HELP-RESPONSE-002: reject malformed, unbounded, unknown or inconsistent help responses", () => {
+  const valid = {
+    answer: "The Rider and selected Driver negotiate the fare directly.",
+    sourceId: "fare-negotiation",
+    escalationRequired: false,
+    source: "approved-content"
+  };
+  const invalid = [
+    null, [], "help",
+    { ...valid, answer: "" },
+    { ...valid, answer: "   " },
+    { ...valid, answer: " " + valid.answer },
+    { ...valid, answer: "x".repeat(1001) },
+    { ...valid, answer: "answer\u0000hidden" },
+    { ...valid, sourceId: "unknown-entry" },
+    { ...valid, source: "arbitrary-provider-text" },
+    { ...valid, escalationRequired: "false" },
+    { ...valid, escalationRequired: true },
+    { ...valid, sourceId: "unsupported" },
+    { ...valid, sourceId: "unsupported", escalationRequired: true, source: "provider-approved-content" },
+    { ...valid, sourceId: "fare-negotiation", escalationRequired: true }
+  ];
+  for (const response of invalid) assert.equal(normalizeRiderHelpResponse(response), null);
+});
+
+test("Rider help source labels distinguish approved content, provider selection and deterministic fallback", () => {
+  assert.equal(getRiderHelpSourceLabel("approved-content"), "Approved in-repository help content");
+  assert.equal(getRiderHelpSourceLabel("provider-approved-content"), "AI-selected approved help content");
+  assert.equal(getRiderHelpSourceLabel("deterministic-fallback"), "Deterministic fallback from approved help content");
+  assert.throws(() => getRiderHelpSourceLabel("unknown"), /Unknown Rider help response source/);
+});
+
+test("RIDER-HELP-RESPONSE-001..002: App validates the help contract before rendering answer or source", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const askHelp=async()=>{");
+  const end = source.indexOf("const submitSupportRequest=async()=>{", start);
+  assert.ok(start >= 0 && end > start);
+  const handler = source.slice(start, end);
+  const fetchIndex = handler.indexOf('const response=await apiFetch("/api/v1/assistance/help"');
+  const normalizeIndex = handler.indexOf("normalizeRiderHelpResponse(response)");
+  const answerIndex = handler.indexOf("setHelpAnswer(");
+  assert.ok(fetchIndex >= 0 && normalizeIndex > fetchIndex && answerIndex > normalizeIndex);
+  assert.match(handler, /if\(!result\)throw new Error\("Help service returned an invalid response/);
+  assert.match(handler, /getRiderHelpSourceLabel\(result\.source\)/);
+  assert.doesNotMatch(handler, /as AssistantHelp/);
 });

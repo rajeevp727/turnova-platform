@@ -33,6 +33,68 @@ const RIDER_TABS = Object.freeze({
   Profile: { label: "Profile", hint: "Open Rider profile, help and appearance settings." }
 });
 
+const HELP_SOURCE_IDS = new Set([
+  "state-negotiating",
+  "state-agreement-confirmed",
+  "state-accepted",
+  "state-arrived",
+  "state-in-progress",
+  "state-completed",
+  "state-cancelled",
+  "state-expired",
+  "fare-negotiation",
+  "agreement-version",
+  "direct-payment",
+  "driver-photo",
+  "driver-selection",
+  "reservation",
+  "queue-status",
+  "availability-status",
+  "unsupported"
+]);
+
+const HELP_SOURCE_LABELS = Object.freeze({
+  "approved-content": "Approved in-repository help content",
+  "provider-approved-content": "AI-selected approved help content",
+  "deterministic-fallback": "Deterministic fallback from approved help content"
+});
+
+function normalizeRiderHelpResponse(value) {
+  const isRecord = item => item !== null && typeof item === "object" && !Array.isArray(item);
+  if (!isRecord(value) ||
+      typeof value.answer !== "string" ||
+      value.answer.length === 0 ||
+      value.answer.length > 1000 ||
+      value.answer !== value.answer.trim() ||
+      /[\u0000-\u001f\u007f-\u009f]/.test(value.answer) ||
+      typeof value.sourceId !== "string" ||
+      !HELP_SOURCE_IDS.has(value.sourceId) ||
+      typeof value.escalationRequired !== "boolean" ||
+      typeof value.source !== "string" ||
+      !Object.prototype.hasOwnProperty.call(HELP_SOURCE_LABELS, value.source)) return null;
+
+  // The API's unsupported entry is the only current help response that escalates.
+  if (value.sourceId === "unsupported") {
+    if (!value.escalationRequired || value.source !== "deterministic-fallback") return null;
+  } else if (value.escalationRequired) {
+    return null;
+  }
+
+  // Project only the approved response contract; ignore transport/provider metadata.
+  return Object.freeze({
+    answer: value.answer,
+    sourceId: value.sourceId,
+    escalationRequired: value.escalationRequired,
+    source: value.source
+  });
+}
+
+function getRiderHelpSourceLabel(source) {
+  const label = HELP_SOURCE_LABELS[source];
+  if (!label) throw new RangeError("Unknown Rider help response source.");
+  return label;
+}
+
 function getRiderThemeOptionProps(option, selected) {
   const definition = THEME_OPTIONS[option];
   if (!definition) throw new RangeError("Unknown Rider theme option.");
@@ -84,6 +146,8 @@ function shouldApplyRiderProfileRequestResponse(requestSequence, currentSequence
 }
 
 module.exports = {
+  normalizeRiderHelpResponse,
+  getRiderHelpSourceLabel,
   shouldApplyRiderProfileRequestResponse,
   getRiderProfileActionProps,
   getRiderProfileFieldProps,

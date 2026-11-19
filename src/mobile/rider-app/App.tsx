@@ -28,7 +28,7 @@ import { canDiscoverRiderTrip, validateRiderBookingText, getRiderDriverOptionPro
 import { finishRiderBookingAttempt, tryBeginRiderBookingAttempt } from "../shared/riderBookingAttempt";
 import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
 import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderHistoryRequestedAtLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideAgreementEventValid, isRiderRideLocationTimestampValid, isRiderRideStatusEventValid, normalizeRiderAgreementHistory, shouldApplyRiderAgreementHistoryResponse } from "../shared/riderActivityPresentation";
-import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps, shouldApplyRiderProfileRequestResponse } from "../shared/riderProfileForm";
+import { getRiderHelpSourceLabel, getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps, normalizeRiderHelpResponse, shouldApplyRiderProfileRequestResponse } from "../shared/riderProfileForm";
 import { getRiderSupportActionProps, getRiderSupportFieldProps, getRiderSupportRequestAttempt, submitRiderSupportRequest, validateRiderSupportRequest, type RiderSupportRequestAttempt } from "../shared/riderSupportRequest";
 
 type ThemePreference = "light" | "dark" | "system";
@@ -67,7 +67,7 @@ type DiscoveryUnion = { unionId: string; unionName: string; drivers: DiscoveryDr
 type DiscoveryResult = { pickupZoneId: string; journeyDistanceKm: number | null; unions: DiscoveryUnion[] };
 type RideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt?: string | null };
 type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: "Rider" | "Driver"; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
-type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
+
 async function saveTokens(t: Tokens, isCurrent: () => boolean) { return saveSessionTokensIfCurrent(SecureStore, t, isCurrent); }
 async function clearTokens() { await clearSessionTokens(SecureStore); }
 async function request(path: string, init: RequestInit = {}, token?: string) {
@@ -456,9 +456,11 @@ export default function App() {
       isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
     helpSubmissionInFlight.current=true;setHelpBusy(true);setHelpAnswer("");setError("");
     try{
-      const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question,rideState})}) as AssistantHelp;
+      const response=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question,rideState})});
       if(!isCurrent())return;
-      const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";
+      const result=normalizeRiderHelpResponse(response);
+      if(!result)throw new Error("Help service returned an invalid response. Please retry or contact support.");
+      const source=getRiderHelpSourceLabel(result.source);
       setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);
     }catch(e){if(isCurrent())setError(e instanceof Error?e.message:"Unable to load approved help content.");}
     finally{if(isCurrent()){helpSubmissionInFlight.current=false;setHelpBusy(false);}}

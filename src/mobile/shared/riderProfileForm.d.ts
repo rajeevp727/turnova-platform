@@ -2,6 +2,14 @@ export type RiderThemeOption = "system" | "light" | "dark";
 export type RiderProfileField = "helpQuestion";
 export type RiderProfileAction = "askHelp" | "signOut";
 export type RiderNavigationTab = "Book" | "Activity" | "Offers" | "Profile";
+export type RiderHelpSource = "approved-content" | "provider-approved-content" | "deterministic-fallback";
+
+export interface RiderHelpResponse {
+  answer: string;
+  sourceId: string;
+  escalationRequired: boolean;
+  source: RiderHelpSource;
+}
 
 export interface RiderThemeOptionProps {
   accessibilityRole: "radio";
@@ -34,5 +42,8 @@ export function getRiderThemeOptionProps(option: RiderThemeOption, selected: boo
 export function getRiderProfileFieldProps(field: RiderProfileField, disabled: boolean): RiderProfileFieldProps;
 export function getRiderProfileActionProps(action: RiderProfileAction, disabled: boolean, busy: boolean): RiderProfileActionProps;
 export function getRiderTabProps(tab: RiderNavigationTab, selected: boolean, disabled: boolean): RiderTabProps;
+
+export function normalizeRiderHelpResponse(value: unknown): RiderHelpResponse | null;
+export function getRiderHelpSourceLabel(source: RiderHelpSource): string;
 
 export function shouldApplyRiderProfileRequestResponse(requestSequence: number, currentSequence: number, requestSessionEpoch: number, currentSessionEpoch: number): boolean;
