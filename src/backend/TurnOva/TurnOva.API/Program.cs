@@ -3756,7 +3756,9 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
             var existing = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
-            var existingRide = await FindRideAsync(existing.Resource.rideId, ct);
+            var existingRide = await FindRideAsync(
+                existing.Resource.rideId, ct,
+                ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
             return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(ToRiderRideDetailsResponse(existingRide));
         }
     }
