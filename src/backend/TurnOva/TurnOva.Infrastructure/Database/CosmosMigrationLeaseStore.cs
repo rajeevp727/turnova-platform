@@ -120,6 +120,15 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         }
     }
 
-    private static CosmosMigrationLease ToLease(CosmosMigrationLeaseDocument document, string etag) =>
-        new(document.Id, document.Owner, etag, document.ExpiresAtUtc);
+    private static CosmosMigrationLease ToLease(CosmosMigrationLeaseDocument document, string etag)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (!string.Equals(document.Id, LeaseId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(document.Owner) ||
+            string.IsNullOrWhiteSpace(etag))
+            throw new InvalidOperationException(
+                "Cosmos returned migration lease metadata without the expected ID, owner and ETag.");
+
+        return new(document.Id, document.Owner, etag, document.ExpiresAtUtc);
+    }
 }
