@@ -52,8 +52,8 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(RideOfferStatuses.Pending, afterInterruptionOffer?.Status);
         Assert.Empty(advancer.AdvancedRideIds);
         var activityLedger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
-        Assert.Empty(activityLedger.Values.Where(item =>
-            item.DriverId == firstDriverId && item.ActivityType == "Rejected"));
+        Assert.DoesNotContain(activityLedger.Values, item =>
+            item.DriverId == firstDriverId && item.ActivityType == "Rejected");
 
         // The retry must recognize the same offer ID and must not move the Driver again.
         using var retry = await firstDriver.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null);
@@ -67,9 +67,9 @@ public sealed partial class RideApiIntegrationTests
 
         var auditEvents = await queueStore.GetAuditEventsAsync(
             "hyderabad-central", "cab", CancellationToken.None);
-        var rotation = Assert.Single(auditEvents.Where(item =>
+        var rotation = Assert.Single(auditEvents, item =>
             item.EventType == QueueAuditEventTypes.RotatedToBack &&
-            item.OfferId == initialOffer.CurrentOfferId));
+            item.OfferId == initialOffer.CurrentOfferId);
         Assert.Equal(firstDriverId, rotation.DriverId);
 
         var resolvedOffer = await offerStore.GetByRideAsync(ride.RideId, CancellationToken.None);
@@ -77,8 +77,8 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(RideOfferStatuses.Rejected,
             Assert.Single(resolvedOffer!.Attempts, item => item.OfferId == initialOffer.CurrentOfferId).Status);
         Assert.Equal(new[] { ride.RideId }, advancer.AdvancedRideIds.ToArray());
-        Assert.Single(activityLedger.Values.Where(item =>
-            item.DriverId == firstDriverId && item.ActivityType == "Rejected"));
+        Assert.Single(activityLedger.Values, item =>
+            item.DriverId == firstDriverId && item.ActivityType == "Rejected");
     }
 
     private sealed class CrashAfterFirstRotationQueueStore(IQueueStore inner) : IQueueStore
