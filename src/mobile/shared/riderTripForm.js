@@ -209,9 +209,9 @@ function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
   const distance = Number.isFinite(driver?.distanceToPickupKm)
     ? driver.distanceToPickupKm.toFixed(1) + " kilometres from pickup"
     : "pickup distance unavailable";
-  const union = typeof unionName === "string" && unionName.trim()
-    ? ", " + unionName.trim() + " union"
-    : "";
+  const union = typeof unionName === "string" && unionName.length === 0
+    ? ""
+    : ", " + (isSafeTrimmedText(unionName, 120) ? unionName : "Approved") + " union";
 
   return {
     accessibilityRole: "radio",
