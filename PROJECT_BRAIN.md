@@ -6,8 +6,8 @@
 **Last verified:** 2026-11-19
 **Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`; PR #193 is merged.
-**Current phase:** API — role-scoped response/privacy audit reopened. The correction is on PR #195 and its exact-head API CI passed; merge/review and main re-audit remain pending.
-**Only active feature PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`, head `4b9c0cd72b462ef768afc081bca01da3ade1ad9b`; [CI #44496152952](https://github.com/rajeevp727/turnova-platform/actions/runs/44496152952) passed 763/763 backend tests and native .NET 10 Release publish. PR #194 is Draft.
+**Current phase:** API — role-scoped response/privacy audit reopened. Source/test head `4b9c0cd72b462ef768afc081bca01da3ade1ad9b` passed 763/763 backend tests and native .NET 10 Release publish (CI #44496152952); docs-sync head `4f8bd0358939ef2052b4fbc9db5cc44063d8b0df` has CI #44497100207 pending.
+**Only active feature PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`. PR #194 is Draft; do not resume Android until API exit.
 **Review/merge:** PR #195 has no independent review recorded; branch-protection/ruleset inspection was denied by repository permissions. Do not self-approve or merge until required review/policy is known.
 **Parked Rider PR #194:** head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`; runs #44493716559/#44494246556 failed due invalid control-character regex escaping, stale source-order assertion and nullable passengers activity type mismatch. Fix after API exit.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
