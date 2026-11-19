@@ -1,6 +1,122 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { applyRideStatusUpdate, findActiveRide, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
+const { applyRideStatusUpdate, findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, normalizeRiderRideHistory, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } = require("./rideRecovery.js");
+
+const validHistoryItem = (overrides = {}) => ({
+  rideId: "ride-1",
+  pickup: "Nizampet",
+  dropoff: "HITEC City",
+  passengers: 2,
+  serviceClass: "cab",
+  status: "Completed",
+  requestedAt: "2026-11-19T00:00:00Z",
+  acceptedAt: null,
+  stops: [],
+  ...overrides
+});
+
+test("RIDER-HISTORY-014: normalize empty and valid Rider history while preserving legacy service classes", () => {
+  assert.deepEqual(normalizeRiderRideHistory([]), []);
+  const normalized = normalizeRiderRideHistory([
+    validHistoryItem({ riderId: "private-rider", driverId: "private-driver", phoneNumber: "+910000000000", pickupLatitude: 17.4 }),
+    validHistoryItem({ rideId: "legacy-scooty", serviceClass: "Scooty" }),
+    validHistoryItem({ rideId: "legacy-bike", serviceClass: "Bike" }),
+    validHistoryItem({ rideId: "legacy-auto", serviceClass: "Auto" })
+  ]);
+  assert.ok(normalized);
+  assert.equal(normalized.length, 4);
+  assert.equal(normalized[0].serviceClass, "cab");
+  assert.equal(normalized[1].serviceClass, "Scooty");
+  assert.equal(normalized[2].serviceClass, "Bike");
+  assert.equal(normalized[3].serviceClass, "Auto");
+  assert.deepEqual(Object.keys(normalized[0]).sort(), [
+    "acceptedAt", "dropoff", "passengers", "pickup", "requestedAt",
+    "rideId", "serviceClass", "status", "stops"
+  ]);
+  assert.equal(normalized[0].riderId, undefined);
+  assert.equal(normalized[0].driverId, undefined);
+  assert.equal(normalized[0].phoneNumber, undefined);
+  assert.equal(isRiderRideHistoryShapeValid(normalized), true);
+});
+
+test("RIDER-HISTORY-014: malformed display fields use safe fallbacks and unknown states fail closed", () => {
+  const normalized = normalizeRiderRideHistory([validHistoryItem({
+    pickup: { unexpected: "private" },
+    dropoff: "  ",
+    passengers: "two",
+    serviceClass: "bike<script>",
+    status: "FutureServerStatus",
+    requestedAt: "not-a-date",
+    acceptedAt: "not-a-date",
+    stops: { unexpected: true },
+    riderId: "private-rider"
+  })]);
+  assert.deepEqual(normalized, [{
+    rideId: "ride-1",
+    pickup: "Pickup unavailable",
+    dropoff: "Drop-off unavailable",
+    passengers: null,
+    serviceClass: "unknown",
+    status: "Unknown",
+    requestedAt: "",
+    acceptedAt: null,
+    stops: []
+  }]);
+  assert.equal(hasUnresolvedRiderRideHistory(normalized), true);
+});
+
+test("Rider ride-history normalization rejects invalid and duplicate ride identities", () => {
+  for (const invalid of [
+    null,
+    {},
+    "not-an-array",
+    [null],
+    [42],
+    [[]],
+    [{}],
+    [validHistoryItem({ rideId: "" })],
+    [validHistoryItem({ rideId: " ride-1" })],
+    [validHistoryItem({ rideId: "ride-1 " })],
+    [validHistoryItem({ rideId: "ride-1" }), validHistoryItem({ rideId: "ride-1" })]
+  ]) {
+    assert.equal(normalizeRiderRideHistory(invalid), null);
+    assert.equal(isRiderRideHistoryShapeValid(invalid), false);
+  }
+});
+
+test("Rider ride-details response must match the active history identity", () => {
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "InProgress" }, "ride-1"), true);
+  assert.equal(isRiderRideDetailsResponseValid({
+    rideId: "ride-1",
+    status: "InProgress",
+    requestedAt: "2026-11-19T00:00:00Z",
+    locationCapturedAtUtc: "2026-11-19T00:00:01Z"
+  }, "ride-1"), true);
+  for (const field of ["requestedAt", "acceptedAt", "negotiationExpiresAtUtc", "locationUpdatedAt", "locationCapturedAtUtc", "driverLocationCapturedAtUtc"]) {
+    assert.equal(isRiderRideDetailsResponseValid({
+      rideId: "ride-1",
+      status: "InProgress",
+      [field]: "2026-11-31T00:00:00Z"
+    }, "ride-1"), false, field);
+  }
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "FutureServerStatus" }, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1" }, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-2", status: "Completed" }, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid({ status: "Completed" }, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid([], "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid(null, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1" }, " ride-1"), false);
+});
+
+test("only the newest Rider history hydration request may apply its response", () => {
+  assert.equal(shouldApplyRideHistoryResponse(1, 1), true);
+  assert.equal(shouldApplyRideHistoryResponse(1, 2), false);
+  assert.equal(shouldApplyRideHistoryResponse(2, 2), true);
+  assert.equal(shouldApplyRideHistoryResponse(0, 0), false);
+  assert.equal(shouldApplyRideHistoryResponse(-1, -1), false);
+  assert.equal(shouldApplyRideHistoryResponse(Number.NaN, Number.NaN), false);
+  assert.equal(shouldApplyRideHistoryResponse(Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 1), false);
+});
 
 test("Rider recovery includes selected negotiation and active trip states", () => {
   const history = [
@@ -32,6 +148,29 @@ test("terminal-only or empty history clears stale active ride state", () => {
   assert.equal(findActiveRide(terminalHistory, "rider"), null);
   assert.equal(findActiveRide(terminalHistory, "driver"), null);
   assert.equal(findActiveRide([], "rider"), null);
+});
+
+test("Rider recovery retains unknown future lifecycle records until the server confirms a known terminal state", () => {
+  const unknown = { rideId: "future-status", status: "FutureServerStatus" };
+  assert.equal(findActiveRide([unknown], "rider"), unknown);
+});
+
+test("Rider recovery prefers a known active ride over an unknown future history value", () => {
+  const unknown = { rideId: "future-status", status: "FutureServerStatus" };
+  const active = { rideId: "active", status: "InProgress" };
+  assert.equal(findActiveRide([unknown, active], "rider"), active);
+});
+
+test("Rider recovery fails closed for a malformed lifecycle value", () => {
+  const malformed = { rideId: "missing-status" };
+  assert.equal(findActiveRide([malformed], "rider"), malformed);
+});
+
+test("Driver legacy Offered exclusion is unchanged by Rider unknown-status fallback", () => {
+  const legacyOffer = { rideId: "legacy-offer", status: "Offered" };
+  const unknown = { rideId: "future-status", status: "FutureServerStatus" };
+  assert.equal(findActiveRide([legacyOffer], "driver"), null);
+  assert.equal(findActiveRide([unknown], "driver"), null);
 });
 
 test("ride status events apply only to the current ride while its screen effect is active", () => {
@@ -101,4 +240,96 @@ test("live terminal status events update only the matching Driver history row", 
   ]);
   assert.equal(updated[1], history[1]);
   assert.equal(history[0].status, "InProgress");
+});
+
+
+test("RIDER-HISTORY-011: active ride details reject impossible optional server timestamps", () => {
+  for (const field of ["requestedAt", "acceptedAt", "negotiationExpiresAtUtc", "locationUpdatedAt", "locationCapturedAtUtc", "driverLocationCapturedAtUtc"]) {
+    assert.equal(isRiderRideDetailsResponseValid({
+      rideId: "ride-1",
+      [field]: "2026-11-31T00:00:00Z"
+    }, "ride-1"), false, field);
+  }
+  assert.equal(isRiderRideDetailsResponseValid({
+    rideId: "ride-1",
+    status: "InProgress",
+    requestedAt: "2024-02-29T00:00:00Z",
+    locationCapturedAtUtc: null
+  }, "ride-1"), true);
+});
+
+
+test("RIDER-HISTORY-012: unknown or malformed history remains unresolved alongside known active rows", () => {
+  const active = { rideId: "active", status: "InProgress" };
+  const unknown = { rideId: "future-status", status: "FutureServerStatus" };
+  const malformed = { rideId: "missing-status" };
+
+  assert.equal(hasUnresolvedRiderRideHistory([]), false);
+  assert.equal(hasUnresolvedRiderRideHistory([{ rideId: "completed", status: "Completed" }]), false);
+  assert.equal(hasUnresolvedRiderRideHistory([unknown]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([active, unknown]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([unknown, active]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([active, malformed]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([
+    { rideId: "legacy-offer", status: "Offered" },
+    { rideId: "selected-negotiation", status: "Negotiating" }
+  ]), true);
+  assert.equal(hasUnresolvedRiderRideHistory([
+    { rideId: "active-one", status: "InProgress" },
+    { rideId: "active-two", status: "Accepted" }
+  ]), true);
+  assert.equal(hasUnresolvedRiderRideHistory(null), true);
+});
+
+test("RIDER-HISTORY-012: Rider hydration checks all lifecycle values before detail lookup or success", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const loadRideHistory=useCallback");
+  const end = source.indexOf("useEffect(()=>", start);
+  assert.ok(start >= 0 && end > start);
+  const hydration = source.slice(start, end);
+  const normalized = hydration.indexOf("normalizeRiderRideHistory(historyResponse)");
+  const unresolved = hydration.indexOf("hasUnresolvedRiderRideHistory(history)");
+  const active = hydration.indexOf('findActiveRide(history, "rider")');
+  const detail = hydration.indexOf('apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId))');
+  const loaded = hydration.indexOf("setActiveRideStateLoaded(true)");
+  assert.ok(normalized >= 0 && unresolved > normalized && active > unresolved);
+  assert.ok(detail > active && loaded > detail);
+  assert.match(hydration, /if\(hasUnresolvedRiderRideHistory\(history\)\)\{[\s\S]*?setRideHistory\(history\);[\s\S]*?Booking remains disabled/);
+});
+
+test("RIDER-HISTORY-013: active ride details require a known nonterminal lifecycle status", () => {
+  const activeStatuses = [
+    "Requested", "Matching", "Offered", "Negotiating",
+    "AgreementConfirmed", "Accepted", "Arrived", "InProgress"
+  ];
+  for (const status of activeStatuses) {
+    assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status }, "ride-1"), true, status);
+  }
+
+  for (const status of ["Completed", "Cancelled", "Expired", "FutureServerStatus", "", " InProgress", "InProgress "]) {
+    assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status }, "ride-1"), false, status);
+  }
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: null }, "ride-1"), false);
+});
+
+test("RIDER-HISTORY-013: Rider hydration validates detail lifecycle before committing active state", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const loadRideHistory=useCallback");
+  const end = source.indexOf("useEffect(()=>", start);
+  assert.ok(start >= 0 && end > start);
+  const hydration = source.slice(start, end);
+  const detailFetch = hydration.indexOf('apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId))');
+  const validation = hydration.indexOf("isRiderRideDetailsResponseValid(detailsResponse,active.rideId)");
+  const detailCommit = hydration.indexOf("activeDetails=detailsResponse as Ride");
+  const bookingReady = hydration.indexOf("setActiveRideStateLoaded(true)");
+  assert.ok(detailFetch >= 0 && validation > detailFetch);
+  assert.ok(detailCommit > validation && bookingReady > detailCommit);
+});
+
+
+test("RIDER-HISTORY-014: Rider Activity renders only normalized history and safe passenger fallbacks", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.ok(source.includes("normalizeRiderRideHistory(historyResponse)"));
+  assert.ok(source.includes('item.passengers===null?"Passenger count unavailable"'));
+  assert.ok(source.includes("getRiderRideStatusLabel(item.status)"));
 });
