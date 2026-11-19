@@ -9,7 +9,7 @@ import { readAccessTokenIfCurrent, readSessionTokens, saveSessionTokensIfCurrent
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { formatAgreementAmount } from "../shared/agreementFormatting";
-import { findActiveRide, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
+import { findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, isRiderRideHistoryShapeValid, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
