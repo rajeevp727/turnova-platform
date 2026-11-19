@@ -45,7 +45,7 @@ const darkColors: ThemeColors = {
   subtle: "#A6B3C2", label: "#A6B3C2", danger: "#FF8A80", success: "#70D6A0",
   tabInactive: "#9AA9B9", tabActive: "#18DDB9"
 };
-const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
+const API = (process.env.EXPO_PUBLIC_API_BASE_URL ?? "https://turnova.onrender.com").replace(/\/$/, "");
 const ZONE = "hyderabad-central";
 const DEFAULT_SERVICE_CLASS = "cab";
 type Tokens = { accessToken: string; refreshToken: string };
