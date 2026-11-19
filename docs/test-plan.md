@@ -3687,3 +3687,12 @@ These are response-validation regressions only. They do not change API timestamp
 | RIDER-SUPPORT-RESPONSE-001 | Support intake response timestamp | Accept only offset-qualified, calendar-valid timestamps within the .NET DateTimeOffset range and precision; reject impossible dates, missing offsets, offsets beyond ±14:00, UTC underflow/overflow and precision beyond seven fractional digits. | Automated Node unit | P1 |
 
 The support response parser reuses the shared Rider timestamp validator. This is client response validation only; server timestamps and support persistence remain authoritative.
+
+
+## Rider active-booking recovery accessibility — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-ACTIVE-BOOKING-UI-001 | Active booking recovery controls | Retry status check and View active ride are exposed as named buttons with truthful hints; retry reflects the auth-loading disabled/busy state; View active ride opens Activity without submitting another booking. | Automated Node helper + source wiring | P1 |
+
+This is an Android Rider accessibility/source-wiring increment under the existing selected-booking and recovery requirements. It does not change server ride state, booking eligibility, API requests or reservation behavior.
