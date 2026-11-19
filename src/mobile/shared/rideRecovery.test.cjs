@@ -39,6 +39,7 @@ test("Rider ride-details response must match the active history identity", () =>
   for (const field of ["requestedAt", "acceptedAt", "negotiationExpiresAtUtc", "locationUpdatedAt", "locationCapturedAtUtc", "driverLocationCapturedAtUtc"]) {
     assert.equal(isRiderRideDetailsResponseValid({
       rideId: "ride-1",
+      status: "InProgress",
       [field]: "2026-11-31T00:00:00Z"
     }, "ride-1"), false, field);
   }
@@ -195,6 +196,7 @@ test("RIDER-HISTORY-011: active ride details reject impossible optional server t
   }
   assert.equal(isRiderRideDetailsResponseValid({
     rideId: "ride-1",
+    status: "InProgress",
     requestedAt: "2024-02-29T00:00:00Z",
     locationCapturedAtUtc: null
   }, "ride-1"), true);
