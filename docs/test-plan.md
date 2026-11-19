@@ -1183,8 +1183,6 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-019 | Provider attempts to supply a passenger count absent from Rider text | Provider contract cannot supply passenger count; response keeps it null and lists passengerCount for manual completion. No default is invented | Unit + API | P0 |
 | AI-020 | Assistance request logging privacy | Trip-intent/help logs contain only use-case/source/outcome metadata; route, raw prompt, contact and payment values are absent | API integration security | P0 |
 | AI-021 | Help provider prompt privacy | Provider receives only allow-listed generic keywords and approved source IDs; raw question, precise location, contact and payment values are absent | Unit/security | P0 |
-| AI-020 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
-| AI-021 | AI trip draft omits passenger count while Rider form previously contains its default | Rider form clears the stale/default passenger value; discovery and booking remain blocked until the Rider manually enters an integer from 1 through 6 | Shared mobile helper + Rider UI | P0 |
 
 | AI-022 | Known ride-state explanation exceeds MaxOutputCharacters | Approved state content is returned only when it fits the configured limit; otherwise the service returns a short deterministic escalation response within the same limit | Unit | P0 |
 | AI-023 | Unsupported-help fallback is subject to the configured output limit | Every unsupported/ambiguous help path returns a bounded escalation response; no fallback can exceed MaxOutputCharacters | Unit | P0 |
@@ -1204,6 +1202,8 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-037 | Oversized trip-intent or help JSON body exceeds 16 KiB | Real Kestrel returns HTTP 413 before the assistance service/provider is invoked; both endpoints declare the same request-size limit and OpenAPI response | Real Kestrel host integration | P0 |
 | AI-038 | Assistance request contains unknown ride, location, fare, contact or payment properties | HTTP 400; strict request DTOs accept only text for trip intent and question/optional approved rideState for help | API integration/security | P0 |
 | AI-039 | Caller supplies a ride state to help while provider is enabled | A known state returns only its approved in-repository explanation and an unknown state escalates; neither path invokes the provider or forwards caller-supplied rideState | Unit/security | P0 |
+| AI-040 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
+| AI-041 | AI trip draft omits passenger count while Rider form previously contains its default | Rider form clears the stale/default passenger value; discovery and booking remain blocked until the Rider manually enters an integer from 1 through 6 | Shared mobile helper + Rider UI | P0 |
 
 **AI-01 test-helper correction:** `ValidateOptionsResult.Failures` may be null on success; assertions must use a null-safe empty sequence when constructing failure diagnostics. The first CI run caught this test-only failure (627/632 passed after Release build); corrected helper is in PR #165 source/test head `1289297e68297da2ab3629d820c3445bd39187cd`.
 
