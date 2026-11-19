@@ -6,7 +6,7 @@ Latest completed exact-head run on documentation-bearing head `9c50d518e319b5891
 
 **Phase state:** `.github/turnova-phase.json` now matches `docs/architecture.md`: API `in_progress`, Android `not_started`, iOS `not_started`. This keeps Android/iOS CI and work gated until their ordered exits.
 
-**Review/merge:** PR #195 has no independent review recorded. Repository `.github/copilot-instructions.md` explicitly requires human approval before merge; the PR author is `rajeevp727`, so no self-review is possible. Branch-protection/ruleset inspection was denied by repository permissions. Do not self-approve, bypass policy or merge without explicit human approval.
+**Review/merge:** PR #195 has no independent review recorded. Repository `.github/copilot-instructions.md` explicitly requires human approval before merge; the PR author is `rajeevp727`, so no self-review is possible. GitHub branch metadata reports `main` as unprotected and the repository rulesets query returned an empty list. Nevertheless, `.github/copilot-instructions.md` explicitly requires human approval before merge. Do not self-approve or merge without that approval.
 
 **Parked Rider PR:** [#194](https://github.com/rajeevp727/turnova-platform/pull/194) remains Draft at `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`. Runs [#44493716559](https://github.com/rajeevp727/turnova-platform/actions/runs/44493716559) and [#44494246556](https://github.com/rajeevp727/turnova-platform/actions/runs/44494246556) failed; exact fixes are recorded below. No Driver or iOS completion work has started.
 
