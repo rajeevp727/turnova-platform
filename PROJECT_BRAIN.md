@@ -6,10 +6,10 @@
 **Last verified:** 2026-11-19
 **Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`; PR #193 is merged.
-**Current phase:** API — role-scoped response/privacy audit reopened. Source/test head `4b9c0cd72b462ef768afc081bca01da3ade1ad9b` passed 763/763 backend tests and native .NET 10 Release publish (CI #44496152952); docs-sync head `4f8bd0358939ef2052b4fbc9db5cc44063d8b0df` has CI #44497100207 pending.
-**Only active feature PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`. PR #194 is Draft; do not resume Android until API exit.
-**Review/merge:** PR #195 has no independent review recorded; branch-protection/ruleset inspection was denied by repository permissions. Do not self-approve or merge until required review/policy is known.
-**Parked Rider PR #194:** head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`; runs #44493716559/#44494246556 failed due invalid control-character regex escaping, stale source-order assertion and nullable passengers activity type mismatch. Fix after API exit.
+**Current phase:** API — role-scoped response/privacy audit reopened. Verified source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed exact-head CI #44497833447 (763/763 backend tests, native .NET 10 Release publish and verifier).
+**Only active feature PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`. `.github/turnova-phase.json` is API `in_progress`, Android/iOS `not_started`; CI confirms mobile jobs disabled.
+**Human merge gate:** repository `.github/copilot-instructions.md` explicitly requires human approval before merge. PR #195 has no independent review recorded; the PR author is the repository owner, so no self-review is possible. Do not merge without explicit human approval.
+**Parked Rider PR #194:** Draft, head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`; runs #44493716559/#44494246556 failed due invalid control-character regex escaping, stale source-order assertion and nullable passengers activity type mismatch. Fix after API exit.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 **External gates:** live Cosmos ETag/multi-instance/restart, production identity/hosting/provider access, approved radius/location freshness, routing/maps/SignalR, private-media scanning/retention/consent, support/reconciliation policy, Union legal approval, Android/iOS physical-device tests and signing.
 
@@ -3055,6 +3055,6 @@ PR #193 remains open at the verified head. No approval was submitted; branch `ma
 **Next:** recheck PR #193 head/checks after this documentation-only synchronization. Merge only if the latest documentation-bearing head has all required API/Android jobs green and GitHub still permits the merge without self-approval or bypass. Re-read main after merge and continue Rider-only work. Strict acceptance remains 0/19 Verified; production readiness is not established.
 
 
-## API role-scoped response privacy audit — 2026-11-19 (latest)
+## API role-scoped response privacy audit — 2026-11-19 (verified source/config head)
 
-PR #195 at `4b9c0cd72b462ef768afc081bca01da3ade1ad9b` passed exact-head CI #44496152952: scope/backend success, 763/763 backend tests, native non-container .NET 10 Release publish and verifier (11 negative cases plus valid fixture). Role-scoped Rider/Driver/agreement DTOs, location privacy and legacy non-Cab suppression are implemented and tested. PR #195 remains unmerged with no independent review recorded; API phase stays current until review/policy, merge and main re-audit. PR #194 is Draft with three known Rider CI/type issues; do not resume Android before API exit.
+PR #195 verified source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed exact-head CI #44497833447: scope/backend success, 763/763 backend tests, native non-container .NET 10 Release publish, publish verifier (11 negative cases plus valid fixture), artifact 14516745376. The phase-scope log confirms mobile CI disabled, Android inactive and iOS inactive. `.github/turnova-phase.json` now matches the architecture document: API in_progress, Android not_started, iOS not_started. Role-scoped Rider/Driver/agreement DTOs, location privacy and legacy non-Cab suppression are implemented and tested. PR #195 remains unmerged because repository instructions require explicit human approval; API phase stays current until approval/merge and main re-audit. PR #194 remains Draft with known Rider failures; do not resume Android before API exit.

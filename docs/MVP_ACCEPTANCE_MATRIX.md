@@ -2,11 +2,13 @@
 
 **Last updated:** 2026-11-19. **Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`. **Current platform phase:** API — role-scoped ride response/privacy audit (reopened).
 
-**Active API PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`. Source/test head `4b9c0cd72b462ef768afc081bca01da3ade1ad9b` passed [CI #44496152952](https://github.com/rajeevp727/turnova-platform/actions/runs/44496152952): scope/backend green, 763/763 backend tests, native .NET 10 Release build/publish and publish verifier (11 negative cases plus valid fixture). Current docs-sync head `4f8bd0358939ef2052b4fbc9db5cc44063d8b0df` has exact-head CI [#44497100207](https://github.com/rajeevp727/turnova-platform/actions/runs/44497100207) pending; do not treat the earlier run as final-head verification.
+**Active API PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`. Verified source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed [exact-head CI #44497833447](https://github.com/rajeevp727/turnova-platform/actions/runs/44497833447): scope + backend green, **763/763 backend tests**, native .NET 10 Release linux-x64 publish, verifier 11 negative cases plus valid fixture, [publish artifact 14516745376](https://github.com/rajeevp727/turnova-platform/actions/runs/44497833447/artifacts/14516745376). The scope job confirmed mobile CI disabled, Android phase inactive and iOS phase inactive. A documentation-only handoff update follows this verified source/config head; no API code changed after it.
 
-**Review/merge:** PR #195 is open and mergeable, but no independent review is recorded. Branch-protection/ruleset inspection was denied by repository permissions, so merge policy cannot be confirmed. Do not self-approve or merge until required review/policy is known.
+**Phase state:** `.github/turnova-phase.json` now matches `docs/architecture.md`: API `in_progress`, Android `not_started`, iOS `not_started`. This keeps Android/iOS CI and work gated until their ordered exits.
 
-**Parked Rider PR:** [#194](https://github.com/rajeevp727/turnova-platform/pull/194) remains Draft at `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`. Runs [#44493716559](https://github.com/rajeevp727/turnova-platform/actions/runs/44493716559) and [#44494246556](https://github.com/rajeevp727/turnova-platform/actions/runs/44494246556) failed; exact fixes are recorded in the current-step handoff. No Driver or iOS completion work has started.
+**Review/merge:** PR #195 has no independent review recorded. Repository `.github/copilot-instructions.md` explicitly requires human approval before merge; the PR author is `rajeevp727`, so no self-review is possible. Branch-protection/ruleset inspection was denied by repository permissions. Do not self-approve, bypass policy or merge without explicit human approval.
+
+**Parked Rider PR:** [#194](https://github.com/rajeevp727/turnova-platform/pull/194) remains Draft at `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`. Runs [#44493716559](https://github.com/rajeevp727/turnova-platform/actions/runs/44493716559) and [#44494246556](https://github.com/rajeevp727/turnova-platform/actions/runs/44494246556) failed; exact fixes are recorded below. No Driver or iOS completion work has started.
 
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). **Production readiness:** not established. Live Cosmos, identity, hosting, providers, product policy, legal and physical-device gates remain external. No Docker/container work.
 
@@ -52,7 +54,7 @@ The 7 Rider profile/help/theme/navigation cases are deterministic helper/source-
 
 **API CI evidence:** PR #183 exact-head run [#44154364366](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366) passed the scope detector, .NET 10 Release build, **758/758 backend tests (0 failed, 0 skipped)**, native non-container API publish, publish verifier and artifact validation (artifact [14360582057](https://github.com/rajeevp727/turnova-platform/actions/runs/44154364366/artifacts/14360582057)). Android/iOS jobs were correctly skipped while the API phase was active. PR #183 merged at `dda08764b25f2a2b4f5e7665e85a59e539d8663e`.
 
-**Current API privacy correction:** PR #195 source/test head `4b9c0cd72b462ef768afc081bca01da3ade1ad9b` passed exact-head run [#44496152952](https://github.com/rajeevp727/turnova-platform/actions/runs/44496152952): scope/backend green, **763/763 backend tests**, native .NET 10 Release publish, publish verifier (11 negative cases plus valid fixture), artifact `14515835555`. Current docs-sync head `4f8bd0358939ef2052b4fbc9db5cc44063d8b0df` is under exact-head CI [#44497100207](https://github.com/rajeevp727/turnova-platform/actions/runs/44497100207). Mobile jobs were correctly skipped for this API-only PR. PR #195 remains unmerged with no independent review recorded; therefore the platform gate is not yet exited.
+**Current API privacy correction:** PR #195 verified source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed exact-head run [#44497833447](https://github.com/rajeevp727/turnova-platform/actions/runs/44497833447): scope/backend green, **763/763 backend tests**, native .NET 10 Release publish, publish verifier (11 negative cases plus valid fixture), artifact [14516745376](https://github.com/rajeevp727/turnova-platform/actions/runs/44497833447/artifacts/14516745376). Scope confirmed mobile CI, Android and iOS phases inactive. A docs-only handoff follows with no code/config change. Repository instructions require explicit human approval before merge; PR #195 remains unmerged, so the platform gate is not yet exited.
 
 External gates above are not reported as completed. Strict acceptance remains 0/19 until each row's full external and platform evidence passes; production readiness is not established. AI-01 is supplemental and outside the denominator.
 
@@ -60,7 +62,7 @@ External gates above are not reported as completed. Strict acceptance remains 0/
 
 | Phase | Exit evidence | State |
 |---|---|---|
-| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and final-head API CI; PR #195 must be reviewed/merged and main re-audited | **Current phase — reopened; PR #195 CI passed, review/merge pending** |
+| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and final-head API CI; PR #195 must be reviewed/merged and main re-audited | **Current phase — reopened; PR #195 CI passed, explicit human approval/merge pending** |
 | Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | **Gated — Rider first, Driver second** |
 | iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after both Android apps exit | **Gated — not started** |
 
@@ -142,8 +144,8 @@ External API gates (live Cosmos ETag/multi-instance/restart, production identity
 
 ## Highest-priority next work
 
-1. **Current P0 — API PR #195:** finish exact-head CI on the docs-bearing PR head. Source/test head `4b9c0cd72b462ef768afc081bca01da3ade1ad9b` passed 763/763 backend tests and native non-container .NET 10 Release publish; docs-sync head `4f8bd0358939ef2052b4fbc9db5cc44063d8b0df` is pending CI #44497100207.
-2. **Review/merge:** PR #195 has no independent review recorded; branch-protection/ruleset inspection was denied by repository permissions. Confirm required review/policy, never self-approve or bypass. Re-read main after merge and re-run the API phase exit audit.
+1. **Current P0 — API PR #195:** verified source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed exact-head CI #44497833447: 763/763 backend tests, native non-container .NET 10 Release publish, publish verifier and phase-scope validation.
+2. **Human merge gate:** repository `.github/copilot-instructions.md` explicitly requires human approval before merge. PR #195 has no independent review recorded; do not self-approve or bypass. Re-read main after approval/merge and repeat the API phase exit audit.
 3. **Then Android Rider:** resume Draft PR #194 only after API exit. Fix the invalid control-character regex, stale history source-order assertion and nullable passengers activity/accessibility type mismatch; then complete Rider tests, debug/release builds and emulator smoke.
 4. **Then Android Driver:** only after Rider exits; complete Driver-specific flows/tests/builds/emulator smoke.
 5. **Then iOS Rider and Driver:** only after both Android apps exit; complete simulator builds and launch smoke in order.
