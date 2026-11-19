@@ -45,7 +45,7 @@ const darkColors: ThemeColors = {
   subtle: "#A6B3C2", label: "#A6B3C2", danger: "#FF8A80", success: "#70D6A0",
   tabInactive: "#9AA9B9", tabActive: "#18DDB9"
 };
-const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
+const API = (process.env.EXPO_PUBLIC_API_BASE_URL ?? "https://turnova.onrender.com").replace(/\/$/, "");
 const ZONE = "hyderabad-central";
 const DEFAULT_SERVICE_CLASS = "cab";
 type Tokens = { accessToken: string; refreshToken: string };
@@ -93,6 +93,7 @@ export default function App() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [name, setName] = useState("");
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [membership, setMembership] = useState<QueueMembership>({ isQueued: false, position: null });
@@ -296,7 +297,7 @@ export default function App() {
       const accepted = await acceptSession(result, authEpoch, true);
       if (!accepted) throw new Error("Session changed. Please sign in again.");
       setPassword("");
-    } catch (e) { if (sessionEpoch.current === authEpoch) setError(e instanceof Error ? e.message : "Authentication failed."); }
+    } catch (e) { if (sessionEpoch.current === authEpoch) { const message = e instanceof Error ? e.message : "Authentication failed."; setError(/network request failed|failed to fetch|networkerror/i.test(message) ? "Unable to reach the TurnOva API. Check that EXPO_PUBLIC_API_BASE_URL points to the live HTTPS API and that the service is running." : message); } }
     finally { if (sessionEpoch.current === authEpoch) setLoading(false); }
   };
 
@@ -1184,7 +1185,12 @@ export default function App() {
         <View style={styles.card}>
           {mode === "register" && <TextInput value={name} onChangeText={setName} style={styles.input} placeholderTextColor={colors.muted} placeholder="Full name" autoCapitalize="words" />}
           <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholderTextColor={colors.muted} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-          <TextInput value={password} onChangeText={setPassword} style={styles.input} placeholderTextColor={colors.muted} placeholder="Password" secureTextEntry />
+          <View style={styles.passwordField}>
+            <TextInput value={password} onChangeText={setPassword} style={styles.passwordInput} placeholderTextColor={colors.muted} placeholder="Password" secureTextEntry={!passwordVisible} />
+            <Pressable testID="driver-auth-password-visibility" accessibilityRole="button" accessibilityLabel={passwordVisible ? "Hide password" : "Show password"} onPress={() => setPasswordVisible(value => !value)} hitSlop={10} style={styles.passwordToggle}>
+              <Text style={styles.passwordToggleText}>{passwordVisible ? "◉" : "👁"}</Text>
+            </Pressable>
+          </View>
           <Pressable style={styles.primary} disabled={loading || !email.trim() || !password} onPress={() => void authenticate()}><Text style={styles.primaryText}>{loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create driver account"}</Text></Pressable>
           <Pressable onPress={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}><Text style={styles.link}>{mode === "login" ? "New to TurnOva? Create an account" : "Already registered? Sign in"}</Text></Pressable>
           {!!error && <Text style={styles.error}>{error}</Text>}
@@ -1305,6 +1311,6 @@ export default function App() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  safe:{flex:1,backgroundColor:colors.background},header:{backgroundColor:colors.header,padding:22,paddingTop:18},brand:{color:"#FFFFFF",fontSize:25,fontWeight:"800"},tagline:{color:colors.subtle,marginTop:4,fontSize:12},role:{color:colors.tabActive,fontWeight:"800",marginTop:6},content:{padding:22,paddingBottom:34},eyebrow:{color:colors.tabActive,fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:colors.text,fontSize:28,fontWeight:"800",marginTop:8},sub:{color:colors.muted,fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:colors.surface,padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.text,marginBottom:12},primary:{backgroundColor:colors.accent,borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:colors.accentText,fontWeight:"800"},link:{color:colors.tabActive,fontWeight:"800",textAlign:"center",marginTop:18},label:{color:colors.label,fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},cardTitle:{color:colors.text,fontSize:18,fontWeight:"800",marginVertical:8},position:{color:colors.tabActive,fontSize:42,fontWeight:"900",marginTop:6},muted:{color:colors.muted,fontSize:13,marginTop:5},queueItem:{backgroundColor:colors.surface,padding:14,borderRadius:12,marginBottom:8},error:{color:colors.danger,marginTop:12},success:{color:colors.success,marginTop:12},secondary:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:colors.text,fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:colors.surface,paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:colors.tabInactive,fontSize:12,fontWeight:"700"},tabActive:{color:colors.tabActive},themePicker:{flexDirection:"row",gap:8,marginTop:10,marginBottom:10},themeOption:{flex:1,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,alignItems:"center",backgroundColor:colors.surface},themeOptionSelected:{backgroundColor:colors.header,borderColor:colors.header},themeOptionText:{color:colors.muted,fontWeight:"700",fontSize:12},themeOptionTextSelected:{color:"#FFFFFF",fontWeight:"800"}
+  safe:{flex:1,backgroundColor:colors.background},header:{backgroundColor:colors.header,padding:22,paddingTop:18},brand:{color:"#FFFFFF",fontSize:25,fontWeight:"800"},tagline:{color:colors.subtle,marginTop:4,fontSize:12},role:{color:colors.tabActive,fontWeight:"800",marginTop:6},content:{padding:22,paddingBottom:34},eyebrow:{color:colors.tabActive,fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:colors.text,fontSize:28,fontWeight:"800",marginTop:8},sub:{color:colors.muted,fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:colors.surface,padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.text,marginBottom:12},passwordField:{flexDirection:"row",alignItems:"center",borderWidth:1,borderColor:colors.border,borderRadius:12,marginBottom:12,paddingRight:12},passwordInput:{flex:1,padding:14,color:colors.text},passwordToggle:{padding:6,minWidth:36,alignItems:"center",justifyContent:"center"},passwordToggleText:{fontSize:19,color:colors.muted},primary:{backgroundColor:colors.accent,borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:colors.accentText,fontWeight:"800"},link:{color:colors.tabActive,fontWeight:"800",textAlign:"center",marginTop:18},label:{color:colors.label,fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},cardTitle:{color:colors.text,fontSize:18,fontWeight:"800",marginVertical:8},position:{color:colors.tabActive,fontSize:42,fontWeight:"900",marginTop:6},muted:{color:colors.muted,fontSize:13,marginTop:5},queueItem:{backgroundColor:colors.surface,padding:14,borderRadius:12,marginBottom:8},error:{color:colors.danger,marginTop:12},success:{color:colors.success,marginTop:12},secondary:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:colors.text,fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:colors.surface,paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:colors.tabInactive,fontSize:12,fontWeight:"700"},tabActive:{color:colors.tabActive},themePicker:{flexDirection:"row",gap:8,marginTop:10,marginBottom:10},themeOption:{flex:1,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,alignItems:"center",backgroundColor:colors.surface},themeOptionSelected:{backgroundColor:colors.header,borderColor:colors.header},themeOptionText:{color:colors.muted,fontWeight:"700",fontSize:12},themeOptionTextSelected:{color:"#FFFFFF",fontWeight:"800"}
 });
 }
