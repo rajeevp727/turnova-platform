@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-
 namespace TurnOva.API;
 
 public static class InMemoryRideIdempotencyReservations
@@ -24,9 +22,8 @@ public static class InMemoryRideIdempotencyReservations
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedRideId);
 
-        // ICollection.Remove on ConcurrentDictionary compares both key and value
-        // atomically, unlike TryGetValue followed by TryRemove(key, out _).
-        return ((ICollection<KeyValuePair<string, string>>)reservations)
-            .Remove(new KeyValuePair<string, string>(key, expectedRideId));
+        // The .NET 10 key/value overload performs an atomic compare-and-remove;
+        // a stale cleanup cannot remove a replacement reservation for the same key.
+        return reservations.TryRemove(new KeyValuePair<string, string>(key, expectedRideId));
     }
 }
