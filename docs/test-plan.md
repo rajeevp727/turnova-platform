@@ -3638,3 +3638,11 @@ COSMOS-MIG-021 covers malformed migration lease IDs/owners and missing ETags. RI
 The final documentation-bearing PR #197 head `a56cc77992ae8111880a3f2608bf029d8bd15129` passed [CI #44637969745](https://github.com/rajeevp727/turnova-platform/actions/runs/44637969745). The backend Release suite executed **819/819 tests (0 failed, 0 skipped)**. Scope validation, native non-container .NET 10 Release linux-x64 publish, publish-verifier shell syntax, 11 negative verifier fixtures plus the valid fixture, and publish artifact validation passed; artifact [14584329890](https://github.com/rajeevp727/turnova-platform/actions/runs/44637969745/artifacts/14584329890).
 
 The code-bearing source/test head remains `e47924d03a7f186fc0286edc9e2c4ef642d7eebd`; the five commits to the final head are documentation-only. Mobile-auth, mobile, Android native/emulator and iOS native/Simulator jobs were skipped by the checked-in API-only phase gate and are not counted as passed. The Release build reported 25 xUnit analyzer warnings and 0 errors. This run adds no new test cases and does not establish live Cosmos, production identity/hosting/provider, mobile, physical-device or signing readiness.
+
+## RID-IDEM-006 — in-memory legacy idempotency reservation release races — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-IDEM-006 | In-memory legacy reservation disappears or is replaced during retry/cleanup | After a failed `TryAdd`, a reservation removed before lookup produces a retryable conflict instead of an indexer exception. Cleanup atomically removes only the exact key/value pair and cannot delete a replacement ride reservation. | Deterministic API helper unit + endpoint wiring | P1 |
+
+`InMemoryRideIdempotencyReservationsTests.TryGetRideIdReturnsFalseWhenReservationWasReleasedAfterTryAddConflict` covers the missing-read race; `TryRemoveExactDoesNotDeleteAReplacementReservation` verifies compare-and-remove semantics. The legacy compatibility endpoint uses these helpers. This is a local/test compatibility hardening only; the endpoint remains disabled outside Development/Testing. Fresh exact-head CI is pending.
