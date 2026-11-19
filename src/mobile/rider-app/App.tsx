@@ -9,7 +9,7 @@ import { readAccessTokenIfCurrent, readSessionTokens, saveSessionTokensIfCurrent
 import { requireAppRole } from "../shared/appRole";
 import { agreementConfirmationLabel } from "../shared/agreementConfirmation";
 import { formatAgreementAmount } from "../shared/agreementFormatting";
-import { findActiveRide, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
+import { findActiveRide, hasUnresolvedRiderRideHistory, isRiderRideDetailsResponseValid, normalizeRiderRideHistory, shouldApplyRideHistoryResponse, shouldApplyRideStatusUpdate } from "../shared/rideRecovery";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
@@ -20,14 +20,15 @@ import { stopRegisteredConnections } from "../shared/sessionConnectionRegistry";
 import { readJsonResponseIfCurrent } from "../shared/sessionResponseGuard";
 import { resetRiderSessionState } from "../shared/sessionStateReset";
 import { clearPersistentProposalAttempt, finishProposalSubmission, getOrCreatePersistentProposalAttempt, type PersistentProposalAttempt } from "../shared/proposalAttempt";
-import { getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap } from "../shared/tripLocationSharing";
-import { passengerCountInputFromDraft, parsePassengerCountInput } from "../shared/tripIntentDraft";
-import { canStartRiderBooking, hasActiveRiderRide } from "../shared/riderBookingGuard";
+import { applyRiderRideStatusUpdate, canShowRiderDriverLocation, getRideMapFitCoordinates, mergeTripLocationSnapshot, shouldApplyTripLocationUpdate, shouldFitRideMap, suspendRiderLocationSharing } from "../shared/tripLocationSharing";
+import { normalizeRiderTripIntentDraft, ownsRiderTripIntentRequest, passengerCountInputFromDraft, parsePassengerCountInput, shouldApplyRiderTripIntentResponse } from "../shared/tripIntentDraft";
+import { canStartRiderBooking, hasActiveRiderRide, normalizeRiderSelectedBookingResponse } from "../shared/riderBookingGuard";
 import { finishRiderAuthSubmission, getRiderAuthErrorProps, getRiderAuthFieldProps, getRiderAuthModeToggleProps, getRiderAuthSubmitProps, tryBeginRiderAuthSubmission } from "../shared/riderAuthForm";
-import { getRiderDriverOptionProps, getRiderTripActionProps, getRiderTripFieldProps } from "../shared/riderTripForm";
-import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
-import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid } from "../shared/riderActivityPresentation";
-import { getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps } from "../shared/riderProfileForm";
+import { canDiscoverRiderTrip, validateRiderBookingText, getRiderDriverOptionProps, getRiderUnionDriverGroupProps, getRiderTripActionProps, getRiderTripFieldProps, getVisibleUnionDrivers, normalizeRiderDiscoveryResponse, shouldApplyRiderDiscoveryResponse } from "../shared/riderTripForm";
+import { finishRiderBookingAttempt, tryBeginRiderBookingAttempt } from "../shared/riderBookingAttempt";
+import { finishRiderActivityAction, getRiderActivityActionProps, getRiderActivityFieldProps, parseRiderAgreementAmount, tryBeginRiderActivityAction } from "../shared/riderActivityForm";
+import { getRiderAgreementVersionAccessibilityLabel, getRiderAgreementVersionCreatedAtLabel, getRiderAgreementVersionRouteLabel, getRiderHistoryAccessibilityLabel, getRiderHistoryRequestedAtLabel, getRiderRideStatusLabel, getRiderRideStatusMessage, isRiderCancellationResponseValid, isRiderRideAgreementEventValid, isRiderRideLocationTimestampValid, isRiderRideStatusEventValid, normalizeRiderAgreementHistory, shouldApplyRiderAgreementHistoryResponse } from "../shared/riderActivityPresentation";
+import { getRiderHelpSourceLabel, getRiderProfileActionProps, getRiderProfileFieldProps, getRiderTabProps, getRiderThemeOptionProps, normalizeRiderHelpResponse, shouldApplyRiderProfileRequestResponse } from "../shared/riderProfileForm";
 import { getRiderSupportActionProps, getRiderSupportFieldProps, getRiderSupportRequestAttempt, submitRiderSupportRequest, validateRiderSupportRequest, type RiderSupportRequestAttempt } from "../shared/riderSupportRequest";
 
 type ThemePreference = "light" | "dark" | "system";
@@ -60,14 +61,13 @@ const API = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:5000";
 type Tokens = { accessToken: string; refreshToken: string };
 type User = { id: string; email: string; name?: string; role: string };
 type ServiceClass = "cab";
-type Ride = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: ServiceClass; status: string; estimatedFareInr: number | null; stops?: string[]; unionId?: string; unionName?: string; driverDisplayName?: string; driverVehicleMake?: string; driverVehicleModel?: string; driverDistanceToPickupKm?: number | null; negotiationExpiresAtUtc?: string | null; pickupLatitude?: number; pickupLongitude?: number; driverLatitude?: number; driverLongitude?: number; locationCapturedAtUtc?: string | null; driverLocationCapturedAtUtc?: string | null; locationUpdatedAt?: string };
+type Ride = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: ServiceClass; status: string; locationSharingActive?: boolean; requestedAt?: string; acceptedAt?: string | null; estimatedFareInr: number | null; stops?: string[]; unionId?: string; unionName?: string; driverDisplayName?: string; driverVehicleMake?: string; driverVehicleModel?: string; driverDistanceToPickupKm?: number | null; negotiationExpiresAtUtc?: string | null; pickupLatitude?: number; pickupLongitude?: number; driverLatitude?: number; driverLongitude?: number; locationCapturedAtUtc?: string | null; driverLocationCapturedAtUtc?: string | null; locationUpdatedAt?: string };
 type DiscoveryDriver = { driverId: string; fullName: string; vehicleMake: string; vehicleModel: string; serviceClass: ServiceClass; passengerCapacity: number; distanceToPickupKm: number; profilePhotoBase64?: string | null; profilePhotoContentType?: string | null };
 type DiscoveryUnion = { unionId: string; unionName: string; drivers: DiscoveryDriver[] };
 type DiscoveryResult = { pickupZoneId: string; journeyDistanceKm: number | null; unions: DiscoveryUnion[] };
-type RideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number; serviceClass: string; status: string; requestedAt: string; acceptedAt?: string | null };
-type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: string; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
-type TripIntentDraft = { pickup: string | null; dropoff: string | null; serviceClass: string; passengerCount: number | null; needsClarification: boolean; missingFields: string[]; requiresUserConfirmation: boolean; source: string };
-type AssistantHelp = { answer: string; sourceId: string; escalationRequired: boolean; source: string };
+type RideHistoryItem = { rideId: string; pickup: string; dropoff: string; passengers: number | null; serviceClass: string; status: string; requestedAt: string; acceptedAt: string | null; stops: string[] };
+type AgreementVersion = { rideId: string; version: number; amount: number; currency: string; pickup: string; dropoff: string; stops: string[]; proposedBy: "Rider" | "Driver"; createdAtUtc: string; riderConfirmed: boolean; riderConfirmedAtUtc: string | null; driverConfirmed: boolean; driverConfirmedAtUtc: string | null };
+
 async function saveTokens(t: Tokens, isCurrent: () => boolean) { return saveSessionTokensIfCurrent(SecureStore, t, isCurrent); }
 async function clearTokens() { await clearSessionTokens(SecureStore); }
 async function request(path: string, init: RequestInit = {}, token?: string) {
@@ -81,18 +81,20 @@ export default function App() {
   const [user,setUser]=useState<User|null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0); const authenticatedSessionEpoch=useRef<number|null>(null);
+  const renderedSessionEpoch=sessionEpoch.current;
   const activeSessionStops=useRef<Set<() => unknown>>(new Set());
   const stopSessionResources=useCallback(()=>stopRegisteredConnections(activeSessionStops.current),[]);
   const invalidateSession=useCallback(()=>{const epoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);stopSessionResources();return epoch;},[stopSessionResources]);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
   const nameInputRef=useRef<TextInput|null>(null); const emailInputRef=useRef<TextInput|null>(null); const passwordInputRef=useRef<TextInput|null>(null); const authSubmissionInFlight=useRef(false);
-  const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
-  const [tripIntentText,setTripIntentText]=useState(""); const [tripIntentBusy,setTripIntentBusy]=useState(false); const [tripIntentNotice,setTripIntentNotice]=useState("");
+  const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState(""); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
+  const [tripIntentText,setTripIntentText]=useState(""); const [tripIntentBusy,setTripIntentBusy]=useState(false); const [tripIntentNotice,setTripIntentNotice]=useState(""); const riderTripIntentRequestSequence=useRef(0); const riderTripFormRevision=useRef(0);
   const [helpQuestion,setHelpQuestion]=useState(""); const [helpBusy,setHelpBusy]=useState(false); const [helpAnswer,setHelpAnswer]=useState(""); const [logoutBusy,setLogoutBusy]=useState(false);
   const [supportSubject,setSupportSubject]=useState(""); const [supportDescription,setSupportDescription]=useState(""); const [supportBusy,setSupportBusy]=useState(false); const [supportNotice,setSupportNotice]=useState(""); const [supportError,setSupportError]=useState("");
   const helpSubmissionInFlight=useRef(false); const logoutInFlight=useRef(false); const supportSubmissionInFlight=useRef(false); const supportAttemptRef=useRef<RiderSupportRequestAttempt|null>(null);
-  const [ride,setRide]=useState<Ride|null>(null); const [rideHistory,setRideHistory]=useState<RideHistoryItem[]>([]); const [activeRideStateLoaded,setActiveRideStateLoaded]=useState(false); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
+  const riderHelpRequestSequence=useRef(0); const riderSupportRequestSequence=useRef(0);
+  const [ride,setRide]=useState<Ride|null>(null); const [rideHistory,setRideHistory]=useState<RideHistoryItem[]>([]); const [activeRideStateLoaded,setActiveRideStateLoaded]=useState(false); const rideHistoryRequestSequence=useRef(0); const agreementHistoryRequestSequence=useRef(0); const riderDiscoveryRequestSequence=useRef(0); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const rideMapRef=useRef<MapView|null>(null);
   const [followDriverLocation,setFollowDriverLocation]=useState(true);
   const [readyRideMapId,setReadyRideMapId]=useState<string|null>(null);
@@ -127,7 +129,7 @@ export default function App() {
   const [bookingRequestKey,setBookingRequestKey]=useState(()=>`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const bookingRequestKeyRef=useRef(bookingRequestKey);
   const selectedBookingLocation=useRef(createSelectedBookingLocation(Location));
-  const bookingInFlight=useRef(false);
+  const bookingInFlight=useRef<string|null>(null);
   const resetSelectedBookingAttempt=useCallback(()=>{
     selectedBookingLocation.current.reset();
     const nextKey=`${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -143,6 +145,17 @@ export default function App() {
     setCancelBusy(false);
     setConfirmBusyVersion(null);
     setActiveRideStateLoaded(false);
+    bookingInFlight.current=null;
+    rideHistoryRequestSequence.current += 1;
+    agreementHistoryRequestSequence.current += 1;
+    riderDiscoveryRequestSequence.current += 1;
+    riderTripIntentRequestSequence.current += 1;
+    riderTripFormRevision.current += 1;
+    riderHelpRequestSequence.current += 1;
+    riderSupportRequestSequence.current += 1;
+    helpSubmissionInFlight.current = false;
+    supportSubmissionInFlight.current = false;
+    setLoading(false);
     authenticatedSessionEpoch.current = null;
     resetSelectedBookingAttempt();
     resetRiderSessionState({
@@ -154,7 +167,7 @@ export default function App() {
       agreementHistory: setAgreementHistory, agreementAmount: setAgreementAmount,
       followDriverLocation: setFollowDriverLocation, readyRideMapId: setReadyRideMapId
     });
-    supportAttemptRef.current=null;supportSubmissionInFlight.current=false;setSupportSubject("");setSupportDescription("");setSupportBusy(false);setSupportNotice("");setSupportError("");
+    supportAttemptRef.current=null;setSupportSubject("");setSupportDescription("");setSupportBusy(false);setSupportNotice("");setSupportError("");
     if (preserveAuthInput) {
       setEmail(preserveAuthInput.email);
       setPassword(preserveAuthInput.password);
@@ -240,22 +253,43 @@ export default function App() {
     const body=await readJsonResponseIfCurrent(response,()=>sessionEpoch.current===requestEpoch&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)) as any;if(!response.ok)throw new Error(body.message??body.title??"Request failed.");return body;
   },[tokens,refresh,invalidateSession,clearRiderSessionState]);
   const loadRideHistory=useCallback(async(isActive:()=>boolean)=>{
-    const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
+    if(!isActive()||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;
+    const requestSequence=++rideHistoryRequestSequence.current;
+    const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)&&shouldApplyRideHistoryResponse(requestSequence,rideHistoryRequestSequence.current);
     if(!isCurrent())return;
     // A failed or in-flight server read must never make the Book tab appear available.
     setActiveRideStateLoaded(false);
-    const history=await apiFetch("/api/v1/rides/mine") as RideHistoryItem[];
-    if(!isCurrent())return;
-    setRideHistory(history);
-    const active=findActiveRide(history, "rider");
-    if(active){
-      const details=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId));
+    try{
+      const historyResponse=await apiFetch("/api/v1/rides/mine") as unknown;
       if(!isCurrent())return;
-      setRide(current=>current&&current.rideId===details.rideId?mergeTripLocationSnapshot(current,details):details);
-    }else if(isCurrent()){
-      setRide(null);
+      const history=normalizeRiderRideHistory(historyResponse);
+      if(!history)throw new Error("Ride history response is invalid. Booking remains disabled until the server status can be verified.");
+      if(hasUnresolvedRiderRideHistory(history)){
+        // Keep history readable, but do not let a known active row mask an
+        // unknown/malformed record that could still represent another active booking.
+        setRideHistory(history);
+        throw new Error("Ride history contains an unsupported or malformed lifecycle status. Booking remains disabled until the server confirms known statuses.");
+      }
+      const active=findActiveRide(history, "rider");
+      let activeDetails: Ride | null = null;
+      if(active){
+        const detailsResponse=await apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId)) as unknown;
+        if(!isCurrent())return;
+        if(!isRiderRideDetailsResponseValid(detailsResponse,active.rideId))throw new Error("Ride details response did not match the active history record. Booking remains disabled until the server status can be verified.");
+        activeDetails=detailsResponse as Ride;
+      }
+      if(!isCurrent())return;
+      setRideHistory(history);
+      if(activeDetails)setRide(current=>current&&current.rideId===activeDetails!.rideId?mergeTripLocationSnapshot(current,activeDetails!):activeDetails!);
+      else setRide(null);
+      setActiveRideStateLoaded(true);
+    }catch(error){
+      // A failed, malformed or ambiguous history/detail read cannot authorize cached GPS.
+      // Keep the ride card/history visible, but suspend Driver location until a later
+      // server snapshot has been validated for the current authenticated session.
+      if(isCurrent())setRide(current=>current?suspendRiderLocationSharing(current):current);
+      throw error;
     }
-    if(isCurrent())setActiveRideStateLoaded(true);
   },[apiFetch]);
   useEffect(()=>{let active=true;let restoreEpoch=sessionEpoch.current;const isRestoreCurrent=()=>active&&sessionEpoch.current===restoreEpoch;(async()=>{try{const restored=await restoreStoredSession(SecureStore,request,isRestoreCurrent);if(isRestoreCurrent()&&restored){const restoredEpoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);restoreEpoch=restoredEpoch;const restoredUser=requireAppRole<User>(restored.user,"Rider");authenticatedSessionEpoch.current=restoredEpoch;setTokens(restored.tokens);setUser(restoredUser);}}catch{if(isRestoreCurrent())setError("Unable to restore session. Check your connection or secure storage and retry.");}finally{if(isRestoreCurrent())setLoading(false);}})();return()=>{active=false;};},[]);
   useEffect(()=>{
@@ -279,8 +313,14 @@ export default function App() {
     activeSessionStops.current.add(stopConnection);
     const refreshAgreements=async()=>{
       if(!active||!isConnectionCurrent())return;
-      const history=await apiFetch(`/api/v1/rides/${ride.rideId}/agreements`) as AgreementVersion[];
-      if(active&&isConnectionCurrent())setAgreementHistory(history);
+      const requestSequence=++agreementHistoryRequestSequence.current;
+      const isCurrent=()=>active&&isConnectionCurrent()&&
+        shouldApplyRiderAgreementHistoryResponse(requestSequence,agreementHistoryRequestSequence.current);
+      const response=await apiFetch(`/api/v1/rides/${encodeURIComponent(ride.rideId)}/agreements`) as unknown;
+      if(!isCurrent())return;
+      const history=normalizeRiderAgreementHistory(response,ride.rideId);
+      if(!history)throw new Error("Agreement history response is invalid. Refresh Activity before confirming or proposing another version.");
+      if(isCurrent())setAgreementHistory(history);
     };
     const refreshRiderState=async()=>{
       if(!active||!isConnectionCurrent())return;
@@ -290,7 +330,7 @@ export default function App() {
       }catch(e){if(active&&isConnectionCurrent())setError(e instanceof Error?e.message:"Unable to recover the latest ride state.");}
     };
     connection.on("DriverLocationUpdated",(update:{rideId:string;latitude:number;longitude:number;locationUpdatedAt:string;locationCapturedAtUtc?:string|null})=>{
-      if(active&&isConnectionCurrent())setRide(current=>{
+      if(active&&isConnectionCurrent()&&isRiderRideLocationTimestampValid(update))setRide(current=>{
         if(!current||!shouldApplyTripLocationUpdate(current,update))return current;
         return {
           ...current,
@@ -302,11 +342,17 @@ export default function App() {
       });
     });
     connection.on("RideStatusChanged",(update:{rideId:string;status:string})=>{
-      if(shouldApplyRideStatusUpdate(ride.rideId,update.rideId,active&&isConnectionCurrent()))
-        setRide(current=>current?.rideId===update.rideId?{...current,status:update.status}:current);
+      if(active&&isConnectionCurrent()&&isRiderRideStatusEventValid(update,ride.rideId)&&shouldApplyRideStatusUpdate(ride.rideId,update.rideId,true)){
+        // Invalidate any history read started before this newer live lifecycle event.
+        rideHistoryRequestSequence.current+=1;
+        setRide(current=>current?applyRiderRideStatusUpdate(current,update):current);
+        // The event carries lifecycle only. Re-read the API snapshot before enabling
+        // location sharing; do not infer the server's sharing permission from status.
+        void refreshRiderState();
+      }
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
-      if(active&&isConnectionCurrent()&&update.rideId===ride.rideId)void refreshAgreements().catch(e=>{if(active&&isConnectionCurrent())setError(e instanceof Error?e.message:"Unable to refresh fare agreement.");});
+      if(active&&isConnectionCurrent()&&isRiderRideAgreementEventValid(update,ride.rideId))void refreshAgreements().catch(e=>{if(active&&isConnectionCurrent())setError(e instanceof Error?e.message:"Unable to refresh fare agreement.");});
     });
     connection.onreconnected(()=>{if(active&&isConnectionCurrent())void refreshRiderState();});
     void startSignalRConnection(connection, () => active&&isConnectionCurrent(), () => {
@@ -364,12 +410,35 @@ export default function App() {
       if (sessionEpoch.current === authEpoch) setLoading(false);
     }
   };
+  const markRiderTripFormEdited=()=>{
+    riderTripFormRevision.current += 1;
+    setTripIntentBusy(false);
+    setTripIntentNotice("");
+  };
   const draftTripIntent=async()=>{
+    const requestText=tripIntentText;
+    if(!requestText.trim())return;
+    if(!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)){setError("Please sign in again.");return;}
+    const requestSequence=++riderTripIntentRequestSequence.current;
+    const requestSessionEpoch=sessionEpoch.current;
+    const requestFormRevision=riderTripFormRevision.current;
+    const ownsRequest=()=>ownsRiderTripIntentRequest(
+      requestSequence,riderTripIntentRequestSequence.current,
+      requestSessionEpoch,sessionEpoch.current
+    )&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
+    const canApply=()=>shouldApplyRiderTripIntentResponse(
+      requestSequence,riderTripIntentRequestSequence.current,
+      requestSessionEpoch,sessionEpoch.current,
+      requestFormRevision,riderTripFormRevision.current
+    )&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
     setTripIntentBusy(true);setTripIntentNotice("");setError("");
     try {
-      const result=await apiFetch("/api/v1/assistance/trip-intent",{method:"POST",body:JSON.stringify({text:tripIntentText})}) as TripIntentDraft;
-      if(result.pickup)setPickup(result.pickup);
-      if(result.dropoff)setDropoff(result.dropoff);
+      const response=await apiFetch("/api/v1/assistance/trip-intent",{method:"POST",body:JSON.stringify({text:requestText})}) as unknown;
+      if(!canApply())return;
+      const result=normalizeRiderTripIntentDraft(response);
+      if(!result)throw new Error("Trip assistant response was invalid. Review your trip details manually.");
+      if(result.pickup!==null)setPickup(result.pickup);
+      if(result.dropoff!==null)setDropoff(result.dropoff);
       // A missing AI passenger count must clear the pre-existing form default so the Rider
       // explicitly completes it before discovery or booking.
       setPassengers(passengerCountInputFromDraft(result.passengerCount));
@@ -378,42 +447,82 @@ export default function App() {
       const source=result.source==="provider"?"AI provider draft":"Deterministic local fallback draft";
       setTripIntentNotice(missing+source+". Review and edit every field before searching. This draft does not book a ride or charge anyone.");
     } catch(e) {
-      setError(e instanceof Error?e.message:"Unable to prepare a trip draft.");
+      if(canApply())setError(e instanceof Error?e.message:"Unable to prepare a trip draft.");
     } finally {
-      setTripIntentBusy(false);
+      // An older request must not clear the busy state owned by a newer request/session.
+      if(ownsRequest())setTripIntentBusy(false);
     }
   };
-  const askHelp=async()=>{if(helpSubmissionInFlight.current)return;helpSubmissionInFlight.current=true;setHelpBusy(true);setHelpAnswer("");setError("");try{const result=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question:helpQuestion,rideState:ride?.status??null})}) as AssistantHelp;const source=result.source==="provider-approved-content"?"AI-selected approved help":"Approved in-repository help content";setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);}catch(e){setError(e instanceof Error?e.message:"Unable to load approved help content.");}finally{helpSubmissionInFlight.current=false;setHelpBusy(false);}};
+  const askHelp=async()=>{
+    if(helpSubmissionInFlight.current)return;
+    const requestEpoch=sessionEpoch.current;
+    if(!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)){setError("Please sign in again.");return;}
+    const requestSequence=++riderHelpRequestSequence.current;
+    const question=helpQuestion;
+    const rideState=ride?.status??null;
+    const isCurrent=()=>shouldApplyRiderProfileRequestResponse(requestSequence,riderHelpRequestSequence.current,requestEpoch,sessionEpoch.current)&&
+      isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
+    helpSubmissionInFlight.current=true;setHelpBusy(true);setHelpAnswer("");setError("");
+    try{
+      const response=await apiFetch("/api/v1/assistance/help",{method:"POST",body:JSON.stringify({question,rideState})});
+      if(!isCurrent())return;
+      const result=normalizeRiderHelpResponse(response);
+      if(!result)throw new Error("Help service returned an invalid response. Please retry or contact support.");
+      const source=getRiderHelpSourceLabel(result.source);
+      setHelpAnswer(`${result.answer}\n\n${result.escalationRequired?"Escalation required. ":""}${source}.`);
+    }catch(e){if(isCurrent())setError(e instanceof Error?e.message:"Unable to load approved help content.");}
+    finally{if(isCurrent()){helpSubmissionInFlight.current=false;setHelpBusy(false);}}
+  };
   const submitSupportRequest=async()=>{
     if(supportSubmissionInFlight.current)return;
-    const validation=validateRiderSupportRequest(supportSubject,supportDescription);
+    const requestEpoch=sessionEpoch.current;
+    if(!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)){setSupportError("Please sign in again.");return;}
+    const requestSequence=++riderSupportRequestSequence.current;
+    const subject=supportSubject;
+    const description=supportDescription;
+    const isCurrent=()=>shouldApplyRiderProfileRequestResponse(requestSequence,riderSupportRequestSequence.current,requestEpoch,sessionEpoch.current)&&
+      isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);
+    const validation=validateRiderSupportRequest(subject,description);
     if(validation){setSupportError(validation);setSupportNotice("");return;}
     let attempt:RiderSupportRequestAttempt;
-    try{attempt=getRiderSupportRequestAttempt(supportAttemptRef.current,supportSubject,supportDescription);}
-    catch(e){setSupportError(e instanceof Error?e.message:"Unable to prepare support request.");return;}
+    try{attempt=getRiderSupportRequestAttempt(supportAttemptRef.current,subject,description);}
+    catch(e){if(isCurrent())setSupportError(e instanceof Error?e.message:"Unable to prepare support request.");return;}
     supportAttemptRef.current=attempt;
     supportSubmissionInFlight.current=true;setSupportBusy(true);setSupportNotice("");setSupportError("");
     try{
       const result=await submitRiderSupportRequest(apiFetch,attempt);
+      if(!isCurrent())return;
       setSupportNotice(`${result.replayed?"Your earlier support request was already accepted.":"Your support request was accepted."} Reference ${result.requestId}. This form does not assign a category, priority or response-time target.`);
       supportAttemptRef.current=null;setSupportSubject("");setSupportDescription("");
     }catch(e){
-      setSupportError(`${e instanceof Error?e.message:"Unable to submit support request."} Your draft remains available. If you retry without changing the text, the same idempotency key is reused.`);
-    }finally{supportSubmissionInFlight.current=false;setSupportBusy(false);}
+      if(isCurrent())setSupportError(`${e instanceof Error?e.message:"Unable to submit support request."} Your draft remains available. If you retry without changing the text, the same idempotency key is reused.`);
+    }finally{if(isCurrent()){supportSubmissionInFlight.current=false;setSupportBusy(false);}}
   };
   const logout=async()=>{if(logoutInFlight.current)return;logoutInFlight.current=true;setLogoutBusy(true);const logoutEpoch=invalidateSession();try{await logoutSession(SecureStore,async()=>{if(tokens)await request("/api/v1/auth/logout",{method:"POST"},tokens.accessToken);});}catch{if(sessionEpoch.current===logoutEpoch)setError("Unable to clear secure session storage. Please retry sign-out.");return;}finally{logoutInFlight.current=false;setLogoutBusy(false);}if(sessionEpoch.current!==logoutEpoch)return;clearRiderSessionState();};
   const findNearbyVehicles=async()=>{
-    if(!canStartRiderBooking(activeRideStateLoaded,ride)){if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before searching for another Driver.");}else{setError("Your active booking status is still being verified. Retry after the status check completes.");}return;}
+    const requestEpoch=renderedSessionEpoch;
+    if(!isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch))return;
+    const requestSequence=++riderDiscoveryRequestSequence.current;
+    const isCurrent=()=>isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch)&&
+      shouldApplyRiderDiscoveryResponse(requestSequence,riderDiscoveryRequestSequence.current);
+    if(!isCurrent())return;
+    if(!canStartRiderBooking(activeRideStateLoaded,ride)){setLoading(false);if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before searching for another Driver.");}else{setError("Your active booking status is still being verified. Retry after the status check completes.");}return;}
     const passengerCount=parsePassengerCountInput(passengers);
-    if(passengerCount===null){setDiscovery(null);setError("Enter a passenger count from 1 to 6 before searching.");return;}
-    setLoading(true);setError("");setSelectedDriverId(null);resetSelectedBookingAttempt();
+    if(passengerCount===null||!canDiscoverRiderTrip(pickup,dropoff,passengerCount)){setLoading(false);setDiscovery(null);setSelectedDriverId(null);setError("Enter a pickup, destination and passenger count from 1 to 6 before searching.");return;}
+    const tripTextError=validateRiderBookingText(pickup,dropoff,stopsText);
+    if(tripTextError!==null){setLoading(false);setDiscovery(null);setSelectedDriverId(null);setError(tripTextError);return;}
+    setLoading(true);setError("");setSelectedDriverId(null);setDiscovery(null);resetSelectedBookingAttempt();
     try {
-      const {discovery:result}=await discoverNearbyCabDrivers(Location,apiFetch,passengerCount);
+      const {discovery:rawResult}=await discoverNearbyCabDrivers(Location,apiFetch,passengerCount);
+      if(!isCurrent())return;
+      const result=normalizeRiderDiscoveryResponse(rawResult);
+      if(!result)throw new Error("The discovery response is invalid. Refresh and try again.");
+      if(!isCurrent())return;
       setDiscovery(result as DiscoveryResult);
     } catch(e) {
-      setDiscovery(null);setError(e instanceof Error?e.message:"Unable to discover nearby Cab drivers.");
+      if(isCurrent()){setDiscovery(null);setError(e instanceof Error?e.message:"Unable to discover nearby Cab drivers.");}
     } finally {
-      setLoading(false);
+      if(isCurrent())setLoading(false);
     }
   };
   const cancelRide=async()=>{
@@ -429,19 +538,98 @@ export default function App() {
       if(!isCurrent())return;
       if(!isRiderCancellationResponseValid(updated,rideId))throw new Error("Ride service returned an invalid cancellation response.");
       setRide(updated);
-    }catch(e){if(isCurrent())setError(e instanceof Error?e.message:"Unable to cancel ride.");}
-    finally{if(finishRiderActivityAction(activityActionInFlight,actionKey))setCancelBusy(false);}
+    }catch(e){
+      if(isCurrent()){
+        // Cancellation may have committed even when its response was lost or malformed.
+        // Re-read server-owned history before presenting the state as current.
+        try{await loadRideHistory(()=>isCurrent());}catch{}
+        if(isCurrent())setError(e instanceof Error?e.message:"Unable to cancel ride.");
+      }
+    }finally{if(finishRiderActivityAction(activityActionInFlight,actionKey))setCancelBusy(false);}
   };
-   const requestSelectedDriver=async()=>{if(!canStartRiderBooking(activeRideStateLoaded,ride)){if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before requesting another Driver.");}else{setError("Your active booking status is still being verified. Retry after the status check completes.");}return;}if(!selectedDriver||!selectedUnion||bookingInFlight.current)return;const requestKey=bookingRequestKey;const selectedDriverIdForRequest=selectedDriver.driverId;const unionIdForRequest=selectedUnion.unionId;const pickupForRequest=pickup;const dropoffForRequest=dropoff;const stops=stopsText.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean);const passengerCount=parsePassengerCountInput(passengers);if(passengerCount===null){setError("Enter a passenger count from 1 to 6 before requesting a driver.");return;}bookingInFlight.current=true;setLoading(true);setError("");try{const coordinates=await selectedBookingLocation.current.capture();if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");const created=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});setRide(created as Ride);setRideHistory(current=>[created as RideHistoryItem,...current.filter(item=>item.rideId!==created.rideId)]);setAgreementHistory([]);setAgreementAmount("");setTab("Activity");setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}catch(e){setError(e instanceof Error?e.message:"Unable to request the selected driver.");}finally{bookingInFlight.current=false;setLoading(false);}};
-  const loadAgreementHistory=useCallback(async(rideId:string,isActive:()=>boolean=()=>true)=>{const isCurrent=()=>isActive()&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch);if(!isCurrent())return false;const result=await apiFetch(`/api/v1/rides/${rideId}/agreements`) as AgreementVersion[];if(!isCurrent())return false;setAgreementHistory(result);return true;},[apiFetch]);
-  useEffect(()=>{if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}if(tab!=="Activity"||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;let active=true;void apiFetch(`/api/v1/rides/${ride.rideId}/agreements`).then(result=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory(result as AgreementVersion[]);}).catch(()=>{if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))setAgreementHistory([]);});return()=>{active=false;};},[ride?.rideId,tab,apiFetch]);
+   const requestSelectedDriver=async()=>{
+    const requestEpoch=renderedSessionEpoch;
+    const riderIdForRequest=user?.id??"";
+    const isCurrent=()=>isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch);
+    if(!isCurrent())return;
+    if(!canStartRiderBooking(activeRideStateLoaded,ride)){
+      if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before requesting another Driver.");}
+      else{setError("Your active booking status is still being verified. Retry after the status check completes.");}
+      return;
+    }
+    if(!selectedDriver||!selectedUnion)return;
+    const requestKey=bookingRequestKey;
+    const selectedDriverIdForRequest=selectedDriver.driverId;
+    const unionIdForRequest=selectedUnion.unionId;
+    const pickupForRequest=pickup;
+    const dropoffForRequest=dropoff;
+    const stopsTextForRequest=stopsText;
+    const bookingTextError=validateRiderBookingText(pickupForRequest,dropoffForRequest,stopsTextForRequest);
+    if(bookingTextError!==null){setError(bookingTextError);return;}
+    const stops=stopsTextForRequest.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean);
+    const passengerCount=parsePassengerCountInput(passengers);
+    if(passengerCount===null){setError("Enter a passenger count from 1 to 6 before requesting a driver.");return;}
+    if(!tryBeginRiderBookingAttempt(bookingInFlight,requestKey))return;
+    setLoading(true);
+    setError("");
+    try{
+      const coordinates=await selectedBookingLocation.current.capture();
+      if(!isCurrent())return;
+      if(bookingRequestKeyRef.current!==requestKey)throw new Error("Trip details changed while refreshing your location. Please select a driver again.");
+      const createdResponse=await apiFetch("/api/v1/rider/bookings",{method:"POST",headers:{"Idempotency-Key":requestKey},body:JSON.stringify({selectedDriverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest,dropoff:dropoffForRequest,stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude})});
+      if(!isCurrent())return;
+      const created=normalizeRiderSelectedBookingResponse(createdResponse,{riderId:riderIdForRequest,driverId:selectedDriverIdForRequest,unionId:unionIdForRequest,pickup:pickupForRequest.trim(),dropoff:dropoffForRequest.trim(),stops,passengers:passengerCount,pickupLatitude:coordinates.latitude,pickupLongitude:coordinates.longitude});
+      if(!created)throw new Error("The booking response could not be verified. Refreshing server ride state before another booking is enabled.");
+      setRide(created);
+      setRideHistory(current=>[created,...current.filter(item=>item.rideId!==created.rideId)]);
+      setAgreementHistory([]);
+      setAgreementAmount("");
+      setTab("Activity");
+      setDiscovery(null);
+      setSelectedDriverId(null);
+      resetSelectedBookingAttempt();
+    }catch(e){
+      if(isCurrent()){
+        try{await loadRideHistory(()=>isCurrent());}catch{}
+        if(isCurrent())setError(e instanceof Error?e.message:"Unable to request the selected driver.");
+      }
+    }finally{
+      if(finishRiderBookingAttempt(bookingInFlight,requestKey)&&isCurrent())setLoading(false);
+    }
+  };
+  const loadAgreementHistory=useCallback(async(rideId:string,isActive:()=>boolean=()=>true)=>{
+    const requestSequence=++agreementHistoryRequestSequence.current;
+    const isCurrent=()=>isActive()&&
+      isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)&&
+      shouldApplyRiderAgreementHistoryResponse(requestSequence,agreementHistoryRequestSequence.current);
+    if(!isCurrent())return false;
+    const response=await apiFetch(`/api/v1/rides/${encodeURIComponent(rideId)}/agreements`) as unknown;
+    if(!isCurrent())return false;
+    const result=normalizeRiderAgreementHistory(response,rideId);
+    if(!result)throw new Error("Agreement history response is invalid. Refresh Activity before confirming or proposing another version.");
+    if(!isCurrent())return false;
+    setAgreementHistory(result);
+    return true;
+  },[apiFetch]);
+  useEffect(()=>{
+    if(!ride){setAgreementHistory([]);setAgreementAmount("");return;}
+    if(tab!=="Activity"||!isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch))return;
+    let active=true;
+    void loadAgreementHistory(ride.rideId,()=>active).catch(e=>{
+      if(active&&isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)){
+        setAgreementHistory([]);
+        setError(e instanceof Error?e.message:"Unable to verify agreement history.");
+      }
+    });
+    return()=>{active=false;};
+  },[ride?.rideId,tab,loadAgreementHistory]);
    const proposeAgreement=async()=>{
      const rideId=ride?.rideId;
      const proposalUserId=user?.id;
      const requestEpoch=sessionEpoch.current;
      if(!rideId||!proposalUserId||proposalSubmissionInFlight.current||activityActionInFlight.current)return;
-     const amount=Number(agreementAmount);
-     if(!Number.isFinite(amount)||amount<=0){setError("Enter a positive agreed amount in INR.");return;}
+     const amount=parseRiderAgreementAmount(agreementAmount);
+     if(amount===null){setError("Enter a positive INR amount using no more than two decimal places.");return;}
      const pendingLock="pending-"+(++proposalSubmissionSequence.current);
      proposalSubmissionInFlight.current=pendingLock;
      let ownedSubmissionLock=pendingLock;
@@ -505,6 +693,7 @@ export default function App() {
   const selectedUnion = discovery?.unions.find(group=>group.drivers.some(driver=>driver.driverId===selectedDriverId)) ?? null;
   const hasActiveSelectedRide=hasActiveRiderRide(ride);
   const canStartBooking=canStartRiderBooking(activeRideStateLoaded,ride);
+  const canDiscoverTrip=canDiscoverRiderTrip(pickup,dropoff,parsePassengerCountInput(passengers));const bookingTextError=validateRiderBookingText(pickup,dropoff,stopsText);
   const activityActionBusy=cancelBusy||confirmBusyVersion!==null||proposalSubmitting;
   useEffect(()=>{if(hasActiveSelectedRide&&tab==="Book")setTab("Activity");},[hasActiveSelectedRide,tab]);
   const themePicker = <View style={styles.themePicker} accessibilityRole="radiogroup" accessibilityLabel="App theme">
@@ -576,11 +765,15 @@ export default function App() {
   </SafeAreaView>;
   const tabs=["Book","Activity","Offers","Profile"] as const;
   return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/><View style={styles.header}><TurnOvaLogo subtitle={`Rider · ${user.name||user.email}`} compact /></View><ScrollView contentContainerStyle={styles.content}>
-    {tab==="Book"&&!activeRideStateLoaded&&<View style={styles.card}><Text style={styles.title}>Checking active booking</Text><Text style={styles.muted}>TurnOva is checking your server-owned ride history before enabling another booking.</Text><Pressable style={styles.secondary} disabled={loading} onPress={()=>void loadRideHistory(()=>isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)).catch(e=>setError(e instanceof Error?e.message:"Unable to verify your active booking."))}><Text style={styles.secondaryText}>Retry status check</Text></Pressable></View>}
-    {tab==="Book"&&activeRideStateLoaded&&hasActiveSelectedRide&&<View style={styles.card}><Text style={styles.title}>Active booking</Text><Text style={styles.muted}>You already have a selected-driver negotiation or active ride. A second booking is unavailable until this one is completed, cancelled or expired.</Text><Pressable style={styles.primary} onPress={()=>setTab("Activity")}><Text style={styles.primaryText}>View active ride</Text></Pressable></View>}
-    {tab==="Book"&&canStartBooking&&<><Text style={styles.eyebrow}>YOUR CITY, YOUR RIDE</Text><Text style={styles.title}>Where to?</Text><Text style={styles.sub}>Discover Cab drivers from approved nearby unions, then choose who to contact.</Text><View style={styles.card}><Text style={styles.label}>TRIP ASSISTANT · DRAFT ONLY</Text><TextInput testID="rider-trip-intent" {...getRiderTripFieldProps("tripIntent",loading)} value={tripIntentText} onChangeText={setTripIntentText} multiline maxLength={1000} style={[styles.input,{minHeight:72,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Example: Cab from Nizampet to HITEC City for 2 passengers" editable={!loading}/><Pressable testID="rider-trip-intent-draft" {...getRiderTripActionProps("draft",tripIntentBusy||loading||!tripIntentText.trim(),tripIntentBusy)} style={styles.secondary} onPress={()=>void draftTripIntent()} disabled={tripIntentBusy||loading||!tripIntentText.trim()}><Text style={styles.secondaryText}>{tripIntentBusy?"Preparing draft…":"Draft trip details"}</Text></Pressable>{!!tripIntentNotice&&<Text testID="rider-trip-intent-notice" accessibilityLiveRegion="polite" style={styles.muted}>{tripIntentNotice}</Text>}<Text style={styles.label}>PICKUP NOTE / LANDMARK</Text><TextInput testID="rider-pickup" {...getRiderTripFieldProps("pickup",loading)} value={pickup} onChangeText={value=>{setPickup(value);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}} style={styles.input} placeholderTextColor={colors.muted} placeholder="Pickup" editable={!loading}/><Text style={styles.label}>DROP-OFF NOTE / LANDMARK</Text><TextInput testID="rider-dropoff" {...getRiderTripFieldProps("dropoff",loading)} value={dropoff} onChangeText={value=>{setDropoff(value);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}} style={styles.input} placeholderTextColor={colors.muted} placeholder="Drop-off" editable={!loading}/><Text style={styles.label}>OPTIONAL INTERMEDIATE STOPS</Text><TextInput testID="rider-stops" {...getRiderTripFieldProps("stops",loading)} value={stopsText} onChangeText={value=>{setStopsText(value);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}} multiline style={[styles.input,{minHeight:72,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Add one stop per line" editable={!loading}/><Text style={styles.label}>VEHICLE CATEGORY</Text><View style={{paddingVertical:10,paddingHorizontal:14,borderRadius:10,borderWidth:1,borderColor:colors.accent,backgroundColor:colors.surface}}><Text style={{color:colors.text,fontWeight:"700"}}>Cab</Text><Text style={styles.muted}>TurnOva currently supports Cab rides only.</Text></View><Text style={styles.label}>PASSENGERS (1–6)</Text><TextInput testID="rider-passengers" {...getRiderTripFieldProps("passengers",loading)} value={passengers} onChangeText={value=>{setPassengers(value.replace(/\D/g,""));setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}} keyboardType="number-pad" maxLength={2} style={styles.input} placeholderTextColor={colors.muted} editable={!loading}/>{parsePassengerCountInput(passengers)===null&&<Text testID="rider-passengers-error" accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.error}>Enter a passenger count from 1 to 6 before searching.</Text>}<Text style={styles.muted}>Your device GPS is used for pickup-zone matching and driver-to-pickup proximity. The text above is a landmark or driver instruction.</Text><Pressable testID="rider-discover-drivers" {...getRiderTripActionProps("discover",loading||!pickup.trim()||!dropoff.trim()||parsePassengerCountInput(passengers)===null,loading)} style={styles.secondary} onPress={()=>void findNearbyVehicles()} disabled={loading||!pickup.trim()||!dropoff.trim()||parsePassengerCountInput(passengers)===null}><Text style={styles.secondaryText}>{loading?"Searching…":"Find nearby Cab drivers"}</Text></Pressable>{discovery!==null&&<View style={{marginTop:14}}><Text style={styles.cardTitle}>{discovery.unions.length?discovery.unions.length+" approved union(s) with eligible Cab drivers":"No eligible Cab drivers are currently available in your pickup area."}</Text><Text style={styles.muted}>Journey distance: {discovery.journeyDistanceKm===null?"Unavailable until a routing provider is configured":discovery.journeyDistanceKm.toFixed(1)+" km"}. Driver-to-pickup distances below are separate.</Text>{discovery.unions.map(union=><View key={union.unionId} style={{marginTop:14,padding:12,borderWidth:1,borderColor:colors.border,borderRadius:12}}><Text style={styles.cardTitle}>{union.unionName}</Text>{union.drivers.map(driver=>{const selected=selectedDriverId===driver.driverId;return <Pressable key={driver.driverId} testID={`rider-driver-option-${driver.driverId}`} {...getRiderDriverOptionProps(driver,selected,loading,union.unionName)} disabled={loading} onPress={()=>{setSelectedDriverId(driver.driverId);resetSelectedBookingAttempt();}} style={{flexDirection:"row",alignItems:"center",paddingVertical:10,borderBottomWidth:1,borderBottomColor:colors.border,backgroundColor:selected?colors.subtle:"transparent"}}>{driver.profilePhotoBase64?<Image source={{uri:"data:"+(driver.profilePhotoContentType??"image/jpeg")+";base64,"+driver.profilePhotoBase64}} style={{width:52,height:52,borderRadius:26,marginRight:12}}/>:<View style={{width:52,height:52,borderRadius:26,marginRight:12,backgroundColor:colors.border,alignItems:"center",justifyContent:"center"}}><Text style={styles.muted}>No photo</Text></View>}<View style={{flex:1}}><Text style={styles.cardTitle}>{driver.fullName}</Text><Text style={styles.muted}>{driver.vehicleMake} {driver.vehicleModel} · Cab · up to {driver.passengerCapacity} passenger(s)</Text><Text style={styles.muted}>{driver.distanceToPickupKm.toFixed(1)} km from pickup</Text></View><Text style={{color:colors.accent,fontWeight:"700"}}>{selected?"Selected":"Select"}</Text></Pressable>;})}</View>)}</View>}{selectedDriverId!==null&&selectedDriver!==null&&<View style={{marginTop:14,padding:12,borderRadius:10,backgroundColor:colors.surface,borderWidth:1,borderColor:colors.accent}}><Text style={styles.cardTitle}>Selected · {selectedDriver.fullName}</Text><Text style={styles.muted}>{selectedDriver.vehicleMake} {selectedDriver.vehicleModel} · Cab · {selectedDriver.distanceToPickupKm.toFixed(1)} km from pickup</Text><Text style={styles.label}>TRIP DETAILS</Text><Text style={styles.muted}>From: {pickup}</Text><Text style={styles.muted}>To: {dropoff}</Text>{stopsText.trim().length>0&&<Text style={styles.muted}>Stops: {stopsText.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean).join(" → ")}</Text>}<Text style={styles.muted}>Journey distance is unavailable until routing is configured. The selected Driver will receive this request for direct fare negotiation. A server-approved negotiation deadline is required; booking remains unavailable until that policy is configured. Fare is negotiated directly; TurnOva does not quote or collect payment.</Text><Pressable testID="rider-request-selected-driver" {...getRiderTripActionProps("requestDriver",loading,loading)} style={styles.primary} disabled={loading} onPress={()=>void requestSelectedDriver()}><Text style={styles.primaryText}>{loading?"Requesting…":"Request this driver"}</Text></Pressable><View style={{flexDirection:"row",gap:8,marginTop:10}}><Pressable style={styles.secondary} disabled><Text style={styles.secondaryText}>Call · provider pending</Text></Pressable><Pressable style={styles.secondary} disabled><Text style={styles.secondaryText}>Chat · provider pending</Text></Pressable></View></View>}</View></>}
-    {tab==="Activity"&&<><Text testID="rider-activity-title" accessibilityRole="header" style={styles.title}>Activity</Text>{ride&&<View style={styles.card}><Text testID="rider-activity-ride-status" accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={`Ride status ${ride.status}`} style={styles.status}>{ride.status.toUpperCase()}</Text><Text style={styles.cardTitle}>{ride.driverDisplayName ? "Selected driver request" : "Ride requested"}</Text><Text style={styles.muted}>Reference · {ride.rideId}</Text>{ride.driverDisplayName&&<><Text style={styles.label}>SELECTED DRIVER</Text><Text style={styles.cardTitle}>{ride.driverDisplayName}</Text><Text style={styles.muted}>{ride.driverVehicleMake} {ride.driverVehicleModel} · Cab{ride.driverDistanceToPickupKm!=null?" · "+ride.driverDistanceToPickupKm.toFixed(1)+" km from pickup":""}</Text>{ride.unionName&&<Text style={styles.muted}>Union · {ride.unionName}</Text>}</>}<Text style={styles.label}>PICKUP</Text><Text style={styles.cardTitle}>{ride.pickup}</Text><Text style={styles.label}>DROP-OFF</Text><Text style={styles.cardTitle}>{ride.dropoff}</Text>{ride.stops?.length? <><Text style={styles.label}>STOPS</Text><Text style={styles.cardTitle}>{ride.stops.join(" → ")}</Text></>:null}<Text style={styles.muted}>{ride.serviceClass.toUpperCase()} · {ride.passengers} passenger(s) · Fare is negotiated directly with the driver; TurnOva does not quote or collect payment.</Text><View style={{marginTop:14,paddingTop:12,borderTopWidth:1,borderTopColor:colors.border}}><Text style={styles.cardTitle}>Direct fare negotiation</Text>{agreementHistory.map(item=><View key={item.version} testID={`rider-agreement-version-${item.version}`} accessible={true} accessibilityLabel={getRiderAgreementVersionAccessibilityLabel(item)} style={{paddingVertical:7}}><Text style={styles.muted}>Version {item.version} · {formatAgreementAmount(item.amount, item.currency)} · proposed by {item.proposedBy}</Text><Text style={styles.muted}>{getRiderAgreementVersionRouteLabel(item)}</Text><Text style={styles.muted}>{getRiderAgreementVersionCreatedAtLabel(item)}</Text><Text style={styles.muted}>{agreementConfirmationLabel("Rider", item.riderConfirmed, item.riderConfirmedAtUtc)}</Text><Text style={styles.muted}>{agreementConfirmationLabel("Driver", item.driverConfirmed, item.driverConfirmedAtUtc)}</Text></View>)}{["Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(ride.status)&&<><TextInput testID="rider-agreement-amount" {...getRiderActivityFieldProps("agreementAmount",activityActionBusy)} value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" editable={!activityActionBusy} style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/><Pressable testID="rider-agreement-propose" {...getRiderActivityActionProps("propose",loading||activityActionBusy||!agreementAmount.trim(),proposalSubmitting)} style={styles.secondary} disabled={loading||activityActionBusy||!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>{proposalSubmitting?"Submitting…":"Propose / counter fare"}</Text></Pressable>{agreementHistory.length>0&&<Pressable testID="rider-agreement-confirm" {...getRiderActivityActionProps("confirm",loading||activityActionBusy||agreementHistory[agreementHistory.length-1].riderConfirmed,confirmBusyVersion===agreementHistory[agreementHistory.length-1].version,agreementHistory[agreementHistory.length-1].riderConfirmed)} style={styles.secondary} disabled={loading||activityActionBusy||agreementHistory[agreementHistory.length-1].riderConfirmed} onPress={()=>void confirmAgreement()}><Text style={styles.secondaryText}>{agreementHistory[agreementHistory.length-1].riderConfirmed?"You confirmed this version":"Confirm current agreement"}</Text></Pressable>}</>}</View>{ride.driverLatitude!=null&&ride.driverLongitude!=null&&<>
+    {tab==="Book"&&!activeRideStateLoaded&&<View style={styles.card}><Text style={styles.title}>Checking active booking</Text><Text style={styles.muted}>TurnOva is checking your server-owned ride history before enabling another booking.</Text><Pressable testID="rider-retry-active-booking" {...getRiderTripActionProps("retryStatus",loading,loading)} style={styles.secondary} disabled={loading} onPress={()=>void loadRideHistory(()=>isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)).catch(e=>setError(e instanceof Error?e.message:"Unable to verify your active booking."))}><Text style={styles.secondaryText}>Retry status check</Text></Pressable></View>}
+    {tab==="Book"&&activeRideStateLoaded&&hasActiveSelectedRide&&<View style={styles.card}><Text style={styles.title}>Active booking</Text><Text style={styles.muted}>You already have a selected-driver negotiation or active ride. A second booking is unavailable until this one is completed, cancelled or expired.</Text><Pressable testID="rider-view-active-ride" {...getRiderTripActionProps("viewActiveRide",false,false)} style={styles.primary} onPress={()=>setTab("Activity")}><Text style={styles.primaryText}>View active ride</Text></Pressable></View>}
+    {tab==="Book"&&canStartBooking&&<><Text style={styles.eyebrow}>YOUR CITY, YOUR RIDE</Text><Text style={styles.title}>Where to?</Text><Text style={styles.sub}>Discover Cab drivers from approved nearby unions, then choose who to contact.</Text><View style={styles.card}><Text style={styles.label}>TRIP ASSISTANT · DRAFT ONLY</Text><TextInput testID="rider-trip-intent" {...getRiderTripFieldProps("tripIntent",loading)} value={tripIntentText} onChangeText={value=>{markRiderTripFormEdited();setTripIntentText(value);}} multiline maxLength={1000} style={[styles.input,{minHeight:72,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Example: Cab from Nizampet to HITEC City for 2 passengers" editable={!loading}/><Pressable testID="rider-trip-intent-draft" {...getRiderTripActionProps("draft",tripIntentBusy||loading||!tripIntentText.trim(),tripIntentBusy)} style={styles.secondary} onPress={()=>void draftTripIntent()} disabled={tripIntentBusy||loading||!tripIntentText.trim()}><Text style={styles.secondaryText}>{tripIntentBusy?"Preparing draft…":"Draft trip details"}</Text></Pressable>{!!tripIntentNotice&&<Text testID="rider-trip-intent-notice" accessibilityLiveRegion="polite" style={styles.muted}>{tripIntentNotice}</Text>}<Text style={styles.label}>PICKUP NOTE / LANDMARK</Text><TextInput testID="rider-pickup" {...getRiderTripFieldProps("pickup",loading)} value={pickup} onChangeText={value=>{markRiderTripFormEdited();setPickup(value);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}} maxLength={250} style={styles.input} placeholderTextColor={colors.muted} placeholder="Pickup" editable={!loading}/><Text style={styles.label}>DROP-OFF NOTE / LANDMARK</Text><TextInput testID="rider-dropoff" {...getRiderTripFieldProps("dropoff",loading)} value={dropoff} onChangeText={value=>{markRiderTripFormEdited();setDropoff(value);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}} maxLength={250} style={styles.input} placeholderTextColor={colors.muted} placeholder="Drop-off" editable={!loading}/><Text style={styles.label}>OPTIONAL INTERMEDIATE STOPS</Text><TextInput testID="rider-stops" {...getRiderTripFieldProps("stops",loading)} value={stopsText} onChangeText={value=>{markRiderTripFormEdited();setStopsText(value);setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}} multiline style={[styles.input,{minHeight:72,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Add one stop per line" editable={!loading}/><Text style={styles.label}>VEHICLE CATEGORY</Text><View style={{paddingVertical:10,paddingHorizontal:14,borderRadius:10,borderWidth:1,borderColor:colors.accent,backgroundColor:colors.surface}}><Text style={{color:colors.text,fontWeight:"700"}}>Cab</Text><Text style={styles.muted}>TurnOva currently supports Cab rides only.</Text></View><Text style={styles.label}>PASSENGERS (1–6)</Text><TextInput testID="rider-passengers" {...getRiderTripFieldProps("passengers",loading)} value={passengers} onChangeText={value=>{markRiderTripFormEdited();setPassengers(value.replace(/\D/g,""));setDiscovery(null);setSelectedDriverId(null);resetSelectedBookingAttempt();}} keyboardType="number-pad" maxLength={2} style={styles.input} placeholderTextColor={colors.muted} editable={!loading}/>{parsePassengerCountInput(passengers)===null&&<Text testID="rider-passengers-error" accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.error}>Enter a passenger count from 1 to 6 before searching.</Text>}<Text style={styles.muted}>Your device GPS is used for pickup-zone matching and driver-to-pickup proximity. The text above is a landmark or driver instruction.</Text><Pressable testID="rider-discover-drivers" {...getRiderTripActionProps("discover",loading||!canDiscoverTrip,loading)} style={styles.secondary} onPress={()=>void findNearbyVehicles()} disabled={loading||!canDiscoverTrip}><Text style={styles.secondaryText}>{loading?"Searching…":"Find nearby Cab drivers"}</Text></Pressable>{discovery!==null&&<View style={{marginTop:14}}><Text style={styles.cardTitle}>{discovery.unions.length?discovery.unions.length+" approved union(s) with eligible Cab drivers":"No eligible Cab drivers are currently available in your pickup area."}</Text><Text style={styles.muted}>Journey distance: {discovery.journeyDistanceKm===null?"Unavailable until a routing provider is configured":discovery.journeyDistanceKm.toFixed(1)+" km"}. Driver-to-pickup distances below are separate.</Text>{discovery.unions.map(union=><View key={union.unionId} testID={`rider-union-driver-group-${union.unionId}`} {...getRiderUnionDriverGroupProps(union.unionName)} style={{marginTop:14,padding:12,borderWidth:1,borderColor:colors.border,borderRadius:12}}><Text style={styles.cardTitle}>{union.unionName}</Text>{getVisibleUnionDrivers(union.drivers).map(driver=>{const selected=selectedDriverId===driver.driverId;return <Pressable key={driver.driverId} testID={`rider-driver-option-${driver.driverId}`} {...getRiderDriverOptionProps(driver,selected,loading,union.unionName)} disabled={loading} onPress={()=>{setSelectedDriverId(driver.driverId);resetSelectedBookingAttempt();}} style={{flexDirection:"row",alignItems:"center",paddingVertical:10,borderBottomWidth:1,borderBottomColor:colors.border,backgroundColor:selected?colors.subtle:"transparent"}}>{driver.profilePhotoBase64?<Image source={{uri:"data:"+(driver.profilePhotoContentType??"image/jpeg")+";base64,"+driver.profilePhotoBase64}} style={{width:52,height:52,borderRadius:26,marginRight:12}}/>:<View style={{width:52,height:52,borderRadius:26,marginRight:12,backgroundColor:colors.border,alignItems:"center",justifyContent:"center"}}><Text style={styles.muted}>No photo</Text></View>}<View style={{flex:1}}><Text style={styles.cardTitle}>{driver.fullName}</Text><Text style={styles.muted}>{driver.vehicleMake} {driver.vehicleModel} · Cab · up to {driver.passengerCapacity} passenger(s)</Text><Text style={styles.muted}>{driver.distanceToPickupKm.toFixed(1)} km from pickup</Text></View><Text style={{color:colors.accent,fontWeight:"700"}}>{selected?"Selected":"Select"}</Text></Pressable>;})}</View>)}</View>}{selectedDriverId!==null&&selectedDriver!==null&&<View style={{marginTop:14,padding:12,borderRadius:10,backgroundColor:colors.surface,borderWidth:1,borderColor:colors.accent}}><Text style={styles.cardTitle}>Selected · {selectedDriver.fullName}</Text><Text style={styles.muted}>{selectedDriver.vehicleMake} {selectedDriver.vehicleModel} · Cab · {selectedDriver.distanceToPickupKm.toFixed(1)} km from pickup</Text><Text style={styles.label}>TRIP DETAILS</Text>{bookingTextError!==null&&<Text testID="rider-booking-text-error" accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.error}>{bookingTextError}</Text>}<Text style={styles.muted}>From: {pickup}</Text><Text style={styles.muted}>To: {dropoff}</Text>{stopsText.trim().length>0&&<Text style={styles.muted}>Stops: {stopsText.split(/\r?\n/).map(stop=>stop.trim()).filter(Boolean).join(" → ")}</Text>}<Text style={styles.muted}>Journey distance is unavailable until routing is configured. The selected Driver will receive this request for direct fare negotiation. A server-approved negotiation deadline is required; booking remains unavailable until that policy is configured. Fare is negotiated directly; TurnOva does not quote or collect payment.</Text><Pressable testID="rider-request-selected-driver" {...getRiderTripActionProps("requestDriver",loading||bookingTextError!==null,loading)} style={styles.primary} disabled={loading||bookingTextError!==null} onPress={()=>void requestSelectedDriver()}><Text style={styles.primaryText}>{loading?"Requesting…":"Request this driver"}</Text></Pressable><View style={{flexDirection:"row",gap:8,marginTop:10}}><Pressable style={styles.secondary} disabled><Text style={styles.secondaryText}>Call · provider pending</Text></Pressable><Pressable style={styles.secondary} disabled><Text style={styles.secondaryText}>Chat · provider pending</Text></Pressable></View></View>}</View></>}
+    {tab==="Activity"&&<><Text testID="rider-activity-title" accessibilityRole="header" style={styles.title}>Activity</Text>{ride&&<View style={styles.card}><Text testID="rider-activity-ride-status" accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={`Ride status ${getRiderRideStatusLabel(ride.status)}`} style={styles.status}>{getRiderRideStatusLabel(ride.status)}</Text><Text style={styles.cardTitle}>{ride.driverDisplayName ? "Selected driver request" : "Ride requested"}</Text><Text style={styles.muted}>Reference · {ride.rideId}</Text>{ride.driverDisplayName&&<><Text style={styles.label}>SELECTED DRIVER</Text><Text style={styles.cardTitle}>{ride.driverDisplayName}</Text><Text style={styles.muted}>{ride.driverVehicleMake} {ride.driverVehicleModel} · Cab{ride.driverDistanceToPickupKm!=null?" · "+ride.driverDistanceToPickupKm.toFixed(1)+" km from pickup":""}</Text>{ride.unionName&&<Text style={styles.muted}>Union · {ride.unionName}</Text>}</>}<Text style={styles.label}>PICKUP</Text><Text style={styles.cardTitle}>{ride.pickup}</Text><Text style={styles.label}>DROP-OFF</Text><Text style={styles.cardTitle}>{ride.dropoff}</Text>{ride.stops?.length? <><Text style={styles.label}>STOPS</Text><Text style={styles.cardTitle}>{ride.stops.join(" → ")}</Text></>:null}<Text style={styles.muted}>{ride.serviceClass.toUpperCase()} · {ride.passengers} passenger(s) · Fare is negotiated directly with the driver; TurnOva does not quote or collect payment.</Text><View style={{marginTop:14,paddingTop:12,borderTopWidth:1,borderTopColor:colors.border}}><Text style={styles.cardTitle}>Direct fare negotiation</Text>{agreementHistory.map(item=><View key={item.version} testID={`rider-agreement-version-${item.version}`} accessible={true} accessibilityLabel={getRiderAgreementVersionAccessibilityLabel(item)} style={{paddingVertical:7}}><Text style={styles.muted}>Version {item.version} · {formatAgreementAmount(item.amount, item.currency)} · proposed by {item.proposedBy}</Text><Text style={styles.muted}>{getRiderAgreementVersionRouteLabel(item)}</Text><Text style={styles.muted}>{getRiderAgreementVersionCreatedAtLabel(item)}</Text><Text style={styles.muted}>{agreementConfirmationLabel("Rider", item.riderConfirmed, item.riderConfirmedAtUtc)}</Text><Text style={styles.muted}>{agreementConfirmationLabel("Driver", item.driverConfirmed, item.driverConfirmedAtUtc)}</Text></View>)}{["Negotiating","AgreementConfirmed","Accepted","Arrived","InProgress"].includes(ride.status)&&<><TextInput testID="rider-agreement-amount" {...getRiderActivityFieldProps("agreementAmount",activityActionBusy)} value={agreementAmount} onChangeText={setAgreementAmount} keyboardType="decimal-pad" editable={!activityActionBusy} style={styles.input} placeholderTextColor={colors.muted} placeholder="Propose / counter amount (₹)"/><Pressable testID="rider-agreement-propose" {...getRiderActivityActionProps("propose",loading||activityActionBusy||!agreementAmount.trim(),proposalSubmitting)} style={styles.secondary} disabled={loading||activityActionBusy||!agreementAmount.trim()} onPress={()=>void proposeAgreement()}><Text style={styles.secondaryText}>{proposalSubmitting?"Submitting…":"Propose / counter fare"}</Text></Pressable>{agreementHistory.length>0&&<Pressable testID="rider-agreement-confirm" {...getRiderActivityActionProps("confirm",loading||activityActionBusy||agreementHistory[agreementHistory.length-1].riderConfirmed,confirmBusyVersion===agreementHistory[agreementHistory.length-1].version,agreementHistory[agreementHistory.length-1].riderConfirmed)} style={styles.secondary} disabled={loading||activityActionBusy||agreementHistory[agreementHistory.length-1].riderConfirmed} onPress={()=>void confirmAgreement()}><Text style={styles.secondaryText}>{agreementHistory[agreementHistory.length-1].riderConfirmed?"You confirmed this version":"Confirm current agreement"}</Text></Pressable>}</>}</View>{canShowRiderDriverLocation(ride)&&<>
         <MapView
+          testID="rider-live-driver-map"
+          accessible={true}
+          accessibilityLabel="Live driver location map"
+          accessibilityHint="Shows your driver's latest shared location and your pickup point. Moving the map pauses automatic following."
           key={ride.rideId}
           ref={rideMapRef}
           customMapStyle={resolvedTheme === "dark" ? darkMapStyle : []}
@@ -588,15 +781,15 @@ export default function App() {
           initialRegion={{latitude:ride.driverLatitude,longitude:ride.driverLongitude,latitudeDelta:0.025,longitudeDelta:0.025}}
           onMapReady={()=>setReadyRideMapId(ride.rideId)}
           onPanDrag={()=>setFollowDriverLocation(false)}>
-          <Marker coordinate={{latitude:ride.driverLatitude,longitude:ride.driverLongitude}} title="Your driver"/>
-          {ride.pickupLatitude!=null&&ride.pickupLongitude!=null&&<Marker coordinate={{latitude:ride.pickupLatitude,longitude:ride.pickupLongitude}} title="Pickup" pinColor={colors.accent}/>}
+          <Marker coordinate={{latitude:ride.driverLatitude,longitude:ride.driverLongitude}} title="Your driver" description="Latest location shared by your selected driver during this active ride."/>
+          {ride.pickupLatitude!=null&&ride.pickupLongitude!=null&&<Marker coordinate={{latitude:ride.pickupLatitude,longitude:ride.pickupLongitude}} title="Pickup" description="Your selected pickup location." pinColor={colors.accent}/>}
         </MapView>
         {!followDriverLocation&&<Pressable testID="rider-follow-driver" {...getRiderActivityActionProps("followDriver",false,false)} style={styles.secondary} onPress={()=>setFollowDriverLocation(true)}>
           <Text style={styles.secondaryText}>Follow driver</Text>
         </Pressable>}
-      </>}<Text testID="rider-activity-status-message" accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.muted}>{getRiderRideStatusMessage(ride)}</Text>{["Requested","Negotiating","AgreementConfirmed","Accepted","Arrived"].includes(ride.status)&&<Pressable testID="rider-cancel-ride" {...getRiderActivityActionProps("cancel",loading||activityActionBusy,cancelBusy)} style={styles.secondary} disabled={loading||activityActionBusy} onPress={()=>void cancelRide()}><Text style={styles.secondaryText}>Cancel ride</Text></Pressable>}</View>}{rideHistory.filter(item=>item.rideId!==ride?.rideId).length>0&&<View style={styles.card}><Text style={styles.cardTitle}>Trip history</Text>{rideHistory.filter(item=>item.rideId!==ride?.rideId).map(item=><View key={item.rideId} testID={`rider-history-${item.rideId}`} accessible={true} accessibilityLabel={getRiderHistoryAccessibilityLabel(item)} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><Text style={styles.status}>{item.status.toUpperCase()}</Text><Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text><Text style={styles.muted}>{item.serviceClass.toUpperCase()} · {item.passengers} passenger(s)</Text><Text style={styles.muted}>{new Date(item.requestedAt).toLocaleString()}</Text><Text style={styles.muted}>Reference · {item.rideId}</Text></View>)}</View>}{!ride&&rideHistory.length===0&&<View style={styles.card}><Text style={styles.muted}>No rides yet. Discover available Cab drivers to get started.</Text></View>}</>}
+      </>}<Text testID="rider-activity-status-message" accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.muted}>{getRiderRideStatusMessage(ride)}</Text>{["Requested","Negotiating","AgreementConfirmed","Accepted","Arrived"].includes(ride.status)&&<Pressable testID="rider-cancel-ride" {...getRiderActivityActionProps("cancel",loading||activityActionBusy,cancelBusy)} style={styles.secondary} disabled={loading||activityActionBusy} onPress={()=>void cancelRide()}><Text style={styles.secondaryText}>Cancel ride</Text></Pressable>}</View>}{rideHistory.filter(item=>item.rideId!==ride?.rideId).length>0&&<View style={styles.card}><Text style={styles.cardTitle}>Trip history</Text>{rideHistory.filter(item=>item.rideId!==ride?.rideId).map(item=><View key={item.rideId} testID={`rider-history-${item.rideId}`} accessible={true} accessibilityLabel={getRiderHistoryAccessibilityLabel(item)} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><Text style={styles.status}>{getRiderRideStatusLabel(item.status)}</Text><Text style={styles.cardTitle}>{item.pickup} → {item.dropoff}</Text><Text style={styles.muted}>{item.serviceClass.toUpperCase()} · {item.passengers===null?"Passenger count unavailable":item.passengers+" passenger(s)"}</Text><Text style={styles.muted}>{getRiderHistoryRequestedAtLabel(item)}</Text><Text style={styles.muted}>Reference · {item.rideId}</Text></View>)}</View>}{!ride&&rideHistory.length===0&&<View style={styles.card}><Text style={styles.muted}>No rides yet. Discover available Cab drivers to get started.</Text></View>}</>}
     {tab==="Offers"&&<><Text style={styles.title}>Offers</Text><View style={styles.card}><Text style={styles.muted}>Fare proposals and confirmation history are shown in Activity for your assigned trip. No platform fare is quoted or collected.</Text></View></>}
-    {tab==="Profile"&&<><Text testID="rider-profile-title" accessibilityRole="header" style={styles.title}>Your profile</Text>{themePicker}<Text style={styles.label}>APP THEME</Text><View style={styles.card}><Text testID="rider-profile-name" accessibilityRole="text" accessibilityLabel={`Rider name ${user.name||"Rider"}`} style={styles.cardTitle}>{user.name||"Rider"}</Text><Text testID="rider-profile-email" accessibilityRole="text" accessibilityLabel={`Email ${user.email}`} style={styles.muted}>{user.email}</Text><Text testID="rider-profile-role" accessibilityRole="text" accessibilityLabel={`Account role ${user.role}`} style={styles.muted}>Account role: {user.role}</Text><Text style={styles.label}>TURNOVA HELP</Text><TextInput testID="rider-help-question" {...getRiderProfileFieldProps("helpQuestion",helpBusy)} value={helpQuestion} onChangeText={setHelpQuestion} editable={!helpBusy} multiline maxLength={1000} style={[styles.input,{minHeight:64,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Ask about fare agreements, ride/queue states or direct-payment reports"/><Pressable testID="rider-help-submit" {...getRiderProfileActionProps("askHelp",helpBusy||!helpQuestion.trim(),helpBusy)} style={styles.secondary} disabled={helpBusy||!helpQuestion.trim()} onPress={()=>void askHelp()}><Text style={styles.secondaryText}>{helpBusy?"Checking approved help…":"Ask TurnOva assistant"}</Text></Pressable>{!!helpAnswer&&<Text testID="rider-help-answer" accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.muted}>{helpAnswer}</Text>}<Text style={styles.label}>SUPPORT REQUEST · SUBJECT AND DESCRIPTION ONLY</Text><Text style={styles.muted}>No category, priority, assignment or response-time target is selected here. Do not include passwords, tokens or payment credentials. Intake may be unavailable until Product/Operations policy, retention and durable storage are approved.</Text><TextInput testID="rider-support-subject" {...getRiderSupportFieldProps("subject",supportBusy)} value={supportSubject} onChangeText={value=>{setSupportSubject(value);setSupportError("");setSupportNotice("");}} editable={!supportBusy} maxLength={120} style={styles.input} placeholderTextColor={colors.muted} placeholder="Subject (3–120 characters)"/><TextInput testID="rider-support-description" {...getRiderSupportFieldProps("description",supportBusy)} value={supportDescription} onChangeText={value=>{setSupportDescription(value);setSupportError("");setSupportNotice("");}} editable={!supportBusy} multiline maxLength={4000} style={[styles.input,{minHeight:112,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Describe the issue (10–4000 characters)"/><Pressable testID="rider-support-submit" {...getRiderSupportActionProps(supportBusy||!supportSubject.trim()||!supportDescription.trim(),supportBusy)} style={styles.secondary} disabled={supportBusy||!supportSubject.trim()||!supportDescription.trim()} onPress={()=>void submitSupportRequest()}><Text style={styles.secondaryText}>{supportBusy?"Submitting support request…":"Submit support request"}</Text></Pressable>{!!supportNotice&&<Text testID="rider-support-notice" accessibilityRole="text" accessibilityLiveRegion="polite" style={[styles.muted,{color:colors.success}]}>{supportNotice}</Text>}{!!supportError&&<Text testID="rider-support-error" accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.error}>{supportError}</Text>}<Pressable testID="rider-sign-out" {...getRiderProfileActionProps("signOut",logoutBusy||helpBusy||supportBusy,logoutBusy)} style={styles.secondary} disabled={logoutBusy||helpBusy||supportBusy} onPress={()=>void logout()}><Text style={styles.secondaryText}>{logoutBusy?"Signing out…":"Sign out"}</Text></Pressable></View></>}
+    {tab==="Profile"&&<><Text testID="rider-profile-title" accessibilityRole="header" style={styles.title}>Your profile</Text>{themePicker}<Text style={styles.label}>APP THEME</Text><View style={styles.card}><Text testID="rider-profile-name" accessibilityRole="text" accessibilityLabel={`Rider name ${user.name||"Rider"}`} style={styles.cardTitle}>{user.name||"Rider"}</Text><Text testID="rider-profile-email" accessibilityRole="text" accessibilityLabel={`Email ${user.email}`} style={styles.muted}>{user.email}</Text><Text testID="rider-profile-role" accessibilityRole="text" accessibilityLabel={`Account role ${user.role}`} style={styles.muted}>Account role: {user.role}</Text><Text style={styles.label}>TURNOVA HELP</Text><TextInput testID="rider-help-question" {...getRiderProfileFieldProps("helpQuestion",helpBusy)} value={helpQuestion} onChangeText={setHelpQuestion} editable={!helpBusy} multiline maxLength={1000} style={[styles.input,{minHeight:64,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Ask about fare agreements, ride statuses or direct-payment reports"/><Pressable testID="rider-help-submit" {...getRiderProfileActionProps("askHelp",helpBusy||!helpQuestion.trim(),helpBusy)} style={styles.secondary} disabled={helpBusy||!helpQuestion.trim()} onPress={()=>void askHelp()}><Text style={styles.secondaryText}>{helpBusy?"Checking approved help…":"Ask TurnOva assistant"}</Text></Pressable>{!!helpAnswer&&<Text testID="rider-help-answer" accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.muted}>{helpAnswer}</Text>}<Text style={styles.label}>SUPPORT REQUEST · SUBJECT AND DESCRIPTION ONLY</Text><Text style={styles.muted}>No category, priority, assignment or response-time target is selected here. Do not include passwords, tokens or payment credentials. Intake may be unavailable until Product/Operations policy, retention and durable storage are approved.</Text><TextInput testID="rider-support-subject" {...getRiderSupportFieldProps("subject",supportBusy)} value={supportSubject} onChangeText={value=>{setSupportSubject(value);setSupportError("");setSupportNotice("");}} editable={!supportBusy} maxLength={120} style={styles.input} placeholderTextColor={colors.muted} placeholder="Subject (3–120 characters)"/><TextInput testID="rider-support-description" {...getRiderSupportFieldProps("description",supportBusy)} value={supportDescription} onChangeText={value=>{setSupportDescription(value);setSupportError("");setSupportNotice("");}} editable={!supportBusy} multiline maxLength={4000} style={[styles.input,{minHeight:112,textAlignVertical:"top"}]} placeholderTextColor={colors.muted} placeholder="Describe the issue (10–4000 characters)"/><Pressable testID="rider-support-submit" {...getRiderSupportActionProps(supportBusy||!supportSubject.trim()||!supportDescription.trim(),supportBusy)} style={styles.secondary} disabled={supportBusy||!supportSubject.trim()||!supportDescription.trim()} onPress={()=>void submitSupportRequest()}><Text style={styles.secondaryText}>{supportBusy?"Submitting support request…":"Submit support request"}</Text></Pressable>{!!supportNotice&&<Text testID="rider-support-notice" accessibilityRole="text" accessibilityLiveRegion="polite" style={[styles.muted,{color:colors.success}]}>{supportNotice}</Text>}{!!supportError&&<Text testID="rider-support-error" accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.error}>{supportError}</Text>}<Pressable testID="rider-sign-out" {...getRiderProfileActionProps("signOut",logoutBusy||helpBusy||supportBusy,logoutBusy)} style={styles.secondary} disabled={logoutBusy||helpBusy||supportBusy} onPress={()=>void logout()}><Text style={styles.secondaryText}>{logoutBusy?"Signing out…":"Sign out"}</Text></Pressable></View></>}
     {!!error&&<Text testID="rider-global-error" accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.error}>{error}</Text>}
   </ScrollView><View style={styles.tabBar} accessibilityRole="tablist" accessibilityLabel="Rider navigation">{tabs.map(item=><Pressable key={item} testID={`rider-tab-${item.toLowerCase()}`} {...getRiderTabProps(item,tab===item,loading || (item === "Book" && !canStartBooking))} style={styles.tab} disabled={loading || (item === "Book" && !canStartBooking)} onPress={()=>setTab(item)}><Text style={[styles.tabText,tab===item&&styles.tabActive]}>{item}</Text></Pressable>)}</View></SafeAreaView>;
 }
