@@ -286,6 +286,8 @@ The GitHub Actions workflow currently runs:
 | RID-IDEM-001 | Repeat request with same rider and Idempotency-Key | Original ride is returned; no second ride is created | API + Cosmos | P0 |
 | RID-IDEM-002 | Same key used by different riders | Separate ride requests are allowed | API + Cosmos | P1 |
 | RID-IDEM-003 | Missing or oversized idempotency key | HTTP 400; no ride is created | API | P0 |
+| RID-IDEM-004 | A stale/corrupt idempotency mapping references another Rider's ride | HTTP 409; the authenticated Rider receives no other Rider's ride ID or response projection | `LegacyIdempotencyReplayCannotReturnAnotherRidersRide` | P0 |
+| RID-IDEM-005 | Legacy FIFO compatibility is enabled outside Development/Testing | HTTP 409 before ride or idempotency writes; local/test compatibility uses full GUID IDs and create-if-absent ride persistence | `LegacyFifoRiderRequestsRemainDisabledOutsideDevelopmentAndTesting` | P0 |
 | TRACK-007 | Assigned Driver posts location during active ride | Latest location is broadcast to the owning Rider's SignalR group | API + SignalR | P0 |
 | TRACK-008 | Driver posts location after completion/cancellation | HTTP 404/409; no location update or broadcast | API security | P0 |
 | TRACK-009 | Rider SignalR connection uses another Rider's ride ID | Connection is aborted before group membership | SignalR security | P0 |
