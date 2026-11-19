@@ -3780,3 +3780,12 @@ The `AI-01-RIDER-DRAFT-RESPONSE-003` test fixture uses actual JavaScript `\u0000
 | RIDER-AGREEMENT-INPUT-001 | Rider enters an invalid proposal amount | Accept only a positive plain base-10 decimal with at most two fractional digits; reject zero, negative, signed, exponent, hexadecimal, locale-formatted and over-precision input before a persistent retry record or POST is created | Automated Node helper + App source wiring | P1 |
 
 This mirrors API contract case CAB-AGR-012. It is client-side preflight only: the API remains authoritative, the Rider proposal remains INR-only pending Product policy, and no fare estimate, price cap, conversion or payment behavior is added.
+
+
+## Rider active-detail lifecycle consistency — PR #194 (2026-11-19)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-HISTORY-013 | Active ride detail lifecycle validation | When history identifies an active Rider ride, accept the detail snapshot only if its lifecycle is one of the known nonterminal Rider states. Reject missing, malformed, unknown or terminal detail states before committing active ride state or enabling another booking. On rejection, retain the fail-closed history state and suspend cached Driver location until a later valid server snapshot. | Automated Node helper + App source-wiring | P0 |
+
+This protects recovery from inconsistent history/detail reads. It does not change server lifecycle or reservation behavior; the API remains authoritative and must still reject overlapping active bookings.

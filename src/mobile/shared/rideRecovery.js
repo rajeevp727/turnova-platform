@@ -44,6 +44,11 @@ function isRiderRideDetailsResponseValid(response, expectedRideId) {
   if (!response || typeof response !== "object" || Array.isArray(response) ||
       typeof response.rideId !== "string" || response.rideId !== expectedRideId) return false;
 
+  // The history projection selected an active Rider ride. A terminal, missing or
+  // unknown detail status cannot safely re-enable booking while the two reads disagree.
+  if (typeof response.status !== "string" ||
+      !ACTIVE_RIDE_STATUSES.rider.has(response.status)) return false;
+
   const optionalTimestampFields = [
     "requestedAt",
     "acceptedAt",

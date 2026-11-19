@@ -32,6 +32,7 @@ test("Rider ride-details response must match the active history identity", () =>
   assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "InProgress" }, "ride-1"), true);
   assert.equal(isRiderRideDetailsResponseValid({
     rideId: "ride-1",
+    status: "InProgress",
     requestedAt: "2026-11-19T00:00:00Z",
     locationCapturedAtUtc: "2026-11-19T00:00:01Z"
   }, "ride-1"), true);
@@ -41,7 +42,8 @@ test("Rider ride-details response must match the active history identity", () =>
       [field]: "2026-11-31T00:00:00Z"
     }, "ride-1"), false, field);
   }
-  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "FutureServerStatus" }, "ride-1"), true);
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: "FutureServerStatus" }, "ride-1"), false);
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1" }, "ride-1"), false);
   assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-2", status: "Completed" }, "ride-1"), false);
   assert.equal(isRiderRideDetailsResponseValid({ status: "Completed" }, "ride-1"), false);
   assert.equal(isRiderRideDetailsResponseValid([], "ride-1"), false);
@@ -235,4 +237,33 @@ test("RIDER-HISTORY-012: Rider hydration checks all lifecycle values before deta
   assert.ok(shape >= 0 && unresolved > shape && active > unresolved);
   assert.ok(detail > active && loaded > detail);
   assert.match(hydration, /if\(hasUnresolvedRiderRideHistory\(history\)\)\{[\s\S]*?setRideHistory\(history\);[\s\S]*?Booking remains disabled/);
+});
+
+test("RIDER-HISTORY-013: active ride details require a known nonterminal lifecycle status", () => {
+  const activeStatuses = [
+    "Requested", "Matching", "Offered", "Negotiating",
+    "AgreementConfirmed", "Accepted", "Arrived", "InProgress"
+  ];
+  for (const status of activeStatuses) {
+    assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status }, "ride-1"), true, status);
+  }
+
+  for (const status of ["Completed", "Cancelled", "Expired", "FutureServerStatus", "", " InProgress", "InProgress "]) {
+    assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status }, "ride-1"), false, status);
+  }
+  assert.equal(isRiderRideDetailsResponseValid({ rideId: "ride-1", status: null }, "ride-1"), false);
+});
+
+test("RIDER-HISTORY-013: Rider hydration validates detail lifecycle before committing active state", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const loadRideHistory=useCallback");
+  const end = source.indexOf("useEffect(()=>", start);
+  assert.ok(start >= 0 && end > start);
+  const hydration = source.slice(start, end);
+  const detailFetch = hydration.indexOf('apiFetch("/api/v1/rides/"+encodeURIComponent(active.rideId))');
+  const validation = hydration.indexOf("isRiderRideDetailsResponseValid(detailsResponse,active.rideId)");
+  const detailCommit = hydration.indexOf("activeDetails=detailsResponse as Ride");
+  const bookingReady = hydration.indexOf("setActiveRideStateLoaded(true)");
+  assert.ok(detailFetch >= 0 && validation > detailFetch);
+  assert.ok(detailCommit > validation && bookingReady > detailCommit);
 });
