@@ -2825,7 +2825,7 @@ REALTIME-01 regression coverage includes five deterministic shared formatter tes
 
 The current Rider and Driver npm audit artifacts (`14195939928` / `14196118910`) each report 1 low, 11 moderate, 0 high and 0 critical. Findings include deepmerge prototype poisoning, glob AbortSignal cancellation bypass and minimatch denial of service. Do not blind-upgrade Expo/React Native to the major version suggested by npm audit; evaluate compatible targeted overrides and lockfile reproducibility in PLATFORM-01.
 
-Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged. Product/Safety separately decides Ops suspension/rejection during active negotiation/ride.
+The DRIVER-01 normalized Union-code concurrency work was completed in PR #173; see the implementation, regression tests and exact-head CI evidence in the `DRIVER-01 Union code uniqueness — implemented (PR #173)` section above. Product/Safety separately decides Ops suspension/rejection during an active negotiation/ride.
 
 
 ## Latest exact-head verification — REALTIME-01 CI #1803 (2026-11-16)
@@ -2837,7 +2837,7 @@ Next sequential test work is DRIVER-01 concurrent normalized Union-code creation
 - REALTIME-01 engineering implementation remains complete: both apps display persisted currency per immutable agreement version; five shared formatter tests and one backend integration test verify USD v1/EUR v2 history for both authenticated parties; proposal entry remains INR-only pending Product policy. No currency conversion, fare, payment, schema, auth or ride-lifecycle behavior was added.
 - Review state: four COMMENT-only reviews, zero unresolved inline threads, no approval/self-approval and no critical/high authorization, privacy, concurrency, idempotency or data-loss finding identified in the reviewed nine-file diff.
 - This evidence/documentation synchronization advances the branch; a fresh exact-head CI is required on the resulting documentation commit before PR readiness/merge. Recheck the exact head and all required jobs before proceeding.
-- Next sequential engineering task after REALTIME-01 merges: DRIVER-01 normalized Union-code creation concurrency. Replace the list-check/random-GUID/upsert race for new codes with deterministic IDs and create-if-absent in the existing `Unions` container (`/unionId` partition); map Cosmos/in-memory duplicate conflicts to HTTP 409; add concurrent case/whitespace-normalization tests; preserve existing Union IDs and historical records. Product/Safety separately owns the active-ride Ops rejection/suspension policy; do not invent an emergency-suspension policy.
+- The next sequential DRIVER-01 normalized Union-code engineering task was completed in PR #173; see the current implementation and regression evidence above. Product/Safety still owns the active-ride Ops rejection/suspension policy; do not invent an emergency-suspension policy.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established.
 
 
