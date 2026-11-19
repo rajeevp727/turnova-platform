@@ -188,6 +188,13 @@ The 16 KiB request-body limit is declared through endpoint metadata and document
 - Automated Testing uses a deterministic in-memory adapter with an explicit fake Clean result; Development returns PendingScan. Staging/Production use an unavailable adapter and fail closed with HTTP 503. The fake Clean result is not malware-scanning evidence.
 - Production remains blocked until Infrastructure/Security supplies private object storage, malware scanning/quarantine, managed identity and provider-backed private retrieval, and Product/Legal approves consent, retention and deletion. Live provider/Cosmos validation is not claimed.
 
+
+## Legacy FIFO compatibility boundary
+
+`POST /api/v1/rides/request` is retained only for Development/Testing compatibility regressions. It returns HTTP 409 outside those local/test environments even if `Dispatch:LegacyFifoRiderRequestsEnabled` is set. The current Rider flow is Union-grouped discovery followed by explicit `POST /api/v1/rider/bookings`; no customer-facing FIFO ranking or automatic Driver assignment is part of the MVP.
+
+When the compatibility route is enabled in Development/Testing, it uses full GUID ride IDs, create-if-absent persistence and Rider-owner-scoped idempotency replay. A stale/corrupt idempotency mapping cannot return another Rider's ride, and a ride-ID collision cannot overwrite an existing ride.
+
 ## Cosmos startup migration lease
 
 The API creates the `MigrationHistory` and `MigrationLocks` containers before applying ordered schema migrations. A runner acquires the `schema-migrations` lease using create-if-absent or expired-lease recovery with an ETag precondition. The lease lasts 30 minutes and is renewed every 10 minutes using the latest ETag while migrations run.
