@@ -82,8 +82,11 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
                 cancellationToken);
             return ToLease(replacement, response.ETag);
         }
-        catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+        catch (CosmosException ex) when (
+            ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed)
         {
+            // The lease disappeared or another runner replaced it after the read.
+            // Both outcomes mean this acquisition/renewal attempt lost its race.
             return null;
         }
     }
