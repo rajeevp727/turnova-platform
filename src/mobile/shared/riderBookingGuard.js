@@ -68,9 +68,10 @@ function normalizeRiderSelectedBookingResponse(response, expected) {
   const expectedPickupLongitude = normalizeCoordinate(expected.pickupLongitude, -180, 180);
   if (expectedPickupLatitude === null || expectedPickupLongitude === null) return null;
 
+  // The role-scoped API intentionally omits RiderId and DriverId from this DTO.
+  // Bind the authenticated Rider and selected Driver to the request context above;
+  // validate the response only against the public fields the server actually returns.
   if (!isSafeTrimmedText(response.rideId, 128) ||
-      !isSafeTrimmedText(response.riderId) || response.riderId !== expected.riderId ||
-      !isSafeTrimmedText(response.driverId, 128) || response.driverId !== expected.driverId ||
       !isSafeTrimmedText(response.unionId, 128) || response.unionId !== expected.unionId ||
       !isSafeTrimmedText(response.pickup, 250) || response.pickup !== expected.pickup ||
       !isSafeTrimmedText(response.dropoff, 250) || response.dropoff !== expected.dropoff ||
