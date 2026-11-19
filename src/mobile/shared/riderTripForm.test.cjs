@@ -221,7 +221,7 @@ test("RIDER-DISCOVERY-RESPONSE-002: reject malformed contracts, incomplete vehic
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleModel: "x".repeat(61) }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, serviceClass: "bike" }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, distanceToPickupKm: Infinity }] }] },
-    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, passengerCapacity: 7 }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, passengerCapacity: 9 }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=" }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "text/html" }] }] },
     { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "image/jpeg" }] }] },
@@ -244,6 +244,64 @@ test("RIDER-DISCOVERY-RESPONSE-003: default JPEG content type only for a server-
     unions: [{ unionId: "union-1", unionName: "Green Cab Union", drivers: [driver] }]
   });
   assert.equal(result.unions[0].drivers[0].profilePhotoContentType, "image/jpeg");
+});
+
+test("RIDER-DISCOVERY-RESPONSE-004: accept API Cab capacity 7–8 and reject unsafe public display text", () => {
+  const validDriver = {
+    driverId: "driver-1",
+    fullName: "Asha Rao",
+    vehicleMake: "Maruti",
+    vehicleModel: "Dzire",
+    serviceClass: "cab",
+    passengerCapacity: 4,
+    distanceToPickupKm: 2.4,
+    profilePhotoBase64: null,
+    profilePhotoContentType: null
+  };
+  const buildResponse = ({
+    pickupZoneId = "zone-hyd-1",
+    unionId = "union-1",
+    unionName = "Green Cab Union",
+    driver = {}
+  } = {}) => ({
+    pickupZoneId,
+    journeyDistanceKm: null,
+    unions: [{ unionId, unionName, drivers: [{ ...validDriver, ...driver }] }]
+  });
+
+  for (const passengerCapacity of [7, 8]) {
+    const result = normalizeRiderDiscoveryResponse(buildResponse({ driver: { passengerCapacity } }));
+    assert.equal(result?.unions[0].drivers[0].passengerCapacity, passengerCapacity);
+  }
+  for (const passengerCapacity of [0, 9]) {
+    assert.equal(normalizeRiderDiscoveryResponse(buildResponse({ driver: { passengerCapacity } })), null);
+  }
+
+  const invalidResponses = [
+    buildResponse({ pickupZoneId: "zone\ninvalid" }),
+    buildResponse({ pickupZoneId: "z".repeat(81) }),
+    buildResponse({ unionId: "union\ninvalid" }),
+    buildResponse({ unionName: "Green\u0085Union" }),
+    buildResponse({ unionName: "U".repeat(121) }),
+    buildResponse({ driver: { driverId: "driver\ninvalid" } }),
+    buildResponse({ driver: { fullName: "Asha\nRao" } }),
+    buildResponse({ driver: { fullName: "D".repeat(121) } }),
+    buildResponse({ driver: { vehicleMake: "Maruti\u0085" } }),
+    buildResponse({ driver: { vehicleModel: "Dzire\n" } })
+  ];
+  for (const response of invalidResponses) {
+    assert.equal(normalizeRiderDiscoveryResponse(response), null);
+  }
+
+  const option = getRiderDriverOptionProps({
+    ...validDriver,
+    passengerCapacity: 8,
+    fullName: "Asha\nRao",
+    vehicleMake: "Maruti\u0085",
+    vehicleModel: "Dzire"
+  }, false, false, "Green\nUnion");
+  assert.match(option.accessibilityLabel, /^Cab, verified Cab vehicle, Cab, capacity 8 passengers/);
+  assert.doesNotMatch(option.accessibilityLabel, /[\u0000-\u001f\u007f-\u009f]/);
 });
 
 test("RIDER-DISCOVERY-UI-001: cap visible drivers at the first three server-ordered results", () => {
