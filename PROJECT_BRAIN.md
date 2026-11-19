@@ -6,11 +6,10 @@
 **Last verified:** 2026-11-19
 **Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`; PR #193 is merged.
-**Current phase:** API — role-scoped response/privacy audit reopened. A previous API exit claim is withdrawn until the response projection gap is closed and API checks pass.
-**Only active feature PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`, head `427ed65316351058b837f62f341ca5ca8638a88b`; exact-head CI #44495982367 pending. PR #194 is Draft while Rider Android work waits for API exit.
-**Security finding:** raw DemoRide and internal agreement records were returned to Rider/Driver mobile endpoints, exposing unnecessary actor IDs, dispatch-zone data, agreement persistence internals, audit events and reconciliation state.
-**Current fix:** RiderRideDetailsResponse/RiderSelectedBookingResponse, DriverRideHistoryItem and RideAgreementVersionResponse/RideAgreementProposalResponse define role-scoped response contracts. Driver coordinates are gated by an approved Union Cab snapshot, sharing flag, lifecycle and coordinate validity; estimatedFareInr is always null. Legacy non-Cab/unionless history retains its class label but hides unverified driver/vehicle/union/location details.
-**Review/merge:** no independent review is recorded; do not self-approve or bypass policy. No merge.
+**Current phase:** API — role-scoped response/privacy audit reopened. The correction is on PR #195 and its exact-head API CI passed; merge/review and main re-audit remain pending.
+**Only active feature PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`, head `4b9c0cd72b462ef768afc081bca01da3ade1ad9b`; [CI #44496152952](https://github.com/rajeevp727/turnova-platform/actions/runs/44496152952) passed 763/763 backend tests and native .NET 10 Release publish. PR #194 is Draft.
+**Review/merge:** PR #195 has no independent review recorded; branch-protection/ruleset inspection was denied by repository permissions. Do not self-approve or merge until required review/policy is known.
+**Parked Rider PR #194:** head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`; runs #44493716559/#44494246556 failed due invalid control-character regex escaping, stale source-order assertion and nullable passengers activity type mismatch. Fix after API exit.
 **Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 **External gates:** live Cosmos ETag/multi-instance/restart, production identity/hosting/provider access, approved radius/location freshness, routing/maps/SignalR, private-media scanning/retention/consent, support/reconciliation policy, Union legal approval, Android/iOS physical-device tests and signing.
 
@@ -3056,11 +3055,6 @@ PR #193 remains open at the verified head. No approval was submitted; branch `ma
 **Next:** recheck PR #193 head/checks after this documentation-only synchronization. Merge only if the latest documentation-bearing head has all required API/Android jobs green and GitHub still permits the merge without self-approval or bypass. Re-read main after merge and continue Rider-only work. Strict acceptance remains 0/19 Verified; production readiness is not established.
 
 
-## API role-scoped response privacy audit — 2026-11-19
+## API role-scoped response privacy audit — 2026-11-19 (latest)
 
-API phase was reopened after an audit found that several Rider/Driver endpoints returned the full DemoRide aggregate and agreement records with internal actor/idempotency metadata. The current API branch replaces those responses with explicit Rider, Driver and agreement DTOs, preserving only the fields required by each role. Driver coordinates are returned only during permitted location sharing; platform fare remains null. New integration tests assert response allow-lists and legacy compatibility. Branch fix/api-role-scoped-ride-responses at cccde26270d31aaea394b74500949171f72668d9; PR #194 remains Draft. PR #195 must pass exact-head CI, native non-container publish, contract/auth and persistence checks before Android can resume.
-
-
-## API role-scoped response privacy audit — 2026-11-19
-
-API phase was reopened after an audit found that Rider/Driver endpoints returned the full DemoRide aggregate and agreement records with internal actor/idempotency metadata. PR #195 replaces these responses with explicit Rider, Driver and agreement DTOs, preserving only fields required by each role. Driver coordinates require an approved Union Cab snapshot plus active sharing, permitted lifecycle and valid coordinates; platform fare remains null. Legacy non-Cab/unionless rides retain history labels but hide driver/vehicle/union/location details. API-PRIV-001..005 integration tests cover role projections, legacy compatibility, agreement privacy and location gating. PR #195 head 427ed65316351058b837f62f341ca5ca8638a88b; exact-head CI #44495982367 pending. PR #194 remains Draft. API phase exit is not complete until final-head checks and native non-container publish pass.
+PR #195 at `4b9c0cd72b462ef768afc081bca01da3ade1ad9b` passed exact-head CI #44496152952: scope/backend success, 763/763 backend tests, native non-container .NET 10 Release publish and verifier (11 negative cases plus valid fixture). Role-scoped Rider/Driver/agreement DTOs, location privacy and legacy non-Cab suppression are implemented and tested. PR #195 remains unmerged with no independent review recorded; API phase stays current until review/policy, merge and main re-audit. PR #194 is Draft with three known Rider CI/type issues; do not resume Android before API exit.
