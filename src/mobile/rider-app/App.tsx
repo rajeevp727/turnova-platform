@@ -338,6 +338,9 @@ export default function App() {
         // Invalidate any history read started before this newer live lifecycle event.
         rideHistoryRequestSequence.current+=1;
         setRide(current=>current?applyRiderRideStatusUpdate(current,update):current);
+        // The event carries lifecycle only. Re-read the API snapshot before enabling
+        // location sharing; do not infer the server's sharing permission from status.
+        void refreshRiderState();
       }
     });
     connection.on("RideAgreementChanged",(update:{rideId:string})=>{
@@ -496,6 +499,8 @@ export default function App() {
     if(!canStartRiderBooking(activeRideStateLoaded,ride)){setLoading(false);if(hasActiveRiderRide(ride)){setTab("Activity");setError("You already have an active booking or ride. Complete or cancel it before searching for another Driver.");}else{setError("Your active booking status is still being verified. Retry after the status check completes.");}return;}
     const passengerCount=parsePassengerCountInput(passengers);
     if(passengerCount===null||!canDiscoverRiderTrip(pickup,dropoff,passengerCount)){setLoading(false);setDiscovery(null);setSelectedDriverId(null);setError("Enter a pickup, destination and passenger count from 1 to 6 before searching.");return;}
+    const tripTextError=validateRiderBookingText(pickup,dropoff,stopsText);
+    if(tripTextError!==null){setLoading(false);setDiscovery(null);setSelectedDriverId(null);setError(tripTextError);return;}
     setLoading(true);setError("");setSelectedDriverId(null);setDiscovery(null);resetSelectedBookingAttempt();
     try {
       const {discovery:rawResult}=await discoverNearbyCabDrivers(Location,apiFetch,passengerCount);
