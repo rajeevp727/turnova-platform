@@ -3035,3 +3035,17 @@ The union radio-group helper now rejects actual C0/C1 control characters in the 
 ## Union radio-group source-wiring assertion correction — PR #194 (2026-11-19)
 
 CI #44441520440 passed 371/372 Node tests and identified one test-only failure: the source-wiring regular expression contained doubled escaping and therefore did not match the JSX call. The helper implementation itself passed its deterministic accessibility-label assertions. Corrected the test regex to match the literal helper invocation. No product code changed in this correction. The new test commit is `c210d508b68d19564ecd9923bdc7551af8d6aa07`; fresh exact-head CI is required.
+
+
+## Rider active-booking recovery accessibility — PR #194 (2026-11-19)
+
+- **Platform phase:** Android — Rider first. API engineering exit remains complete; Driver Android and both iOS apps remain gated by the strict platform order.
+- **Finding:** the unresolved-active-booking card exposed “Retry status check” and “View active ride” as Pressables without explicit accessibility role, label or hint. These controls are important recovery/navigation actions when the server-owned ride state has not yet been verified.
+- **Change:** added typed `retryStatus` and `viewActiveRide` accessibility definitions to `riderTripForm.js` / `.d.ts`, wired stable test IDs and helper props in `App.tsx`, and retained the existing authenticated history reload and Activity-only navigation handlers.
+- **Deterministic evidence:** `RIDER-ACTIVE-BOOKING-UI-001` verifies button role, labels, truthful hints, idle/busy state and exact source wiring. Test plan and acceptance matrix are synchronized. This is additional evidence under existing selected-booking/recovery scope; no row status changed.
+- **Source/test commits:** `7bbaf2c6fb7a4e1715cc0dba112263712e508603`, `f3b974a30278dbe06770c5200139676315a60981`, `72e31b9de2bf6990aa2e8fa7eeba4e5d4b15696a`, `4294e8d1734caa2fcc087eef11d720af6a4bfb17`.
+- **CI:** the preceding exact-head run [#44441659332](https://github.com/rajeevp727/turnova-platform/actions/runs/44441659332) passed scope, Rider/Driver Expo/config/typecheck/bundle checks, shared mobile/auth tests and backend Release build/tests/native non-container publish. Both Android native debug builds were still running at last inspection. That run predates this increment and must not be treated as final-head evidence. Fresh exact-head API/Android CI is required after documentation sync; iOS jobs remain skipped.
+- **Review:** no independent maintainer review is recorded; prior PR comments are author COMMENT-only. No self-approval or merge.
+- **Acceptance:** strict 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); engineering implementation is not empty, and production readiness is not established.
+- **Next exact action:** inspect fresh exact-head CI for the documentation-bearing PR #194 head; resolve any test/build failures, then continue the next Rider-only in-scope accessibility/functional gap. Do not start Driver or iOS early.
+- **External gates:** live Cosmos ETag/multi-instance/restart; production identity/API hosting; approved pickup radius/zones and location freshness; routing/maps; SignalR backplane and Call/Chat/push providers; private-media scanning/retention/consent (including legacy inline-photo scan metadata); support/reconciliation policy; Union legal approval; physical-device/manual accessibility and signing.
