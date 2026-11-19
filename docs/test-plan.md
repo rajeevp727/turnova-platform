@@ -3185,6 +3185,14 @@ CI recovery: run #44137503480 executed 753 tests (751 passed, 2 failed) because 
 The runner now renews a 30-minute ETag-protected lease every 10 minutes and cancels migration work when renewal loses ownership. Current migrations create containers idempotently and receive the cancellation token. Future non-idempotent migrations must remain cancellation-aware and resumable. Live Cosmos multi-instance contention, process suspension/crash and restart remain external. Source/test CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Final documentation-head CI #44130301238 also passed 744/744 backend tests and native publish (artifact 14348249426). The current documentation-only sync requires its own exact-head CI before merge; live two-instance contention, process suspension/crash and restart remain external. Final PR #180 exact-head CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Live two-instance contention, process suspension/crash and restart remain external.
 
 
+## COSMOS-MIG-011 runner lease-loss exact-head evidence — 2026-11-19
+
+PR #197 final head `eb58774aee290995a60cf4a5089de4fd9c2373e2` passed exact-head CI [#44541764287](https://github.com/rajeevp727/turnova-platform/actions/runs/44541764287): scope/backend green, **764/764 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier 11 negative fixtures plus the valid fixture, artifact [14539312231](https://github.com/rajeevp727/turnova-platform/actions/runs/44541764287/artifacts/14539312231). Mobile-auth, mobile, Android and iOS jobs were skipped by the API-only phase gate.
+
+`CosmosMigrationRunnerTests.LeaseRenewalLossCancelsMigrationBeforeHistoryMarkerIsWritten` uses mocked Cosmos bootstrap/history and a deterministic fake lease store/delay. It waits for lease-renewal loss to cancel the migration token, then releases an in-flight migration operation that deliberately returns after cancellation. The runner's post-migration cancellation check throws before a MigrationHistory marker can be written, and release uses the lease ETag observed by this runner. This is deterministic orchestration/adapter evidence only; live Cosmos ETag contention, multi-instance ownership, process suspension/crash and restart remain external.
+
+CI recovery: initial test attempt #44540542579 timed out before the migration began; #44541214255 exposed Moq's generic type-matcher cast limitation. The final test uses the exact internal MigrationHistory document type via the test assembly's InternalsVisibleTo declaration. Final-head CI #44541764287 is the authoritative passing result.
+
 ### Platform phase-state CI fixtures (implemented in PR #179; API-only CI #44111719737 passed)
 
 | ID | Scenario | Expected result | Type | Priority |
