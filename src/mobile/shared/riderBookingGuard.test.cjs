@@ -207,6 +207,8 @@ for (const [name, override] of [
   ["service class", { serviceClass: "bike" }],
   ["stops", { stops: [] }],
   ["ride ID", { rideId: " " }],
+  ["overlong Union name", { unionName: "U".repeat(121) }],
+  ["overlong Driver name", { driverDisplayName: "D".repeat(121) }],
   ["lifecycle control characters", { status: "Negotiating\n" }],
   ["request timestamp", { requestedAt: "not-a-date" }],
   ["impossible request calendar date", { requestedAt: "2026-02-30T00:00:00Z" }],
@@ -354,6 +356,42 @@ test("Rider selected-booking response requires timezone-qualified server timesta
   }, validSelectedBookingExpected), null);
 });
 
+
+test("RIDER-BOOKING-RESPONSE-005: reject malformed optional timestamps instead of silently dropping them", () => {
+  const optionalTimestampFields = [
+    "acceptedAt",
+    "locationUpdatedAt",
+    "locationCapturedAtUtc",
+    "driverLocationCapturedAtUtc"
+  ];
+  const invalidValues = [
+    "2026-02-30T00:00:00Z",
+    "2026-11-19T25:00:00Z",
+    "2026-11-19T00:00:00+05:60"
+  ];
+
+  for (const field of optionalTimestampFields) {
+    for (const value of invalidValues) {
+      assert.equal(normalizeRiderSelectedBookingResponse({
+        ...validSelectedBookingResponse,
+        [field]: value
+      }, validSelectedBookingExpected), null, field + ": " + value);
+    }
+  }
+
+  const valid = normalizeRiderSelectedBookingResponse({
+    ...validSelectedBookingResponse,
+    acceptedAt: "2026-11-19T00:01:00Z",
+    locationUpdatedAt: "2026-11-19T00:01:01Z",
+    locationCapturedAtUtc: "2026-11-19T00:01:02Z",
+    driverLocationCapturedAtUtc: "2026-11-19T00:01:03Z"
+  }, validSelectedBookingExpected);
+  assert.ok(valid);
+  assert.equal(valid.acceptedAt, "2026-11-19T00:01:00Z");
+  assert.equal(valid.locationUpdatedAt, "2026-11-19T00:01:01Z");
+  assert.equal(valid.locationCapturedAtUtc, "2026-11-19T00:01:02Z");
+  assert.equal(valid.driverLocationCapturedAtUtc, "2026-11-19T00:01:03Z");
+});
 
 test("RIDER-BOOKING-RESPONSE-004: rejects impossible calendar dates, invalid clock values and invalid offsets", () => {
   for (const requestedAt of [
