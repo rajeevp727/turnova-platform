@@ -8,6 +8,7 @@ const {
   normalizeRiderDiscoveryResponse,
   getVisibleUnionDrivers,
   getRiderDriverOptionProps,
+  getRiderUnionDriverGroupProps,
   getRiderTripActionProps,
   getRiderTripFieldProps,
   canDiscoverRiderTrip,
@@ -270,6 +271,21 @@ test("Rider driver option exposes radio selection, union, Cab details and pickup
 
   const disabled = getRiderDriverOptionProps(driver, false, true);
   assert.deepEqual(disabled.accessibilityState, { checked: false, disabled: true });
+});
+
+test("Rider discovery groups each union's driver radio options with a safe accessible label", () => {
+  assert.deepEqual(getRiderUnionDriverGroupProps("Green Cab Union"), {
+    accessibilityRole: "radiogroup",
+    accessibilityLabel: "Green Cab Union union Cab drivers"
+  });
+  assert.deepEqual(getRiderUnionDriverGroupProps("bad\\nunion"), {
+    accessibilityRole: "radiogroup",
+    accessibilityLabel: "Approved union Cab drivers"
+  });
+
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /getRiderUnionDriverGroupProps\\(union\\.unionName\\)/);
+  assert.match(source, /rider-union-driver-group-/);
 });
 
 test("Rider trip helpers reject unknown fields and actions", () => {
