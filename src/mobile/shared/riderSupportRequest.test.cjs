@@ -158,3 +158,27 @@ test("Rider support submission is single-flight and preserves the attempt after 
   assert.match(source, /style=\{\[styles\.muted,\{color:colors\.success\}\]\}\>\{supportNotice\}/);
   assert.doesNotMatch(source, /styles\.success/);
 });
+
+
+test("RIDER-SUPPORT-RESPONSE-001: support response timestamps obey the API DateTimeOffset contract", () => {
+  const valid = {
+    requestId: "d".repeat(64),
+    submittedAtUtc: "2026-11-19T06:30:00.1234567+05:30",
+    replayed: false
+  };
+  assert.deepEqual(parseRiderSupportRequestResponse(valid), valid);
+
+  for (const submittedAtUtc of [
+    "2026-02-30T06:30:00Z",
+    "2026-11-19T06:30:00",
+    "2026-11-19T06:30:00+14:01",
+    "0001-01-01T00:00:00+14:00",
+    "9999-12-31T23:59:59-14:00",
+    "2026-11-19T06:30:00.12345678Z"
+  ]) {
+    assert.throws(
+      () => parseRiderSupportRequestResponse({ ...valid, submittedAtUtc }),
+      /invalid response/
+    );
+  }
+});

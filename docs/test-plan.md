@@ -3678,3 +3678,12 @@ The Rider response timestamp validator now mirrors the range representable by th
 | RIDER-TIMESTAMP-004 | UTC range after offset normalization | Reject local timestamps whose offset moves the UTC instant before year 0001 or after year 9999 | Automated Node unit | P1 |
 
 These are response-validation regressions only. They do not change API timestamp serialization, ride lifecycle, agreement writes, location authority or persistence. The exact documentation-bearing PR head requires fresh CI; no result from a superseded head is substituted.
+
+
+## Rider support response timestamp contract — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-SUPPORT-RESPONSE-001 | Support intake response timestamp | Accept only offset-qualified, calendar-valid timestamps within the .NET DateTimeOffset range and precision; reject impossible dates, missing offsets, offsets beyond ±14:00, UTC underflow/overflow and precision beyond seven fractional digits. | Automated Node unit | P1 |
+
+The support response parser reuses the shared Rider timestamp validator. This is client response validation only; server timestamps and support persistence remain authoritative.
