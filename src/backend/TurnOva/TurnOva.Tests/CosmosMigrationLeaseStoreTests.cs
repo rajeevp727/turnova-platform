@@ -38,8 +38,11 @@ public sealed class CosmosMigrationLeaseStoreTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
-    public async Task ReplaceReturnsNullWhenAnotherRunnerWinsTheEtagRace()
+    [Theory]
+    [InlineData(HttpStatusCode.PreconditionFailed)]
+    [InlineData(HttpStatusCode.NotFound)]
+    public async Task ReplaceReturnsNullWhenLeaseDisappearsOrAnotherRunnerWinsTheEtagRace(
+        HttpStatusCode statusCode)
     {
         var container = new Mock<Container>();
         container.Setup(value => value.ReplaceItemAsync(
@@ -49,7 +52,7 @@ public sealed class CosmosMigrationLeaseStoreTests
                 It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new CosmosException(
-                "lease replaced", HttpStatusCode.PreconditionFailed, 0, "activity", 0));
+                "lease changed during replace", statusCode, 0, "activity", 0));
         var store = new CosmosMigrationLeaseStore(container.Object);
         var expected = new CosmosMigrationLease(
             "schema-migrations", "owner-1", "stale-etag", DateTimeOffset.UtcNow.AddMinutes(10));
@@ -58,6 +61,13 @@ public sealed class CosmosMigrationLeaseStoreTests
             expected, "owner-1", DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None);
 
         Assert.Null(renewed);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosMigrationLeaseDocument>(),
+            "schema-migrations",
+            It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(options =>
+                options != null && options.IfMatchEtag == "stale-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
