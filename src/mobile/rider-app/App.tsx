@@ -263,6 +263,12 @@ export default function App() {
     if(!isCurrent())return;
     if(!isRiderRideHistoryShapeValid(historyResponse))throw new Error("Ride history response is invalid. Booking remains disabled until the server status can be verified.");
     const history=historyResponse as RideHistoryItem[];
+    if(hasUnresolvedRiderRideHistory(history)){
+      // Keep history readable, but do not let a known active row mask an
+      // unknown/malformed record that could still represent another active booking.
+      setRideHistory(history);
+      throw new Error("Ride history contains an unsupported or malformed lifecycle status. Booking remains disabled until the server confirms known statuses.");
+    }
     const active=findActiveRide(history, "rider");
     let activeDetails: Ride | null = null;
     if(active){
