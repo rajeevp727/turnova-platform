@@ -3705,3 +3705,11 @@ This is an Android Rider accessibility/source-wiring increment under the existin
 | RIDER-LOCATION-UI-005 | Live driver map accessibility | The active-ride map exposes a stable test ID, accessible name and hint; the Driver marker describes the latest shared active-ride location; the pickup marker describes the selected pickup; panning still pauses automatic follow. | Automated Node source wiring | P1 |
 
 The map remains rendered only while the server-authorised ride is actively sharing valid Driver coordinates. This is presentation/accessibility only; it does not change location collection, sharing eligibility, GPS payloads or map-follow state transitions.
+
+## Rider mixed-status history fail-closed recovery — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-HISTORY-012 | Mixed known and unknown lifecycle rows | If any history row has a missing or unknown lifecycle value, Rider preserves the returned rows for Activity but does not mark recovery successful or enable another booking, even when a separate row has a known active status. | Automated Node unit + source wiring | P0 |
+
+This prevents a known active row from masking another unresolved record. The API remains authoritative; this client guard only fails closed until every returned lifecycle value is understood.
