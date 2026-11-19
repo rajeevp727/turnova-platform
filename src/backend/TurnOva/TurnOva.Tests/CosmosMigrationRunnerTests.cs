@@ -71,10 +71,12 @@ public sealed class CosmosMigrationRunnerTests
     public async Task LeaseReleaseStillRunsWhenMigrationCancellationCallbackThrowsDuringShutdown()
     {
         var migrationStarted = NewSignal();
+        var cancellationObserved = NewSignal();
         var completeMigration = NewSignal();
-        var migration = new CancellationCallbackThrowingMigration(migrationStarted, completeMigration);
+        var migration = new CancellationCallbackThrowingMigration(
+            migrationStarted, cancellationObserved, completeMigration);
         var leaseStore = new LeaseLostStore();
-        var delay = new ControlledDelay();
+        var delay = new ShutdownControlledDelay();
         var coordinator = new CosmosMigrationLeaseCoordinator(
             leaseStore,
             TimeProvider.System,
@@ -104,7 +106,11 @@ public sealed class CosmosMigrationRunnerTests
         await delay.WaitUntilRequestedAsync().WaitAsync(TimeSpan.FromSeconds(5));
         migration.Complete();
 
-        var exception = await Record.ExceptionAsync(async () => await run);
+        var exceptionTask = Record.ExceptionAsync(async () =>
+            await run.WaitAsync(TimeSpan.FromSeconds(5)));
+        await cancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        delay.Release();
+        var exception = await exceptionTask;
 
         Assert.NotNull(exception);
         Assert.Contains("test cancellation callback failure", exception.ToString());
@@ -187,6 +193,7 @@ public sealed class CosmosMigrationRunnerTests
 
     private sealed class CancellationCallbackThrowingMigration(
         TaskCompletionSource started,
+        TaskCompletionSource cancellationObserved,
         TaskCompletionSource completed) : ICosmosMigration
     {
         public string Id => "test-cancellation-callback";
@@ -196,8 +203,11 @@ public sealed class CosmosMigrationRunnerTests
             ICosmosMigrationDatabase database,
             CancellationToken cancellationToken)
         {
-            _ = cancellationToken.Register(
-                static () => throw new InvalidOperationException("test cancellation callback failure"));
+            _ = cancellationToken.Register(() =>
+            {
+                cancellationObserved.TrySetResult();
+                throw new InvalidOperationException("test cancellation callback failure");
+            });
             started.TrySetResult();
             await completed.Task;
         }
@@ -232,6 +242,23 @@ public sealed class CosmosMigrationRunnerTests
         {
             ReleasedLease = expected;
             return Task.FromResult(true);
+        }
+    }
+
+    private sealed class ShutdownControlledDelay : ICosmosMigrationDelay
+    {
+        private readonly TaskCompletionSource requested = NewSignal();
+        private readonly TaskCompletionSource released = NewSignal();
+
+        public Task WaitUntilRequestedAsync() => requested.Task;
+
+        public void Release() => released.TrySetResult();
+
+        public async Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
+        {
+            _ = cancellationToken; // Intentionally wait for the test to release after cancellation begins.
+            requested.TrySetResult();
+            await released.Task;
         }
     }
 
