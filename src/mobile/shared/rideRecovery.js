@@ -29,7 +29,7 @@ function isSafeHistoryText(value, maximumLength = 1000) {
   return typeof value === "string" &&
     value.trim().length > 0 &&
     value.length <= maximumLength &&
-    !/[\\u0000-\\u001f\\u007f-\\u009f]/.test(value);
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value);
 }
 
 function normalizeRiderRideHistory(history) {
@@ -43,7 +43,7 @@ function normalizeRiderRideHistory(history) {
         item.rideId.length === 0 ||
         item.rideId.length > 128 ||
         item.rideId !== item.rideId.trim() ||
-        /[\\u0000-\\u001f\\u007f-\\u009f]/.test(item.rideId) ||
+        /[\u0000-\u001f\u007f-\u009f]/.test(item.rideId) ||
         seenRideIds.has(item.rideId)) return null;
     seenRideIds.add(item.rideId);
 
@@ -55,7 +55,7 @@ function normalizeRiderRideHistory(history) {
       item.status.length <= 64 &&
       item.status === item.status.trim() &&
       KNOWN_RIDE_STATUSES.has(item.status) &&
-      !/[\\u0000-\\u001f\\u007f-\\u009f]/.test(item.status)
+      !/[\u0000-\u001f\u007f-\u009f]/.test(item.status)
       ? item.status
       : "Unknown";
     const requestedAt = typeof item.requestedAt === "string" &&
