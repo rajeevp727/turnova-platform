@@ -1,6 +1,6 @@
 # TurnOva MVP Acceptance Matrix
 
-**Last updated:** 2026-11-19. **Main HEAD:** `d499196ef3333fd9697c6f14d7a88b84bb897474`. **Current platform phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
+**Last updated:** 2026-11-20. **Main HEAD:** `d499196ef3333fd9697c6f14d7a88b84bb897474`. **Current platform phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
 
 **API evidence on main:** Exact-head CI [#44531886570](https://github.com/rajeevp727/turnova-platform/actions/runs/44531886570) passed **763/763 backend tests**, native non-container .NET 10 Release linux-x64 publish, verifier 11 negative fixtures plus valid fixture, artifact [14534262215](https://github.com/rajeevp727/turnova-platform/actions/runs/44531886570/artifacts/14534262215). Android/iOS/mobile jobs were skipped by the API-only phase gate.
 
@@ -9,6 +9,10 @@
 **Latest exact-head API code/test/contract evidence:** head `1f73ba1370fae9d0c197cc0128d0a695b16f1f56` passed API-only CI [#44587192430](https://github.com/rajeevp727/turnova-platform/actions/runs/44587192430): **798/798 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier and artifact [14562196056](https://github.com/rajeevp727/turnova-platform/actions/runs/44587192430/artifacts/14562196056). This head includes AI-020 assistance-log privacy coverage and AI-021 provider-input minimization coverage, plus the AI-01 API contract documentation. Mobile, Android and iOS jobs were skipped by the API-only phase gate.
 
 **New test-plan coverage:** AI-020 verifies assistance logs omit route, raw prompt, contact and payment values; AI-021 verifies help-provider inputs contain only allow-listed generic keywords and approved source IDs; `COSMOS-MIG-011`–`015` cover runner lease-loss fencing, lease adapter create/read/replace/release mapping, invalid timing and identity. `COSMOS-UNION-001`–`002` cover Cosmos 409 duplicate mapping without in-memory fallback and non-conflict failure propagation. `COSMOS-STORE-005`–`006` cover RideOffer create conflict/provider error and stale/missing ETag replacement. `COSMOS-RES-001`–`004` verify Driver/Rider reservation promotion/release use the observed ETag and commit the corresponding audit event in the same partition batch. `OFFER-REJECT-003`–`004` now have deterministic API-level tests for interrupted legacy rejection retry and expired-offer no-rotation. Exact-head CI #44575193194 passed all 796 backend tests and native API publish. These legacy tests use in-memory stores only; live Cosmos cross-instance contention, partition consistency and restart remain external.
+
+
+
+**Documentation integrity audit (2026-11-20):** Restored the historical `PROJECT_BRAIN.md` body after the PR branch snapshot was found to omit 1,285 lines relative to `main`; current branch retains the API handoff and complete history. Documentation-only correction; no runtime source/test changed. Existing 798/798 source/test evidence remains on head `1f73ba1370fae9d0c197cc0128d0a695b16f1f56` / CI #44587192430.
 
 **Human-review process exception:** PR #195 was merged into main as `d499196` without independent review, despite the repository instruction requiring explicit human approval. PR #197 has an automated COMMENT-only review but no independent human approval. Do not self-approve, bypass policy or merge without independent human review. Keep API `in_progress` and re-audit main before any Android phase transition.
 
