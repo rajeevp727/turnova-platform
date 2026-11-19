@@ -85,7 +85,7 @@ export default function App() {
   const stopSessionResources=useCallback(()=>stopRegisteredConnections(activeSessionStops.current),[]);
   const invalidateSession=useCallback(()=>{const epoch=advanceSessionEpoch(sessionEpoch,refreshInFlight);stopSessionResources();return epoch;},[stopSessionResources]);
   const [tab,setTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
-  const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState("");
+  const [mode,setMode]=useState<"login"|"register">("login"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [name,setName]=useState(""); const [passwordVisible,setPasswordVisible]=useState(false);
   const nameInputRef=useRef<TextInput|null>(null); const emailInputRef=useRef<TextInput|null>(null); const passwordInputRef=useRef<TextInput|null>(null); const authSubmissionInFlight=useRef(false);
   const [pickup,setPickup]=useState("Current location"); const [dropoff,setDropoff]=useState("HITEC City, Hyderabad"); const [stopsText,setStopsText]=useState(""); const [passengers,setPassengers]=useState("1");
   const [tripIntentText,setTripIntentText]=useState(""); const [tripIntentBusy,setTripIntentBusy]=useState(false); const [tripIntentNotice,setTripIntentNotice]=useState("");
@@ -543,17 +543,23 @@ export default function App() {
           placeholderTextColor={colors.muted}
           placeholder="Email address"
         />
-        <TextInput
-          testID="rider-auth-password"
-          ref={passwordInputRef}
-          {...getRiderAuthFieldProps("password",mode)}
-          value={password}
-          onChangeText={setPassword}
-          onSubmitEditing={()=>{if(!authSubmitDisabled)void authenticate();}}
-          style={styles.input}
-          placeholderTextColor={colors.muted}
-          placeholder="Password"
-        />
+        <View style={styles.passwordField}>
+          <TextInput
+            testID="rider-auth-password"
+            ref={passwordInputRef}
+            {...getRiderAuthFieldProps("password",mode)}
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={()=>{if(!authSubmitDisabled)void authenticate();}}
+            style={styles.passwordInput}
+            placeholderTextColor={colors.muted}
+            placeholder="Password"
+            secureTextEntry={!passwordVisible}
+          />
+          <Pressable testID="rider-auth-password-visibility" accessibilityRole="button" accessibilityLabel={passwordVisible?"Hide password":"Show password"} onPress={()=>setPasswordVisible(value=>!value)} hitSlop={10} style={styles.passwordToggle}>
+            <Text style={styles.passwordToggleText}>{passwordVisible?"◉":"👁"}</Text>
+          </Pressable>
+        </View>
         <Pressable
           testID="rider-auth-submit"
           {...getRiderAuthSubmitProps(mode,authSubmitDisabled,loading)}
@@ -601,5 +607,5 @@ export default function App() {
   </ScrollView><View style={styles.tabBar} accessibilityRole="tablist" accessibilityLabel="Rider navigation">{tabs.map(item=><Pressable key={item} testID={`rider-tab-${item.toLowerCase()}`} {...getRiderTabProps(item,tab===item,loading || (item === "Book" && !canStartBooking))} style={styles.tab} disabled={loading || (item === "Book" && !canStartBooking)} onPress={()=>setTab(item)}><Text style={[styles.tabText,tab===item&&styles.tabActive]}>{item}</Text></Pressable>)}</View></SafeAreaView>;
 }
 function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({safe:{flex:1,backgroundColor:colors.background},header:{backgroundColor:colors.header,padding:22,paddingTop:18},brand:{color:"#FFFFFF",fontSize:25,fontWeight:"800"},tagline:{color:colors.subtle,marginTop:4,fontSize:12},content:{padding:22,paddingBottom:34},eyebrow:{color:colors.tabActive,fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:colors.text,fontSize:28,fontWeight:"800",marginTop:8},sub:{color:colors.muted,fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:colors.surface,padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.text,marginBottom:12},label:{color:colors.label,fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},primary:{backgroundColor:colors.accent,borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:colors.accentText,fontWeight:"800"},link:{color:colors.tabActive,fontWeight:"800",textAlign:"center",marginTop:18},muted:{color:colors.muted,fontSize:13,marginTop:7,lineHeight:19},cardTitle:{color:colors.text,fontSize:17,fontWeight:"800",marginTop:8},status:{color:colors.tabActive,fontWeight:"900"},error:{color:colors.danger,marginTop:12},secondary:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:colors.text,fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:colors.surface,paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:colors.tabInactive,fontSize:12,fontWeight:"700"},tabActive:{color:colors.tabActive},themePicker:{flexDirection:"row",gap:8,marginTop:10,marginBottom:10},themeOption:{flex:1,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,alignItems:"center",backgroundColor:colors.surface},themeOptionSelected:{backgroundColor:colors.header,borderColor:colors.header},themeOptionText:{color:colors.muted,fontWeight:"700",fontSize:12},themeOptionTextSelected:{color:"#FFFFFF",fontWeight:"800"}});
+  return StyleSheet.create({safe:{flex:1,backgroundColor:colors.background},header:{backgroundColor:colors.header,padding:22,paddingTop:18},brand:{color:"#FFFFFF",fontSize:25,fontWeight:"800"},tagline:{color:colors.subtle,marginTop:4,fontSize:12},content:{padding:22,paddingBottom:34},eyebrow:{color:colors.tabActive,fontWeight:"800",fontSize:11,letterSpacing:1.3,marginTop:8},title:{color:colors.text,fontSize:28,fontWeight:"800",marginTop:8},sub:{color:colors.muted,fontSize:14,marginTop:6,marginBottom:20},card:{backgroundColor:colors.surface,padding:20,borderRadius:18,marginBottom:15},input:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.text,marginBottom:12},passwordField:{flexDirection:"row",alignItems:"center",borderWidth:1,borderColor:colors.border,borderRadius:12,marginBottom:12,paddingRight:12},passwordInput:{flex:1,padding:14,color:colors.text},passwordToggle:{padding:6,minWidth:36,alignItems:"center",justifyContent:"center"},passwordToggleText:{fontSize:19,color:colors.muted},label:{color:colors.label,fontSize:10,fontWeight:"800",letterSpacing:1.1,marginTop:10},primary:{backgroundColor:colors.accent,borderRadius:12,padding:15,alignItems:"center",marginTop:12},primaryText:{color:colors.accentText,fontWeight:"800"},link:{color:colors.tabActive,fontWeight:"800",textAlign:"center",marginTop:18},muted:{color:colors.muted,fontSize:13,marginTop:7,lineHeight:19},cardTitle:{color:colors.text,fontSize:17,fontWeight:"800",marginTop:8},status:{color:colors.tabActive,fontWeight:"900"},error:{color:colors.danger,marginTop:12},secondary:{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:13,alignItems:"center",marginTop:20},secondaryText:{color:colors.text,fontWeight:"800"},tabBar:{flexDirection:"row",backgroundColor:colors.surface,paddingVertical:14},tab:{flex:1,alignItems:"center"},tabText:{color:colors.tabInactive,fontSize:12,fontWeight:"700"},tabActive:{color:colors.tabActive},themePicker:{flexDirection:"row",gap:8,marginTop:10,marginBottom:10},themeOption:{flex:1,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,alignItems:"center",backgroundColor:colors.surface},themeOptionSelected:{backgroundColor:colors.header,borderColor:colors.header},themeOptionText:{color:colors.muted,fontWeight:"700",fontSize:12},themeOptionTextSelected:{color:"#FFFFFF",fontWeight:"800"}});
 }
