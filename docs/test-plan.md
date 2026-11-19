@@ -3727,3 +3727,12 @@ These are client preflight/recovery checks only. API lifecycle and location-shar
 ## PR #194 exact-head Android Rider verification — 2026-11-19
 
 The code/test head `b8559d47b60971e544300f1684c99992e7d2a464` passed [CI #44450139254](https://github.com/rajeevp727/turnova-platform/actions/runs/44450139254). All 9 required API/Android jobs passed; the 3 iOS jobs were correctly skipped by platform order. Evidence: backend .NET 10 Release **758/758**, shared Node **376/376**, Python **48/48**, Rider/Driver Expo/config/typecheck/Android bundle checks, both debug and standalone release APKs, embedded package identity, both emulator install/launch smoke jobs, and native non-container API Release publish/artifact verification. Rider and Driver npm audit inventories each reported 0 critical, 0 high, 11 moderate and 0 low package nodes. Artifacts: API publish 14495342544; Rider debug/release/smoke 14495468216 / 14495866811 / 14495981721; Driver debug/release/smoke 14494519987 / 14495508649 / 14495479023. Emulator smoke is install/cold-launch/foreground-process evidence only; it is not full UI/TalkBack, live API/Cosmos/SignalR/TriSend, physical-device or production acceptance. Driver app builds are unchanged-app regression coverage, not Driver feature completion. Documentation synchronization requires a fresh exact-head run.
+
+
+## Rider customer-facing FIFO wording guard — PR #194
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RIDER-DISPATCH-UI-001 | Rider help copy does not expose internal FIFO or queue concepts | Rider Profile help prompt refers to ride statuses, not queue/FIFO; Rider App source contains no customer-facing queue, FIFO or next-driver wording. Internal legacy FIFO compatibility is unchanged. | Automated Node source wiring | P1 |
+
+This protects the PRD boundary that FIFO fairness remains internal and unresolved. It does not alter Rider discovery ordering, explicit driver selection or server-owned assignment.
