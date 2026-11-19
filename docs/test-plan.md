@@ -251,7 +251,7 @@ The GitHub Actions workflow currently runs:
 - Add durable ride persistence, driver eligibility/onboarding and production CORS policy.
 - Add session revocation strategy if immediate access-token invalidation is required.
 
-## 11. Ride persistence, acceptance and live tracking (planned until CI/device validation)
+## 11. Ride persistence, acceptance and live tracking (API deterministic coverage executed; live Cosmos/mobile evidence remains external)
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
@@ -266,6 +266,8 @@ The GitHub Actions workflow currently runs:
 | TRACK-004 | Rider Activity screen is open | Map refreshes from authoritative ride state while screen is active | Mobile E2E | P1 |
 | TRACK-005 | Driver leaves Trips screen | Foreground location subscription is removed | Mobile | P0 |
 | TRACK-006 | Location permission denied | Driver sees an actionable error; no false location-sharing state | Mobile | P1 |
+
+**Execution status (2026-11-20):** The API portions of this historical case set now have deterministic backend coverage in `RideApiIntegrationTests` and `RideTrackingHubTests`; the old “planned until CI/device validation” wording was stale. Examples include invalid ride-request rejection, concurrent Driver acceptance with exactly one winner, owner/assigned-Driver access isolation and selected-Cab-trip location sharing. `RID-PERSIST-001` still requires live Cosmos persistence/restart evidence. `TRACK-004`–`TRACK-006` remain mobile runtime/permission/device acceptance and are not claimed by API CI.
 
 ## 12. Ride lifecycle, idempotency and SignalR
 
@@ -3593,3 +3595,8 @@ The deterministic cases RIDER-ACTIVITY-HISTORY-001..007 are recorded above. This
 The API privacy correction intentionally removes `riderId` and `driverId` from `RiderSelectedBookingResponse`. A cross-branch audit found that parked Draft PR [#194](https://github.com/rajeevp727/turnova-platform/pull/194), head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`, currently has `normalizeRiderSelectedBookingResponse` in `src/mobile/shared/riderBookingGuard.js` requiring `response.riderId === expected.riderId` and `response.driverId === expected.driverId` (current helper lines 72–73). The current mainline Rider app does not make this check, but PR #194 will reject the new API response until reconciled. This is a known downstream Draft-branch contract mismatch, not a defect in the role-scoped API contract.
 
 **After API PR #195 is approved/merged and main is re-audited:** resume Android Rider first; update the Rider normalizer and its fixtures/tests so authenticated Rider identity and selected Driver identity are checked from the current session and original booking request context, while the response is validated only against fields the API actually returns (ride ID, Union ID, route/stops, passenger count, Cab class, fare-null, timestamps and approved display fields). Do not reintroduce RiderId/DriverId into the API response. Re-run the full Rider mobile-auth/Node suite, TypeScript/Expo checks, Android debug/release builds and emulator install/launch smoke before advancing to Android Driver.
+
+
+## COSMOS-MIG-016 exact-head evidence — 2026-11-20
+
+The migration runner now nests shutdown cleanup so a throwing cancellation callback or unexpected heartbeat-task failure cannot skip release with the latest observed lease ETag. The deterministic regression `CosmosMigrationRunnerTests.LeaseReleaseStillRunsWhenMigrationCancellationCallbackThrowsDuringShutdown` uses a controlled delay to hold the heartbeat until the callback failure is observed, then releases it and verifies the lease release is attempted while the callback exception remains visible. Source/test head `994a19f03be828a0dd47aab9cdfa09d218b2f153` passed API-only CI [#44605112028](https://github.com/rajeevp727/turnova-platform/actions/runs/44605112028): **801/801 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture) and artifact [14570447444](https://github.com/rajeevp727/turnova-platform/actions/runs/44605112028/artifacts/14570447444). Live Cosmos multi-instance contention, process crash/restart and cross-container atomicity remain external.
