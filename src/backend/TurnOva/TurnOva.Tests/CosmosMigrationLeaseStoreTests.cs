@@ -212,23 +212,46 @@ public sealed class CosmosMigrationLeaseStoreTests
     }
 
     [Theory]
-    [InlineData("", "etag-1", "owner-2")]
-    [InlineData("other-id", "etag-1", "owner-2")]
-    [InlineData("schema-migrations", "", "owner-2")]
-    [InlineData("schema-migrations", "etag-1", " ")]
+    [InlineData("", "owner-1", "etag-1", "owner-2")]
+    [InlineData("other-id", "owner-1", "etag-1", "owner-2")]
+    [InlineData("schema-migrations", "", "etag-1", "owner-2")]
+    [InlineData("schema-migrations", "owner-1", "", "owner-2")]
+    [InlineData("schema-migrations", "owner-1", "etag-1", " ")]
     public async Task ReplaceRejectsAnInvalidExpectedLeaseBeforeCallingCosmos(
         string id,
+        string owner,
         string etag,
         string newOwner)
     {
         var container = new Mock<Container>();
         var store = new CosmosMigrationLeaseStore(container.Object);
         var expected = new CosmosMigrationLease(
-            id, "owner-1", etag, DateTimeOffset.UtcNow.AddMinutes(10));
+            id, owner, etag, DateTimeOffset.UtcNow.AddMinutes(10));
 
         await Assert.ThrowsAsync<ArgumentException>(async () =>
             await store.TryReplaceAsync(
                 expected, newOwner, DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("", "owner-1", "etag-1")]
+    [InlineData("other-id", "owner-1", "etag-1")]
+    [InlineData("schema-migrations", "", "etag-1")]
+    [InlineData("schema-migrations", "owner-1", "")]
+    public async Task ReleaseRejectsAnInvalidExpectedLeaseBeforeCallingCosmos(
+        string id,
+        string owner,
+        string etag)
+    {
+        var container = new Mock<Container>();
+        var store = new CosmosMigrationLeaseStore(container.Object);
+        var expected = new CosmosMigrationLease(
+            id, owner, etag, DateTimeOffset.UtcNow.AddMinutes(10));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.TryReleaseAsync(expected, CancellationToken.None));
 
         container.VerifyNoOtherCalls();
     }
