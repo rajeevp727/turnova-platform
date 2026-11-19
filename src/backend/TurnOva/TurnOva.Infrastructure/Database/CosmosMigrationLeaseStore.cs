@@ -19,6 +19,8 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
+
         var document = new CosmosMigrationLeaseDocument
         {
             Id = LeaseId,
