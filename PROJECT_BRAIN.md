@@ -6,7 +6,7 @@
 **Last verified:** 2026-11-19
 **Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`; PR #193 is merged.
-**Current phase:** API — role-scoped response/privacy audit reopened. Verified source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed CI #44497833447; documentation-only head `f9552687b765c5f624c9ccb1e2586d472368f966` passed exact-head CI #444986 attempt 2 after one intermittent auth startup-validation test failure; latest documentation-bearing PR head `38dc6d8eb4bdeec075ea7fe995f1d1f3b82fbf6f` passed exact-head CI #44504446025 (763/763 tests, native .NET 10 Release publish, verifier 11 negative fixtures plus valid fixture; mobile/Android/iOS jobs correctly skipped).
+**Current phase:** API — role-scoped response/privacy audit reopened. Original role-projection source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed CI #44497833447. Follow-up selected-booking actor-ID minimization source/test commit `b699453202064fcdb99ba4cf66cdbbb78a96ed07` removes unused RiderId/DriverId and adds API-PRIV-001 absence coverage; code-bearing exact-head CI #44512060615 is in progress. Latest documentation-bearing head `aef80d214837c301392ee94a00e929495d1676a6` has exact-head CI #44512177250 pending. Earlier documentation head `38dc6d8` passed CI #44504446025 with 763/763 tests and native publish; mobile/Android/iOS jobs correctly skipped.
 **Only active feature PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`. `.github/turnova-phase.json` is API `in_progress`, Android/iOS `not_started`; CI confirms mobile jobs disabled.
 **Human merge gate:** repository `.github/copilot-instructions.md` explicitly requires human approval before merge. PR #195 has no independent review recorded; the PR author is the repository owner, so no self-review is possible. Do not merge without explicit human approval.
 **Parked Rider PR #194:** Draft, head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`; runs #44493716559/#44494246556 failed due invalid control-character regex escaping, stale source-order assertion and nullable passengers activity type mismatch. Fix after API exit.
@@ -3081,3 +3081,8 @@ This final tracker/API-document synchronization changes documentation only. The 
 ## API response minimization follow-up — 2026-11-19
 
 The Rider app's `Ride` contract and selected-booking flow do not consume `RiderId` or `DriverId` from the booking response. PR #195 therefore removes those two actor identifiers from `RiderSelectedBookingResponse`; the Rider already supplied the selected Driver in the booking request. API-PRIV-001 now asserts that the booking response omits both actor IDs. This is a response-only minimization; booking identity, ownership authorization, reservation and idempotency behavior are unchanged.
+
+
+## Current API response-minimization checkpoint — 2026-11-19
+
+RiderSelectedBookingResponse no longer echoes RiderId or DriverId. The current Rider app sends the selected Driver ID in its booking request and does not consume actor IDs from the response. API-PRIV-001 asserts both properties are absent. Code-bearing commit `b699453202064fcdb99ba4cf66cdbbb78a96ed07`; exact-head CI #44512060615 is in progress. Latest docs head `aef80d214837c301392ee94a00e929495d1676a6`; exact-head CI #44512177250 is pending. PR #195 remains open and requires independent human approval; do not self-approve or merge without approval.
