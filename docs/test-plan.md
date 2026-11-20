@@ -9,6 +9,8 @@
 
 TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
 
+**Current phase gate (2026-11-20):** API remains `in_progress`; Android and iOS remain `not_started`. PR #197 merged without independent human approval, so its historical merge does not satisfy the current user-directed transition gate. PR #200 is the sole active API follow-up; require independent human approval, green checks on its final head, permitted merge and a fresh main/API exit audit before starting Android Rider. PR #199/#203 demo-preview builds are not Android completion evidence.
+
 ## API contract and authentication hardening
 
 | ID | Scenario | Expected result | Type | Priority |
