@@ -25,6 +25,8 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 
 AuthApiIntegrationTests.OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySchemes asserts auth register/login/refresh, Rider discovery/booking, Driver payment-report, Union reconciliation and Operations driver/Union paths. It checks Bearer on Rider/Driver/Union routes, OpsAdminKey without Bearer on Operations routes, no security requirement on public login/register/refresh, and exclusion of /__test/throw.
 
+OpenAPI exposure is now explicit in `OpenApiEndpointPolicy`: only Development and Testing are allowed (case-insensitive). `OpenApiEndpointPolicyTests` reject Production, Staging, QA, custom, empty and null environment names; `AuthApiIntegrationTests.OpenApiDocumentIsNotMappedInStaging` verifies the Staging route returns 404. Production host startup is not exercised by this integration fixture because Production requires Cosmos; the Production policy is covered directly.
+
 ## 1. Authentication — registration
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |
@@ -327,8 +329,9 @@ The shared `rideRecovery.test.cjs` also verifies immutable `RideStatusChanged` p
 | COSMOS-READY-001 | Cosmos database is reachable | `GET /health/ready` returns HTTP 200 | API + Cosmos | P0 |
 | COSMOS-READY-002 | Cosmos database is unavailable | `GET /health/ready` returns HTTP 503 | API + failure injection | P0 |
 | COSMOS-READY-003 | API runs in Development/Testing in-memory mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
+| COSMOS-ENV-001 | Production requires both Cosmos settings; partial endpoint/key configuration fails in every environment; Staging/QA without Cosmos may start with in-memory adapters only for isolated tests and must return 503 readiness; non-Development/Testing support intake requires policy approval, positive retention and Cosmos | API policy + integration | P0 |
 
-Automated tests cover Cosmos configuration validation. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
+Automated tests cover Cosmos configuration validation, the Production Cosmos requirement, partial-configuration rejection, OpenAPI environment exposure and non-development support-intake storage gates. PR #200 adds Staging/QA readiness and disabled-intake integration cases; its exact-head CI is pending. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
 
 ## 14. Driver onboarding and eligibility
 
