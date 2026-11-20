@@ -75,6 +75,25 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnhandledApiExceptionOutsideAuthStillReturnsNoStoreHeaders()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("An API error must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/__test/throw");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Contains(response.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("sensitive-api-test-exception", body, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task AuthRouteCachePolicyPreservesPrivateDirectivesAndAddsNoStore()
     {
         using var handler = new RecordingHandler((_, _) =>

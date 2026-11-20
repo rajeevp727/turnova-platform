@@ -374,6 +374,11 @@ if (app.Environment.IsEnvironment("Testing"))
         throw new InvalidOperationException("sensitive-auth-test-exception");
     }).ExcludeFromDescription();
 
+    app.MapGet("/api/v1/__test/throw", () =>
+    {
+        throw new InvalidOperationException("sensitive-api-test-exception");
+    }).ExcludeFromDescription();
+
     app.MapGet("/api/v1/auth/__test/private-cache", (HttpContext context) =>
     {
         context.Response.Headers["Cache-Control"] = "private, max-age=60";
