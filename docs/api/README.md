@@ -197,6 +197,8 @@ When the compatibility route is enabled in Development/Testing, it uses full GUI
 
 Legacy Cosmos cleanup for the Development/Testing compatibility route is also fenced: it point-reads the Rider-partitioned idempotency item, requires exact item ID/Rider ID/ride ID plus a nonblank observed ETag, and deletes with `IfMatchEtag`. A missing or mismatched record is not deleted; post-read HTTP 404/412 are lost cleanup races; non-race provider failures propagate. This route remains disabled outside Development/Testing and does not expose customer-facing FIFO ranking or automatic assignment. Fifteen deterministic `CosmosLegacyRideIdempotencyCleanupTests` cases cover the contract. Live Cosmos contention/restart is not inferred from these mocks.
 
+Persistence environment contract: Production requires CosmosDb:Endpoint and CosmosDb:Key. Development/Testing may use in-memory persistence; Staging may also run in-memory while support intake remains disabled. Enabling Staging support intake requires approved retention and Cosmos persistence. Do not broaden the Production-only Cosmos startup guard to all non-Development/Testing environments without changing this tested Staging contract.
+
 ## Cosmos startup migration lease
 
 The API creates the `MigrationHistory` and `MigrationLocks` containers before applying ordered schema migrations. A runner acquires the `schema-migrations` lease using create-if-absent or expired-lease recovery with an ETag precondition. The lease lasts 30 minutes and is renewed every 10 minutes using the latest ETag while migrations run.
