@@ -75,10 +75,7 @@ async function jsonRequest(path: string, init: RequestInit = {}, token?: string)
 }
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [demoMode,setDemoMode]=useState(false);
-  const [demoTab,setDemoTab]=useState<"Home"|"Queue"|"Trips"|"Payslips"|"Profile">("Home");
-  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
+  const [user, setUser] = useState<User | null>(null);  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme();
   const [tokens, setTokens] = useState<Tokens | null>(null);
   const refreshInFlight = useRef<Promise<string> | null>(null);
@@ -278,18 +275,6 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
-  const startDemoSession = async () => {
-    try {
-      setError("");
-      const response = await jsonRequest("/api/v1/auth/demo/driver", { method: "POST" });
-      if (!response?.isDemo || response?.user?.role !== "Driver") throw new Error("Invalid demo session response.");
-      setUser(requireAppRole<User>(response.user, "Driver"));
-      setDemoTab("Home");
-      setDemoMode(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to start demo session. Check API availability and demo configuration.");
-    }
-  };
   const authenticate = async (replaceOldest = false) => {
     const credentials = { email: email.trim(), password, name: name.trim(), mode };
     const authEpoch = invalidateSession();
@@ -1188,8 +1173,8 @@ export default function App() {
   const themePicker = <View style={styles.themePicker}>
     {(["system", "light", "dark"] as const).map(option => <Pressable key={option} onPress={() => selectTheme(option)} style={[styles.themeOption, themePreference === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, themePreference === option && styles.themeOptionTextSelected]}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</Text></Pressable>)}
   </View>;
-  if (loading && !user && !demoMode) return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{ marginTop: 80 }} /></SafeAreaView>;
-  if (!user && !demoMode) return (
+  if (loading && !user) return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{ marginTop: 80 }} /></SafeAreaView>;
+  if (!user) return (
     <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
       <View style={styles.header}><TurnOvaLogo subtitle="Everyone’s Turn Matters." /></View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -1216,25 +1201,6 @@ export default function App() {
       </ScrollView>
     </SafeAreaView>
   );
-
-  if(demoMode) return <SafeAreaView style={styles.safe}>
-    <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
-    <View style={styles.header}><TurnOvaLogo subtitle="Driver demo · Offline preview" compact /><Text style={styles.role}>DRIVER DEMO</Text></View>
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>DRIVER PARTNER DEMO</Text>
-      <Text style={styles.title}>{demoTab==="Home"?"Welcome, Demo Driver":demoTab}</Text>
-      <Text style={styles.sub}>Sample content only. Demo session is restricted; real queue actions, ride acceptance, GPS sharing and payouts are unavailable.</Text>
-      {demoTab==="Home"&&<View style={styles.card}><Text style={styles.label}>SERVICE ZONE</Text><Text style={styles.cardTitle}>Hyderabad Central · CAB</Text><Text style={styles.label}>AVAILABILITY</Text><Text style={styles.cardTitle}>Offline · Demo</Text><Text style={styles.label}>QUEUE POSITION</Text><Text style={styles.position}>—</Text><Text style={styles.muted}>Go-online is disabled in offline demo mode.</Text></View>}
-      {demoTab==="Queue"&&<View style={styles.card}><Text style={styles.cardTitle}>Driver queue</Text><Text style={styles.muted}>Sample queue position: #4</Text><Text style={styles.muted}>This is illustrative only; no live queue connection is active.</Text></View>}
-      {demoTab==="Trips"&&<View style={styles.card}><Text style={styles.label}>SAMPLE RIDE REQUEST</Text><Text style={styles.cardTitle}>Nizampet → HITEC City</Text><Text style={styles.muted}>Rider: Demo Rider · Cab · 1 passenger</Text><Text style={styles.muted}>Status: Sample request · Accept/reject disabled</Text><View style={{height:1,backgroundColor:colors.border,marginVertical:14}}/><Text style={styles.label}>TRIP HISTORY</Text><Text style={styles.muted}>Kukatpally → Secunderabad · Completed (sample)</Text></View>}
-      {demoTab==="Payslips"&&<View style={styles.card}><Text style={styles.cardTitle}>Payslips</Text><Text style={styles.muted}>No real payslips are available in offline demo mode.</Text></View>}
-      {demoTab==="Profile"&&<View style={styles.card}><Text style={styles.label}>DEMO DRIVER PROFILE</Text><Text style={styles.cardTitle}>Arjun Kumar</Text><Text style={styles.muted}>Role: Driver</Text><Text style={styles.muted}>Vehicle: Maruti Swift Dzire · TS09 AB 1234 (sample)</Text><Text style={styles.muted}>Union approval: Pending · Sample state</Text></View>}
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:8,marginTop:16}}>
-        {(["Home","Queue","Trips","Payslips","Profile"] as const).map(item=><Pressable key={item} onPress={()=>setDemoTab(item)} style={[styles.themeOption,demoTab===item&&styles.themeOptionSelected]}><Text style={[styles.themeOptionText,demoTab===item&&styles.themeOptionTextSelected]}>{item}</Text></Pressable>)}
-      </View>
-      <Pressable style={[styles.secondary,{marginTop:16}]} onPress={()=>{setDemoMode(false);setDemoTab("Home");}}><Text style={styles.secondaryText}>Exit demo</Text></Pressable>
-    </ScrollView>
-  </SafeAreaView>;
 
   if (!user) return null;
 
