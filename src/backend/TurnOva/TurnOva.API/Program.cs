@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -289,6 +290,19 @@ if (app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 app.UseAuthentication();
+// Demo tokens may not access normal authenticated APIs or mutate production data.
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true &&
+        context.User.HasClaim("demo", "true") &&
+        !context.Request.Path.StartsWithSegments("/api/v1/demo"))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { message = "Demo sessions are restricted to demo endpoints." });
+        return;
+    }
+    await next();
+});
 app.UseAuthorization();
 app.UseRateLimiter();
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
@@ -1469,6 +1483,43 @@ app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, Cance
 
 
 var authGroup = app.MapGroup("/api/v1/auth").WithTags("Authentication");
+authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
+{
+    // Explicit opt-in only. Demo JWTs are isolated from all non-demo API routes.
+    if (!configuration.GetValue<bool>("DemoAuth:Enabled")) return Results.NotFound();
+    var normalizedRole = role.Trim().ToLowerInvariant();
+    if (normalizedRole is not ("rider" or "driver")) return Results.NotFound();
+
+    var issuer = configuration["Auth:Jwt:Issuer"];
+    var audience = configuration["Auth:Jwt:Audience"];
+    var signingKey = configuration["Auth:Jwt:SigningKey"];
+    if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience) ||
+        string.IsNullOrWhiteSpace(signingKey) || signingKey.Length < 32)
+        return Results.Problem("Demo authentication is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    var rider = normalizedRole == "rider";
+    var id = rider ? "demo-rider-001" : "demo-driver-001";
+    var email = rider ? "rider.demo@turnova.invalid" : "driver.demo@turnova.invalid";
+    var name = rider ? "Demo Rider" : "Demo Driver";
+    var appRole = rider ? "Rider" : "Driver";
+    var now = DateTime.UtcNow;
+    var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)), SecurityAlgorithms.HmacSha256);
+    var claims = new[] {
+        new Claim(JwtRegisteredClaimNames.Sub, id),
+        new Claim(JwtRegisteredClaimNames.Email, email),
+        new Claim("name", name),
+        new Claim("role", appRole),
+        new Claim("demo", "true")
+    };
+    var jwt = new JwtSecurityToken(issuer, audience, claims, now, now.AddMinutes(30), credentials);
+    return Results.Ok(new {
+        accessToken = new JwtSecurityTokenHandler().WriteToken(jwt),
+        refreshToken = (string?)null,
+        expiresIn = 1800,
+        isDemo = true,
+        user = new { id, email, name, role = appRole, isDemo = true }
+    });
+}).AllowAnonymous();
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
     CancellationToken ct) =>
