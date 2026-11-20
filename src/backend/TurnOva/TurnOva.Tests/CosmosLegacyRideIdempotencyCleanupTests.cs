@@ -227,4 +227,27 @@ public sealed class CosmosLegacyRideIdempotencyCleanupTests
 
         container.VerifyNoOtherCalls();
     }
+    [Theory]
+    [InlineData("", RiderId, RideId)]
+    [InlineData(KeyId, " ", RideId)]
+    [InlineData(KeyId, RiderId, "\t")]
+    public async Task DeleteRejectsInvalidIdentityBeforeCosmosAccess(
+        string id,
+        string riderId,
+        string rideId)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            CosmosLegacyRideIdempotencyCleanup.TryDeleteExactAsync(
+                container.Object,
+                id,
+                new PartitionKey(RiderId),
+                riderId,
+                rideId,
+                CancellationToken.None));
+
+        container.VerifyNoOtherCalls();
+    }
+
 }
