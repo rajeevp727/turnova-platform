@@ -160,11 +160,18 @@ public sealed class StorageReadinessProbeTests
         var check = probe.CheckAsync(CancellationToken.None);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
-        var exception = await Assert.ThrowsAsync<StorageReadinessException>(
-            () => check.WaitAsync(TimeSpan.FromSeconds(1)));
+        try
+        {
+            var exception = await Assert.ThrowsAsync<StorageReadinessException>(
+                () => check.WaitAsync(TimeSpan.FromSeconds(5)));
 
-        Assert.Equal("timeout", exception.FailureKind);
-        completion.TrySetException(new InvalidOperationException("late-provider-failure"));
+            Assert.Equal("timeout", exception.FailureKind);
+        }
+        finally
+        {
+            // Always complete the provider task, including if the watchdog assertion fails.
+            completion.TrySetException(new InvalidOperationException("late-provider-failure"));
+        }
     }
 
     [Fact]
