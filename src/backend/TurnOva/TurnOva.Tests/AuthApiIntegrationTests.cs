@@ -388,6 +388,12 @@ public sealed class AuthApiIntegrationTests
             using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
             Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
             Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+                using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                Assert.Equal(429, problem.RootElement.GetProperty("status").GetInt32());
+            }
             statuses.Add(response.StatusCode);
         }
 
