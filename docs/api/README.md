@@ -347,3 +347,9 @@ An OPTIONS preflight to an auth route from an origin not present in `Cors:Allowe
 ## AUTH-API-021 — Development HTTPS redirect remains non-cacheable
 
 A plain-HTTP GET to an auth route in Development redirects with HTTP 307 to HTTPS. AuthRouteHttpsRedirectStillReturnsNoStoreHeaders disables redirect following, configures HTTPS_PORT=443 and verifies Cache-Control: no-store and Pragma: no-cache on the redirect, with no TriSend request. This is supplemental security coverage, not a new MVP acceptance row. Exact source/test head [0d55b4693dffc5b9d549b82cc8eff85b34d7f929](https://github.com/rajeevp727/turnova-platform/commit/0d55b4693dffc5b9d549b82cc8eff85b34d7f929) passed [API-only CI #44790113886](https://github.com/rajeevp727/turnova-platform/actions/runs/44790113886) with 938/938 tests and native non-container publish/verifier; artifact [14656202254](https://github.com/rajeevp727/turnova-platform/actions/runs/44790113886/artifacts/14656202254).
+
+## AUTH-API-022 — unmatched auth-route 404 cache policy
+
+The `/api/v1/auth` no-store policy also applies when endpoint routing cannot find a matching handler. A GET to `/api/v1/auth/__test/not-found` returns HTTP 404 with `Cache-Control: no-store` and `Pragma: no-cache`, without invoking TriSend. This supplements coverage for successful auth responses, 401/403/429/500 responses, CORS preflight and Development HTTPS redirects. It does not change the 19-row MVP acceptance denominator.
+
+Source/test head [`f5cc60ac57a272aaa9cb239684d9655f287ee4e9`](https://github.com/rajeevp727/turnova-platform/commit/f5cc60ac57a272aaa9cb239684d9655f287ee4e9) passed exact-head API-only CI [#44798095244](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244) with 939/939 backend tests and native non-container .NET 10 publish/verifier; artifact [14659488247](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244/artifacts/14659488247).
