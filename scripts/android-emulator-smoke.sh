@@ -550,6 +550,13 @@ while true; do
   capture_app_runtime_logcat
 done
 
+# Reject visible session/storage restoration failures before accepting the login UI.
+if grep -Fq "Unable to restore your session." "$OUTPUT_DIR/ui-hierarchy.xml"; then
+  echo "Android app displayed an unexpected session/storage error during startup." >&2
+  cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+  exit 1
+fi
+
 # Verify that the real email/password authentication UI is rendered on a
 # fresh install. Demo authentication was intentionally removed from this PR.
 case "$EXPECTED_ID" in
