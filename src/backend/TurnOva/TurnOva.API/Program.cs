@@ -298,8 +298,26 @@ app.Use(async (context, next) =>
         // remove the non-cacheable policy from an API/realtime error response.
         context.Response.OnStarting(() =>
         {
-            context.Response.Headers["Cache-Control"] = "no-store";
-            context.Response.Headers["Pragma"] = "no-cache";
+            // Preserve endpoint-specific directives such as "private"; add the
+            // non-cacheable directives without replacing an existing policy.
+            var cacheControl = context.Response.Headers["Cache-Control"].ToString();
+            if (!cacheControl.Split(',').Any(directive =>
+                    directive.Trim().Equals("no-store", StringComparison.OrdinalIgnoreCase)))
+            {
+                context.Response.Headers["Cache-Control"] = string.IsNullOrWhiteSpace(cacheControl)
+                    ? "no-store"
+                    : $"{cacheControl}, no-store";
+            }
+
+            var pragma = context.Response.Headers["Pragma"].ToString();
+            if (!pragma.Split(',').Any(directive =>
+                    directive.Trim().Equals("no-cache", StringComparison.OrdinalIgnoreCase)))
+            {
+                context.Response.Headers["Pragma"] = string.IsNullOrWhiteSpace(pragma)
+                    ? "no-cache"
+                    : $"{pragma}, no-cache";
+            }
+
             return Task.CompletedTask;
         });
     }
