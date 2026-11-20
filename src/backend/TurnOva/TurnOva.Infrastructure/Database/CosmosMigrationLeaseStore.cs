@@ -63,9 +63,10 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         ArgumentNullException.ThrowIfNull(expected);
         if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(expected.Owner) ||
-            string.IsNullOrWhiteSpace(expected.ETag) ||
-            string.IsNullOrWhiteSpace(newOwner))
-            throw new ArgumentException("A valid expected migration lease and owner are required.", nameof(expected));
+            string.IsNullOrWhiteSpace(expected.ETag))
+            throw new ArgumentException("A valid expected migration lease is required.", nameof(expected));
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(newOwner);
 
         var replacement = new CosmosMigrationLeaseDocument
         {
