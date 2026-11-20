@@ -273,8 +273,6 @@ if (useCosmos)
     await app.Services.GetRequiredService<CosmosMigrationRunner>().RunAsync();
 }
 
-app.UseCors();
-
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
@@ -288,10 +286,6 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         .ExecuteAsync(context);
 }));
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
 // Authentication responses may contain access/refresh tokens or personal profile data.
 // Prevent browsers, proxies and intermediaries from storing any auth-route response.
 app.Use(async (context, next) =>
@@ -310,6 +304,12 @@ app.Use(async (context, next) =>
 
     await next();
 });
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+// CORS preflight can short-circuit the pipeline, so keep it inside the auth cache policy.
+app.UseCors();
 app.UseAuthentication();
 // A demo JWT is never accepted by normal authenticated application routes.
 app.Use(async (context, next) =>
