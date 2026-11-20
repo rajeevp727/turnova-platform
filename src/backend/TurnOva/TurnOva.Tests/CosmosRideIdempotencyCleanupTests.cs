@@ -207,4 +207,41 @@ public sealed class CosmosRideIdempotencyCleanupTests
 
         container.VerifyNoOtherCalls();
     }
+    [Fact]
+    public async Task DeletePropagatesNonRaceDeleteProviderFailures()
+    {
+        var createdAt = DateTimeOffset.UtcNow;
+        var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, createdAt);
+        var read = new Mock<ItemResponse<RideIdempotencyRecord>>();
+        read.SetupGet(value => value.Resource).Returns(record);
+        read.SetupGet(value => value.ETag).Returns("observed-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var failure = new CosmosException(
+            "unavailable during delete", HttpStatusCode.ServiceUnavailable, 0, "idempotency-cleanup", 0);
+        container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+                KeyId,
+                It.IsAny<PartitionKey>(),
+                It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "observed-etag"),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(failure);
+
+        var thrown = await Assert.ThrowsAsync<CosmosException>(() =>
+            CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
+                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId,
+                RequestHash, createdAt, CancellationToken.None));
+
+        Assert.Same(failure, thrown);
+        container.Verify(value => value.ReadItemAsync<RideIdempotencyRecord>(
+            KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+            KeyId,
+            It.IsAny<PartitionKey>(),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "observed-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
 }
