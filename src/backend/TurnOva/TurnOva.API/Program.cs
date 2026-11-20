@@ -292,6 +292,18 @@ if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+// Authentication responses may contain access/refresh tokens or personal profile data.
+// Prevent browsers, proxies and intermediaries from storing any auth-route response.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/v1/auth"))
+    {
+        context.Response.Headers["Cache-Control"] = "no-store";
+        context.Response.Headers["Pragma"] = "no-cache";
+    }
+
+    await next();
+});
 app.UseAuthentication();
 // A demo JWT is never accepted by normal authenticated application routes.
 app.Use(async (context, next) =>
