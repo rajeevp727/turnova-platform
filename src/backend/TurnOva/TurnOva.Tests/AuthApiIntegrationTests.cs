@@ -128,6 +128,8 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/auth/me");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(handler.Requests);
     }
 
@@ -435,6 +437,24 @@ public sealed class AuthApiIntegrationTests
             throw new InvalidOperationException("Anonymous profile reads must not call TriSend."));
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task MeEndpointRejectsInvalidBearerTokenWithNoStoreHeaders()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Invalid bearer profile reads must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "not-a-valid-jwt");
 
         using var response = await client.GetAsync("/api/v1/auth/me");
 
