@@ -3318,3 +3318,16 @@ Main at 06cb552db6c929cd5ab22d8bc1f2da191670f0f2 still has .github/turnova-phase
 - Scope/backend jobs passed. Mobile-auth, mobile, Android, emulator and iOS jobs were intentionally skipped under the API-only phase gate; this is not Android or iOS completion evidence.
 - This is deterministic CI/publish evidence only. No live Cosmos ETag/multi-instance/restart, production identity, hosted API, provider or production readiness is claimed.
 - The docs synchronization that records this result is documentation-only; its new final head must receive its own exact-head API CI before it is considered verified.
+
+
+
+## Run 8 — current API handoff (2026-11-20)
+
+- Main remains `c9280eec23dd4fb5fab06b11e24d2a619b489235`. Main `.github/turnova-phase.json` is stale (`api=complete`, `android=in_progress`); the active PR branch correctly remains API `in_progress`, Android/iOS `not_started`. Main's stale phase file is not authorization to advance.
+- PR #200 remains the sole ready/active feature PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`. Current source/test head `7e16f61b1545514c608092a05dc44b1c2c9ce9f3`; exact-head API-only CI [#44780717714](https://github.com/rajeevp727/turnova-platform/actions/runs/44780717714) passed **936/936 backend tests**, Release build, native non-container Linux x64 publish/verifier, artifact [14652587015](https://github.com/rajeevp727/turnova-platform/actions/runs/44780717714/artifacts/14652587015). Mobile jobs were intentionally skipped under the API-only phase gate.
+- AUTH-API-019 moves auth no-store middleware ahead of CORS and HTTPS redirection, with CORS still ahead of HTTPS redirection. Its deterministic preflight test verifies HTTP 204, allowed origin, no-store/no-cache and no TriSend call.
+- Compare to current main: 138 commits ahead / 2 behind (weekly-build workflow and PR #204 trusted-LAN Android config). Do not merge unrelated Android config into the API branch.
+- Three PR #200 reviews remain owner-authored COMMENTED; zero unresolved threads and no independent human approval. Never self-approve or merge without the required independent approval. PR #197's merge without independent human approval remains a disclosed historical exception.
+- PRs #196/#198/#205/#206 remain Draft/parked; #205 is Android APK optimization and #206 is mobile real-auth UI. PR #204 is merged configuration-only work. Do not advance mobile work before API phase exit.
+- Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Production readiness/live Cosmos/provider validation is not established.
+- Next: verify exact-head CI for the run-8 documentation commit; obtain independent human approval; merge only when permitted; re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver.

@@ -3859,3 +3859,15 @@ Covered by `AuthApiIntegrationTests.UnhandledAuthRouteExceptionStillReturnsNoSto
 - Scope/backend jobs passed. Mobile-auth, mobile, Android, emulator and iOS jobs were intentionally skipped under the API-only phase gate; this is not Android or iOS completion evidence.
 - This is deterministic CI/publish evidence only. No live Cosmos ETag/multi-instance/restart, production identity, hosted API, provider or production readiness is claimed.
 - The docs synchronization that records this result is documentation-only; its new final head must receive its own exact-head API CI before it is considered verified.
+
+
+
+## AUTH-API-019 — auth CORS preflight responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-019 | A browser sends an allowed CORS preflight OPTIONS request to an authentication route | The preflight returns HTTP 204 with the configured Access-Control-Allow-Origin plus Cache-Control: no-store and Pragma: no-cache; no TriSend request is made. The auth cache policy wraps CORS short-circuiting while CORS remains ahead of Development HTTPS redirection. | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.AuthRouteCorsPreflightStillReturnsNoStoreHeaders`. The auth no-store middleware now runs after the outer exception handler but before CORS and Development HTTPS redirection, so CORS preflight and redirect responses retain the same non-cacheable policy without changing the existing Development CORS-before-HTTPS behavior. This is supplemental API security coverage and does not add a row to the 19-area MVP acceptance denominator.
+
+**Exact source/test evidence:** source/test head `7e16f61b1545514c608092a05dc44b1c2c9ce9f3` passed exact-head API-only CI [#44780717714](https://github.com/rajeevp727/turnova-platform/actions/runs/44780717714): **936/936 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 API publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14652587015](https://github.com/rajeevp727/turnova-platform/actions/runs/44780717714/artifacts/14652587015). Mobile/mobile-auth/Android/emulator/iOS jobs were intentionally skipped under the API-only phase gate.
