@@ -32,15 +32,11 @@ public static class AiAssistanceEndpoints
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.OnRejected = async (context, cancellationToken) =>
             {
-                await context.HttpContext.Response.WriteAsJsonAsync(
-                    new ProblemDetails
-                    {
-                        Type = "about:blank",
-                        Title = "Too many requests. Please retry later.",
-                        Status = StatusCodes.Status429TooManyRequests
-                    },
-                    "application/problem+json",
-                    cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                await Results.Problem(
+                    title: "Too many requests. Please retry later.",
+                    statusCode: StatusCodes.Status429TooManyRequests)
+                    .ExecuteAsync(context.HttpContext);
             };
             options.AddPolicy(RateLimitPolicy, context =>
             {
