@@ -159,6 +159,33 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task DisablingDemoAuthAfterIssuanceRejectsStillValidDemoToken()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+
+        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        Assert.Equal(HttpStatusCode.OK, issued.StatusCode);
+        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
+        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(accessToken));
+
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        using var allowed = await client.GetAsync("/api/v1/demo/__test/marked");
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+
+        factory.Services.GetRequiredService<IConfiguration>()["DemoAuth:Enabled"] = "false";
+        using var denied = await client.GetAsync("/api/v1/demo/__test/marked");
+
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task DemoSessionIssuanceIsRateLimitedPerRemoteAddress()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
