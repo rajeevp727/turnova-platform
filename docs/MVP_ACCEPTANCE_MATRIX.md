@@ -4,9 +4,9 @@
 
 **API evidence on main:** Exact-head CI [#44531886570](https://github.com/rajeevp727/turnova-platform/actions/runs/44531886570) passed **763/763 backend tests**, native non-container .NET 10 Release linux-x64 publish, verifier 11 negative fixtures plus valid fixture, artifact [14534262215](https://github.com/rajeevp727/turnova-platform/actions/runs/44531886570/artifacts/14534262215). Android/iOS/mobile jobs were skipped by the API-only phase gate.
 
-**Current API PR:** PR #197 is the sole ready/active feature PR, open and mergeable on `test/api-cosmos-migration-runner-fencing-20261119`, current head `31400519db835991267be08c6ceef748494737f6`. RID-IDEM-006 source/test commit `21366103a7237a7dbc26b79703e9794d243e3b2a` hardens the Development/Testing-only legacy idempotency reservation read/cleanup race. Exact-head CI [#44640064788](${ci}) passed **821/821 backend tests** and native non-container publish/verifier; artifact [14586007422](${artifact}). PR #196 and #198 remain Draft and parked.
+**Current API PR:** PR #197 is the sole ready/active feature PR, open and mergeable on `test/api-cosmos-migration-runner-fencing-20261119`, current head `1f257cfb7df079640baf068392dbca3def2cfa7a`. RID-IDEM-006 source/test commit `21366103a7237a7dbc26b79703e9794d243e3b2a` hardens the Development/Testing-only legacy idempotency reservation read/cleanup race. Exact-head CI [#44642122427](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427) passed **821/821 backend tests** and native non-container publish/verifier; artifact [14586078440](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427/artifacts/14586078440). PR #196 and #198 remain Draft and parked.
 
-**Latest completed API source/test evidence:** PR #197 code-bearing commit `21366103a7237a7dbc26b79703e9794d243e3b2a` and exact PR head `31400519db835991267be08c6ceef748494737f6` passed API-only CI [#44640064788](${ci}): **821/821 backend tests (0 failed, 0 skipped)**, scope validation, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact validation [14586007422](${artifact}). Mobile, Android and iOS jobs were intentionally skipped by the API-only phase gate.
+**Latest completed API source/test evidence:** PR #197 code-bearing commit `21366103a7237a7dbc26b79703e9794d243e3b2a` and exact PR head `1f257cfb7df079640baf068392dbca3def2cfa7a` passed API-only CI [#44642122427](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427): **821/821 backend tests (0 failed, 0 skipped)**, scope validation, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact validation [14586078440](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427/artifacts/14586078440). Mobile, Android and iOS jobs were intentionally skipped by the API-only phase gate.
 
 **New test-plan coverage:** COSMOS-UNION-003 proves cancellation before in-memory Union mutation; COSMOS-MIG-017 covers 404/412 lease replace races and retry after disappearance; COSMOS-MIG-018 proves 503 propagation; COSMOS-MIG-019 verifies retry backoff after create conflict plus missing point read; COSMOS-MIG-020 rejects blank/whitespace lease owners before Cosmos SDK access; COSMOS-MIG-021 rejects malformed lease IDs/owners and missing ETags returned by Cosmos.
 
@@ -71,7 +71,7 @@ External gates above are not reported as completed. Strict acceptance remains 0/
 
 | Phase | Exit evidence | State |
 |---|---|---|
-| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and exact-head API CI; PR #195 is merged but its missing independent review is a documented process exception; PR #197 requires independent human approval and main re-audit before phase exit | **Current phase — API active; PR #197 head `31400519db835991267be08c6ceef748494737f6` passed CI #44640064788 with 821/821 backend tests and native publish/verifier** |
+| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and exact-head API CI; PR #195 is merged but its missing independent review is a documented process exception; PR #197 requires independent human approval and main re-audit before phase exit | **Current phase — API active; PR #197 head `1f257cfb7df079640baf068392dbca3def2cfa7a` passed CI #44642122427 with 821/821 backend tests and native publish/verifier** |
 | Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | **Gated — Rider first, Driver second** |
 | iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after both Android apps exit | **Gated — not started** |
 
@@ -1511,7 +1511,7 @@ Current Rider and Driver CI #1800 npm audit artifacts `14195939928` and `1419611
 
 | Test-plan ID | Criterion | Current automated evidence | Status |
 |---|---|---|---|
-| SUPPORT-API-017 | A real Kestrel host rejects a support request with Content-Length above 16 KiB before persistence | `SupportRequestKestrelIntegrationTests.KestrelRejectsOversizedSupportRequestBeforeStoreAccess`; asserts HTTP 413 and zero store writes. Included in exact-head CI #44640064788 (821/821 backend tests; native publish/verifier passed). | In progress |
+| SUPPORT-API-017 | A real Kestrel host rejects a support request with Content-Length above 16 KiB before persistence | `SupportRequestKestrelIntegrationTests.KestrelRejectsOversizedSupportRequestBeforeStoreAccess`; asserts HTTP 413 and zero store writes. Included in exact-head CI #44642122427 (821/821 backend tests; native publish/verifier passed). | In progress |
 
 
 ## Android dependency resolution follow-up — 2026-11-18
