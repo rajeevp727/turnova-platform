@@ -144,6 +144,21 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task DemoTokenCannotAccessMarkedEndpointWhenDemoAuthIsDisabled()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach a demo endpoint while disabled."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", CreateToken(role: "Rider", demo: true));
+
+        using var response = await client.GetAsync("/api/v1/demo/__test/marked");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task DemoSessionIssuanceIsRateLimitedPerRemoteAddress()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
@@ -154,6 +169,28 @@ public sealed class AuthApiIntegrationTests
         for (var index = 0; index < DemoAuthPolicy.RequestsPerMinute + 1; index++)
         {
             using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
+            statuses.Add(response.StatusCode);
+        }
+
+        Assert.Equal(DemoAuthPolicy.RequestsPerMinute,
+            statuses.Count(status => status == HttpStatusCode.OK));
+        Assert.Equal(1, statuses.Count(status => status == HttpStatusCode.TooManyRequests));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DemoSessionRateLimitDoesNotTrustClientForwardedForHeaders()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        var statuses = new List<HttpStatusCode>();
+
+        for (var index = 0; index < DemoAuthPolicy.RequestsPerMinute + 1; index++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/demo/rider");
+            request.Headers.TryAddWithoutValidation("X-Forwarded-For", $"198.51.100.{index + 1}");
+            using var response = await client.SendAsync(request);
             statuses.Add(response.StatusCode);
         }
 
@@ -846,15 +883,18 @@ public sealed class AuthApiIntegrationTests
         string audience = Audience,
         string signingKey = SigningKey,
         DateTime? notBefore = null,
-        DateTime? expires = null)
+        DateTime? expires = null,
+        bool demo = false)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, "driver-1"),
-            new Claim("role", role)
+            new(JwtRegisteredClaimNames.Sub, "driver-1"),
+            new("role", role)
         };
+        if (demo)
+            claims.Add(new Claim("demo", "true"));
         var token = new JwtSecurityToken(
             issuer, audience, claims,
             notBefore ?? DateTime.UtcNow.AddMinutes(-1),
