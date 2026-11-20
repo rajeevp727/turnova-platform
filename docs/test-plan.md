@@ -3882,3 +3882,14 @@ Covered by `AuthApiIntegrationTests.AuthRouteCorsPreflightStillReturnsNoStoreHea
 Covered by `AuthApiIntegrationTests.AuthRouteCorsPreflightFromDisallowedOriginStillReturnsNoStoreHeaders`. The test distinguishes an allowed-origin preflight from a rejected-origin preflight and verifies that the auth cache policy also wraps the latter CORS short-circuit. CORS is a browser access policy, not a substitute for API authentication/authorization. This is supplemental security coverage outside the 19-row MVP acceptance denominator.
 
 Exact source/test head [`f839b60224f8deb5d38a653562366d8750236628`](https://github.com/rajeevp727/turnova-platform/commit/f839b60224f8deb5d38a653562366d8750236628) passed [CI #44788943890](https://github.com/rajeevp727/turnova-platform/actions/runs/44788943890): 937/937 backend tests, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14656290784](https://github.com/rajeevp727/turnova-platform/actions/runs/44788943890/artifacts/14656290784).
+
+
+## AUTH-API-021 — Development HTTPS redirect remains non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-021 | Plain-HTTP GET to an auth route in Development with HTTPS_PORT=443 | HTTP 307 redirect to HTTPS; Cache-Control: no-store and Pragma: no-cache remain present; no TriSend request | API middleware integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.AuthRouteHttpsRedirectStillReturnsNoStoreHeaders. The test disables automatic redirect following, configures HTTPS_PORT=443 and asserts the HTTPS Location and cache headers. This verifies the auth cache middleware wraps Development HTTPS redirection. Supplemental coverage outside the 19-row acceptance denominator.
+
+Exact source/test head [0d55b4693dffc5b9d549b82cc8eff85b34d7f929](https://github.com/rajeevp727/turnova-platform/commit/0d55b4693dffc5b9d549b82cc8eff85b34d7f929) passed [CI #44790113886](https://github.com/rajeevp727/turnova-platform/actions/runs/44790113886): 938/938 tests, .NET 10 Release build, native non-container publish/verifier, and artifact [14656202254](https://github.com/rajeevp727/turnova-platform/actions/runs/44790113886/artifacts/14656202254).
