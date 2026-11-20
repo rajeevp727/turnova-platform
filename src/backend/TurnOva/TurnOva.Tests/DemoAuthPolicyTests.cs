@@ -13,7 +13,9 @@ public sealed class DemoAuthPolicyTests
     [InlineData("Testing", true, true)]
     [InlineData("Development", true, true)]
     [InlineData("Testing", false, false)]
-    [InlineData(null, true, true)]
+    [InlineData(null, true, false)]
+    [InlineData("", true, false)]
+    [InlineData(" ", true, false)]
     public void DemoAuthRequiresExplicitEnablementAndIsNeverEnabledInProduction(
         string? environmentName, bool configured, bool expected)
     {
