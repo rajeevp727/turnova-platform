@@ -12,6 +12,7 @@ public static class CosmosRideIdempotencyCleanup
         string riderId,
         string rideId,
         string requestHash,
+        DateTimeOffset expectedCreatedAtUtc,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(container);
@@ -38,6 +39,7 @@ public static class CosmosRideIdempotencyCleanup
             !string.Equals(record.riderId, riderId, StringComparison.Ordinal) ||
             !string.Equals(record.rideId, rideId, StringComparison.Ordinal) ||
             !string.Equals(record.RequestHash, requestHash, StringComparison.Ordinal) ||
+            record.CreatedAtUtc != expectedCreatedAtUtc ||
             string.IsNullOrWhiteSpace(response.ETag))
             return false;
 
