@@ -204,7 +204,8 @@ case "$1" in
         elif [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
           printf '<hierarchy><node text="RIDER ACCOUNT"/><node text="Welcome back"/><node text="Sign in"/><node resource-id="rider-auth-submit"/><node resource-id="rider-auth-email"/><node resource-id="rider-auth-password"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
         else
-          printf '<hierarchy><node text="RIDER ACCOUNT"/><node text="Welcome back"/><node text="Sign in"/><node resource-id="rider-auth-submit"/><node resource-id="rider-auth-email"/><node resource-id="rider-auth-password"/></hierarchy>\n'        fi
+          printf '<hierarchy><node text="RIDER ACCOUNT"/><node text="Welcome back"/><node text="Sign in"/><node resource-id="rider-auth-submit"/><node resource-id="rider-auth-email"/><node resource-id="rider-auth-password"/></hierarchy>\n'
+        fi
         ;;
       pm) echo "package:/data/app/turnova/base.apk" ;;
       cmd) echo "com.turnova.rider/.MainActivity" ;;
