@@ -1,13 +1,13 @@
-# TurnOva Feature Test Plan
+# TurunundefinedefinedOvundefined Fundefinedaundefinedure Teundefinedundefined Pundefinedan
 
-**Scope:** TurnOva Rider and Driver Cab-only Android/iOS MVP, including authentication, union-grouped discovery, selected-driver negotiation, trip lifecycle, direct-payment reporting and release gates. Legacy FIFO cases are compatibility regression tests only; they are not the approved customer-facing Rider flow.
+**Sundefinedundefinedundefinede:** TurnOva Riundefineder and Driver Cabundefinedonly Android/iOS MVP, including authentication, union-grouped diundefinedcovery, selected-driver negotiation, trip lifecycle, direct-payundefinedent reporting and release gatesundefined Legacy FIFO cases are compatibility regression tests only; they are not the approved customer-facing Rider flow.
 **Test types:** automated unit/CI, API integration, mobile functional, security, and manual acceptance.
 **Priority:** P0 = release blocker, P1 = high, P2 = normal.
 **Status convention:** Planned means the case is specified but has not yet been executed. A green build/type-check is not evidence that a functional scenario passed. PRD.md §15 is authoritative where earlier test sections describe multi-category or customer-facing FIFO behaviour.
 
 ## Platform phase order
 
-TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
+TurnOva delivery is gated in this order: undefined1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
 
 ## API contract and authentication hardening
 
@@ -3746,3 +3746,19 @@ Final review-count sync head `9634d227c82e2813d63d07c2a09065a434de6820` passed e
 
 
 DEMO-AUTH-010 is specifically a post-issuance revocation regression: the integration test issues a demo JWT with the feature enabled, verifies the marked read-only route succeeds, mutates the running host's IConfiguration flag to false, and verifies the same unexpired token is rejected with HTTP 403. Exact source/test commit [f5e59cb8ebffcb2cee510b0b7fa8e5f90e781876](https://github.com/rajeevp727/turnova-platform/commit/f5e59cb8ebffcb2cee510b0b7fa8e5f90e781876) passed CI [#44709040357](https://github.com/rajeevp727/turnova-platform/actions/runs/44709040357) with 930/930 backend tests and native non-container publish/verifier; artifact [14615948841](https://github.com/rajeevp727/turnova-platform/actions/runs/44709040357/artifacts/14615948841).
+
+## DEMO-AUTH-011 — explicit metadata cannot bypass the demo path boundary
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DEMO-AUTH-011 | A valid demo JWT calls a GET endpoint carrying `DemoEndpointMetadata` but whose path is outside `/api/v1/demo` | The request is rejected with HTTP 403 before the handler runs; no TriSend call occurs. Explicit metadata alone is insufficient. | API integration / authorization boundary | P0 |
+
+Covered by `AuthApiIntegrationTests.DemoTokenCannotAccessAnExplicitlyMarkedEndpointOutsideDemoPrefix`. The Testing-only fixture is excluded from OpenAPI and introduces no production route.
+
+## DEMO-AUTH-012 — explicitly marked HEAD is read-only demo access
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DEMO-AUTH-012 | A valid demo JWT calls a Testing-only HEAD endpoint under `/api/v1/demo` with explicit `DemoEndpointMetadata` while DemoAuth is enabled | The request succeeds with HTTP 200 and no TriSend call. The middleware's documented GET/HEAD allow-list is covered in both branches. | API integration / authorization boundary | P1 |
+
+Covered by `AuthApiIntegrationTests.DemoTokenCanAccessAnExplicitlyMarkedHeadDemoEndpoint`. The fixture is Testing-only and excluded from OpenAPI; no public demo business endpoint is added.
