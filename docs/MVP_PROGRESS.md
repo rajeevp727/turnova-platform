@@ -28,7 +28,7 @@
 
 **Latest source/test increment:** head `4afdd81de66b7e7772c27301de0a8fd53a238cee` adds a typed `DemoSessionResponse` contract, explicitly documents the successful 200 response and Problem Details 429/503 responses, and asserts the OpenAPI schema exposes the response fields (supporting both inline and referenced schema output). The test-plan row DEMO-AUTH-008 was synchronized in commit `2eb72b7e8db84ee49ee9334fc0660a3fd0a9f223`. Exact final-head CI is pending. Previous documentation head `577a9f271540ec85746ae26ea175549955035eb0` passed CI [#44717646663](https://github.com/rajeevp727/turnova-platform/actions/runs/44717646663) with 932/932 backend tests, Release build and native non-container publish/verifier.
 
-**Next exact action:** update PR #200 from current main without force-pushing, then run exact-head API CI for the final synchronized docs/source; no additional feature PR is permitted while #200 is open. Obtain independent human approval for PR #200; do not self-approve or merge. After a permitted merge, re-read main and repeat the API exit audit. Only then may Rider Android completion begin; Driver follows Rider, and iOS follows both Android apps.
+**Next exact action:** update PR #200 from current main without force-pushing; the latest docs/source head passed 932/932 and native publish, but the base is still one commit behind. Re-run exact-head CI after a non-force branch update; no additional feature PR is permitted while #200 is open. Obtain independent human approval for PR #200; do not self-approve or merge. After a permitted merge, re-read main and repeat the API exit audit. Only then may Rider Android completion begin; Driver follows Rider, and iOS follows both Android apps.
 
 ## 2. Overall MVP completion
 
