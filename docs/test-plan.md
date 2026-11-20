@@ -3927,3 +3927,14 @@ Covered by `AuthApiIntegrationTests.AuthRouteCachePolicyPreservesPrivateDirectiv
 
 Exact source/test head [`bb96a98e0e1281885f73fd045e29883799b4a6a0`](https://github.com/rajeevp727/turnova-platform/commit/bb96a98e0e1281885f73fd045e29883799b4a6a0) passed API-only CI [#44810978513](https://github.com/rajeevp727/turnova-platform/actions/runs/44810978513): **942/942 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 API publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), artifact validation and upload. Artifact [14666462214](https://github.com/rajeevp727/turnova-platform/actions/runs/44810978513/artifacts/14666462214). Mobile/mobile-auth/Android/emulator/iOS jobs were intentionally skipped under the API-first phase gate.
 
+
+
+## AI-044 — assistance rate-limit responses are non-cacheable Problem Details
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-044 | An authenticated Rider exceeds the AI help per-subject fixed-window limit | HTTP 429 with `application/problem+json` Problem Details, status 429, `Cache-Control: no-store`, `Pragma: no-cache`, and no caller subject in the response | API integration/privacy | P1 |
+
+Covered by `AiAssistanceApiIntegrationTests.AssistantRateLimitRejectionIsNonCacheable`. This verifies that the API-wide non-cacheable response middleware wraps endpoint-level rate-limit rejection. The AI limiter remains partitioned by authenticated subject; the generic response does not echo the subject or prompt.
+
+The regression found that setting `Response.ContentType` before `WriteAsJsonAsync` was ineffective because the JSON helper reset the media type to `application/json`. The rejection now uses `Results.Problem` to emit the declared Problem Details media type. Source/test head [`8571997e62ebd9893b1edead79f059691c080f29`](https://github.com/rajeevp727/turnova-platform/commit/8571997e62ebd9893b1edead79f059691c080f29) passed exact-head API-only CI [#44826100723](https://github.com/rajeevp727/turnova-platform/actions/runs/44826100723): **945/945 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact [14674935330](https://github.com/rajeevp727/turnova-platform/actions/runs/44826100723/artifacts/14674935330). AI-044 is supplemental AI-01 coverage outside the 19-area MVP acceptance denominator.
