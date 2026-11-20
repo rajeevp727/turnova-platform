@@ -3058,3 +3058,12 @@ The API privacy correction intentionally removes `riderId` and `driverId` from `
 - Strict acceptance: 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 - Next exact action: verify exact-head CI for the final documentation-bearing PR #197 head, continue API-only gap audit, and obtain independent human review. After approval/merge, re-read main and repeat the full API phase-exit audit before Android Rider.
 - External gates: live Cosmos ETag/multi-instance/partition/restart; production JWT/TriSend identity, secrets, API hosting/providers; Product-approved dispatch radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/reconciliation policies; Union legal approval; Android/iOS physical-device and signing evidence.
+
+
+## Latest documentation-bearing API CI — 2026-11-20
+
+- Documentation-bearing head a94b1f5dcb05885f332c2daf7ed4fb5f095c34c7 passed exact-head API-only CI [#44669155071](https://github.com/rajeevp727/turnova-platform/actions/runs/44669155071): scope/backend success, 854/854 backend tests (0 failed, 0 skipped), Release build, native non-container .NET 10 linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14598569138](https://github.com/rajeevp727/turnova-platform/actions/runs/44669155071/artifacts/14598569138). Build log: 25 xUnit analyzer warnings, 0 errors. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-only gate.
+- Source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 separately passed CI #44668284857 with the same 854/854 test count and artifact 14599196865.
+- Current PR #197 remains open/ready/mergeable. Four reviews are owner-authored COMMENT-only; no independent approval; zero unresolved threads. PR #196/#198 remain Draft/parked.
+- API remains in_progress; Android/iOS remain not_started. Strict acceptance remains 0/19 (16 In Progress, 3 Blocked). Production readiness is not established.
+- This evidence note is documentation-only; verify exact-head CI on the resulting PR head before any merge consideration.
