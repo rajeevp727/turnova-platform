@@ -37,6 +37,22 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task DemoSessionIsDisabledForUnknownEnvironmentEvenWhenExplicitlyEnabled()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" },
+            environmentName: "Preview");
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("rider", "Rider", "demo-rider-001")]
     [InlineData("driver", "Driver", "demo-driver-001")]
