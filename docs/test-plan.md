@@ -3766,3 +3766,11 @@ Covered by `AuthApiIntegrationTests.DemoTokenCannotAccessAnExplicitlyMarkedEndpo
 Covered by `AuthApiIntegrationTests.DemoTokenCanAccessAnExplicitlyMarkedHeadDemoEndpoint`. The fixture is Testing-only and excluded from OpenAPI; no public demo business endpoint is added.
 
 **Code/test evidence:** source/test head `444fbba3dd91b0531ce5fa42358ccf7b65e10af6` was included in exact-head API-only CI [#44712638042](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042) at documentation head `4dba640291450f22502938d61f3f0d17d66a1e76`: 932/932 backend tests, Release build, native non-container .NET 10 publish/verifier, artifact [14618770509](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042/artifacts/14618770509). That run proves the source/test changes; it is not used as clean-documentation evidence because the intermediate docs snapshot was malformed. The restored clean-documents head must pass its own exact-head CI.
+
+## DEMO-AUTH-014 — SignalR query-token transport cannot bypass demo isolation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DEMO-AUTH-014 | A valid restricted demo JWT is supplied as the `access_token` query parameter on `POST /hubs/rides/negotiate` | The API returns HTTP 403 before SignalR negotiation or hub group membership; no TriSend call occurs. The SignalR query-string token extraction path does not bypass demo-session isolation. | API integration / authentication boundary | P0 |
+
+Covered by `AuthApiIntegrationTests.DemoTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken`. This is deterministic TestServer evidence for the special SignalR query-token path; it does not claim live WebSocket delivery, a production backplane or device reconnect validation.
