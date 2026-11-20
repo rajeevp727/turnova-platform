@@ -8,7 +8,7 @@ namespace TurnOva.Tests;
 
 public sealed class CosmosCreateConflictReadTests
 {
-    private sealed record TestDocument(string Id);
+    public sealed record TestDocument(string Id);
 
     [Fact]
     public async Task ReadAfterConflictReturnsResourceWhenReservationStillExists()
