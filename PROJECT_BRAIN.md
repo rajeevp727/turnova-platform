@@ -3,22 +3,22 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in PRD.md, docs/architecture.md, and docs/test-plan.md.
 
-**Last verified:** 2026-11-20  
-**Repository:** https://github.com/rajeevp727/turnova-platform  
-**Main HEAD:** `d499196ef3333fd9697c6f14d7a88b84bb897474`  
+**Last verified:** 2026-11-20
+**Repository:** https://github.com/rajeevp727/turnova-platform
+**Main HEAD:** `d499196ef3333fd9697c6f14d7a88b84bb897474`
 **Current phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
 
-**Current API PR:** [#197](https://github.com/rajeevp727/turnova-platform/pull/197), branch `test/api-cosmos-migration-runner-fencing-20261119`, source/test head `7dcfb1d125039d5f38b63da885029985d913d393`, open/ready/mergeable. PR #196 and #198 remain Draft/parked.
+**Current API PR:** [#197](https://github.com/rajeevp727/turnova-platform/pull/197), branch `test/api-cosmos-migration-runner-fencing-20261119`, open/ready/mergeable. It is the sole active feature PR. PR #196 and #198 remain Draft/parked.
 
-**Latest source/test evidence:** [CI #44650666047](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047) passed scope validation, .NET 10 Release build, **829/829 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, verifier (11 negative fixtures plus valid fixture), and artifact [14591605262](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047/artifacts/14591605262). Mobile/Android/iOS jobs were intentionally skipped by the API-only gate.
+**Current source/test head:** `35d26a6c308d8db537e12f70cd7d151995477e1c`. RID-IDEM-007 adds a shared Cosmos create-conflict follow-up read that treats only HTTP 404 as an absent idempotency record. Both selected-booking and Development/Testing legacy compatibility paths now return a retryable conflict when concurrent cleanup removes the record between CreateItem(409) and the point read. Other provider failures propagate. Three deterministic tests cover resource present, resource deleted and HTTP 503. Exact-head CI is pending for this new source/test head; prior 829/829 results do not cover it.
 
-**COSMOS-MIG-022:** Cosmos migration lease create/replace now validates the returned response Resource, fixed lease ID, exact requested/new owner and nonblank ETag. Missing or mismatched Resource fails closed. Eight deterministic cases passed in the 829-test run. The prior 2/829 test-expectation failure was corrected; the final source/test head is green.
+**Previous verified source/test evidence:** COSMOS-MIG-022 head `7dcfb1d125039d5f38b63da885029985d913d393` passed [CI #44650666047](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047): scope, .NET 10 Release build, **829/829 backend tests**, native non-container linux-x64 publish, verifier (11 negative fixtures plus valid fixture) and artifact [14591605262](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047/artifacts/14591605262). The prior docs-only head `0c3f3d03c44f886ea48c7321420cc661c5ad6be1` passed [CI #44652749850](https://github.com/rajeevp727/turnova-platform/actions/runs/44652749850); these results predate RID-IDEM-007.
 
-**Review/phase gate:** four recorded reviews are owner-authored COMMENT-only; no independent human approval is recorded and there are no unresolved review threads. Do not self-approve or merge. Keep API phase active until independent approval and a fresh main/API exit audit. Documentation head `16b859615b3ab55f7b0bc15afeb3997fb7e0b2a8` passed exact-head CI #44651780351 (829/829 backend tests and native publish/verifier; artifact 14591277727). Handoff-only documentation head `c70c5158829af3b50903bef3187986356c05917c` passed exact-head CI #44652271490 (829/829 backend tests and native publish/verifier; artifact 14592025117). This final progress/matrix/brain synchronization is documentation-only and requires its own exact-head CI before merge. Do not start Android before that gate.
+**Review/phase gate:** four recorded reviews on PR #197 are owner-authored COMMENT-only; no independent human approval is recorded and there are zero unresolved review threads. Do not self-approve or merge. Keep API phase active until independent approval, merge and a fresh main/API exit audit. Android and iOS remain gated.
 
-**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, Product-approved dispatch/location/support/reconciliation policies, private-media storage/scanning/consent/retention, Union legal approval and physical-device/signing gates remain external.
+**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation-completion percentage. Production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, Product-approved dispatch/location/support/reconciliation policies, private-media storage/scanning/consent/retention, Union legal approval and physical-device/signing gates remain external.
 
-**Next sequential action:** finish docs/test-plan/progress/matrix synchronization and exact-head CI; continue API-only gap audit. After independent approval and merge, re-read main and repeat the API phase-exit audit before Android Rider, then Android Driver, then iOS Rider and Driver.
+**Next sequential action:** obtain exact-head CI for RID-IDEM-007 and the current documentation sync; continue API-only source/test/security/persistence gap audit and obtain independent human review. After approval and merge, re-read main and repeat the API phase-exit audit before Android Rider, then Android Driver, then iOS Rider and Driver.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
