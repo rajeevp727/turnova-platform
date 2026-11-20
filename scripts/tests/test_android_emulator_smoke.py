@@ -515,8 +515,10 @@ exit 0
             self.assertIn("540 1087", (recovered_output / "input-taps.txt").read_text(encoding="utf-8"))
             self.assertTrue((recovered_output / "system-anr-1.xml").is_file())
             recovered_ui = (recovered_output / "ui-hierarchy.xml").read_text(encoding="utf-8")
-            for expected_text in ("Offline demo access", "Continue as Demo Rider", "Demo mode is read-only", "rider-demo-login"):
+            for expected_text in ("RIDER ACCOUNT", "Welcome back", "Sign in", "rider-auth-submit", "rider-auth-email", "rider-auth-password"):
                 self.assertIn(expected_text, recovered_ui)
+            for removed_demo_text in ("Offline demo access", "Continue as Demo Rider", "Demo mode is read-only", "rider-demo-login"):
+                self.assertNotIn(removed_demo_text, recovered_ui)
 
             # A persistent launcher ANR is closed only while the target app remains
             # foreground and stable, then the login surface is verified.
