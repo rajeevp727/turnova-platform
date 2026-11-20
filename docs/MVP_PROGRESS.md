@@ -32,9 +32,9 @@ No Docker/container build, image, registry or deployment was used or is permitte
 
 **Platform phase:** Android. **Current app:** Rider first. Driver and iOS completion remain gated.
 
-**Active-PR constraint:** PR #200 is the sole open ready feature PR. Do not create a parallel Rider PR until #200 is resolved; it needs independent human approval and must be rechecked against current main.
+**Active-PR constraint:** PR #200 is the sole ready/active feature PR; #196, #198 and #203 remain Draft. Do not create a parallel Rider PR until #200 is resolved; it needs independent human approval and the documentation-bearing final head must pass CI.
 
-**API follow-up evidence:** PR #200 source/test head cbf1c254e46af201e3b5aa2fcadac23be9d65260; prior docs-bearing head 6048ff738c9eee070f3b9692b58ce6ee2d6dbec5 passed 906/906, Release build and native non-container publish/verifier in [CI #44685465381](https://github.com/rajeevp727/turnova-platform/actions/runs/44685465381), artifact [14606221934](https://github.com/rajeevp727/turnova-platform/actions/runs/44685465381/artifacts/14606221934). Current exact-head CI is pending; no independent review submissions are recorded.
+**API follow-up evidence:** Source/test head `cbf1c254e46af201e3b5aa2fcadac23be9d65260` passed [exact-head CI #44688136275](https://github.com/rajeevp727/turnova-platform/actions/runs/44688136275): 923/923 backend tests, Release build, native non-container .NET 10 publish/verifier and artifact [14607178313](https://github.com/rajeevp727/turnova-platform/actions/runs/44688136275/artifacts/14607178313). The subsequent documentation synchronization requires fresh exact-final-head CI before merge consideration. No independent review or approval is recorded.
 
 **Android demo-preview evidence:** PR #199 merged at 238728a0bb3dffe990cd4626615a4d927f814a12, but exact-head CI [#44684360422](https://github.com/rajeevp727/turnova-platform/actions/runs/44684360422) failed: backend 902/902; Rider typecheck failed on seven TS18047 nullable-user errors (App.tsx lines 569 and 590); shared mobile-auth tests 285/286 because the login/register UI was removed; Driver mobile job cancelled; native Android build and emulator smoke skipped. The test is correct; restore authentication rather than weakening it.
 
