@@ -3938,3 +3938,14 @@ Exact source/test head [`bb96a98e0e1281885f73fd045e29883799b4a6a0`](https://gith
 Covered by `AiAssistanceApiIntegrationTests.AssistantRateLimitRejectionIsNonCacheable`. This verifies that the API-wide non-cacheable response middleware wraps endpoint-level rate-limit rejection. The AI limiter remains partitioned by authenticated subject; the generic response does not echo the subject or prompt.
 
 The regression found that setting `Response.ContentType` before `WriteAsJsonAsync` was ineffective because the JSON helper reset the media type to `application/json`. The rejection now uses `Results.Problem` to emit the declared Problem Details media type. Source/test head [`8571997e62ebd9893b1edead79f059691c080f29`](https://github.com/rajeevp727/turnova-platform/commit/8571997e62ebd9893b1edead79f059691c080f29) passed exact-head API-only CI [#44826100723](https://github.com/rajeevp727/turnova-platform/actions/runs/44826100723): **945/945 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact [14674935330](https://github.com/rajeevp727/turnova-platform/actions/runs/44826100723/artifacts/14674935330). AI-044 is supplemental AI-01 coverage outside the 19-area MVP acceptance denominator.
+
+
+## DEMO-AUTH-014 — demo-auth throttling returns Problem Details
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DEMO-AUTH-014 | The authenticated-independent demo-session endpoint exceeds its 10-request/minute server-observed remote-IP allowance | The 11th POST returns HTTP 429 with `application/problem+json` Problem Details and status 429; `Cache-Control: no-store` and `Pragma: no-cache` remain present; TriSend is never called | API integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.DemoSessionIssuanceIsRateLimitedPerRemoteAddress`. The shared rate-limiter rejection callback also serves AI assistance; AI-044 separately verifies the same Problem Details and non-cacheable response contract for authenticated AI help. Demo auth remains opt-in and restricted to the configured non-production environment allow-list. The limiter is process-local; multi-instance exposure still requires shared/edge rate limiting and trusted forwarded-header configuration.
+
+Source/test head [`ed9faf6c345db33dc2336805580f2007cae9aade`](https://github.com/rajeevp727/turnova-platform/commit/ed9faf6c345db33dc2336805580f2007cae9aade) passed exact-head API-only CI [#44827321958](https://github.com/rajeevp727/turnova-platform/actions/runs/44827321958): **945/945 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier, artifact [14674272359](https://github.com/rajeevp727/turnova-platform/actions/runs/44827321958/artifacts/14674272359). DEMO-AUTH-014 is an API test case, not an additional MVP acceptance area.
