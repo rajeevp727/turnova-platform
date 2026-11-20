@@ -3331,6 +3331,17 @@ app.MapPost("/api/v1/rider/bookings", async (
 
     async Task<IResult?> ResolveExistingBookingIdempotencyAsync(RideIdempotencyRecord prior)
     {
+        // Validate the persisted idempotency envelope before trusting its ride pointer.
+        // The point read is Rider-partition scoped, but corrupted/mis-keyed metadata must
+        // not be allowed to drive recovery or reservation changes.
+        if (!string.Equals(prior.id, keyId, StringComparison.Ordinal) ||
+            !string.Equals(prior.riderId, riderId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(prior.rideId))
+            return Results.Conflict(new
+            {
+                message = "The original booking reference cannot be safely replayed. Retry with a new Idempotency-Key."
+            });
+
         if (prior.RequestHash != requestFingerprint)
             return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
 
