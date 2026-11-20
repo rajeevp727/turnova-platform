@@ -1,6 +1,6 @@
 # TurnOva MVP progress
 
-**Last updated:** 2026-11-20.
+**Last updated:** 2026-11-21.
 **Main HEAD:** `c9280eec23dd4fb5fab06b11e24d2a619b489235`.
 **Current platform phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
 
@@ -3284,3 +3284,10 @@ Main at 06cb552db6c929cd5ab22d8bc1f2da191670f0f2 still has .github/turnova-phase
 - **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. Production readiness and live Cosmos/provider validation are not established.
 - **External gates:** live Cosmos ETag/partition/multi-instance/restart; Staging/QA provisioning and durable readiness; shared/edge demo rate limiting and trusted forwarded-header configuration; production JWT/TriSend identity, secrets and API hosting; Product-approved radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support and reconciliation policy; Union legal approval; Android/iOS physical-device and signing/store/TestFlight evidence.
 - **Next exact action:** continue API-only engineering while PR #200 remains open; obtain independent human approval, verify the latest documentation-bearing head and required checks, and merge only when repository policy permits. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver.
+
+## Run 11 — AUTH-API-023 method-mismatch cache coverage (2026-11-21)
+
+- Added `AuthApiIntegrationTests.UnsupportedMethodOnAuthenticationRouteReturnsMethodNotAllowedWithNoStoreHeaders`. A POST to the existing GET-only `/api/v1/auth/me` route returns HTTP 405 with `Cache-Control: no-store` and `Pragma: no-cache`; the request never reaches TriSend. This complements AUTH-API-022's unmatched-route 404 case and covers endpoint-routing method-mismatch responses.
+- Source/test commit [`2f8d0cc757b56bab89625644da10a913f276e10d`](https://github.com/rajeevp727/turnova-platform/commit/2f8d0cc757b56bab89625644da10a913f276e10d) passed exact-head API-only CI [#44807178037](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037): **940/940 backend tests (0 failed, 0 skipped)**, .NET 10 Release solution build, native non-container linux-x64 API publish, publish-script syntax, native publish verifier (11 negative fixtures plus valid fixture), artifact validation and upload. Artifact: [14663477137](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037/artifacts/14663477137). Build emitted 25 existing xUnit analyzer warnings and 0 errors.
+- Scope/backend checks passed. Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+- This is supplemental API security coverage. It does not add a twentieth acceptance area or promote any of the 19 rows to Verified.

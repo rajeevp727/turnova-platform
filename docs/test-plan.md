@@ -3903,3 +3903,13 @@ Exact source/test head [0d55b4693dffc5b9d549b82cc8eff85b34d7f929](https://github
 Covered by `AuthApiIntegrationTests.UnmatchedAuthRouteReturnsNotFoundWithNoStoreHeaders`. The request to `/api/v1/auth/__test/not-found` verifies the auth cache middleware also covers endpoint-routing 404 responses, not only mapped auth handlers and middleware short-circuits. The test asserts the generic 404, both cache headers and zero upstream TriSend requests. This is supplemental API security coverage outside the 19-row MVP acceptance denominator.
 
 Exact source/test head [`f5cc60ac57a272aaa9cb239684d9655f287ee4e9`](https://github.com/rajeevp727/turnova-platform/commit/f5cc60ac57a272aaa9cb239684d9655f287ee4e9) passed API-only CI [#44798095244](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244): **939/939 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, native publish verifier (11 negative fixtures plus valid fixture), artifact validation and upload. Artifact [14659488247](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244/artifacts/14659488247). Mobile/Android/iOS jobs were intentionally skipped under the API phase gate.
+
+## AUTH-API-023 — authentication method-mismatch responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-023 | A POST request targets the GET-only `/api/v1/auth/me` route | HTTP 405 with `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnsupportedMethodOnAuthenticationRouteReturnsMethodNotAllowedWithNoStoreHeaders`. This verifies that the auth cache policy also covers endpoint-routing 405 responses when the path exists but the HTTP method is unsupported. The case is supplemental API security coverage outside the 19-area MVP acceptance denominator.
+
+Exact source/test head [`2f8d0cc757b56bab89625644da10a913f276e10d`](https://github.com/rajeevp727/turnova-platform/commit/2f8d0cc757b56bab89625644da10a913f276e10d) passed API-only CI [#44807178037](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037): **940/940 backend tests (0 failed, 0 skipped)**, Release build, native non-container linux-x64 publish/verifier and artifact [14663477137](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037/artifacts/14663477137). Mobile/Android/iOS jobs were intentionally skipped under the API phase gate.

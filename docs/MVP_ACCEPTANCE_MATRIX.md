@@ -1,6 +1,6 @@
 # TurnOva MVP Acceptance Matrix
 
-**Last updated:** 2026-11-20. **Main HEAD:** `c9280eec23dd4fb5fab06b11e24d2a619b489235`. **Current platform phase:** API **in_progress**; Android **not_started**; iOS **not_started**.
+**Last updated:** 2026-11-21. **Main HEAD:** `c9280eec23dd4fb5fab06b11e24d2a619b489235`. **Current platform phase:** API **in_progress**; Android **not_started**; iOS **not_started**.
 
 **API engineering evidence:** PR #184 records the engineering-only API implementation exit. PR #197 merged at `8d5bcb6b913f51250d9f0fc4f0d521a973130747` with 897/897 backend tests and native non-container .NET 10 publish/verifier, but without independent human approval. That historical process exception does not satisfy the current phase-transition gate.
 
@@ -2025,3 +2025,12 @@ These supplemental API tests do not add acceptance rows. Strict acceptance remai
 ## Supplemental API security evidence — AUTH-API-022 (2026-11-21)
 
 `AuthApiIntegrationTests.UnmatchedAuthRouteReturnsNotFoundWithNoStoreHeaders` verifies that an unmapped GET beneath `/api/v1/auth` returns HTTP 404 with `Cache-Control: no-store` and `Pragma: no-cache`, without a TriSend request. Exact source/test head [`f5cc60ac57a272aaa9cb239684d9655f287ee4e9`](https://github.com/rajeevp727/turnova-platform/commit/f5cc60ac57a272aaa9cb239684d9655f287ee4e9) passed API-only CI [#44798095244](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244): 939/939 backend tests, Release build, native non-container publish/verifier and artifact [14659488247](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244/artifacts/14659488247). AUTH-API-022 is supplemental and does not add an acceptance row or promote any row to Verified. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked).
+
+## Run 11 — AUTH-API-023 method-mismatch cache coverage (2026-11-21)
+
+- Added `AuthApiIntegrationTests.UnsupportedMethodOnAuthenticationRouteReturnsMethodNotAllowedWithNoStoreHeaders`. A POST to the existing GET-only `/api/v1/auth/me` route returns HTTP 405 with `Cache-Control: no-store` and `Pragma: no-cache`; the request never reaches TriSend. This complements AUTH-API-022's unmatched-route 404 case and covers endpoint-routing method-mismatch responses.
+- Source/test commit [`2f8d0cc757b56bab89625644da10a913f276e10d`](https://github.com/rajeevp727/turnova-platform/commit/2f8d0cc757b56bab89625644da10a913f276e10d) passed exact-head API-only CI [#44807178037](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037): **940/940 backend tests (0 failed, 0 skipped)**, .NET 10 Release solution build, native non-container linux-x64 API publish, publish-script syntax, native publish verifier (11 negative fixtures plus valid fixture), artifact validation and upload. Artifact: [14663477137](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037/artifacts/14663477137). Build emitted 25 existing xUnit analyzer warnings and 0 errors.
+- Scope/backend checks passed. Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+- This is supplemental API security coverage. It does not add a twentieth acceptance area or promote any of the 19 rows to Verified.
+
+Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). AUTH-API-023 is supplemental and does not promote an acceptance row.
