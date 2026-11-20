@@ -74,6 +74,29 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task AuthRouteCorsPreflightStillReturnsNoStoreHeaders()
+    {
+        const string allowedOrigin = "https://rider.example";
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("CORS preflight must not call TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["Cors:AllowedOrigins:0"] = allowedOrigin });
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/v1/auth/rider/login");
+        request.Headers.Add("Origin", allowedOrigin);
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(allowedOrigin, Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin")));
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("rider", "Rider", "demo-rider-001")]
     [InlineData("driver", "Driver", "demo-driver-001")]
