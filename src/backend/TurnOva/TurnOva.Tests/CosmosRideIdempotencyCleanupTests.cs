@@ -34,7 +34,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
         container.Setup(value => value.DeleteItemAsync<RideIdempotencyRecord>(
                 KeyId,
                 partitionKey,
-                It.Is<ItemRequestOptions?>(options => options?.IfMatchEtag == "observed-etag"),
+                It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "observed-etag"),
                 cancellation.Token))
             .ReturnsAsync(deleted.Object);
 
@@ -46,7 +46,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
             KeyId, partitionKey, It.IsAny<ItemRequestOptions?>(), cancellation.Token), Times.Once);
         container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
             KeyId, partitionKey,
-            It.Is<ItemRequestOptions?>(options => options?.IfMatchEtag == "observed-etag"),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "observed-etag"),
             cancellation.Token), Times.Once);
         container.VerifyNoOtherCalls();
     }
@@ -119,7 +119,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
             .ReturnsAsync(read.Object);
         container.Setup(value => value.DeleteItemAsync<RideIdempotencyRecord>(
                 KeyId, It.IsAny<PartitionKey>(),
-                It.Is<ItemRequestOptions?>(options => options?.IfMatchEtag == "stale-etag"),
+                It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "stale-etag"),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "idempotency-cleanup", 0));
 
@@ -129,7 +129,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
         Assert.False(result);
         container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
             KeyId, It.IsAny<PartitionKey>(),
-            It.Is<ItemRequestOptions?>(options => options?.IfMatchEtag == "stale-etag"),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "stale-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
