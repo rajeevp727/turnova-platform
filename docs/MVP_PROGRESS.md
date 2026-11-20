@@ -22,7 +22,7 @@
 
 ## Platform phase exit criteria
 
-- **API — current phase:** in-scope API source flows, role-scoped contracts/privacy checks, deterministic backend tests, API documentation, persistence/repository tests and native non-container .NET 10 publish are evidenced on main. PR #197 adds migration-runner lease-loss fencing, Cosmos lease adapter guards, Union create-if-absent mapping, RideOffer conflict/ETag handling, selected Rider/Driver reservation ETag/audit contracts, legacy offer retry/expiry regressions, AI-01 privacy/provider-isolation tests, RID-IDEM-006 cleanup fencing and COSMOS-MIG-022 write-response identity validation. Source/test head `7dcfb1d125039d5f38b63da885029985d913d393` passed [CI #44650666047](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047) with **829/829 backend tests**, native non-container .NET 10 Release linux-x64 publish, verifier and artifact [14591605262](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047/artifacts/14591605262). API remains `in_progress` pending independent human approval of PR #197 and a fresh main/API exit audit. The documentation head `c70c5158829af3b50903bef3187986356c05917c` passed CI #44652271490 (829/829); this final status-note synchronization requires its own exact-head CI before merge. Live Cosmos and production integrations remain external.
+- **API — current phase:** in-scope API source flows, role-scoped contracts/privacy checks, deterministic backend tests, API documentation, persistence/repository tests and native non-container .NET 10 publish are evidenced on main. PR #197 additionally hardens migration-runner lease loss, Cosmos lease adapters, Union create-if-absent, RideOffer ETag/conflict handling, selected Rider/Driver reservation audit contracts, legacy offer retry/expiry, AI-01 privacy, RID-IDEM-006 cleanup fencing, COSMOS-MIG-022 response identity validation and RID-IDEM-007 Cosmos idempotency conflict/read races. Source/test head `35d26a6c308d8db537e12f70cd7d151995477e1c` adds three deterministic RID-IDEM-007 tests and is awaiting exact-head CI; the previous 829/829 result applies only to the earlier COSMOS-MIG-022 head. API remains `in_progress` pending independent human approval of PR #197 and a fresh main/API exit audit. Live Cosmos and production integrations remain external.
 - **Android — gated:** only after API exit, complete Rider first and Driver second; each needs API-wired in-scope flows, deterministic tests, debug/release builds and emulator install/launch smoke. Physical-device/signing and reachable live API/Cosmos acceptance remain external.
 - **iOS — gated:** only after both Android apps exit, complete Rider first and Driver second; each needs deterministic tests, simulator build and launch smoke. Physical-device/signing/TestFlight gates remain external.
 
@@ -30,11 +30,11 @@
 
 **Platform phase:** API. Android and iOS completion work remains gated.
 
-**Current item:** PR #197 — API persistence/retry/privacy and Cosmos migration lease response validation.
+**Current item:** PR #197 — RID-IDEM-007 Cosmos idempotency create-conflict/read deletion race.
 
-**Engineering result:** Create/replace now validate the actual Cosmos response resource, exact lease ID, owner and ETag. The code fails closed when the response resource is absent or mismatched. The eight added deterministic cases passed as part of the 829/829 exact source/test-head CI run. The native API publish and verifier also passed; no live Cosmos behavior is inferred.
+**Engineering result:** A Cosmos idempotency create may return 409 while concurrent cleanup deletes the record before the follow-up point read. Both selected-booking and Development/Testing legacy paths now return a retryable conflict for that 404 race; non-404 provider failures still propagate. Three deterministic adapter tests cover existing, deleted and HTTP 503 cases. Exact-head CI is pending; no test result is claimed for this increment yet.
 
-**Next exact action:** finish the current docs/test-plan/progress/matrix synchronization, wait for exact-head CI on that docs head, then continue API-only gap audit and obtain independent human review. Do not merge or advance to Android without approval and a fresh main/API exit audit.
+**Next exact action:** obtain exact-head CI for source/test head `35d26a6c308d8db537e12f70cd7d151995477e1c` and the current documentation sync. If green, continue the API-only authorization, persistence, security and contract gap audit and obtain independent human approval. Do not merge or advance to Android without approval and a fresh main/API exit audit.
 
 ## 2. Overall MVP completion
 
