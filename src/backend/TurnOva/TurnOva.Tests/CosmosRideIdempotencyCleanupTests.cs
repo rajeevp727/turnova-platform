@@ -52,6 +52,49 @@ public sealed class CosmosRideIdempotencyCleanupTests
     }
 
     [Fact]
+    public async Task DeleteDoesNotAttemptWhenReadResponseHasNoResource()
+    {
+        var read = new Mock<ItemResponse<RideIdempotencyRecord>>();
+        read.SetupGet(value => value.Resource).Returns((RideIdempotencyRecord)null!);
+        read.SetupGet(value => value.ETag).Returns("observed-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
+            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId,
+            RequestHash, DateTimeOffset.UtcNow, CancellationToken.None);
+
+        Assert.False(result);
+        container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteDoesNotAttemptWhenReadResponseHasNoEtag()
+    {
+        var createdAt = DateTimeOffset.UtcNow;
+        var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, createdAt);
+        var read = new Mock<ItemResponse<RideIdempotencyRecord>>();
+        read.SetupGet(value => value.Resource).Returns(record);
+        read.SetupGet(value => value.ETag).Returns(string.Empty);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
+            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId,
+            RequestHash, createdAt, CancellationToken.None);
+
+        Assert.False(result);
+        container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+    [Fact]
     public async Task DeleteDoesNotRemoveARecordWithDifferentIdentityRequestHashOrCreationTime()
     {
         var createdAt = DateTimeOffset.UtcNow;
@@ -105,8 +148,10 @@ public sealed class CosmosRideIdempotencyCleanupTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task DeleteReturnsFalseWhenEtagChangesAfterRead()
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.PreconditionFailed)]
+    public async Task DeleteReturnsFalseWhenRecordDisappearsOrChangesAfterRead(HttpStatusCode statusCode)
     {
         var createdAt = DateTimeOffset.UtcNow;
         var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, createdAt);
@@ -121,7 +166,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
                 KeyId, It.IsAny<PartitionKey>(),
                 It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "stale-etag"),
                 It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "idempotency-cleanup", 0));
+            .ThrowsAsync(new CosmosException("record changed or disappeared", statusCode, 0, "idempotency-cleanup", 0));
 
         var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
             container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, createdAt, CancellationToken.None);
