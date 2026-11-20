@@ -281,7 +281,7 @@ export default function App() {
   const startDemoSession = async () => {
     try {
       setError("");
-      const response = await request("/api/v1/auth/demo/driver", { method: "POST" });
+      const response = await jsonRequest("/api/v1/auth/demo/driver", { method: "POST" });
       if (!response?.isDemo || response?.user?.role !== "Driver") throw new Error("Invalid demo session response.");
       setUser(requireAppRole<User>(response.user, "Driver"));
       setDemoTab("Home");
@@ -1223,6 +1223,8 @@ export default function App() {
       <Pressable style={[styles.secondary,{marginTop:16}]} onPress={()=>{setDemoMode(false);setDemoTab("Home");}}><Text style={styles.secondaryText}>Exit demo</Text></Pressable>
     </ScrollView>
   </SafeAreaView>;
+
+  if (!user) return null;
 
   const position = membership.position;
   const tabs = ["Home", "Queue", "Trips", "Payslips", "Profile"] as const;
