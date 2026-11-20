@@ -286,14 +286,16 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         .ExecuteAsync(context);
 }));
 
-// Authentication responses may contain access/refresh tokens or personal profile data.
-// Prevent browsers, proxies and intermediaries from storing any auth-route response.
+// API and realtime responses can contain private profile/ride data, auth tokens or
+// SignalR connection credentials. Prevent browsers, proxies and intermediaries from
+// storing them; keep health checks and the development OpenAPI document outside this policy.
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api/v1/auth"))
+    if (context.Request.Path.StartsWithSegments("/api/v1") ||
+        context.Request.Path.StartsWithSegments("/hubs/rides"))
     {
         // Register at response start so exception-handler Response.Clear() cannot
-        // remove the non-cacheable policy from an auth-route error response.
+        // remove the non-cacheable policy from an API/realtime error response.
         context.Response.OnStarting(() =>
         {
             context.Response.Headers["Cache-Control"] = "no-store";

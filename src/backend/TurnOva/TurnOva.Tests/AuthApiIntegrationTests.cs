@@ -1005,6 +1005,7 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/driver/availability");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
         Assert.Empty(handler.Requests);
     }
 
@@ -1052,6 +1053,7 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/driver/availability");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertNoStoreHeaders(response);
         Assert.Empty(handler.Requests);
     }
 
@@ -1082,6 +1084,28 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/driver/availability");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task RideHubNegotiationResponseDoesNotCacheConnectionCredentials()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("SignalR negotiation must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(role: "Driver"));
+
+        using var response = await client.PostAsync("/hubs/rides/negotiate?negotiateVersion=1", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(body.RootElement.TryGetProperty("connectionToken", out var connectionToken));
+        Assert.Equal(JsonValueKind.String, connectionToken.ValueKind);
+        Assert.False(string.IsNullOrWhiteSpace(connectionToken.GetString()));
         Assert.Empty(handler.Requests);
     }
 
@@ -1158,6 +1182,13 @@ public sealed class AuthApiIntegrationTests
             expires ?? DateTime.UtcNow.AddMinutes(5),
             credentials);
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private static void AssertNoStoreHeaders(HttpResponseMessage response)
+    {
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, string json) =>
