@@ -32,7 +32,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         {
             var response = await locks.CreateItemAsync(
                 document, new PartitionKey(document.Id), cancellationToken: cancellationToken);
-            return ToLease(document, response.ETag);
+            return ToLease(response.Resource, response.ETag, owner);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
@@ -82,7 +82,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
                 new PartitionKey(replacement.Id),
                 new ItemRequestOptions { IfMatchEtag = expected.ETag },
                 cancellationToken);
-            return ToLease(replacement, response.ETag);
+            return ToLease(response.Resource, response.ETag, newOwner);
         }
         catch (CosmosException ex) when (
             ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed)
@@ -120,14 +120,19 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         }
     }
 
-    private static CosmosMigrationLease ToLease(CosmosMigrationLeaseDocument document, string etag)
+    private static CosmosMigrationLease ToLease(
+        CosmosMigrationLeaseDocument? document,
+        string etag,
+        string? expectedOwner = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (!string.Equals(document.Id, LeaseId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(document.Owner) ||
+            (expectedOwner is not null &&
+                !string.Equals(document.Owner, expectedOwner, StringComparison.Ordinal)) ||
             string.IsNullOrWhiteSpace(etag))
             throw new InvalidOperationException(
-                "Cosmos returned migration lease metadata without the expected ID, owner and ETag.");
+                "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.");
 
         return new(document.Id, document.Owner, etag, document.ExpiresAtUtc);
     }
