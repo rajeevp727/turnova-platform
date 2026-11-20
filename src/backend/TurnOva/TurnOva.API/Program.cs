@@ -3554,6 +3554,7 @@ app.MapPost("/api/v1/rider/bookings", async (
             riderId,
             rideId,
             requestFingerprint,
+            idempotencyRecord.CreatedAtUtc!.Value,
             CancellationToken.None);
     }
 
