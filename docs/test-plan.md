@@ -3871,3 +3871,14 @@ Covered by `AuthApiIntegrationTests.UnhandledAuthRouteExceptionStillReturnsNoSto
 Covered by `AuthApiIntegrationTests.AuthRouteCorsPreflightStillReturnsNoStoreHeaders`. The auth no-store middleware now runs after the outer exception handler but before CORS and Development HTTPS redirection, so CORS preflight and redirect responses retain the same non-cacheable policy without changing the existing Development CORS-before-HTTPS behavior. This is supplemental API security coverage and does not add a row to the 19-area MVP acceptance denominator.
 
 **Exact source/test evidence:** source/test head `7e16f61b1545514c608092a05dc44b1c2c9ce9f3` passed exact-head API-only CI [#44780717714](https://github.com/rajeevp727/turnova-platform/actions/runs/44780717714): **936/936 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 API publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14652587015](https://github.com/rajeevp727/turnova-platform/actions/runs/44780717714/artifacts/14652587015). Mobile/mobile-auth/Android/emulator/iOS jobs were intentionally skipped under the API-only phase gate.
+
+
+## AUTH-API-020 — rejected-origin CORS preflight remains non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-020 | A browser sends an OPTIONS preflight to an authentication route from an origin not listed in `Cors:AllowedOrigins` | HTTP 204 with no `Access-Control-Allow-Origin`; the response still includes `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request is made | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.AuthRouteCorsPreflightFromDisallowedOriginStillReturnsNoStoreHeaders`. The test distinguishes an allowed-origin preflight from a rejected-origin preflight and verifies that the auth cache policy also wraps the latter CORS short-circuit. CORS is a browser access policy, not a substitute for API authentication/authorization. This is supplemental security coverage outside the 19-row MVP acceptance denominator.
+
+Exact source/test head [`f839b60224f8deb5d38a653562366d8750236628`](https://github.com/rajeevp727/turnova-platform/commit/f839b60224f8deb5d38a653562366d8750236628) passed [CI #44788943890](https://github.com/rajeevp727/turnova-platform/actions/runs/44788943890): 937/937 backend tests, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14656290784](https://github.com/rajeevp727/turnova-platform/actions/runs/44788943890/artifacts/14656290784).
