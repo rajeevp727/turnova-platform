@@ -550,13 +550,36 @@ while true; do
   capture_app_runtime_logcat
 done
 
-for expected_text in "Welcome back" "Email address" "Password" "Sign in"; do
+# PR #199 replaced the email/password login screen with a restricted demo
+# entry point. Verify the actual role-specific demo CTA and read-only notice
+# instead of asserting text that no longer exists in either app.
+case "$EXPECTED_ID" in
+  com.turnova.rider)
+    expected_demo_cta="Continue as Demo Rider"
+    expected_demo_resource="rider-demo-login"
+    ;;
+  com.turnova.driver)
+    expected_demo_cta="Continue as Demo Driver"
+    expected_demo_resource="driver-demo-login"
+    ;;
+  *)
+    echo "No Android demo-screen smoke expectations are configured for $EXPECTED_ID." >&2
+    exit 2
+    ;;
+esac
+
+for expected_text in "Offline demo access" "$expected_demo_cta" "Demo mode is read-only"; do
   if ! grep -Fq "$expected_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
-    echo "Android login screen is missing expected visible/accessibility text: $expected_text" >&2
+    echo "Android demo screen is missing expected visible/accessibility text: $expected_text" >&2
     cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
     exit 1
   fi
 done
+if ! grep -Fq "resource-id=\"$expected_demo_resource\"" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+  echo "Android demo CTA is missing its stable accessibility resource ID: $expected_demo_resource" >&2
+  cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+  exit 1
+fi
 for forbidden_text in "Unable to restore your session" "Unable to restore session" "Session expired" "Unable to clear secure session storage"; do
   if grep -Fq "$forbidden_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
     echo "Android fresh-install login UI contains an unexpected session/storage error: $forbidden_text" >&2
@@ -652,7 +675,7 @@ with open(output, "w", encoding="utf-8") as stream:
         "install": "passed",
         "launch": "passed",
         "processStableAfterStartup": True,
-        "loginScreenTextVerified": True,
+        "demoEntryScreenTextVerified": True,
         "staleSessionErrorAbsent": True,
         "systemUiRecovery": {
             "pixelLauncherAnrWaitAttempts": int(pixel_launcher_wait_attempts),
