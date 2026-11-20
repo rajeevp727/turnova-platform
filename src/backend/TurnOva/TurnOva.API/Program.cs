@@ -3536,12 +3536,25 @@ app.MapPost("/api/v1/rider/bookings", async (
     async Task RemoveIdempotencyRecordAsync()
     {
         if (isIdempotencyRecovery) return;
-        if (idempotencyContainer is null) bookingIdempotency.TryRemove(idempotencyIndex, out _);
-        else
+        if (idempotencyContainer is null)
         {
-            try { await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct); }
-            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+            // Remove only the record created by this request. A stale failure path must
+            // not delete a replacement record installed after a retry/recovery race.
+            InMemoryRideIdempotencyReservations.TryRemoveExact(
+                bookingIdempotency, idempotencyIndex, idempotencyRecord);
+            return;
         }
+
+        // Cosmos cleanup is compare-and-delete: validate the exact Rider/ride/request
+        // identity and delete with the observed ETag so a newer record cannot be removed.
+        await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
+            idempotencyContainer,
+            keyId,
+            new PartitionKey(riderId),
+            riderId,
+            rideId,
+            requestFingerprint,
+            CancellationToken.None);
     }
 
     if (await HasActiveRiderBookingAsync(riderId, rideId, requestFingerprint, ct))
