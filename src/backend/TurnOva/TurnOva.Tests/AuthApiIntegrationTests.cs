@@ -56,6 +56,23 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task DemoTokenCannotAccessNormalAuthenticatedEndpoints()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
+        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task DemoSessionRejectsUnsupportedRole()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
