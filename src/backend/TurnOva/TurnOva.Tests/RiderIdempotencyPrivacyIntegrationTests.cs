@@ -12,7 +12,7 @@ namespace TurnOva.Tests;
 public sealed partial class RideApiIntegrationTests
 {
     [Fact]
-    public async Task SelectedBookingIdempotencyReplayCannotReturnAnotherRidersRide()
+    public async Task StaleSelectedBookingIdempotencyReplayCannotRecoverAnotherRidersRide()
     {
         const string ownerId = "selected-idempotency-owner";
         const string otherRiderId = "selected-idempotency-other";
@@ -38,7 +38,7 @@ public sealed partial class RideApiIntegrationTests
             $"{otherRiderId}:{replayKeyId}",
             new RideIdempotencyRecord(
                 replayKeyId, otherRiderId, ownedRideId,
-                originalRecord.RequestHash, DateTimeOffset.UtcNow)));
+                originalRecord.RequestHash, DateTimeOffset.UtcNow.AddMinutes(-2))));
 
         using var replayRequest = CreateSelectedBookingRequest(
             replayKey, driverId, unionId, "KPHB", "HITEC City", []);
