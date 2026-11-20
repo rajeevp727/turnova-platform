@@ -191,6 +191,34 @@ public sealed class SupportRequestApiIntegrationTests
     }
 
     [Fact]
+    public async Task TestingInMemoryPersistenceRemainsReady()
+    {
+        using var factory = new SupportApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/health/ready");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("ready", body.RootElement.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task StagingInMemoryPersistenceDoesNotReportReady()
+    {
+        using var factory = new SupportApiFactory("Staging");
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/health/ready");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, body.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal("Storage dependency unavailable", body.RootElement.GetProperty("title").GetString());
+        Assert.Equal("The configured storage dependency is not reachable.", body.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
     public void StagingSupportIntakeCannotEnableWithoutApprovedRetentionDays()
     {
         using var factory = new SupportApiFactory("Staging", policyApproved: true);
