@@ -531,4 +531,23 @@ public sealed class CosmosMigrationLeaseStoreTests
             store.ReadAsync(CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task ReplaceRejectsBlankNewOwnerBeforeCallingCosmos(string newOwner)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var store = new CosmosMigrationLeaseStore(container.Object);
+        var expected = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-observed", DateTimeOffset.UtcNow.AddMinutes(10));
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.TryReplaceAsync(
+                expected, newOwner, DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None));
+
+        Assert.Equal("newOwner", exception.ParamName);
+        container.VerifyNoOtherCalls();
+    }
+
 }
