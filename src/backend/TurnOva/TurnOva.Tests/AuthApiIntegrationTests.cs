@@ -65,6 +65,8 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.PostAsync($"/api/v1/auth/demo/{role}", null);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.True(body.RootElement.GetProperty("isDemo").GetBoolean());
         Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("refreshToken").ValueKind);
