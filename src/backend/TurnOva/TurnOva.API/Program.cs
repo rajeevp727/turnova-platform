@@ -297,6 +297,7 @@ app.UseAuthentication();
 app.Use(async (context, next) =>
 {
     var explicitlyMarkedDemoEndpoint =
+        (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)) &&
         context.Request.Path.StartsWithSegments("/api/v1/demo") &&
         context.GetEndpoint()?.Metadata.GetMetadata<DemoEndpointMetadata>() is not null;
     if (context.User.Identity?.IsAuthenticated == true &&
@@ -330,6 +331,10 @@ if (app.Environment.IsEnvironment("Testing"))
         .RequireAuthorization()
         .ExcludeFromDescription();
     app.MapGet("/api/v1/demo/__test/marked", () => Results.Ok(new { status = "reached" }))
+        .RequireAuthorization()
+        .WithMetadata(new DemoEndpointMetadata())
+        .ExcludeFromDescription();
+    app.MapPost("/api/v1/demo/__test/marked-write", () => Results.Ok(new { status = "reached" }))
         .RequireAuthorization()
         .WithMetadata(new DemoEndpointMetadata())
         .ExcludeFromDescription();
@@ -1523,7 +1528,12 @@ authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
         user = new { id = subject, email, name, role = appRole, isDemo = true }
     });
 }).AllowAnonymous()
-  .RequireRateLimiting(DemoAuthPolicy.RateLimitPolicyName);
+  .RequireRateLimiting(DemoAuthPolicy.RateLimitPolicyName)
+  .WithSummary("Issue a restricted Rider or Driver demo session")
+  .WithDescription("Returns a fixed 30-minute demo identity only when DemoAuth is explicitly enabled in an allowlisted non-production environment. Demo tokens cannot access normal Rider/Driver APIs. Issuance is limited to 10 requests per server-observed remote IP per minute.")
+  .Produces(StatusCodes.Status404NotFound)
+  .Produces(StatusCodes.Status429TooManyRequests)
+  .Produces(StatusCodes.Status503ServiceUnavailable);
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
     CancellationToken ct) =>

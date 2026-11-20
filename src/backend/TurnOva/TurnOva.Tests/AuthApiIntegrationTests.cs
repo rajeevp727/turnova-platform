@@ -163,6 +163,24 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task DemoTokenCannotAccessAnExplicitlyMarkedMutationEndpoint()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
+        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.PostAsync("/api/v1/demo/__test/marked-write", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
@@ -323,6 +341,7 @@ public sealed class AuthApiIntegrationTests
         Assert.True(paths.TryGetProperty("/api/v1/auth/{role}/login", out var loginPath));
         Assert.True(paths.TryGetProperty("/api/v1/auth/{role}/register", out var registerPath));
         Assert.True(paths.TryGetProperty("/api/v1/auth/refresh", out var refreshPath));
+        Assert.True(paths.TryGetProperty("/api/v1/auth/demo/{role}", out var demoAuthPath));
         Assert.True(paths.TryGetProperty("/api/v1/rider/discovery", out _));
         Assert.True(paths.TryGetProperty("/api/v1/rider/bookings", out var riderBookingPath));
         Assert.True(paths.TryGetProperty("/api/v1/driver/rides/{rideId}/payment-report", out var paymentReportPath));
@@ -331,6 +350,9 @@ public sealed class AuthApiIntegrationTests
         Assert.True(paths.TryGetProperty("/api/v1/ops/unions", out var opsUnionsPath));
         Assert.False(paths.TryGetProperty("/__test/throw", out _),
             "Testing-only exception routes must not appear in the published API contract.");
+        Assert.False(paths.TryGetProperty("/api/v1/demo/__test/unmarked", out _));
+        Assert.False(paths.TryGetProperty("/api/v1/demo/__test/marked", out _));
+        Assert.False(paths.TryGetProperty("/api/v1/demo/__test/marked-write", out _));
 
         var schemes = root.GetProperty("components").GetProperty("securitySchemes");
         Assert.Equal("http", schemes.GetProperty("Bearer").GetProperty("type").GetString());
@@ -343,6 +365,12 @@ public sealed class AuthApiIntegrationTests
         Assert.False(loginPath.GetProperty("post").TryGetProperty("security", out _));
         Assert.False(registerPath.GetProperty("post").TryGetProperty("security", out _));
         Assert.False(refreshPath.GetProperty("post").TryGetProperty("security", out _));
+        var demoAuthOperation = demoAuthPath.GetProperty("post");
+        Assert.False(demoAuthOperation.TryGetProperty("security", out _));
+        var demoAuthResponses = demoAuthOperation.GetProperty("responses");
+        Assert.True(demoAuthResponses.TryGetProperty("404", out _));
+        Assert.True(demoAuthResponses.TryGetProperty("429", out _));
+        Assert.True(demoAuthResponses.TryGetProperty("503", out _));
 
         foreach (var security in new[]
         {
