@@ -16,7 +16,8 @@ public sealed class CosmosRideIdempotencyCleanupTests
     [Fact]
     public async Task DeleteUsesObservedEtagForTheExactRiderRideAndRequest()
     {
-        var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, DateTimeOffset.UtcNow);
+        var createdAt = DateTimeOffset.UtcNow;
+        var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, createdAt);
         var read = new Mock<ItemResponse<RideIdempotencyRecord>>();
         read.SetupGet(value => value.Resource).Returns(record);
         read.SetupGet(value => value.ETag).Returns("observed-etag");
@@ -38,7 +39,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
             .ReturnsAsync(deleted.Object);
 
         var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-            container.Object, KeyId, partitionKey, RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, cancellation.Token);
+            container.Object, KeyId, partitionKey, RiderId, RideId, RequestHash, createdAt, cancellation.Token);
 
         Assert.True(result);
         container.Verify(value => value.ReadItemAsync<RideIdempotencyRecord>(
@@ -51,16 +52,17 @@ public sealed class CosmosRideIdempotencyCleanupTests
     }
 
     [Fact]
-    public async Task DeleteDoesNotRemoveARecordWithDifferentIdentityOrRequestHash()
+    public async Task DeleteDoesNotRemoveARecordWithDifferentIdentityRequestHashOrCreationTime()
     {
-        var original = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, DateTimeOffset.UtcNow);
+        var createdAt = DateTimeOffset.UtcNow;
+        var original = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, createdAt);
         var replacements = new[]
         {
             original with { id = "different-key" },
             original with { riderId = "different-rider" },
             original with { rideId = "different-ride" },
             original with { RequestHash = "different-hash" },
-            original with { CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(1) }
+            original with { CreatedAtUtc = createdAt.AddMinutes(1) }
         };
 
         foreach (var replacement in replacements)
@@ -74,7 +76,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
                 .ReturnsAsync(read.Object);
 
             var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, CancellationToken.None);
+                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, createdAt, CancellationToken.None);
 
             Assert.False(result);
             container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
@@ -94,7 +96,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
             .ThrowsAsync(new CosmosException("missing", HttpStatusCode.NotFound, 0, "idempotency-cleanup", 0));
 
         var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, CancellationToken.None);
+            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, createdAt, CancellationToken.None);
 
         Assert.False(result);
         container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
@@ -105,7 +107,8 @@ public sealed class CosmosRideIdempotencyCleanupTests
     [Fact]
     public async Task DeleteReturnsFalseWhenEtagChangesAfterRead()
     {
-        var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, DateTimeOffset.UtcNow);
+        var createdAt = DateTimeOffset.UtcNow;
+        var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, createdAt);
         var read = new Mock<ItemResponse<RideIdempotencyRecord>>();
         read.SetupGet(value => value.Resource).Returns(record);
         read.SetupGet(value => value.ETag).Returns("stale-etag");
