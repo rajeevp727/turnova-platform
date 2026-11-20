@@ -174,10 +174,12 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task StagingSupportIntakeFailsClosedUntilPolicyIsApproved()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public async Task NonDevelopmentSupportIntakeFailsClosedUntilPolicyIsApproved(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging");
+        using var factory = new SupportApiFactory(environmentName);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
         client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-staging-01");
@@ -203,10 +205,12 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Equal("ready", body.RootElement.GetProperty("status").GetString());
     }
 
-    [Fact]
-    public async Task StagingInMemoryPersistenceDoesNotReportReady()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public async Task NonDevelopmentInMemoryPersistenceDoesNotReportReady(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging");
+        using var factory = new SupportApiFactory(environmentName);
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/health/ready");
@@ -242,10 +246,12 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Contains("Non-development support intake requires CosmosDb:Endpoint and CosmosDb:Key", exception.ToString());
     }
 
-    [Fact]
-    public async Task StagingSupportIntakeReturns503BeforeParsingMalformedBody()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public async Task NonDevelopmentSupportIntakeReturns503BeforeParsingMalformedBody(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging");
+        using var factory = new SupportApiFactory(environmentName);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
         using var content = new StringContent("{not-json", Encoding.UTF8, "application/json");
