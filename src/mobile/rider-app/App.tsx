@@ -328,6 +328,18 @@ export default function App() {
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
+  const startDemoSession = async () => {
+    try {
+      setError("");
+      const response = await request("/api/v1/auth/demo/rider", { method: "POST" });
+      if (!response?.isDemo || response?.user?.role !== "Rider") throw new Error("Invalid demo session response.");
+      setUser(requireAppRole<User>(response.user, "Rider"));
+      setDemoTab("Book");
+      setDemoMode(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to start demo session. Check API availability and demo configuration.");
+    }
+  };
   const authenticate = async () => {
     if(!tryBeginRiderAuthSubmission(authSubmissionInFlight))return;
     let authEpoch = sessionEpoch.current;
@@ -523,9 +535,9 @@ export default function App() {
       {themePicker}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Offline demo access</Text>
-        <Text style={styles.muted}>No email or password required. Demo data stays on this screen and is not sent to a server.</Text>
-        <Pressable testID="rider-demo-login" style={styles.primary} onPress={()=>{setDemoTab("Book");setDemoMode(true);}}><Text style={styles.primaryText}>Continue as Demo Rider</Text></Pressable>
-        <Text style={styles.muted}>Demo mode is read-only. Booking, payments and live tracking are unavailable.</Text>
+        <Text style={styles.muted}>No email or password required. The API issues a restricted demo session that cannot access real user or ride data.</Text>
+        <Pressable testID="rider-demo-login" style={styles.primary} onPress={startDemoSession}><Text style={styles.primaryText}>Continue as Demo Rider</Text></Pressable>
+        {error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.muted}>Demo mode is read-only. Booking, payments and live tracking are unavailable.</Text>
       </View>
     </ScrollView>
   </SafeAreaView>;
@@ -536,7 +548,7 @@ export default function App() {
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={styles.eyebrow}>RIDER DEMO</Text>
       <Text style={styles.title}>{demoTab==="Book"?"Where to?":demoTab}</Text>
-      <Text style={styles.sub}>Sample content only. No API connection, real booking, payment or live driver tracking.</Text>
+      <Text style={styles.sub}>Sample content only. Demo session is restricted; real booking, payment and live tracking are unavailable.</Text>
       {demoTab==="Book"&&<View style={styles.card}>
         <Text style={styles.label}>SAMPLE TRIP</Text><Text style={styles.cardTitle}>Nizampet → HITEC City</Text>
         <Text style={styles.muted}>Cab · 1 passenger · Sample estimate ₹280–₹340</Text>
