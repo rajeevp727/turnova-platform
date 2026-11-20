@@ -3949,3 +3949,24 @@ The regression found that setting `Response.ContentType` before `WriteAsJsonAsyn
 Covered by `AuthApiIntegrationTests.DemoSessionIssuanceIsRateLimitedPerRemoteAddress`. The shared rate-limiter rejection callback also serves AI assistance; AI-044 separately verifies the same Problem Details and non-cacheable response contract for authenticated AI help. Demo auth remains opt-in and restricted to the configured non-production environment allow-list. The limiter is process-local; multi-instance exposure still requires shared/edge rate limiting and trusted forwarded-header configuration.
 
 Source/test head [`ed9faf6c345db33dc2336805580f2007cae9aade`](https://github.com/rajeevp727/turnova-platform/commit/ed9faf6c345db33dc2336805580f2007cae9aade) passed exact-head API-only CI [#44827321958](https://github.com/rajeevp727/turnova-platform/actions/runs/44827321958): **945/945 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier, artifact [14674272359](https://github.com/rajeevp727/turnova-platform/actions/runs/44827321958/artifacts/14674272359). DEMO-AUTH-014 is an API test case, not an additional MVP acceptance area.
+
+
+## AUTH-API-025 — non-auth API exception responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-025 | A Testing-only unhandled exception occurs on `GET /api/v1/__test/throw`, outside the authentication route group | HTTP 500 generic Problem Details with `Cache-Control: no-store` and `Pragma: no-cache`; exception text is not disclosed and TriSend is not called | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnhandledApiExceptionOutsideAuthStillReturnsNoStoreHeaders`. The fixture exists only in the Testing environment and is excluded from OpenAPI. It proves the response-start cache policy applies to generic application API errors as well as `/api/v1/auth` errors after exception-handler response clearing.
+
+Source/test head [`f23725fe7446e2718831268e9dbf28c056d27d4a`](https://github.com/rajeevp727/turnova-platform/commit/f23725fe7446e2718831268e9dbf28c056d27d4a) passed exact-head API-only CI [#44829152846](https://github.com/rajeevp727/turnova-platform/actions/runs/44829152846): **946/946 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14675407783](https://github.com/rajeevp727/turnova-platform/actions/runs/44829152846/artifacts/14675407783).
+
+## AUTH-API-026 — SignalR negotiate responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-026 | A demo JWT is supplied through SignalR's `access_token` query parameter to `POST /hubs/rides/negotiate` | HTTP 403 with `Cache-Control: no-store` and `Pragma: no-cache`; the demo token is rejected before hub negotiation and no TriSend call occurs | API realtime integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.DemoTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken`. The test asserts the realtime response cache policy on the special SignalR query-token transport path as well as the existing 403 restriction.
+
+Source/test head [`8dd40521b55e9d4aaa6fc9a0b4ea8f4fd286ef1e`](https://github.com/rajeevp727/turnova-platform/commit/8dd40521b55e9d4aaa6fc9a0b4ea8f4fd286ef1e) passed exact-head API-only CI [#44829652135](https://github.com/rajeevp727/turnova-platform/actions/runs/44829652135): **946/946 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier, and artifact [14675448230](https://github.com/rajeevp727/turnova-platform/actions/runs/44829652135/artifacts/14675448230). Mobile/Android/iOS jobs were intentionally skipped under the API phase gate.
