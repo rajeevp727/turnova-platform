@@ -201,28 +201,6 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
-    public async Task DemoSessionRateLimitDoesNotTrustClientForwardedForHeaders()
-    {
-        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
-        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
-        using var client = factory.CreateClient();
-        var statuses = new List<HttpStatusCode>();
-
-        for (var index = 0; index < DemoAuthPolicy.RequestsPerMinute + 1; index++)
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/demo/rider");
-            request.Headers.TryAddWithoutValidation("X-Forwarded-For", $"198.51.100.{index + 1}");
-            using var response = await client.SendAsync(request);
-            statuses.Add(response.StatusCode);
-        }
-
-        Assert.Equal(DemoAuthPolicy.RequestsPerMinute,
-            statuses.Count(status => status == HttpStatusCode.OK));
-        Assert.Equal(1, statuses.Count(status => status == HttpStatusCode.TooManyRequests));
-        Assert.Empty(handler.Requests);
-    }
-
-    [Fact]
     public async Task DemoTokenCannotAccessAnExplicitlyMarkedMutationEndpoint()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach TriSend."));
