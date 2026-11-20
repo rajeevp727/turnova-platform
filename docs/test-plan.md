@@ -3673,3 +3673,10 @@ Covered by `RiderIdempotencyPrivacyIntegrationTests.StaleSelectedBookingIdempote
 | RID-IDEM-009 | A failed selected-booking request races with replacement of its in-memory or Cosmos idempotency record | In-memory cleanup uses atomic key/value compare-and-remove. Cosmos cleanup point-reads and validates id, Rider, ride, request hash and creation timestamp, then deletes with the observed ETag. HTTP 404/412 are treated as a lost cleanup race; non-race provider failures propagate. A replacement record is never deleted. | Deterministic in-memory + mocked Cosmos adapter unit | P0 |
 
 Covered by `InMemoryRideIdempotencyReservationsTests.TryRemoveExactDoesNotDeleteAReplacementBookingRecord` and nine deterministic `CosmosRideIdempotencyCleanupTests` cases: exact ETag deletion; missing Resource; missing ETag; mismatched identity/hash/timestamp; missing record before read; post-read HTTP 404 and 412 lost races; non-race provider failure; and pre-cancelled token. The additional metadata and HTTP 404 cases are in the current API PR source/test increment; its exact-head CI is pending. Live Cosmos ETag contention remains an external gate.
+## RID-IDEM-010 — selected-booking replay validates its persisted idempotency envelope — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-IDEM-010 | A Rider-scoped idempotency record has a mismatched key ID, Rider ID or blank ride ID while its request hash matches | The API returns a generic HTTP 409 before trusting the stored ride pointer or changing reservations. No ride ID is exposed and the Rider's existing reservation remains unchanged. | API integration / idempotency integrity | P0 |
+
+Covered by `RiderIdempotencyPrivacyIntegrationTests.SelectedBookingReplayRejectsMismatchedIdempotencyEnvelope` (three deterministic cases: mismatched id, mismatched Rider ID and blank ride ID). Exact-head CI for this increment is pending. The record is partition-key scoped, but the persisted identity envelope is validated independently before replay/recovery.
