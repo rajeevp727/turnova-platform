@@ -433,6 +433,41 @@ jobs:
           path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
+      # Keep the universal APK above for x86_64 emulator smoke tests and older devices.
+      # Also publish an ARM64-only APK for modern physical Android phones.
+      - name: Compile ARM64-only standalone release APK
+        working-directory: src/mobile/${{ matrix.app }}/android
+        run: '"$HOME/.gradle/turnova-distributions/gradle-8.14.3/bin/gradle" --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a assembleRelease'
+      - name: Verify ARM64-only APK and report size
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          python3 - "$apk" <<'PY'
+          import sys
+          import zipfile
+
+          apk = sys.argv[1]
+          with zipfile.ZipFile(apk) as archive:
+              native = sorted({
+                  name.split("/")[1]
+                  for name in archive.namelist()
+                  if name.startswith("lib/") and name.endswith(".so") and len(name.split("/")) > 2
+              })
+          if not native:
+              raise SystemExit("APK contains no native libraries; cannot verify ABI filtering.")
+          if native != ["arm64-v8a"]:
+              raise SystemExit(f"Expected ARM64-only native libraries; found ABIs: {native}")
+          size = __import__("os").path.getsize(apk)
+          print(f"Verified ARM64-only APK: {size / 1024 / 1024:.2f} MiB ({size} bytes)")
+          PY
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.app }}-android-arm64-release-apk
+          path: src/mobile/${{ matrix.app }}/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
 
   native-ios:
     needs: [scope, mobile-ios, mobile-auth-tests]
