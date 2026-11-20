@@ -418,6 +418,8 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/auth/me");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(handler.Requests);
     }
 
@@ -584,6 +586,8 @@ public sealed class AuthApiIntegrationTests
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         using var responseJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(accessToken, responseJson.RootElement.GetProperty("accessToken").GetString());
         Assert.Equal(refreshToken, responseJson.RootElement.GetProperty("refreshToken").GetString());
