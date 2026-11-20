@@ -1,12 +1,12 @@
-#uuundefinedundundefundefinednedfinedefineddefinedndefinednunundundefinedfinedundefinedfinedundefinedfinedTuuundefineddefundefinednednOvundefinedundefinedPundefinedundefinedjeundefinedundefinedundefinedBundefinedundefinedin
+# TurnOva Project Brain
 
->undefinedCundefinedundefinedundefinedundefinedundefinedundefinedundefinedwundefinedundefinedundefinedingundefinedundefinedundefinednundefinedexundefined fundefinedr future undefinedeveundefinedopment undefinedeundefinedsions. Reundefinedd tundefinedis undefinedefore undefinedoding; update it in tundefinede same feature PR whenever project state changes.
+> Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in PRD.md, docs/architecture.md, and docs/test-plan.md.
 
-**Last verifiedundefined** 2026-11-20
-**Repositorundefined:** https://githuundefined.com/rajeevp727/turnova-platform
+**Last verified:** 2026-11-20
+**Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `4061357c095debbc31fc5027a7bff27bd8b06265`
-**Current phase:** API `complete`; Android `in_progress` undefinedRider firstundefined; iOS `not_started`.
+**Current phase:** API `complete`; Android `in_progress` (Rider first); iOS `not_started`.
 
 **API engineering exit:** PR #184 records the engineering-only API exit. PR #197 merged at `8d5bcb6b913f51250d9f0fc4f0d521a973130747`; exact-head API CI [#44678941800](https://github.com/rajeevp727/turnova-platform/actions/runs/44678941800) passed 897/897 backend tests, Release build and native non-container .NET 10 publish/verifier. This is engineering exit, not live Cosmos or production readiness.
 
@@ -3230,12 +3230,11 @@ Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH
 
 Source/test commit `f5e59cb8ebffcb2cee510b0b7fa8e5f90e781876` adds `AuthApiIntegrationTests.DisablingDemoAuthAfterIssuanceRejectsStillValidDemoToken`: issue a Rider demo JWT with DemoAuth enabled, verify the marked read-only GET succeeds, change the running host's IConfiguration flag to false, and verify the same unexpired token is rejected with HTTP 403. Exact-head [CI #44709040357](https://github.com/rajeevp727/turnova-platform/actions/runs/44709040357) passed 930/930 backend tests, Release build, native non-container .NET 10 publish/verifier and artifact [14615948841](https://github.com/rajeevp727/turnova-platform/actions/runs/44709040357/artifacts/14615948841). This is supplemental security evidence, not a new 19-row acceptance item and not live distributed-rate-limit or production evidence. PR #200 remains the sole active feature PR and requires independent human approval before merge; after merge, re-audit main and resume Android Rider first.
 
-## Latest demo-auth boundary checkpoint — 2026-11-20
+## Latest API-only demo-auth handoff — 2026-11-20
 
-- Current main remains `4061357c095debbc31fc5027a7bff27bd8b06265`; phase config remains API `complete`, Android `in_progress` (Rider first), iOS `not_started`.
-- PR #200 remains the sole ready/active API follow-up. Latest source/test head is `444fbba3dd91b0531ce5fa42358ccf7b65e10af6`, based on `238728a0bb3dffe990cd4626615a4d927f814a12`; latest documentation-bearing head is the current PR #200 head; use GitHub PR metadata for its exact SHA and do not reuse an earlier CI result. Source/test head `444fbba3dd91b0531ce5fa42358ccf7b65e10af6` and documentation-bearing head `4dba640291450f22502938d61f3f0d17d66a1e76` passed exact-head CI [#44712638042](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042): 932/932 backend tests, Release build, native non-container .NET 10 publish/verifier and artifact [14618770509](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042/artifacts/14618770509). The 25 xUnit analyzer warnings and 0 build errors remain; mobile/Android/iOS jobs were skipped. Documentation-bearing head `70dd7daf0321c3296b2a2c94af070dd8f8e3a808` passed exact-head CI #44713368501: 932/932 backend tests, Release build, native non-container publish/verifier and artifact 14618073750. Check PR metadata for any later head before relying on this evidence.
-- DEMO-AUTH-012 proves explicit metadata outside `/api/v1/demo` is insufficient (403); DEMO-AUTH-013 proves a marked HEAD route within the demo path is permitted (200). Both use Testing-only routes excluded from OpenAPI. No production demo business endpoint was added.
-- Code commits: `babd3c09a870a89210cedb80c229bd2dcb08e517` and `444fbba3dd91b0531ce5fa42358ccf7b65e10af6`. Exact-head CI for the current head is pending/not yet observed.
-- PR #200 still requires independent human approval. All recorded reviews are owner-authored COMMENT-only. Do not self-approve or merge. PR #197 merged without independent approval recorded; this historical exception remains disclosed. PR #196/#198 remain Draft/parked.
-- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established. Live Cosmos, shared demo rate limiting/trusted proxy, Staging/QA provisioning, production identity/hosting/providers, product policy, private media, legal and physical-device/signing gates remain external.
-- Next exact action: verify exact-head CI for `444fbba3dd91b0531ce5fa42358ccf7b65e10af6`, obtain independent human approval for PR #200, then re-read main before any Rider Android continuation. Do not advance Driver before Rider exits or iOS before both Android apps exit.
+- Main phase config says API `complete`, Android `in_progress` (Rider first), iOS `not_started`; however, PR #197 merged without independent human approval recorded. The user's explicit review gate is therefore unresolved. Do not start Android until an independent reviewer/user resolves the merged-PR approval exception.
+- PR #200 is the sole ready/active API follow-up, branch `test/api-nondev-support-readiness-20261120`. Code/test head: `444fbba3dd91b0531ce5fa42358ccf7b65e10af6`; docs restoration commit in progress at this branch tip. No merge without independent human approval.
+- DEMO-AUTH-012 covers marked metadata outside `/api/v1/demo` (403); DEMO-AUTH-013 covers marked HEAD within the demo prefix (200). Both fixtures are Testing-only and excluded from OpenAPI.
+- Code/test head passed exact-head CI [#44712638042](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042): 932/932 backend tests, Release build, native non-container .NET 10 publish/verifier and artifact [14618770509](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042/artifacts/14618770509). The intermediate docs snapshot was malformed; this commit restores the four progress/test/brain documents from clean raw UTF-8 sources and reapplies the evidence. Exact-head CI for the restored docs commit is pending.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). Production readiness is not established. Live Cosmos, shared rate limiting/trusted proxy, Staging/QA, production identity/hosting/providers, product policy, private media, legal and physical-device/signing gates remain external.
+- Next action: verify the restored documentation head and exact-head CI; obtain independent human approval for PR #200; resolve PR #197's missing independent approval before Android. Keep Rider before Driver and both Android apps before iOS.

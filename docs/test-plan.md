@@ -1,13 +1,13 @@
-# TurunundefinedefinedOvundefined Fundefinedaundefinedure Teundefinedundefined Pundefinedan
+# TurnOva Feature Test Plan
 
-**Sundefinedundefinedundefinede:** TurnOva Riundefineder and Driver Cabundefinedonly Android/iOS MVP, including authentication, union-grouped diundefinedcovery, selected-driver negotiation, trip lifecycle, direct-payundefinedent reporting and release gatesundefined Legacy FIFO cases are compatibility regression tests only; they are not the approved customer-facing Rider flow.
+**Scope:** TurnOva Rider and Driver Cab-only Android/iOS MVP, including authentication, union-grouped discovery, selected-driver negotiation, trip lifecycle, direct-payment reporting and release gates. Legacy FIFO cases are compatibility regression tests only; they are not the approved customer-facing Rider flow.
 **Test types:** automated unit/CI, API integration, mobile functional, security, and manual acceptance.
 **Priority:** P0 = release blocker, P1 = high, P2 = normal.
 **Status convention:** Planned means the case is specified but has not yet been executed. A green build/type-check is not evidence that a functional scenario passed. PRD.md §15 is authoritative where earlier test sections describe multi-category or customer-facing FIFO behaviour.
 
 ## Platform phase order
 
-TurnOva delivery is gated in this order: undefined1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
+TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
 
 ## API contract and authentication hardening
 
@@ -3763,8 +3763,4 @@ Covered by `AuthApiIntegrationTests.DemoTokenCannotAccessAnExplicitlyMarkedEndpo
 
 Covered by `AuthApiIntegrationTests.DemoTokenCanAccessAnExplicitlyMarkedHeadDemoEndpoint`. The fixture is Testing-only and excluded from OpenAPI; no public demo business endpoint is added.
 
-
-**DEMO-AUTH-012/013 exact source/test evidence:** code/test head `444fbba3dd91b0531ce5fa42358ccf7b65e10af6` plus documentation-bearing head `4dba640291450f22502938d61f3f0d17d66a1e76` passed exact-head API-only CI [#44712638042](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042): **932/932 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact [14618770509](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042/artifacts/14618770509). The 25 xUnit analyzer warnings and 0 build errors are existing repository warnings. Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-only follow-up. A subsequent documentation-only synchronization requires its own exact-head CI.
-
-
-**Final documentation-head verification:** PR #200 documentation-bearing head `70dd7daf0321c3296b2a2c94af070dd8f8e3a808` passed exact-head API-only CI [#44713368501](https://github.com/rajeevp727/turnova-platform/actions/runs/44713368501): scope/backend success, **932/932 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact [14618073750](https://github.com/rajeevp727/turnova-platform/actions/runs/44713368501/artifacts/14618073750). Build emitted 25 xUnit analyzer warnings and 0 errors. Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped for this API-only PR. No runtime source changed after code/test head `444fbba3dd91b0531ce5fa42358ccf7b65e10af6`.
+**Code/test evidence:** source/test head `444fbba3dd91b0531ce5fa42358ccf7b65e10af6` was included in exact-head API-only CI [#44712638042](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042) at documentation head `4dba640291450f22502938d61f3f0d17d66a1e76`: 932/932 backend tests, Release build, native non-container .NET 10 publish/verifier, artifact [14618770509](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042/artifacts/14618770509). That run proves the source/test changes; it is not used as clean-documentation evidence because the intermediate docs snapshot was malformed. The restored clean-documents head must pass its own exact-head CI.
