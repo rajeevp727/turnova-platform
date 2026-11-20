@@ -90,6 +90,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
     [Fact]
     public async Task DeleteReturnsFalseWhenRecordDisappearsBeforeRead()
     {
+        var createdAt = DateTimeOffset.UtcNow;
         var container = new Mock<Container>(MockBehavior.Strict);
         container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
                 KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
@@ -123,7 +124,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
             .ThrowsAsync(new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "idempotency-cleanup", 0));
 
         var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, CancellationToken.None);
+            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, createdAt, CancellationToken.None);
 
         Assert.False(result);
         container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
