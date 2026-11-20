@@ -296,7 +296,11 @@ app.UseAuthentication();
 // A demo JWT is never accepted by normal authenticated application routes.
 app.Use(async (context, next) =>
 {
+    var demoEndpointsEnabled = DemoAuthPolicy.IsEnabled(
+        app.Environment.EnvironmentName,
+        app.Configuration.GetValue<bool>("DemoAuth:Enabled"));
     var explicitlyMarkedDemoEndpoint =
+        demoEndpointsEnabled &&
         (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)) &&
         context.Request.Path.StartsWithSegments("/api/v1/demo") &&
         context.GetEndpoint()?.Metadata.GetMetadata<DemoEndpointMetadata>() is not null;
