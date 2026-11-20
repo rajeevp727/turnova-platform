@@ -138,6 +138,22 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnsupportedMethodOnAuthenticationRouteReturnsMethodNotAllowedWithNoStoreHeaders()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("A method mismatch on an auth route must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsync("/api/v1/auth/me", content: null);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task AuthRouteHttpsRedirectStillReturnsNoStoreHeaders()
     {
         using var handler = new RecordingHandler((_, _) =>
