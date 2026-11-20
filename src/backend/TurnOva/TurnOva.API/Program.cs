@@ -304,12 +304,13 @@ app.Use(async (context, next) =>
 
     await next();
 });
+// CORS preflight can short-circuit the pipeline, so keep it inside the auth cache policy.
+// Keep CORS before HTTPS redirection so Development preflight requests are not redirected.
+app.UseCors();
 if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
-// CORS preflight can short-circuit the pipeline, so keep it inside the auth cache policy.
-app.UseCors();
 app.UseAuthentication();
 // A demo JWT is never accepted by normal authenticated application routes.
 app.Use(async (context, next) =>
