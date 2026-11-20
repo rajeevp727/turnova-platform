@@ -67,10 +67,30 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/auth/__test/throw");
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.True(response.Headers.CacheControl?.NoStore);
         Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("sensitive-auth-test-exception", body, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task AuthRouteCachePolicyPreservesPrivateDirectivesAndAddsNoStore()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("The cache-policy fixture must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/auth/__test/private-cache");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var cacheControl = response.Headers.CacheControl;
+        Assert.NotNull(cacheControl);
+        Assert.True(cacheControl.Private);
+        Assert.True(cacheControl.NoStore);
+        Assert.Equal(TimeSpan.FromSeconds(60), cacheControl.MaxAge);
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(handler.Requests);
     }
 

@@ -374,6 +374,12 @@ if (app.Environment.IsEnvironment("Testing"))
         throw new InvalidOperationException("sensitive-auth-test-exception");
     }).ExcludeFromDescription();
 
+    app.MapGet("/api/v1/auth/__test/private-cache", (HttpContext context) =>
+    {
+        context.Response.Headers["Cache-Control"] = "private, max-age=60";
+        return Results.Ok(new { status = "ok" });
+    }).ExcludeFromDescription();
+
     // These fixtures prove that a URL prefix alone never grants demo-token access.
     app.MapGet("/api/v1/demo/__test/unmarked", () => Results.Ok(new { status = "reached" }))
         .RequireAuthorization()
