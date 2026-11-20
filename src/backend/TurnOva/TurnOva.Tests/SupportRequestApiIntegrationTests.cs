@@ -222,10 +222,12 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Equal("The configured storage dependency is not reachable.", body.RootElement.GetProperty("detail").GetString());
     }
 
-    [Fact]
-    public void StagingSupportIntakeCannotEnableWithoutApprovedRetentionDays()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public void NonDevelopmentSupportIntakeCannotEnableWithoutApprovedRetentionDays(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging", policyApproved: true);
+        using var factory = new SupportApiFactory(environmentName, policyApproved: true);
 
         var exception = Record.Exception(() => factory.CreateClient());
 
