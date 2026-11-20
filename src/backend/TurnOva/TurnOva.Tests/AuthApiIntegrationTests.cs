@@ -484,6 +484,9 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.PostAsync(negotiatePath, null);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Contains(response.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(handler.Requests);
     }
 
