@@ -34,6 +34,8 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(handler.Requests);
     }
 
@@ -362,6 +364,8 @@ public sealed class AuthApiIntegrationTests
             new { email = "  DRIVER@example.com  ", password = "StrongPassword!123", name = "  Test Driver  ", role = "Admin" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         var request = Assert.Single(handler.Requests);
         Assert.Equal("/auth/register", request.Path);
         Assert.Equal("POST", request.Method);
@@ -384,6 +388,8 @@ public sealed class AuthApiIntegrationTests
             new { email = "  RIDER@example.com  ", password = "StrongPassword!123", name = "  Test Rider  ", role = "Admin" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         var request = Assert.Single(handler.Requests);
         Assert.Equal("/auth/register", request.Path);
         Assert.Equal("rider@example.com", request.Body.GetProperty("email").GetString());
@@ -419,10 +425,14 @@ public sealed class AuthApiIntegrationTests
 
         using var first = await client.PostAsJsonAsync("/api/v1/auth/rider/register", payload);
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal("no-store", first.Headers.CacheControl?.ToString());
+        Assert.Contains(first.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
 
         using var second = await client.PostAsJsonAsync("/api/v1/auth/rider/register", payload);
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        Assert.Equal("no-store", second.Headers.CacheControl?.ToString());
+        Assert.Contains(second.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         var body = await second.Content.ReadAsStringAsync();
         Assert.Contains("Email already registered.", body, StringComparison.Ordinal);
         Assert.DoesNotContain("accessToken", body, StringComparison.OrdinalIgnoreCase);
@@ -482,6 +492,8 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/auth/me");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         var profileBody = await response.Content.ReadAsStringAsync();
         using var profile = JsonDocument.Parse(profileBody);
         Assert.Equal("rider-1", profile.RootElement.GetProperty("id").GetString());
@@ -662,6 +674,8 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/api/v1/auth/me");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         var profileBody = await response.Content.ReadAsStringAsync();
         using var profile = JsonDocument.Parse(profileBody);
         Assert.Equal("driver-1", profile.RootElement.GetProperty("id").GetString());
@@ -756,6 +770,8 @@ public sealed class AuthApiIntegrationTests
             new { email = "rider@example.com", password = "password" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(new[] { "/auth/login", "/auth/logout" }, handler.Requests.Select(x => x.Path));
         Assert.Equal("Bearer", handler.Requests[1].AuthorizationScheme);
         Assert.Equal("wrong-role-access-token", handler.Requests[1].AuthorizationParameter);
@@ -778,6 +794,8 @@ public sealed class AuthApiIntegrationTests
             new { email = "driver@example.com", password = "password" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(new[] { "/auth/login", "/auth/logout" }, handler.Requests.Select(x => x.Path));
         Assert.Equal("Bearer", handler.Requests[1].AuthorizationScheme);
         Assert.Equal("wrong-role-access-token", handler.Requests[1].AuthorizationParameter);
@@ -797,6 +815,8 @@ public sealed class AuthApiIntegrationTests
             new { refreshToken });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         var request = Assert.Single(handler.Requests);
         Assert.Equal("/auth/refresh", request.Path);
         Assert.Equal(refreshToken, request.Body.GetProperty("refreshToken").GetString());
@@ -832,6 +852,8 @@ public sealed class AuthApiIntegrationTests
             new { email = "rider@example.com", password = "password" });
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("temporarily unavailable", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private upstream detail", body, StringComparison.Ordinal);
