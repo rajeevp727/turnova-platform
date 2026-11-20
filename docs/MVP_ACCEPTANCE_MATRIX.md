@@ -65,7 +65,7 @@ External gates above are not reported as completed. Strict acceptance remains 0/
 
 | Phase | Exit evidence | State |
 |---|---|---|
-| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and exact-head API CI; PR #195 is merged but its missing independent review is a documented process exception; PR #197 requires independent human approval and main re-audit before phase exit | **Current phase — API active; PR #197 head `1f257cfb7df079640baf068392dbca3def2cfa7a` passed CI #44642122427 with 821/821 backend tests and native publish/verifier** |
+| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs, native non-container .NET 10 publish and exact-head API CI; PR #197 still requires independent human approval and a post-merge main re-audit before phase exit | **API active — source/test head `d811abe29f67bca4f214ffccf075423583af13e5` passed CI #44659282694: 841/841 backend tests, native publish/verifier and artifact** |
 | Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | **Gated — Rider first, Driver second** |
 | iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after both Android apps exit | **Gated — not started** |
 
@@ -1859,3 +1859,14 @@ Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); production 
 ## RID-IDEM-006 — legacy idempotency reservation race hardening — 2026-11-20
 
 The Development/Testing-only legacy compatibility endpoint now handles a reservation disappearing between failed `TryAdd` and the subsequent read by returning a retryable conflict instead of using a throwing dictionary indexer. Cleanup uses the .NET 10 public `ConcurrentDictionary.TryRemove(KeyValuePair)` overload for atomic key/value compare-and-remove, so a stale request cannot remove a replacement reservation. Deterministic tests cover both the missing-read and replacement-preservation cases. This does not enable customer-facing FIFO, change the selected-driver Rider flow, or alter the environment gate. Fresh exact-head CI is pending; previous API evidence remains 819/819 at CI #44637267725. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established.
+
+
+## Current API phase handoff — 2026-11-20
+
+PR #197 source/test head `d811abe29f67bca4f214ffccf075423583af13e5` passed [exact-head CI #44659282694](https://github.com/rajeevp727/turnova-platform/actions/runs/44659282694): scope/backend green, **841/841 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish script syntax, 11 negative verifier fixtures plus valid fixture, and artifact [14594194463](https://github.com/rajeevp727/turnova-platform/actions/runs/44659282694/artifacts/14594194463). The Release build emitted 25 xUnit analyzer warnings and 0 errors. Mobile, Android and iOS jobs were intentionally skipped by the API-only gate.
+
+New API hardening: RID-IDEM-007 covers Cosmos create 409 → follow-up read 404 and input/cancellation boundaries; RID-IDEM-008 rejects stale cross-Rider replay recovery before any foreign reservation; RID-IDEM-009 compare-and-deletes only the exact selected-booking idempotency record using identity, request hash, creation timestamp and Cosmos ETag. All are deterministic automated evidence; live Cosmos ETag/multi-instance/restart remains external.
+
+PR #197 is open/ready/mergeable at the source/test checkpoint, with four owner-authored COMMENT-only reviews, zero unresolved threads and no independent human approval. PR #196 and #198 remain Draft. Do not self-approve, merge or advance Android. API remains `in_progress`; Android/iOS remain `not_started`.
+
+Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
