@@ -27,6 +27,24 @@ AuthApiIntegrationTests.OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySch
 
 OpenAPI exposure is now explicit in `OpenApiEndpointPolicy`: only Development and Testing are allowed (case-insensitive). `OpenApiEndpointPolicyTests` reject Production, Staging, QA, custom, empty and null environment names; `AuthApiIntegrationTests.OpenApiDocumentIsNotMappedInStaging` verifies the Staging route returns 404. Production host startup is not exercised by this integration fixture because Production requires Cosmos; the Production policy is covered directly.
 
+## Supplemental demo-session checks (outside the 19-row denominator)
+
+These checks cover the restricted demo-preview capability; they do not replace Rider/Driver MVP acceptance.
+
+| ID | Scenario | Expected result | Type | Status |
+|---|---|---|---|---|
+| DEMO-AUTH-001 | Demo auth disabled | POST /api/v1/auth/demo/rider and /driver return 404 when DemoAuth:Enabled is false; TriSend is not called | API integration/security | Implemented; covered in merged main |
+| DEMO-AUTH-002 | Role-scoped demo token | Rider and Driver routes issue only their fixed app role, demo=true, a 30-minute access token and no refresh token; issuer/audience/signing-key configuration is required | API integration/security | Implemented; covered in merged main |
+| DEMO-AUTH-003 | Unsupported demo role | Unknown roles such as admin return 404 and do not issue a token | API integration/security | Implemented; covered in merged main |
+| DEMO-AUTH-004 | Demo token isolation | A demo token is rejected before normal authenticated application endpoints can execute; only explicitly demo-scoped paths are exempt from the middleware restriction | API integration/security | Implemented; covered in merged main |
+| DEMO-MOB-001 | Rider demo entry and sample screen | Rider validates isDemo and role=Rider; sample UI cannot book, pay or start live tracking | Mobile functional/security | In progress; merged PR #199 currently fails typecheck and one shared source-wiring test |
+| DEMO-MOB-002 | Driver demo entry and sample screen | Driver validates isDemo and role=Driver; sample UI cannot go online, accept rides, share GPS or report payouts | Mobile functional/security | In progress; Driver CI job was cancelled before typecheck/build evidence |
+| DEMO-MOB-003 | Rider demo render nullability/accessibility | Demo rendering is safe when profile state is absent; accessible demo entry and error announcement remain covered | Mobile typecheck/test | Pending focused Rider correction |
+
+**Demo API source:** Program.cs maps POST /api/v1/auth/demo/{role}; it is opt-in, requires configured JWT issuer/audience/signing key of at least 32 characters, issues a 30-minute token with demo=true, and the authorization middleware blocks demo tokens from normal authenticated routes. No refresh token is issued. These are demo-only controls, not a production identity provider.
+
+**Android PR #199 exact-head regression evidence:** [CI #44684360422](https://github.com/rajeevp727/turnova-platform/actions/runs/44684360422) failed overall. Backend passed 902/902. Rider typecheck failed with seven TS18047 nullable-user references in src/mobile/rider-app/App.tsx lines 569 and 590. Shared mobile-auth tests passed 285/286; riderAuthForm.test.cjs still expected getRiderAuthFieldProps("name",mode) after the demo screen replaced the registration form. Driver mobile job was cancelled and native Android build/emulator smoke jobs were skipped. Do not report either Android app as build-verified from this run.
+
 ## 1. Authentication — registration
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |
