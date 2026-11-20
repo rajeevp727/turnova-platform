@@ -121,6 +121,32 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task AuthRouteHttpsRedirectStillReturnsNoStoreHeaders()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("HTTPS redirection must not call TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["HTTPS_PORT"] = "443" },
+            environmentName: "Development");
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.TemporaryRedirect, response.StatusCode);
+        Assert.NotNull(response.Headers.Location);
+        Assert.Equal(Uri.UriSchemeHttps, response.Headers.Location!.Scheme);
+        Assert.Equal("localhost", response.Headers.Location.Host);
+        Assert.Equal("/api/v1/auth/me", response.Headers.Location.AbsolutePath);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("rider", "Rider", "demo-rider-001")]
     [InlineData("driver", "Driver", "demo-driver-001")]
