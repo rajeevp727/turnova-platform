@@ -5,7 +5,7 @@
 
 **Last verified:** 2026-11-20
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `4061357c095debbc31fc5027a7bff27bd8b06265`
+**Main HEAD:** `06cb552db6c929cd5ab22d8bc1f2da191670f0f2`
 **Current phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
 
 **API engineering evidence:** PR #184 records the engineering-only API exit. PR #197 merged at `8d5bcb6b913f51250d9f0fc4f0d521a973130747` with 897/897 backend tests and native non-container .NET 10 publish/verifier, but was merged without independent human approval (six owner-authored COMMENT-only reviews). That historical exception does not satisfy the current user-directed phase-transition gate. Keep API `in_progress` until PR #200 is independently approved, passes final-head CI, is merged when permitted, and main receives a fresh API exit audit. Live Cosmos and production readiness are not claimed.
@@ -3242,3 +3242,9 @@ Source/test commit `f5e59cb8ebffcb2cee510b0b7fa8e5f90e781876` adds `AuthApiInteg
 ## Latest API authorization checkpoint — DEMO-AUTH-014 — 2026-11-20
 
 The SignalR hub uses query-string `access_token` extraction for browser/mobile transports. A restricted demo JWT is now explicitly tested against `POST /hubs/rides/negotiate`; the API returns HTTP 403 before SignalR negotiation and no TriSend call occurs. Exact source/test CI [#44724697514](https://github.com/rajeevp727/turnova-platform/actions/runs/44724697514) passed 933/933 backend tests and native non-container .NET 10 publish/verifier. This supplemental security test is outside the 19-row denominator. Strict acceptance remains 0/19 Verified; production readiness is not established.
+
+## Latest API auth-response cache hardening — 2026-11-20
+
+API middleware now sets Cache-Control: no-store and Pragma: no-cache on all /api/v1/auth responses before authentication/authorization. Deterministic integration assertions cover successful demo-session issuance, Rider/Driver login and anonymous /auth/me rejection. Exact source/test head b003f83491ffd8f2d5d7550f40357e43d13feaab passed API-only CI [#44733713863](https://github.com/rajeevp727/turnova-platform/actions/runs/44733713863): 933/933 backend tests, Release build, native non-container .NET 10 publish/verifier, artifact [14628220704](https://github.com/rajeevp727/turnova-platform/actions/runs/44733713863/artifacts/14628220704). Build had 0 errors and 25 existing xUnit analyzer warnings.
+
+PR #200 is the sole active API PR, head b003f83491ffd8f2d5d7550f40357e43d13feaab, open/ready/mergeable. Three owner-authored COMMENT-only reviews exist; independent human approval is absent. PR #196/#198 remain Draft/parked. Main HEAD is 06cb552db6c929cd5ab22d8bc1f2da191670f0f2, one weekly-build workflow commit beyond PR #200's base snapshot; no application source changed on main. Keep API in_progress, Android/iOS not_started, until independent approval, permitted merge and fresh main/API exit audit. Strict acceptance remains 0/19 Verified; production readiness is not established.
