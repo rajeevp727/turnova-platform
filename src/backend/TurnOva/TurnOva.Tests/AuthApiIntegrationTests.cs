@@ -50,6 +50,8 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(handler.Requests);
     }
 
@@ -238,6 +240,8 @@ public sealed class AuthApiIntegrationTests
         for (var index = 0; index < DemoAuthPolicy.RequestsPerMinute + 1; index++)
         {
             using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
+            Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+            Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
             statuses.Add(response.StatusCode);
         }
 
