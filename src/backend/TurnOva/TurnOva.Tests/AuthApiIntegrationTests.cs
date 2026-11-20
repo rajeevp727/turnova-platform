@@ -221,6 +221,20 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task OpenApiDocumentIsNotMappedInStaging()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Staging OpenAPI must not call TriSend."));
+        using var factory = new AuthApiFactory(handler, environmentName: "Staging");
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("/api/v1/auth/rider/login", "RIDER@example.com", "rider@example.com", "Rider", "rider-access-token", "rider-refresh-token")]
     [InlineData("/api/v1/auth/driver/login", "DRIVER@example.com", "driver@example.com", "Driver", "driver-access-token", "driver-refresh-token")]
@@ -661,11 +675,12 @@ public sealed class AuthApiIntegrationTests
 
     private sealed class AuthApiFactory(
         RecordingHandler handler,
-        IReadOnlyDictionary<string, string?>? overrides = null) : WebApplicationFactory<Program>
+        IReadOnlyDictionary<string, string?>? overrides = null,
+        string environmentName = "Testing") : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Testing");
+            builder.UseEnvironment(environmentName);
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
                 var settings = new Dictionary<string, string?>
