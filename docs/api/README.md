@@ -269,3 +269,12 @@ Other external API gates remain live Cosmos, production identity/secrets/hosting
 - Selected-booking idempotency cleanup is fenced. In-memory cleanup uses exact key/value compare-and-remove. Cosmos cleanup validates id, Rider, ride, request hash and creation timestamp, then deletes with the observed ETag. A concurrent delete/replacement (404/412) is a lost cleanup race; non-race provider failures are not hidden.
 - Deterministic coverage: `CosmosCreateConflictReadTests` (5 cases), `RiderIdempotencyPrivacyIntegrationTests.StaleSelectedBookingIdempotencyReplayCannotRecoverAnotherRidersRide`, `InMemoryRideIdempotencyReservationsTests.TryRemoveExactDoesNotDeleteAReplacementBookingRecord`, and six `CosmosRideIdempotencyCleanupTests`.
 - Exact source/test head `d811abe29f67bca4f214ffccf075423583af13e5` passed API-only CI [#44659282694](https://github.com/rajeevp727/turnova-platform/actions/runs/44659282694): **841/841 backend tests**, native non-container .NET 10 Release linux-x64 publish, verifier (11 negative fixtures plus valid fixture), and artifact [14594194463](https://github.com/rajeevp727/turnova-platform/actions/runs/44659282694/artifacts/14594194463). These are deterministic/mock-backed checks, not live Cosmos multi-instance/restart evidence. Mobile/Android/iOS jobs were skipped by the API-only phase gate.
+
+
+### Restricted Rider and Driver demo authentication
+
+- `POST /api/v1/auth/demo/rider` and `POST /api/v1/auth/demo/driver` issue fixed, non-real demo identities with a 30-minute JWT and a `demo=true` claim.
+- The endpoint returns 404 unless `DemoAuth:Enabled=true` is explicitly configured. It returns 503 if the existing JWT issuer, audience or signing key is missing/invalid.
+- Demo tokens are rejected by normal authenticated application routes with 403; they are not normal Rider/Driver accounts and must not be used for live rides, onboarding, payments or private data.
+- Enable this only on an isolated demo deployment. Keep it disabled on production unless product/security explicitly approve the exposure.
+- Automated integration tests cover disabled-by-default behavior, Rider/Driver role claims, unsupported roles and denial at the normal authenticated profile route.
