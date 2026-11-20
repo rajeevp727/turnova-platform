@@ -550,4 +550,80 @@ public sealed class CosmosMigrationLeaseStoreTests
         container.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task CreatePropagatesNonConflictProviderFailures()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var failure = new CosmosException(
+            "cosmos unavailable during create", HttpStatusCode.ServiceUnavailable, 0, "activity", 0);
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<CosmosMigrationLeaseDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(failure);
+        var store = new CosmosMigrationLeaseStore(container.Object);
+
+        var thrown = await Assert.ThrowsAsync<CosmosException>(() =>
+            store.TryCreateAsync("owner-1", DateTimeOffset.UtcNow.AddMinutes(30), CancellationToken.None));
+
+        Assert.Same(failure, thrown);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<CosmosMigrationLeaseDocument>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReadPropagatesNonNotFoundProviderFailures()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var failure = new CosmosException(
+            "cosmos unavailable during read", HttpStatusCode.ServiceUnavailable, 0, "activity", 0);
+        container.Setup(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(failure);
+        var store = new CosmosMigrationLeaseStore(container.Object);
+
+        var thrown = await Assert.ThrowsAsync<CosmosException>(() => store.ReadAsync(CancellationToken.None));
+
+        Assert.Same(failure, thrown);
+        container.Verify(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+            "schema-migrations",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReleasePropagatesNonRaceProviderFailures()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var failure = new CosmosException(
+            "cosmos unavailable during release", HttpStatusCode.ServiceUnavailable, 0, "activity", 0);
+        container.Setup(value => value.DeleteItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(failure);
+        var store = new CosmosMigrationLeaseStore(container.Object);
+        var expected = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-observed", DateTimeOffset.UtcNow.AddMinutes(10));
+
+        var thrown = await Assert.ThrowsAsync<CosmosException>(() =>
+            store.TryReleaseAsync(expected, CancellationToken.None));
+
+        Assert.Same(failure, thrown);
+        container.Verify(value => value.DeleteItemAsync<CosmosMigrationLeaseDocument>(
+            "schema-migrations",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
 }
