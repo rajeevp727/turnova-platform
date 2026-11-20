@@ -3970,3 +3970,12 @@ Source/test head [`f23725fe7446e2718831268e9dbf28c056d27d4a`](https://github.com
 Covered by `AuthApiIntegrationTests.DemoTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken`. The test asserts the realtime response cache policy on the special SignalR query-token transport path as well as the existing 403 restriction.
 
 Source/test head [`8dd40521b55e9d4aaa6fc9a0b4ea8f4fd286ef1e`](https://github.com/rajeevp727/turnova-platform/commit/8dd40521b55e9d4aaa6fc9a0b4ea8f4fd286ef1e) passed exact-head API-only CI [#44829652135](https://github.com/rajeevp727/turnova-platform/actions/runs/44829652135): **946/946 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier, and artifact [14675448230](https://github.com/rajeevp727/turnova-platform/actions/runs/44829652135/artifacts/14675448230). Mobile/Android/iOS jobs were intentionally skipped under the API phase gate.
+
+
+## AUTH-API-027 — unmatched non-auth API routes remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-027 | A GET request targets an unmapped path beneath `/api/v1` but outside `/api/v1/auth` | HTTP 404 with `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnmatchedNonAuthApiRouteReturnsNotFoundWithNoStoreHeaders`. This closes the generic route-miss branch for the API-wide response cache policy, complementing AUTH-API-022 (auth-route 404) and AUTH-API-025 (non-auth API exception 500). The request targets `/api/v1/nonexistent`, which has no mapped endpoint; the test asserts the 404 and both cache directives and verifies no upstream TriSend request. This supplemental regression is outside the 19-area MVP acceptance denominator.

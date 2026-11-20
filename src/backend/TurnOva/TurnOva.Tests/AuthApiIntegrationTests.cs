@@ -177,6 +177,23 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnmatchedNonAuthApiRouteReturnsNotFoundWithNoStoreHeaders()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("An unmatched API route must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/nonexistent");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Contains(response.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task UnsupportedMethodOnAuthenticationRouteReturnsMethodNotAllowedWithNoStoreHeaders()
     {
         using var handler = new RecordingHandler((_, _) =>
