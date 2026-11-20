@@ -3,16 +3,16 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in PRD.md, docs/architecture.md, and docs/test-plan.md.
 
-**Last verified:** 2026-11-20
+**Last verified:** 2026-11-21
 **Repository:** https://github.com/rajeevp727/turnova-platform
 **Main HEAD:** `c9280eec23dd4fb5fab06b11e24d2a619b489235`
 **Current phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
 
 **API engineering evidence:** PR #184 records the engineering-only API implementation exit. PR #197 merged at `8d5bcb6b913f51250d9f0fc4f0d521a973130747` with 897/897 backend tests and native non-container publish/verifier, but without independent human approval. This historical exception does not authorize Android. Keep API `in_progress` until PR #200 is independently approved, passes final-head CI, is merged when permitted, and main receives a fresh API phase-exit audit.
 
-**Current sole ready/active feature PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head `81d4ac6e1eb565c5b0f3eef9f561edd48433fa9c`, docs head `d487766a08ba7f6314643e72400e9527910112b4`. AUTH-API-017 hardens no-store/no-cache headers across exception-handler clearing and is covered by a Testing-only 500 regression. Source/test CI #44749883561 and final docs CI #44750672158 passed backend build/tests and native non-container publish/verifier; latest artifact [14635915717](https://github.com/rajeevp727/turnova-platform/actions/runs/44750672158/artifacts/14635915717). Three reviews are owner-authored COMMENT-only; independent approval is absent; zero unresolved threads. PR #196/#198 remain Draft/parked.
+**Current sole ready/active feature PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head [`bb96a98e0e1281885f73fd045e29883799b4a6a0`](https://github.com/rajeevp727/turnova-platform/commit/bb96a98e0e1281885f73fd045e29883799b4a6a0). AUTH-API-024 proves endpoint-specific `private` and `max-age=60` directives survive while `no-store` and `Pragma: no-cache` are added. Exact source/test CI [#44810978513](https://github.com/rajeevp727/turnova-platform/actions/runs/44810978513) passed 942/942 backend tests, Release build and native non-container publish/verifier; artifact [14666462214](https://github.com/rajeevp727/turnova-platform/actions/runs/44810978513/artifacts/14666462214). The Run 12 documentation sync requires its own exact-head CI. Three reviews remain owner-authored COMMENT-only; independent approval is absent; zero unresolved threads.
 
-**Main/phase discrepancy:** main `06cb552db6c929cd5ab22d8bc1f2da191670f0f2` still says API complete / Android in_progress. PR #200 corrects the phase to API `in_progress` / Android `not_started`. Its branch is two commits behind main (weekly-build workflow and PR #204 Android LAN demo config; 118 ahead / 2 behind); GitHub reports mergeable/clean. PR #204 only enables trusted-LAN cleartext HTTP and is not Android completion. Do not start Android until independent approval, permitted merge and fresh main/API exit audit.
+**Main/phase discrepancy:** main `c9280eec23dd4fb5fab06b11e24d2a619b489235` still says API complete / Android in_progress. PR #200 keeps API `in_progress` / Android and iOS `not_started`. It compares 154 ahead / 2 behind; the two main-only commits are the weekly-build workflow and PR #204 Android LAN config. GitHub reports mergeable. PR #204 is config-only and is not Android completion. Do not start Android until independent approval, permitted merge and fresh main/API exit audit.
 
 **PR #200 security scope:** DemoAuth is opt-in and allowlisted to Development, Testing, Staging, QA and Demo; Production, blank and unknown environments fail closed. Tokens are fixed-role, 30-minute JWTs with `demo=true` and no refresh token. Only explicitly marked GET/HEAD routes under `/api/v1/demo` may accept them; path prefix alone and mutation methods do not grant access. Environment and flag are rechecked on every request. Issuance is limited to 10 requests per server-observed remote IP per minute. The ASP.NET Core fixed-window limiter is process-local; multi-instance demo hosting needs a shared/edge limiter and trusted forwarded-header configuration. No production demo business endpoints are mapped.
 
@@ -20,7 +20,7 @@
 
 **Android is not complete:** both unauthenticated entry screens remain demo-only. Rider login/register UI is absent; the source-level `riderAuthForm` assertion was replaced with a demo-only assertion. The Rider demo still displays the prohibited sample estimate `₹280–₹340`; “Offline demo access” is inaccurate because demo-session creation calls the API. CI build/smoke success does not prove the missing auth or functional Rider flows. PR #196 and #198 remain Draft/parked; PR #203 is merged, not Draft.
 
-**Next sequential action:** keep API as the active platform phase. PR #200 is now synced to main and its latest source/test head passed 933/933 backend tests plus native non-container publish/verifier. Obtain independent human approval; do not self-approve or merge. After a permitted merge, re-read main and repeat the API phase-exit audit. Only then may Rider Android completion begin, followed by Driver Android, then iOS Rider and Driver.
+**Next sequential action:** verify the Run 12 documentation-bearing PR #200 head with exact-head API-only CI; obtain independent human approval; merge only when permitted; then re-read main and perform a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver.
 
 **Strict acceptance:** **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. **Production readiness is not established.**
 
@@ -3369,3 +3369,12 @@ Main at 06cb552db6c929cd5ab22d8bc1f2da191670f0f2 still has .github/turnova-phase
 - This is supplemental API security coverage. It does not add a twentieth acceptance area or promote any of the 19 rows to Verified.
 
 - Main remains `c9280eec23dd4fb5fab06b11e24d2a619b489235`; API remains the only active platform phase. PR #200 still requires independent human approval and a fresh main/API exit audit before Android work.
+
+
+## Run 12 — AUTH-API-024 cache-directive preservation (2026-11-21)
+
+- The API no-store middleware preserves endpoint-specific Cache-Control directives. A Testing-only route begins with `private, max-age=60`; the response retains those directives and adds `no-store` and `Pragma: no-cache`. The fixture is excluded from OpenAPI and never calls TriSend.
+- A prior test failure was an overly strict assertion: exception handling returned `no-store, no-cache`, while the test expected the whole header to equal `no-store`. The assertion now checks the no-store directive; the new regression verifies private/max-age preservation.
+- Source/test head `bb96a98e0e1281885f73fd045e29883799b4a6a0` passed CI #44810978513 with 942/942 backend tests, Release build and native non-container publish/verifier (artifact 14666462214). The documentation-bearing head created in this run needs its own exact-head CI.
+- API remains the active phase. Strict acceptance is 0/19 Verified (16 In Progress, 3 Blocked); production readiness and live Cosmos/provider validation are not established. Independent human approval for PR #200 remains absent. Do not advance mobile work.
+

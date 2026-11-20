@@ -357,3 +357,10 @@ Source/test head [`f5cc60ac57a272aaa9cb239684d9655f287ee4e9`](https://github.com
 ## AUTH-API-023 — method-mismatch auth responses
 
 A POST to the GET-only `/api/v1/auth/me` route returns HTTP 405 with `Cache-Control: no-store` and `Pragma: no-cache`, without calling TriSend. This verifies that the auth-route cache policy also covers endpoint-routing method mismatches. The regression is supplemental security coverage and does not change the 19-row MVP acceptance denominator. Source/test head [`2f8d0cc757b56bab89625644da10a913f276e10d`](https://github.com/rajeevp727/turnova-platform/commit/2f8d0cc757b56bab89625644da10a913f276e10d) passed [API-only CI #44807178037](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037) with 940/940 backend tests and native non-container .NET 10 publish/verifier; artifact [14663477137](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037/artifacts/14663477137).
+
+
+## AUTH-API-024 — preserve endpoint cache directives while enforcing no-store
+
+The API response middleware no longer replaces endpoint-specific Cache-Control directives. A Testing-only auth fixture returns `private, max-age=60`; the middleware preserves both and adds `no-store`, plus `Pragma: no-cache`. The fixture is excluded from OpenAPI and does not call TriSend. The exception-path regression checks the no-store directive instead of requiring an exact whole-header value.
+
+Source/test head [`bb96a98e0e1281885f73fd045e29883799b4a6a0`](https://github.com/rajeevp727/turnova-platform/commit/bb96a98e0e1281885f73fd045e29883799b4a6a0) passed exact-head API-only CI [#44810978513](https://github.com/rajeevp727/turnova-platform/actions/runs/44810978513): 942/942 backend tests, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14666462214](https://github.com/rajeevp727/turnova-platform/actions/runs/44810978513/artifacts/14666462214). The documentation-bearing head created in Run 12 requires its own exact-head CI. This is supplemental security coverage, not a twentieth MVP acceptance area.
