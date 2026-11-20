@@ -202,9 +202,9 @@ case "$1" in
           fi
           printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"$title\"/><node resource-id=\"android:id/aerr_close\" text=\"Close app\" bounds=\"[70,898][1010,1024]\" ${close_state}/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" ${wait_state}/></hierarchy>"
         elif [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
-          printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
+          printf '<hierarchy><node text="Offline demo access"/><node text="Continue as Demo Rider"/><node text="Demo mode is read-only"/><node resource-id="rider-demo-login"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
         else
-          printf '<hierarchy><node text="Welcome back"/><node hint="Email address"/><node hint="Password"/><node text="Sign in"/></hierarchy>\n'
+          printf '<hierarchy><node text="Offline demo access"/><node text="Continue as Demo Rider"/><node text="Demo mode is read-only"/><node resource-id="rider-demo-login"/></hierarchy>\n'
         fi
         ;;
       pm) echo "package:/data/app/turnova/base.apk" ;;
@@ -368,9 +368,9 @@ exit 0
             self.assertEqual(report["install"], "passed")
             self.assertEqual(report["launch"], "passed")
             self.assertTrue(report["processStableAfterStartup"])
-            self.assertTrue(report["loginScreenTextVerified"])
+            self.assertTrue(report["demoEntryScreenTextVerified"])
             ui_hierarchy = (output / "ui-hierarchy.xml").read_text(encoding="utf-8")
-            for expected_text in ("Welcome back", "Email address", "Password", "Sign in"):
+            for expected_text in ("Offline demo access", "Continue as Demo Rider", "Demo mode is read-only", "rider-demo-login"):
                 self.assertIn(expected_text, ui_hierarchy)
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
             self.assertTrue(report["staleSessionErrorAbsent"])
@@ -515,7 +515,7 @@ exit 0
             self.assertIn("540 1087", (recovered_output / "input-taps.txt").read_text(encoding="utf-8"))
             self.assertTrue((recovered_output / "system-anr-1.xml").is_file())
             recovered_ui = (recovered_output / "ui-hierarchy.xml").read_text(encoding="utf-8")
-            for expected_text in ("Welcome back", "Email address", "Password", "Sign in"):
+            for expected_text in ("Offline demo access", "Continue as Demo Rider", "Demo mode is read-only", "rider-demo-login"):
                 self.assertIn(expected_text, recovered_ui)
 
             # A persistent launcher ANR is closed only while the target app remains

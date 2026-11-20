@@ -565,6 +565,7 @@ export default function App() {
       <Pressable style={[styles.secondary,{marginTop:16}]} onPress={()=>{setDemoMode(false);setDemoTab("Book");}}><Text style={styles.secondaryText}>Exit demo</Text></Pressable>
     </ScrollView>
   </SafeAreaView>;
+  if (!user) return null;
   const tabs=["Book","Activity","Offers","Profile"] as const;
   return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/><View style={styles.header}><TurnOvaLogo subtitle={`Rider · ${user.name||user.email}`} compact /></View><ScrollView contentContainerStyle={styles.content}>
     {tab==="Book"&&!activeRideStateLoaded&&<View style={styles.card}><Text style={styles.title}>Checking active booking</Text><Text style={styles.muted}>TurnOva is checking your server-owned ride history before enabling another booking.</Text><Pressable style={styles.secondary} disabled={loading} onPress={()=>void loadRideHistory(()=>isAuthenticatedSessionCurrent(sessionEpoch,authenticatedSessionEpoch)).catch(e=>setError(e instanceof Error?e.message:"Unable to verify your active booking."))}><Text style={styles.secondaryText}>Retry status check</Text></Pressable></View>}
