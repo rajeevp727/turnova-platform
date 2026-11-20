@@ -297,7 +297,7 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+if (OpenApiEndpointPolicy.IsEnabled(app.Environment.EnvironmentName))
     app.MapOpenApi().AllowAnonymous();
 app.MapHealthChecks("/health/live");
 
