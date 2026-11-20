@@ -3,18 +3,22 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in PRD.md, docs/architecture.md, and docs/test-plan.md.
 
-**Last verified:** 2026-11-20
-**Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `d499196ef3333fd9697c6f14d7a88b84bb897474`.
+**Last verified:** 2026-11-20  
+**Repository:** https://github.com/rajeevp727/turnova-platform  
+**Main HEAD:** `d499196ef3333fd9697c6f14d7a88b84bb897474`  
 **Current phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
-**Main API evidence:** CI [#44531886570](https://github.com/rajeevp727/turnova-platform/actions/runs/44531886570) passed 763/763 backend tests, native non-container .NET 10 Release publish and verifier.
-**Current API PR:** [#197](https://github.com/rajeevp727/turnova-platform/pull/197), branch `test/api-cosmos-migration-runner-fencing-20261119`, current head `1f257cfb7df079640baf068392dbca3def2cfa7a`, open/ready/mergeable. Latest code-bearing commit `21366103a7237a7dbc26b79703e9794d243e3b2a` adds RID-IDEM-006 atomic key/value compare-and-remove safety. Exact-head CI [#44642122427](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427) passed 821/821 backend tests and native non-container publish/verifier; artifact [14586078440](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427/artifacts/14586078440). PR #196/#198 remain Draft.
-**Latest completed API source/test evidence:** PR #197 code-bearing commit `21366103a7237a7dbc26b79703e9794d243e3b2a` and exact PR head `1f257cfb7df079640baf068392dbca3def2cfa7a` passed API-only CI [#44642122427](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427): **821/821 backend tests (0 failed, 0 skipped)**, scope validation, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact validation [14586078440](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427/artifacts/14586078440).
 
-**AI-039 regression:** caller-supplied known/unknown ride states are resolved locally; the enabled provider is never invoked for either path. The AI test-plan identifiers are now unique through AI-041.
-**Documentation integrity:** restored the complete historical Project Brain body from main after detecting a 1,285-line omission in the PR snapshot; the refreshed file retains the current handoff header and full history.
-**Next sequential action:** continue the API-only security/persistence gap audit within PR #197 and obtain independent human approval. The current head `1f257cfb7df079640baf068392dbca3def2cfa7a` passed exact-head CI #44642122427 (821/821 backend tests and native publish/verifier). Do not merge without independent approval. After approval and merge, re-read main and repeat the complete API phase-exit audit before Android Rider; Android Driver follows Rider; iOS follows both Android apps. Strict acceptance remains 0/19 (16 In Progress, 3 Blocked); production readiness is not established. Keep PR #196 and #198 Draft.
+**Current API PR:** [#197](https://github.com/rajeevp727/turnova-platform/pull/197), branch `test/api-cosmos-migration-runner-fencing-20261119`, source/test head `7dcfb1d125039d5f38b63da885029985d913d393`, open/ready/mergeable. PR #196 and #198 remain Draft/parked.
 
+**Latest source/test evidence:** [CI #44650666047](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047) passed scope validation, .NET 10 Release build, **829/829 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, verifier (11 negative fixtures plus valid fixture), and artifact [14591605262](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047/artifacts/14591605262). Mobile/Android/iOS jobs were intentionally skipped by the API-only gate.
+
+**COSMOS-MIG-022:** Cosmos migration lease create/replace now validates the returned response Resource, fixed lease ID, exact requested/new owner and nonblank ETag. Missing or mismatched Resource fails closed. Eight deterministic cases passed in the 829-test run. The prior 2/829 test-expectation failure was corrected; the final source/test head is green.
+
+**Review/phase gate:** four recorded reviews are owner-authored COMMENT-only; no independent human approval is recorded and there are no unresolved review threads. Do not self-approve or merge. Keep API phase active until independent approval, final documentation-head CI and a fresh main/API exit audit. Do not start Android before that gate.
+
+**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, Product-approved dispatch/location/support/reconciliation policies, private-media storage/scanning/consent/retention, Union legal approval and physical-device/signing gates remain external.
+
+**Next sequential action:** finish docs/test-plan/progress/matrix synchronization and exact-head CI; continue API-only gap audit. After independent approval and merge, re-read main and repeat the API phase-exit audit before Android Rider, then Android Driver, then iOS Rider and Driver.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
