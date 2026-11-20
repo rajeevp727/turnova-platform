@@ -529,15 +529,27 @@ export default function App() {
   if(!user&&!demoMode)return <SafeAreaView style={styles.safe}>
     <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
     <View style={styles.header}><TurnOvaLogo subtitle="Everyone’s Turn Matters." /></View>
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>RIDER ACCOUNT</Text><Text style={styles.title}>Explore TurnOva</Text>
-      <Text style={styles.sub}>Registration is temporarily unavailable while the API is offline. Continue with a local demo profile to preview the Rider app.</Text>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Text style={styles.eyebrow}>RIDER ACCOUNT</Text>
+      <Text style={styles.title}>{mode === "register" ? "Create your account" : "Welcome back"}</Text>
+      <Text style={styles.sub}>{mode === "register" ? "Register as a Rider to book and manage your rides." : "Sign in to continue to your Rider account."}</Text>
       {themePicker}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Offline demo access</Text>
-        <Text style={styles.muted}>No email or password required. The API issues a restricted demo session that cannot access real user or ride data.</Text>
-        <Pressable testID="rider-demo-login" style={styles.primary} onPress={startDemoSession}><Text style={styles.primaryText}>Continue as Demo Rider</Text></Pressable>
-        {error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.muted}>Demo mode is read-only. Booking, payments and live tracking are unavailable.</Text>
+        {mode === "register" && <>
+          <Text style={styles.label}>FULL NAME</Text>
+          <TextInput testID="rider-auth-name" value={name} onChangeText={setName} style={styles.input} placeholder="Your full name" placeholderTextColor={colors.muted} autoCapitalize="words" editable={!loading}/>
+        </>}
+        <Text style={styles.label}>EMAIL ADDRESS</Text>
+        <TextInput testID="rider-auth-email" value={email} onChangeText={setEmail} style={styles.input} placeholder="you@example.com" placeholderTextColor={colors.muted} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} editable={!loading}/>
+        <Text style={styles.label}>PASSWORD</Text>
+        <TextInput testID="rider-auth-password" value={password} onChangeText={setPassword} style={styles.input} placeholder="Enter your password" placeholderTextColor={colors.muted} secureTextEntry autoCapitalize="none" editable={!loading} onSubmitEditing={() => { if (!authSubmitDisabled) void authenticate(); }}/>
+        {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
+        <Pressable testID="rider-auth-submit" style={[styles.primary, authSubmitDisabled && {opacity:0.55}]} disabled={authSubmitDisabled} onPress={() => void authenticate()}>
+          <Text style={styles.primaryText}>{loading ? "Please wait…" : mode === "register" ? "Create Rider account" : "Sign in"}</Text>
+        </Pressable>
+        <Pressable testID="rider-auth-toggle-mode" style={styles.secondary} disabled={loading} onPress={() => { setError(""); setMode(mode === "login" ? "register" : "login"); }}>
+          <Text style={styles.secondaryText}>{mode === "login" ? "New to TurnOva? Create an account" : "Already registered? Sign in"}</Text>
+        </Pressable>
       </View>
     </ScrollView>
   </SafeAreaView>;
