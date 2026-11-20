@@ -78,10 +78,7 @@ async function request(path: string, init: RequestInit = {}, token?: string) {
 }
 
 export default function App() {
-  const [user,setUser]=useState<User|null>(null);
-  const [demoMode,setDemoMode]=useState(false);
-  const [demoTab,setDemoTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
-  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
+  const [user,setUser]=useState<User|null>(null);  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0); const authenticatedSessionEpoch=useRef<number|null>(null);
   const activeSessionStops=useRef<Set<() => unknown>>(new Set());
   const stopSessionResources=useCallback(()=>stopRegisteredConnections(activeSessionStops.current),[]);
@@ -328,18 +325,6 @@ export default function App() {
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const startDemoSession = async () => {
-    try {
-      setError("");
-      const response = await request("/api/v1/auth/demo/rider", { method: "POST" });
-      if (!response?.isDemo || response?.user?.role !== "Rider") throw new Error("Invalid demo session response.");
-      setUser(requireAppRole<User>(response.user, "Rider"));
-      setDemoTab("Book");
-      setDemoMode(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to start demo session. Check API availability and demo configuration.");
-    }
-  };
   const authenticate = async () => {
     if(!tryBeginRiderAuthSubmission(authSubmissionInFlight))return;
     let authEpoch = sessionEpoch.current;
@@ -525,8 +510,8 @@ export default function App() {
     {(["system", "light", "dark"] as const).map(option => <Pressable key={option} testID={`rider-theme-${option}`} {...getRiderThemeOptionProps(option,themePreference===option)} onPress={() => selectTheme(option)} style={[styles.themeOption, themePreference === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, themePreference === option && styles.themeOptionTextSelected]}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</Text></Pressable>)}
   </View>;
   const authSubmitDisabled=loading||!email.trim()||!password;
-  if(loading&&!user&&!demoMode)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}} accessibilityLabel="Restoring your Rider session"/></SafeAreaView>;
-  if(!user&&!demoMode)return <SafeAreaView style={styles.safe}>
+  if (loading && !user)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}} accessibilityLabel="Restoring your Rider session"/></SafeAreaView>;
+  if (!user)return <SafeAreaView style={styles.safe}>
     <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
     <View style={styles.header}><TurnOvaLogo subtitle="Everyone’s Turn Matters." /></View>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -554,29 +539,6 @@ export default function App() {
     </ScrollView>
   </SafeAreaView>;
 
-  if(demoMode) return <SafeAreaView style={styles.safe}>
-    <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
-    <View style={styles.header}><TurnOvaLogo subtitle="Rider demo · Offline preview" compact /></View>
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>RIDER DEMO</Text>
-      <Text style={styles.title}>{demoTab==="Book"?"Where to?":demoTab}</Text>
-      <Text style={styles.sub}>Sample content only. Demo session is restricted; real booking, payment and live tracking are unavailable.</Text>
-      {demoTab==="Book"&&<View style={styles.card}>
-        <Text style={styles.label}>SAMPLE TRIP</Text><Text style={styles.cardTitle}>Nizampet → HITEC City</Text>
-        <Text style={styles.muted}>Cab · 1 passenger · Sample estimate ₹280–₹340</Text>
-        <View style={{height:1,backgroundColor:colors.border,marginVertical:14}}/>
-        <Text style={styles.label}>NEARBY DEMO DRIVER</Text><Text style={styles.cardTitle}>Arjun Kumar</Text><Text style={styles.muted}>Maruti Swift Dzire · Demo Union · 2.4 km away</Text>
-        <Text style={styles.muted}>Driver discovery and booking are disabled in offline demo mode.</Text>
-      </View>}
-      {demoTab==="Activity"&&<View style={styles.card}><Text style={styles.label}>SAMPLE RIDE HISTORY</Text><Text style={styles.cardTitle}>Nizampet → HITEC City</Text><Text style={styles.muted}>Completed · Demo ride · ₹310 (illustrative only)</Text><Text style={styles.cardTitle}>Kukatpally → Secunderabad</Text><Text style={styles.muted}>Cancelled · Demo record</Text></View>}
-      {demoTab==="Offers"&&<View style={styles.card}><Text style={styles.cardTitle}>Offers</Text><Text style={styles.muted}>No live offers are loaded in offline demo mode.</Text></View>}
-      {demoTab==="Profile"&&<View style={styles.card}><Text style={styles.label}>DEMO RIDER PROFILE</Text><Text style={styles.cardTitle}>Raja · Sample Rider</Text><Text style={styles.muted}>Role: Rider</Text><Text style={styles.muted}>Account: Local demo profile · Not registered</Text></View>}
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:8,marginTop:16}}>
-        {(["Book","Activity","Offers","Profile"] as const).map(item=><Pressable key={item} onPress={()=>setDemoTab(item)} style={[styles.themeOption,demoTab===item&&styles.themeOptionSelected]}><Text style={[styles.themeOptionText,demoTab===item&&styles.themeOptionTextSelected]}>{item}</Text></Pressable>)}
-      </View>
-      <Pressable style={[styles.secondary,{marginTop:16}]} onPress={()=>{setDemoMode(false);setDemoTab("Book");}}><Text style={styles.secondaryText}>Exit demo</Text></Pressable>
-    </ScrollView>
-  </SafeAreaView>;
   if (!user) return null;
   const tabs=["Book","Activity","Offers","Profile"] as const;
   return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/><View style={styles.header}><TurnOvaLogo subtitle={`Rider · ${user.name||user.email}`} compact /></View><ScrollView contentContainerStyle={styles.content}>
