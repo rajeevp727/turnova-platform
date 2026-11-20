@@ -3893,3 +3893,13 @@ Exact source/test head [`f839b60224f8deb5d38a653562366d8750236628`](https://gith
 Covered by AuthApiIntegrationTests.AuthRouteHttpsRedirectStillReturnsNoStoreHeaders. The test disables automatic redirect following, configures HTTPS_PORT=443 and asserts the HTTPS Location and cache headers. This verifies the auth cache middleware wraps Development HTTPS redirection. Supplemental coverage outside the 19-row acceptance denominator.
 
 Exact source/test head [0d55b4693dffc5b9d549b82cc8eff85b34d7f929](https://github.com/rajeevp727/turnova-platform/commit/0d55b4693dffc5b9d549b82cc8eff85b34d7f929) passed [CI #44790113886](https://github.com/rajeevp727/turnova-platform/actions/runs/44790113886): 938/938 tests, .NET 10 Release build, native non-container publish/verifier, and artifact [14656202254](https://github.com/rajeevp727/turnova-platform/actions/runs/44790113886/artifacts/14656202254).
+
+## AUTH-API-022 — unmatched authentication routes remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-022 | A GET request targets an unmapped path beneath `/api/v1/auth` | HTTP 404 with `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnmatchedAuthRouteReturnsNotFoundWithNoStoreHeaders`. The request to `/api/v1/auth/__test/not-found` verifies the auth cache middleware also covers endpoint-routing 404 responses, not only mapped auth handlers and middleware short-circuits. The test asserts the generic 404, both cache headers and zero upstream TriSend requests. This is supplemental API security coverage outside the 19-row MVP acceptance denominator.
+
+Exact source/test head [`f5cc60ac57a272aaa9cb239684d9655f287ee4e9`](https://github.com/rajeevp727/turnova-platform/commit/f5cc60ac57a272aaa9cb239684d9655f287ee4e9) passed API-only CI [#44798095244](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244): **939/939 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, native publish verifier (11 negative fixtures plus valid fixture), artifact validation and upload. Artifact [14659488247](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244/artifacts/14659488247). Mobile/Android/iOS jobs were intentionally skipped under the API phase gate.
