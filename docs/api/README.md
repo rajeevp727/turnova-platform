@@ -21,6 +21,7 @@ The document is generated from ASP.NET Core endpoint metadata. Contract integrat
 | `POST /api/v1/auth/refresh` | Public refresh-token exchange; opaque token is forwarded unchanged |
 | `POST /api/v1/auth/logout` | Best-effort upstream revocation; accepts an expired/invalid bearer so the auth service can decide whether revocation is possible |
 | `GET /api/v1/auth/me` | Valid TurnOva JWT required; request is rejected locally before TriSend is called when unauthenticated |
+| `POST /api/v1/auth/demo/{role}` | Public but disabled by default; requires explicit DemoAuth:Enabled=true and valid JWT issuer/audience/signing-key configuration; supports only Rider/Driver demo identities |
 | Rider endpoints | JWT with `role=Rider` |
 | Driver endpoints | JWT with `role=Driver` |
 | `/api/v1/union/*` | JWT with `role=UnionManager` and one or more server-issued `unionId` claims; handlers filter to those current assignments |
@@ -39,8 +40,19 @@ The API project pins transitive `Microsoft.OpenApi` to patched 2.7.5. The initia
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/auth/me`
+- `POST /api/v1/auth/demo/{role}` — opt-in restricted demo session for rider or driver only
 
 Only `rider` and `driver` route values are accepted. The API owns `appId=turnova` and the corresponding role; clients cannot select an arbitrary role.
+
+### Restricted demo sessions
+
+- POST /api/v1/auth/demo/rider and POST /api/v1/auth/demo/driver issue a sample identity only when DemoAuth:Enabled=true; the default is disabled and disabled routes return 404.
+- Only the fixed Rider and Driver roles are supported. Unknown roles return 404.
+- The host must provide valid JWT issuer, audience and signing-key configuration; the signing key must contain at least 32 characters. Missing/invalid configuration returns 503.
+- The API issues a 30-minute access token with a demo=true claim and no refresh token.
+- Middleware rejects demo tokens from normal authenticated application endpoints before their handlers execute. Demo tokens must never be treated as real Rider/Driver sessions or enabled on Production.
+- The mobile demo screens display sample content only. They do not prove live API/Cosmos connectivity and must keep booking, fare negotiation, payment, availability, ride acceptance and live GPS actions disabled.
+
 
 ### Driver onboarding and eligibility
 
