@@ -229,15 +229,17 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Contains("SupportRequests:RetentionDays", exception.ToString());
     }
 
-    [Fact]
-    public void StagingSupportIntakeCannotEnableWithoutCosmosPersistence()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public void NonDevelopmentSupportIntakeCannotEnableWithoutCosmosPersistence(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging", policyApproved: true, retentionDays: 7);
+        using var factory = new SupportApiFactory(environmentName, policyApproved: true, retentionDays: 7);
 
         var exception = Record.Exception(() => factory.CreateClient());
 
         Assert.NotNull(exception);
-        Assert.Contains("Staging support intake requires CosmosDb:Endpoint and CosmosDb:Key", exception.ToString());
+        Assert.Contains("Non-development support intake requires CosmosDb:Endpoint and CosmosDb:Key", exception.ToString());
     }
 
     [Fact]
