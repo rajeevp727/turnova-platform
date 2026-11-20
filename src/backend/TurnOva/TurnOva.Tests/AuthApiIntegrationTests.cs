@@ -107,6 +107,62 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task DemoTokenCannotAccessAnUnmarkedEndpointUnderTheDemoPrefix()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
+        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.GetAsync("/api/v1/demo/__test/unmarked");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DemoTokenCanAccessOnlyAnExplicitlyMarkedDemoEndpoint()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
+        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.GetAsync("/api/v1/demo/__test/marked");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DemoSessionIssuanceIsRateLimitedPerRemoteAddress()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        var statuses = new List<HttpStatusCode>();
+
+        for (var index = 0; index < DemoAuthPolicy.RequestsPerMinute + 1; index++)
+        {
+            using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
+            statuses.Add(response.StatusCode);
+        }
+
+        Assert.Equal(DemoAuthPolicy.RequestsPerMinute,
+            statuses.Count(status => status == HttpStatusCode.OK));
+        Assert.Equal(1, statuses.Count(status => status == HttpStatusCode.TooManyRequests));
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]

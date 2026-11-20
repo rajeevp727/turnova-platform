@@ -50,7 +50,9 @@ Only `rider` and `driver` route values are accepted. The API owns `appId=turnova
 - Only the fixed Rider and Driver roles are supported. Unknown roles return 404.
 - The host must provide valid JWT issuer, audience and signing-key configuration; the signing key must contain at least 32 characters. Missing/invalid configuration returns 503. Demo auth is allowed only when explicitly enabled in the named non-production environments Development, Testing, Staging, QA or Demo. Production, blank and every unknown environment name fail closed even when DemoAuth:Enabled=true.
 - The API issues a 30-minute access token with a demo=true claim and no refresh token.
-- Middleware rejects demo tokens from normal authenticated application endpoints before their handlers execute. Demo tokens must never be treated as real Rider/Driver sessions. The API enforces the Production deny; enable the flag only on an isolated non-production demo host.
+- Middleware rejects demo tokens from normal authenticated application endpoints before their handlers execute. A `/api/v1/demo` path prefix alone is not an authorization grant: the endpoint must also carry `DemoEndpointMetadata`. No production demo business endpoints are currently mapped; demo screens remain local sample content.
+- Anonymous demo-token issuance is rate-limited to 10 requests per server-observed remote IP per minute (HTTP 429 after the limit). The limiter does not trust arbitrary client-supplied forwarding headers; hosted reverse-proxy deployments should configure trusted forwarded headers if per-client IP partitioning is required.
+- Demo tokens must never be treated as real Rider/Driver sessions. The API enforces the Production deny; enable the flag only on an isolated non-production demo host.
 - The mobile demo screens display sample content only. They do not prove live API/Cosmos connectivity and must keep booking, fare negotiation, payment, availability, ride acceptance and live GPS actions disabled.
 
 

@@ -296,9 +296,12 @@ app.UseAuthentication();
 // A demo JWT is never accepted by normal authenticated application routes.
 app.Use(async (context, next) =>
 {
+    var explicitlyMarkedDemoEndpoint =
+        context.Request.Path.StartsWithSegments("/api/v1/demo") &&
+        context.GetEndpoint()?.Metadata.GetMetadata<DemoEndpointMetadata>() is not null;
     if (context.User.Identity?.IsAuthenticated == true &&
         context.User.HasClaim("demo", "true") &&
-        !context.Request.Path.StartsWithSegments("/api/v1/demo"))
+        !explicitlyMarkedDemoEndpoint)
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         await context.Response.WriteAsJsonAsync(new { message = "Demo sessions are restricted to demo endpoints." });
@@ -321,6 +324,15 @@ if (app.Environment.IsEnvironment("Testing"))
     {
         throw new InvalidOperationException("sensitive-test-exception");
     }).ExcludeFromDescription();
+
+    // These fixtures prove that a URL prefix alone never grants demo-token access.
+    app.MapGet("/api/v1/demo/__test/unmarked", () => Results.Ok(new { status = "reached" }))
+        .RequireAuthorization()
+        .ExcludeFromDescription();
+    app.MapGet("/api/v1/demo/__test/marked", () => Results.Ok(new { status = "reached" }))
+        .RequireAuthorization()
+        .WithMetadata(new DemoEndpointMetadata())
+        .ExcludeFromDescription();
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
@@ -1510,7 +1522,8 @@ authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
         isDemo = true,
         user = new { id = subject, email, name, role = appRole, isDemo = true }
     });
-}).AllowAnonymous();
+}).AllowAnonymous()
+  .RequireRateLimiting(DemoAuthPolicy.RateLimitPolicyName);
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
     CancellationToken ct) =>

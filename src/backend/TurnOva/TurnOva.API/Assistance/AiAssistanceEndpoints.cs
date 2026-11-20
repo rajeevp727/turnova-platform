@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using TurnOva.Application.Assistance;
+using TurnOva.API;
 
 namespace TurnOva.API.Assistance;
 
@@ -33,7 +34,7 @@ public static class AiAssistanceEndpoints
             {
                 context.HttpContext.Response.ContentType = "application/problem+json";
                 await context.HttpContext.Response.WriteAsJsonAsync(
-                    new { title = "Too many assistant requests. Please retry later.", status = StatusCodes.Status429TooManyRequests },
+                    new { title = "Too many requests. Please retry later.", status = StatusCodes.Status429TooManyRequests },
                     cancellationToken);
             };
             options.AddPolicy(RateLimitPolicy, context =>
@@ -49,6 +50,21 @@ public static class AiAssistanceEndpoints
                     _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = requestsPerMinute,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    });
+            });
+            options.AddPolicy(DemoAuthPolicy.RateLimitPolicyName, context =>
+            {
+                // Demo issuance is anonymous: partition only by the server-observed remote IP.
+                // Do not trust an arbitrary client-supplied forwarding header here.
+                var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = DemoAuthPolicy.RequestsPerMinute,
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0,
                         AutoReplenishment = true
