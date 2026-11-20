@@ -97,6 +97,30 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task AuthRouteCorsPreflightFromDisallowedOriginStillReturnsNoStoreHeaders()
+    {
+        const string allowedOrigin = "https://rider.example";
+        const string disallowedOrigin = "https://untrusted.example";
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Rejected CORS preflight must not call TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["Cors:AllowedOrigins:0"] = allowedOrigin });
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/v1/auth/rider/login");
+        request.Headers.Add("Origin", disallowedOrigin);
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.False(response.Headers.Contains("Access-Control-Allow-Origin"));
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("rider", "Rider", "demo-rider-001")]
     [InlineData("driver", "Driver", "demo-driver-001")]
