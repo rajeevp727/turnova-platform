@@ -202,10 +202,9 @@ case "$1" in
           fi
           printf '%s\n' "<hierarchy><node resource-id=\"android:id/alertTitle\" text=\"$title\"/><node resource-id=\"android:id/aerr_close\" text=\"Close app\" bounds=\"[70,898][1010,1024]\" ${close_state}/><node resource-id=\"android:id/aerr_wait\" text=\"Wait\" bounds=\"[70,1024][1010,1150]\" ${wait_state}/></hierarchy>"
         elif [[ "${FAKE_RESTORE_ERROR:-0}" == "1" ]]; then
-          printf '<hierarchy><node text="Offline demo access"/><node text="Continue as Demo Rider"/><node text="Demo mode is read-only"/><node resource-id="rider-demo-login"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
+          printf '<hierarchy><node text="RIDER ACCOUNT"/><node text="Welcome back"/><node text="Sign in"/><node resource-id="rider-auth-submit"/><node resource-id="rider-auth-email"/><node resource-id="rider-auth-password"/><node text="Unable to restore your session. Check your connection or secure storage and retry."/></hierarchy>\n'
         else
-          printf '<hierarchy><node text="Offline demo access"/><node text="Continue as Demo Rider"/><node text="Demo mode is read-only"/><node resource-id="rider-demo-login"/></hierarchy>\n'
-        fi
+          printf '<hierarchy><node text="RIDER ACCOUNT"/><node text="Welcome back"/><node text="Sign in"/><node resource-id="rider-auth-submit"/><node resource-id="rider-auth-email"/><node resource-id="rider-auth-password"/></hierarchy>\n'        fi
         ;;
       pm) echo "package:/data/app/turnova/base.apk" ;;
       cmd) echo "com.turnova.rider/.MainActivity" ;;
@@ -368,9 +367,9 @@ exit 0
             self.assertEqual(report["install"], "passed")
             self.assertEqual(report["launch"], "passed")
             self.assertTrue(report["processStableAfterStartup"])
-            self.assertTrue(report["demoEntryScreenTextVerified"])
+            self.assertTrue(report["authenticationScreenVerified"])
             ui_hierarchy = (output / "ui-hierarchy.xml").read_text(encoding="utf-8")
-            for expected_text in ("Offline demo access", "Continue as Demo Rider", "Demo mode is read-only", "rider-demo-login"):
+            for expected_text in ("RIDER ACCOUNT", "Welcome back", "Sign in", "rider-auth-submit", "rider-auth-email", "rider-auth-password"):
                 self.assertIn(expected_text, ui_hierarchy)
             self.assertEqual(report["productionApiOrAuthentication"], "not exercised")
             self.assertTrue(report["staleSessionErrorAbsent"])
