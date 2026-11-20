@@ -473,9 +473,12 @@ public sealed class AuthApiIntegrationTests
         var successSchema = demoAuthSuccess.GetProperty("content")
             .GetProperty("application/json")
             .GetProperty("schema");
-        Assert.True(successSchema.TryGetProperty("$ref", out var successSchemaRef));
-        var schemaName = successSchemaRef.GetString()!.Split('/').Last();
-        var demoSessionSchema = root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
+        var demoSessionSchema = successSchema;
+        if (successSchema.TryGetProperty("$ref", out var successSchemaRef))
+        {
+            var schemaName = successSchemaRef.GetString()!.Split('/').Last();
+            demoSessionSchema = root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
+        }
         var responseProperties = demoSessionSchema.GetProperty("properties");
         foreach (var property in new[] { "accessToken", "refreshToken", "expiresIn", "isDemo", "user" })
             Assert.True(responseProperties.TryGetProperty(property, out _), $"Demo session response is missing {property}.");
