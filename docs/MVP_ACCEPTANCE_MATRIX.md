@@ -1,6 +1,6 @@
 # TurnOva MVP Acceptance Matrix
 
-**Last updated:** 2026-11-20. **Main HEAD:** `4061357c095debbc31fc5027a7bff27bd8b06265`. **Current platform phase:** API **in_progress**; Android **not_started**; iOS **not_started**.
+**Last updated:** 2026-11-20. **Main HEAD:** `06cb552db6c929cd5ab22d8bc1f2da191670f0f2`. **Current platform phase:** API **in_progress**; Android **not_started**; iOS **not_started**.
 
 **API engineering evidence:** PR #184 records the engineering-only API exit. PR #197 merged at `8d5bcb6b913f51250d9f0fc4f0d521a973130747` with 897/897 backend tests and native non-container .NET 10 Release publish/verifier, but it was merged without independent human approval (six owner-authored COMMENT-only reviews). This historical exception does not satisfy the current user-directed phase-transition gate. API remains the active phase pending independent approval/merge of PR #200 and a fresh main/API exit audit.
 
@@ -1931,3 +1931,9 @@ Main phase config still says API complete / Android in progress, but PR #197 was
 ## Supplemental API authorization evidence — DEMO-AUTH-014 — 2026-11-20
 
 A demo JWT supplied through SignalR's `access_token` query parameter on `POST /hubs/rides/negotiate` is rejected with HTTP 403 before negotiation. The deterministic regression is `AuthApiIntegrationTests.DemoTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken`; exact source/test CI [#44724697514](https://github.com/rajeevp727/turnova-platform/actions/runs/44724697514) passed 933/933 backend tests and native non-container .NET 10 publish/verifier (artifact [14623053097](https://github.com/rajeevp727/turnova-platform/actions/runs/44724697514/artifacts/14623053097)). This is supplemental API security evidence, not a new acceptance row; the strict count remains 0/19 Verified. API remains the active phase pending independent human approval for PR #200 and a fresh post-merge API exit audit.
+
+## Supplemental API authorization hardening — AUTH-API-016 — 2026-11-20
+
+The API marks /api/v1/auth responses with Cache-Control: no-store and Pragma: no-cache before authentication/authorization. Deterministic integration assertions cover demo-token issuance, Rider/Driver login and unauthenticated profile-read rejection. Source/test head b003f83491ffd8f2d5d7550f40357e43d13feaab passed exact-head API-only CI [#44733713863](https://github.com/rajeevp727/turnova-platform/actions/runs/44733713863): 933/933 backend tests, Release build, native non-container .NET 10 publish/verifier and artifact [14628220704](https://github.com/rajeevp727/turnova-platform/actions/runs/44733713863/artifacts/14628220704). This is supplemental API security evidence and does not change the 19-row denominator or any row's strict status.
+
+PR #200 remains the sole ready/active API PR, open/mergeable at head b003f83491ffd8f2d5d7550f40357e43d13feaab; independent human approval remains absent. PR #196/#198 remain Draft/parked. API remains in_progress; Android/iOS remain not_started. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); production readiness is not established. Live Cosmos, shared/edge rate limiting/trusted proxy, hosted Staging/QA, production identity/hosting/providers, Product policies, private-media/legal and physical-device/signing gates remain external.
