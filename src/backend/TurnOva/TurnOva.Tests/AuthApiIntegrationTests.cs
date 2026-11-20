@@ -285,6 +285,31 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task DemoTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach SignalR or TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+
+        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        Assert.Equal(HttpStatusCode.OK, issued.StatusCode);
+        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
+        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(accessToken));
+
+        // SignalR's browser/mobile transport places access tokens in the query string
+        // on the negotiate request. This special JWT extraction path must not bypass
+        // the demo-token restriction applied to normal authenticated API routes.
+        var negotiatePath = $"/hubs/rides/negotiate?negotiateVersion=1&access_token={Uri.EscapeDataString(accessToken!)}";
+        using var response = await client.PostAsync(negotiatePath, null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
