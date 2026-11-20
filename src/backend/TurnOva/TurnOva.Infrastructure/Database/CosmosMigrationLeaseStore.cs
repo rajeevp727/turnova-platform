@@ -125,8 +125,8 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         string etag,
         string? expectedOwner = null)
     {
-        ArgumentNullException.ThrowIfNull(document);
-        if (!string.Equals(document.Id, LeaseId, StringComparison.Ordinal) ||
+        if (document is null ||
+            !string.Equals(document.Id, LeaseId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(document.Owner) ||
             (expectedOwner is not null &&
                 !string.Equals(document.Owner, expectedOwner, StringComparison.Ordinal)) ||
