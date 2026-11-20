@@ -3831,23 +3831,13 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
             return;
         }
 
-        try
-        {
-            var current = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
-                keyId, new PartitionKey(riderId), cancellationToken: CancellationToken.None);
-            if (!string.Equals(current.Resource.rideId, rideId, StringComparison.Ordinal))
-                return;
-
-            await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(
-                keyId, new PartitionKey(riderId),
-                new ItemRequestOptions { IfMatchEtag = current.ETag },
-                CancellationToken.None);
-        }
-        catch (CosmosException ex) when (
-            ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
-        {
-            // The exact reservation is already absent or has changed; never delete a replacement.
-        }
+        await CosmosLegacyRideIdempotencyCleanup.TryDeleteExactAsync(
+            idempotencyContainer,
+            keyId,
+            new PartitionKey(riderId),
+            riderId,
+            rideId,
+            CancellationToken.None);
     }
 
     try
