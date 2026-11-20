@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using TurnOva.API;
 
@@ -100,6 +102,31 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task AssistantRequestLogsNeverContainUserPromptOrSensitiveValues()
+    {
+        using var loggerProvider = new CapturingLoggerProvider();
+        using var factory = new AiAssistanceApiFactory(loggerProvider);
+        using var rider = factory.CreateClient("Rider", "ai-log-privacy");
+
+        using var tripResponse = await rider.PostAsJsonAsync(
+            "/api/v1/assistance/trip-intent",
+            new { text = "Cab from 12 Private Road to Secret Clinic for 2 passengers" });
+        Assert.Equal(HttpStatusCode.OK, tripResponse.StatusCode);
+
+        using var helpResponse = await rider.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "How is payment received? Contact raja@example.test or +91 9876543210 from 12 Private Road." });
+        Assert.Equal(HttpStatusCode.OK, helpResponse.StatusCode);
+
+        var messages = string.Join("\n", loggerProvider.Messages);
+        Assert.Contains("Assistant request completed", messages, StringComparison.Ordinal);
+        Assert.DoesNotContain("12 Private Road", messages, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Secret Clinic", messages, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("raja@example.test", messages, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("9876543210", messages, StringComparison.Ordinal);
+        Assert.DoesNotContain("payment", messages, StringComparison.OrdinalIgnoreCase);
+    }
+    [Fact]
     public async Task TripIntentRejectsUnmappedRideLocationAndFareFields()
     {
         using var factory = new AiAssistanceApiFactory();
@@ -137,8 +164,47 @@ public sealed class AiAssistanceApiIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        private readonly ConcurrentQueue<string> _messages = new();
+
+        public IReadOnlyCollection<string> Messages => _messages.ToArray();
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, _messages);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(
+            string categoryName,
+            ConcurrentQueue<string> messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) =>
+                string.Equals(categoryName, "TurnOva.AiAssistance", StringComparison.Ordinal);
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                if (IsEnabled(logLevel))
+                    messages.Enqueue(formatter(state, exception));
+            }
+        }
+    }
+
     private sealed class AiAssistanceApiFactory : WebApplicationFactory<Program>
     {
+        private readonly ILoggerProvider? _loggerProvider;
+
+        public AiAssistanceApiFactory(ILoggerProvider? loggerProvider = null) =>
+            _loggerProvider = loggerProvider;
+
         private const string Issuer = "turnova-ai-assistance-tests";
         private const string Audience = "turnova-api";
         private const string SigningKey = "turnova-ai-assistance-test-signing-key-32-bytes";
@@ -146,6 +212,9 @@ public sealed class AiAssistanceApiIntegrationTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
+            if (_loggerProvider is not null)
+                builder.ConfigureLogging(logging => logging.AddProvider(_loggerProvider));
+
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>

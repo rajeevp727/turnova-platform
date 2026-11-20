@@ -556,6 +556,36 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task HelpProviderReceivesOnlyAllowListedKeywordsAndSourceIds()
+    {
+        const string question = "Please explain payment received for ride at 12 Private Road. Contact raja@example.com or +91 9876543210; card 4111111111111111.";
+        var provider = new FakeProvider
+        {
+            HelpHandler = (prompt, _) =>
+            {
+                var providerInput = string.Join(" ", prompt.AllowedKeywords.Concat(prompt.AllowedSourceIds));
+                Assert.Contains("payment", prompt.AllowedKeywords);
+                Assert.Contains("received", prompt.AllowedKeywords);
+                Assert.Contains("direct-payment", prompt.AllowedSourceIds);
+                Assert.Null(prompt.RideState);
+                Assert.DoesNotContain("12", providerInput, StringComparison.Ordinal);
+                Assert.DoesNotContain("Private", providerInput, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("raja", providerInput, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("example.com", providerInput, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("9876543210", providerInput, StringComparison.Ordinal);
+                Assert.DoesNotContain("4111111111111111", providerInput, StringComparison.Ordinal);
+                return Task.FromResult<HelpProviderResult?>(new HelpProviderResult("direct-payment"));
+            }
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.ExplainHelpAsync(question, null, CancellationToken.None);
+
+        Assert.Equal("direct-payment", result.SourceId);
+        Assert.Equal("provider-approved-content", result.Source);
+        Assert.Contains("unverified", result.Answer, StringComparison.OrdinalIgnoreCase);
+    }
+    [Fact]
     public async Task ProviderCannotInjectUnapprovedHelpContent()
     {
         var provider = new FakeProvider
@@ -584,6 +614,35 @@ public sealed class AiAssistanceServiceTests
             service.DraftTripIntentAsync(new string('x', 1001), CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.ExplainHelpAsync(new string('x', 1001), null, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("InProgress", "state-in-progress")]
+    [InlineData("Unknown", "unsupported")]
+    public async Task ExplicitRideStateNeverReachesProvider(
+        string rideState,
+        string expectedSourceId)
+    {
+        var providerCalls = 0;
+        var provider = new FakeProvider
+        {
+            HelpHandler = (_, _) =>
+            {
+                providerCalls++;
+                return Task.FromResult<HelpProviderResult?>(new HelpProviderResult("made-up-policy"));
+            }
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var result = await service.ExplainHelpAsync(
+            "What is happening with my trip?",
+            rideState,
+            CancellationToken.None);
+
+        Assert.Equal(expectedSourceId, result.SourceId);
+        Assert.Equal(0, providerCalls);
+        Assert.NotEqual("provider-approved-content", result.Source);
+        Assert.NotEqual("made-up-policy", result.SourceId);
     }
 
     private static AiAssistanceService CreateService(

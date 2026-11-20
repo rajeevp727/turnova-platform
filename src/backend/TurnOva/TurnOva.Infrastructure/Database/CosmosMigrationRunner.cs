@@ -81,10 +81,23 @@ public sealed class CosmosMigrationRunner(
         }
         finally
         {
-            // Stop and await the heartbeat before releasing with its latest ETag.
-            migrationCancellation.Cancel();
-            await renewalTask;
-            await leaseCoordinator.ReleaseAsync(leaseState);
+            // Stop the heartbeat before releasing with its latest ETag. A migration
+            // cancellation callback or heartbeat failure must not skip lease release.
+            try
+            {
+                migrationCancellation.Cancel();
+            }
+            finally
+            {
+                try
+                {
+                    await renewalTask;
+                }
+                finally
+                {
+                    await leaseCoordinator.ReleaseAsync(leaseState);
+                }
+            }
         }
     }
 
@@ -103,7 +116,7 @@ public sealed class CosmosMigrationRunner(
         }
     }
 
-    private sealed class MigrationHistoryDocument
+    internal sealed class MigrationHistoryDocument
     {
         public string Id { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;

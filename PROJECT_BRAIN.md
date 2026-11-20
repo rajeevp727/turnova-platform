@@ -3,17 +3,26 @@
 > Compact working context for future development sessions. Read this before coding; update it in the same feature PR whenever project state changes.
 > Full requirements remain in PRD.md, docs/architecture.md, and docs/test-plan.md.
 
-**Last verified:** 2026-11-19
+**Last verified:** 2026-11-20
 **Repository:** https://github.com/rajeevp727/turnova-platform
-**Main HEAD:** `7f64c67f8ac0d65254898d62520a1028e3ae56ce`; PR #193 is merged.
-**Current phase:** API — role-scoped response/privacy audit reopened. Original role-projection source/test/phase-config head `ef1feddbf71e2f0ea2b72c8ffde33fcbe5a8977e` passed CI #44497833447. Follow-up selected-booking actor-ID minimization source/test commit `b699453202064fcdb99ba4cf66cdbbb78a96ed07` removes unused RiderId/DriverId and adds API-PRIV-001 absence coverage. Test-only compatibility correction `c211fa03f7b40e042376c0d701efa988b17f684b` passed exact-head CI #44513190938: 763/763 backend tests, native .NET 10 Release publish, verifier and artifact 14523623180. Latest documentation-bearing head `2ba41b55b901595e05489458690a2205db5eaa83` passed exact-head CI #44513877029: 763/763 backend tests, native publish, verifier and artifact 14525350285; mobile/Android/iOS jobs were skipped by the API-only gate. Earlier documentation head `38dc6d8` passed CI #44504446025 with 763/763 tests and native publish; mobile/Android/iOS jobs correctly skipped.
-**Only active feature PR:** [#195](https://github.com/rajeevp727/turnova-platform/pull/195), branch `fix/api-role-scoped-ride-responses`. `.github/turnova-phase.json` is API `in_progress`, Android/iOS `not_started`; CI confirms mobile jobs disabled.
-**Human merge gate:** PR #195 has no independent review recorded; the PR author is the repository owner, so no self-review is possible. GitHub reports `main` as unprotected and the repository rulesets query is empty, but `.github/copilot-instructions.md` explicitly requires human approval before merge. Do not merge without that approval.
-**Parked Rider PR #194:** Draft, head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`; runs #44493716559/#44494246556 failed due invalid control-character regex escaping, stale source-order assertion and nullable passengers activity type mismatch. Fix after API exit.
-**Downstream API contract handoff:** PR #194's `normalizeRiderSelectedBookingResponse` still requires `response.riderId` and `response.driverId`; API PR #195 intentionally omits them. Reconcile the Rider normalizer/tests after API merge by validating actor identity from session/request context, not by restoring actor IDs to API responses.
-**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
-**External gates:** live Cosmos ETag/multi-instance/restart, production identity/hosting/provider access, approved radius/location freshness, routing/maps/SignalR, private-media scanning/retention/consent, support/reconciliation policy, Union legal approval, Android/iOS physical-device tests and signing.
+**Main HEAD:** `d499196ef3333fd9697c6f14d7a88b84bb897474`
+**Current phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
 
+**Current API PR:** [#197](https://github.com/rajeevp727/turnova-platform/pull/197), branch `test/api-cosmos-migration-runner-fencing-20261119`, open/ready/mergeable and sole active feature PR. Latest source/test head `b4d4138466c39b9c914e41524c0191577beb662d`; docs-bearing head `9634d227c82e2813d63d07c2a09065a434de6820` passed exact-head CI #44676774010 with 871/871 backend tests and native publish/verifier. The subsequent progress/matrix/Project Brain synchronization is documentation-only and requires its own final-head CI. PR #196 and #198 remain Draft/parked.
+
+**Latest source/test increment:** head `b4d4138466c39b9c914e41524c0191577beb662d` adds PLATFORM-HEALTH-017. In-memory persistence is considered ready only in Development/Testing; Staging/QA/custom non-Development/Testing environments without Cosmos return generic HTTP 503 from `/health/ready`, and Production still fails startup without Cosmos. Two API integration tests cover Staging 503 and Testing 200. Documentation-bearing head `9634d227c82e2813d63d07c2a09065a434de6820` passed exact-head API-only CI [#44676774010](https://github.com/rajeevp727/turnova-platform/actions/runs/44676774010): **871/871 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14602990197](https://github.com/rajeevp727/turnova-platform/actions/runs/44676774010/artifacts/14602990197). Build log: 25 xUnit analyzer warnings, 0 errors. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped by the API-only phase gate. Live Cosmos and hosted Staging readiness remain external.
+
+**Current documentation synchronization:** `docs/test-plan.md`, `docs/api/README.md`, `docs/MVP_PROGRESS.md`, and `docs/MVP_ACCEPTANCE_MATRIX.md` record PLATFORM-HEALTH-017 and the 871/871 exact-head result on head `9634d227c82e2813d63d07c2a09065a434de6820`. This Project Brain review-count refresh is documentation-only and requires exact-head CI before merge consideration. Mobile-auth/mobile/Android/emulator/iOS jobs remain intentionally skipped under the API-only phase gate.
+
+**Review/phase gate:** six recorded reviews on PR #197 are owner-authored COMMENT-only; the latest follow-up withdraws the earlier Staging persistence concern. No independent human approval is recorded and there are zero unresolved review threads. Do not self-approve or merge. Keep API phase active until independent approval, merge and a fresh main/API exit audit. Android and iOS remain gated.
+
+**Strict acceptance:** 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation-completion percentage. Production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, Product-approved dispatch/location/support/reconciliation policies, private-media storage/scanning/consent/retention, Union legal approval and physical-device/signing gates remain external.
+
+**Next sequential action:** verify exact-head CI for the current documentation-bearing PR #197 head; source/test head `b4d4138466c39b9c914e41524c0191577beb662d` and docs head `9634d227c82e2813d63d07c2a09065a434de6820` passed 871/871 plus native non-container publish/verifier. Continue API-only source/test/security/authorization/persistence/OpenAPI audit within PR #197. Obtain independent human approval; do not self-approve or merge. After approval and permitted merge, re-read main and repeat the full API phase-exit audit before Android Rider, then Android Driver, then iOS Rider and Driver.
+
+## PLATFORM-HEALTH-017 — environment-scoped readiness
+
+Staging/QA/custom non-Development/Testing environments may retain in-memory adapters for deterministic test harnesses, but `/health/ready` returns a generic 503 without Cosmos. Development/Testing in-memory mode remains ready; Production startup requires Cosmos. A hosted Staging/QA deployment must provision Cosmos and route readiness checks to `/health/ready`; this is not live hosting evidence.
 
 ## Product in one line
 Cab-only, union-connected ride discovery where the Rider selects an eligible nearby Driver, both parties negotiate and confirm an immutable fare agreement, and the Driver reports direct payment received.
@@ -21,7 +30,7 @@ Cab-only, union-connected ride discovery where the Rider selects an eligible nea
 ## Stack and app scope
 - Backend: .NET 10 LTS / ASP.NET Core Web API / C# 14.
 - Mobile: React Native + Expo; Android and iOS.
-- Data: Azure Cosmos DB; local in-memory fallbacks exist for demo/tests.
+- Data: Azure Cosmos DB; in-memory adapters support Development/Testing and isolated integration tests. Non-Development/Testing environments without Cosmos are not ready (`/health/ready` returns HTTP 503); Production fails startup without Cosmos.
 - Realtime: SignalR.
 - Authentication: TurnOva API integrates with TriSend Auth; JWT + refresh-token rotation.
 - MVP apps: TurnOva Driver and TurnOva Rider.
@@ -3102,3 +3111,89 @@ CI #44512525481 failed 762/763 because `SelectedBookingReservationPreventsConcur
 - CI #44512525481 had failed 762/763 because one concurrency/cancellation test still read `riderId` from the selected-booking response. Test-only commit `c211fa03` now asserts actor-ID absence and obtains the owning Rider from the test-only ride store. The corrected exact-head run passed.
 - PR #195 remains open and unmerged. No independent reviews or inline review threads are recorded; repository instructions require explicit human approval. Do not self-approve, bypass or merge without approval. API phase remains current pending approval, merge and main re-audit.
 - Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, approved radius/location freshness and negotiation expiry, maps/routing/SignalR, private-media scanning/consent/retention, support/reconciliation policy, Union legal terms and physical-device/signing evidence remain external gates.
+
+
+## API persistence race and cancellation hardening — 2026-11-20
+
+- UnionCreateIfAbsent checks cancellation before either the in-memory ConcurrentDictionary.TryAdd or Cosmos path.
+- Cosmos migration lease replacement treats HTTP 404 (lease disappeared after read) and 412 (ETag changed) as lost races. The coordinator retries acquisition after an expired lease disappears, backs off after create-conflict followed by missing point-read, and still propagates non-race provider failures such as 503.
+- Deterministic tests: COSMOS-UNION-003, COSMOS-MIG-017, COSMOS-MIG-018, COSMOS-MIG-019.
+- Exact source/test head 85c812068bda0f002b329560ec7a03ba0d208caf, CI [#44616358336](https://github.com/rajeevp727/turnova-platform/actions/runs/44616358336), 806/806 backend tests, native non-container publish artifact [14574662365](https://github.com/rajeevp727/turnova-platform/actions/runs/44616358336/artifacts/14574662365).
+- A prior exact-head attempt #44615820910 failed one test because its fake owner expectation was incorrect; the test now asserts the second create attempt and observed ETag outcome. The corrected exact-head run passed.
+- API remains the only active phase. PR #197 requires independent human review before merge; PRs #196 and #198 remain Draft. Strict acceptance 0/19; production readiness not established.
+
+
+## Latest API source/test checkpoint — 2026-11-20
+
+PR #197 head `0b5ad41f0ba2fee9b2add11326b518c617d1226a` passed [CI #44625126116](https://github.com/rajeevp727/turnova-platform/actions/runs/44625126116): **809/809 backend tests**, native non-container .NET 10 Release publish and verifier; artifact [14578084857](https://github.com/rajeevp727/turnova-platform/actions/runs/44625126116/artifacts/14578084857). The latest test addition is COSMOS-MIG-020, rejecting empty/whitespace migration lease owners before Cosmos SDK access. Independent human approval remains required; API stays active until approval, merge and a fresh main/API exit audit. PR #196/#198 remain Draft; strict acceptance is 0/19 and production readiness is not established.
+
+
+## Latest API lease-metadata hardening — 2026-11-20
+
+PR #197 exact-head `0cc3456b057b589b0b69be05e9eb990fe2f866ab` passed API-only CI [#44635146494](https://github.com/rajeevp727/turnova-platform/actions/runs/44635146494): **816/816 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact validation [14583916800](https://github.com/rajeevp727/turnova-platform/actions/runs/44635146494/artifacts/14583916800). Mobile, Android and iOS jobs were intentionally skipped by the API-only phase gate.
+
+COSMOS-MIG-021: successful Cosmos migration lease create/replace responses and point reads must return the fixed lease ID, nonblank owner and nonblank ETag. The adapter throws on malformed metadata so migration execution cannot begin with an unfenced lease. Deterministic tests cover create/replace missing ETag and malformed read metadata. Independent human approval remains required for PR #197; API remains active until merge and a fresh main/API exit audit.
+
+
+## Latest API idempotency/privacy hardening — 2026-11-20
+
+Latest source/test head `282fb6c67f90f2b5a69725a8499281dd107f55c7` adds owner-scoped replay checks to selected and legacy Rider idempotency, blocks the legacy FIFO compatibility route outside Development/Testing, uses full GUID IDs and create-if-absent writes for local/test legacy requests, and releases only the exact idempotency reservation on failure/collision. Three integration tests cover cross-Rider replay and the Staging gate. Exact-head CI [#44636788384](https://github.com/rajeevp727/turnova-platform/actions/runs/44636788384) is pending; last passed evidence remains 816/816 at `0cc3456b057b589b0b69be05e9eb990fe2f866ab` / CI #44635146494. Independent human approval remains required; API is still the active platform phase.
+
+
+## Latest API source/test evidence — 2026-11-20
+
+PR #197 exact source/test head `e47924d03a7f186fc0286edc9e2c4ef642d7eebd` passed API-only CI [#44637267725](https://github.com/rajeevp727/turnova-platform/actions/runs/44637267725): **819/819 backend tests (0 failed, 0 skipped)**, scope validation, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact validation [14583859769](https://github.com/rajeevp727/turnova-platform/actions/runs/44637267725/artifacts/14583859769). Mobile, Android and iOS jobs were intentionally skipped by the API-only phase gate.
+
+COSMOS-MIG-021 hardens migration lease metadata; RID-IDEM-004/005 harden Rider-scoped idempotency and local/test-only legacy FIFO. Independent human approval remains required for PR #197; API remains the active platform phase.
+
+## Final API-only CI handoff — 2026-11-20
+
+PR #197 is open, ready and mergeable at `a56cc77992ae8111880a3f2608bf029d8bd15129`. Its source/test head is `e47924d03a7f186fc0286edc9e2c4ef642d7eebd`; GitHub compare confirms five documentation-only commits after that code-bearing head. Final-head CI [#44637969745](https://github.com/rajeevp727/turnova-platform/actions/runs/44637969745) passed scope/backend, **819/819 backend tests**, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture) and artifact validation [14584329890](https://github.com/rajeevp727/turnova-platform/actions/runs/44637969745/artifacts/14584329890). Android/iOS/mobile jobs were skipped by the API-only phase gate. Build log reported 25 xUnit analyzer warnings and 0 errors.
+
+Only owner-authored COMMENT reviews exist on PR #197; no independent human approval or reviewer request is present. Main remains `d499196ef3333fd9697c6f14d7a88b84bb897474`; it reports unprotected, but repository instructions still prohibit merge without human approval. PR #196 and #198 remain Draft. API remains `in_progress`; Android/iOS remain `not_started`. Strict acceptance remains 0/19 (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness is not established.
+
+Next exact action: continue the API-only gap audit inside PR #197. After independent approval, verify final-head CI and policy, merge only if permitted, then re-read main and re-run the full API phase-exit audit before Android Rider. External gates remain live Cosmos multi-instance/ETag/restart, production identity/hosting/providers, Product dispatch/location/expiry policy, maps/routing/SignalR/call/chat/push, private-media storage/scanning/consent/retention, support/reconciliation policy, Union legal terms, and mobile physical-device/signing evidence.
+
+## API idempotency reservation race hardening — 2026-11-20
+
+The Development/Testing-only legacy compatibility path had two in-memory concurrency windows: after a failed `TryAdd`, the reservation could disappear before an indexer read; cleanup used separate read/remove calls and could delete a replacement reservation. PR #197 now returns a retryable conflict when the read finds no reservation and uses `InMemoryRideIdempotencyReservations.TryRemoveExact` with the .NET 10 public `ConcurrentDictionary.TryRemove(KeyValuePair)` overload for atomic key/value compare-and-remove. Deterministic tests cover both cases; test-plan ID RID-IDEM-006. Source/test commits: `bfb9f3a`, `30cf49d`, `6b61c74`, `2136610`. Exact PR head `1f257cfb7df079640baf068392dbca3def2cfa7a` passed CI #44642122427 with 821/821 backend tests, native non-container .NET 10 Release publish and verifier. The legacy route remains disabled outside Development/Testing and no customer-facing FIFO behaviour is enabled.
+
+
+## Latest API source/test handoff — 2026-11-20
+
+PR #197 source/test head `d811abe29f67bca4f214ffccf075423583af13e5` passed exact-head API-only CI [#44659282694](https://github.com/rajeevp727/turnova-platform/actions/runs/44659282694): **841/841 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 Release linux-x64 publish, publish-script syntax, 11 negative verifier fixtures plus valid fixture, and artifact [14594194463](https://github.com/rajeevp727/turnova-platform/actions/runs/44659282694/artifacts/14594194463). Build output had 25 xUnit analyzer warnings and 0 errors. Mobile/Android/iOS jobs were intentionally skipped by the API-only phase gate.
+
+RID-IDEM-007 adds 409→404 Cosmos conflict-read handling and five deterministic boundary tests. RID-IDEM-008 rejects stale cross-Rider idempotency recovery before any foreign reservation. RID-IDEM-009 uses exact in-memory compare-and-remove and Cosmos identity/request-hash/creation-time validation plus ETag conditional deletion; 404/412 are lost races, non-race failures propagate. The incremental diff was reviewed for auth, privacy, concurrency, idempotency and data-loss risks; no new critical/high finding identified.
+
+PR #197 remains open and needs independent human approval; four owner-authored reviews are COMMENT-only and there are zero unresolved threads. PR #196 and #198 remain Draft. API is the only active platform phase. Strict acceptance remains 0/19 (16 In Progress, 3 Blocked); production readiness is not established. The documentation sync following this source/test checkpoint requires fresh exact-head CI before any merge consideration. Do not self-approve or merge.
+
+
+## Latest API persistence/OpenAPI audit — 2026-11-20
+
+PR #197 source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 passed [CI #44668284857](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857): **854/854 backend tests**, Release build, native non-container .NET 10 linux-x64 publish/verifier and artifact [14599196865](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857/artifacts/14599196865). New coverage verifies migration lease 503 propagation, blank replacement owner argument validation, idempotency cleanup delete-side 503 propagation and OpenAPI route/security coverage for Rider, Driver, UnionManager, Operations and public auth routes. Live Cosmos contention/restart and production identity/hosting/provider validation remain external. PR #197 still requires independent human approval; no self-approval or merge. PR #196/#198 remain Draft; Android/iOS remain gated. Strict acceptance 0/19; production readiness not established.
+
+
+## Documentation-bearing API CI — 2026-11-20
+
+PR #197 documentation-bearing head a94b1f5dcb05885f332c2daf7ed4fb5f095c34c7 passed [CI #44669155071](https://github.com/rajeevp727/turnova-platform/actions/runs/44669155071): **854/854 backend tests**, Release build, native non-container .NET 10 linux-x64 publish/verifier, artifact [14598569138](https://github.com/rajeevp727/turnova-platform/actions/runs/44669155071/artifacts/14598569138). The build emitted 25 xUnit analyzer warnings and 0 errors. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under API phase gating. This note update requires a new exact-head CI. Independent human approval for PR #197 remains pending; do not self-approve or merge.
+
+
+## Latest API handoff — RID-IDEM-011 — 2026-11-20
+
+PR #197 remains the sole active API feature PR. Source/test head `8fe2afd2dbd3a88c5c09a81f6fb112beeaf0ecd6` passed exact-head [CI #44672496184](https://github.com/rajeevp727/turnova-platform/actions/runs/44672496184): 869/869 backend tests (0 failed, 0 skipped), Release build, native non-container .NET 10 linux-x64 publish/verifier and artifact [14599929361](https://github.com/rajeevp727/turnova-platform/actions/runs/44672496184/artifacts/14599929361). Build log: 25 xUnit analyzer warnings, 0 errors; mobile/Android/iOS jobs were skipped by the API-only phase gate.
+
+RID-IDEM-011 replaces the Development/Testing legacy Cosmos idempotency cleanup's inline read/delete with exact item ID/Rider/ride validation and ETag conditional deletion. Fifteen deterministic tests cover exact deletion, null Resource, missing ETag, three identity mismatches, pre-read 404, post-read 404/412, read/delete 503, cancellation and blank identity inputs. Non-race provider errors propagate; no production FIFO behavior was enabled. The change was reviewed for data-loss, concurrency, cancellation and privacy risks; no new critical/high finding was identified.
+
+PR #197 remains open and requires independent human approval. Four reviews are owner-authored COMMENT-only; no independent approval; zero unresolved threads. PR #196/#198 remain Draft/parked. API remains in_progress; Android/iOS remain not_started. Strict acceptance remains 0/19 (16 In Progress, 3 Blocked); production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, product dispatch/support/reconciliation policy, private-media/legal and physical-device/signing gates remain external.
+
+
+## RIDER-03 matrix row synchronization — 2026-11-20
+
+The detailed RIDER-03 evidence row and progress row now include RID-IDEM-011, distinguishing fifteen deterministic legacy Cosmos cleanup cases from ten selected-booking Cosmos cleanup cases and the in-memory replacement regression. Source/test head `8fe2afd2dbd3a88c5c09a81f6fb112beeaf0ecd6` passed CI #44672496184 (869/869). The prior documentation head `ea6df4b2215d3a0449c08f9d199ecce71e809eea` passed CI #44672906257 (869/869); this row-sync commit must pass its own exact-head CI. API remains the only active phase; PR #197 requires independent human approval. PR #196/#198 remain Draft. Strict acceptance remains 0/19; production readiness is not established.
+
+
+## Environment persistence guard audit — 2026-11-20
+
+A proposed guard requiring Cosmos in every environment except Development/Testing was not retained. Exact-head CI #44673667869 failed 5/881: the Staging legacy-FIFO gate test and four Staging support-intake contract tests. Those tests establish the existing contract: Staging may use in-memory persistence while support intake is disabled; enabling Staging support intake requires approved retention and Cosmos. The guard and its 12 tests were reverted in commit `3d0ef28b82ea8c10ef3d2898940a09f95e384007`. The restored tree passed exact-head CI #44674102947 with 869/869, Release build and native publish. Production still requires Cosmos; no Staging/production behavior change remains.
+
+Latest restored source/test head `3d0ef28b82ea8c10ef3d2898940a09f95e384007` passed exact-head API-only [CI #44674102947](https://github.com/rajeevp727/turnova-platform/actions/runs/44674102947): scope/backend success, **869/869 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14602045569](https://github.com/rajeevp727/turnova-platform/actions/runs/44674102947/artifacts/14602045569). Build log: 25 xUnit analyzer warnings and 0 errors. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped by the API-only phase gate.

@@ -59,8 +59,10 @@ public sealed class SupportRequestAvailabilityTests
     [InlineData("Testing", false, true)]
     [InlineData("Staging", false, false)]
     [InlineData("Production", false, false)]
+    [InlineData("QA", false, false)]
     [InlineData("Staging", true, true)]
     [InlineData("Production", true, true)]
+    [InlineData("QA", true, true)]
     public void NonDevelopmentSupportIntakeRequiresExplicitPolicyApproval(
         string environmentName,
         bool policyApproved,

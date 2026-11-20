@@ -140,11 +140,8 @@ var cosmosKey = builder.Configuration["CosmosDb:Key"];
 var databaseName = builder.Configuration["CosmosDb:DatabaseName"] ?? "TurnOvaDb";
 var useCosmos = !string.IsNullOrWhiteSpace(cosmosEndpoint) || !string.IsNullOrWhiteSpace(cosmosKey);
 
-if (builder.Environment.IsProduction() && !useCosmos)
-    throw new InvalidOperationException("Production requires CosmosDb:Endpoint and CosmosDb:Key. In-memory persistence is development/test only.");
-
-if (useCosmos && (string.IsNullOrWhiteSpace(cosmosEndpoint) || string.IsNullOrWhiteSpace(cosmosKey)))
-    throw new InvalidOperationException("Both CosmosDb:Endpoint and CosmosDb:Key must be configured.");
+CosmosPersistenceEnvironmentPolicy.Validate(
+    builder.Environment.EnvironmentName, cosmosEndpoint, cosmosKey);
 
 if (useCosmos)
 {
@@ -225,9 +222,15 @@ builder.Services.AddSingleton<StorageReadinessProbe>(sp =>
                 .GetDatabase(databaseName).ReadAsync(cancellationToken: ct);
         };
     }
-    else
+    else if (builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"))
     {
         storageProbe = _ => Task.CompletedTask;
+    }
+    else
+    {
+        // Non-development/test in-memory stores are volatile and must never advertise readiness.
+        storageProbe = _ => Task.FromException(
+            new InvalidOperationException("Durable Cosmos persistence is required for readiness outside Development/Testing."));
     }
 
     return new StorageReadinessProbe(storageProbe, TimeSpan.FromSeconds(3));
@@ -255,13 +258,13 @@ var supportPolicyApproved = app.Configuration.GetValue<bool>("SupportRequests:Po
 var localSupportEnvironment = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing");
 
 if (supportPolicyApproved && !localSupportEnvironment && supportRetentionTtlSeconds is null)
-    throw new InvalidOperationException("SupportRequests:RetentionDays must be a positive Product/Operations-approved value that fits Cosmos item TTL seconds before Staging/Production support intake can be enabled.");
+    throw new InvalidOperationException("SupportRequests:RetentionDays must be a positive Product/Operations-approved value that fits Cosmos item TTL seconds before non-development support intake can be enabled.");
 
 if (supportRequestsEnabled && useCosmos && supportRetentionTtlSeconds is null)
     throw new InvalidOperationException("SupportRequests:RetentionDays must be a positive approved value that fits Cosmos item TTL seconds whenever support requests use persistent Cosmos storage.");
 
-if (app.Environment.IsStaging() && supportRequestsEnabled && !useCosmos)
-    throw new InvalidOperationException("Staging support intake requires CosmosDb:Endpoint and CosmosDb:Key. Keep SupportRequests:PolicyApproved=false until durable storage is configured.");
+if (supportRequestsEnabled && !localSupportEnvironment && !useCosmos)
+    throw new InvalidOperationException("Non-development support intake requires CosmosDb:Endpoint and CosmosDb:Key. Keep SupportRequests:PolicyApproved=false until durable storage is configured.");
 
 if (useCosmos)
 {
@@ -291,7 +294,7 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+if (OpenApiEndpointPolicy.IsEnabled(app.Environment.EnvironmentName))
     app.MapOpenApi().AllowAnonymous();
 app.MapHealthChecks("/health/live");
 
@@ -556,22 +559,8 @@ static string NormalizeUnionCode(string? code) =>
 static string CreateUnionId(string normalizedCode) =>
     "union-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedCode))).ToLowerInvariant();
 
-async Task<bool> TryCreateUnionIfAbsentAsync(DriverUnion union, CancellationToken ct)
-{
-    if (unionContainer is null)
-        return unions.TryAdd(union.UnionId, union);
-
-    try
-    {
-        await unionContainer.CreateItemAsync(
-            union, new PartitionKey(union.UnionId), cancellationToken: ct);
-        return true;
-    }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-    {
-        return false;
-    }
-}
+Task<bool> TryCreateUnionIfAbsentAsync(DriverUnion union, CancellationToken ct) =>
+    UnionCreateIfAbsent.TryCreateAsync(unionContainer, unions, union, ct);
 
 async Task<DriverUnionAssignment?> FindUnionAssignmentAsync(string driverId, CancellationToken ct)
 {
@@ -1003,11 +992,6 @@ async Task<DriverOnboardingProfile?> GetApprovedDriverProfileAsync(string driver
     return profile?.Status == "Approved" ? profile : null;
 }
 
-async Task SaveRideAsync(DemoRide ride, CancellationToken ct)
-{
-    if (rideContainer is null) { rides[ride.RideId] = ride; return; }
-    await rideContainer.UpsertItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
-}
 
 async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
 {
@@ -3350,10 +3334,36 @@ app.MapPost("/api/v1/rider/bookings", async (
 
     async Task<IResult?> ResolveExistingBookingIdempotencyAsync(RideIdempotencyRecord prior)
     {
+        // Validate the persisted idempotency envelope before trusting its ride pointer.
+        // The point read is Rider-partition scoped, but corrupted/mis-keyed metadata must
+        // not be allowed to drive recovery or reservation changes.
+        if (!string.Equals(prior.id, keyId, StringComparison.Ordinal) ||
+            !string.Equals(prior.riderId, riderId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(prior.rideId))
+            return Results.Conflict(new
+            {
+                message = "The original booking reference cannot be safely replayed. Retry with a new Idempotency-Key."
+            });
+
         if (prior.RequestHash != requestFingerprint)
             return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
 
-        var priorRide = await FindRideAsync(prior.rideId, ct);
+        // Distinguish a genuinely missing ride (the supported interrupted-create recovery
+        // case) from an existing ride owned by another Rider. Filtering the raw read first
+        // would make a foreign ride look missing and could reserve its deterministic ID.
+        var priorRideSnapshot = await ReadRideRawAsync(prior.rideId, ct);
+        if (priorRideSnapshot is not null &&
+            !string.Equals(priorRideSnapshot.RiderId, riderId, StringComparison.Ordinal))
+            return Results.Conflict(new
+            {
+                message = "The original booking reference cannot be safely replayed. Retry with a new Idempotency-Key."
+            });
+
+        var priorRide = priorRideSnapshot is null
+            ? null
+            : await FindRideAsync(
+                prior.rideId, ct,
+                ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
         if (priorRide is not null)
         {
             if (!string.IsNullOrWhiteSpace(priorRide.UnionId) &&
@@ -3369,7 +3379,9 @@ app.MapPost("/api/v1/rider/bookings", async (
 
                 // The overlap check can reconcile an expired negotiation. Re-read before
                 // restoring the Rider reservation or replaying a Driver notification.
-                priorRide = await FindRideAsync(priorRide.RideId, ct);
+                priorRide = await FindRideAsync(
+                    priorRide.RideId, ct,
+                    ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
             }
 
             if (priorRide is not null)
@@ -3525,9 +3537,11 @@ app.MapPost("/api/v1/rider/bookings", async (
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
-                var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
-                    keyId, new PartitionKey(riderId), cancellationToken: ct);
-                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior.Resource);
+                var prior = await CosmosCreateConflictRead.ReadAfterCreateConflictAsync<RideIdempotencyRecord>(
+                    idempotencyContainer, keyId, new PartitionKey(riderId), ct);
+                if (prior is null)
+                    return Results.Conflict(new { message = "A booking with this Idempotency-Key is already being processed. Retry shortly." });
+                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior);
                 if (existingResult is not null) return existingResult;
             }
         }
@@ -3536,12 +3550,26 @@ app.MapPost("/api/v1/rider/bookings", async (
     async Task RemoveIdempotencyRecordAsync()
     {
         if (isIdempotencyRecovery) return;
-        if (idempotencyContainer is null) bookingIdempotency.TryRemove(idempotencyIndex, out _);
-        else
+        if (idempotencyContainer is null)
         {
-            try { await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct); }
-            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+            // Remove only the record created by this request. A stale failure path must
+            // not delete a replacement record installed after a retry/recovery race.
+            InMemoryRideIdempotencyReservations.TryRemoveExact(
+                bookingIdempotency, idempotencyIndex, idempotencyRecord);
+            return;
         }
+
+        // Cosmos cleanup is compare-and-delete: validate the exact Rider/ride/request
+        // identity and delete with the observed ETag so a newer record cannot be removed.
+        await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
+            idempotencyContainer,
+            keyId,
+            new PartitionKey(riderId),
+            riderId,
+            rideId,
+            requestFingerprint,
+            idempotencyRecord.CreatedAtUtc!.Value,
+            CancellationToken.None);
     }
 
     if (await HasActiveRiderBookingAsync(riderId, rideId, requestFingerprint, ct))
@@ -3726,8 +3754,9 @@ app.MapGet("/api/v1/rides/nearby", () =>
 
 app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal user, CreateRideRequest request, QueueService queueService, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
-    if (!app.Configuration.GetValue<bool>("Dispatch:LegacyFifoRiderRequestsEnabled"))
-        return Results.Conflict(new { message = "Customer-facing FIFO ride requests are disabled. Select a driver through Rider discovery." });
+    if (!app.Configuration.GetValue<bool>("Dispatch:LegacyFifoRiderRequestsEnabled") ||
+        (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")))
+        return Results.Conflict(new { message = "Legacy FIFO compatibility requests are disabled outside Development/Testing. Select a driver through Rider discovery." });
     if (string.IsNullOrWhiteSpace(request.Pickup) || string.IsNullOrWhiteSpace(request.Dropoff))
         return Results.BadRequest(new { message = "Pickup and drop-off are required." });
     if (request.Passengers is < 1 or > 6)
@@ -3751,14 +3780,22 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         return Results.BadRequest(new { message = "A valid Idempotency-Key header (1-128 characters) is required." });
 
     var keyId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
-    var rideId = $"RIDE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+    var reservationKey = $"{riderId}:{keyId}";
+    var rideId = $"RIDE-{Guid.NewGuid().ToString("N").ToUpperInvariant()}";
     var reservation = new RideIdempotencyRecord(keyId, riderId, rideId);
     if (idempotencyContainer is null)
     {
-        if (!idempotencyKeys.TryAdd($"{riderId}:{keyId}", rideId))
+        if (!idempotencyKeys.TryAdd(reservationKey, rideId))
         {
-            var existingId = idempotencyKeys[$"{riderId}:{keyId}"];
-            var existingRide = await FindRideAsync(existingId, ct);
+            // The original request may release its reservation between TryAdd and this read.
+            // A missing key is a retryable in-flight/cleanup race, not an indexer exception.
+            if (!InMemoryRideIdempotencyReservations.TryGetRideId(
+                    idempotencyKeys, reservationKey, out var existingId))
+                return Results.Conflict(new { message = "The original request is still being processed. Retry shortly." });
+
+            var existingRide = await FindRideAsync(
+                existingId, ct,
+                ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
             return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(ToRiderRideDetailsResponse(existingRide));
         }
     }
@@ -3767,8 +3804,13 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         try { await idempotencyContainer.CreateItemAsync(reservation, new PartitionKey(riderId), cancellationToken: ct); }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
-            var existing = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
-            var existingRide = await FindRideAsync(existing.Resource.rideId, ct);
+            var existing = await CosmosCreateConflictRead.ReadAfterCreateConflictAsync<RideIdempotencyRecord>(
+                idempotencyContainer, keyId, new PartitionKey(riderId), ct);
+            if (existing is null)
+                return Results.Conflict(new { message = "The original request is still being processed. Retry shortly." });
+            var existingRide = await FindRideAsync(
+                existing.rideId, ct,
+                ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
             return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(ToRiderRideDetailsResponse(existingRide));
         }
     }
@@ -3782,11 +3824,39 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         AuditEvents = AppendRideAuditEvent(ride, "RideRequested", riderId, "Rider",
             newStatus: ride.Status, occurredAtUtc: requestedAtUtc)
     };
-    try { await SaveRideAsync(ride, ct); }
+    async Task ReleaseIdempotencyReservationAsync()
+    {
+        if (idempotencyContainer is null)
+        {
+            // Compare-and-remove the exact key/value pair atomically. A stale cleanup
+            // must never remove a newer request's replacement reservation.
+            InMemoryRideIdempotencyReservations.TryRemoveExact(idempotencyKeys, reservationKey, rideId);
+            return;
+        }
+
+        await CosmosLegacyRideIdempotencyCleanup.TryDeleteExactAsync(
+            idempotencyContainer,
+            keyId,
+            new PartitionKey(riderId),
+            riderId,
+            rideId,
+            CancellationToken.None);
+    }
+
+    try
+    {
+        if (!await TryCreateRideAsync(ride, ct))
+        {
+            await ReleaseIdempotencyReservationAsync();
+            return Results.Conflict(new
+            {
+                message = "The ride identifier is already in use. Retry with a new Idempotency-Key."
+            });
+        }
+    }
     catch
     {
-        if (idempotencyContainer is null) idempotencyKeys.TryRemove($"{riderId}:{keyId}", out _);
-        else await idempotencyContainer.DeleteItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
+        await ReleaseIdempotencyReservationAsync();
         throw;
     }
 

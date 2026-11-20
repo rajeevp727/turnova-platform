@@ -7921,6 +7921,7 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
     private sealed class TurnOvaApiFactory : WebApplicationFactory<Program>
     {
         private readonly bool _legacyFifoRiderRequestsEnabled;
+        private readonly string _environmentName;
         private readonly double? _nearbyRadiusKm;
         // Test-only fixture; production appsettings intentionally leaves this product policy unset.
         private readonly int? _nearbyLocationMaxAgeSeconds;
@@ -7940,9 +7941,11 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
             IQueueStore? queueStore = null,
             IDriverRideReservationStore? reservationStore = null,
             Exception? storageReadinessException = null,
-            IReadOnlyDictionary<string, string?>? dispatchZoneConfigurationOverrides = null)
+            IReadOnlyDictionary<string, string?>? dispatchZoneConfigurationOverrides = null,
+            string environmentName = "Testing")
         {
             _legacyFifoRiderRequestsEnabled = legacyFifoRiderRequestsEnabled;
+            _environmentName = environmentName;
             _nearbyRadiusKm = nearbyRadiusKm;
             _nearbyLocationMaxAgeSeconds = nearbyLocationMaxAgeSeconds;
             _selectedDriverNegotiationLifetimeMinutes = selectedDriverNegotiationLifetimeMinutes;
@@ -7957,7 +7960,7 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Testing");
+            builder.UseEnvironment(_environmentName);
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
                 var settings = new Dictionary<string, string?>

@@ -182,10 +182,14 @@ public sealed class AuthApiIntegrationTests
         var paths = root.GetProperty("paths");
         Assert.True(paths.TryGetProperty("/api/v1/auth/me", out var mePath));
         Assert.True(paths.TryGetProperty("/api/v1/auth/{role}/login", out var loginPath));
+        Assert.True(paths.TryGetProperty("/api/v1/auth/{role}/register", out var registerPath));
+        Assert.True(paths.TryGetProperty("/api/v1/auth/refresh", out var refreshPath));
         Assert.True(paths.TryGetProperty("/api/v1/rider/discovery", out _));
-        Assert.True(paths.TryGetProperty("/api/v1/rider/bookings", out _));
-        Assert.True(paths.TryGetProperty("/api/v1/union/reconciliation", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/rider/bookings", out var riderBookingPath));
+        Assert.True(paths.TryGetProperty("/api/v1/driver/rides/{rideId}/payment-report", out var paymentReportPath));
+        Assert.True(paths.TryGetProperty("/api/v1/union/reconciliation", out var unionReconciliationPath));
         Assert.True(paths.TryGetProperty("/api/v1/ops/drivers/{driverId}", out var opsPath));
+        Assert.True(paths.TryGetProperty("/api/v1/ops/unions", out var opsUnionsPath));
         Assert.False(paths.TryGetProperty("/__test/throw", out _),
             "Testing-only exception routes must not appear in the published API contract.");
 
@@ -198,8 +202,36 @@ public sealed class AuthApiIntegrationTests
         var meSecurity = mePath.GetProperty("get").GetProperty("security");
         Assert.Contains(meSecurity.EnumerateArray(), requirement => requirement.TryGetProperty("Bearer", out _));
         Assert.False(loginPath.GetProperty("post").TryGetProperty("security", out _));
+        Assert.False(registerPath.GetProperty("post").TryGetProperty("security", out _));
+        Assert.False(refreshPath.GetProperty("post").TryGetProperty("security", out _));
+
+        foreach (var security in new[]
+        {
+            riderBookingPath.GetProperty("post").GetProperty("security"),
+            paymentReportPath.GetProperty("post").GetProperty("security"),
+            unionReconciliationPath.GetProperty("get").GetProperty("security")
+        })
+            Assert.Contains(security.EnumerateArray(), requirement => requirement.TryGetProperty("Bearer", out _));
+
         var opsSecurity = opsPath.GetProperty("get").GetProperty("security");
         Assert.Contains(opsSecurity.EnumerateArray(), requirement => requirement.TryGetProperty("OpsAdminKey", out _));
+        Assert.DoesNotContain(opsSecurity.EnumerateArray(), requirement => requirement.TryGetProperty("Bearer", out _));
+        var opsUnionSecurity = opsUnionsPath.GetProperty("post").GetProperty("security");
+        Assert.Contains(opsUnionSecurity.EnumerateArray(), requirement => requirement.TryGetProperty("OpsAdminKey", out _));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentIsNotMappedInStaging()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Staging OpenAPI must not call TriSend."));
+        using var factory = new AuthApiFactory(handler, environmentName: "Staging");
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Empty(handler.Requests);
     }
 
@@ -643,11 +675,12 @@ public sealed class AuthApiIntegrationTests
 
     private sealed class AuthApiFactory(
         RecordingHandler handler,
-        IReadOnlyDictionary<string, string?>? overrides = null) : WebApplicationFactory<Program>
+        IReadOnlyDictionary<string, string?>? overrides = null,
+        string environmentName = "Testing") : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Testing");
+            builder.UseEnvironment(environmentName);
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
                 var settings = new Dictionary<string, string?>

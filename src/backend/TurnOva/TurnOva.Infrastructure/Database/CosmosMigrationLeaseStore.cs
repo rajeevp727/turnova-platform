@@ -19,6 +19,8 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
+
         var document = new CosmosMigrationLeaseDocument
         {
             Id = LeaseId,
@@ -30,7 +32,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         {
             var response = await locks.CreateItemAsync(
                 document, new PartitionKey(document.Id), cancellationToken: cancellationToken);
-            return ToLease(document, response.ETag);
+            return ToLease(response.Resource, response.ETag, owner);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
@@ -58,10 +60,13 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(expected);
         if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(expected.ETag) ||
-            string.IsNullOrWhiteSpace(newOwner))
-            throw new ArgumentException("A valid expected migration lease and owner are required.", nameof(expected));
+            string.IsNullOrWhiteSpace(expected.Owner) ||
+            string.IsNullOrWhiteSpace(expected.ETag))
+            throw new ArgumentException("A valid expected migration lease is required.", nameof(expected));
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(newOwner);
 
         var replacement = new CosmosMigrationLeaseDocument
         {
@@ -78,10 +83,13 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
                 new PartitionKey(replacement.Id),
                 new ItemRequestOptions { IfMatchEtag = expected.ETag },
                 cancellationToken);
-            return ToLease(replacement, response.ETag);
+            return ToLease(response.Resource, response.ETag, newOwner);
         }
-        catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+        catch (CosmosException ex) when (
+            ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed)
         {
+            // The lease disappeared or another runner replaced it after the read.
+            // Both outcomes mean this acquisition/renewal attempt lost its race.
             return null;
         }
     }
@@ -90,6 +98,12 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         CosmosMigrationLease expected,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(expected);
+        if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(expected.Owner) ||
+            string.IsNullOrWhiteSpace(expected.ETag))
+            throw new ArgumentException("A valid expected migration lease is required.", nameof(expected));
+
         try
         {
             await locks.DeleteItemAsync<CosmosMigrationLeaseDocument>(
@@ -107,6 +121,20 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         }
     }
 
-    private static CosmosMigrationLease ToLease(CosmosMigrationLeaseDocument document, string etag) =>
-        new(document.Id, document.Owner, etag, document.ExpiresAtUtc);
+    private static CosmosMigrationLease ToLease(
+        CosmosMigrationLeaseDocument? document,
+        string etag,
+        string? expectedOwner = null)
+    {
+        if (document is null ||
+            !string.Equals(document.Id, LeaseId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(document.Owner) ||
+            (expectedOwner is not null &&
+                !string.Equals(document.Owner, expectedOwner, StringComparison.Ordinal)) ||
+            string.IsNullOrWhiteSpace(etag))
+            throw new InvalidOperationException(
+                "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.");
+
+        return new(document.Id, document.Owner, etag, document.ExpiresAtUtc);
+    }
 }

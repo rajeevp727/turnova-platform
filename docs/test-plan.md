@@ -14,12 +14,16 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
 | API-OPENAPI-001 | Generate API v1 contract in Testing | `GET /openapi/v1.json` returns the v1 document and includes auth, Rider discovery/booking, Union reconciliation and Driver payment-report routes | API integration | P0 |
-| API-OPENAPI-002 | Document authorization accurately | Authenticated routes use JWT Bearer; `/api/v1/ops/*` uses `X-Driver-Admin-Key`; public login/register/refresh routes have no bearer requirement | API integration/security | P0 |
+| API-OPENAPI-002 | Document authorization accurately | Rider booking, Driver payment-report and Union reconciliation carry JWT Bearer; `/api/v1/ops/*` carries only `X-Driver-Admin-Key`; public login/register/refresh routes have no bearer requirement | API integration/security | P0 |
 | API-OPENAPI-003 | Keep OpenAPI out of Production | Runtime maps the generated contract only in Development/Testing | API configuration | P1 |
 | AUTH-API-015 | Local profile-read authorization | `GET /api/v1/auth/me` rejects missing/invalid JWT before calling TriSend; valid Rider/Driver tokens are forwarded unchanged | API integration/security | P0 |
 | API-CI-001 | Enforce API-first CI phase | Backend tests and native API publish run for API-only changes while mobile jobs are skipped; mobile changes enable Android jobs; iOS jobs require the phase-approval label | CI fixture | P0 |
 | API-OPENAPI-004 | Keep OpenAPI.NET dependency patched | Restore resolves Microsoft.OpenApi 2.7.5 or later on the compatible 2.x line; NU1903 remains an error and no audit suppression is added | Dependency/security CI | P0 |
 | API-OPENAPI-005 | Exclude test-only routes from the contract | The Testing-only `/__test/throw` route remains usable by the exception-handler test but is absent from `/openapi/v1.json` | API integration | P1 |
+
+
+
+AuthApiIntegrationTests.OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySchemes asserts auth register/login/refresh, Rider discovery/booking, Driver payment-report, Union reconciliation and Operations driver/Union paths. It checks Bearer on Rider/Driver/Union routes, OpsAdminKey without Bearer on Operations routes, no security requirement on public login/register/refresh, and exclusion of /__test/throw.
 
 ## 1. Authentication — registration
 
@@ -230,7 +234,7 @@ The GitHub Actions workflow currently runs:
 - Driver app TypeScript typecheck.
 - Rider app TypeScript typecheck.
 
-**Important:** The CI workflow passing confirms compilation and the existing automated tests/typechecks only. The API integration, TriSend contract, mobile runtime, JWT security and end-to-end scenarios above still require automated coverage or execution against test environments. Cases marked Planned have not been executed.
+**Important:** A green CI run proves only the jobs and tests executed by that run. The backend suite includes deterministic API integration and JWT authorization coverage; it does not prove live TriSend/provider identity, live Cosmos multi-instance/restart, mobile runtime, physical-device or production end-to-end behavior. Rows marked Planned are not implemented or passed. Record external evidence separately.
 
 ## 9. Recommended execution order
 
@@ -241,17 +245,21 @@ The GitHub Actions workflow currently runs:
 5. P0 mobile session restore, refresh failure, logout and network failure tests.
 6. P1/P2 resilience, usability and platform tests.
 
-## 10. Known acceptance gaps to close before production
+## 10. Historical acceptance backlog — reconciled 2026-11-20
 
-- Add API integration tests with a fake TriSend HTTP handler and test JWTs; do not call the production auth service from CI.
-- Add mobile component/integration tests for login/register, secure storage, refresh, logout and duplicate taps.
-- Serialize concurrent token refreshes to prevent refresh-token rotation races.
-- Validate passenger count as 1–6 instead of silently clamping invalid values.
-- Add request idempotency for ride creation.
-- Add durable ride persistence, driver eligibility/onboarding and production CORS policy.
-- Add session revocation strategy if immediate access-token invalidation is required.
+The original pre-MVP backlog is superseded by later implementation and test evidence; it is retained here as a traceable checklist rather than a current list of unimplemented API work.
 
-## 11. Ride persistence, acceptance and live tracking (planned until CI/device validation)
+- **TriSend/API integration tests:** implemented in `AuthApiIntegrationTests` with a recording fake `HttpMessageHandler`, signed deterministic test JWTs, and assertions that anonymous/invalid requests do not call TriSend. CI does not call the production identity provider. Latest exact-head API CI #44642122427 passed 821/821 backend tests.
+- **Mobile auth tests:** deterministic shared auth/session helper and source-integration coverage exists. Full Rider/Driver native UI, secure-store/Keychain, install/launch and physical-device acceptance remains in the ordered Android then iOS phases; do not begin those completion phases before the API exit gate.
+- **Token refresh concurrency:** keep explicit mobile-phase audit coverage for concurrent refresh calls and provider rotation/reuse semantics. Do not treat local storage mutation serialization as proof of network refresh single-flight. Live TriSend rotation/reuse remains an external provider gate.
+- **Passenger count and request validation:** API enforces Cab passenger count 1–6 and validates route, stops, coordinates and idempotency key before reservation writes; `RIDER-BOOK-INPUT-001..006` and `SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver` / `SelectedBookingAcceptsMaximumSupportedRouteAndPassengerBoundaries` are included in exact-head API CI #44642122427.
+- **Ride idempotency:** selected booking and the Development/Testing-only legacy compatibility path have deterministic idempotency/concurrency tests; the legacy FIFO route remains disabled outside Development/Testing and does not define customer-facing ranking/assignment.
+- **Persistence, eligibility and CORS:** API repositories/adapters, driver onboarding/eligibility, Union membership and CORS validation have deterministic tests and native publish evidence. Live Cosmos ETag/transactional-batch/multi-instance/restart and production CORS-origin/hosting validation remain external.
+- **Session revocation:** no local access-token blacklist is invented. Immediate access-token revocation beyond the upstream refresh/logout contract remains a Product/Security decision if required.
+
+Do not interpret these historical bullets as a reason to skip external evidence or to begin Android early. API phase exit still requires complete in-scope source/test/docs evidence and available API checks; live Cosmos, production identity/hosting and provider validation remain external.
+
+## 11. Ride persistence, acceptance and live tracking (API deterministic coverage executed; live Cosmos/mobile evidence remains external)
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
@@ -266,6 +274,8 @@ The GitHub Actions workflow currently runs:
 | TRACK-004 | Rider Activity screen is open | Map refreshes from authoritative ride state while screen is active | Mobile E2E | P1 |
 | TRACK-005 | Driver leaves Trips screen | Foreground location subscription is removed | Mobile | P0 |
 | TRACK-006 | Location permission denied | Driver sees an actionable error; no false location-sharing state | Mobile | P1 |
+
+**Execution status (2026-11-20):** The API portions of this historical case set now have deterministic backend coverage in `RideApiIntegrationTests` and `RideTrackingHubTests`; the old “planned until CI/device validation” wording was stale. Examples include invalid ride-request rejection, concurrent Driver acceptance with exactly one winner, owner/assigned-Driver access isolation and selected-Cab-trip location sharing. `RID-PERSIST-001` still requires live Cosmos persistence/restart evidence. `TRACK-004`–`TRACK-006` remain mobile runtime/permission/device acceptance and are not claimed by API CI.
 
 ## 12. Ride lifecycle, idempotency and SignalR
 
@@ -284,6 +294,8 @@ The GitHub Actions workflow currently runs:
 | RID-IDEM-001 | Repeat request with same rider and Idempotency-Key | Original ride is returned; no second ride is created | API + Cosmos | P0 |
 | RID-IDEM-002 | Same key used by different riders | Separate ride requests are allowed | API + Cosmos | P1 |
 | RID-IDEM-003 | Missing or oversized idempotency key | HTTP 400; no ride is created | API | P0 |
+| RID-IDEM-004 | A stale/corrupt selected or legacy idempotency mapping references another Rider's ride | HTTP 409; the authenticated Rider receives no other Rider's ride ID or response projection and no foreign Rider reservation is acquired | `SelectedBookingIdempotencyReplayCannotReturnAnotherRidersRide`; `LegacyIdempotencyReplayCannotReturnAnotherRidersRide` | P0 |
+| RID-IDEM-005 | Legacy FIFO compatibility is enabled outside Development/Testing | HTTP 409 before ride or idempotency writes; local/test compatibility uses full GUID IDs and create-if-absent ride persistence | `LegacyFifoRiderRequestsRemainDisabledOutsideDevelopmentAndTesting` | P0 |
 | TRACK-007 | Assigned Driver posts location during active ride | Latest location is broadcast to the owning Rider's SignalR group | API + SignalR | P0 |
 | TRACK-008 | Driver posts location after completion/cancellation | HTTP 404/409; no location update or broadcast | API security | P0 |
 | TRACK-009 | Rider SignalR connection uses another Rider's ride ID | Connection is aborted before group membership | SignalR security | P0 |
@@ -314,7 +326,7 @@ The shared `rideRecovery.test.cjs` also verifies immutable `RideStatusChanged` p
 | COSMOS-MIG-005 | Migration fails before history is recorded | Startup fails; a later startup can retry the idempotent migration | Cosmos integration | P0 |
 | COSMOS-READY-001 | Cosmos database is reachable | `GET /health/ready` returns HTTP 200 | API + Cosmos | P0 |
 | COSMOS-READY-002 | Cosmos database is unavailable | `GET /health/ready` returns HTTP 503 | API + failure injection | P0 |
-| COSMOS-READY-003 | API runs in in-memory demo mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
+| COSMOS-READY-003 | API runs in Development/Testing in-memory mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
 
 Automated tests cover Cosmos configuration validation. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
 
@@ -580,10 +592,14 @@ Cross-document atomicity, outbox retries, and next-driver progression after reje
 | OFFER-REJECT-001 | Assigned driver rejects a pending, unexpired offer | Queue rotation uses the offer ID; offer and current attempt become Rejected | API/store | P0 |
 | OFFER-REJECT-002 | Another driver rejects the offer | HTTP 409; queue and offer remain unchanged | API/security | P0 |
 | OFFER-REJECT-003 | Driver retries after queue rotation succeeded but offer update failed | Same offer ID is recognized; driver is not rotated twice and offer can be resolved | API/store | P0 |
-| OFFER-REJECT-004 | Driver rejects an expired or already-resolved offer | HTTP 409; no new queue rotation | API | P0 |
+| OFFER-REJECT-004 | Driver rejects an expired or non-rejected resolved offer | HTTP 409; no new queue rotation | API | P0 |
 | OFFER-REJECT-005 | Driver repeats a successfully recorded rejection | HTTP 204; no duplicate rotation or work activity | API | P1 |
 
 This retry path depends on the driver retrying after an interrupted response. Automatic reconciliation and next-driver offer issuance remain separate work.
+
+`OFFER-REJECT-003` is exercised by `RideApiIntegrationTests.LegacyOfferRejectionRetryAfterRotationInterruptionDoesNotRotateTwice`, which simulates interruption after a durable in-memory queue rotation and verifies same-offer retry does not rotate twice, work activity is recorded once, and advancement is signalled only after offer resolution. `OFFER-REJECT-004` is exercised by `RideApiIntegrationTests.LegacyExpiredOfferRejectionReturnsConflictWithoutQueueRotation`, which verifies an expired offer returns HTTP 409 without queue rotation, work activity or advancement. Both are deterministic legacy compatibility tests using in-memory stores; neither enables customer-facing FIFO ranking/assignment nor proves live Cosmos multi-instance behavior. A replay of the same already-rejected offer is the separate idempotent `OFFER-REJECT-005` case and returns HTTP 204 without a second rotation or work-activity record.
+
+
 
 
 ## Idempotent FIFO queue rotation
@@ -731,8 +747,9 @@ The automated API tests use the in-memory ride store. Cosmos cross-partition que
 | PLATFORM-CORS-001 | Browser preflight uses an origin configured in `Cors:AllowedOrigins` | API returns the matching `Access-Control-Allow-Origin` header and allows the requested method | API integration/security | P0 |
 | PLATFORM-CORS-002 | Browser preflight uses an origin not in the configured allow-list | API does not emit `Access-Control-Allow-Origin` for that origin | API integration/security | P0 |
 | PLATFORM-HEALTH-001 | Liveness probe calls `/health/live` | HTTP 200 while the API process is running | API integration | P0 |
-| PLATFORM-HEALTH-002 | Readiness probe calls `/health/ready` in demo/in-memory mode | HTTP 200 with `status: ready`; public response does not disclose the storage mode or database name | API integration | P0 |
+| PLATFORM-HEALTH-002 | Readiness probe calls `/health/ready` in Development/Testing in-memory mode | HTTP 200 with `status: ready`; public response does not disclose the storage mode or database name | API integration | P0 |
 | PLATFORM-HEALTH-003 | Readiness probe calls `/health/ready` in Cosmos mode while the database is unavailable | HTTP 503; readiness does not report healthy when the configured persistent store is unreachable | Cosmos integration/failure injection | P0 |
+| PLATFORM-HEALTH-017 | Readiness probe runs outside Development/Testing with in-memory fallback (for example Staging) | HTTP 503; process-local persistence is never advertised as ready outside Development/Testing | API integration | P0 |
 
 | PLATFORM-CORS-003 | Configured origin contains a wildcard hostname such as `https://*.turnova.test` | Startup validation rejects the origin before it is added to the CORS policy | Unit |
 | PLATFORM-CORS-004 | Configured origin contains a wildcard character elsewhere in the origin string | Startup validation rejects the origin; no wildcard matching is enabled | Unit |
@@ -843,8 +860,8 @@ The UnionManager reconciliation Cosmos read uses an explicit scalar projection r
 | CAB-DISC-017 | Nearby radius is zero, negative, NaN or positive infinity | API returns 503 and does not apply an implicit/default radius | RiderDiscoveryFailsClosedWhenNearbyRadiusIsMissingOrInvalid | PR #58 merged at `a3a5835c66ec5f77f4b7505b4d99d5a43de18403`; final head `73db39c8cbdf79da99181688f7540e63c88cfc32` passed CI run [42258555372](https://github.com/rajeevp727/turnova-platform/actions/runs/42258555372), all four jobs |
 | CAB-DISC-018 | Two eligible drivers have equal pickup distance | Stable DriverId ordinal tie-break keeps result order deterministic before the per-union three-driver cap | RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency (equal-distance central-1/central-2 fixture and ordered IDs) | PR #59 final-head CI run [42259580145](https://github.com/rajeevp727/turnova-platform/actions/runs/42259580145) passed all four jobs |
 | CAB-DISC-019 | A pickup coordinate matches multiple configured zone rectangles, including an inclusive shared boundary | Discovery and selected booking fail closed independent of configuration order; selected booking creates no ride, idempotency record or reservation; an Online Driver whose location becomes ambiguous is taken Offline | RiderDiscoveryFailsClosedWhenPickupMatchesOverlappingConfiguredZones; SelectedBookingFailsClosedWhenPickupMatchesOverlappingConfiguredZonesBeforeReservation; DriverLocationTakesDriverOfflineWhenPickupMatchesOverlappingConfiguredZones (overlapping interiors and shared inclusive boundaries, both zone orders; 12 cases) | PR #109 exact-head CI [42418661118](https://github.com/rajeevp727/turnova-platform/actions/runs/42418661118) passed 8/8 jobs and 290/290 backend tests |
-| CAB-DISC-020 | Rider discovery response privacy allow-list | Seed eligible unions and drivers, call Rider discovery, and inspect property names at every response level | Top-level response contains only pickupZoneId, journeyDistanceKm and unions; each union contains only unionId, unionName and drivers; each Driver contains only identity/display, verified Cab vehicle/capacity, pickup distance and current-union-approved photo fields. No contact, exact GPS, document, approval-audit or queue fields are exposed. `RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency` asserts exact property names | Added in PR #168; exact-head CI pending |
-| CAB-DISC-021 | Rider discovery rejects invalid pickup coordinates and passenger counts | Submit out-of-range latitude/longitude and passenger counts below 1 or above 6 | HTTP 400 for all six boundary cases; no discovery response is returned. `RiderDiscoveryRejectsInvalidPickupCoordinatesAndPassengerCounts` | Added in PR #168; exact-head CI pending |
+| CAB-DISC-020 | Rider discovery response privacy allow-list | Seed eligible unions and drivers, call Rider discovery, and inspect property names at every response level | Top-level response contains only pickupZoneId, journeyDistanceKm and unions; each union contains only unionId, unionName and drivers; each Driver contains only identity/display, verified Cab vehicle/capacity, pickup distance and current-union-approved photo fields. No contact, exact GPS, document, approval-audit or queue fields are exposed. `RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency` asserts exact property names | Passed in PR #168 exact-head CI #1713 / run 43712409000 (backend 651/651; 12/12 jobs). |
+| CAB-DISC-021 | Rider discovery rejects invalid pickup coordinates and passenger counts | Submit out-of-range latitude/longitude and passenger counts below 1 or above 6 | HTTP 400 for all six boundary cases; no discovery response is returned. `RiderDiscoveryRejectsInvalidPickupCoordinatesAndPassengerCounts` | Passed in PR #168 exact-head CI #1713 / run 43712409000 (backend 651/651; 12/12 jobs). |
 
 Zone resolution accepts a pickup only when exactly one configured rectangle matches. Overlapping rectangles and inclusive shared boundaries are ambiguous; no configuration-order precedence is applied. Rider discovery/booking reject ambiguous pickups, while Driver location reconciliation takes the Driver Offline. The 12 deterministic cases in CAB-DISC-019 exercise overlapping interiors and shared inclusive boundaries in both zone orders. Mobile acceptance still requires Android/iOS device checks for union grouping, selected booking request/retry and reconnect recovery, approved-photo rendering, location permission denial, no-provider call/chat messaging, fare proposal/confirmation and the distinct unavailable journey-distance label. The app submits foreground GPS coordinates to the API and renders only server-authorized union/Driver discovery; live maps/routing, Product-approved non-overlapping zone boundaries and radius, approved location freshness/negotiation-lifetime policy, and Cosmos multi-instance query/concurrency validation remain external gates.
 
@@ -961,12 +978,12 @@ The recovery regression SelectedBookingRecoversAfterInterruptedRideWriteUsingSam
 
 | ID | Scenario | Expected result | Automated evidence | Status |
 |---|---|---|---|---|
-| RIDER-BOOK-INPUT-001 | Selected Driver or Union ID is blank/whitespace or exceeds 128 characters | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
-| RIDER-BOOK-INPUT-002 | Pickup or drop-off is blank/whitespace or exceeds 250 characters | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
-| RIDER-BOOK-INPUT-003 | Passenger count is below 1 or above 6 | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
-| RIDER-BOOK-INPUT-004 | Pickup latitude or longitude is outside its valid geographic range | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
-| RIDER-BOOK-INPUT-005 | Idempotency-Key is missing or exceeds 128 characters | HTTP 400; no reservation or idempotency record is created | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | CI pending on final documentation head |
-| RIDER-BOOK-INPUT-006 | Request uses exact supported maxima: six passengers, ten stops, and 250 characters for pickup, drop-off and each stop | HTTP 201; all route fields and stops are persisted; selected Driver reservation is held | SelectedBookingAcceptsMaximumSupportedRouteAndPassengerBoundaries | CI pending on final documentation head |
+| RIDER-BOOK-INPUT-001 | Selected Driver or Union ID is blank/whitespace or exceeds 128 characters | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | Included in exact-head API CI #44642122427 (821/821 backend tests). |
+| RIDER-BOOK-INPUT-002 | Pickup or drop-off is blank/whitespace or exceeds 250 characters | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | Included in exact-head API CI #44642122427 (821/821 backend tests). |
+| RIDER-BOOK-INPUT-003 | Passenger count is below 1 or above 6 | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | Included in exact-head API CI #44642122427 (821/821 backend tests). |
+| RIDER-BOOK-INPUT-004 | Pickup latitude or longitude is outside its valid geographic range | HTTP 400 before reservation or idempotency write | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | Included in exact-head API CI #44642122427 (821/821 backend tests). |
+| RIDER-BOOK-INPUT-005 | Idempotency-Key is missing or exceeds 128 characters | HTTP 400; no reservation or idempotency record is created | SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver | Included in exact-head API CI #44642122427 (821/821 backend tests). |
+| RIDER-BOOK-INPUT-006 | Request uses exact supported maxima: six passengers, ten stops, and 250 characters for pickup, drop-off and each stop | HTTP 201; all route fields and stops are persisted; selected Driver reservation is held | SelectedBookingAcceptsMaximumSupportedRouteAndPassengerBoundaries | Included in exact-head API CI #44642122427 (821/821 backend tests). |
 
 PR #105 merged at `b4833a210fbb31ea6faefe5892272abcf36357e3`; its final-head CI [42401645940](https://github.com/rajeevp727/turnova-platform/actions/runs/42401645940) passed all eight jobs and executed 257/257 backend tests. PR #106 adds the 14 invalid-input cases plus the positive maximum-boundary case. Its code commit `2d76c556ade57eea01621121859532f5a06c1fcd` passed backend build/tests (272/272) and the Rider/Driver mobile typecheck/bundle jobs in CI [42404536969](https://github.com/rajeevp727/turnova-platform/actions/runs/42404536969); four native Android/iOS jobs were still running when this documentation update was prepared. This is API boundary evidence only; the final PR head must pass all required jobs before merge.
 
@@ -1033,12 +1050,13 @@ DRIVER-01 code/test audit (2026-11-07): `DriverOnboardingRequest` accepts Cab on
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
 |---|---|---|---|---|
-| PLATFORM-HEALTH-001 | API runs in demo in-memory mode | Liveness and readiness return HTTP 200; readiness returns only service/status and does not identify the storage provider | `PublicHealthEndpointsExposeOnlyGenericStatusMetadata` | P0 |
+| PLATFORM-HEALTH-001 | API runs in Development/Testing in-memory mode | Liveness and readiness return HTTP 200; readiness returns only service/status and does not identify the storage provider | `PublicHealthEndpointsExposeOnlyGenericStatusMetadata`, `TestingInMemoryPersistenceRemainsReady` | P0 |
 | PLATFORM-HEALTH-002 | Storage dependency probe fails | Readiness returns generic HTTP 503 while liveness remains HTTP 200; response omits provider exception and infrastructure metadata | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
 | PLATFORM-HEALTH-003 | Storage probe exceeds its configured bound | Probe cancels after three seconds in production wiring; unit test verifies timeout maps to a readiness failure | `CheckAsyncMapsProbeTimeoutToReadinessFailure` | P0 |
 | PLATFORM-HEALTH-004 | Caller cancels the readiness request | Request cancellation propagates and is not misreported as a dependency timeout | `CheckAsyncPropagatesCallerCancellation` | P1 |
 | PLATFORM-HEALTH-005 | Unauthenticated root and health endpoints are queried | `/` exposes only name/version/message; `/health` and `/health/ready` expose only service/status; storage mode, database name, environment and provider metadata are absent | `PublicHealthEndpointsExposeOnlyGenericStatusMetadata` | P0 |
 | PLATFORM-HEALTH-006 | Storage readiness fails | Generic HTTP 503 problem details contain no storage mode, database, environment, endpoint, connection-string or raw provider exception metadata | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
+| PLATFORM-HEALTH-017 | Staging uses in-memory fallback without Cosmos | `/health/ready` returns generic HTTP 503; Testing in-memory mode remains HTTP 200 | `StagingInMemoryPersistenceDoesNotReportReady`, `TestingInMemoryPersistenceRemainsReady` | P0 |
 | PLATFORM-AUDIT-015 | Numeric actor reference contains allowed separators | Phone-like actor references with at least eight digits and only numeric/separator characters are reduced to the System actor before persistence | `ReservationAuditRedactsPhoneLikeActorIdsWithAllowedSeparators` | P0 |
 | PLATFORM-AUDIT-016 | Opaque actor reference contains letters and digits | Opaque internal IDs containing letters remain intact; only phone-like numeric references are redacted | `ReservationAuditPreservesOpaqueActorIdsContainingLetters` | P1 |
 | PLATFORM-AUDIT-017 | Reservation audit event uses a declared event type | The four declared reservation event types are accepted unchanged | `ReservationAuditAcceptsOnlyTheFourDeclaredEventTypes` | P1 |
@@ -1177,8 +1195,8 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-017 | Rider/Driver asks what queue status means | Approved answer states Rider discovery is not FIFO-ranked or auto-assigned and leaves the internal FIFO role unresolved | Unit | P0 |
 | AI-018 | Driver asks about Online/Offline eligibility | Approved answer explains availability as one server-side eligibility input without promising discovery or assignment | Unit | P1 |
 | AI-019 | Provider attempts to supply a passenger count absent from Rider text | Provider contract cannot supply passenger count; response keeps it null and lists passengerCount for manual completion. No default is invented | Unit + API | P0 |
-| AI-020 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
-| AI-021 | AI trip draft omits passenger count while Rider form previously contains its default | Rider form clears the stale/default passenger value; discovery and booking remain blocked until the Rider manually enters an integer from 1 through 6 | Shared mobile helper + Rider UI | P0 |
+| AI-020 | Assistance request logging privacy | Trip-intent/help logs contain only use-case/source/outcome metadata; route, raw prompt, contact and payment values are absent | API integration security | P0 |
+| AI-021 | Help provider prompt privacy | Provider receives only allow-listed generic keywords and approved source IDs; raw question, precise location, contact and payment values are absent | Unit/security | P0 |
 
 | AI-022 | Known ride-state explanation exceeds MaxOutputCharacters | Approved state content is returned only when it fits the configured limit; otherwise the service returns a short deterministic escalation response within the same limit | Unit | P0 |
 | AI-023 | Unsupported-help fallback is subject to the configured output limit | Every unsupported/ambiguous help path returns a bounded escalation response; no fallback can exceed MaxOutputCharacters | Unit | P0 |
@@ -1197,6 +1215,9 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-036 | Provider options are disabled or enabled with incomplete/invalid settings | Disabled provider accepts empty placeholders; enabled provider requires provider/model/HTTPS endpoint/managed credential reference; numeric limits remain enforced and error messages never echo endpoint/secret values | Options validation + DI | P0 |
 | AI-037 | Oversized trip-intent or help JSON body exceeds 16 KiB | Real Kestrel returns HTTP 413 before the assistance service/provider is invoked; both endpoints declare the same request-size limit and OpenAPI response | Real Kestrel host integration | P0 |
 | AI-038 | Assistance request contains unknown ride, location, fare, contact or payment properties | HTTP 400; strict request DTOs accept only text for trip intent and question/optional approved rideState for help | API integration/security | P0 |
+| AI-039 | Caller supplies a ride state to help while provider is enabled | A known state returns only its approved in-repository explanation and an unknown state escalates; neither path invokes the provider or forwards caller-supplied rideState | Unit/security | P0 |
+| AI-040 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
+| AI-041 | AI trip draft omits passenger count while Rider form previously contains its default | Rider form clears the stale/default passenger value; discovery and booking remain blocked until the Rider manually enters an integer from 1 through 6 | Shared mobile helper + Rider UI | P0 |
 
 **AI-01 test-helper correction:** `ValidateOptionsResult.Failures` may be null on success; assertions must use a null-safe empty sequence when constructing failure diagnostics. The first CI run caught this test-only failure (627/632 passed after Release build); corrected helper is in PR #165 source/test head `1289297e68297da2ab3629d820c3445bd39187cd`.
 
@@ -2703,7 +2724,7 @@ Automated implementation: InvalidDispatchZoneConfigurationFailsClosedAcrossRider
 
 - DISPATCH-02: approved Cab unions, active approved Driver membership, max-three per Union, pickup-proximity ordering, minimal Union-approved selfie/Cab projection and explicit Rider selection are implemented/tested. No FIFO ranking or auto-assignment. No new source gap; live Cosmos/device acceptance remains.
 - DISPATCH-03/04: selected-negotiation expiry/read repair, no legacy FIFO advancement, decline/expiry rejection, per-Driver reservation leases and concurrent booking/availability/Union-transfer guards are implemented/tested. Live Cosmos ETag/transactional-batch/multi-instance/restart evidence remains.
-- REALTIME-01: SignalR Hub group authorization, exact RideId matching, JWT expiry/rotation, reconnect retry, session-epoch fencing and history refresh are implemented/tested. Planned safe follow-up: Rider/Driver agreement-history UI hardcodes INR/₹ although the API persists the agreement currency; display each stored currency code. Keep new proposals INR-only until Product confirms multi-currency policy.
+- REALTIME-01: SignalR Hub group authorization, exact RideId matching, JWT expiry/rotation, reconnect retry, session-epoch fencing and history refresh are implemented/tested. Persisted agreement-currency display is also implemented in PR #172: Rider/Driver history uses the API currency for each immutable version; five shared formatter tests and one API integration test cover USD/EUR history and reject silent INR fallback. Proposal entry remains INR-only pending Product policy; see the REALTIME-01 exact-head evidence below.
 - TRIP-01: server-owned lifecycle, mutual-confirmation start gate, foreground-only location sharing, persisted GPS watermark, stale/future rejection, history ownership, stale event fencing and Rider map follow/recenter are implemented/tested. Live routing and device GPS/map acceptance remain.
 - DRIVER-01/02: Cab onboarding/Union approval, verified vehicle/document metadata, approved selfie visibility, availability and location are implemented/tested. Private document storage/scanning/retention/consent, phone OTP provider, live Cosmos and signed-device evidence remain.
 - DRIVER-03: IST work metrics and immutable monthly payslip PDF are implemented. PDF explicitly states earnings/deductions/net payable are not calculated; no compensation policy is introduced. Product must confirm distinct-IST-date DaysWorked semantics.
@@ -2784,12 +2805,27 @@ This run validates the exact pre-documentation-sync head only. The current docum
 
 REALTIME-01 runtime scope remains agreement-history presentation: display each immutable version's persisted currency; never infer or default missing/malformed currency to INR; proposal entry remains INR-only pending Product policy. No fare, conversion, payment, reconciliation, auth, API production contract or ride-state behaviour changed.
 
-## DRIVER-01 next sequential engineering audit — Union code uniqueness
+## DRIVER-01 Union code uniqueness — implemented (PR #173)
 
-Main-branch `POST /api/v1/ops/unions` normalizes the code and checks `ListUnionsAsync`, then creates a random GUID and persists through `UpsertItemAsync`. This check-then-upsert sequence is race-prone: concurrent Ops requests can both pass and create duplicate active normalized codes. Planned safe correction after REALTIME-01 merges: deterministic ID for newly created normalized codes, create-if-absent semantics in the existing `Unions` container partitioned by `/unionId`, HTTP 409 translation for duplicate conflicts, and concurrent case/whitespace-normalization tests. Existing Union IDs and historical records must remain unchanged.
+`POST /api/v1/ops/unions` now normalizes codes by trimming and uppercasing, derives a deterministic SHA-256-based Union ID for new records, and uses create-if-absent semantics in the existing `Unions` container partitioned by `/unionId`. The in-memory adapter uses `ConcurrentDictionary.TryAdd`; duplicate conflicts return HTTP 409. Existing legacy Union IDs and historical records are preserved.
 
-A separate Product/Safety decision is required for Ops rejection/suspension during active negotiation/ride; do not invent a policy or mutate active rides until Product defines the outcome.
+Automated integration regressions:
+- `ConcurrentUnionCreationWithEquivalentNormalizedCodesCreatesExactlyOneUnion` races `  hyd-race  ` against `HYD-RACE`, verifies exactly one HTTP 201 and one HTTP 409, checks the deterministic normalized ID, and confirms only one Union is stored.
+- `UnionCreationConflictPreservesExistingLegacyUnionIdAndRecord` verifies a normalized-code collision returns HTTP 409 without replacing the existing legacy ID or record.
 
+PR [#173](https://github.com/rajeevp727/turnova-platform/pull/173) merged at `b0014139f849408e838c67df13f05722dc9b7afe`. Exact source/test-head CI [#43906366037](https://github.com/rajeevp727/turnova-platform/actions/runs/43906366037) passed **671/671 backend tests (0 failed, 0 skipped)** and all 12 required CI jobs. These deterministic in-memory integration tests do not replace live Cosmos cross-instance create-conflict, ETag or restart validation.
+
+A separate Product/Safety decision is still required for Ops rejection/suspension during an active negotiation or ride; do not invent a policy or mutate active rides until Product defines the outcome.
+
+### Cosmos Union create-if-absent adapter regression — PR #197
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-UNION-001 | Cosmos reports HTTP 409 for a deterministic normalized Union ID | The persistence boundary returns a duplicate result, does not fall back to the in-memory dictionary or overwrite the legacy record, and forwards the caller's cancellation token to Cosmos | `UnionCreateIfAbsentTests.CosmosCreateConflictReturnsFalseWithoutFallingBackToInMemoryStore` with mocked Cosmos Container | P0 |
+| COSMOS-UNION-002 | Cosmos create fails for a reason other than HTTP 409 | The provider failure propagates; it is not misreported as a duplicate Union | `UnionCreateIfAbsentTests.CosmosCreatePropagatesNonConflictFailures` with mocked Cosmos Container | P1 |
+| COSMOS-UNION-003 | Cancellation is requested before in-memory Union creation | The boundary throws OperationCanceledException before ConcurrentDictionary.TryAdd and leaves the in-memory store unchanged | UnionCreateIfAbsentTests.InMemoryCreateHonorsCancellationBeforeMutatingStore | P1 |
+
+The Operations endpoint maps the persistence boundary's duplicate result to HTTP 409. The existing concurrent API integration test covers the in-memory `ConcurrentDictionary.TryAdd` path; the new mocked-container tests exercise the production Cosmos `CreateItemAsync` conflict mapping and verify the `/unionId` partition key/cancellation forwarding. They are deterministic adapter evidence only; live Cosmos cross-instance create conflict, ETag, consistency and restart behavior remain external infrastructure validation.
 
 ## Exact-head verification record — REALTIME-01 CI #1799 (2026-11-16)
 
@@ -2799,7 +2835,7 @@ This evidence is limited to CI, Android emulators and unsigned iOS Simulators. I
 
 REALTIME-01 regression coverage includes five deterministic shared formatter tests and one API integration test proving immutable USD v1/EUR v2 history is returned in order to both Rider and Driver. Proposal entry remains INR-only.
 
-Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged.
+The DRIVER-01 normalized Union-code concurrency work was completed in PR #173; see the implementation and exact-head CI evidence above.
 
 ## REALTIME-01 exact-head executed verification — CI #1800 (2026-11-16)
 
@@ -2820,7 +2856,7 @@ REALTIME-01 regression coverage includes five deterministic shared formatter tes
 
 The current Rider and Driver npm audit artifacts (`14195939928` / `14196118910`) each report 1 low, 11 moderate, 0 high and 0 critical. Findings include deepmerge prototype poisoning, glob AbortSignal cancellation bypass and minimatch denial of service. Do not blind-upgrade Expo/React Native to the major version suggested by npm audit; evaluate compatible targeted overrides and lockfile reproducibility in PLATFORM-01.
 
-Next sequential test work is DRIVER-01 concurrent normalized Union-code creation: race two requests with case/whitespace variants; assert exactly one creation succeeds and the other returns HTTP 409; assert the stored Union remains unique and existing Union IDs are unchanged. Product/Safety separately decides Ops suspension/rejection during active negotiation/ride.
+The DRIVER-01 normalized Union-code concurrency work was completed in PR #173; see the implementation, regression tests and exact-head CI evidence in the `DRIVER-01 Union code uniqueness — implemented (PR #173)` section above. Product/Safety separately decides Ops suspension/rejection during an active negotiation/ride.
 
 
 ## Latest exact-head verification — REALTIME-01 CI #1803 (2026-11-16)
@@ -2832,7 +2868,7 @@ Next sequential test work is DRIVER-01 concurrent normalized Union-code creation
 - REALTIME-01 engineering implementation remains complete: both apps display persisted currency per immutable agreement version; five shared formatter tests and one backend integration test verify USD v1/EUR v2 history for both authenticated parties; proposal entry remains INR-only pending Product policy. No currency conversion, fare, payment, schema, auth or ride-lifecycle behavior was added.
 - Review state: four COMMENT-only reviews, zero unresolved inline threads, no approval/self-approval and no critical/high authorization, privacy, concurrency, idempotency or data-loss finding identified in the reviewed nine-file diff.
 - This evidence/documentation synchronization advances the branch; a fresh exact-head CI is required on the resulting documentation commit before PR readiness/merge. Recheck the exact head and all required jobs before proceeding.
-- Next sequential engineering task after REALTIME-01 merges: DRIVER-01 normalized Union-code creation concurrency. Replace the list-check/random-GUID/upsert race for new codes with deterministic IDs and create-if-absent in the existing `Unions` container (`/unionId` partition); map Cosmos/in-memory duplicate conflicts to HTTP 409; add concurrent case/whitespace-normalization tests; preserve existing Union IDs and historical records. Product/Safety separately owns the active-ride Ops rejection/suspension policy; do not invent an emergency-suspension policy.
+- The next sequential DRIVER-01 normalized Union-code engineering task was completed in PR #173; see the current implementation and regression evidence above. Product/Safety still owns the active-ride Ops rejection/suspension policy; do not invent an emergency-suspension policy.
 - Strict acceptance remains **0/19 Verified** (15 In Progress, 4 Blocked). This is complete-evidence accounting, not an implementation-completion percentage. Production readiness is not established.
 
 
@@ -3109,6 +3145,8 @@ Production-signed AAB/IPA, approved iOS bundle IDs/EAS linkage/build-number poli
 | COSMOS-STORE-002 | Duplicate support item | Same content replays; different content conflicts; a missing item after conflict fails closed | Repository contract | P0 |
 | COSMOS-STORE-003 | Ride offer state replacement | Cosmos adapter sends the expected ETag as IfMatchEtag | Repository contract | P0 |
 | COSMOS-STORE-004 | Driver/Rider reservation acquisition | Reservation and append-only audit event are created in one same-partition transactional batch | Repository contract | P0 |
+| COSMOS-STORE-005 | Cosmos RideOffer create returns HTTP 409 | Create-if-absent returns false, clears any client ETag, uses the rideId partition and does not overwrite the existing aggregate; non-conflict Cosmos failures propagate | `CosmosAdapterContractTests.RideOfferCreateConflictReturnsFalseWithoutOverwritingTheExistingAggregate`, `RideOfferCreatePropagatesNonConflictCosmosFailures` | P0 |
+| COSMOS-STORE-006 | Cosmos RideOffer replacement returns HTTP 412 or 404 | Stale/missing replacement returns false and the expected ETag is sent as `IfMatchEtag` | `CosmosAdapterContractTests.RideOfferReplacementReturnsFalseForStaleEtagOrMissingItem` | P0 |
 | COSMOS-MIG-006 | Migration schema contract | Every migration ID is unique and every declared container/partition-key pair matches the deterministic schema contract | Migration contract | P0 |
 
 Live Cosmos ETag contention, multi-instance migration lease recovery, restart/crash recovery, cross-partition query/index/RU behaviour and production retention remain external Cosmos integration gates.
@@ -3150,7 +3188,7 @@ PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), exact head `
 
 PR [#179](https://github.com/rajeevp727/turnova-platform/pull/179), baseline head `aaee8df8585013aa95d89d19dad5f68a8bcf099c`, passed API-only CI [#44115448770](https://github.com/rajeevp727/turnova-platform/actions/runs/44115448770): scope passed; backend .NET 10 Release **724 passed, 0 failed, 0 skipped**; native non-container API publish succeeded (artifact [14341634913](https://github.com/rajeevp727/turnova-platform/actions/runs/44115448770/artifacts/14341634913)); every mobile, Android and iOS job was correctly skipped under API `in_progress` / Android+iOS `not_started`. Retention code head `fb4e0c92a27796d2ec1d5cfbb6b5bc6af4fe1e31` adds positive approved retention validation, per-item TTL serialization and container `DefaultTimeToLive=-1`; fresh exact-head CI is required after this documentation synchronization. CI #44113282011 exposed an invalid Staging test that tried to start with policy approval but no Cosmos; the fail-closed guard was correct and the invalid test was removed. No fallback or credential was added.
 
-The same suite verifies SUPPORT-API-010 endpoint size-limit metadata/OpenAPI 413, SUPPORT-API-011 Staging malformed-body 503-before-binding and SUPPORT-API-012 Staging no-Cosmos startup rejection. New SUPPORT-API-013–016 cases cover retention-day parsing/overflow, per-item `ttl` serialization, the `DefaultTimeToLive=-1` migration contract and request-time revalidation after configuration reload. The 16 KiB metadata is tested; Kestrel host-level payload rejection still needs a dedicated host integration check.
+The same suite verifies SUPPORT-API-010 endpoint size-limit metadata/OpenAPI 413, SUPPORT-API-011 Staging malformed-body 503-before-binding and SUPPORT-API-012 Staging no-Cosmos startup rejection. New SUPPORT-API-013–016 cases cover retention-day parsing/overflow, per-item `ttl` serialization, the `DefaultTimeToLive=-1` migration contract and request-time revalidation after configuration reload. SUPPORT-API-017 adds `SupportRequestKestrelIntegrationTests.KestrelRejectsOversizedSupportRequestBeforeStoreAccess`, which verifies an actual Kestrel HTTP 413 response and zero store writes; the test also passed in the latest exact-head API CI #44642122427 (821/821 backend tests).
 
 ### Private media/KYC API implementation and external gates
 
@@ -3172,7 +3210,7 @@ CI recovery: run #44137503480 executed 753 tests (751 passed, 2 failed) because 
 
 **External gate:** Infrastructure/Security must supply private object storage, malware scanning/quarantine, managed identity and provider-backed private retrieval. Product/Legal must approve consent, retention and deletion. Live Cosmos/provider validation remains separate. The Testing Clean result is a deterministic fake, not malware-scan evidence. Staging/Production fail closed until a real provider is configured.
 
-### Cosmos migration lease follow-up (planned; not implemented or passed)
+### Cosmos migration lease lifecycle and runner-fencing coverage
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
@@ -3180,9 +3218,46 @@ CI recovery: run #44137503480 executed 753 tests (751 passed, 2 failed) because 
 | COSMOS-MIG-008 | Lease renewal loses an ETag race or a renewal request fails | Renewal fails closed, cancels the migration token, and the runner checks cancellation after migration work before writing the history marker | Deterministic fake-store concurrency and runner cancellation boundary | P0 |
 | COSMOS-MIG-009 | Runner finishes or is cancelled while holding a renewed lease | Heartbeat is stopped and awaited before release; release uses the latest ETag and cannot delete a replacement owner's lease | Deterministic lifecycle and Cosmos adapter contract | P0 |
 | COSMOS-MIG-010 | Two runners acquire/recover an active or expired lease | Active lease is retried; expired lease takeover uses the observed ETag; only one owner can renew/release the current lease | Deterministic coordinator and Cosmos adapter ETag tests; live two-instance gate remains | P0 |
+| COSMOS-MIG-011 | Lease renewal loses ownership while a migration is running | Renewal conflict cancels migration execution; no MigrationHistory marker is written; runner releases only the observed lease | `CosmosMigrationRunnerTests.LeaseRenewalLossCancelsMigrationBeforeHistoryMarkerIsWritten` with mocked Cosmos bootstrap/history and deterministic fake lease store/delay | P0 |
+| COSMOS-MIG-012 | Lease adapter create/read mapping | Create uses the fixed schema-migrations identity and returns the response ETag; Conflict maps to no lease; Read returns persisted owner/expiry/ETag; NotFound maps to no lease | `CosmosMigrationLeaseStoreTests.CreateUsesTheMigrationLeaseIdentityAndReturnsCreatedEtag`, `CreateReturnsNullWhenTheLeaseAlreadyExists`, `ReadReturnsLeaseMetadataAndTheObservedEtag`, `ReadReturnsNullWhenNoLeaseDocumentExists` | P0 |
+| COSMOS-MIG-013 | Lease adapter replace/release guards | Replacement and release reject a wrong lease ID, blank owner or blank observed ETag before Cosmos access; release returns false for missing/replaced lease and never deletes a replacement owner | `CosmosMigrationLeaseStoreTests.ReplaceRejectsAnInvalidExpectedLeaseBeforeCallingCosmos`, `ReleaseRejectsAnInvalidExpectedLeaseBeforeCallingCosmos`, `ReleaseUsesTheLatestEtagAndDoesNotDeleteAReplacementLease`, `ReleaseReturnsFalseWhenTheLeaseDocumentNoLongerExists` | P0 |
+| COSMOS-MIG-014 | Invalid lease timing configuration | Zero/negative lease duration, zero renewal interval, renewal interval not shorter than lease duration, or zero retry delay is rejected before lease-store access | `CosmosMigrationLeaseCoordinatorTests.AcquireRejectsInvalidLeaseTimingBeforeStoreAccess` | P0 |
+| COSMOS-MIG-015 | Lease state identity cannot change during renewal | A renewal update cannot change the fixed lease ID or owner; rejected updates leave the previously observed lease/ETag unchanged | `CosmosMigrationLeaseCoordinatorTests.LeaseStateRejectsAnUpdateFromAnotherLeaseIdentity` | P0 |
+| COSMOS-MIG-016 | Cancellation callback fails during runner shutdown | Heartbeat is still awaited and lease release is attempted with the latest observed ETag; the cancellation callback failure remains visible after cleanup | `CosmosMigrationRunnerTests.LeaseReleaseStillRunsWhenMigrationCancellationCallbackThrowsDuringShutdown` | P0 |
+| COSMOS-MIG-017 | Expired migration lease disappears between point-read and conditional replace | HTTP 404 and 412 both map to a lost-race result; coordinator retries create instead of failing acquisition | CosmosMigrationLeaseStoreTests.ReplaceReturnsNullWhenLeaseDisappearsOrAnotherRunnerWinsTheEtagRace and CosmosMigrationLeaseCoordinatorTests.AcquireRetriesCreateWhenExpiredLeaseDisappearsBeforeReplace | P0 |
+| COSMOS-MIG-018 | Conditional migration lease replace receives a non-race provider failure | A provider failure such as HTTP 503 propagates and is not misreported as a lost lease | CosmosMigrationLeaseStoreTests.ReplacePropagatesNonRaceCosmosFailures | P0 |
+| COSMOS-MIG-019 | Create reports a conflict but the following lease point-read is missing | Coordinator waits the configured retry delay before attempting create again; it does not hot-spin on a disappearing lease | CosmosMigrationLeaseCoordinatorTests.AcquireBacksOffWhenLeaseDisappearsBetweenCreateAndRead | P1 |
+| COSMOS-MIG-020 | Migration lease creation receives an empty or whitespace-only owner | Empty, space-only and tab-only owners are rejected with `ArgumentException` before any Cosmos SDK call | `CosmosMigrationLeaseStoreTests.CreateRejectsBlankOwnerBeforeCallingCosmos` | P0 |
+| COSMOS-MIG-021 | Cosmos returns a malformed migration lease document or omits the ETag after create/read/replace | The store rejects an unexpected lease ID, blank owner or blank ETag before returning a lease to the coordinator; migration work cannot start with an unfenced lease | `CosmosMigrationLeaseStoreTests.CreateRejectsSuccessfulResponseWithoutEtag`, `CosmosMigrationLeaseStoreTests.ReplaceRejectsSuccessfulResponseWithoutEtag`, `CosmosMigrationLeaseStoreTests.ReadRejectsMalformedLeaseMetadata` | P0 |
 
-The runner now renews a 30-minute ETag-protected lease every 10 minutes and cancels migration work when renewal loses ownership. Current migrations create containers idempotently and receive the cancellation token. Future non-idempotent migrations must remain cancellation-aware and resumable. Live Cosmos multi-instance contention, process suspension/crash and restart remain external. Source/test CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Final documentation-head CI #44130301238 also passed 744/744 backend tests and native publish (artifact 14348249426). The current documentation-only sync requires its own exact-head CI before merge; live two-instance contention, process suspension/crash and restart remain external. Final PR #180 exact-head CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Live two-instance contention, process suspension/crash and restart remain external.
+The runner now renews a 30-minute ETag-protected lease every 10 minutes and cancels migration work when renewal loses ownership. Current migrations create containers idempotently and receive the cancellation token. Future non-idempotent migrations must remain cancellation-aware and resumable. Live Cosmos multi-instance contention, process suspension/crash and restart remain external. Source/test CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Final documentation-head CI #44130301238 also passed 744/744 backend tests and native publish (artifact 14348249426). The historical PR #180 documentation-only sync passed its own exact-head CI #44130301238 with 744/744 backend tests and native publish; the current PR #197 evidence and handoff are recorded in the later COSMOS-UNION-003 and COSMOS-MIG-017–019 section. Live two-instance contention, process suspension/crash and restart remain external. Final PR #180 exact-head CI #44129354677 passed 744/744 backend tests and native non-container API publish (artifact 14348528758). Live two-instance contention, process suspension/crash and restart remain external.
 
+
+## COSMOS-MIG-011 runner lease-loss exact-head evidence — 2026-11-19
+
+PR #197 source/test head `eb58774aee290995a60cf4a5089de4fd9c2373e2` passed exact-head CI [#44541764287](https://github.com/rajeevp727/turnova-platform/actions/runs/44541764287): scope/backend green, **764/764 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier 11 negative fixtures plus the valid fixture, artifact [14539312231](https://github.com/rajeevp727/turnova-platform/actions/runs/44541764287/artifacts/14539312231). Mobile-auth, mobile, Android and iOS jobs were skipped by the API-only phase gate.
+
+`CosmosMigrationRunnerTests.LeaseRenewalLossCancelsMigrationBeforeHistoryMarkerIsWritten` uses mocked Cosmos bootstrap/history and a deterministic fake lease store/delay. It waits for lease-renewal loss to cancel the migration token, then releases an in-flight migration operation that deliberately returns after cancellation. The runner's post-migration cancellation check throws before a MigrationHistory marker can be written, and release uses the lease ETag observed by this runner. This is deterministic orchestration/adapter evidence only; live Cosmos ETag contention, multi-instance ownership, process suspension/crash and restart remain external.
+
+**Documentation-bearing head:** `eb2aa46b1afdcf299f2a68d1e11f6f9089c8ebc9` passed exact-head CI [#44542442224](https://github.com/rajeevp727/turnova-platform/actions/runs/44542442224): scope/backend green, **764/764 backend tests**, native non-container .NET 10 Release linux-x64 publish, verifier 11 negative fixtures plus valid fixture, artifact [14538458995](https://github.com/rajeevp727/turnova-platform/actions/runs/44542442224/artifacts/14538458995). Mobile-auth, mobile, Android and iOS jobs were skipped by the API-only gate. The documentation-bearing head `416f4ded2dcc162c6e4f8ee82fd96eb29c752929` passed exact-head CI [#44543138846](https://github.com/rajeevp727/turnova-platform/actions/runs/44543138846): scope/backend green, **764/764 backend tests**, native non-container .NET 10 Release linux-x64 publish, verifier 11 negative fixtures plus valid fixture, artifact [14538189582](https://github.com/rajeevp727/turnova-platform/actions/runs/44543138846/artifacts/14538189582). Mobile, Android and iOS jobs were skipped by the API-only gate. Any subsequent documentation-only synchronization must also receive exact-head CI before merge.
+
+CI recovery: initial test attempt #44540542579 timed out before the migration began; #44541214255 exposed Moq's generic type-matcher cast limitation. The final test uses the exact internal MigrationHistory document type via the test assembly's InternalsVisibleTo declaration. Final-head CI #44541764287 is the authoritative passing result.
+
+## COSMOS-MIG-012/013 deterministic adapter coverage — PR #197
+
+Source/test commit `0c24310df160367229a6e321a7e211bfb166eb2d` extends the mocked Cosmos lease-store contract suite: create success/conflict mapping, read success/not-found mapping, response ETag propagation, invalid expected-lease rejection before SDK access and missing-lease release. Follow-up source/test commit `4dbfa5fe0d9a90f71f6734cfc02e8f1a2f484d9a` adds COSMOS-MIG-014/015 for fail-closed lease timing validation and immutable lease ID/owner state updates. These deterministic tests complement COSMOS-MIG-007–011 coordinator and runner coverage. They do not simulate a real Cosmos data plane, multi-instance ETag contention, process crash or restart. Final documentation-bearing PR #197 head `756053040777832a786b350d585ddcf035df81e7` passed exact-head CI [#44546455130](https://github.com/rajeevp727/turnova-platform/actions/runs/44546455130): scope/backend success, **779/779 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, verifier 11 negative fixtures plus valid fixture, artifact [14540308108](https://github.com/rajeevp727/turnova-platform/actions/runs/44546455130/artifacts/14540308108). Mobile, Android and iOS jobs were skipped by the API-only phase gate; this is not later-platform completion evidence. Live Cosmos multi-instance contention, process crash/restart and production persistence remain external.
+## COSMOS selected-reservation adapter ETag contract — PR #197
+
+| ID | Scenario | Expected result | Deterministic automated evidence | Priority |
+|---|---|---|---|---|
+| COSMOS-RES-001 | Promote a temporary Driver reservation | Read the current Driver partition item; replace it with no expiry using the observed ETag; append the MadePermanent audit fact in the same Driver partition batch | `CosmosAdapterContractTests.DriverReservationPromotionUsesObservedEtagAndAppendsAuditAtomically` | P0 |
+| COSMOS-RES-002 | Release a Driver reservation | Delete only the matching RideId using the observed ETag and append the Released audit fact atomically in the same Driver partition | `CosmosAdapterContractTests.DriverReservationReleaseUsesObservedEtagAndAppendsAuditAtomically` | P0 |
+| COSMOS-RES-003 | Promote a temporary Rider active-booking reservation | Replace the active reservation with no expiry using the observed ETag and append the MadePermanent audit fact in the same Rider partition batch | `CosmosAdapterContractTests.RiderReservationPromotionUsesObservedEtagAndAppendsAuditAtomically` | P0 |
+| COSMOS-RES-004 | Release a Rider active-booking reservation | Delete only the matching RideId using the observed ETag and append the Released audit fact atomically in the same Rider partition | `CosmosAdapterContractTests.RiderReservationReleaseUsesObservedEtagAndAppendsAuditAtomically` | P0 |
+
+These are mocked Cosmos SDK contract tests. They verify partition choice, conditional ETag options, matching aggregate identity and atomic audit composition; they do not prove live Cosmos transactional-batch contention or crash recovery.
+
+Exact-head source/test commit `8e22cd19d019705fdcf5f66cffa392955f567593` passed API-only CI [#44562777292](https://github.com/rajeevp727/turnova-platform/actions/runs/44562777292): **794/794 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier and artifact [14549992698](https://github.com/rajeevp727/turnova-platform/actions/runs/44562777292/artifacts/14549992698). The first compile attempt exposed four expression-tree pattern-matching assertions; the final test source uses expression-tree-compatible null comparisons. Scope/backend passed; mobile-auth, Expo, Android and iOS jobs were skipped by the API-only gate.
 
 ### Platform phase-state CI fixtures (implemented in PR #179; API-only CI #44111719737 passed)
 
@@ -3207,7 +3282,7 @@ The current checked-in state is API `in_progress`, Android/iOS `not_started`. Ex
 | ID | Scenario | Expected result | Automated evidence | Priority |
 |---|---|---|---|---|
 | DRIVER-MEDIA-006 | Driver retrieves an uploaded private object | Only the owning Driver receives bytes; response is `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`; another Driver receives 404 | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadIssuesOpaqueOwnerBoundReferenceAndPrivateRead` (including owner-only status polling) | P0 |
-| DRIVER-MEDIA-007 | Upload declares an unsupported media type or mismatched file signature | API rejects it before storage; no media reference is issued | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadRejectsMismatchedContentSignature` plus `IsValidPrivateMediaPayload`; exact-head CI pending | P0 |
+| DRIVER-MEDIA-007 | Upload declares an unsupported media type or mismatched file signature | API rejects it before storage; no media reference is issued | `PrivateDriverMediaApiIntegrationTests.PrivateDriverMediaUploadRejectsMismatchedContentSignature` plus `IsValidPrivateMediaPayload`; Included in exact-head API CI #44642122427 (821/821 backend tests). | P0 |
 | DRIVER-MEDIA-008 | Historical Driver profile contains inline Base64 selfie | Historical record remains readable; new writes leave Base64 null and use `ProfilePhotoStorageReference` | Existing selfie/discovery regression suite plus new onboarding reference assertion | P0 |
 
 **External gate:** Real private object storage, malware scanning/quarantine, managed identity, consent, retention/deletion and live authorization integration remain unconfigured. Testing uses a deterministic Clean fake only; Development returns PendingScan; Staging/Production fail closed. No live provider or production media validation is claimed.
@@ -3520,16 +3595,6 @@ The deterministic cases RIDER-ACTIVITY-HISTORY-001..007 are recorded above. This
 | API-PRIV-001 | Rider response projection | Booking response contains Rider-visible booking and approved Cab/Union display fields only and omits RiderId/DriverId; detail/cancel/legacy request responses also omit actor IDs, dispatch zone, agreement collections/revision, payment reconciliation and audit events; fare remains null. | API integration | P0 |
 | API-PRIV-002 | Driver response projection | Accept/arrive/start/complete and legacy available-list responses omit RiderId, DriverId, dispatch zone, raw agreement collections/revision and audit events while retaining Driver-visible route/state/current agreement/payment report data. | API integration | P0 |
 | API-PRIV-003 | Agreement response projection | POST proposal, idempotent replay and GET history omit RiderId, DriverId, UnionId, idempotency key and request hash; preserve version, amount, currency, route/stops, proposer and both confirmation timestamps. | API integration | P0 |
-| API-PRIV-004 | Driver location privacy | Driver coordinates/capture/update timestamps are null unless the persisted sharing flag and ride lifecycle both permit sharing and coordinates are valid; valid active-sharing coordinates remain visible to the owning Rider. | API integration | P0 |
-
-
-## API role-scoped response projection and privacy tests — 2026-11-19
-
-| ID | Scenario | Expected result | Type | Priority |
-|---|---|---|---|---|
-| API-PRIV-001 | Rider response projection | Booking response contains Rider-visible booking and approved Cab/Union display fields only and omits RiderId/DriverId; detail/cancel/legacy request responses also omit actor IDs, dispatch zone, agreement collections/revision, payment reconciliation and audit events; fare remains null. | API integration | P0 |
-| API-PRIV-002 | Driver response projection | Accept/arrive/start/complete and legacy available-list responses omit RiderId, DriverId, dispatch zone, raw agreement collections/revision and audit events while retaining Driver-visible route/state/current agreement/payment report data. | API integration | P0 |
-| API-PRIV-003 | Agreement response projection | POST proposal, idempotent replay and GET history omit RiderId, DriverId, UnionId, idempotency key and request hash; preserve version, amount, currency, route/stops, proposer and both confirmation timestamps. | API integration | P0 |
 | API-PRIV-004 | Driver location privacy | Driver coordinates/capture/update timestamps are null unless the approved Union Cab snapshot, persisted sharing flag and ride lifecycle all permit sharing and coordinates are valid; valid active-sharing coordinates remain visible to the owning Rider. | API integration | P0 |
 | API-PRIV-005 | Legacy non-Cab/unionless Rider detail | Historical service-class label remains visible, but Driver name, vehicle, union details and location are omitted when the ride has no approved Union Cab driver snapshot. | API integration | P0 |
 
@@ -3537,4 +3602,113 @@ The deterministic cases RIDER-ACTIVITY-HISTORY-001..007 are recorded above. This
 
 The API privacy correction intentionally removes `riderId` and `driverId` from `RiderSelectedBookingResponse`. A cross-branch audit found that parked Draft PR [#194](https://github.com/rajeevp727/turnova-platform/pull/194), head `2f9ffe311302bd3219a2c274cb7fc10a8ae8af52`, currently has `normalizeRiderSelectedBookingResponse` in `src/mobile/shared/riderBookingGuard.js` requiring `response.riderId === expected.riderId` and `response.driverId === expected.driverId` (current helper lines 72–73). The current mainline Rider app does not make this check, but PR #194 will reject the new API response until reconciled. This is a known downstream Draft-branch contract mismatch, not a defect in the role-scoped API contract.
 
-**After API PR #195 is approved/merged and main is re-audited:** resume Android Rider first; update the Rider normalizer and its fixtures/tests so authenticated Rider identity and selected Driver identity are checked from the current session and original booking request context, while the response is validated only against fields the API actually returns (ride ID, Union ID, route/stops, passenger count, Cab class, fare-null, timestamps and approved display fields). Do not reintroduce RiderId/DriverId into the API response. Re-run the full Rider mobile-auth/Node suite, TypeScript/Expo checks, Android debug/release builds and emulator install/launch smoke before advancing to Android Driver.
+**After API PR #197 receives independent human approval, merges and main is re-audited:** resume Android Rider first; update the Rider normalizer and its fixtures/tests so authenticated Rider identity and selected Driver identity are checked from the current session and original booking request context, while the response is validated only against fields the API actually returns (ride ID, Union ID, route/stops, passenger count, Cab class, fare-null, timestamps and approved display fields). Do not reintroduce RiderId/DriverId into the API response. Re-run the full Rider mobile-auth/Node suite, TypeScript/Expo checks, Android debug/release builds and emulator install/launch smoke before advancing to Android Driver.
+
+
+## COSMOS-MIG-016 exact-head evidence — 2026-11-20
+
+The migration runner now nests shutdown cleanup so a throwing cancellation callback or unexpected heartbeat-task failure cannot skip release with the latest observed lease ETag. The deterministic regression `CosmosMigrationRunnerTests.LeaseReleaseStillRunsWhenMigrationCancellationCallbackThrowsDuringShutdown` uses a controlled delay to hold the heartbeat until the callback failure is observed, then releases it and verifies the lease release is attempted while the callback exception remains visible. Source/test head `994a19f03be828a0dd47aab9cdfa09d218b2f153` passed API-only CI [#44605112028](https://github.com/rajeevp727/turnova-platform/actions/runs/44605112028): **801/801 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture) and artifact [14570447444](https://github.com/rajeevp727/turnova-platform/actions/runs/44605112028/artifacts/14570447444). Live Cosmos multi-instance contention, process crash/restart and cross-container atomicity remain external.
+
+
+## COSMOS-UNION-003 and COSMOS-MIG-017–019 exact-head evidence — 2026-11-20
+
+PR #197 adds cancellation-before-mutation to the in-memory Union create-if-absent path; conditional migration-lease replacement treats HTTP 404 (lease disappeared after read) and 412 (ETag changed) as a lost race; coordinator retries create after a disappearing expired lease and backs off when a create conflict is followed by a missing point-read; non-race provider errors such as HTTP 503 remain visible. Source/test head 85c812068bda0f002b329560ec7a03ba0d208caf passed API-only CI [#44616358336](https://github.com/rajeevp727/turnova-platform/actions/runs/44616358336): **806/806 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), artifact [14574662365](https://github.com/rajeevp727/turnova-platform/actions/runs/44616358336/artifacts/14574662365). Intermediate CI [#44615820910](https://github.com/rajeevp727/turnova-platform/actions/runs/44615820910) had 805/806 pass because one new coordinator test incorrectly assumed the fake store's canned owner matched the coordinator-generated owner; the assertion was corrected to verify the second create attempt and ETag outcome. The exact-head rerun passed. Live Cosmos multi-instance contention, cross-instance partition consistency and process crash/restart remain external and are not inferred from mocks.
+
+
+## COSMOS-MIG-020 and latest API source/test head — 2026-11-20
+
+`CosmosMigrationLeaseStore.TryCreateAsync` rejects empty, space-only and tab-only lease owners before issuing a Cosmos request. `CosmosMigrationLeaseStoreTests.CreateRejectsBlankOwnerBeforeCallingCosmos` verifies all three inputs and asserts the mocked container receives no calls. Source/test head `0b5ad41f0ba2fee9b2add11326b518c617d1226a` passed API-only CI [#44625126116](https://github.com/rajeevp727/turnova-platform/actions/runs/44625126116): **809/809 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), artifact [14578084857](https://github.com/rajeevp727/turnova-platform/actions/runs/44625126116/artifacts/14578084857). This is deterministic adapter evidence; live Cosmos ETag contention, multi-instance partition consistency, process crash/restart and production readiness remain external gates.
+
+
+## COSMOS-MIG-021 and exact-head evidence — 2026-11-20
+
+The migration lease store now rejects a successful Cosmos create/replace response without an ETag and rejects read responses with an unexpected lease ID, blank owner or blank ETag. These guards prevent the coordinator from starting migration work with a lease that cannot be conditionally renewed/released. `CosmosMigrationLeaseStoreTests.CreateRejectsSuccessfulResponseWithoutEtag`, `ReplaceRejectsSuccessfulResponseWithoutEtag` and `ReadRejectsMalformedLeaseMetadata` cover the boundary. PR #197 exact-head `0cc3456b057b589b0b69be05e9eb990fe2f866ab` passed API-only CI [#44635146494](https://github.com/rajeevp727/turnova-platform/actions/runs/44635146494): **816/816 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact validation [14583916800](https://github.com/rajeevp727/turnova-platform/actions/runs/44635146494/artifacts/14583916800). Mobile, Android and iOS jobs were intentionally skipped by the API-only phase gate.
+
+
+## RID-IDEM-004/005 and legacy compatibility hardening — 2026-11-20
+
+Selected-booking and legacy Rider idempotency replay now validate that the referenced ride belongs to the authenticated Rider before returning a response. Legacy FIFO compatibility is denied outside Development/Testing even if its flag is enabled. Local/test compatibility uses full GUID ride IDs and create-if-absent writes instead of upsert; collision/failure cleanup removes only the exact Rider/key/ride reservation with an ETag-guarded Cosmos delete. Regression tests: `SelectedBookingIdempotencyReplayCannotReturnAnotherRidersRide`, `LegacyIdempotencyReplayCannotReturnAnotherRidersRide`, and `LegacyFifoRiderRequestsRemainDisabledOutsideDevelopmentAndTesting`. PR #197 exact source/test head `e47924d03a7f186fc0286edc9e2c4ef642d7eebd` passed API-only CI [#44637267725](https://github.com/rajeevp727/turnova-platform/actions/runs/44637267725): **819/819 backend tests (0 failed, 0 skipped)**, scope validation, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact validation [14583859769](https://github.com/rajeevp727/turnova-platform/actions/runs/44637267725/artifacts/14583859769). Mobile, Android and iOS jobs were intentionally skipped by the API-only phase gate.
+
+## Latest API source/test evidence — 2026-11-20
+
+COSMOS-MIG-021 covers malformed migration lease IDs/owners and missing ETags. RID-IDEM-004/005 cover cross-Rider replay isolation and the local/test-only legacy FIFO gate. PR #197 exact source/test head `e47924d03a7f186fc0286edc9e2c4ef642d7eebd` passed API-only CI [#44637267725](https://github.com/rajeevp727/turnova-platform/actions/runs/44637267725): **819/819 backend tests (0 failed, 0 skipped)**, scope validation, native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact validation [14583859769](https://github.com/rajeevp727/turnova-platform/actions/runs/44637267725/artifacts/14583859769). Mobile, Android and iOS jobs were intentionally skipped by the API-only phase gate.
+
+## API-only CI verification — PR #197 final documentation-bearing head — 2026-11-20
+
+The final documentation-bearing PR #197 head `a56cc77992ae8111880a3f2608bf029d8bd15129` passed [CI #44637969745](https://github.com/rajeevp727/turnova-platform/actions/runs/44637969745). The backend Release suite executed **819/819 tests (0 failed, 0 skipped)**. Scope validation, native non-container .NET 10 Release linux-x64 publish, publish-verifier shell syntax, 11 negative verifier fixtures plus the valid fixture, and publish artifact validation passed; artifact [14584329890](https://github.com/rajeevp727/turnova-platform/actions/runs/44637969745/artifacts/14584329890).
+
+The code-bearing source/test head remains `e47924d03a7f186fc0286edc9e2c4ef642d7eebd`; the five commits to the final head are documentation-only. Mobile-auth, mobile, Android native/emulator and iOS native/Simulator jobs were skipped by the checked-in API-only phase gate and are not counted as passed. The Release build reported 25 xUnit analyzer warnings and 0 errors. This run adds no new test cases and does not establish live Cosmos, production identity/hosting/provider, mobile, physical-device or signing readiness.
+
+## RID-IDEM-006 — in-memory legacy idempotency reservation release races — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-IDEM-006 | In-memory legacy reservation disappears or is replaced during retry/cleanup | After a failed `TryAdd`, a reservation removed before lookup produces a retryable conflict instead of an indexer exception. Cleanup atomically removes only the exact key/value pair and cannot delete a replacement ride reservation. | Deterministic API helper unit + endpoint wiring | P1 |
+
+`InMemoryRideIdempotencyReservationsTests.TryGetRideIdReturnsFalseWhenReservationWasReleasedAfterTryAddConflict` covers the missing-read race; `TryRemoveExactDoesNotDeleteAReplacementReservation` verifies atomic key/value compare-and-remove semantics using the .NET 10 public `ConcurrentDictionary.TryRemove(KeyValuePair)` overload. The legacy compatibility endpoint uses these helpers. This is local/test compatibility hardening only; the endpoint remains disabled outside Development/Testing and does not enable customer-facing FIFO ranking or automatic assignment. Code-bearing commit `21366103a7237a7dbc26b79703e9794d243e3b2a` and exact PR head `1f257cfb7df079640baf068392dbca3def2cfa7a` passed [CI #44642122427](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427): 821/821 backend tests (0 failed, 0 skipped), native non-container .NET 10 Release linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), artifact [14586078440](https://github.com/rajeevp727/turnova-platform/actions/runs/44642122427/artifacts/14586078440). Mobile/Android/iOS jobs were intentionally skipped by the API-only phase gate.
+
+
+## COSMOS-MIG-022 — validate Cosmos migration lease create/replace response identity — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-MIG-022 | Cosmos create/replace returns missing or mismatched lease resource | Successful create/replace must return a non-null Resource with fixed `schema-migrations` ID, the exact requested/new owner and a nonblank response ETag. Missing Resource, unexpected ID, blank owner or owner mismatch fails closed; the store never substitutes the local request object for the provider response. | Deterministic Cosmos adapter unit | P1 |
+| COSMOS-MIG-023 | Cosmos migration lease create/read/release encounters a non-race provider failure | HTTP 503 and other non-race provider failures propagate from create, read and release; only documented conflict/not-found/ETag-race statuses are converted to non-acquisition or lost-race results. | CosmosMigrationLeaseStoreTests: CreatePropagatesNonConflictProviderFailures; ReadPropagatesNonNotFoundProviderFailures; ReleasePropagatesNonRaceProviderFailures | P0 |
+
+`CosmosMigrationLeaseStoreTests.CreateRejectsSuccessfulResponseWithUnexpectedLeaseIdentity`, `CreateRejectsSuccessfulResponseWithoutResource`, `ReplaceRejectsSuccessfulResponseWithUnexpectedLeaseIdentity` and `ReplaceRejectsSuccessfulResponseWithoutResource` cover malformed write responses; existing create/replace success and missing-ETag tests cover the valid metadata path. The first exact-head attempt, CI #44650297199, caught two tests expecting `InvalidOperationException` while the shared null guard emitted `ArgumentNullException`. The helper was corrected to fail closed with the documented `InvalidOperationException`. Source/test head `7dcfb1d125039d5f38b63da885029985d913d393` passed [CI #44650666047](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047): **829/829 backend tests (0 failed, 0 skipped)**, scope validation, native non-container .NET 10 Release linux-x64 publish, verifier (11 negative fixtures plus valid fixture), artifact validation and upload [14591605262](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047/artifacts/14591605262). Mobile/Android/iOS jobs were intentionally skipped by the API-only phase gate. These are deterministic mocked-adapter checks, not live Cosmos ETag/multi-instance/restart evidence.
+
+
+COSMOS-MIG-023 is covered by three strict-mock tests proving HTTP 503 is propagated for lease create, read and release. COSMOS-MIG-022 remains covered by malformed/missing Cosmos lease response metadata tests. Exact source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 passed API-only CI [#44668284857](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857) with 854/854 backend tests and native publish/verifier; these are deterministic adapter tests, not live Cosmos contention or restart evidence.
+
+## RID-IDEM-007 — Cosmos idempotency create-conflict/read deletion race — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-IDEM-007 | A Cosmos idempotency create returns HTTP 409 but concurrent cleanup deletes the existing record before the follow-up point read | HTTP 404 is treated as a retryable conflict for both selected booking and Development/Testing legacy compatibility; no 500 or subsequent ride/reservation/queue mutation occurs. Non-404 provider failures continue to propagate. | Deterministic Cosmos adapter unit | P1 |
+
+CosmosCreateConflictReadTests now covers five deterministic cases: an existing resource is returned with the Rider partition/cancellation token, a concurrent-delete HTTP 404 returns null for retryable conflict handling, non-404 provider failures such as HTTP 503 propagate, whitespace IDs are rejected before Cosmos access, and a pre-cancelled token prevents the SDK read. The shared helper is used by both selected-booking and Development/Testing legacy compatibility conflict paths. The legacy route remains disabled outside Development/Testing; no customer-facing FIFO ranking or automatic assignment is introduced. The first exact-head attempt #44654299770 failed 1/832 because Moq could not proxy a private nested test document fixture; it was made public in `9d4ada4965212feab10a99e3831993a04662df12`. A later build attempt #44659135538 found four CS8072 expression-tree errors in the new cleanup tests; the predicates were corrected to explicit null checks in `d811abe29f67bca4f214ffccf075423583af13e5`. Neither failed run is counted as passing evidence. Exact source/test head `d811abe29f67bca4f214ffccf075423583af13e5` passed [CI #44659282694](https://github.com/rajeevp727/turnova-platform/actions/runs/44659282694): **841/841 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact validation/upload [14594194463](https://github.com/rajeevp727/turnova-platform/actions/runs/44659282694/artifacts/14594194463). The run emitted 25 existing xUnit analyzer warnings and 0 errors; mobile/Android/iOS jobs were intentionally skipped by the API-only phase gate.
+
+
+## RID-IDEM-008 — stale selected-booking replay cannot recover a foreign Rider ride — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-IDEM-008 | A stale Rider-scoped idempotency record points to an existing ride owned by another Rider | The API performs an internal raw identity check before interrupted-create recovery; it returns a generic HTTP 409 without returning the foreign ride ID or acquiring a Rider/Driver reservation for that foreign ride. A genuinely missing ride remains eligible for the bounded recovery path. | API integration | P0 |
+
+Covered by `RiderIdempotencyPrivacyIntegrationTests.StaleSelectedBookingIdempotencyReplayCannotRecoverAnotherRidersRide`; the fixture uses a record older than the recovery window and asserts the foreign ride ID is absent and no reservation is acquired.
+
+## RID-IDEM-009 — selected-booking cleanup cannot delete a replacement idempotency record — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-IDEM-009 | A failed selected-booking request races with replacement of its in-memory or Cosmos idempotency record | In-memory cleanup uses atomic key/value compare-and-remove. Cosmos cleanup point-reads and validates id, Rider, ride, request hash and creation timestamp, then deletes with the observed ETag. HTTP 404/412 are treated as a lost cleanup race; non-race provider failures propagate. A replacement record is never deleted. | Deterministic in-memory + mocked Cosmos adapter unit | P0 |
+
+Covered by InMemoryRideIdempotencyReservationsTests.TryRemoveExactDoesNotDeleteAReplacementBookingRecord and ten deterministic CosmosRideIdempotencyCleanupTests cases: exact ETag deletion; missing Resource; missing ETag; mismatched identity/hash/timestamp; missing record before read; post-read HTTP 404 and 412 lost races; read-side and delete-side non-race HTTP 503 propagation; and pre-cancelled token. Source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 passed exact-head API-only CI [#44668284857](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857): 854/854 backend tests, native non-container .NET 10 Release publish/verifier and artifact [14599196865](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857/artifacts/14599196865). Live Cosmos ETag contention remains an external gate.
+## RID-IDEM-010 — selected-booking replay validates its persisted idempotency envelope — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-IDEM-010 | A Rider-scoped idempotency record has a mismatched key ID, Rider ID or blank ride ID while its request hash matches | The API returns a generic HTTP 409 before trusting the stored ride pointer or changing reservations. No ride ID is exposed and the Rider's existing reservation remains unchanged. | API integration / idempotency integrity | P0 |
+
+Covered by RiderIdempotencyPrivacyIntegrationTests.SelectedBookingReplayRejectsMismatchedIdempotencyEnvelope (three deterministic cases: mismatched id, mismatched Rider ID and blank ride ID). Source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 passed API-only CI [#44668284857](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857): 854/854 backend tests and native non-container .NET 10 Release publish/verifier. The record is partition-key scoped, but the persisted identity envelope is validated independently before replay/recovery.
+
+
+## RID-IDEM-011 — legacy Cosmos idempotency cleanup is identity- and ETag-fenced — 2026-11-20
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| RID-IDEM-011 | A Development/Testing legacy ride-create request fails after creating its Cosmos idempotency reservation while the item is missing, malformed, replaced or unavailable | Cleanup point-reads in the Rider partition, verifies the exact item ID, Rider ID and ride ID plus a nonblank observed ETag, then deletes with IfMatchEtag. Missing/mismatched/no-resource/no-ETag records are not deleted; post-read HTTP 404/412 are lost cleanup races; non-race provider failures propagate; blank identity inputs and pre-cancelled tokens fail before Cosmos access. | Deterministic mocked Cosmos adapter unit | P0 |
+
+Covered by `CosmosLegacyRideIdempotencyCleanupTests` (15 deterministic cases): exact identity/ETag deletion; null Resource; blank ETag; mismatched item ID, Rider ID and ride ID; missing record before read; post-read 404/412; read-side and delete-side 503 propagation; pre-cancelled token; and blank item ID, Rider ID and ride ID validation. The Development/Testing-only legacy route remains disabled outside those environments; no customer-facing FIFO ranking or automatic assignment was introduced. PR #197 source/test head `8fe2afd2dbd3a88c5c09a81f6fb112beeaf0ecd6` passed exact-head API-only CI [#44672496184](https://github.com/rajeevp727/turnova-platform/actions/runs/44672496184): scope/backend success, **869/869 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14599929361](https://github.com/rajeevp727/turnova-platform/actions/runs/44672496184/artifacts/14599929361). Build log: 25 xUnit analyzer warnings and 0 errors. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped by the API-only phase gate. Live Cosmos ETag contention, multi-instance and restart behaviour remain external and are not established by mocks.
+
+
+## PLATFORM-HEALTH-017 exact-head evidence — 2026-11-20
+
+`StagingInMemoryPersistenceDoesNotReportReady` and `TestingInMemoryPersistenceRemainsReady` prove the environment boundary: Development/Testing in-memory readiness remains HTTP 200, while Staging without Cosmos returns a generic HTTP 503 from `/health/ready`. The response does not expose the environment, provider or storage configuration. Production startup still requires Cosmos; a hosted Staging/QA deployment must provision Cosmos and honour the readiness endpoint. This does not establish live Cosmos or hosted readiness wiring.
+
+Source/test head `b4d4138466c39b9c914e41524c0191577beb662d` plus documentation-bearing head `504fd31f7822898af283b5da11611cf7c67a76bb` passed exact-head API-only CI [#44675511781](https://github.com/rajeevp727/turnova-platform/actions/runs/44675511781): scope/backend success, **871/871 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14601822841](https://github.com/rajeevp727/turnova-platform/actions/runs/44675511781/artifacts/14601822841). Build log: 25 xUnit analyzer warnings and 0 errors. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-only phase gate.
+
+The final documentation-bearing head `1f7283ebfc02b3fd3c5f547babbfbfd9d10dd64a` also passed exact-head API-only CI [#44676082805](https://github.com/rajeevp727/turnova-platform/actions/runs/44676082805): **871/871 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 publish/verifier, and artifact [14602610321](https://github.com/rajeevp727/turnova-platform/actions/runs/44676082805/artifacts/14602610321). This is deterministic CI evidence only; live Cosmos and hosted Staging readiness wiring remain external.
+
+
+Final review-count sync head `9634d227c82e2813d63d07c2a09065a434de6820` passed exact-head API-only CI [#44676774010](https://github.com/rajeevp727/turnova-platform/actions/runs/44676774010): **871/871 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release publish/verifier, artifact [14602990197](https://github.com/rajeevp727/turnova-platform/actions/runs/44676774010/artifacts/14602990197). Six recorded PR reviews are owner-authored COMMENT-only; the latest follow-up withdraws the earlier Staging persistence concern. Independent human approval remains required.
