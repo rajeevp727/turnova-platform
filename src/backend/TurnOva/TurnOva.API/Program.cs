@@ -1531,21 +1531,20 @@ authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
         new Claim("demo", "true")
     };
     var jwt = new JwtSecurityToken(issuer, audience, claims, now, now.AddMinutes(30), credentials);
-    return Results.Ok(new
-    {
-        accessToken = new JwtSecurityTokenHandler().WriteToken(jwt),
-        refreshToken = (string?)null,
-        expiresIn = 1800,
-        isDemo = true,
-        user = new { id = subject, email, name, role = appRole, isDemo = true }
-    });
+    return Results.Ok(new DemoSessionResponse(
+        new JwtSecurityTokenHandler().WriteToken(jwt),
+        RefreshToken: null,
+        ExpiresIn: 1800,
+        IsDemo: true,
+        User: new DemoSessionUserResponse(subject, email, name, appRole, IsDemo: true)));
 }).AllowAnonymous()
   .RequireRateLimiting(DemoAuthPolicy.RateLimitPolicyName)
   .WithSummary("Issue a restricted Rider or Driver demo session")
   .WithDescription("Returns a fixed 30-minute demo identity only when DemoAuth is explicitly enabled in an allowlisted non-production environment. Demo tokens cannot access normal Rider/Driver APIs. Issuance is limited to 10 requests per server-observed remote IP per minute.")
+  .Produces<DemoSessionResponse>(StatusCodes.Status200OK)
   .Produces(StatusCodes.Status404NotFound)
-  .Produces(StatusCodes.Status429TooManyRequests)
-  .Produces(StatusCodes.Status503ServiceUnavailable);
+  .ProducesProblem(StatusCodes.Status429TooManyRequests)
+  .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
     CancellationToken ct) =>
