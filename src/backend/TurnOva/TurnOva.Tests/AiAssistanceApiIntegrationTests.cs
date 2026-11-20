@@ -102,6 +102,36 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task AssistantRateLimitRejectionIsNonCacheable()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var rider = factory.CreateClient("Rider", "ai-rate-limit-cache");
+
+        for (var attempt = 0; attempt < 11; attempt++)
+        {
+            using var response = await rider.PostAsJsonAsync(
+                "/api/v1/assistance/help",
+                new { question = "What does queue status mean?" });
+
+            if (attempt < 10)
+            {
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                continue;
+            }
+
+            Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.Contains(response.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(429, body.RootElement.GetProperty("status").GetInt32());
+            Assert.DoesNotContain("ai-rate-limit-cache", body.RootElement.GetRawText(), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task AssistantRequestLogsNeverContainUserPromptOrSensitiveValues()
     {
         using var loggerProvider = new CapturingLoggerProvider();
