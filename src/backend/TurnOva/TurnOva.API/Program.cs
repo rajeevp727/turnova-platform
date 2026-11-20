@@ -140,8 +140,9 @@ var cosmosKey = builder.Configuration["CosmosDb:Key"];
 var databaseName = builder.Configuration["CosmosDb:DatabaseName"] ?? "TurnOvaDb";
 var useCosmos = !string.IsNullOrWhiteSpace(cosmosEndpoint) || !string.IsNullOrWhiteSpace(cosmosKey);
 
-if (builder.Environment.IsProduction() && !useCosmos)
-    throw new InvalidOperationException("Production requires CosmosDb:Endpoint and CosmosDb:Key. In-memory persistence is development/test only.");
+TurnOva.API.CosmosPersistenceEnvironmentGuard.Validate(
+    builder.Environment.EnvironmentName,
+    useCosmos);
 
 if (useCosmos && (string.IsNullOrWhiteSpace(cosmosEndpoint) || string.IsNullOrWhiteSpace(cosmosKey)))
     throw new InvalidOperationException("Both CosmosDb:Endpoint and CosmosDb:Key must be configured.");
