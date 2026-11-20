@@ -20,6 +20,15 @@
 
 **External gates:** live Cosmos ETag/partition/multi-instance/restart/process recovery; Staging/QA Cosmos provisioning and readiness wiring; production identity/hosting/providers; Product-approved dispatch/location/support/reconciliation policies; private-media storage/scanning/consent/retention; Union legal approval; Android/iOS physical-device, signing and store/TestFlight evidence.
 
+**External gate owners / required inputs:**
+- **Product / Operations:** signed decisions for positive pickup radius and zone overlap, Driver location freshness, negotiation lifetime, support categories/required fields/severity/escalation/hours/targets/approved retention and consent, reconciliation dispute/next-ride policy, and internal FIFO fairness. Union partnership terms require Legal review.
+- **Cloud / Infrastructure:** provisioned Cosmos account/database/containers/partition/TTL and secret references; Staging/QA/Production API hosting with readiness-probe wiring; production DNS/TLS/CORS; private object storage, malware scanning and managed identity.
+- **Identity / Provider owners:** TriSend auth contract and JWT issuer/audience/secret rotation; reachable Maps/geocoding/routing, SignalR backplane/WebSocket, Call/Chat and push provider contracts plus credentials.
+- **QA / Release:** reachable Android and iOS physical devices, location/notification permissions, test accounts, Android signing and Play Console access, iOS certificates/profiles and TestFlight access.
+- **Legal / Privacy:** approved Union terms and document/selfie consent, retention, access and deletion rules.
+
+Do not request or commit credentials while independent code/test/docs work remains. Revisit each gate when its owner supplies the stated input; these gates do not by themselves block platform phase advancement after engineering exit criteria pass.
+
 **Next sequential action:** verify PR #200 documentation-bearing exact-head CI and obtain independent human approval. After any permitted merge, re-read main and audit the API engineering exit criteria. Live/production external gates remain documented and revisited but do not block advancing to Android Rider once API source/tests/docs/native publish/API-specific checks are complete and independently reviewed. Then complete Android Driver before iOS Rider and iOS Driver; strict 19/19 acceptance and production readiness remain separate.
 
 ## API environment policy handoff — PLATFORM-HEALTH-017 / COSMOS-ENV-001

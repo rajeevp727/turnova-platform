@@ -20,6 +20,15 @@ Main push CI: [run #44678954110](https://github.com/rajeevp727/turnova-platform/
 
 **External gates:** live Cosmos ETag/partition/multi-instance/restart/process recovery; Staging/QA Cosmos provisioning and hosting configuration that honours `/health/ready`; production JWT/TriSend identity, secrets and API hosting; Product-approved radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push providers; private-media storage/scanning/managed identity/consent/retention/deletion; support/reconciliation policy; Union legal approval; Android/iOS physical-device, signing and store/TestFlight evidence.
 
+**External gate owners / required inputs:**
+- **Product / Operations:** signed decisions for positive pickup radius and zone overlap, Driver location freshness, negotiation lifetime, support categories/required fields/severity/escalation/hours/targets/approved retention and consent, reconciliation dispute/next-ride policy, and internal FIFO fairness. Union partnership terms require Legal review.
+- **Cloud / Infrastructure:** provisioned Cosmos account/database/containers/partition/TTL and secret references; Staging/QA/Production API hosting with readiness-probe wiring; production DNS/TLS/CORS; private object storage, malware scanning and managed identity.
+- **Identity / Provider owners:** TriSend auth contract and JWT issuer/audience/secret rotation; reachable Maps/geocoding/routing, SignalR backplane/WebSocket, Call/Chat and push provider contracts plus credentials.
+- **QA / Release:** reachable Android and iOS physical devices, location/notification permissions, test accounts, Android signing and Play Console access, iOS certificates/profiles and TestFlight access.
+- **Legal / Privacy:** approved Union terms and document/selfie consent, retention, access and deletion rules.
+
+Do not request or commit credentials while independent code/test/docs work remains. Revisit each gate when its owner supplies the stated input; these gates do not by themselves block platform phase advancement after engineering exit criteria pass.
+
 **Next exact action:** verify the main CI retry and PR #200 exact-head CI; obtain independent human approval for PR #200. After any permitted merge, re-read main and repeat the full API phase-exit audit. Once API source/tests/docs/native publish and API-specific checks are complete and independently reviewed, advance to Android Rider even if the documented live/production external gates remain open; then complete Android Driver before iOS Rider and iOS Driver.
 ## Platform phase exit criteria
 
