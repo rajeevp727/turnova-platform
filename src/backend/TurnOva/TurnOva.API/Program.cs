@@ -342,6 +342,14 @@ if (app.Environment.IsEnvironment("Testing"))
         .RequireAuthorization()
         .WithMetadata(new DemoEndpointMetadata())
         .ExcludeFromDescription();
+    app.MapMethods("/api/v1/demo/__test/marked-head", [HttpMethods.Head], () => Results.Ok())
+        .RequireAuthorization()
+        .WithMetadata(new DemoEndpointMetadata())
+        .ExcludeFromDescription();
+    app.MapGet("/api/v1/demo-outside/__test/marked", () => Results.Ok(new { status = "reached" }))
+        .RequireAuthorization()
+        .WithMetadata(new DemoEndpointMetadata())
+        .ExcludeFromDescription();
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
