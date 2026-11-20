@@ -141,7 +141,7 @@ var databaseName = builder.Configuration["CosmosDb:DatabaseName"] ?? "TurnOvaDb"
 var useCosmos = !string.IsNullOrWhiteSpace(cosmosEndpoint) || !string.IsNullOrWhiteSpace(cosmosKey);
 
 if (builder.Environment.IsProduction() && !useCosmos)
-    throw new InvalidOperationException("Production requires CosmosDb:Endpoint and CosmosDb:Key. In-memory persistence is development/test only.");
+    throw new InvalidOperationException("Production requires CosmosDb:Endpoint and CosmosDb:Key. In-memory persistence is not allowed in Production.");
 
 if (useCosmos && (string.IsNullOrWhiteSpace(cosmosEndpoint) || string.IsNullOrWhiteSpace(cosmosKey)))
     throw new InvalidOperationException("Both CosmosDb:Endpoint and CosmosDb:Key must be configured.");
@@ -225,9 +225,15 @@ builder.Services.AddSingleton<StorageReadinessProbe>(sp =>
                 .GetDatabase(databaseName).ReadAsync(cancellationToken: ct);
         };
     }
-    else
+    else if (builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"))
     {
         storageProbe = _ => Task.CompletedTask;
+    }
+    else
+    {
+        // Non-development/test in-memory stores are volatile and must never advertise readiness.
+        storageProbe = _ => Task.FromException(
+            new InvalidOperationException("Durable Cosmos persistence is required for readiness outside Development/Testing."));
     }
 
     return new StorageReadinessProbe(storageProbe, TimeSpan.FromSeconds(3));
