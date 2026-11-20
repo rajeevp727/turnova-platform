@@ -1,7 +1,7 @@
 # TurnOva MVP progress
 
 **Last updated:** 2026-11-20.
-**Main HEAD:** `4061357c095debbc31fc5027a7bff27bd8b06265`.
+**Main HEAD:** `06cb552db6c929cd5ab22d8bc1f2da191670f0f2`.
 **Current platform phase:** API `in_progress`; Android `not_started`; iOS `not_started`.
 
 **API engineering evidence:** PR #184 records the engineering-only API exit and PR #197 merged at `8d5bcb6b913f51250d9f0fc4f0d521a973130747`; exact-head CI [#44678941800](https://github.com/rajeevp727/turnova-platform/actions/runs/44678941800) passed 897/897 backend tests, Release build and native non-container .NET 10 publish/verifier. **PR #197 was merged without independent human approval**, a disclosed historical exception; its six recorded reviews were owner-authored COMMENT-only. The current user-directed phase gate therefore remains API until the active API follow-up PR #200 receives independent human approval, final-head checks pass, merge is permitted, and main is re-audited. Live Cosmos, hosted Staging/QA and production identity/hosting are not claimed.
@@ -3149,3 +3149,14 @@ Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH
 - **Next exact action:** obtain independent human approval for PR #200; do not self-approve or merge. After a permitted merge, re-read main and repeat the API exit audit.
 
 **Latest verified API checkpoint:** source/test head `4afdd81de66b7e7772c27301de0a8fd53a238cee` is included in last verified PR #200 branch checkpoint `ec226e501c736c6ad449c64e2fc630c06749f127`. Exact-head API-only CI [#44728587496](https://github.com/rajeevp727/turnova-platform/actions/runs/44728587496) passed scope/backend, **933/933 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact [14625840809](https://github.com/rajeevp727/turnova-platform/actions/runs/44728587496/artifacts/14625840809). Mobile/mobile-auth/Android/emulator/iOS jobs were intentionally skipped by the API-only phase gate. The build emitted 25 xUnit analyzer warnings and 0 errors. The current PR head is a documentation-only successor; verify its exact-head CI and independent human approval before any merge.
+
+
+## Latest API auth-response cache hardening — 2026-11-20
+
+- Added middleware before authentication/authorization that marks every /api/v1/auth response Cache-Control: no-store and Pragma: no-cache; this covers token issuance/login and auth/profile rejection responses without changing JWT semantics.
+- Deterministic integration assertions cover successful demo-session issuance, successful Rider/Driver login and anonymous /auth/me rejection.
+- Source/test head b003f83491ffd8f2d5d7550f40357e43d13feaab passed exact-head API-only CI [#44733713863](https://github.com/rajeevp727/turnova-platform/actions/runs/44733713863): **933/933 backend tests (0 failed, 0 skipped)**, Release build, native non-container .NET 10 linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact [14628220704](https://github.com/rajeevp727/turnova-platform/actions/runs/44733713863/artifacts/14628220704). Build: 0 errors; 25 existing xUnit analyzer warnings.
+- Current branch: PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), test/api-nondev-support-readiness-20261120, head b003f83491ffd8f2d5d7550f40357e43d13feaab, open/ready/mergeable. Its three reviews are owner-authored COMMENT-only; independent human approval is still absent. PR #196 and #198 remain Draft/parked. PR #197 is merged but lacked independent approval; keep API in_progress, Android/iOS not_started.
+- Main is 06cb552db6c929cd5ab22d8bc1f2da191670f0f2 (one weekly-build workflow commit after PR #200's base snapshot 4061357c095debbc31fc5027a7bff27bd8b06265); no application source changed on main in that commit. Recheck base/head and mergeability before any merge.
+- Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
+- Next exact action: obtain independent human approval for PR #200; recheck final head and required checks, merge only if repository policy permits, then re-read main and perform a fresh API phase-exit audit before Android Rider. No Android completion work has started.
