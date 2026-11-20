@@ -144,6 +144,43 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task DemoTokenCanAccessAnExplicitlyMarkedHeadDemoEndpoint()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
+        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Head, "/api/v1/demo/__test/marked-head");
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DemoTokenCannotAccessAnExplicitlyMarkedEndpointOutsideDemoPrefix()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
+        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await client.GetAsync("/api/v1/demo-outside/__test/marked");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task DemoTokenCannotAccessMarkedEndpointWhenDemoAuthIsDisabled()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach a demo endpoint while disabled."));
