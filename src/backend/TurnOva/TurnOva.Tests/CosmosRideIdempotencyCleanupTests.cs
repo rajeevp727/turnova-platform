@@ -38,7 +38,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
             .ReturnsAsync(deleted.Object);
 
         var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-            container.Object, KeyId, partitionKey, RiderId, RideId, RequestHash, cancellation.Token);
+            container.Object, KeyId, partitionKey, RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, cancellation.Token);
 
         Assert.True(result);
         container.Verify(value => value.ReadItemAsync<RideIdempotencyRecord>(
@@ -59,7 +59,8 @@ public sealed class CosmosRideIdempotencyCleanupTests
             original with { id = "different-key" },
             original with { riderId = "different-rider" },
             original with { rideId = "different-ride" },
-            original with { RequestHash = "different-hash" }
+            original with { RequestHash = "different-hash" },
+            original with { CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(1) }
         };
 
         foreach (var replacement in replacements)
@@ -73,7 +74,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
                 .ReturnsAsync(read.Object);
 
             var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, CancellationToken.None);
+                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, CancellationToken.None);
 
             Assert.False(result);
             container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
@@ -93,7 +94,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
             .ThrowsAsync(new CosmosException("missing", HttpStatusCode.NotFound, 0, "idempotency-cleanup", 0));
 
         var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, CancellationToken.None);
+            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, CancellationToken.None);
 
         Assert.False(result);
         container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
@@ -119,7 +120,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
             .ThrowsAsync(new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "idempotency-cleanup", 0));
 
         var result = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, CancellationToken.None);
+            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, CancellationToken.None);
 
         Assert.False(result);
         container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
@@ -139,7 +140,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
 
         var thrown = await Assert.ThrowsAsync<CosmosException>(() =>
             CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, CancellationToken.None));
+                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, CancellationToken.None));
 
         Assert.Same(failure, thrown);
     }
@@ -153,7 +154,7 @@ public sealed class CosmosRideIdempotencyCleanupTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
-                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, cancellation.Token));
+                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, RequestHash, DateTimeOffset.UtcNow, cancellation.Token));
 
         container.VerifyNoOtherCalls();
     }
