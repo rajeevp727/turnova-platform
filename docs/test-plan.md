@@ -1218,8 +1218,8 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-004 | Provider receives trip-intent prompt | Provider sees only fixed route placeholders and generic action tokens; exact pickup/drop-off, passenger count, family/child context, accessibility/health details, luggage, email, phone and arbitrary free text are absent | Unit/security | P0 |
 | AI-005 | Provider is disabled or unavailable | Deterministic local draft is returned with source marked as fallback | Unit + API | P0 |
 | AI-006 | Provider returns wrong service class or route token | Provider output is rejected; local Cab draft and locally parsed passenger count are preserved. Provider contract has no passenger-count field | Unit | P0 |
-| AI-007 | Provider times out or transient HTTP call fails | Deterministic fallback is returned within the configured timeout | Unit | P0 |
-| AI-008 | Caller cancels an assistance request | Cancellation propagates; it is not converted into a successful fallback response | Unit | P1 |
+| AI-007 | Trip-intent or help provider times out; transient provider failures use fallback | Deterministic fallback is returned within the configured timeout | Unit | P0 |
+| AI-008 | Caller cancels while a trip-intent or help provider request is in flight | Linked provider cancellation propagates; it is not converted into a successful fallback response | Unit | P1 |
 | AI-009 | Rider requests a known ride-state explanation | Exact approved in-repository state explanation is returned; no ride state is changed | Unit + API | P0 |
 | AI-010 | Rider/Driver asks approved product help | Provider may select only an approved source ID; API returns the exact in-repository answer | Unit + API | P0 |
 | AI-011 | Question is unsupported or provider source ID is unknown | Safe escalation response is returned; no policy, fare, ETA or support SLA is fabricated | Unit + API | P0 |
@@ -1254,6 +1254,8 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-039 | Caller supplies a ride state to help while provider is enabled | A known state returns only its approved in-repository explanation and an unknown state escalates; neither path invokes the provider or forwards caller-supplied rideState | Unit/security | P0 |
 | AI-040 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
 | AI-041 | AI trip draft omits passenger count while Rider form previously contains its default | Rider form clears the stale/default passenger value; discovery and booking remain blocked until the Rider manually enters an integer from 1 through 6 | Shared mobile helper + Rider UI | P0 |
+| AI-042 | Help provider times out | The linked provider token is cancelled and the exact locally approved help entry is returned as deterministic fallback within the configured timeout | Unit | P0 |
+| AI-043 | Caller cancels while help provider request is in flight | The linked provider token is cancelled and caller cancellation propagates instead of returning approved-content fallback | Unit | P1 |
 
 **AI-01 test-helper correction:** `ValidateOptionsResult.Failures` may be null on success; assertions must use a null-safe empty sequence when constructing failure diagnostics. The first CI run caught this test-only failure (627/632 passed after Release build); corrected helper is in PR #165 source/test head `1289297e68297da2ab3629d820c3445bd39187cd`.
 
