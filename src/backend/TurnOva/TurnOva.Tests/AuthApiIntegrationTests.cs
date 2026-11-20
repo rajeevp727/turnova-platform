@@ -24,6 +24,48 @@ public sealed class AuthApiIntegrationTests
     private const string Audience = "turnova-api";
     private const string SigningKey = "turnova-auth-integration-test-signing-key-32-bytes";
 
+    [Fact]
+    public async Task DemoSessionIsDisabledUnlessExplicitlyEnabled()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("rider", "Rider", "demo-rider-001")]
+    [InlineData("driver", "Driver", "demo-driver-001")]
+    public async Task DemoSessionIssuesRestrictedRoleJwt(string role, string expectedRole, string expectedSubject)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsync($"/api/v1/auth/demo/{role}", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(body.RootElement.GetProperty("isDemo").GetBoolean());
+        Assert.Equal(expectedRole, body.RootElement.GetProperty("user").GetProperty("role").GetString());
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(body.RootElement.GetProperty("accessToken").GetString());
+        Assert.Equal(expectedSubject, token.Subject);
+        Assert.Contains(token.Claims, claim => claim.Type == "role" && claim.Value == expectedRole);
+        Assert.Contains(token.Claims, claim => claim.Type == "demo" && claim.Value == "true");
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DemoSessionRejectsUnsupportedRole()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
+        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsync("/api/v1/auth/demo/admin", null);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
