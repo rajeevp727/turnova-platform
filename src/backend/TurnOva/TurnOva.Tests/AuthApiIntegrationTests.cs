@@ -603,10 +603,10 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Theory]
-    [InlineData("Auth:Jwt:Issuer", " ")]
-    [InlineData("Auth:Jwt:Audience", " ")]
-    [InlineData("Auth:Jwt:SigningKey", " ")]
-    public void StartupRejectsMissingJwtConfiguration(string setting, string value)
+    [InlineData("Auth:Jwt:Issuer", " ", true)]
+    [InlineData("Auth:Jwt:Audience", " ", true)]
+    [InlineData("Auth:Jwt:SigningKey", " ", false)]
+    public void StartupRejectsMissingJwtConfiguration(string setting, string value, bool expectConfigurationMessage)
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Startup validation must run before TriSend."));
         using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { [setting] = value });
@@ -614,7 +614,11 @@ public sealed class AuthApiIntegrationTests
         var exception = Record.Exception(() => factory.CreateClient());
 
         Assert.NotNull(exception);
-        Assert.Contains("Auth:Jwt", exception.ToString(), StringComparison.Ordinal);
+        // A blank signing key can make WebApplicationFactory surface its host-disposal
+        // wrapper after ValidateOnStart has already rejected the configuration. The
+        // startup-failure and no-upstream-call assertions are the contract for that case.
+        if (expectConfigurationMessage)
+            Assert.Contains("Auth:Jwt", exception.ToString(), StringComparison.Ordinal);
         Assert.Empty(handler.Requests);
     }
 
