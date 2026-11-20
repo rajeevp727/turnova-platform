@@ -679,7 +679,7 @@ with open(output, "w", encoding="utf-8") as stream:
         "install": "passed",
         "launch": "passed",
         "processStableAfterStartup": True,
-        "demoEntryScreenTextVerified": True,
+        "authenticationScreenVerified": True,
         "staleSessionErrorAbsent": True,
         "systemUiRecovery": {
             "pixelLauncherAnrWaitAttempts": int(pixel_launcher_wait_attempts),
