@@ -1976,3 +1976,11 @@ Main at 06cb552db6c929cd5ab22d8bc1f2da191670f0f2 still has .github/turnova-phase
 - **Acceptance accounting:** 0/19 strictly Verified; 16 In Progress and 3 Blocked (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. Production readiness is not established.
 - **External gates:** live Cosmos ETag/partition/multi-instance/restart; Staging/QA provisioning and readiness; production JWT/TriSend identity, secrets and API hosting; shared/edge rate limiting and trusted proxy configuration; Product-approved radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/reconciliation policy; Union legal approval; Android/iOS physical-device and signing/store/TestFlight evidence.
 - **Next exact action:** continue API-only safe code/test/docs work while PR #200 remains open. Obtain independent human approval, verify latest head and required checks, merge only when permitted, then re-read main and perform a fresh API phase-exit audit before Android Rider. Complete Android Rider, Android Driver, iOS Rider and iOS Driver strictly in that order. No live Cosmos, provider or production validation is claimed.
+
+
+## Out-of-sequence mobile PRs parked — Run 6 (2026-11-20)
+
+- [PR #205](https://github.com/rajeevp727/turnova-platform/pull/205), Android ARM64 release APK optimization, was found open/ready and converted to Draft. It is Android build work and must remain parked until the API phase-exit gate passes.
+- [PR #206](https://github.com/rajeevp727/turnova-platform/pull/206), Rider/Driver real-auth UI restoration, was found open/ready and converted to Draft. It is mobile UI work and must remain parked until the API phase-exit gate passes.
+- A phase-gate comment was added to each PR. Neither PR was advanced, marked ready, merged, or treated as completion evidence.
+- PR #200 remains the sole ready/active feature PR. PR #196 and #198 remain Draft/parked. PR #197 remains merged with the historical independent-approval exception disclosed. PR #204 remains configuration-only Android LAN demo work.
