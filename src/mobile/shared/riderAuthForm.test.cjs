@@ -101,28 +101,11 @@ test("Rider auth field helper rejects unknown fields and modes", () => {
   assert.throws(() => getRiderAuthFieldProps("email", "other"), /mode must be login or register/);
 });
 
-test("Rider auth screen wires accessible fields, keyboard focus, and error announcements", () => {
+test("Rider demo entry is accessible and clearly read-only", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
-  assert.match(source, /if\(!tryBeginRiderAuthSubmission\(authSubmissionInFlight\)\)return;/);
-  assert.match(source, /finally\s*\{\s*finishRiderAuthSubmission\(authSubmissionInFlight\)/);
-  assert.match(source, /getRiderAuthFieldProps\("name",mode\)/);
-  assert.match(source, /getRiderAuthFieldProps\("email",mode\)/);
-  assert.match(source, /getRiderAuthFieldProps\("password",mode\)/);
-  assert.match(source, /onSubmitEditing=\{\(\)=>emailInputRef\.current\?\.focus\(\)\}/);
-  assert.match(source, /onSubmitEditing=\{\(\)=>passwordInputRef\.current\?\.focus\(\)\}/);
-  assert.match(source, /if\(!authSubmitDisabled\)void authenticate\(\)/);
-  assert.match(source, /keyboardShouldPersistTaps="handled"/);
-  assert.match(source, /getRiderAuthSubmitProps\(mode,authSubmitDisabled,loading\)/);
-  assert.match(source, /getRiderAuthModeToggleProps\(mode\)/);
-  assert.match(source, /getRiderAuthErrorProps\(\)/);
-  for (const id of [
-    "rider-auth-name",
-    "rider-auth-email",
-    "rider-auth-password",
-    "rider-auth-submit",
-    "rider-auth-mode-toggle",
-    "rider-auth-error"
-  ]) {
-    assert.ok(source.includes(`testID="${id}"`), `Missing Rider auth testID: ${id}`);
-  }
+  assert.match(source, /testID="rider-demo-login"/);
+  assert.match(source, /Continue as Demo Rider/);
+  assert.match(source, /Demo mode is read-only/);
+  assert.match(source, /real booking, payment and live tracking are unavailable/);
+  assert.match(source, /if\(!user&&!demoMode\)return/);
 });
