@@ -40,4 +40,26 @@ public sealed class InMemoryRideIdempotencyReservationsTests
             reservations, key, "replacement-ride"));
         Assert.False(reservations.ContainsKey(key));
     }
+    [Fact]
+    public void TryRemoveExactDoesNotDeleteAReplacementBookingRecord()
+    {
+        const string key = "rider:request-key";
+        var reservations = new ConcurrentDictionary<string, RideIdempotencyRecord>();
+        var now = DateTimeOffset.UtcNow;
+        var original = new RideIdempotencyRecord(
+            "request-key", "rider", "original-ride", "original-hash", now);
+        var replacement = new RideIdempotencyRecord(
+            "request-key", "rider", "replacement-ride", "replacement-hash", now.AddSeconds(1));
+
+        Assert.True(reservations.TryAdd(key, replacement));
+
+        Assert.False(InMemoryRideIdempotencyReservations.TryRemoveExact(
+            reservations, key, original));
+        Assert.Same(replacement, reservations[key]);
+
+        Assert.True(InMemoryRideIdempotencyReservations.TryRemoveExact(
+            reservations, key, replacement));
+        Assert.Empty(reservations);
+    }
+
 }
