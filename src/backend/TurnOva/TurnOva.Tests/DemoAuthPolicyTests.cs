@@ -12,11 +12,16 @@ public sealed class DemoAuthPolicyTests
     [InlineData("QA", true, true)]
     [InlineData("Testing", true, true)]
     [InlineData("Development", true, true)]
+    [InlineData("Demo", true, true)]
     [InlineData("Testing", false, false)]
     [InlineData(null, true, false)]
     [InlineData("", true, false)]
     [InlineData(" ", true, false)]
-    public void DemoAuthRequiresExplicitEnablementAndIsNeverEnabledInProduction(
+    [InlineData("Preview", true, false)]
+    [InlineData("Unknown", true, false)]
+    [InlineData("Prod", true, false)]
+    [InlineData("Production-East", true, false)]
+    public void DemoAuthRequiresExplicitEnablementAndAnAllowlistedNonProductionEnvironment(
         string? environmentName, bool configured, bool expected)
     {
         Assert.Equal(expected, DemoAuthPolicy.IsEnabled(environmentName, configured));
