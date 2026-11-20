@@ -55,6 +55,23 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task UnhandledAuthRouteExceptionStillReturnsNoStoreHeaders()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Auth error path must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/auth/__test/throw");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains(response.Headers.Pragma, value => value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("sensitive-auth-test-exception", body, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("rider", "Rider", "demo-rider-001")]
     [InlineData("driver", "Driver", "demo-driver-001")]

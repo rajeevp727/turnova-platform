@@ -311,3 +311,8 @@ All /api/v1/auth route responses receive Cache-Control: no-store and Pragma: no-
 - **Strict acceptance:** 0/19 Verified (16 In Progress; 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Production readiness is not established.
 - **External gates:** live Cosmos ETag/partition/multi-instance/restart; Staging/QA provisioning and readiness wiring; shared/edge rate limiting and trusted proxy; production JWT/TriSend identity, secrets and API hosting; approved dispatch/location/support/reconciliation policies; maps/routing/realtime providers; private-media storage/scanning/consent/retention; Union legal approval; physical-device/signing/store/TestFlight evidence.
 - **Next exact action:** obtain independent human approval for PR #200; recheck final head/checks and merge only if permitted; re-read main and perform a fresh API phase-exit audit. Only after that audit may Android Rider begin, followed by Android Driver, then iOS Rider and Driver. No live Cosmos, provider or production validation is claimed.
+
+
+### Authentication error-response cache protection
+
+The auth-route no-store middleware registers its headers with `HttpResponse.OnStarting`, rather than only setting them before endpoint execution. This preserves `Cache-Control: no-store` and `Pragma: no-cache` when the outer exception handler clears a failed response and writes a generic HTTP 500. The Testing-only `AUTH-API-017` regression asserts both headers and verifies that the exception message is not returned. This does not expose the test route in OpenAPI or Production.

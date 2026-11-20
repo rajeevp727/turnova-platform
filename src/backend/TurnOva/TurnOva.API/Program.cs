@@ -298,8 +298,14 @@ app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/v1/auth"))
     {
-        context.Response.Headers["Cache-Control"] = "no-store";
-        context.Response.Headers["Pragma"] = "no-cache";
+        // Register at response start so exception-handler Response.Clear() cannot
+        // remove the non-cacheable policy from an auth-route error response.
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers["Cache-Control"] = "no-store";
+            context.Response.Headers["Pragma"] = "no-cache";
+            return Task.CompletedTask;
+        });
     }
 
     await next();
@@ -340,6 +346,11 @@ if (app.Environment.IsEnvironment("Testing"))
     app.MapGet("/__test/throw", () =>
     {
         throw new InvalidOperationException("sensitive-test-exception");
+    }).ExcludeFromDescription();
+
+    app.MapGet("/api/v1/auth/__test/throw", () =>
+    {
+        throw new InvalidOperationException("sensitive-auth-test-exception");
     }).ExcludeFromDescription();
 
     // These fixtures prove that a URL prefix alone never grants demo-token access.
