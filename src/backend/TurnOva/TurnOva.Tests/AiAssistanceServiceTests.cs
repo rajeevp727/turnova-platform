@@ -645,6 +645,66 @@ public sealed class AiAssistanceServiceTests
         Assert.NotEqual("made-up-policy", result.SourceId);
     }
 
+    [Fact]
+    public async Task HelpProviderTimeoutUsesApprovedContentFallback()
+    {
+        var providerStarted = new TaskCompletionSource<CancellationToken>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new FakeProvider
+        {
+            HelpHandler = async (_, cancellationToken) =>
+            {
+                providerStarted.TrySetResult(cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                return new HelpProviderResult("fare-negotiation");
+            }
+        };
+        var service = CreateService(provider, enabled: true, timeoutSeconds: 1);
+
+        var operation = service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+        var providerToken = await providerStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var result = await operation.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.True(providerToken.IsCancellationRequested);
+        Assert.Equal("fare-negotiation", result.SourceId);
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.False(result.EscalationRequired);
+    }
+
+    [Fact]
+    public async Task HelpCallerCancellationDuringProviderRequestIsPropagated()
+    {
+        var providerStarted = new TaskCompletionSource<CancellationToken>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingProvider = new TaskCompletionSource<HelpProviderResult?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new FakeProvider
+        {
+            HelpHandler = (_, token) =>
+            {
+                providerStarted.TrySetResult(token);
+                return pendingProvider.Task;
+            }
+        };
+        var service = CreateService(provider, enabled: true, timeoutSeconds: 10);
+        using var callerCancellation = new CancellationTokenSource();
+
+        var operation = service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            callerCancellation.Token);
+        var providerToken = await providerStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await callerCancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+        Assert.True(providerToken.IsCancellationRequested);
+        pendingProvider.TrySetResult(null);
+    }
+
     private static AiAssistanceService CreateService(
         IAiAssistantProvider provider,
         bool enabled = false,
