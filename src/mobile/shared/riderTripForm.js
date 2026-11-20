@@ -1,4 +1,16 @@
 "use strict";
+const JPEG_BASE64_PATTERN = /^\/9j\/(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/;
+
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
+
+function isSafeTrimmedText(value, maximumLength) {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= maximumLength &&
+    value === value.trim() &&
+    !CONTROL_CHARACTERS.test(value);
+}
+
 
 const TRIP_FIELDS = Object.freeze({
   tripIntent: {
@@ -7,15 +19,15 @@ const TRIP_FIELDS = Object.freeze({
   },
   pickup: {
     accessibilityLabel: "Pickup landmark or note",
-    accessibilityHint: "Enter a pickup landmark or instruction. Device GPS is used for pickup-zone matching and driver-to-pickup proximity."
+    accessibilityHint: "Enter a pickup landmark or instruction, maximum 250 characters. Device GPS is used for pickup-zone matching and driver-to-pickup proximity."
   },
   dropoff: {
     accessibilityLabel: "Destination landmark or note",
-    accessibilityHint: "Enter the destination landmark or instruction. This text is not used to estimate the journey distance."
+    accessibilityHint: "Enter the destination landmark or instruction, maximum 250 characters. This text is not used to estimate the journey distance."
   },
   stops: {
     accessibilityLabel: "Optional intermediate stops",
-    accessibilityHint: "Optional. Enter one stop per line in the order you want to visit them."
+    accessibilityHint: "Optional. Enter up to 10 stops, one per line, maximum 250 characters per stop, in visit order."
   },
   passengers: {
     accessibilityLabel: "Passenger count",
@@ -38,6 +50,16 @@ const TRIP_ACTIONS = Object.freeze({
     label: "Request this driver",
     busyLabel: "Requesting selected driver",
     hint: "Sends the selected Cab driver a request for direct fare negotiation. TurnOva does not quote or collect payment."
+  },
+  retryStatus: {
+    label: "Retry active booking check",
+    busyLabel: "Checking active booking status",
+    hint: "Reloads your server-owned ride history. A new booking stays unavailable until the server confirms there is no active selected booking or ride."
+  },
+  viewActiveRide: {
+    label: "View active ride",
+    busyLabel: "Opening active ride",
+    hint: "Opens Activity for your current selected-driver negotiation or ride. It does not create or submit another booking."
   }
 });
 
@@ -62,22 +84,139 @@ function getRiderTripActionProps(action, disabled, busy) {
   };
 }
 
+function canDiscoverRiderTrip(pickup, dropoff, passengerCount) {
+  return validateRiderBookingText(pickup, dropoff, "") === null &&
+    Number.isInteger(passengerCount) && passengerCount >= 1 && passengerCount <= 6;
+}
+
+function validateRiderBookingText(pickup, dropoff, stopsText) {
+  if (typeof pickup !== "string" || pickup.trim().length === 0)
+    return "Enter a pickup note or landmark.";
+  if (pickup.trim().length > 250)
+    return "Pickup note must be 250 characters or fewer.";
+  if (CONTROL_CHARACTERS.test(pickup))
+    return "Pickup note must not contain control characters.";
+  if (typeof dropoff !== "string" || dropoff.trim().length === 0)
+    return "Enter a destination note or landmark.";
+  if (dropoff.trim().length > 250)
+    return "Destination note must be 250 characters or fewer.";
+  if (CONTROL_CHARACTERS.test(dropoff))
+    return "Destination note must not contain control characters.";
+  if (typeof stopsText !== "string")
+    return "Optional stops must be entered as text.";
+  const stops = stopsText.split(/\r?\n/).map(stop => stop.trim()).filter(Boolean);
+  if (stops.length > 10)
+    return "Enter no more than 10 optional stops.";
+  if (stops.some(stop => stop.length > 250))
+    return "Each optional stop must be 250 characters or fewer.";
+  if (stops.some(stop => CONTROL_CHARACTERS.test(stop)))
+    return "Each optional stop must not contain control characters.";
+  return null;
+}
+
+function shouldApplyRiderDiscoveryResponse(requestSequence, currentSequence) {
+  return Number.isSafeInteger(requestSequence) && requestSequence > 0 &&
+    Number.isSafeInteger(currentSequence) && requestSequence === currentSequence;
+}
+
+function normalizeRiderDiscoveryResponse(response) {
+  const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
+
+  if (!isRecord(response) ||
+      !isSafeTrimmedText(response.pickupZoneId, 80) ||
+      !(response.journeyDistanceKm === null ||
+        (Number.isFinite(response.journeyDistanceKm) && response.journeyDistanceKm >= 0)) ||
+      !Array.isArray(response.unions)) return null;
+
+  const seenUnionIds = new Set();
+  const unions = [];
+  for (const union of response.unions) {
+    if (!isRecord(union) ||
+        !isSafeTrimmedText(union.unionId, 128) ||
+        !isSafeTrimmedText(union.unionName, 120) ||
+        !Array.isArray(union.drivers) ||
+        seenUnionIds.has(union.unionId)) return null;
+    seenUnionIds.add(union.unionId);
+
+    const seenDriverIds = new Set();
+    const drivers = [];
+    for (const driver of union.drivers) {
+      if (!isRecord(driver) ||
+          !isSafeTrimmedText(driver.driverId, 256) ||
+          !isSafeTrimmedText(driver.fullName, 120) ||
+          !isSafeTrimmedText(driver.vehicleMake, 60) ||
+          !isSafeTrimmedText(driver.vehicleModel, 60) ||
+          driver.serviceClass !== "cab" ||
+          !Number.isInteger(driver.passengerCapacity) ||
+          driver.passengerCapacity < 1 || driver.passengerCapacity > 8 ||
+          !Number.isFinite(driver.distanceToPickupKm) || driver.distanceToPickupKm < 0 ||
+          (driver.profilePhotoBase64 !== undefined && driver.profilePhotoBase64 !== null &&
+            (typeof driver.profilePhotoBase64 !== "string" || driver.profilePhotoBase64.length === 0 || driver.profilePhotoBase64.length > 410000)) ||
+          (driver.profilePhotoContentType !== undefined && driver.profilePhotoContentType !== null &&
+            typeof driver.profilePhotoContentType !== "string") ||
+          seenDriverIds.has(driver.driverId)) return null;
+
+      const photo = driver.profilePhotoBase64 ?? null;
+      const contentType = driver.profilePhotoContentType ?? null;
+      if (photo !== null && (!JPEG_BASE64_PATTERN.test(photo) || photo.length % 4 !== 0)) return null;
+      if ((photo === null && contentType !== null) ||
+          (photo !== null && contentType !== null && contentType !== "image/jpeg") ||
+          (photo !== null && driver.profilePhotoApprovalStatus !== undefined && driver.profilePhotoApprovalStatus !== "Approved") ||
+          (photo !== null && driver.profilePhotoApprovedByUnionId !== undefined && driver.profilePhotoApprovedByUnionId !== union.unionId)) return null;
+
+      seenDriverIds.add(driver.driverId);
+      drivers.push({
+        driverId: driver.driverId,
+        fullName: driver.fullName,
+        vehicleMake: driver.vehicleMake,
+        vehicleModel: driver.vehicleModel,
+        serviceClass: "cab",
+        passengerCapacity: driver.passengerCapacity,
+        distanceToPickupKm: driver.distanceToPickupKm,
+        profilePhotoBase64: photo,
+        profilePhotoContentType: photo === null ? null : (contentType ?? "image/jpeg")
+      });
+    }
+
+    unions.push({ unionId: union.unionId, unionName: union.unionName, drivers });
+  }
+
+  // Project only the public Rider discovery contract; ignore unexpected private fields.
+  return {
+    pickupZoneId: response.pickupZoneId,
+    journeyDistanceKm: response.journeyDistanceKm,
+    unions
+  };
+}
+
+function getVisibleUnionDrivers(drivers) {
+  return Array.isArray(drivers) ? drivers.slice(0, 3) : [];
+}
+
+function getRiderUnionDriverGroupProps(unionName) {
+  const safeUnionName = isSafeTrimmedText(unionName, 120) ? unionName : "Approved";
+  return {
+    accessibilityRole: "radiogroup",
+    accessibilityLabel: safeUnionName + " union Cab drivers"
+  };
+}
+
 function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
-  const name = typeof driver?.fullName === "string" && driver.fullName.trim()
-    ? driver.fullName.trim()
-    : "Cab driver";
-  const vehicle = [driver?.vehicleMake, driver?.vehicleModel]
-    .filter(value => typeof value === "string" && value.trim())
-    .join(" ") || "verified Cab vehicle";
-  const capacity = Number.isInteger(driver?.passengerCapacity) && driver.passengerCapacity > 0
+  const name = isSafeTrimmedText(driver?.fullName, 120) ? driver.fullName : "Cab driver";
+  const vehicle = [
+    isSafeTrimmedText(driver?.vehicleMake, 60) ? driver.vehicleMake : "",
+    isSafeTrimmedText(driver?.vehicleModel, 60) ? driver.vehicleModel : ""
+  ].filter(Boolean).join(" ") || "verified Cab vehicle";
+  const capacity = Number.isInteger(driver?.passengerCapacity) &&
+    driver.passengerCapacity >= 1 && driver.passengerCapacity <= 8
     ? driver.passengerCapacity
     : null;
   const distance = Number.isFinite(driver?.distanceToPickupKm)
     ? driver.distanceToPickupKm.toFixed(1) + " kilometres from pickup"
     : "pickup distance unavailable";
-  const union = typeof unionName === "string" && unionName.trim()
-    ? ", " + unionName.trim() + " union"
-    : "";
+  const union = typeof unionName === "string" && unionName.length === 0
+    ? ""
+    : ", " + (isSafeTrimmedText(unionName, 120) ? unionName : "Approved") + " union";
 
   return {
     accessibilityRole: "radio",
@@ -89,7 +228,13 @@ function getRiderDriverOptionProps(driver, selected, disabled, unionName = "") {
 }
 
 module.exports = {
+  canDiscoverRiderTrip,
+  validateRiderBookingText,
+  shouldApplyRiderDiscoveryResponse,
+  normalizeRiderDiscoveryResponse,
+  getVisibleUnionDrivers,
   getRiderDriverOptionProps,
+  getRiderUnionDriverGroupProps,
   getRiderTripActionProps,
   getRiderTripFieldProps
 };

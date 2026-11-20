@@ -5,10 +5,109 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const {
+  normalizeRiderDiscoveryResponse,
+  getVisibleUnionDrivers,
   getRiderDriverOptionProps,
+  getRiderUnionDriverGroupProps,
   getRiderTripActionProps,
-  getRiderTripFieldProps
+  getRiderTripFieldProps,
+  canDiscoverRiderTrip,
+  validateRiderBookingText,
+  shouldApplyRiderDiscoveryResponse
 } = require("./riderTripForm.js");
+
+test("RIDER-DISCOVERY-PREFLIGHT-001: require pickup, destination and whole passenger count from 1 to 6", () => {
+  assert.equal(canDiscoverRiderTrip("Nizampet", "HITEC City", 1), true);
+  assert.equal(canDiscoverRiderTrip(" Nizampet ", " HITEC City ", 6), true);
+  for (const [pickup, dropoff, passengers] of [
+    ["", "HITEC City", 1],
+    ["Nizampet", "", 1],
+    ["  ", "HITEC City", 1],
+    ["Nizampet", "  ", 1],
+    [null, "HITEC City", 1],
+    ["Nizampet", {}, 1],
+    ["Nizampet", "HITEC City", null],
+    ["Nizampet", "HITEC City", 0],
+    ["Nizampet", "HITEC City", 7],
+    ["Nizampet\nKukatpally", "HITEC City", 1],
+    ["Nizampet", "HITEC City\u0085", 1],
+    ["Nizampet", "HITEC City", 1.5],
+    ["Nizampet", "HITEC City", Number.NaN]
+  ]) {
+    assert.equal(canDiscoverRiderTrip(pickup, dropoff, passengers), false);
+  }
+});
+
+test("RIDER-BOOKING-TEXT-001: enforce pickup, destination and optional stop limits before booking", () => {
+  assert.equal(validateRiderBookingText("Nizampet", "HITEC City", "Kukatpally\nMiyapur"), null);
+  assert.equal(validateRiderBookingText("Nizampet", "HITEC City", "  \nKukatpally\n\n"), null);
+  assert.equal(validateRiderBookingText("x".repeat(250), "y".repeat(250), Array(10).fill("s".repeat(250)).join("\n")), null);
+  assert.match(validateRiderBookingText("", "HITEC City", ""), /pickup note or landmark/);
+  assert.match(validateRiderBookingText("Nizampet", "", ""), /destination note or landmark/);
+  assert.match(validateRiderBookingText("x".repeat(251), "HITEC City", ""), /Pickup note must be 250/);
+  assert.match(validateRiderBookingText("Nizampet", "x".repeat(251), ""), /Destination note must be 250/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City", Array(11).fill("Stop").join("\n")), /no more than 10/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City", "x".repeat(251)), /Each optional stop must be 250/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City", null), /stops must be entered as text/);
+  assert.match(validateRiderBookingText("Nizampet\nKukatpally", "HITEC City", ""), /Pickup note must not contain control characters/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City\u0085", ""), /Destination note must not contain control characters/);
+  assert.match(validateRiderBookingText("Nizampet", "HITEC City", "Kukatpally\u0085Miyapur"), /Each optional stop must not contain control characters/);
+});
+
+test("RIDER-DISCOVERY-SEQUENCE-001: apply only the latest safe discovery request sequence", () => {
+  assert.equal(shouldApplyRiderDiscoveryResponse(1, 1), true);
+  assert.equal(shouldApplyRiderDiscoveryResponse(2, 2), true);
+  assert.equal(shouldApplyRiderDiscoveryResponse(1, 2), false);
+  assert.equal(shouldApplyRiderDiscoveryResponse(0, 0), false);
+  assert.equal(shouldApplyRiderDiscoveryResponse(-1, -1), false);
+  assert.equal(shouldApplyRiderDiscoveryResponse(Number.NaN, Number.NaN), false);
+  assert.equal(shouldApplyRiderDiscoveryResponse(Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 1), false);
+});
+
+test("RIDER-BOOKING-TEXT-001: validate booking text in the handler and expose field limits", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /validateRiderBookingText\(pickupForRequest,dropoffForRequest,stopsTextForRequest\)/);
+  assert.match(source, /maxLength=\{250\}/);
+  assert.match(source, /rider-booking-text-error/);
+  assert.match(source, /getRiderTripActionProps\("requestDriver",loading\|\|bookingTextError!==null,loading\)/);
+  assert.match(source, /disabled=\{loading\|\|bookingTextError!==null\}/);
+  const requestStart = source.indexOf("const requestSelectedDriver=async()=>{");
+  const requestEnd = source.indexOf("const loadAgreementHistory", requestStart);
+  assert.ok(requestStart >= 0 && requestEnd > requestStart);
+  const requestSource = source.slice(requestStart, requestEnd);
+  assert.ok(requestSource.indexOf("validateRiderBookingText") < requestSource.indexOf("tryBeginRiderBookingAttempt(bookingInFlight,requestKey)"));
+  assert.ok(requestSource.indexOf("validateRiderBookingText") < requestSource.indexOf("selectedBookingLocation.current.capture"));
+});
+
+test("RIDER-DISCOVERY-SESSION-001: fence discovery UI state by session and request sequence", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /const riderDiscoveryRequestSequence=useRef\(0\)/);
+  assert.match(source, /const canDiscoverTrip=canDiscoverRiderTrip\(pickup,dropoff,parsePassengerCountInput\(passengers\)\)/);
+  assert.match(source, /getRiderTripActionProps\("discover",loading\|\|!canDiscoverTrip,loading\)/);
+  assert.match(source, /disabled=\{loading\|\|!canDiscoverTrip\}/);
+
+  const resetStart = source.indexOf("const clearRiderSessionState");
+  const resetEnd = source.indexOf("useEffect", resetStart);
+  assert.ok(resetStart >= 0 && resetEnd > resetStart);
+  const resetSource = source.slice(resetStart, resetEnd);
+  assert.match(resetSource, /riderDiscoveryRequestSequence\.current \+= 1/);
+  assert.match(resetSource, /setLoading\(false\)/);
+
+  const searchStart = source.indexOf("const findNearbyVehicles=async()=>{");
+  const searchEnd = source.indexOf("const cancelRide=async()=>{", searchStart);
+  assert.ok(searchStart >= 0 && searchEnd > searchStart);
+  const searchSource = source.slice(searchStart, searchEnd);
+  assert.match(searchSource, /const requestEpoch=renderedSessionEpoch/);
+  const initialSessionGuard = searchSource.indexOf("if(!isSessionEpochCurrent(sessionEpoch,authenticatedSessionEpoch,requestEpoch))return;");
+  const requestSequenceStart = searchSource.indexOf("const requestSequence=++riderDiscoveryRequestSequence.current");
+  assert.ok(initialSessionGuard >= 0 && requestSequenceStart > initialSessionGuard);
+  assert.match(searchSource, /const requestSequence=\+\+riderDiscoveryRequestSequence\.current/);
+  assert.match(searchSource, /isSessionEpochCurrent\(sessionEpoch,authenticatedSessionEpoch,requestEpoch\)/);
+  assert.match(searchSource, /shouldApplyRiderDiscoveryResponse\(requestSequence,riderDiscoveryRequestSequence\.current\)/);
+  assert.match(searchSource, /canDiscoverRiderTrip\(pickup,dropoff,passengerCount\)/);
+  assert.match(searchSource, /if\(!isCurrent\(\)\)return/);
+  assert.match(searchSource, /if\(isCurrent\(\)\)setLoading\(false\)/);
+});
 
 test("Rider trip draft input explains that it is optional and never books or charges", () => {
   const props = getRiderTripFieldProps("tripIntent", false);
@@ -29,7 +128,7 @@ test("Rider pickup and destination labels distinguish landmark text from GPS and
 test("Rider intermediate stops and passenger count provide ordered and bounded instructions", () => {
   const stops = getRiderTripFieldProps("stops", true);
   const passengers = getRiderTripFieldProps("passengers", false);
-  assert.match(stops.accessibilityHint, /one stop per line in the order/);
+  assert.match(stops.accessibilityHint, /up to 10 stops, one per line, maximum 250 characters per stop, in visit order/);
   assert.deepEqual(stops.accessibilityState, { disabled: true });
   assert.equal(passengers.accessibilityLabel, "Passenger count");
   assert.match(passengers.accessibilityHint, /whole number from 1 to 6/);
@@ -56,6 +155,168 @@ test("Rider trip draft and selected-driver request actions preserve direct negot
   assert.match(request.accessibilityHint, /does not quote or collect payment/);
 });
 
+test("RIDER-DISCOVERY-RESPONSE-001: project only validated public Cab discovery fields", () => {
+  const raw = {
+    pickupZoneId: "zone-hyd-1",
+    journeyDistanceKm: null,
+    privateRootField: "must not survive",
+    unions: [{
+      unionId: "union-1",
+      unionName: "Green Cab Union",
+      privateUnionField: "must not survive",
+      drivers: [{
+        driverId: "driver-1",
+        fullName: "Asha Rao",
+        vehicleMake: "Maruti",
+        vehicleModel: "Dzire",
+        serviceClass: "cab",
+        passengerCapacity: 4,
+        distanceToPickupKm: 2.4,
+        profilePhotoBase64: null,
+        profilePhotoContentType: null,
+        phoneNumber: "+910000000000",
+        latitude: 17.4,
+        longitude: 78.4,
+        profilePhotoApprovalStatus: "Pending"
+      }]
+    }]
+  };
+  const result = normalizeRiderDiscoveryResponse(raw);
+  assert.deepEqual(result, {
+    pickupZoneId: "zone-hyd-1",
+    journeyDistanceKm: null,
+    unions: [{
+      unionId: "union-1",
+      unionName: "Green Cab Union",
+      drivers: [{
+        driverId: "driver-1",
+        fullName: "Asha Rao",
+        vehicleMake: "Maruti",
+        vehicleModel: "Dzire",
+        serviceClass: "cab",
+        passengerCapacity: 4,
+        distanceToPickupKm: 2.4,
+        profilePhotoBase64: null,
+        profilePhotoContentType: null
+      }]
+    }]
+  });
+  assert.equal("phoneNumber" in result.unions[0].drivers[0], false);
+  assert.equal("latitude" in result.unions[0].drivers[0], false);
+  assert.equal("privateRootField" in result, false);
+});
+
+test("RIDER-DISCOVERY-RESPONSE-002: reject malformed contracts, incomplete vehicle details and photo metadata", () => {
+  const validDriver = {
+    driverId: "driver-1", fullName: "Asha Rao", vehicleMake: "Maruti", vehicleModel: "Dzire",
+    serviceClass: "cab", passengerCapacity: 4, distanceToPickupKm: 2.4,
+    profilePhotoBase64: null, profilePhotoContentType: null
+  };
+  const validUnion = { unionId: "union-1", unionName: "Green Cab Union", drivers: [validDriver] };
+  const valid = { pickupZoneId: "zone-hyd-1", journeyDistanceKm: null, unions: [validUnion] };
+  for (const invalid of [
+    null, [], {}, { ...valid, pickupZoneId: " " }, { ...valid, journeyDistanceKm: -1 },
+    { ...valid, journeyDistanceKm: Number.NaN }, { ...valid, unions: {} },
+    { ...valid, unions: [{ ...validUnion, drivers: null }] },
+    { ...valid, unions: [validUnion, validUnion] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, driverId: " " }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleMake: " " }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleModel: "" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleMake: "x".repeat(61) }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, vehicleModel: "x".repeat(61) }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, serviceClass: "bike" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, distanceToPickupKm: Infinity }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, passengerCapacity: 9 }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "text/html" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "aGVsbG8=", profilePhotoContentType: "image/jpeg" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "/9j/AA==", profilePhotoContentType: "image/jpeg", profilePhotoApprovalStatus: "Pending" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [{ ...validDriver, profilePhotoBase64: "/9j/AA==", profilePhotoContentType: "image/jpeg", profilePhotoApprovalStatus: "Approved", profilePhotoApprovedByUnionId: "other-union" }] }] },
+    { ...valid, unions: [{ ...validUnion, drivers: [validDriver, validDriver] }] }
+  ]) {
+    assert.equal(normalizeRiderDiscoveryResponse(invalid), null);
+  }
+});
+
+test("RIDER-DISCOVERY-RESPONSE-003: default JPEG content type only for a server-filtered approved photo", () => {
+  const driver = {
+    driverId: "driver-photo", fullName: "Asha Rao", vehicleMake: "Maruti", vehicleModel: "Dzire",
+    serviceClass: "cab", passengerCapacity: 4, distanceToPickupKm: 1.2,
+    profilePhotoBase64: "/9j/AA==", profilePhotoContentType: null
+  };
+  const result = normalizeRiderDiscoveryResponse({
+    pickupZoneId: "zone-hyd-1", journeyDistanceKm: null,
+    unions: [{ unionId: "union-1", unionName: "Green Cab Union", drivers: [driver] }]
+  });
+  assert.equal(result.unions[0].drivers[0].profilePhotoContentType, "image/jpeg");
+});
+
+test("RIDER-DISCOVERY-RESPONSE-004: accept API Cab capacity 7–8 and reject unsafe public display text", () => {
+  const validDriver = {
+    driverId: "driver-1",
+    fullName: "Asha Rao",
+    vehicleMake: "Maruti",
+    vehicleModel: "Dzire",
+    serviceClass: "cab",
+    passengerCapacity: 4,
+    distanceToPickupKm: 2.4,
+    profilePhotoBase64: null,
+    profilePhotoContentType: null
+  };
+  const buildResponse = ({
+    pickupZoneId = "zone-hyd-1",
+    unionId = "union-1",
+    unionName = "Green Cab Union",
+    driver = {}
+  } = {}) => ({
+    pickupZoneId,
+    journeyDistanceKm: null,
+    unions: [{ unionId, unionName, drivers: [{ ...validDriver, ...driver }] }]
+  });
+
+  for (const passengerCapacity of [7, 8]) {
+    const result = normalizeRiderDiscoveryResponse(buildResponse({ driver: { passengerCapacity } }));
+    assert.equal(result?.unions[0].drivers[0].passengerCapacity, passengerCapacity);
+  }
+  for (const passengerCapacity of [0, 9]) {
+    assert.equal(normalizeRiderDiscoveryResponse(buildResponse({ driver: { passengerCapacity } })), null);
+  }
+
+  const invalidResponses = [
+    buildResponse({ pickupZoneId: "zone\ninvalid" }),
+    buildResponse({ pickupZoneId: "z".repeat(81) }),
+    buildResponse({ unionId: "union\ninvalid" }),
+    buildResponse({ unionName: "Green\u0085Union" }),
+    buildResponse({ unionName: "U".repeat(121) }),
+    buildResponse({ driver: { driverId: "driver\ninvalid" } }),
+    buildResponse({ driver: { fullName: "Asha\nRao" } }),
+    buildResponse({ driver: { fullName: "D".repeat(121) } }),
+    buildResponse({ driver: { vehicleMake: "Maruti\u0085" } }),
+    buildResponse({ driver: { vehicleModel: "Dzire\n" } })
+  ];
+  for (const response of invalidResponses) {
+    assert.equal(normalizeRiderDiscoveryResponse(response), null);
+  }
+
+  const option = getRiderDriverOptionProps({
+    ...validDriver,
+    passengerCapacity: 8,
+    fullName: "Asha\nRao",
+    vehicleMake: "Maruti\u0085",
+    vehicleModel: "Dzire"
+  }, false, false, "Green\nUnion");
+  assert.match(option.accessibilityLabel, /^Cab driver, Dzire, Cab, Approved union, capacity 8 passengers/);
+  assert.doesNotMatch(option.accessibilityLabel, /[\u0000-\u001f\u007f-\u009f]/);
+});
+
+test("RIDER-DISCOVERY-UI-001: cap visible drivers at the first three server-ordered results", () => {
+  const drivers = [{ driverId: "d1" }, { driverId: "d2" }, { driverId: "d3" }, { driverId: "d4" }];
+  assert.deepEqual(getVisibleUnionDrivers(drivers), drivers.slice(0, 3));
+  assert.deepEqual(getVisibleUnionDrivers([drivers[2], drivers[0]]), [drivers[2], drivers[0]]);
+  assert.deepEqual(getVisibleUnionDrivers(null), []);
+  assert.deepEqual(getVisibleUnionDrivers({}), []);
+});
+
 test("Rider driver option exposes radio selection, union, Cab details and pickup-only proximity", () => {
   const driver = {
     fullName: "Asha Rao",
@@ -75,11 +336,33 @@ test("Rider driver option exposes radio selection, union, Cab details and pickup
   assert.deepEqual(disabled.accessibilityState, { checked: false, disabled: true });
 });
 
+test("Rider discovery groups each union's driver radio options with a safe accessible label", () => {
+  assert.deepEqual(getRiderUnionDriverGroupProps("Green Cab Union"), {
+    accessibilityRole: "radiogroup",
+    accessibilityLabel: "Green Cab Union union Cab drivers"
+  });
+  assert.deepEqual(getRiderUnionDriverGroupProps("bad\nunion"), {
+    accessibilityRole: "radiogroup",
+    accessibilityLabel: "Approved union Cab drivers"
+  });
+
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /getRiderUnionDriverGroupProps\(union\.unionName\)/);
+  assert.match(source, /rider-union-driver-group-/);
+});
+
 test("Rider trip helpers reject unknown fields and actions", () => {
   assert.throws(() => getRiderTripFieldProps("phone", false), /Unknown Rider trip field/);
   assert.throws(() => getRiderTripActionProps("pay", false, false), /Unknown Rider trip action/);
 });
 
+test("Rider destination starts empty so discovery cannot use an assumed demo destination", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.ok(source.includes('const [dropoff,setDropoff]=useState("");'));
+  assert.ok(!source.includes('useState("HITEC City, Hyderabad")'));
+  assert.match(source, /canDiscoverRiderTrip\(pickup,dropoff,parsePassengerCountInput\(passengers\)\)/);
+  assert.match(source, /disabled=\{loading\|\|!canDiscoverTrip\}/);
+});
 test("Rider booking screen wires accessible trip fields, actions and explicit driver selection", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
   for (const id of [
@@ -105,7 +388,64 @@ test("Rider booking screen wires accessible trip fields, actions and explicit dr
   assert.match(source, /getRiderTripActionProps\("discover"/);
   assert.match(source, /getRiderTripActionProps\("requestDriver"/);
   assert.match(source, /getRiderDriverOptionProps\(driver,selected,loading,union\.unionName\)/);
+  assert.match(source, /getVisibleUnionDrivers\(union\.drivers\)\.map/);
+  assert.match(source, /normalizeRiderDiscoveryResponse\(rawResult\)/);
+  assert.match(source, /The discovery response is invalid/);
   assert.match(source, /testID=\{`rider-driver-option-\$\{driver\.driverId\}`\}/);
   assert.match(source, /accessibilityLiveRegion="polite"/);
   assert.match(source, /accessibilityLiveRegion="assertive"/);
+});
+
+
+test("RIDER-DISCOVERY-RESPONSE-003 rejects invalid base64 even when the JPEG marker and MIME type match", () => {
+  const driver = {
+    driverId: "driver-photo", fullName: "Asha Rao", vehicleMake: "Maruti", vehicleModel: "Dzire",
+    serviceClass: "cab", passengerCapacity: 4, distanceToPickupKm: 1.2,
+    profilePhotoContentType: "image/jpeg"
+  };
+  for (const profilePhotoBase64 of ["/9j/@@==", "/9j/AA==AAAA", "/9j/", "/9j/AA"]) {
+    const result = normalizeRiderDiscoveryResponse({
+      pickupZoneId: "zone-hyd-1", journeyDistanceKm: null,
+      unions: [{ unionId: "union-1", unionName: "Green Cab Union", drivers: [{ ...driver, profilePhotoBase64 }] }]
+    });
+    assert.equal(result, null, profilePhotoBase64);
+  }
+});
+
+
+test("RIDER-ACTIVE-BOOKING-UI-001: recovery controls expose named accessible actions", () => {
+  const retry = getRiderTripActionProps("retryStatus", false, false);
+  assert.equal(retry.accessibilityRole, "button");
+  assert.equal(retry.accessibilityLabel, "Retry active booking check");
+  assert.match(retry.accessibilityHint, /server-owned ride history/);
+  assert.deepEqual(retry.accessibilityState, { disabled: false, busy: false });
+
+  const busyRetry = getRiderTripActionProps("retryStatus", true, true);
+  assert.equal(busyRetry.accessibilityLabel, "Checking active booking status");
+  assert.deepEqual(busyRetry.accessibilityState, { disabled: true, busy: true });
+
+  const view = getRiderTripActionProps("viewActiveRide", false, false);
+  assert.equal(view.accessibilityRole, "button");
+  assert.equal(view.accessibilityLabel, "View active ride");
+  assert.match(view.accessibilityHint, /does not create or submit another booking/);
+  assert.deepEqual(view.accessibilityState, { disabled: false, busy: false });
+
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /testID="rider-retry-active-booking"/);
+  assert.match(source, /getRiderTripActionProps\("retryStatus",loading,loading\)/);
+  assert.match(source, /onPress=\{\(\)=>void loadRideHistory/);
+  assert.match(source, /testID="rider-view-active-ride"/);
+  assert.match(source, /getRiderTripActionProps\("viewActiveRide",false,false\)/);
+  assert.match(source, /onPress=\{\(\)=>setTab\("Activity"\)\}/);
+});
+
+test("RIDER-TRIP-INPUT-002: pickup, destination and stop bounds are checked before discovery GPS", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const findNearbyVehicles=async()=>{");
+  const end = source.indexOf("const cancelRide=async()=>{", start);
+  assert.ok(start >= 0 && end > start);
+  const flow = source.slice(start, end);
+  const validation = flow.indexOf("validateRiderBookingText(pickup,dropoff,stopsText)");
+  const discovery = flow.indexOf("discoverNearbyCabDrivers(Location,apiFetch,passengerCount)");
+  assert.ok(validation >= 0 && discovery > validation);
 });

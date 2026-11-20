@@ -9,6 +9,9 @@ const {
   findAuthoritativeActiveTrip,
   shouldApplyTripLocationUpdate,
   mergeTripLocationSnapshot,
+  applyRiderRideStatusUpdate,
+  suspendRiderLocationSharing,
+  canShowRiderDriverLocation,
   getRideMapFitCoordinates,
   shouldFitRideMap
 } = require("./tripLocationSharing.js");
@@ -49,9 +52,102 @@ test("trip location is paused during negotiation and after terminal states", () 
   }
 });
 
+test("Rider driver map is visible only while an active ride shares valid coordinates", () => {
+  const active = {
+    rideId: "ride-visible",
+    status: "InProgress",
+    locationSharingActive: true,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4
+  };
+  assert.equal(canShowRiderDriverLocation(active), true);
+  assert.equal(canShowRiderDriverLocation({ ...active, status: "Completed" }), false);
+  assert.equal(canShowRiderDriverLocation({ ...active, locationSharingActive: false }), false);
+  assert.equal(canShowRiderDriverLocation({ ...active, driverLongitude: 181 }), false);
+});
+
+test("late Driver location events are rejected after sharing pauses or the ride becomes terminal", () => {
+  const current = {
+    rideId: "ride-terminal",
+    status: "InProgress",
+    locationSharingActive: true,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    locationCapturedAtUtc: "2026-11-08T12:00:10.000Z"
+  };
+  const update = {
+    rideId: "ride-terminal",
+    latitude: 17.5,
+    longitude: 78.5,
+    locationCapturedAtUtc: "2026-11-08T12:00:20.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:21.000Z"
+  };
+  assert.equal(shouldApplyTripLocationUpdate({ ...current, status: "Completed", locationSharingActive: false }, update), false);
+  assert.equal(shouldApplyTripLocationUpdate({ ...current, locationSharingActive: false }, update), false);
+});
+
+test("terminal status update clears Driver GPS and cannot be regressed by a late active event", () => {
+  const current = {
+    rideId: "ride-terminal",
+    status: "InProgress",
+    locationSharingActive: true,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    driverLocationCapturedAtUtc: "2026-11-08T12:00:10.000Z",
+    locationCapturedAtUtc: "2026-11-08T12:00:10.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:11.000Z"
+  };
+  const terminal = applyRiderRideStatusUpdate(current, { rideId: current.rideId, status: "Completed" });
+  assert.equal(terminal.status, "Completed");
+  assert.equal(terminal.locationSharingActive, false);
+  assert.equal(terminal.driverLatitude, undefined);
+  assert.equal(terminal.driverLongitude, undefined);
+  assert.equal(terminal.driverLocationCapturedAtUtc, null);
+  assert.equal(terminal.locationCapturedAtUtc, null);
+  assert.equal(terminal.locationUpdatedAt, undefined);
+
+  const regressed = applyRiderRideStatusUpdate(terminal, { rideId: current.rideId, status: "InProgress" });
+  assert.equal(regressed.status, "Completed");
+  assert.equal(regressed.driverLatitude, undefined);
+});
+
+test("history snapshot that disables sharing clears cached Driver coordinates", () => {
+  const current = {
+    rideId: "ride-snapshot",
+    status: "InProgress",
+    locationSharingActive: true,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    locationCapturedAtUtc: "2026-11-08T12:00:10.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:11.000Z"
+  };
+  const merged = mergeTripLocationSnapshot(current, {
+    rideId: "ride-snapshot",
+    status: "Completed",
+    locationSharingActive: false,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    locationUpdatedAt: "2026-11-08T12:00:12.000Z"
+  });
+  assert.equal(merged.status, "Completed");
+  assert.equal(merged.locationSharingActive, false);
+  assert.equal(merged.driverLatitude, undefined);
+  assert.equal(merged.driverLongitude, undefined);
+  assert.equal(merged.locationUpdatedAt, undefined);
+
+  const terminalCurrent = { ...current, status: "Completed", locationSharingActive: false, driverLatitude: undefined, driverLongitude: undefined };
+  const staleActiveSnapshot = { ...current, status: "InProgress", locationSharingActive: true };
+  const noResurrection = mergeTripLocationSnapshot(terminalCurrent, staleActiveSnapshot);
+  assert.equal(noResurrection.status, "Completed");
+  assert.equal(noResurrection.locationSharingActive, false);
+  assert.equal(noResurrection.driverLatitude, undefined);
+});
+
 test("Rider accepts only a strictly newer capture timestamp for the same ride", () => {
   const current = {
     rideId: "ride-1",
+    status: "Accepted",
+    locationSharingActive: true,
     driverLatitude: 17.4,
     driverLongitude: 78.4,
     locationCapturedAtUtc: "2026-11-08T12:00:10.000Z",
@@ -79,6 +175,8 @@ test("Rider accepts only a strictly newer capture timestamp for the same ride", 
 test("Rider rejects mismatched ride, invalid coordinates and invalid timestamps", () => {
   const current = {
     rideId: "ride-2",
+    status: "Accepted",
+    locationSharingActive: true,
     locationCapturedAtUtc: "2026-11-08T12:00:10.000Z"
   };
   const update = {
@@ -99,9 +197,46 @@ test("Rider rejects mismatched ride, invalid coordinates and invalid timestamps"
   }), false);
 });
 
+test("RIDER-LOCATION-UI-008: reject impossible and timezone-less timestamps before location ordering", () => {
+  const currentCapture = {
+    rideId: "ride-strict-time",
+    status: "InProgress",
+    locationSharingActive: true,
+    locationCapturedAtUtc: "2026-11-08T12:00:10.000Z",
+    locationUpdatedAt: "2026-11-08T12:00:11.000Z"
+  };
+  for (const locationCapturedAtUtc of [
+    "2026-02-30T12:00:00Z",
+    "2026-11-08T12:00:12",
+    "2026-11-08T12:00:12+05:60"
+  ]) {
+    assert.equal(shouldApplyTripLocationUpdate(currentCapture, {
+      rideId: "ride-strict-time",
+      latitude: 17.4,
+      longitude: 78.4,
+      locationCapturedAtUtc
+    }), false, locationCapturedAtUtc);
+  }
+
+  const currentReceipt = {
+    rideId: "ride-strict-receipt",
+    status: "Accepted",
+    locationSharingActive: true,
+    locationUpdatedAt: "2026-11-08T12:00:10.000Z"
+  };
+  assert.equal(shouldApplyTripLocationUpdate(currentReceipt, {
+    rideId: "ride-strict-receipt",
+    latitude: 17.4,
+    longitude: 78.4,
+    locationUpdatedAt: "2026-11-08T12:00:12"
+  }), false);
+});
+
 test("first capture watermark upgrades a legacy receipt-only snapshot without mixing clock semantics", () => {
   const legacy = {
     rideId: "ride-legacy",
+    status: "Accepted",
+    locationSharingActive: true,
     locationUpdatedAt: "2026-11-08T12:00:30.000Z"
   };
   const captured = {
@@ -117,6 +252,8 @@ test("first capture watermark upgrades a legacy receipt-only snapshot without mi
 test("restored ride API capture watermark rejects an older SignalR capture", () => {
   const current = {
     rideId: "ride-restored",
+    status: "InProgress",
+    locationSharingActive: true,
     driverLocationCapturedAtUtc: "2026-11-08T12:00:30.000Z",
     locationUpdatedAt: "2026-11-08T12:00:31.000Z"
   };
@@ -137,7 +274,7 @@ test("restored ride API capture watermark rejects an older SignalR capture", () 
 });
 
 test("legacy SignalR events without capture time remain ordered by server receipt time", () => {
-  const current = { rideId: "ride-legacy", locationUpdatedAt: "2026-11-08T12:00:20.000Z" };
+  const current = { rideId: "ride-legacy", status: "Accepted", locationSharingActive: true, locationUpdatedAt: "2026-11-08T12:00:20.000Z" };
   assert.equal(shouldApplyTripLocationUpdate(current, {
     rideId: "ride-legacy", latitude: 17.4, longitude: 78.4,
     locationUpdatedAt: "2026-11-08T12:00:21.000Z"
@@ -158,6 +295,7 @@ test("stale history refresh cannot overwrite a newer SignalR location snapshot",
   const current = {
     rideId: "ride-refresh",
     status: "Accepted",
+    locationSharingActive: true,
     driverLatitude: 17.4,
     driverLongitude: 78.4,
     locationCapturedAtUtc: "2026-11-08T12:00:30.000Z",
@@ -166,6 +304,7 @@ test("stale history refresh cannot overwrite a newer SignalR location snapshot",
   const staleSnapshot = {
     rideId: "ride-refresh",
     status: "InProgress",
+    locationSharingActive: true,
     driverLatitude: 17.3,
     driverLongitude: 78.3,
     driverLocationCapturedAtUtc: "2026-11-08T12:00:29.000Z",
@@ -190,6 +329,18 @@ test("stale history refresh cannot overwrite a newer SignalR location snapshot",
   assert.equal(mergedNewer.locationCapturedAtUtc, "2026-11-08T12:00:35.000Z");
 });
 
+test("Rider status events invalidate pending history and use the location-clearing transition", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf('connection.on("RideStatusChanged"');
+  const end = source.indexOf('connection.on("RideAgreementChanged"', start);
+  assert.ok(start >= 0 && end > start);
+  const handler = source.slice(start, end);
+  const invalidation = handler.indexOf("rideHistoryRequestSequence.current+=1");
+  const statusUpdate = handler.indexOf("applyRiderRideStatusUpdate(current,update)");
+  assert.ok(invalidation >= 0 && statusUpdate > invalidation);
+  assert.ok(source.includes("canShowRiderDriverLocation(ride)"));
+});
+
 test("Rider camera follows only after the matching map is ready and follow is enabled", () => {
   const state = { tab: "Activity", rideId: "ride-map", readyRideId: null, followDriverLocation: true };
   assert.equal(shouldFitRideMap(state), false);
@@ -202,6 +353,8 @@ test("Rider camera follows only after the matching map is ready and follow is en
 test("map viewport includes valid Driver and pickup coordinates only", () => {
   assert.deepEqual(getRideMapFitCoordinates({
     rideId: "ride-map",
+    status: "Accepted",
+    locationSharingActive: true,
     driverLatitude: 17.4,
     driverLongitude: 78.4,
     pickupLatitude: 17.5,
@@ -310,4 +463,111 @@ test("Driver foreground resume rechecks authoritative history before recreating 
   const watcherStart = effect.indexOf("Location.watchPositionAsync");
   assert.ok(historyRead >= 0 && authoritativeCheck > historyRead && watcherStart > authoritativeCheck);
   assert.match(effect, /if \(state === "active"\) void startWatching\(\)/);
+});
+
+test("Rider status update safely preserves a missing ride and narrows the React state updater", () => {
+  assert.equal(applyRiderRideStatusUpdate(null, { rideId: "ride-missing", status: "Completed" }), null);
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /setRide\(current=>current\?applyRiderRideStatusUpdate\(current,update\):current\)/);
+});
+
+test("RIDER-LOCATION-UI-003: a conflicting terminal history snapshot cannot replace an established terminal outcome", () => {
+  const current = {
+    rideId: "ride-terminal-conflict",
+    status: "Completed",
+    locationSharingActive: false,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4
+  };
+  const staleTerminal = {
+    rideId: "ride-terminal-conflict",
+    status: "Cancelled",
+    locationSharingActive: false,
+    driverLatitude: 17.5,
+    driverLongitude: 78.5
+  };
+  const merged = mergeTripLocationSnapshot(current, staleTerminal);
+  assert.equal(merged.status, "Completed");
+  assert.equal(merged.locationSharingActive, false);
+  assert.equal(merged.driverLatitude, undefined);
+  assert.equal(merged.driverLongitude, undefined);
+});
+
+
+test("RIDER-LOCATION-UI-005: live driver map and markers expose accessible context", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const mapStart = source.indexOf("<MapView");
+  const mapEnd = source.indexOf("</MapView>", mapStart);
+  assert.ok(mapStart >= 0 && mapEnd > mapStart);
+  const map = source.slice(mapStart, mapEnd);
+
+  assert.match(map, /testID="rider-live-driver-map"/);
+  assert.match(map, /accessible=\{true\}/);
+  assert.match(map, /accessibilityLabel="Live driver location map"/);
+  assert.match(map, /accessibilityHint="Shows your driver's latest shared location and your pickup point\. Moving the map pauses automatic following\."/);
+  assert.match(map, /onPanDrag=\{\(\)=>setFollowDriverLocation\(false\)\}/);
+  assert.match(map, /title="Your driver" description="Latest location shared by your selected driver during this active ride\."/);
+  assert.match(map, /title="Pickup" description="Your selected pickup location\."/);
+});
+
+test("RIDER-LOCATION-UI-006: Rider status events rehydrate server-owned sharing state before location updates", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const statusStart = source.indexOf('connection.on("RideStatusChanged"');
+  const statusEnd = source.indexOf('connection.on("RideAgreementChanged"', statusStart);
+  assert.ok(statusStart >= 0 && statusEnd > statusStart);
+  const handler = source.slice(statusStart, statusEnd);
+  const stateUpdate = handler.indexOf("setRide(current=>current?applyRiderRideStatusUpdate(current,update):current)");
+  const refresh = handler.indexOf("void refreshRiderState()");
+  assert.ok(stateUpdate >= 0 && refresh > stateUpdate);
+
+  const refreshStart = source.indexOf("const refreshRiderState=async()=>{");
+  const refreshEnd = source.indexOf('connection.on("DriverLocationUpdated"', refreshStart);
+  assert.ok(refreshStart >= 0 && refreshEnd > refreshStart);
+  const refreshBody = source.slice(refreshStart, refreshEnd);
+  assert.ok(refreshBody.indexOf("await loadRideHistory") >= 0);
+  assert.ok(refreshBody.indexOf("await refreshAgreements") > refreshBody.indexOf("await loadRideHistory"));
+});
+
+
+test("RIDER-LOCATION-UI-007: failed or ambiguous Rider history verification suspends cached Driver GPS", () => {
+  const ride = {
+    rideId: "ride-unverified",
+    status: "InProgress",
+    locationSharingActive: true,
+    driverLatitude: 17.4,
+    driverLongitude: 78.4,
+    driverLocationCapturedAtUtc: "2026-11-19T05:00:00Z",
+    locationCapturedAtUtc: "2026-11-19T05:00:00Z",
+    locationUpdatedAt: "2026-11-19T05:00:01Z",
+    pickupLatitude: 17.5,
+    pickupLongitude: 78.5
+  };
+  const suspended = suspendRiderLocationSharing(ride);
+
+  assert.notEqual(suspended, ride);
+  assert.equal(suspended.rideId, ride.rideId);
+  assert.equal(suspended.status, ride.status);
+  assert.equal(suspended.locationSharingActive, false);
+  assert.equal(suspended.driverLatitude, undefined);
+  assert.equal(suspended.driverLongitude, undefined);
+  assert.equal(suspended.driverLocationCapturedAtUtc, null);
+  assert.equal(suspended.locationCapturedAtUtc, null);
+  assert.equal(suspended.locationUpdatedAt, undefined);
+  assert.deepEqual(getRideMapFitCoordinates(suspended), [
+    { latitude: 17.5, longitude: 78.5 }
+  ]);
+  assert.equal(suspendRiderLocationSharing(null), null);
+
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const start = source.indexOf("const loadRideHistory=useCallback");
+  const end = source.indexOf("useEffect(()=>{let active=true;let restoreEpoch", start);
+  assert.ok(start >= 0 && end > start);
+  const loader = source.slice(start, end);
+  const historyRead = loader.indexOf('apiFetch("/api/v1/rides/mine")');
+  const catchBlock = loader.indexOf("}catch(error){", historyRead);
+  const suspension = loader.indexOf("suspendRiderLocationSharing(current)", catchBlock);
+  const rethrow = loader.indexOf("throw error;", suspension);
+  assert.ok(historyRead >= 0 && catchBlock > historyRead);
+  assert.ok(suspension > catchBlock && rethrow > suspension);
+  assert.match(loader, /if\(isCurrent\(\)\)setRide\(current=>current\?suspendRiderLocationSharing\(current\):current\)/);
 });
