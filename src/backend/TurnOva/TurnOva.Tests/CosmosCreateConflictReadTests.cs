@@ -106,4 +106,36 @@ public sealed class CosmosCreateConflictReadTests
 
         Assert.Same(failure, thrown);
     }
+
+    [Fact]
+    public async Task ReadAfterConflictRejectsWhitespaceIdBeforeCosmosAccess()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            CosmosCreateConflictRead.ReadAfterCreateConflictAsync<TestDocument>(
+                container.Object,
+                "  ",
+                new PartitionKey("rider-1"),
+                CancellationToken.None));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReadAfterConflictHonorsPreCancelledTokenBeforeCosmosAccess()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosCreateConflictRead.ReadAfterCreateConflictAsync<TestDocument>(
+                container.Object,
+                "idempotency-key",
+                new PartitionKey("rider-1"),
+                cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
 }
