@@ -3160,3 +3160,8 @@ Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH
 - Main is 06cb552db6c929cd5ab22d8bc1f2da191670f0f2 (one weekly-build workflow commit after PR #200's base snapshot 4061357c095debbc31fc5027a7bff27bd8b06265); no application source changed on main in that commit. Recheck base/head and mergeability before any merge.
 - Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness is not established.
 - Next exact action: obtain independent human approval for PR #200; recheck final head and required checks, merge only if repository policy permits, then re-read main and perform a fresh API phase-exit audit before Android Rider. No Android completion work has started.
+
+
+## Phase-config discrepancy — 2026-11-20
+
+Main at 06cb552db6c929cd5ab22d8bc1f2da191670f0f2 still has .github/turnova-phase.json set to API complete / Android in_progress. This conflicts with the documented independent-human-approval gate: PR #197 merged without independent approval, and PR #200 is still awaiting it. PR #200 intentionally changes the phase file back to API in_progress / Android not_started. Do not begin Android completion work or treat the main phase-file value as authorization until PR #200 receives independent human approval, merges only if repository policy permits, and a fresh main/API exit audit passes.
