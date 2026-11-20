@@ -3510,9 +3510,11 @@ app.MapPost("/api/v1/rider/bookings", async (
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
-                var prior = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
-                    keyId, new PartitionKey(riderId), cancellationToken: ct);
-                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior.Resource);
+                var prior = await CosmosCreateConflictRead.ReadAfterCreateConflictAsync<RideIdempotencyRecord>(
+                    idempotencyContainer, keyId, new PartitionKey(riderId), ct);
+                if (prior is null)
+                    return Results.Conflict(new { message = "A booking with this Idempotency-Key is already being processed. Retry shortly." });
+                var existingResult = await ResolveExistingBookingIdempotencyAsync(prior);
                 if (existingResult is not null) return existingResult;
             }
         }
@@ -3761,9 +3763,12 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
         try { await idempotencyContainer.CreateItemAsync(reservation, new PartitionKey(riderId), cancellationToken: ct); }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
-            var existing = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(keyId, new PartitionKey(riderId), cancellationToken: ct);
+            var existing = await CosmosCreateConflictRead.ReadAfterCreateConflictAsync<RideIdempotencyRecord>(
+                idempotencyContainer, keyId, new PartitionKey(riderId), ct);
+            if (existing is null)
+                return Results.Conflict(new { message = "The original request is still being processed. Retry shortly." });
             var existingRide = await FindRideAsync(
-                existing.Resource.rideId, ct,
+                existing.rideId, ct,
                 ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
             return existingRide is null ? Results.Conflict(new { message = "The original request is still being processed. Retry shortly." }) : Results.Ok(ToRiderRideDetailsResponse(existingRide));
         }
