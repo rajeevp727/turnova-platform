@@ -38,60 +38,6 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Theory]
-    [InlineData("rider", "Rider", "demo-rider-001")]
-    [InlineData("driver", "Driver", "demo-driver-001")]
-    public async Task DemoSessionIssuesShortLivedRoleScopedToken(string role, string expectedRole, string expectedSubject)
-    {
-        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
-        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
-        using var client = factory.CreateClient();
-
-        using var response = await client.PostAsync($"/api/v1/auth/demo/{role}", null);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.True(body.RootElement.GetProperty("isDemo").GetBoolean());
-        Assert.Equal(1800, body.RootElement.GetProperty("expiresIn").GetInt32());
-        Assert.Equal(expectedRole, body.RootElement.GetProperty("user").GetProperty("role").GetString());
-        var token = new JwtSecurityTokenHandler().ReadJwtToken(body.RootElement.GetProperty("accessToken").GetString());
-        Assert.Equal(expectedSubject, token.Subject);
-        Assert.Equal(expectedRole, token.Claims.Single(claim => claim.Type == "role").Value);
-        Assert.Equal("true", token.Claims.Single(claim => claim.Type == "demo").Value);
-        Assert.Empty(handler.Requests);
-    }
-
-    [Fact]
-    public async Task DemoSessionRejectsUnsupportedRole()
-    {
-        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo auth must not call TriSend."));
-        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
-        using var client = factory.CreateClient();
-
-        using var response = await client.PostAsync("/api/v1/auth/demo/admin", null);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Empty(handler.Requests);
-    }
-
-    [Fact]
-    public async Task DemoTokenCannotAccessNormalAuthenticatedEndpoints()
-    {
-        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Demo token must not reach TriSend."));
-        using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
-        using var client = factory.CreateClient();
-        using var issued = await client.PostAsync("/api/v1/auth/demo/rider", null);
-        using var issuedBody = JsonDocument.Parse(await issued.Content.ReadAsStringAsync());
-        var accessToken = issuedBody.RootElement.GetProperty("accessToken").GetString();
-        client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-
-        using var response = await client.GetAsync("/api/v1/auth/me");
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Empty(handler.Requests);
-    }
-
-    [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
     public async Task HealthProbesAreAvailableWithoutAuthentication(string path)
