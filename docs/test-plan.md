@@ -14,12 +14,16 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
 | API-OPENAPI-001 | Generate API v1 contract in Testing | `GET /openapi/v1.json` returns the v1 document and includes auth, Rider discovery/booking, Union reconciliation and Driver payment-report routes | API integration | P0 |
-| API-OPENAPI-002 | Document authorization accurately | Authenticated routes use JWT Bearer; `/api/v1/ops/*` uses `X-Driver-Admin-Key`; public login/register/refresh routes have no bearer requirement | API integration/security | P0 |
+| API-OPENAPI-002 | Document authorization accurately | Rider booking, Driver payment-report and Union reconciliation carry JWT Bearer; `/api/v1/ops/*` carries only `X-Driver-Admin-Key`; public login/register/refresh routes have no bearer requirement | API integration/security | P0 |
 | API-OPENAPI-003 | Keep OpenAPI out of Production | Runtime maps the generated contract only in Development/Testing | API configuration | P1 |
 | AUTH-API-015 | Local profile-read authorization | `GET /api/v1/auth/me` rejects missing/invalid JWT before calling TriSend; valid Rider/Driver tokens are forwarded unchanged | API integration/security | P0 |
 | API-CI-001 | Enforce API-first CI phase | Backend tests and native API publish run for API-only changes while mobile jobs are skipped; mobile changes enable Android jobs; iOS jobs require the phase-approval label | CI fixture | P0 |
 | API-OPENAPI-004 | Keep OpenAPI.NET dependency patched | Restore resolves Microsoft.OpenApi 2.7.5 or later on the compatible 2.x line; NU1903 remains an error and no audit suppression is added | Dependency/security CI | P0 |
 | API-OPENAPI-005 | Exclude test-only routes from the contract | The Testing-only `/__test/throw` route remains usable by the exception-handler test but is absent from `/openapi/v1.json` | API integration | P1 |
+
+
+
+AuthApiIntegrationTests.OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySchemes asserts auth register/login/refresh, Rider discovery/booking, Driver payment-report, Union reconciliation and Operations driver/Union paths. It checks Bearer on Rider/Driver/Union routes, OpsAdminKey without Bearer on Operations routes, no security requirement on public login/register/refresh, and exclusion of /__test/throw.
 
 ## 1. Authentication — registration
 
@@ -3647,8 +3651,13 @@ The code-bearing source/test head remains `e47924d03a7f186fc0286edc9e2c4ef642d7e
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
 | COSMOS-MIG-022 | Cosmos create/replace returns missing or mismatched lease resource | Successful create/replace must return a non-null Resource with fixed `schema-migrations` ID, the exact requested/new owner and a nonblank response ETag. Missing Resource, unexpected ID, blank owner or owner mismatch fails closed; the store never substitutes the local request object for the provider response. | Deterministic Cosmos adapter unit | P1 |
+| COSMOS-MIG-023 | Cosmos migration lease create/read/release encounters a non-race provider failure | HTTP 503 and other non-race provider failures propagate from create, read and release; only documented conflict/not-found/ETag-race statuses are converted to non-acquisition or lost-race results. | CosmosMigrationLeaseStoreTests: CreatePropagatesNonConflictProviderFailures; ReadPropagatesNonNotFoundProviderFailures; ReleasePropagatesNonRaceProviderFailures | P0 |
 
 `CosmosMigrationLeaseStoreTests.CreateRejectsSuccessfulResponseWithUnexpectedLeaseIdentity`, `CreateRejectsSuccessfulResponseWithoutResource`, `ReplaceRejectsSuccessfulResponseWithUnexpectedLeaseIdentity` and `ReplaceRejectsSuccessfulResponseWithoutResource` cover malformed write responses; existing create/replace success and missing-ETag tests cover the valid metadata path. The first exact-head attempt, CI #44650297199, caught two tests expecting `InvalidOperationException` while the shared null guard emitted `ArgumentNullException`. The helper was corrected to fail closed with the documented `InvalidOperationException`. Source/test head `7dcfb1d125039d5f38b63da885029985d913d393` passed [CI #44650666047](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047): **829/829 backend tests (0 failed, 0 skipped)**, scope validation, native non-container .NET 10 Release linux-x64 publish, verifier (11 negative fixtures plus valid fixture), artifact validation and upload [14591605262](https://github.com/rajeevp727/turnova-platform/actions/runs/44650666047/artifacts/14591605262). Mobile/Android/iOS jobs were intentionally skipped by the API-only phase gate. These are deterministic mocked-adapter checks, not live Cosmos ETag/multi-instance/restart evidence.
+
+
+COSMOS-MIG-023 is covered by three strict-mock tests proving HTTP 503 is propagated for lease create, read and release. COSMOS-MIG-022 remains covered by malformed/missing Cosmos lease response metadata tests. Exact source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 passed API-only CI [#44668284857](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857) with 854/854 backend tests and native publish/verifier; these are deterministic adapter tests, not live Cosmos contention or restart evidence.
+
 ## RID-IDEM-007 — Cosmos idempotency create-conflict/read deletion race — 2026-11-20
 
 | ID | Scenario | Expected result | Type | Priority |
@@ -3672,11 +3681,11 @@ Covered by `RiderIdempotencyPrivacyIntegrationTests.StaleSelectedBookingIdempote
 |---|---|---|---|---|
 | RID-IDEM-009 | A failed selected-booking request races with replacement of its in-memory or Cosmos idempotency record | In-memory cleanup uses atomic key/value compare-and-remove. Cosmos cleanup point-reads and validates id, Rider, ride, request hash and creation timestamp, then deletes with the observed ETag. HTTP 404/412 are treated as a lost cleanup race; non-race provider failures propagate. A replacement record is never deleted. | Deterministic in-memory + mocked Cosmos adapter unit | P0 |
 
-Covered by `InMemoryRideIdempotencyReservationsTests.TryRemoveExactDoesNotDeleteAReplacementBookingRecord` and nine deterministic `CosmosRideIdempotencyCleanupTests` cases: exact ETag deletion; missing Resource; missing ETag; mismatched identity/hash/timestamp; missing record before read; post-read HTTP 404 and 412 lost races; non-race provider failure; and pre-cancelled token. The additional metadata and HTTP 404 cases are in the current API PR source/test increment; its exact-head CI is pending. Live Cosmos ETag contention remains an external gate.
+Covered by InMemoryRideIdempotencyReservationsTests.TryRemoveExactDoesNotDeleteAReplacementBookingRecord and ten deterministic CosmosRideIdempotencyCleanupTests cases: exact ETag deletion; missing Resource; missing ETag; mismatched identity/hash/timestamp; missing record before read; post-read HTTP 404 and 412 lost races; read-side and delete-side non-race HTTP 503 propagation; and pre-cancelled token. Source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 passed exact-head API-only CI [#44668284857](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857): 854/854 backend tests, native non-container .NET 10 Release publish/verifier and artifact [14599196865](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857/artifacts/14599196865). Live Cosmos ETag contention remains an external gate.
 ## RID-IDEM-010 — selected-booking replay validates its persisted idempotency envelope — 2026-11-20
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
 | RID-IDEM-010 | A Rider-scoped idempotency record has a mismatched key ID, Rider ID or blank ride ID while its request hash matches | The API returns a generic HTTP 409 before trusting the stored ride pointer or changing reservations. No ride ID is exposed and the Rider's existing reservation remains unchanged. | API integration / idempotency integrity | P0 |
 
-Covered by `RiderIdempotencyPrivacyIntegrationTests.SelectedBookingReplayRejectsMismatchedIdempotencyEnvelope` (three deterministic cases: mismatched id, mismatched Rider ID and blank ride ID). Exact-head CI for this increment is pending. The record is partition-key scoped, but the persisted identity envelope is validated independently before replay/recovery.
+Covered by RiderIdempotencyPrivacyIntegrationTests.SelectedBookingReplayRejectsMismatchedIdempotencyEnvelope (three deterministic cases: mismatched id, mismatched Rider ID and blank ride ID). Source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 passed API-only CI [#44668284857](https://github.com/rajeevp727/turnova-platform/actions/runs/44668284857): 854/854 backend tests and native non-container .NET 10 Release publish/verifier. The record is partition-key scoped, but the persisted identity envelope is validated independently before replay/recovery.
