@@ -3172,3 +3172,12 @@ PR #197 source/test head 3feb6b86a9c95602f092aae7f3c20c4086688930 passed [CI #44
 ## Documentation-bearing API CI — 2026-11-20
 
 PR #197 documentation-bearing head a94b1f5dcb05885f332c2daf7ed4fb5f095c34c7 passed [CI #44669155071](https://github.com/rajeevp727/turnova-platform/actions/runs/44669155071): **854/854 backend tests**, Release build, native non-container .NET 10 linux-x64 publish/verifier, artifact [14598569138](https://github.com/rajeevp727/turnova-platform/actions/runs/44669155071/artifacts/14598569138). The build emitted 25 xUnit analyzer warnings and 0 errors. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under API phase gating. This note update requires a new exact-head CI. Independent human approval for PR #197 remains pending; do not self-approve or merge.
+
+
+## Latest API handoff — RID-IDEM-011 — 2026-11-20
+
+PR #197 remains the sole active API feature PR. Source/test head `8fe2afd2dbd3a88c5c09a81f6fb112beeaf0ecd6` passed exact-head [CI #44672496184](https://github.com/rajeevp727/turnova-platform/actions/runs/44672496184): 869/869 backend tests (0 failed, 0 skipped), Release build, native non-container .NET 10 linux-x64 publish/verifier and artifact [14599929361](https://github.com/rajeevp727/turnova-platform/actions/runs/44672496184/artifacts/14599929361). Build log: 25 xUnit analyzer warnings, 0 errors; mobile/Android/iOS jobs were skipped by the API-only phase gate.
+
+RID-IDEM-011 replaces the Development/Testing legacy Cosmos idempotency cleanup's inline read/delete with exact item ID/Rider/ride validation and ETag conditional deletion. Fifteen deterministic tests cover exact deletion, null Resource, missing ETag, three identity mismatches, pre-read 404, post-read 404/412, read/delete 503, cancellation and blank identity inputs. Non-race provider errors propagate; no production FIFO behavior was enabled. The change was reviewed for data-loss, concurrency, cancellation and privacy risks; no new critical/high finding was identified.
+
+PR #197 remains open and requires independent human approval. Four reviews are owner-authored COMMENT-only; no independent approval; zero unresolved threads. PR #196/#198 remain Draft/parked. API remains in_progress; Android/iOS remain not_started. Strict acceptance remains 0/19 (16 In Progress, 3 Blocked); production readiness is not established. Live Cosmos ETag/multi-instance/restart, production identity/hosting/providers, product dispatch/support/reconciliation policy, private-media/legal and physical-device/signing gates remain external.
