@@ -3334,9 +3334,22 @@ app.MapPost("/api/v1/rider/bookings", async (
         if (prior.RequestHash != requestFingerprint)
             return Results.Conflict(new { message = "This Idempotency-Key was already used for a different booking request." });
 
-        var priorRide = await FindRideAsync(
-            prior.rideId, ct,
-            ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
+        // Distinguish a genuinely missing ride (the supported interrupted-create recovery
+        // case) from an existing ride owned by another Rider. Filtering the raw read first
+        // would make a foreign ride look missing and could reserve its deterministic ID.
+        var priorRideSnapshot = await ReadRideRawAsync(prior.rideId, ct);
+        if (priorRideSnapshot is not null &&
+            !string.Equals(priorRideSnapshot.RiderId, riderId, StringComparison.Ordinal))
+            return Results.Conflict(new
+            {
+                message = "The original booking reference cannot be safely replayed. Retry with a new Idempotency-Key."
+            });
+
+        var priorRide = priorRideSnapshot is null
+            ? null
+            : await FindRideAsync(
+                prior.rideId, ct,
+                ride => string.Equals(ride.RiderId, riderId, StringComparison.Ordinal));
         if (priorRide is not null)
         {
             if (!string.IsNullOrWhiteSpace(priorRide.UnionId) &&
