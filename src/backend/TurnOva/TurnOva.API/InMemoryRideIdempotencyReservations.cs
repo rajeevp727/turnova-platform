@@ -26,9 +26,20 @@ public static class InMemoryRideIdempotencyReservations
         // a stale cleanup cannot remove a replacement reservation for the same key.
         return reservations.TryRemove(new KeyValuePair<string, string>(key, expectedRideId));
     }
-}
-
     public static bool TryRemoveExact<T>(
+        ConcurrentDictionary<string, T> reservations,
+        string key,
+        T expectedValue)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(reservations);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(expectedValue);
+
+        return reservations.TryRemove(new KeyValuePair<string, T>(key, expectedValue));
+    }
+}
+(
         ConcurrentDictionary<string, T> reservations,
         string key,
         T expectedValue)
