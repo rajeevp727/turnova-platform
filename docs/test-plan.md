@@ -326,7 +326,7 @@ The shared `rideRecovery.test.cjs` also verifies immutable `RideStatusChanged` p
 | COSMOS-MIG-005 | Migration fails before history is recorded | Startup fails; a later startup can retry the idempotent migration | Cosmos integration | P0 |
 | COSMOS-READY-001 | Cosmos database is reachable | `GET /health/ready` returns HTTP 200 | API + Cosmos | P0 |
 | COSMOS-READY-002 | Cosmos database is unavailable | `GET /health/ready` returns HTTP 503 | API + failure injection | P0 |
-| COSMOS-READY-003 | API runs in in-memory demo mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
+| COSMOS-READY-003 | API runs in Development/Testing in-memory mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
 
 Automated tests cover Cosmos configuration validation. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
 
@@ -747,8 +747,9 @@ The automated API tests use the in-memory ride store. Cosmos cross-partition que
 | PLATFORM-CORS-001 | Browser preflight uses an origin configured in `Cors:AllowedOrigins` | API returns the matching `Access-Control-Allow-Origin` header and allows the requested method | API integration/security | P0 |
 | PLATFORM-CORS-002 | Browser preflight uses an origin not in the configured allow-list | API does not emit `Access-Control-Allow-Origin` for that origin | API integration/security | P0 |
 | PLATFORM-HEALTH-001 | Liveness probe calls `/health/live` | HTTP 200 while the API process is running | API integration | P0 |
-| PLATFORM-HEALTH-002 | Readiness probe calls `/health/ready` in demo/in-memory mode | HTTP 200 with `status: ready`; public response does not disclose the storage mode or database name | API integration | P0 |
+| PLATFORM-HEALTH-002 | Readiness probe calls `/health/ready` in Development/Testing in-memory mode | HTTP 200 with `status: ready`; public response does not disclose the storage mode or database name | API integration | P0 |
 | PLATFORM-HEALTH-003 | Readiness probe calls `/health/ready` in Cosmos mode while the database is unavailable | HTTP 503; readiness does not report healthy when the configured persistent store is unreachable | Cosmos integration/failure injection | P0 |
+| PLATFORM-HEALTH-017 | Readiness probe runs outside Development/Testing with in-memory fallback (for example Staging) | HTTP 503; process-local persistence is never advertised as ready outside Development/Testing | API integration | P0 |
 
 | PLATFORM-CORS-003 | Configured origin contains a wildcard hostname such as `https://*.turnova.test` | Startup validation rejects the origin before it is added to the CORS policy | Unit |
 | PLATFORM-CORS-004 | Configured origin contains a wildcard character elsewhere in the origin string | Startup validation rejects the origin; no wildcard matching is enabled | Unit |
@@ -1049,12 +1050,13 @@ DRIVER-01 code/test audit (2026-11-07): `DriverOnboardingRequest` accepts Cab on
 
 | ID | Scenario | Expected result | Automated evidence | Priority |
 |---|---|---|---|---|
-| PLATFORM-HEALTH-001 | API runs in demo in-memory mode | Liveness and readiness return HTTP 200; readiness returns only service/status and does not identify the storage provider | `PublicHealthEndpointsExposeOnlyGenericStatusMetadata` | P0 |
+| PLATFORM-HEALTH-001 | API runs in Development/Testing in-memory mode | Liveness and readiness return HTTP 200; readiness returns only service/status and does not identify the storage provider | `PublicHealthEndpointsExposeOnlyGenericStatusMetadata`, `TestingInMemoryPersistenceRemainsReady` | P0 |
 | PLATFORM-HEALTH-002 | Storage dependency probe fails | Readiness returns generic HTTP 503 while liveness remains HTTP 200; response omits provider exception and infrastructure metadata | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
 | PLATFORM-HEALTH-003 | Storage probe exceeds its configured bound | Probe cancels after three seconds in production wiring; unit test verifies timeout maps to a readiness failure | `CheckAsyncMapsProbeTimeoutToReadinessFailure` | P0 |
 | PLATFORM-HEALTH-004 | Caller cancels the readiness request | Request cancellation propagates and is not misreported as a dependency timeout | `CheckAsyncPropagatesCallerCancellation` | P1 |
 | PLATFORM-HEALTH-005 | Unauthenticated root and health endpoints are queried | `/` exposes only name/version/message; `/health` and `/health/ready` expose only service/status; storage mode, database name, environment and provider metadata are absent | `PublicHealthEndpointsExposeOnlyGenericStatusMetadata` | P0 |
 | PLATFORM-HEALTH-006 | Storage readiness fails | Generic HTTP 503 problem details contain no storage mode, database, environment, endpoint, connection-string or raw provider exception metadata | `ReadinessReturns503WhenStorageIsUnavailableWhileLivenessRemainsHealthy` | P0 |
+| PLATFORM-HEALTH-017 | Staging uses in-memory fallback without Cosmos | `/health/ready` returns generic HTTP 503; Testing in-memory mode remains HTTP 200 | `StagingInMemoryPersistenceDoesNotReportReady`, `TestingInMemoryPersistenceRemainsReady` | P0 |
 | PLATFORM-AUDIT-015 | Numeric actor reference contains allowed separators | Phone-like actor references with at least eight digits and only numeric/separator characters are reduced to the System actor before persistence | `ReservationAuditRedactsPhoneLikeActorIdsWithAllowedSeparators` | P0 |
 | PLATFORM-AUDIT-016 | Opaque actor reference contains letters and digits | Opaque internal IDs containing letters remain intact; only phone-like numeric references are redacted | `ReservationAuditPreservesOpaqueActorIdsContainingLetters` | P1 |
 | PLATFORM-AUDIT-017 | Reservation audit event uses a declared event type | The four declared reservation event types are accepted unchanged | `ReservationAuditAcceptsOnlyTheFourDeclaredEventTypes` | P1 |
