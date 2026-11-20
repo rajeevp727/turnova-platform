@@ -124,8 +124,9 @@ builder.Services.AddOptions<TriSendSettings>()
     .Validate(settings =>
         !string.IsNullOrWhiteSpace(settings.BaseUrl) &&
         Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri) &&
-        uri.Scheme == Uri.UriSchemeHttps,
-        "TriSend:BaseUrl must be a valid HTTPS URL.")
+        (uri.Scheme == Uri.UriSchemeHttps ||
+         (builder.Environment.IsDevelopment() && uri.Scheme == Uri.UriSchemeHttp)),
+        "TriSend:BaseUrl must be HTTPS, except HTTP is permitted for local Development.")
     .ValidateOnStart();
 
 builder.Services.AddHttpClient("TriSend", (services, client) =>
@@ -1467,50 +1468,6 @@ app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, Cance
 
 
 var authGroup = app.MapGroup("/api/v1/auth").WithTags("Authentication");
-authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
-{
-    // Demo access is opt-in and issues a short-lived, non-production identity.
-    if (!configuration.GetValue<bool>("DemoAuth:Enabled"))
-        return Results.NotFound();
-
-    var normalizedRole = role.Trim().ToLowerInvariant();
-    if (normalizedRole is not ("rider" or "driver"))
-        return Results.NotFound();
-
-    var issuer = configuration["Auth:Jwt:Issuer"];
-    var audience = configuration["Auth:Jwt:Audience"];
-    var signingKey = configuration["Auth:Jwt:SigningKey"];
-    if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience) ||
-        string.IsNullOrWhiteSpace(signingKey) || signingKey.Length < 32)
-        return Results.Problem("Demo authentication is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
-
-    var isRider = normalizedRole == "rider";
-    var subject = isRider ? "demo-rider-001" : "demo-driver-001";
-    var email = isRider ? "rider.demo@turnova.invalid" : "driver.demo@turnova.invalid";
-    var name = isRider ? "Demo Rider" : "Demo Driver";
-    var appRole = isRider ? "Rider" : "Driver";
-    var now = DateTime.UtcNow;
-    var credentials = new SigningCredentials(
-        new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-        SecurityAlgorithms.HmacSha256);
-    var claims = new[]
-    {
-        new Claim(JwtRegisteredClaimNames.Sub, subject),
-        new Claim(JwtRegisteredClaimNames.Email, email),
-        new Claim("name", name),
-        new Claim("role", appRole),
-        new Claim("demo", "true")
-    };
-    var jwt = new JwtSecurityToken(issuer, audience, claims, now, now.AddMinutes(30), credentials);
-    return Results.Ok(new
-    {
-        accessToken = new JwtSecurityTokenHandler().WriteToken(jwt),
-        refreshToken = (string?)null,
-        expiresIn = 1800,
-        isDemo = true,
-        user = new { id = subject, email, name, role = appRole, isDemo = true }
-    });
-}).AllowAnonymous();
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
     CancellationToken ct) =>

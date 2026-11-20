@@ -78,10 +78,7 @@ async function request(path: string, init: RequestInit = {}, token?: string) {
 }
 
 export default function App() {
-  const [user,setUser]=useState<User|null>(null);
-  const [demoMode,setDemoMode]=useState(false);
-  const [demoTab,setDemoTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
-  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
+  const [user,setUser]=useState<User|null>(null);  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0); const authenticatedSessionEpoch=useRef<number|null>(null);
   const activeSessionStops=useRef<Set<() => unknown>>(new Set());
   const stopSessionResources=useCallback(()=>stopRegisteredConnections(activeSessionStops.current),[]);
@@ -328,18 +325,6 @@ export default function App() {
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const startDemoSession = async () => {
-    try {
-      setError("");
-      const response = await request("/api/v1/auth/demo/rider", { method: "POST" });
-      if (!response?.isDemo || response?.user?.role !== "Rider") throw new Error("Invalid demo session response.");
-      setUser(requireAppRole<User>(response.user, "Rider"));
-      setDemoTab("Book");
-      setDemoMode(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to start demo session. Check API availability and demo configuration.");
-    }
-  };
   const authenticate = async () => {
     if(!tryBeginRiderAuthSubmission(authSubmissionInFlight))return;
     let authEpoch = sessionEpoch.current;
@@ -525,46 +510,35 @@ export default function App() {
     {(["system", "light", "dark"] as const).map(option => <Pressable key={option} testID={`rider-theme-${option}`} {...getRiderThemeOptionProps(option,themePreference===option)} onPress={() => selectTheme(option)} style={[styles.themeOption, themePreference === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, themePreference === option && styles.themeOptionTextSelected]}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</Text></Pressable>)}
   </View>;
   const authSubmitDisabled=loading||!email.trim()||!password;
-  if(loading&&!user&&!demoMode)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}} accessibilityLabel="Restoring your Rider session"/></SafeAreaView>;
-  if(!user&&!demoMode)return <SafeAreaView style={styles.safe}>
+  if (loading && !user)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}} accessibilityLabel="Restoring your Rider session"/></SafeAreaView>;
+  if (!user)return <SafeAreaView style={styles.safe}>
     <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
     <View style={styles.header}><TurnOvaLogo subtitle="Everyone’s Turn Matters." /></View>
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>RIDER ACCOUNT</Text><Text style={styles.title}>Explore TurnOva</Text>
-      <Text style={styles.sub}>Registration is temporarily unavailable while the API is offline. Continue with a local demo profile to preview the Rider app.</Text>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Text style={styles.eyebrow}>RIDER ACCOUNT</Text>
+      <Text style={styles.title}>{mode === "register" ? "Create your account" : "Welcome back"}</Text>
+      <Text style={styles.sub}>{mode === "register" ? "Register as a Rider to book and manage your rides." : "Sign in to continue to your Rider account."}</Text>
       {themePicker}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Offline demo access</Text>
-        <Text style={styles.muted}>No email or password required. The API issues a restricted demo session that cannot access real user or ride data.</Text>
-        <Pressable testID="rider-demo-login" style={styles.primary} onPress={startDemoSession}><Text style={styles.primaryText}>Continue as Demo Rider</Text></Pressable>
-        {error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.muted}>Demo mode is read-only. Booking, payments and live tracking are unavailable.</Text>
+        {mode === "register" && <>
+          <Text style={styles.label}>FULL NAME</Text>
+          <TextInput testID="rider-auth-name" value={name} onChangeText={setName} style={styles.input} placeholder="Your full name" placeholderTextColor={colors.muted} autoCapitalize="words" editable={!loading}/>
+        </>}
+        <Text style={styles.label}>EMAIL ADDRESS</Text>
+        <TextInput testID="rider-auth-email" value={email} onChangeText={setEmail} style={styles.input} placeholder="you@example.com" placeholderTextColor={colors.muted} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} editable={!loading}/>
+        <Text style={styles.label}>PASSWORD</Text>
+        <TextInput testID="rider-auth-password" value={password} onChangeText={setPassword} style={styles.input} placeholder="Enter your password" placeholderTextColor={colors.muted} secureTextEntry autoCapitalize="none" editable={!loading} onSubmitEditing={() => { if (!authSubmitDisabled) void authenticate(); }}/>
+        {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
+        <Pressable testID="rider-auth-submit" style={[styles.primary, authSubmitDisabled && {opacity:0.55}]} disabled={authSubmitDisabled} onPress={() => void authenticate()}>
+          <Text style={styles.primaryText}>{loading ? "Please wait…" : mode === "register" ? "Create Rider account" : "Sign in"}</Text>
+        </Pressable>
+        <Pressable testID="rider-auth-toggle-mode" style={styles.secondary} disabled={loading} onPress={() => { setError(""); setMode(mode === "login" ? "register" : "login"); }}>
+          <Text style={styles.secondaryText}>{mode === "login" ? "New to TurnOva? Create an account" : "Already registered? Sign in"}</Text>
+        </Pressable>
       </View>
     </ScrollView>
   </SafeAreaView>;
 
-  if(demoMode) return <SafeAreaView style={styles.safe}>
-    <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
-    <View style={styles.header}><TurnOvaLogo subtitle="Rider demo · Offline preview" compact /></View>
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>RIDER DEMO</Text>
-      <Text style={styles.title}>{demoTab==="Book"?"Where to?":demoTab}</Text>
-      <Text style={styles.sub}>Sample content only. Demo session is restricted; real booking, payment and live tracking are unavailable.</Text>
-      {demoTab==="Book"&&<View style={styles.card}>
-        <Text style={styles.label}>SAMPLE TRIP</Text><Text style={styles.cardTitle}>Nizampet → HITEC City</Text>
-        <Text style={styles.muted}>Cab · 1 passenger · Sample estimate ₹280–₹340</Text>
-        <View style={{height:1,backgroundColor:colors.border,marginVertical:14}}/>
-        <Text style={styles.label}>NEARBY DEMO DRIVER</Text><Text style={styles.cardTitle}>Arjun Kumar</Text><Text style={styles.muted}>Maruti Swift Dzire · Demo Union · 2.4 km away</Text>
-        <Text style={styles.muted}>Driver discovery and booking are disabled in offline demo mode.</Text>
-      </View>}
-      {demoTab==="Activity"&&<View style={styles.card}><Text style={styles.label}>SAMPLE RIDE HISTORY</Text><Text style={styles.cardTitle}>Nizampet → HITEC City</Text><Text style={styles.muted}>Completed · Demo ride · ₹310 (illustrative only)</Text><Text style={styles.cardTitle}>Kukatpally → Secunderabad</Text><Text style={styles.muted}>Cancelled · Demo record</Text></View>}
-      {demoTab==="Offers"&&<View style={styles.card}><Text style={styles.cardTitle}>Offers</Text><Text style={styles.muted}>No live offers are loaded in offline demo mode.</Text></View>}
-      {demoTab==="Profile"&&<View style={styles.card}><Text style={styles.label}>DEMO RIDER PROFILE</Text><Text style={styles.cardTitle}>Raja · Sample Rider</Text><Text style={styles.muted}>Role: Rider</Text><Text style={styles.muted}>Account: Local demo profile · Not registered</Text></View>}
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:8,marginTop:16}}>
-        {(["Book","Activity","Offers","Profile"] as const).map(item=><Pressable key={item} onPress={()=>setDemoTab(item)} style={[styles.themeOption,demoTab===item&&styles.themeOptionSelected]}><Text style={[styles.themeOptionText,demoTab===item&&styles.themeOptionTextSelected]}>{item}</Text></Pressable>)}
-      </View>
-      <Pressable style={[styles.secondary,{marginTop:16}]} onPress={()=>{setDemoMode(false);setDemoTab("Book");}}><Text style={styles.secondaryText}>Exit demo</Text></Pressable>
-    </ScrollView>
-  </SafeAreaView>;
   if (!user) return null;
   const tabs=["Book","Activity","Offers","Profile"] as const;
   return <SafeAreaView style={styles.safe}><StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/><View style={styles.header}><TurnOvaLogo subtitle={`Rider · ${user.name||user.email}`} compact /></View><ScrollView contentContainerStyle={styles.content}>

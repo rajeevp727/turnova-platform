@@ -550,43 +550,54 @@ while true; do
   capture_app_runtime_logcat
 done
 
-# PR #199 replaced the email/password login screen with a restricted demo
-# entry point. Verify the actual role-specific demo CTA and read-only notice
-# instead of asserting text that no longer exists in either app.
+# Reject visible session/storage restoration failures before accepting the login UI.
+if grep -Fq "Unable to restore your session." "$OUTPUT_DIR/ui-hierarchy.xml"; then
+  echo "Android app displayed an unexpected session/storage error during startup." >&2
+  cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
+  exit 1
+fi
+
+# Verify that the real email/password authentication UI is rendered on a
+# fresh install. Demo authentication was intentionally removed from this PR.
 case "$EXPECTED_ID" in
   com.turnova.rider)
-    expected_demo_cta="Continue as Demo Rider"
-    expected_demo_resource="rider-demo-login"
+    expected_role_label="RIDER ACCOUNT"
+    expected_submit_resource="rider-auth-submit"
+    expected_email_resource="rider-auth-email"
+    expected_password_resource="rider-auth-password"
     ;;
   com.turnova.driver)
-    expected_demo_cta="Continue as Demo Driver"
-    expected_demo_resource="driver-demo-login"
+    expected_role_label="DRIVER PARTNER"
+    expected_submit_resource="driver-auth-submit"
+    expected_email_resource="driver-auth-email"
+    expected_password_resource="driver-auth-password"
     ;;
   *)
-    echo "No Android demo-screen smoke expectations are configured for $EXPECTED_ID." >&2
+    echo "No Android login-screen smoke expectations are configured for $EXPECTED_ID." >&2
     exit 2
     ;;
 esac
 
-for expected_text in "Offline demo access" "$expected_demo_cta" "Demo mode is read-only"; do
+for expected_text in "$expected_role_label" "Welcome back" "Sign in"; do
   if ! grep -Fq "$expected_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
-    echo "Android demo screen is missing expected visible/accessibility text: $expected_text" >&2
+    echo "Android login screen is missing expected visible/accessibility text: $expected_text" >&2
     cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
     exit 1
   fi
 done
-if ! grep -Fq "resource-id=\"$expected_demo_resource\"" "$OUTPUT_DIR/ui-hierarchy.xml"; then
-  echo "Android demo CTA is missing its stable accessibility resource ID: $expected_demo_resource" >&2
-  cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
-  exit 1
-fi
-for forbidden_text in "Unable to restore your session" "Unable to restore session" "Session expired" "Unable to clear secure session storage"; do
-  if grep -Fq "$forbidden_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
-    echo "Android fresh-install login UI contains an unexpected session/storage error: $forbidden_text" >&2
+for expected_resource in "$expected_submit_resource" "$expected_email_resource" "$expected_password_resource"; do
+  if ! grep -Fq "resource-id=\"$expected_resource\"" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+    echo "Android login screen is missing expected authentication control: $expected_resource" >&2
+    cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
     exit 1
   fi
 done
-
+for forbidden_text in "Continue as Demo" "Offline demo access" "Demo mode is read-only"; do
+  if grep -Fq "$forbidden_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+    echo "Android fresh-install login UI unexpectedly contains a demo entry point: $forbidden_text" >&2
+    exit 1
+  fi
+done
 capture_app_runtime_logcat
 
 sleep 5
@@ -675,7 +686,7 @@ with open(output, "w", encoding="utf-8") as stream:
         "install": "passed",
         "launch": "passed",
         "processStableAfterStartup": True,
-        "demoEntryScreenTextVerified": True,
+        "authenticationScreenVerified": True,
         "staleSessionErrorAbsent": True,
         "systemUiRecovery": {
             "pixelLauncherAnrWaitAttempts": int(pixel_launcher_wait_attempts),
