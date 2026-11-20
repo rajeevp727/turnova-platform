@@ -27,3 +27,16 @@ public static class InMemoryRideIdempotencyReservations
         return reservations.TryRemove(new KeyValuePair<string, string>(key, expectedRideId));
     }
 }
+
+    public static bool TryRemoveExact<T>(
+        ConcurrentDictionary<string, T> reservations,
+        string key,
+        T expectedValue)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(reservations);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(expectedValue);
+
+        return reservations.TryRemove(new KeyValuePair<string, T>(key, expectedValue));
+    }
