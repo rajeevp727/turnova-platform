@@ -67,8 +67,11 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.True(body.RootElement.GetProperty("isDemo").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("refreshToken").ValueKind);
         Assert.Equal(1800, body.RootElement.GetProperty("expiresIn").GetInt32());
-        Assert.Equal(expectedRole, body.RootElement.GetProperty("user").GetProperty("role").GetString());
+        var user = body.RootElement.GetProperty("user");
+        Assert.True(user.GetProperty("isDemo").GetBoolean());
+        Assert.Equal(expectedRole, user.GetProperty("role").GetString());
         var token = new JwtSecurityTokenHandler().ReadJwtToken(body.RootElement.GetProperty("accessToken").GetString());
         Assert.Equal(expectedSubject, token.Subject);
         Assert.Equal(expectedRole, token.Claims.Single(claim => claim.Type == "role").Value);
