@@ -148,7 +148,7 @@ AI-01 is approved supplemental Rider/Driver functionality and is outside the 19-
 ## Health and error behavior
 
 - `GET /health/live` reports process liveness.
-- `GET /health/ready` performs a bounded storage dependency probe and returns 503 when storage is unavailable or the probe times out.
+- `GET /health/ready` performs a bounded storage dependency probe and returns 503 when storage is unavailable or the probe times out. Development/automated Testing in-memory mode is ready for deterministic local use. If Staging, QA or another non-Development/Testing environment has no Cosmos configuration, the API may retain its in-memory adapters for isolated test-harness compatibility, but readiness returns a generic 503; process-local volatile storage must not receive hosted application traffic. Production fails startup without Cosmos. A hosted Staging/QA deployment must configure and validate Cosmos before it can become ready.
 - Unexpected exceptions return generic Problem Details with a trace ID; raw exception details, credentials, tokens, exact coordinates and request bodies are not returned.
 - Common contract outcomes include 400 validation, 401 missing/invalid authentication, 403 role/scope denial, 404 non-owned/not-found resources, 409 state/concurrency conflict, 413 oversized request body, 503 unavailable configuration/dependency and 504 upstream timeout.
 
