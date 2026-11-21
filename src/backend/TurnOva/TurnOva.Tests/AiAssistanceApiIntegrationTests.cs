@@ -76,6 +76,32 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task AssistanceAuthorizationRejectionsAreNonCacheable()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var driver = factory.CreateClient("Driver", "ai-forbidden-trip-intent");
+        using var anonymous = factory.CreateAnonymousClient();
+
+        using var forbiddenResponse = await driver.PostAsJsonAsync(
+            "/api/v1/assistance/trip-intent",
+            new { text = "Cab from Nizampet to HITEC City for 2 passengers" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
+        Assert.True(forbiddenResponse.Headers.CacheControl?.NoStore);
+        Assert.Contains(forbiddenResponse.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        using var unauthorizedResponse = await anonymous.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "What does queue status mean?" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorizedResponse.StatusCode);
+        Assert.True(unauthorizedResponse.Headers.CacheControl?.NoStore);
+        Assert.Contains(unauthorizedResponse.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task AssistanceValidationReturnsTypedNonCacheableBadRequest()
     {
         using var factory = new AiAssistanceApiFactory();
