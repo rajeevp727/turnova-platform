@@ -1645,18 +1645,41 @@ static async Task<IResult> ForwardAuthRequest(
         var content = await response.Content.ReadAsStringAsync(ct);
         if (response.IsSuccessStatusCode && expectedRole is not null)
         {
-            using var json = JsonDocument.Parse(content);
-            var actualRole = json.RootElement.GetProperty("user").GetProperty("role").GetString();
-            if (!string.Equals(actualRole, expectedRole, StringComparison.Ordinal))
+            JsonDocument json;
+            try
             {
-                var accessToken = json.RootElement.GetProperty("accessToken").GetString();
-                if (!string.IsNullOrWhiteSpace(accessToken))
+                json = JsonDocument.Parse(content);
+            }
+            catch (JsonException)
+            {
+                return InvalidAuthenticationResponse();
+            }
+
+            using (json)
+            {
+                var root = json.RootElement;
+                if (root.ValueKind != JsonValueKind.Object ||
+                    !TryGetNonEmptyString(root, "accessToken", out var accessToken))
+                    return InvalidAuthenticationResponse();
+
+                var hasRefreshToken = TryGetNonEmptyString(root, "refreshToken", out _);
+                var hasUser = root.TryGetProperty("user", out var user) &&
+                    user.ValueKind == JsonValueKind.Object;
+                var actualRole = string.Empty;
+                var hasRole = hasUser && TryGetNonEmptyString(user, "role", out actualRole);
+                if (!hasRefreshToken || !hasRole)
                 {
-                    using var logout = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
-                    logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                    using var ignored = await clients.CreateClient("TriSend").SendAsync(logout, ct);
+                    await RevokeAuthSessionAsync(clients, accessToken, ct);
+                    return InvalidAuthenticationResponse();
                 }
-                return Results.Problem($"This account is registered as {actualRole}, not {expectedRole}.", statusCode: 403);
+
+                if (!string.Equals(actualRole, expectedRole, StringComparison.Ordinal))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, ct);
+                    return Results.Problem(
+                        "The authentication service returned an account with a different app role.",
+                        statusCode: StatusCodes.Status403Forbidden);
+                }
             }
         }
         return Results.Content(content, "application/json", Encoding.UTF8, (int)response.StatusCode);
@@ -1670,6 +1693,34 @@ static async Task<IResult> ForwardAuthRequest(
         return Results.Problem("Authentication service timed out.", statusCode: 504);
     }
 }
+
+static bool TryGetNonEmptyString(JsonElement element, string propertyName, out string value)
+{
+    value = string.Empty;
+    if (element.ValueKind != JsonValueKind.Object ||
+        !element.TryGetProperty(propertyName, out var property) ||
+        property.ValueKind != JsonValueKind.String)
+        return false;
+
+    value = property.GetString() ?? string.Empty;
+    return !string.IsNullOrWhiteSpace(value);
+}
+
+static async Task RevokeAuthSessionAsync(
+    IHttpClientFactory clients,
+    string accessToken,
+    CancellationToken cancellationToken)
+{
+    using var logout = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
+    logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+    using var client = clients.CreateClient("TriSend");
+    using var ignored = await client.SendAsync(logout, cancellationToken);
+}
+
+static IResult InvalidAuthenticationResponse() =>
+    Results.Problem(
+        "Authentication service returned an invalid response.",
+        statusCode: StatusCodes.Status502BadGateway);
 
 var onboarding = app.MapGroup("/api/v1/driver/onboarding").RequireAuthorization(policy => policy.RequireRole("Driver")).WithTags("Driver onboarding");
 onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
