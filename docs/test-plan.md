@@ -4355,3 +4355,11 @@ The API counts both JWT sub and legacy ClaimTypes.NameIdentifier identity claims
 | AUTH-API-057 | TriSend returns a JWT containing exactly one non-empty `nameid` claim (the standard JwtSecurityTokenHandler outbound alias for `ClaimTypes.NameIdentifier`) without `sub`, or combines `nameid` with `sub`, or supplies a blank `nameid` | A single `nameid` is accepted on login and refresh; mixed duplicate or blank subjects are rejected with generic 502, no-store/no-cache and bounded best-effort revocation. | API integration/security | P1 |
 
 The API deliberately keeps inbound JWT claim mapping disabled. It therefore recognizes the standard `nameid` wire alias explicitly alongside the raw `ClaimTypes.NameIdentifier` URI and `sub`; this preserves exact-one-subject validation without enabling global inbound claim remapping.
+
+
+## Run 47 — AUTH-API-057 exact-head evidence
+- The validator recognizes `nameid`, the standard JWT wire alias for `ClaimTypes.NameIdentifier`, while inbound claim mapping remains disabled.
+- Positive login and refresh cases accept one non-empty `nameid`; mixed `sub`+`nameid` and blank `nameid` cases are rejected and the bounded access token is best-effort revoked.
+- Source/test head: [`fb93bccb6bde94fef382994320d1def6f41c054e`](https://github.com/rajeevp727/turnova-platform/commit/fb93bccb6bde94fef382994320d1def6f41c054e).
+- Exact-head API-only CI [#44943774814](https://github.com/rajeevp727/turnova-platform/actions/runs/44943774814) passed **1,040/1,040 tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14721694937](https://github.com/rajeevp727/turnova-platform/actions/runs/44943774814/artifacts/14721694937).
+- Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped because API remains the active phase. No Docker/container build or deployment was used.
