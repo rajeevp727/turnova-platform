@@ -1190,7 +1190,7 @@ public sealed class AuthApiIntegrationTests
             "signature" => CreateToken("Driver", signingKey: "different-signing-key-for-tests-32-bytes"),
             "issuer" => CreateToken("Driver", issuer: "wrong-issuer"),
             "audience" => CreateToken("Driver", audience: "wrong-audience"),
-            "expired" => CreateToken("Driver", expires: DateTime.UtcNow.AddMinutes(-5)),
+            "expired" => CreateToken("Driver", notBefore: DateTime.UtcNow.AddMinutes(-10), expires: DateTime.UtcNow.AddMinutes(-5)),
             "missing-role" => CreateToken(includeRole: false),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
