@@ -1619,8 +1619,18 @@ authGroup.MapPost("/refresh", async (
 });
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
-    await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
-        context.Request.Headers.Authorization.ToString(), null, ct));
+{
+    var authorization = context.Request.Headers.Authorization.ToString();
+    if (!string.IsNullOrWhiteSpace(authorization) &&
+        (!AuthenticationHeaderValue.TryParse(authorization, out var header) ||
+         !header.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) ||
+         string.IsNullOrWhiteSpace(header.Parameter)))
+        return Results.BadRequest(new { message = "A non-empty Bearer authorization value is required." });
+
+    // Expiry/signature validation remains the identity provider's responsibility for logout.
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
+        authorization, null, ct);
+});
 authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Get, "/auth/me", null,
         context.Request.Headers.Authorization.ToString(), null, ct))
