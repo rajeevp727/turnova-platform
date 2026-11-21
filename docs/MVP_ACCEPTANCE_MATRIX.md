@@ -2268,3 +2268,7 @@ The synchronized documentation head [192dd7abe3da3225cd118087483e4f1c4d5bebc9](h
 ## Supplemental API security evidence — AUTH-API-042 (outside the 19-row denominator)
 
 The API authentication integration suite now distinguishes upstream transport timeout classification from caller cancellation. Deterministic header/body transport fixtures assert generic HTTP 504, no-store/no-cache and no timeout-detail disclosure; a blocked non-seekable response stream asserts caller cancellation propagates without being converted to 504. The production 15-second linked deadline is unchanged. This supplemental regression does not change any of the 19 acceptance rows or the strict Verified count. Exact-head CI evidence is pending for the current PR head.
+
+## Supplemental API security evidence — AUTH-API-043 (outside the 19-row denominator)
+
+Best-effort auth session revocation now uses ResponseHeadersRead and shares the original upstream cancellation deadline, preventing the ignored logout response body from being buffered. A deterministic integration test returns a 1 MiB unknown-length logout stream and verifies zero bytes are read, the expected bearer token is used, and the caller receives only a generic invalid-session 502. This does not change the 19-row denominator or strict Verified count. Final-head CI is pending.
