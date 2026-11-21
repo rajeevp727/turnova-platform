@@ -66,6 +66,15 @@ public sealed class AuthApiIntegrationTests
         Assert.False(primaryHandler.AllowAutoRedirect);
     }
 
+    [Fact]
+    public void TriSendPrimaryHandlerDisablesAutomaticCookiePersistence()
+    {
+        using var primaryHandler = TriSendHttpClientPolicy.CreatePrimaryHandler();
+
+        Assert.False(primaryHandler.UseCookies);
+    }
+
+
     [Theory]
     [InlineData(HttpStatusCode.MovedPermanently)]
     [InlineData(HttpStatusCode.Redirect)]
