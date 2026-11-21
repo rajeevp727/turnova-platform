@@ -1630,8 +1630,8 @@ authGroup.MapPost("/logout", async (
         if (authorizationValues.Count != 1 ||
             !AuthenticationHeaderValue.TryParse(authorizationValues[0], out var header) ||
             !header.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(header.Parameter))
-            return Results.BadRequest(new { message = "A non-empty Bearer authorization value is required." });
+            !IsValidBearerToken68(header.Parameter))
+            return Results.BadRequest(new { message = "A valid Bearer authorization value is required." });
 
         authorization = authorizationValues[0];
     }
@@ -1640,6 +1640,40 @@ authGroup.MapPost("/logout", async (
     return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
         authorization, null, ct);
 });
+// AuthenticationHeaderValue intentionally parses generic authentication parameters, including
+// comma-separated auth-param values. RFC 6750 Bearer credentials are narrower: token68 only.
+// Enforce that grammar before forwarding so a coalesced/malformed value cannot be treated as a token.
+static bool IsValidBearerToken68(string? token)
+{
+    if (string.IsNullOrEmpty(token))
+        return false;
+
+    var hasTokenCharacter = false;
+    var paddingStarted = false;
+    foreach (var character in token)
+    {
+        if (character == '=')
+        {
+            if (!hasTokenCharacter)
+                return false;
+
+            paddingStarted = true;
+            continue;
+        }
+
+        if (paddingStarted ||
+            !((character >= 'A' && character <= 'Z') ||
+              (character >= 'a' && character <= 'z') ||
+              (character >= '0' && character <= '9') ||
+              character is '-' or '.' or '_' or '~' or '+' or '/'))
+            return false;
+
+        hasTokenCharacter = true;
+    }
+
+    return hasTokenCharacter;
+}
+
 authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Get, "/auth/me", null,
         context.Request.Headers.Authorization.ToString(), null, ct))

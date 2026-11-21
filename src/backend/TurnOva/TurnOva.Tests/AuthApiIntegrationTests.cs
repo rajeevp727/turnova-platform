@@ -703,6 +703,10 @@ public sealed class AuthApiIntegrationTests
     [InlineData("Bearer")]
     [InlineData("Negotiate token")]
     [InlineData(" ")]
+    [InlineData("Bearer first, second=two")]
+    [InlineData("Bearer token with-space")]
+    [InlineData("Bearer =padding")]
+    [InlineData("Bearer token=padding=extra")]
     public async Task LogoutRejectsUnsupportedAuthorizationBeforeCallingTriSend(string authorization)
     {
         using var handler = new RecordingHandler((_, _) =>
@@ -760,10 +764,11 @@ public sealed class AuthApiIntegrationTests
         Assert.Null(request.AuthorizationParameter);
     }
 
-    [Fact]
-    public async Task LogoutForwardsExpiredBearerUnchangedWithoutLocalTokenValidation()
+    [Theory]
+    [InlineData("expired-or-invalid-token")]
+    [InlineData("opaque+/._~-token==")]
+    public async Task LogoutForwardsExpiredBearerUnchangedWithoutLocalTokenValidation(string expiredBearer)
     {
-        const string expiredBearer = "expired-or-invalid-token";
         using var handler = new RecordingHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
         using var factory = new AuthApiFactory(handler);
