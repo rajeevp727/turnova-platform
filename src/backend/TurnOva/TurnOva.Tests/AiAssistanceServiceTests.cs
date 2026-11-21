@@ -40,6 +40,49 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task ProviderAvailabilityProbeFailureUsesDeterministicFallbackForTripIntentAndHelp()
+    {
+        var availabilityProbeCalls = 0;
+        var providerOperationCalls = 0;
+        var provider = new FakeProvider
+        {
+            Availability = () =>
+            {
+                availabilityProbeCalls++;
+                throw new InvalidOperationException("sensitive provider configuration detail");
+            },
+            TripHandler = (_, _) =>
+            {
+                providerOperationCalls++;
+                return Task.FromResult<TripIntentProviderResult?>(
+                    new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab"));
+            },
+            HelpHandler = (_, _) =>
+            {
+                providerOperationCalls++;
+                return Task.FromResult<HelpProviderResult?>(new HelpProviderResult("fare-negotiation"));
+            }
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var trip = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+        var help = await service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("deterministic-fallback", trip.Source);
+        Assert.Equal("Nizampet", trip.Pickup);
+        Assert.Equal("HITEC City", trip.Dropoff);
+        Assert.Equal("deterministic-fallback", help.Source);
+        Assert.Equal("fare-negotiation", help.SourceId);
+        Assert.Equal(2, availabilityProbeCalls);
+        Assert.Equal(0, providerOperationCalls);
+    }
+
+    [Fact]
     public async Task TripIntentBuildsCabDraftAndRequiresRiderReviewWhenProviderIsUnavailable()
     {
         var service = CreateService(new UnavailableAiAssistantProvider());
@@ -759,7 +802,8 @@ public sealed class AiAssistanceServiceTests
 
     private sealed class FakeProvider : IAiAssistantProvider
     {
-        public bool IsAvailable => true;
+        public Func<bool>? Availability { get; init; }
+        public bool IsAvailable => Availability?.Invoke() ?? true;
 
         public Func<SafeTripIntentPrompt, CancellationToken, Task<TripIntentProviderResult?>>? TripHandler { get; set; }
         public Func<SafeHelpPrompt, CancellationToken, Task<HelpProviderResult?>>? HelpHandler { get; init; }
