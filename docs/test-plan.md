@@ -4228,3 +4228,11 @@ Covered by AuthApiIntegrationTests.TriSendPrimaryHandlerDisablesAutomaticCookieP
 | AUTH-API-045 | Startup receives a TriSend:BaseUrl containing URI user-info, query or fragment data | Startup fails closed before any upstream request. HTTPS remains required outside Development; Development loopback HTTP remains the only cleartext exception. | API startup/configuration security | P1 |
 
 Covered by AuthApiIntegrationTests.StartupRejectsNonHttpsOrInvalidTriSendBaseUrl, which now includes user-info, query and fragment fixtures. The API uses explicit bearer/opaque-token forwarding; credentials and query tokens must not be embedded in the service base URL. No provider credential or endpoint is supplied by this change.
+
+## AUTH-API-046 — map upstream authentication response-stream I/O failures
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-046 | TriSend returns response headers and a partial authentication body, then the response stream throws IOException | The API returns generic HTTP 503 with no-store/no-cache headers. It does not expose partial access/refresh token content or the upstream exception message. | API auth integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.TriSendBodyReadIOExceptionReturnsServiceUnavailableWithoutLeakingPartialBody. A deterministic non-seekable stream emits a token-bearing prefix and then throws IOException. The API maps this upstream body-read transport failure to the same generic unavailable response used for HttpRequestException. Size-limit InvalidDataException remains HTTP 502, caller cancellation still propagates, and upstream timeout remains HTTP 504.
