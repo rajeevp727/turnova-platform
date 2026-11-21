@@ -3982,3 +3982,14 @@ Covered by `AuthApiIntegrationTests.UnmatchedNonAuthApiRouteReturnsNotFoundWithN
 
 
 Exact final documentation-bearing head [`ce37efc3b8c393f8e2adb6d6a847daac7b5c6b6b`](https://github.com/rajeevp727/turnova-platform/commit/ce37efc3b8c393f8e2adb6d6a847daac7b5c6b6b) passed API-only CI [#44834287722](https://github.com/rajeevp727/turnova-platform/actions/runs/44834287722): **947/947 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14678415159](https://github.com/rajeevp727/turnova-platform/actions/runs/44834287722/artifacts/14678415159). The source/test change is commit [`5759f8a2a70874df459bd9659c30ded450ef7ba6`](https://github.com/rajeevp727/turnova-platform/commit/5759f8a2a70874df459bd9659c30ded450ef7ba6). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
+
+
+## AUTH-API-028 — unmatched ride-hub routes remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-028 | A GET request targets an unmapped path beneath the ride SignalR hub route, `/hubs/rides/unmapped` | HTTP 404 with `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API realtime middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnmatchedRideHubRouteReturnsNotFoundWithNoStoreHeaders`. This verifies that the ride-hub response cache policy also covers unmatched subpaths, not only successful negotiation and rejected query-token negotiation. It does not add a hub endpoint or change SignalR authorization. This supplemental regression is outside the 19-area MVP acceptance denominator.
+
+Source/test commit [`113041810017b77bdf2bc10fe6a587914aad1275`](https://github.com/rajeevp727/turnova-platform/commit/113041810017b77bdf2bc10fe6a587914aad1275). Exact source/test CI [#44841539219](https://github.com/rajeevp727/turnova-platform/actions/runs/44841539219) had passed scope and Release build; backend tests were running and native publish/verifier were pending at handoff. Record a passed test count only after checking the final run conclusion and TRX counters.
