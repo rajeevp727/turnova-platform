@@ -1643,7 +1643,11 @@ static async Task<IResult> ForwardAuthRequest(
                 "Authentication service returned an unsupported redirect.",
                 statusCode: StatusCodes.Status502BadGateway);
 
-        var content = await response.Content.ReadAsStringAsync(ct);
+        // Identity responses are small JSON contracts. Bound both declared and streamed bodies so a
+        // misconfigured or compromised upstream cannot force unbounded memory allocation per request.
+        const int maximumAuthResponseBytes = 256 * 1024;
+        var content = await ReadBoundedResponseBodyAsync(
+            response.Content, maximumAuthResponseBytes, ct);
         if (response.IsSuccessStatusCode && validateRefreshResponse)
         {
             JsonDocument json;
@@ -1712,6 +1716,12 @@ static async Task<IResult> ForwardAuthRequest(
         }
         return Results.Content(content, "application/json", Encoding.UTF8, (int)response.StatusCode);
     }
+    catch (InvalidDataException)
+    {
+        return Results.Problem(
+            "Authentication service returned an invalid response.",
+            statusCode: StatusCodes.Status502BadGateway);
+    }
     catch (HttpRequestException)
     {
         return Results.Problem("Authentication service is temporarily unavailable.", statusCode: 503);
@@ -1721,6 +1731,32 @@ static async Task<IResult> ForwardAuthRequest(
         return Results.Problem("Authentication service timed out.", statusCode: 504);
     }
 }
+
+static async Task<string> ReadBoundedResponseBodyAsync(
+    HttpContent content, int maximumBytes, CancellationToken ct)
+{
+    if (content.Headers.ContentLength is long contentLength && contentLength > maximumBytes)
+        throw new InvalidDataException("Authentication response exceeded its size limit.");
+
+    await using var stream = await content.ReadAsStreamAsync(ct);
+    using var buffer = new MemoryStream();
+    var chunk = new byte[8192];
+
+    while (true)
+    {
+        var bytesRead = await stream.ReadAsync(chunk.AsMemory(), ct);
+        if (bytesRead == 0)
+            break;
+
+        if (buffer.Length + bytesRead > maximumBytes)
+            throw new InvalidDataException("Authentication response exceeded its size limit.");
+
+        await buffer.WriteAsync(chunk.AsMemory(0, bytesRead), ct);
+    }
+
+    return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
+}
+
 
 static bool TryGetNonEmptyString(JsonElement element, string propertyName, out string value)
 {
