@@ -1282,6 +1282,37 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task InvalidUtf8AuthenticationTokenIsRejectedWithoutReturningCorruptedCredentials()
+    {
+        var prefix = Encoding.UTF8.GetBytes("""{"accessToken":"provider-secret""");
+        var suffix = Encoding.UTF8.GetBytes("""","refreshToken":"next-refresh","user":{"role":"Rider"}}""");
+        var responseBody = new byte[prefix.Length + 1 + suffix.Length];
+        Buffer.BlockCopy(prefix, 0, responseBody, 0, prefix.Length);
+        responseBody[prefix.Length] = 0xFF;
+        Buffer.BlockCopy(suffix, 0, responseBody, prefix.Length + 1, suffix.Length);
+
+        using var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(responseBody)
+            }));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/rider/login",
+            new { email = "rider@example.com", password = "StrongPassword!123" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("invalid response", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("provider-secret", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("next-refresh", body, StringComparison.Ordinal);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
     public async Task CallerCancellationDuringTriSendBodyReadIsNotMappedToGatewayTimeout()
     {
         var readStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
