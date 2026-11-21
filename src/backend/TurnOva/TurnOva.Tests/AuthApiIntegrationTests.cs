@@ -1183,6 +1183,7 @@ public sealed class AuthApiIntegrationTests
     [InlineData("audience")]
     [InlineData("expired")]
     [InlineData("missing-role")]
+    [InlineData("missing-subject")]
     public async Task LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy(string failure)
     {
         var accessToken = failure switch
@@ -1192,6 +1193,7 @@ public sealed class AuthApiIntegrationTests
             "audience" => CreateToken("Driver", audience: "wrong-audience"),
             "expired" => CreateToken("Driver", notBefore: DateTime.UtcNow.AddMinutes(-10), expires: DateTime.UtcNow.AddMinutes(-5)),
             "missing-role" => CreateToken(includeRole: false),
+            "missing-subject" => CreateToken(includeSubject: false),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
         using var handler = new RecordingHandler((request, _) =>
@@ -1868,14 +1870,14 @@ public sealed class AuthApiIntegrationTests
         DateTime? notBefore = null,
         DateTime? expires = null,
         bool demo = false,
-        bool includeRole = true)
+        bool includeRole = true,
+        bool includeSubject = true)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var claims = new List<Claim>
-        {
-            new(JwtRegisteredClaimNames.Sub, "driver-1")
-        };
+        var claims = new List<Claim>();
+        if (includeSubject)
+            claims.Add(new Claim(JwtRegisteredClaimNames.Sub, "driver-1"));
         if (includeRole)
             claims.Add(new Claim("role", role));
         if (demo)
