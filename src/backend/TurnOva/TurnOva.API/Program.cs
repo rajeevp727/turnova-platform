@@ -1620,13 +1620,21 @@ authGroup.MapPost("/refresh", async (
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
 {
+    var authorizationValues = context.Request.Headers.Authorization;
     var hasAuthorizationHeader = context.Request.Headers.ContainsKey("Authorization");
-    var authorization = context.Request.Headers.Authorization.ToString();
-    if (hasAuthorizationHeader &&
-        (!AuthenticationHeaderValue.TryParse(authorization, out var header) ||
-         !header.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) ||
-         string.IsNullOrWhiteSpace(header.Parameter)))
-        return Results.BadRequest(new { message = "A non-empty Bearer authorization value is required." });
+    string? authorization = null;
+    if (hasAuthorizationHeader)
+    {
+        // Authorization is a singleton HTTP field. Reject multiple field values rather than
+        // flattening them into a comma-separated string that could be parsed ambiguously.
+        if (authorizationValues.Count != 1 ||
+            !AuthenticationHeaderValue.TryParse(authorizationValues[0], out var header) ||
+            !header.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(header.Parameter))
+            return Results.BadRequest(new { message = "A non-empty Bearer authorization value is required." });
+
+        authorization = authorizationValues[0];
+    }
 
     // Expiry/signature validation remains the identity provider's responsibility for logout.
     return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
