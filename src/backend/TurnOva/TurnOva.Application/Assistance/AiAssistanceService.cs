@@ -160,7 +160,7 @@ public sealed class AiAssistanceService
             "A selected Driver is reserved against overlapping negotiations and active rides. Cancellation or expiry releases only the reservation belonging to that exact ride.",
             ["overlap", "reservation", "reserved"]),
         new("queue-status",
-            "Rider discovery does not use FIFO queue rank or automatic assignment. Riders see eligible approved Cab Drivers grouped by Union and ordered by pickup proximity, then select one. Whether legacy FIFO remains an internal fairness mechanism is unresolved; do not infer a customer ranking or dispatch rule from it.",
+            "Rider discovery does not show a queue position or automatically assign a Driver. Riders choose an eligible Cab Driver from approved nearby Unions; the list is grouped by Union and ordered by Driver-to-pickup proximity.",
             ["queue", "queued", "fifo"]),
         new("availability-status",
             "Online is one input to server-side Cab eligibility and nearby discovery; it does not guarantee that a Driver will be shown or selected. Offline means the Driver is not available for new ride discovery. Rider selection is explicit and no FIFO assignment occurs.",
