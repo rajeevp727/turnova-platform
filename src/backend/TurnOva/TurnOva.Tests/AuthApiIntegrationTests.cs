@@ -1094,6 +1094,52 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Theory]
+    [InlineData("not-json provider-secret", false)]
+    [InlineData("[]", false)]
+    [InlineData("{\"refreshToken\":\"next-refresh\"}", false)]
+    [InlineData("{\"accessToken\":\"next-access-token\"}", true)]
+    [InlineData("{\"accessToken\":\"next-access-token\",\"refreshToken\":17}", true)]
+    public async Task MalformedSuccessfulRefreshResponseIsRejectedAndRevokedWhenPossible(
+        string upstreamBody,
+        bool expectedRevocation)
+    {
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            if (request.Path == "/auth/refresh")
+            {
+                Assert.Equal("opaque-refresh-token", request.Body.GetProperty("refreshToken").GetString());
+                return Task.FromResult(JsonResponse(HttpStatusCode.OK, upstreamBody));
+            }
+
+            Assert.Equal("/auth/logout", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"success":true}"""));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new { refreshToken = "opaque-refresh-token" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("invalid response", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("provider-secret", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("next-access-token", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("next-refresh", body, StringComparison.Ordinal);
+
+        var expectedPaths = expectedRevocation
+            ? new[] { "/auth/refresh", "/auth/logout" }
+            : new[] { "/auth/refresh" };
+        Assert.Equal(expectedPaths, handler.Requests.Select(request => request.Path));
+        if (expectedRevocation)
+        {
+            Assert.Equal("Bearer", handler.Requests[1].AuthorizationScheme);
+            Assert.Equal("next-access-token", handler.Requests[1].AuthorizationParameter);
+        }
+    }
+
+    [Theory]
     [InlineData("opaque-refresh-token")]
     [InlineData(" opaque-refresh-token ")]
     public async Task RefreshForwardsNonBlankOpaqueTokenWithoutRewritingIt(string refreshToken)

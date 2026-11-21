@@ -1612,7 +1612,7 @@ authGroup.MapPost("/refresh", async (
         return Results.BadRequest(new { message = "Refresh token is required." });
 
     return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/refresh",
-        new { refreshToken = request.RefreshToken }, null, null, ct);
+        new { refreshToken = request.RefreshToken }, null, null, ct, validateRefreshResponse: true);
 });
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
@@ -1625,7 +1625,8 @@ authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, 
 
 static async Task<IResult> ForwardAuthRequest(
     IHttpClientFactory clients, HttpMethod method, string path, object? body,
-    string? authorization, string? expectedRole, CancellationToken ct)
+    string? authorization, string? expectedRole, CancellationToken ct,
+    bool validateRefreshResponse = false)
 {
     using var request = new HttpRequestMessage(method, path);
     if (body is not null)
@@ -1643,6 +1644,33 @@ static async Task<IResult> ForwardAuthRequest(
                 statusCode: StatusCodes.Status502BadGateway);
 
         var content = await response.Content.ReadAsStringAsync(ct);
+        if (response.IsSuccessStatusCode && validateRefreshResponse)
+        {
+            JsonDocument json;
+            try
+            {
+                json = JsonDocument.Parse(content);
+            }
+            catch (JsonException)
+            {
+                return InvalidAuthenticationResponse();
+            }
+
+            using (json)
+            {
+                var root = json.RootElement;
+                if (root.ValueKind != JsonValueKind.Object ||
+                    !TryGetNonEmptyString(root, "accessToken", out var accessToken))
+                    return InvalidAuthenticationResponse();
+
+                if (!TryGetNonEmptyString(root, "refreshToken", out _))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, ct);
+                    return InvalidAuthenticationResponse();
+                }
+            }
+        }
+
         if (response.IsSuccessStatusCode && expectedRole is not null)
         {
             JsonDocument json;
