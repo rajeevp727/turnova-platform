@@ -1147,7 +1147,8 @@ public sealed class AuthApiIntegrationTests
     {
         var payload = Encoding.UTF8.GetBytes(
             """{"accessToken":"provider-secret","refreshToken":"next-refresh"}""" +
-            new string('x', MaximumAuthResponseBytes));
+            new string('x', MaximumAuthResponseBytes * 4));
+        NonSeekableReadStream? unknownLengthStream = null;
         HttpContent content;
         if (knownLength)
         {
@@ -1155,7 +1156,8 @@ public sealed class AuthApiIntegrationTests
         }
         else
         {
-            content = new StreamContent(new NonSeekableReadStream(new MemoryStream(payload)));
+            unknownLengthStream = new NonSeekableReadStream(new MemoryStream(payload));
+            content = new StreamContent(unknownLengthStream);
         }
         content.Headers.ContentType = new("application/json");
 
@@ -1174,6 +1176,9 @@ public sealed class AuthApiIntegrationTests
         Assert.DoesNotContain("provider-secret", body, StringComparison.Ordinal);
         Assert.DoesNotContain("next-refresh", body, StringComparison.Ordinal);
         Assert.Single(handler.Requests);
+        if (!knownLength)
+            Assert.True(unknownLengthStream!.BytesRead < payload.Length,
+                "The API must stop reading the upstream stream as soon as the configured size limit is exceeded.");
     }
 
     [Theory]
@@ -1542,9 +1547,30 @@ public sealed class AuthApiIntegrationTests
             set => throw new NotSupportedException();
         }
 
-        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-            inner.ReadAsync(buffer, cancellationToken);
+        public long BytesRead { get; private set; }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var bytesRead = inner.Read(buffer, offset, count);
+            BytesRead += bytesRead;
+            return bytesRead;
+        }
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var bytesRead = await inner.ReadAsync(buffer, cancellationToken);
+            BytesRead += bytesRead;
+            return bytesRead;
+        }
+
+        public override async Task<int> ReadAsync(
+            byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            var bytesRead = await inner.ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
+            BytesRead += bytesRead;
+            return bytesRead;
+        }
         public override void Flush() { }
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
