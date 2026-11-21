@@ -1325,6 +1325,10 @@ public sealed class AuthApiIntegrationTests
     [InlineData("{\"accessToken\":\"upstream-access-token\",\"user\":{\"role\":\"Rider\"}}", true)]
     [InlineData("{\"accessToken\":\"upstream-access-token\",\"refreshToken\":\"upstream-refresh-token\",\"user\":{\"role\":17}}", true)]
     [InlineData("{\"accessToken\":\"upstream-access-token\",\"refreshToken\":\"upstream-refresh-token\",\"user\":[]}", true)]
+    [InlineData("{\"accessToken\":\"upstream-access-token\",\"accessToken\":\"second-access-token\",\"refreshToken\":\"upstream-refresh-token\",\"user\":{\"role\":\"Rider\"}}", false)]
+    [InlineData("{\"accessToken\":\"upstream-access-token\",\"refreshToken\":\"first-refresh\",\"refreshToken\":\"second-refresh\",\"user\":{\"role\":\"Rider\"}}", true)]
+    [InlineData("{\"accessToken\":\"upstream-access-token\",\"refreshToken\":\"upstream-refresh-token\",\"user\":{\"role\":\"Rider\"},\"user\":{\"role\":\"Rider\"}}", true)]
+    [InlineData("{\"accessToken\":\"upstream-access-token\",\"refreshToken\":\"upstream-refresh-token\",\"user\":{\"role\":\"Rider\",\"role\":\"Driver\"}}", true)]
     public async Task MalformedSuccessfulAuthenticationResponseIsRejectedWithoutExposingUpstreamContent(
         string upstreamBody,
         bool expectedRevocation)
@@ -1368,6 +1372,8 @@ public sealed class AuthApiIntegrationTests
     [InlineData("{\"refreshToken\":\"next-refresh\"}", false)]
     [InlineData("{\"accessToken\":\"next-access-token\"}", true)]
     [InlineData("{\"accessToken\":\"next-access-token\",\"refreshToken\":17}", true)]
+    [InlineData("{\"accessToken\":\"next-access-token\",\"accessToken\":\"second-access-token\",\"refreshToken\":\"next-refresh\"}", false)]
+    [InlineData("{\"accessToken\":\"next-access-token\",\"refreshToken\":\"first-refresh\",\"refreshToken\":\"second-refresh\"}", true)]
     public async Task MalformedSuccessfulRefreshResponseIsRejectedAndRevokedWhenPossible(
         string upstreamBody,
         bool expectedRevocation)

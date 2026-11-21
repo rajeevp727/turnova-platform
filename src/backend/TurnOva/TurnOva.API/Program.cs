@@ -1770,7 +1770,7 @@ static async Task<IResult> ForwardAuthRequest(
                     return InvalidAuthenticationResponse();
 
                 var hasRefreshToken = TryGetNonEmptyString(root, "refreshToken", out _);
-                var hasUser = root.TryGetProperty("user", out var user) &&
+                var hasUser = TryGetUniqueProperty(root, "user", out var user) &&
                     user.ValueKind == JsonValueKind.Object;
                 var actualRole = string.Empty;
                 var hasRole = hasUser && TryGetNonEmptyString(user, "role", out actualRole);
@@ -1921,11 +1921,35 @@ static async Task<string> ReadBoundedResponseBodyAsync(
 }
 
 
+static bool TryGetUniqueProperty(JsonElement element, string propertyName, out JsonElement property)
+{
+    property = default;
+    if (element.ValueKind != JsonValueKind.Object)
+        return false;
+
+    var matchCount = 0;
+    foreach (var candidate in element.EnumerateObject())
+    {
+        if (!string.Equals(candidate.Name, propertyName, StringComparison.Ordinal))
+            continue;
+
+        matchCount++;
+        if (matchCount > 1)
+        {
+            property = default;
+            return false;
+        }
+
+        property = candidate.Value;
+    }
+
+    return matchCount == 1;
+}
+
 static bool TryGetNonEmptyString(JsonElement element, string propertyName, out string value)
 {
     value = string.Empty;
-    if (element.ValueKind != JsonValueKind.Object ||
-        !element.TryGetProperty(propertyName, out var property) ||
+    if (!TryGetUniqueProperty(element, propertyName, out var property) ||
         property.ValueKind != JsonValueKind.String)
         return false;
 
