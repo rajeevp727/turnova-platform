@@ -1637,7 +1637,12 @@ static async Task<IResult> ForwardAuthRequest(
 
     try
     {
-        using var response = await clients.CreateClient("TriSend").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        // ResponseHeadersRead keeps HttpClient from buffering an untrusted body before the size guard.
+        // Keep one deadline across both header acquisition and the bounded stream read.
+        using var upstreamTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        upstreamTimeout.CancelAfter(TimeSpan.FromSeconds(15));
+        using var response = await clients.CreateClient("TriSend").SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, upstreamTimeout.Token);
         if ((int)response.StatusCode is >= 300 and < 400)
             return Results.Problem(
                 "Authentication service returned an unsupported redirect.",
@@ -1647,7 +1652,7 @@ static async Task<IResult> ForwardAuthRequest(
         // misconfigured or compromised upstream cannot force unbounded memory allocation per request.
         const int maximumAuthResponseBytes = 256 * 1024;
         var content = await ReadBoundedResponseBodyAsync(
-            response.Content, maximumAuthResponseBytes, ct);
+            response.Content, maximumAuthResponseBytes, upstreamTimeout.Token);
         if (response.IsSuccessStatusCode && validateRefreshResponse)
         {
             JsonDocument json;
@@ -1726,7 +1731,7 @@ static async Task<IResult> ForwardAuthRequest(
     {
         return Results.Problem("Authentication service is temporarily unavailable.", statusCode: 503);
     }
-    catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
     {
         return Results.Problem("Authentication service timed out.", statusCode: 504);
     }
