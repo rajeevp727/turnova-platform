@@ -3993,3 +3993,14 @@ Exact final documentation-bearing head [`ce37efc3b8c393f8e2adb6d6a847daac7b5c6b6
 Covered by `AuthApiIntegrationTests.UnmatchedRideHubRouteReturnsNotFoundWithNoStoreHeaders`. This verifies that the ride-hub response cache policy also covers unmatched subpaths, not only successful negotiation and rejected query-token negotiation. It does not add a hub endpoint or change SignalR authorization. This supplemental regression is outside the 19-area MVP acceptance denominator.
 
 Source/test commit [`113041810017b77bdf2bc10fe6a587914aad1275`](https://github.com/rajeevp727/turnova-platform/commit/113041810017b77bdf2bc10fe6a587914aad1275). Exact source/test CI [#44841539219](https://github.com/rajeevp727/turnova-platform/actions/runs/44841539219) passed **948/948 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 API publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14681336952](https://github.com/rajeevp727/turnova-platform/actions/runs/44841539219/artifacts/14681336952).
+
+
+## AUTH-API-029 — SignalR negotiate CORS preflight remains non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-029 | An allowed browser origin sends `OPTIONS /hubs/rides/negotiate` with requested method POST and authorization/content-type headers | HTTP 204 with the configured `Access-Control-Allow-Origin`, `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API realtime/CORS middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.RideHubCorsPreflightReturnsNoStoreHeaders`. This verifies the response-start cache policy wraps the CORS middleware's preflight short-circuit on the SignalR negotiate path. It adds no hub endpoint and does not change authentication or authorization. This supplemental regression is outside the 19-area MVP acceptance denominator.
+
+Source/test commit [`9afa592967b3655606f347bca868af7b11d479ff`](https://github.com/rajeevp727/turnova-platform/commit/9afa592967b3655606f347bca868af7b11d479ff) passed exact-head API-only CI [#44847354008](https://github.com/rajeevp727/turnova-platform/actions/runs/44847354008): **949/949 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14683916032](https://github.com/rajeevp727/turnova-platform/actions/runs/44847354008/artifacts/14683916032). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
