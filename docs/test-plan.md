@@ -4220,3 +4220,11 @@ Exact-head API-only CI [#44898077439](https://github.com/rajeevp727/turnova-plat
 | AUTH-API-044 | The pooled TriSend SocketsHttpHandler processes multiple Rider/Driver authentication requests and an upstream response includes Set-Cookie | Automatic cookie handling is disabled. The shared handler does not persist or replay upstream cookies across unrelated Rider/Driver requests; bearer/opaque-token forwarding remains explicit. | API auth integration/security | P1 |
 
 Covered by AuthApiIntegrationTests.TriSendPrimaryHandlerDisablesAutomaticCookiePersistence, which asserts the production handler has UseCookies=false. The API contract uses explicit JWT Authorization and opaque refresh-token forwarding; it does not require a shared cookie session. The test validates handler configuration, not a live TriSend cookie exchange.
+
+## AUTH-API-045 — reject credential-bearing TriSend base URLs
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-045 | Startup receives a TriSend:BaseUrl containing URI user-info, query or fragment data | Startup fails closed before any upstream request. HTTPS remains required outside Development; Development loopback HTTP remains the only cleartext exception. | API startup/configuration security | P1 |
+
+Covered by AuthApiIntegrationTests.StartupRejectsNonHttpsOrInvalidTriSendBaseUrl, which now includes user-info, query and fragment fixtures. The API uses explicit bearer/opaque-token forwarding; credentials and query tokens must not be embedded in the service base URL. No provider credential or endpoint is supplied by this change.
