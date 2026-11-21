@@ -58,6 +58,46 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public void TriSendPrimaryHandlerDisablesAutomaticRedirects()
+    {
+        using var primaryHandler = TriSendHttpClientPolicy.CreatePrimaryHandler();
+
+        Assert.False(primaryHandler.AllowAutoRedirect);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.MovedPermanently)]
+    [InlineData(HttpStatusCode.Redirect)]
+    [InlineData(HttpStatusCode.RedirectMethod)]
+    [InlineData(HttpStatusCode.TemporaryRedirect)]
+    [InlineData(HttpStatusCode.PermanentRedirect)]
+    public async Task AuthenticationUpstreamRedirectIsRejectedWithoutExposingRedirectDetails(HttpStatusCode redirectStatus)
+    {
+        using var handler = new RecordingHandler((_, _) => Task.FromResult(new HttpResponseMessage(redirectStatus)
+        {
+            Headers = { Location = new Uri("https://untrusted.example/collect") },
+            Content = new StringContent("sensitive-upstream-redirect-body")
+        }));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/rider/login",
+            new { email = "rider@example.com", password = "SensitivePassword123!" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Contains(response.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Null(response.Headers.Location);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("untrusted.example", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("sensitive-upstream-redirect-body", body, StringComparison.Ordinal);
+        Assert.Single(handler.Requests);
+        Assert.Equal("/auth/login", handler.Requests[0].Path);
+    }
+
+    [Fact]
     public async Task UnhandledAuthRouteExceptionStillReturnsNoStoreHeaders()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Auth error path must not call TriSend."));

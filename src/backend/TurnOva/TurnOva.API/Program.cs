@@ -134,7 +134,8 @@ builder.Services.AddHttpClient("TriSend", (services, client) =>
     var settings = services.GetRequiredService<IOptions<TriSendSettings>>().Value;
     client.BaseAddress = new Uri(settings.BaseUrl!, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(15);
-});
+})
+.ConfigurePrimaryHttpMessageHandler(TriSendHttpClientPolicy.CreatePrimaryHandler);
 
 
 var cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"];
@@ -1636,6 +1637,11 @@ static async Task<IResult> ForwardAuthRequest(
     try
     {
         using var response = await clients.CreateClient("TriSend").SendAsync(request, ct);
+        if ((int)response.StatusCode is >= 300 and < 400)
+            return Results.Problem(
+                "Authentication service returned an unsupported redirect.",
+                statusCode: StatusCodes.Status502BadGateway);
+
         var content = await response.Content.ReadAsStringAsync(ct);
         if (response.IsSuccessStatusCode && expectedRole is not null)
         {
