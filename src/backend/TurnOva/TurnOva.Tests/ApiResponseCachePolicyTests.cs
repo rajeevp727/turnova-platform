@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Hosting;
 using TurnOva.API;
 
 namespace TurnOva.Tests;
@@ -12,8 +14,8 @@ public sealed class ApiResponseCachePolicyTests
     [InlineData("/openapi/v1.json")]
     public async Task NonApiPathsDoNotReceiveApiCacheDirectives(string path)
     {
-        using var server = CreateServer();
-        using var client = server.CreateClient();
+        using var host = await CreateHostAsync();
+        using var client = host.GetTestClient();
 
         using var response = await client.GetAsync(path);
 
@@ -27,8 +29,8 @@ public sealed class ApiResponseCachePolicyTests
     [InlineData("/hubs/rides/negotiate")]
     public async Task ApiAndRideHubPathsReceiveNoStoreAndNoCache(string path)
     {
-        using var server = CreateServer();
-        using var client = server.CreateClient();
+        using var host = await CreateHostAsync();
+        using var client = host.GetTestClient();
 
         using var response = await client.GetAsync(path);
 
@@ -40,14 +42,20 @@ public sealed class ApiResponseCachePolicyTests
             value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static TestServer CreateServer() =>
-        new(new WebHostBuilder().Configure(app =>
-        {
-            app.UseApiResponseCachePolicy();
-            app.Run(async context =>
+    private static Task<IHost> CreateHostAsync() =>
+        new HostBuilder()
+            .ConfigureWebHost(webHost =>
             {
-                context.Response.Headers["Cache-Control"] = "private, max-age=60";
-                await context.Response.WriteAsync("ok");
-            });
-        }));
+                webHost.UseTestServer();
+                webHost.Configure(app =>
+                {
+                    app.UseApiResponseCachePolicy();
+                    app.Run(async context =>
+                    {
+                        context.Response.Headers["Cache-Control"] = "private, max-age=60";
+                        await context.Response.WriteAsync("ok");
+                    });
+                });
+            })
+            .StartAsync();
 }
