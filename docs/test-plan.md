@@ -9,6 +9,8 @@
 
 TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
 
+**Current phase gate (Run 44, 2026-11-21):** API remains `in_progress`; Android/iOS remain `not_started`. PR #200 is the sole ready/active API feature PR. AUTH-API-053 validates successful TriSend registration/login/refresh access JWTs against the exact JwtBearer signature, issuer, audience and lifetime parameters; it requires a non-empty subject and exactly one role claim, and role-specific login/register require the token role to match the route and `user.role`. Invalid JWTs return generic 502 and are revoked only when token68-safe and at most 16 KiB; role mismatch returns 403. Source/test head [fe90e1351eb523a995706ee780ddf303de339ed1](https://github.com/rajeevp727/turnova-platform/commit/fe90e1351eb523a995706ee780ddf303de339ed1) passed exact-head API-only CI [#44933849417](https://github.com/rajeevp727/turnova-platform/actions/runs/44933849417): **1,026/1,026 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier, and artifact [14719071354](https://github.com/rajeevp727/turnova-platform/actions/runs/44933849417/artifacts/14719071354). The earlier #44933486884 checkpoint had one expired-token test-fixture error (expiry earlier than notBefore); the fixture was corrected and the later exact-head run passed. Mobile-auth/mobile/Android/emulator/iOS jobs remain intentionally skipped under the API-first gate. No live Cosmos, physical-device or production readiness is claimed.
+
 ## API contract and authentication hardening
 
 | ID | Scenario | Expected result | Type | Priority |
@@ -17,6 +19,9 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 | API-OPENAPI-002 | Document authorization accurately | Rider booking, Driver payment-report and Union reconciliation carry JWT Bearer; `/api/v1/ops/*` carries only `X-Driver-Admin-Key`; public login/register/refresh routes have no bearer requirement | API integration/security | P0 |
 | API-OPENAPI-003 | Keep OpenAPI out of Production | Runtime maps the generated contract only in Development/Testing | API configuration | P1 |
 | AUTH-API-015 | Local profile-read authorization | `GET /api/v1/auth/me` rejects missing/invalid JWT before calling TriSend; valid Rider/Driver tokens are forwarded unchanged | API integration/security | P0 |
+| AUTH-API-016 | Prevent HTTP caching of authentication responses | Every response under `/api/v1/auth` sets `Cache-Control: no-store` and `Pragma: no-cache`, including registration/login/refresh/profile success, disabled-demo 404, demo-issuance 429, auth rejection and upstream-error responses | API middleware integration/security | P1 |
+| AUTH-API-017 | Preserve non-cacheable policy on auth-route exceptions | A Testing-only auth route throws through the exception handler; the generic HTTP 500 still carries `Cache-Control: no-store` and `Pragma: no-cache`, and sensitive exception text is absent | API middleware integration/security | P1 |
+| AUTH-API-018 | Invalid bearer on `GET /api/v1/auth/me`; demo-token 403 boundary | Invalid bearer returns 401 with `Cache-Control: no-store` and `Pragma: no-cache` without calling TriSend; demo-token 403 retains the same headers | API integration/security | P1 |
 | API-CI-001 | Enforce API-first CI phase | Backend tests and native API publish run for API-only changes while mobile jobs are skipped; mobile changes enable Android jobs; iOS jobs require the phase-approval label | CI fixture | P0 |
 | API-OPENAPI-004 | Keep OpenAPI.NET dependency patched | Restore resolves Microsoft.OpenApi 2.7.5 or later on the compatible 2.x line; NU1903 remains an error and no audit suppression is added | Dependency/security CI | P0 |
 | API-OPENAPI-005 | Exclude test-only routes from the contract | The Testing-only `/__test/throw` route remains usable by the exception-handler test but is absent from `/openapi/v1.json` | API integration | P1 |
@@ -24,6 +29,36 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 
 
 AuthApiIntegrationTests.OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySchemes asserts auth register/login/refresh, Rider discovery/booking, Driver payment-report, Union reconciliation and Operations driver/Union paths. It checks Bearer on Rider/Driver/Union routes, OpsAdminKey without Bearer on Operations routes, no security requirement on public login/register/refresh, and exclusion of /__test/throw.
+
+OpenAPI exposure is now explicit in `OpenApiEndpointPolicy`: only Development and Testing are allowed (case-insensitive). `OpenApiEndpointPolicyTests` reject Production, Staging, QA, custom, empty and null environment names; `AuthApiIntegrationTests.OpenApiDocumentIsNotMappedInStaging` verifies the Staging route returns 404. Production host startup is not exercised by this integration fixture because Production requires Cosmos; the Production policy is covered directly.
+
+## Supplemental demo-session checks (outside the 19-row denominator)
+
+These checks cover the restricted demo-preview capability; they do not replace Rider/Driver MVP acceptance. Existing AUTH-REG and AUTH-LOGIN requirements remain mandatory; demo mode must never replace the real authentication UI.
+
+| ID | Scenario | Expected result | Type | Status |
+|---|---|---|---|---|
+| DEMO-AUTH-001 | Demo auth disabled | POST /api/v1/auth/demo/rider and /driver return 404 when DemoAuth:Enabled is false; TriSend is not called | API integration/security | Implemented; covered in merged main |
+| DEMO-AUTH-002 | Role-scoped demo token | Rider and Driver routes issue only their fixed app role, `demo=true`, a 30-minute access token and an explicit null refresh token; issuer/audience/signing-key configuration is required | API integration/security | Implemented; `AuthApiIntegrationTests.DemoSessionIssuesShortLivedRoleScopedToken` asserts fixed role, subject, demo claims, 1800-second lifetime, top-level/user `isDemo` and null refresh token |
+| DEMO-AUTH-003 | Unsupported demo role | Unknown roles such as admin return 404 and do not issue a token | API integration/security | Implemented; covered in merged main |
+| DEMO-AUTH-004 | Demo token isolation | A demo token is rejected before normal authenticated application endpoints can execute; only explicitly demo-scoped paths are exempt from the middleware restriction | API integration/security | Implemented; covered in merged main |
+| DEMO-AUTH-005 | Demo auth environment allowlist | Demo auth requires DemoAuth:Enabled=true and one of Development, Testing, Staging, QA or Demo; Production, blank and unknown environment names return 404 even when enabled | API unit/integration/security | Implemented in PR #200; source/test head 8705435b0a6f9500b8d12be7cb6c4455d3e46584 passed exact-head CI #44696916390 (929/929) |
+| DEMO-AUTH-006 | Demo path requires explicit endpoint metadata and read-only method | A demo JWT is accepted only by an explicitly marked GET/HEAD route under /api/v1/demo; an unmarked route or any mutation method returns 403, even if marked | API integration/security | Passed exact-head CI #44696916390 (929/929) |
+| DEMO-AUTH-007 | Demo token issuance rate limit | Anonymous demo-token issuance is limited to 10 requests per server-observed remote IP per process per minute; the next request returns 429 without calling TriSend | API integration/security | Passed exact-head CI #44696916390 (929/929) |
+| DEMO-AUTH-008 | Demo authentication OpenAPI contract | The anonymous demo-token route documents its typed 200 `DemoSessionResponse` body (`accessToken`, `refreshToken`, `expiresIn`, `isDemo`, `user`) plus 404, 429 and 503 responses; Testing-only demo fixture routes are excluded from the contract | API integration / OpenAPI | Passed exact-head CI #44728587496 (933/933) on last verified branch checkpoint `ec226e5`; response DTO and null-refresh-token/user-demo assertions are included |
+| DEMO-AUTH-009 | Demo auth rate limit ignores untrusted forwarding headers | Requests with varying client-supplied X-Forwarded-For values remain in the server-observed remote-IP bucket; the 11th request receives 429 and TriSend is never called | API integration/security | Passed exact-head CI #44696916390 (929/929) |
+| DEMO-AUTH-010 | Existing demo token is rejected after demo access is disabled | A token issued while DemoAuth is enabled first reaches an explicitly marked GET endpoint; after the live IConfiguration flag is switched to false, the still-valid token receives 403 on that same route and no TriSend call occurs | API integration/security | Passed [exact-head CI #44709040357](https://github.com/rajeevp727/turnova-platform/actions/runs/44709040357) (930/930); `AuthApiIntegrationTests.DisablingDemoAuthAfterIssuanceRejectsStillValidDemoToken` |
+| DEMO-AUTH-011 | Multi-instance demo issuance rate limit | Deployment must use a shared/distributed limiter or a trusted edge limit; the current ASP.NET Core fixed-window limiter is process-local and does not guarantee a cross-instance 10/minute cap | Deployment/security | External gate; not exercised |
+| DEMO-MOB-001 | Rider real authentication remains available | Login and registration fields, autofill, keyboard focus and error announcements remain present; demo preview is an additional entry, not a replacement | Mobile functional/accessibility | Not accepted: current main still renders demo-only Rider entry and the auth source assertion was weakened; post-merge CI #44690688744 proves build/smoke only, not real auth functionality |
+| DEMO-MOB-002 | Rider demo entry and sample screen | Rider validates isDemo and role=Rider; sample UI cannot book, negotiate fares, pay or start live tracking | Mobile functional/security | Partial: post-merge CI #44690688744 passes Rider typecheck, Android APK build and emulator launch; Rider remains incomplete until real auth is restored, sample fare removed and copy corrected |
+| DEMO-MOB-003 | Driver real authentication remains available | Driver login and registration remain available alongside optional demo preview | Mobile functional/accessibility | Not accepted: post-merge CI #44690688744 passes Driver typecheck/build/emulator launch, but demo-only entry is not Driver auth completion; Driver work is gated until Rider exits |
+| DEMO-MOB-004 | No platform fare estimate in demo | Rider demo sample does not display estimated/recommended fares or imply platform pricing | Product-scope regression | Failing on main: sample text still shows ₹280–₹340; remove it before acceptance |
+| DEMO-MOB-005 | Accurate demo connectivity copy | UI states that demo session creation requires a reachable configured API; it must not claim offline access while calling the API | Mobile UX | Failing on main: “Offline demo access” is misleading because demo-token issuance calls the API |
+| DEMO-MOB-006 | Safe demo identity state | Demo rendering uses a non-null demo identity without weakening authenticated-user null checks | Mobile typecheck | Typecheck, Android APK build and emulator smoke passed on main CI #44690688744; this does not satisfy the separate real-auth or Rider functional acceptance gaps |
+
+**Demo API source:** Program.cs maps POST /api/v1/auth/demo/{role}; it is opt-in, requires configured JWT issuer/audience/signing key of at least 32 characters, issues a 30-minute token with demo=true and no refresh token, and uses an in-process fixed-window limit of 10 requests per server-observed remote IP per process per minute. DemoAuthPolicy permits only Development/Testing/Staging/QA/Demo and denies Production/unknown/blank environments. Demo tokens can access only explicitly marked GET/HEAD routes under `/api/v1/demo`; unmarked routes and all mutation methods are rejected before handlers run. OpenAPI documents the anonymous route and 404/429/503 responses; Testing-only fixture routes are excluded. Behind a reverse proxy, configure trusted forwarded headers; multi-instance demo hosting needs a shared or edge rate limit. No production demo business endpoints are currently mapped; these are demo-only controls, not a production identity provider.
+
+**Android PR #199/#203 evidence:** PR #199 merged the demo-only entry screens at `238728a0bb3dffe990cd4626615a4d927f814a12`. PR #203 merged the smoke/test-harness update at main `4061357c095debbc31fc5027a7bff27bd8b06265`. Its post-merge CI [#44690688744](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744) passed Rider/Driver TypeScript, shared Node tests 286/286, Python harness 48/48, both Android debug APKs, both standalone release APKs, and both emulator install/launch smoke jobs; iOS jobs were skipped by phase gating. Artifacts: Rider debug [14609150789](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14609150789), release [14608268724](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14608268724), smoke [14609171818](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14609171818); Driver debug [14608218400](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14608218400), release [14608413875](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14608413875), smoke [14609316501](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14609316501). This proves native build and emulator install/launch only, not functional auth or complete MVP acceptance. The Rider login/register UI is still replaced by demo-only content and its source assertion was weakened; the demo still shows the prohibited `₹280–₹340` estimate and misleading “Offline demo access” wording. Restore real Rider auth, keep demo optional/read-only, remove the estimate, correct the copy and restore the auth source regression before Rider can exit. Driver remains gated until Rider exits; iOS remains gated.
 
 ## 1. Authentication — registration
 
@@ -327,8 +362,9 @@ The shared `rideRecovery.test.cjs` also verifies immutable `RideStatusChanged` p
 | COSMOS-READY-001 | Cosmos database is reachable | `GET /health/ready` returns HTTP 200 | API + Cosmos | P0 |
 | COSMOS-READY-002 | Cosmos database is unavailable | `GET /health/ready` returns HTTP 503 | API + failure injection | P0 |
 | COSMOS-READY-003 | API runs in Development/Testing in-memory mode | `GET /health/ready` returns HTTP 200 without Cosmos configuration | API | P1 |
+| COSMOS-ENV-001 | Production requires both Cosmos settings; partial endpoint/key configuration fails in every environment; Staging/QA without Cosmos may start with in-memory adapters only for isolated tests and must return 503 readiness; non-Development/Testing support intake requires policy approval, positive retention and Cosmos | API policy + integration | P0 |
 
-Automated tests cover Cosmos configuration validation. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
+Automated tests cover Cosmos configuration validation, the Production Cosmos requirement, partial-configuration rejection, OpenAPI environment exposure and non-development support-intake storage gates. PR #200 adds Staging/QA readiness, policy-disabled intake, approved-retention and no-Cosmos support-intake integration cases. Its code-bearing head passed 900/900 backend tests and native publish; the current documentation-bearing head still requires exact-head CI. The migration lease, Cosmos data-plane readiness and multi-instance migration scenarios still require a real Cosmos development account; they are not claimed as executed by the in-memory CI suite.
 
 ## 14. Driver onboarding and eligibility
 
@@ -1182,8 +1218,8 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-004 | Provider receives trip-intent prompt | Provider sees only fixed route placeholders and generic action tokens; exact pickup/drop-off, passenger count, family/child context, accessibility/health details, luggage, email, phone and arbitrary free text are absent | Unit/security | P0 |
 | AI-005 | Provider is disabled or unavailable | Deterministic local draft is returned with source marked as fallback | Unit + API | P0 |
 | AI-006 | Provider returns wrong service class or route token | Provider output is rejected; local Cab draft and locally parsed passenger count are preserved. Provider contract has no passenger-count field | Unit | P0 |
-| AI-007 | Provider times out or transient HTTP call fails | Deterministic fallback is returned within the configured timeout | Unit | P0 |
-| AI-008 | Caller cancels an assistance request | Cancellation propagates; it is not converted into a successful fallback response | Unit | P1 |
+| AI-007 | Trip-intent or help provider times out; transient provider failures use fallback | Deterministic fallback is returned within the configured timeout | Unit | P0 |
+| AI-008 | Caller cancels while a trip-intent or help provider request is in flight | Linked provider cancellation propagates; it is not converted into a successful fallback response | Unit | P1 |
 | AI-009 | Rider requests a known ride-state explanation | Exact approved in-repository state explanation is returned; no ride state is changed | Unit + API | P0 |
 | AI-010 | Rider/Driver asks approved product help | Provider may select only an approved source ID; API returns the exact in-repository answer | Unit + API | P0 |
 | AI-011 | Question is unsupported or provider source ID is unknown | Safe escalation response is returned; no policy, fare, ETA or support SLA is fabricated | Unit + API | P0 |
@@ -1218,6 +1254,8 @@ This evidence closes the automated native-compilation preflight only. It does no
 | AI-039 | Caller supplies a ride state to help while provider is enabled | A known state returns only its approved in-repository explanation and an unknown state escalates; neither path invokes the provider or forwards caller-supplied rideState | Unit/security | P0 |
 | AI-040 | Rider asks a generic “what is my ride status?” question without a canonical state | Assistant escalates instead of guessing an accepted/in-progress/completed state; explicit state names still return their approved definition | Unit | P0 |
 | AI-041 | AI trip draft omits passenger count while Rider form previously contains its default | Rider form clears the stale/default passenger value; discovery and booking remain blocked until the Rider manually enters an integer from 1 through 6 | Shared mobile helper + Rider UI | P0 |
+| AI-042 | Help provider times out | The linked provider token is cancelled and the exact locally approved help entry is returned as deterministic fallback within the configured timeout | Unit | P0 |
+| AI-043 | Caller cancels while help provider request is in flight | The linked provider token is cancelled and caller cancellation propagates instead of returning approved-content fallback | Unit | P1 |
 
 **AI-01 test-helper correction:** `ValidateOptionsResult.Failures` may be null on success; assertions must use a null-safe empty sequence when constructing failure diagnostics. The first CI run caught this test-only failure (627/632 passed after Release build); corrected helper is in PR #165 source/test head `1289297e68297da2ab3629d820c3445bd39187cd`.
 
@@ -3712,3 +3750,621 @@ The final documentation-bearing head `1f7283ebfc02b3fd3c5f547babbfbfd9d10dd64a` 
 
 
 Final review-count sync head `9634d227c82e2813d63d07c2a09065a434de6820` passed exact-head API-only CI [#44676774010](https://github.com/rajeevp727/turnova-platform/actions/runs/44676774010): **871/871 backend tests (0 failed, 0 skipped)**, native non-container .NET 10 Release publish/verifier, artifact [14602990197](https://github.com/rajeevp727/turnova-platform/actions/runs/44676774010/artifacts/14602990197). Six recorded PR reviews are owner-authored COMMENT-only; the latest follow-up withdraws the earlier Staging persistence concern. Independent human approval remains required.
+
+
+DEMO-AUTH-010 is specifically a post-issuance revocation regression: the integration test issues a demo JWT with the feature enabled, verifies the marked read-only route succeeds, mutates the running host's IConfiguration flag to false, and verifies the same unexpired token is rejected with HTTP 403. Exact source/test commit [f5e59cb8ebffcb2cee510b0b7fa8e5f90e781876](https://github.com/rajeevp727/turnova-platform/commit/f5e59cb8ebffcb2cee510b0b7fa8e5f90e781876) passed CI [#44709040357](https://github.com/rajeevp727/turnova-platform/actions/runs/44709040357) with 930/930 backend tests and native non-container publish/verifier; artifact [14615948841](https://github.com/rajeevp727/turnova-platform/actions/runs/44709040357/artifacts/14615948841).
+
+## DEMO-AUTH-012 — explicit metadata cannot bypass the demo path boundary
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DEMO-AUTH-012 | A valid demo JWT calls a GET endpoint carrying `DemoEndpointMetadata` but whose path is outside `/api/v1/demo` | The request is rejected with HTTP 403 before the handler runs; no TriSend call occurs. Explicit metadata alone is insufficient. | API integration / authorization boundary | P0 |
+
+Covered by `AuthApiIntegrationTests.DemoTokenCannotAccessAnExplicitlyMarkedEndpointOutsideDemoPrefix`. The Testing-only fixture is excluded from OpenAPI and introduces no production route.
+
+## DEMO-AUTH-013 — explicitly marked HEAD is read-only demo access
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DEMO-AUTH-013 | A valid demo JWT calls a Testing-only HEAD endpoint under `/api/v1/demo` with explicit `DemoEndpointMetadata` while DemoAuth is enabled | The request succeeds with HTTP 200 and no TriSend call. The middleware's documented GET/HEAD allow-list is covered in both branches. | API integration / authorization boundary | P1 |
+
+Covered by `AuthApiIntegrationTests.DemoTokenCanAccessAnExplicitlyMarkedHeadDemoEndpoint`. The fixture is Testing-only and excluded from OpenAPI; no public demo business endpoint is added.
+
+**Code/test evidence:** source/test head `444fbba3dd91b0531ce5fa42358ccf7b65e10af6` was included in exact-head API-only CI [#44712638042](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042) at documentation head `4dba640291450f22502938d61f3f0d17d66a1e76`: 932/932 backend tests, Release build, native non-container .NET 10 publish/verifier, artifact [14618770509](https://github.com/rajeevp727/turnova-platform/actions/runs/44712638042/artifacts/14618770509). That run proves the source/test changes; it is not used as clean-documentation evidence because the intermediate docs snapshot was malformed. The restored clean-documents head `8f3274dd32de2e20d6210d794bc3c232e3d356e1` passed exact-head API-only CI [#44726011931](https://github.com/rajeevp727/turnova-platform/actions/runs/44726011931): 933/933 backend tests, Release build, native non-container .NET 10 publish/verifier, artifact [14623977597](https://github.com/rajeevp727/turnova-platform/actions/runs/44726011931/artifacts/14623977597).
+
+## DEMO-AUTH-014 — SignalR query-token transport cannot bypass demo isolation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DEMO-AUTH-014 | A valid restricted demo JWT is supplied as the `access_token` query parameter on `POST /hubs/rides/negotiate` | The API returns HTTP 403 before SignalR negotiation or hub group membership; no TriSend call occurs. The SignalR query-string token extraction path does not bypass demo-session isolation. | API integration / authentication boundary | P0 |
+
+Covered by `AuthApiIntegrationTests.DemoTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken`. This is deterministic TestServer evidence for the special SignalR query-token path; it does not claim live WebSocket delivery, a production backplane or device reconnect validation.
+
+**Latest verified exact-head CI:** source/test head `4afdd81de66b7e7772c27301de0a8fd53a238cee` is included in last verified branch checkpoint `ec226e501c736c6ad449c64e2fc630c06749f127`; exact-head API-only CI [#44728587496](https://github.com/rajeevp727/turnova-platform/actions/runs/44728587496) passed 933/933 backend tests (0 failed, 0 skipped), Release build, native non-container .NET 10 publish/verifier, artifact [14625840809](https://github.com/rajeevp727/turnova-platform/actions/runs/44728587496/artifacts/14625840809). The current PR head is a documentation-only successor; verify its own exact-head CI before merge.
+
+
+## AUTH-API-016 — authentication responses are non-cacheable — 2026-11-20
+
+`Program.cs` adds an API middleware before authentication/authorization that sets `Cache-Control: no-store` and `Pragma: no-cache` on `/api/v1/auth` responses. Integration assertions cover successful demo-session issuance, successful Rider/Driver login, anonymous `/auth/me` rejection, disabled/unknown-environment 404 and demo-issuance rate-limit 429 responses. This protects access/refresh token responses and profile endpoints from intermediary/browser caching; it does not claim any change to token lifetime or identity-provider behavior.
+
+Earlier source/test head `b003f83491ffd8f2d5d7550f40357e43d13feaab` passed exact-head API-only CI [#44733713863](https://github.com/rajeevp727/turnova-platform/actions/runs/44733713863): 933/933 backend tests, Release build, native publish/verifier and artifact [14628220704](https://github.com/rajeevp727/turnova-platform/actions/runs/44733713863/artifacts/14628220704). The follow-up below extends the AUTH-API-016 negative-response assertions.
+
+Exact source/test head `aaab562527a86f548c32475a162ba939119490f8` passed exact-head API-only CI [#44741552722](https://github.com/rajeevp727/turnova-platform/actions/runs/44741552722): **933/933 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 API publish, publish verifier (11 negative fixtures plus valid fixture), and artifact [14630568388](https://github.com/rajeevp727/turnova-platform/actions/runs/44741552722/artifacts/14630568388). Build: 0 errors; 25 existing xUnit analyzer warnings. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-only phase gate.
+
+
+## AUTH-API-017 — auth-route exception responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-017 | Preserve no-store policy when an auth-route handler throws | A Testing-only `GET /api/v1/auth/__test/throw` reaches the outer exception handler; the generic HTTP 500 still carries `Cache-Control: no-store` and `Pragma: no-cache`, and the exception message is not returned | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnhandledAuthRouteExceptionStillReturnsNoStoreHeaders`. The middleware registers the headers with `HttpResponse.OnStarting` so they are re-applied after the exception handler clears the response. The route is Testing-only and excluded from OpenAPI. Exact source/test head `81d4ac6e1eb565c5b0f3eef9f561edd48433fa9c` passed [CI #44749883561](https://github.com/rajeevp727/turnova-platform/actions/runs/44749883561), including backend build/tests and native non-container API publish/verifier (artifact [14633839847](https://github.com/rajeevp727/turnova-platform/actions/runs/44749883561/artifacts/14633839847)). This is supplemental API security coverage, not a new row in the 19-area MVP acceptance denominator.
+
+## Authoritative API handoff — 2026-11-20, automation run 5
+
+- **Current main:** `c9280eec23dd4fb5fab06b11e24d2a619b489235`. Main phase file still says API complete / Android in_progress; this is stale and is not authorization to advance.
+- **Current phase:** API `in_progress`; Android and iOS `not_started` on the active API branch.
+- **PR #197:** merged at `8d5bcb6b913f51250d9f0fc4f0d521a973130747` without independent human approval. This historical process exception is disclosed and does not satisfy the current phase-transition gate.
+- **Sole active feature PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, current head `6e6677dfababfaf7ffb082d7ed5ea6e852b35a2b), open/ready/mergeable. Source/test head `81d4ac6e1eb565c5b0f3eef9f561edd48433fa9c` adds AUTH-API-017: auth-route no-store/no-cache headers are re-applied via `HttpResponse.OnStarting` after exception-handler `Response.Clear()`, with a Testing-only 500 regression and no exception disclosure.
+- **Exact source/test CI:** [#44749883561](https://github.com/rajeevp727/turnova-platform/actions/runs/44749883561) passed scope/backend build/tests, native non-container linux-x64 API publish and verifier; artifact [14633839847](https://github.com/rajeevp727/turnova-platform/actions/runs/44749883561/artifacts/14633839847).
+- **Last verified docs-head CI:** [#44751331326](https://github.com/rajeevp727/turnova-platform/actions/runs/44751331326) passed scope/backend, .NET 10 Release build/tests, native non-container publish and verifier; artifact [14635576706](https://github.com/rajeevp727/turnova-platform/actions/runs/44751331326/artifacts/14635576706). Android/mobile/iOS jobs were intentionally skipped under the API-only phase gate.
+- **New main-only commits after PR base:** main is two commits ahead of PR #200: the weekly-build workflow and PR #204 `Configure Rider and Driver Android apps for local LAN API demos`, merged at `c9280eec23dd4fb5fab06b11e24d2a619b489235`. PR #204 only adds Android `usesCleartextTraffic: true` to Rider and Driver `app.json` for trusted-LAN HTTP demos; it does not add Rider/Driver flows or constitute Android completion. PR #200 is 118 commits ahead / 2 behind; GitHub currently reports mergeable/clean. Do not merge main into the API branch merely to pull unrelated mobile configuration into the API PR.
+- **Review gate:** three owner-authored COMMENT-only reviews; no independent human approval; zero unresolved review threads. Do not self-approve, bypass policy or merge. PR #196 and #198 remain Draft/parked. PR #203 remains merged demo-preview work, not Android completion.
+- **Strict acceptance:** 0/19 Verified (16 In Progress; 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Production readiness is not established.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart; Staging/QA provisioning and readiness wiring; shared/edge rate limiting and trusted proxy; production JWT/TriSend identity, secrets and API hosting; approved dispatch/location/support/reconciliation policies; maps/routing/realtime providers; private-media storage/scanning/consent/retention; Union legal approval; physical-device/signing/store/TestFlight evidence.
+- **Next exact action:** obtain independent human approval for PR #200; recheck final head/checks and merge only if permitted; re-read latest main and perform a fresh API phase-exit audit. Only after that audit may Android Rider begin, followed by Android Driver, then iOS Rider and Driver. No live Cosmos, provider or production validation is claimed.
+
+
+## Run 6 — latest API phase handoff (2026-11-20)
+
+## Run 6 — live API handoff (2026-11-20)
+
+- **Current main:** `c9280eec23dd4fb5fab06b11e24d2a619b489235`.
+- **Current platform phase:** API `in_progress`; Android and iOS `not_started` for completion work.
+- **Sole ready/active feature PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, latest source/test head `fbcf19240289ad3349f751faaf8983eb3b6b99d0`. GitHub reports mergeable. The branch remains mergeable while main has two main-only commits not in this API PR: the weekly-build workflow and PR #204's Android trusted-LAN cleartext setting. The ahead count changes as handoff commits are added; do not merge unrelated mobile configuration into the API PR merely to synchronize. Do not merge those unrelated mobile config changes into this API PR merely to synchronize.
+- **AUTH-API-018:** added `MeEndpointRejectsInvalidBearerTokenWithNoStoreHeaders`; invalid bearer on `GET /api/v1/auth/me` returns 401 with `Cache-Control: no-store` and `Pragma: no-cache`, without calling TriSend. The existing demo-token 403 test now also asserts both headers.
+- **Exact source/test-head CI:** [#44759040207](https://github.com/rajeevp727/turnova-platform/actions/runs/44759040207) completed successfully: scope and backend jobs passed; .NET 10 Release build, backend test execution/verifier, native non-container Linux x64 publish, publish-script syntax, native publish verifier and artifact validation all passed. API publish artifact: [14641077685](https://github.com/rajeevp727/turnova-platform/actions/runs/44759040207/artifacts/14641077685). The check-run metadata does not expose the numeric test total; do not invent one. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped by the API-only phase gate.
+- **Previous numeric baseline:** exact-head CI [#44752166958](https://github.com/rajeevp727/turnova-platform/actions/runs/44752166958) passed 934/934 backend tests on prior head `31a522215a9d934f2838d1bc2f901f8bf4f63df2`; AUTH-API-018 adds one integration test after that baseline.
+- **Phase discrepancy:** main `.github/turnova-phase.json` still says API complete / Android in_progress. PR #200's phase file correctly says API in_progress / Android not_started / iOS not_started. PR #204 only enables trusted-LAN HTTP for local demos; it is not Rider/Driver Android completion evidence.
+- **Review gate:** PR #200 remains open and ready; three reviews are owner-authored COMMENT-only, no independent human approval is recorded, and there are zero unresolved review threads. Never self-approve or bypass repository policy. PR #197 was merged without independent human approval; retain that historical process exception. PR #196 and #198 remain Draft/parked. PR #204 is merged configuration-only work.
+- **Acceptance accounting:** 0/19 strictly Verified; 16 In Progress and 3 Blocked (DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. Production readiness is not established.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart; Staging/QA provisioning and readiness; production JWT/TriSend identity, secrets and API hosting; shared/edge rate limiting and trusted proxy configuration; Product-approved radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/reconciliation policy; Union legal approval; Android/iOS physical-device and signing/store/TestFlight evidence.
+- **Next exact action:** continue API-only safe code/test/docs work while PR #200 remains open. Obtain independent human approval, verify latest head and required checks, merge only when permitted, then re-read main and perform a fresh API phase-exit audit before Android Rider. Complete Android Rider, Android Driver, iOS Rider and iOS Driver strictly in that order. No live Cosmos, provider or production validation is claimed.
+
+
+## Out-of-sequence mobile PRs parked — Run 6 (2026-11-20)
+
+- [PR #205](https://github.com/rajeevp727/turnova-platform/pull/205), Android ARM64 release APK optimization, was found open/ready and converted to Draft. It is Android build work and must remain parked until the API phase-exit gate passes.
+- [PR #206](https://github.com/rajeevp727/turnova-platform/pull/206), Rider/Driver real-auth UI restoration, was found open/ready and converted to Draft. It is mobile UI work and must remain parked until the API phase-exit gate passes.
+- A phase-gate comment was added to each PR. Neither PR was advanced, marked ready, merged, or treated as completion evidence.
+- PR #200 remains the sole ready/active feature PR. PR #196 and #198 remain Draft/parked. PR #197 remains merged with the historical independent-approval exception disclosed. PR #204 remains configuration-only Android LAN demo work.
+
+
+## Run 7 — live API handoff (2026-11-20)
+
+- **Main:** c9280eec23dd4fb5fab06b11e24d2a619b489235. PR #204 is merged but only enables trusted-LAN HTTP in Rider/Driver Android app configuration; it is not Android feature completion evidence.
+- **Active phase:** API in_progress; Android and iOS not_started. The PR branch phase file remains API in_progress / Android not_started / iOS not_started. Main's phase file is stale (API complete / Android in_progress) and is not authorization to advance.
+- **Sole ready/active feature PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch test/api-nondev-support-readiness-20261120. Source/test commit 7497b2b170349e7cc9ae3c6885d4678655174a2c adds explicit Cache-Control: no-store and Pragma: no-cache assertions for default-disabled demo 404, Rider/Driver registration 201, duplicate registration 201/409, Rider/Driver profile 200, refresh 200, wrong-role login 403 and upstream auth 503. This extends AUTH-API-016 regression coverage; middleware behavior is unchanged.
+- **Current source/test CI:** [#44770262568](https://github.com/rajeevp727/turnova-platform/actions/runs/44770262568) was in progress when this handoff was written. Do not claim it passed or infer a numeric test total. Previous exact-head run [#44760803615](https://github.com/rajeevp727/turnova-platform/actions/runs/44760803615) passed scope/backend, .NET 10 Release build/test-execution verification and native non-container Linux x64 publish/verifier; its check summary did not expose a numeric test total. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-only gate.
+- **Branch/base:** before this documentation sync, PR #200 was 123 commits ahead / 2 behind main and GitHub reported mergeable=true. The two main-only commits are the weekly-build workflow and PR #204 Android LAN configuration. Do not merge unrelated Android config into the API branch merely to synchronize.
+- **Review gate:** three reviews are owner-authored COMMENTED, not approvals; zero unresolved review threads; no independent human approval. Never self-approve, bypass repository policy or merge without the required independent review. PR #197's merge at 8d5bcb6b913f51250d9f0fc4f0d521a973130747 without independent human approval remains a disclosed historical process exception.
+- **Parked work:** PRs #196, #198, #205 and #206 remain Draft. #205 is Android APK optimization; #206 is Rider/Driver real-auth UI. Do not advance or merge them until API exit. PR #204 is merged configuration-only work.
+- **Acceptance and readiness:** strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Production readiness, live Cosmos validation and provider validation are not established.
+- **Next exact action:** verify CI on the latest final documentation-bearing PR head, refresh main/PR/review state, obtain independent human approval and merge only when repository policy permits. After a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider; then Android Driver, iOS Rider and iOS Driver.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart; Staging/QA Cosmos provisioning and durable readiness; shared/edge demo rate limiting and trusted proxy configuration; production JWT/TriSend identity, secrets, API hosting; approved radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/reconciliation policies; Union legal approval; physical-device and signing/store/TestFlight evidence. No Docker/container build or deployment was used.
+
+
+## Run 7 exact-head CI result — 2026-11-20
+
+- Exact documentation-bearing PR #200 head `d9559ac6b3ee52c53cfdd38ffc0db4926d83cce6` passed API-only CI [#44770569414](https://github.com/rajeevp727/turnova-platform/actions/runs/44770569414).
+- .NET 10 Release build passed; **935/935 backend tests passed (0 failures)**; native non-container linux-x64 API publish passed; publish script syntax passed; native publish verifier passed (11 negative fixtures plus valid fixture); artifact validation passed. API publish artifact: [14646474045](https://github.com/rajeevp727/turnova-platform/actions/runs/44770569414/artifacts/14646474045).
+- Scope/backend jobs passed. Mobile-auth, mobile, Android, emulator and iOS jobs were intentionally skipped under the API-only phase gate; this is not Android or iOS completion evidence.
+- This is deterministic CI/publish evidence only. No live Cosmos ETag/multi-instance/restart, production identity, hosted API, provider or production readiness is claimed.
+- The docs synchronization that records this result is documentation-only; its new final head must receive its own exact-head API CI before it is considered verified.
+
+
+
+## AUTH-API-019 — auth CORS preflight responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-019 | A browser sends an allowed CORS preflight OPTIONS request to an authentication route | The preflight returns HTTP 204 with the configured Access-Control-Allow-Origin plus Cache-Control: no-store and Pragma: no-cache; no TriSend request is made. The auth cache policy wraps CORS short-circuiting while CORS remains ahead of Development HTTPS redirection. | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.AuthRouteCorsPreflightStillReturnsNoStoreHeaders`. The auth no-store middleware now runs after the outer exception handler but before CORS and Development HTTPS redirection, so CORS preflight and redirect responses retain the same non-cacheable policy without changing the existing Development CORS-before-HTTPS behavior. This is supplemental API security coverage and does not add a row to the 19-area MVP acceptance denominator.
+
+**Exact source/test evidence:** source/test head `7e16f61b1545514c608092a05dc44b1c2c9ce9f3` passed exact-head API-only CI [#44780717714](https://github.com/rajeevp727/turnova-platform/actions/runs/44780717714): **936/936 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 API publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14652587015](https://github.com/rajeevp727/turnova-platform/actions/runs/44780717714/artifacts/14652587015). Mobile/mobile-auth/Android/emulator/iOS jobs were intentionally skipped under the API-only phase gate.
+
+
+## AUTH-API-020 — rejected-origin CORS preflight remains non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-020 | A browser sends an OPTIONS preflight to an authentication route from an origin not listed in `Cors:AllowedOrigins` | HTTP 204 with no `Access-Control-Allow-Origin`; the response still includes `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request is made | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.AuthRouteCorsPreflightFromDisallowedOriginStillReturnsNoStoreHeaders`. The test distinguishes an allowed-origin preflight from a rejected-origin preflight and verifies that the auth cache policy also wraps the latter CORS short-circuit. CORS is a browser access policy, not a substitute for API authentication/authorization. This is supplemental security coverage outside the 19-row MVP acceptance denominator.
+
+Exact source/test head [`f839b60224f8deb5d38a653562366d8750236628`](https://github.com/rajeevp727/turnova-platform/commit/f839b60224f8deb5d38a653562366d8750236628) passed [CI #44788943890](https://github.com/rajeevp727/turnova-platform/actions/runs/44788943890): 937/937 backend tests, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14656290784](https://github.com/rajeevp727/turnova-platform/actions/runs/44788943890/artifacts/14656290784).
+
+
+## AUTH-API-021 — Development HTTPS redirect remains non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-021 | Plain-HTTP GET to an auth route in Development with HTTPS_PORT=443 | HTTP 307 redirect to HTTPS; Cache-Control: no-store and Pragma: no-cache remain present; no TriSend request | API middleware integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.AuthRouteHttpsRedirectStillReturnsNoStoreHeaders. The test disables automatic redirect following, configures HTTPS_PORT=443 and asserts the HTTPS Location and cache headers. This verifies the auth cache middleware wraps Development HTTPS redirection. Supplemental coverage outside the 19-row acceptance denominator.
+
+Exact source/test head [0d55b4693dffc5b9d549b82cc8eff85b34d7f929](https://github.com/rajeevp727/turnova-platform/commit/0d55b4693dffc5b9d549b82cc8eff85b34d7f929) passed [CI #44790113886](https://github.com/rajeevp727/turnova-platform/actions/runs/44790113886): 938/938 tests, .NET 10 Release build, native non-container publish/verifier, and artifact [14656202254](https://github.com/rajeevp727/turnova-platform/actions/runs/44790113886/artifacts/14656202254).
+
+## AUTH-API-022 — unmatched authentication routes remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-022 | A GET request targets an unmapped path beneath `/api/v1/auth` | HTTP 404 with `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnmatchedAuthRouteReturnsNotFoundWithNoStoreHeaders`. The request to `/api/v1/auth/__test/not-found` verifies the auth cache middleware also covers endpoint-routing 404 responses, not only mapped auth handlers and middleware short-circuits. The test asserts the generic 404, both cache headers and zero upstream TriSend requests. This is supplemental API security coverage outside the 19-row MVP acceptance denominator.
+
+Exact source/test head [`f5cc60ac57a272aaa9cb239684d9655f287ee4e9`](https://github.com/rajeevp727/turnova-platform/commit/f5cc60ac57a272aaa9cb239684d9655f287ee4e9) passed API-only CI [#44798095244](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244): **939/939 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, native publish verifier (11 negative fixtures plus valid fixture), artifact validation and upload. Artifact [14659488247](https://github.com/rajeevp727/turnova-platform/actions/runs/44798095244/artifacts/14659488247). Mobile/Android/iOS jobs were intentionally skipped under the API phase gate.
+
+## AUTH-API-023 — authentication method-mismatch responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-023 | A POST request targets the GET-only `/api/v1/auth/me` route | HTTP 405 with `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnsupportedMethodOnAuthenticationRouteReturnsMethodNotAllowedWithNoStoreHeaders`. This verifies that the auth cache policy also covers endpoint-routing 405 responses when the path exists but the HTTP method is unsupported. The case is supplemental API security coverage outside the 19-area MVP acceptance denominator.
+
+Exact source/test head [`2f8d0cc757b56bab89625644da10a913f276e10d`](https://github.com/rajeevp727/turnova-platform/commit/2f8d0cc757b56bab89625644da10a913f276e10d) passed API-only CI [#44807178037](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037): **940/940 backend tests (0 failed, 0 skipped)**, Release build, native non-container linux-x64 publish/verifier and artifact [14663477137](https://github.com/rajeevp727/turnova-platform/actions/runs/44807178037/artifacts/14663477137). Mobile/Android/iOS jobs were intentionally skipped under the API phase gate.
+
+
+## AUTH-API-024 — endpoint cache directives are preserved when adding no-store
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-024 | A Testing-only auth route returns an endpoint-specific `Cache-Control: private, max-age=60` response | HTTP 200 retains `private` and `max-age=60`, adds `no-store`, includes `Pragma: no-cache`, and makes no TriSend request | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.AuthRouteCachePolicyPreservesPrivateDirectivesAndAddsNoStore`. The fixture is mapped only in the Testing environment and excluded from OpenAPI. The exception-handler regression now checks the `no-store` directive rather than requiring the entire Cache-Control header to equal a single token, because exception handling may also contribute `no-cache`. This supplemental regression does not add a row to the 19-area MVP acceptance denominator.
+
+Exact source/test head [`bb96a98e0e1281885f73fd045e29883799b4a6a0`](https://github.com/rajeevp727/turnova-platform/commit/bb96a98e0e1281885f73fd045e29883799b4a6a0) passed API-only CI [#44810978513](https://github.com/rajeevp727/turnova-platform/actions/runs/44810978513): **942/942 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 API publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), artifact validation and upload. Artifact [14666462214](https://github.com/rajeevp727/turnova-platform/actions/runs/44810978513/artifacts/14666462214). Mobile/mobile-auth/Android/emulator/iOS jobs were intentionally skipped under the API-first phase gate.
+
+
+
+## AI-044 — assistance rate-limit responses are non-cacheable Problem Details
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-044 | An authenticated Rider exceeds the AI help per-subject fixed-window limit | HTTP 429 with `application/problem+json` Problem Details, status 429, `Cache-Control: no-store`, `Pragma: no-cache`, and no caller subject in the response | API integration/privacy | P1 |
+
+Covered by `AiAssistanceApiIntegrationTests.AssistantRateLimitRejectionIsNonCacheable`. This verifies that the API-wide non-cacheable response middleware wraps endpoint-level rate-limit rejection. The AI limiter remains partitioned by authenticated subject; the generic response does not echo the subject or prompt.
+
+The regression found that setting `Response.ContentType` before `WriteAsJsonAsync` was ineffective because the JSON helper reset the media type to `application/json`. The rejection now uses `Results.Problem` to emit the declared Problem Details media type. Source/test head [`8571997e62ebd9893b1edead79f059691c080f29`](https://github.com/rajeevp727/turnova-platform/commit/8571997e62ebd9893b1edead79f059691c080f29) passed exact-head API-only CI [#44826100723](https://github.com/rajeevp727/turnova-platform/actions/runs/44826100723): **945/945 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish verifier (11 negative fixtures plus valid fixture), and artifact [14674935330](https://github.com/rajeevp727/turnova-platform/actions/runs/44826100723/artifacts/14674935330). AI-044 is supplemental AI-01 coverage outside the 19-area MVP acceptance denominator.
+
+
+## DEMO-AUTH-014 — demo-auth throttling returns Problem Details
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| DEMO-AUTH-014 | The authenticated-independent demo-session endpoint exceeds its 10-request/minute server-observed remote-IP allowance | The 11th POST returns HTTP 429 with `application/problem+json` Problem Details and status 429; `Cache-Control: no-store` and `Pragma: no-cache` remain present; TriSend is never called | API integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.DemoSessionIssuanceIsRateLimitedPerRemoteAddress`. The shared rate-limiter rejection callback also serves AI assistance; AI-044 separately verifies the same Problem Details and non-cacheable response contract for authenticated AI help. Demo auth remains opt-in and restricted to the configured non-production environment allow-list. The limiter is process-local; multi-instance exposure still requires shared/edge rate limiting and trusted forwarded-header configuration.
+
+Source/test head [`ed9faf6c345db33dc2336805580f2007cae9aade`](https://github.com/rajeevp727/turnova-platform/commit/ed9faf6c345db33dc2336805580f2007cae9aade) passed exact-head API-only CI [#44827321958](https://github.com/rajeevp727/turnova-platform/actions/runs/44827321958): **945/945 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier, artifact [14674272359](https://github.com/rajeevp727/turnova-platform/actions/runs/44827321958/artifacts/14674272359). DEMO-AUTH-014 is an API test case, not an additional MVP acceptance area.
+
+
+## AUTH-API-025 — non-auth API exception responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-025 | A Testing-only unhandled exception occurs on `GET /api/v1/__test/throw`, outside the authentication route group | HTTP 500 generic Problem Details with `Cache-Control: no-store` and `Pragma: no-cache`; exception text is not disclosed and TriSend is not called | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnhandledApiExceptionOutsideAuthStillReturnsNoStoreHeaders`. The fixture exists only in the Testing environment and is excluded from OpenAPI. It proves the response-start cache policy applies to generic application API errors as well as `/api/v1/auth` errors after exception-handler response clearing.
+
+Source/test head [`f23725fe7446e2718831268e9dbf28c056d27d4a`](https://github.com/rajeevp727/turnova-platform/commit/f23725fe7446e2718831268e9dbf28c056d27d4a) passed exact-head API-only CI [#44829152846](https://github.com/rajeevp727/turnova-platform/actions/runs/44829152846): **946/946 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14675407783](https://github.com/rajeevp727/turnova-platform/actions/runs/44829152846/artifacts/14675407783).
+
+## AUTH-API-026 — SignalR negotiate responses remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-026 | A demo JWT is supplied through SignalR's `access_token` query parameter to `POST /hubs/rides/negotiate` | HTTP 403 with `Cache-Control: no-store` and `Pragma: no-cache`; the demo token is rejected before hub negotiation and no TriSend call occurs | API realtime integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.DemoTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken`. The test asserts the realtime response cache policy on the special SignalR query-token transport path as well as the existing 403 restriction.
+
+Source/test head [`8dd40521b55e9d4aaa6fc9a0b4ea8f4fd286ef1e`](https://github.com/rajeevp727/turnova-platform/commit/8dd40521b55e9d4aaa6fc9a0b4ea8f4fd286ef1e) passed exact-head API-only CI [#44829652135](https://github.com/rajeevp727/turnova-platform/actions/runs/44829652135): **946/946 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier, and artifact [14675448230](https://github.com/rajeevp727/turnova-platform/actions/runs/44829652135/artifacts/14675448230). Mobile/Android/iOS jobs were intentionally skipped under the API phase gate.
+
+
+## AUTH-API-027 — unmatched non-auth API routes remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-027 | A GET request targets an unmapped path beneath `/api/v1` but outside `/api/v1/auth` | HTTP 404 with `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnmatchedNonAuthApiRouteReturnsNotFoundWithNoStoreHeaders`. This closes the generic route-miss branch for the API-wide response cache policy, complementing AUTH-API-022 (auth-route 404) and AUTH-API-025 (non-auth API exception 500). The request targets `/api/v1/nonexistent`, which has no mapped endpoint; the test asserts the 404 and both cache directives and verifies no upstream TriSend request. This supplemental regression is outside the 19-area MVP acceptance denominator.
+
+
+Exact final documentation-bearing head [`ce37efc3b8c393f8e2adb6d6a847daac7b5c6b6b`](https://github.com/rajeevp727/turnova-platform/commit/ce37efc3b8c393f8e2adb6d6a847daac7b5c6b6b) passed API-only CI [#44834287722](https://github.com/rajeevp727/turnova-platform/actions/runs/44834287722): **947/947 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14678415159](https://github.com/rajeevp727/turnova-platform/actions/runs/44834287722/artifacts/14678415159). The source/test change is commit [`5759f8a2a70874df459bd9659c30ded450ef7ba6`](https://github.com/rajeevp727/turnova-platform/commit/5759f8a2a70874df459bd9659c30ded450ef7ba6). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
+
+
+## AUTH-API-028 — unmatched ride-hub routes remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-028 | A GET request targets an unmapped path beneath the ride SignalR hub route, `/hubs/rides/unmapped` | HTTP 404 with `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API realtime middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.UnmatchedRideHubRouteReturnsNotFoundWithNoStoreHeaders`. This verifies that the ride-hub response cache policy also covers unmatched subpaths, not only successful negotiation and rejected query-token negotiation. It does not add a hub endpoint or change SignalR authorization. This supplemental regression is outside the 19-area MVP acceptance denominator.
+
+Source/test commit [`113041810017b77bdf2bc10fe6a587914aad1275`](https://github.com/rajeevp727/turnova-platform/commit/113041810017b77bdf2bc10fe6a587914aad1275). Exact source/test CI [#44841539219](https://github.com/rajeevp727/turnova-platform/actions/runs/44841539219) passed **948/948 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 API publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14681336952](https://github.com/rajeevp727/turnova-platform/actions/runs/44841539219/artifacts/14681336952).
+
+
+## AUTH-API-029 — SignalR negotiate CORS preflight remains non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-029 | An allowed browser origin sends `OPTIONS /hubs/rides/negotiate` with requested method POST and authorization/content-type headers | HTTP 204 with the configured `Access-Control-Allow-Origin`, `Cache-Control: no-store` and `Pragma: no-cache`; no TriSend request | API realtime/CORS middleware integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.RideHubCorsPreflightReturnsNoStoreHeaders`. This verifies the response-start cache policy wraps the CORS middleware's preflight short-circuit on the SignalR negotiate path. It adds no hub endpoint and does not change authentication or authorization. This supplemental regression is outside the 19-area MVP acceptance denominator.
+
+Source/test commit [`9afa592967b3655606f347bca868af7b11d479ff`](https://github.com/rajeevp727/turnova-platform/commit/9afa592967b3655606f347bca868af7b11d479ff) passed exact-head API-only CI [#44847354008](https://github.com/rajeevp727/turnova-platform/actions/runs/44847354008): **949/949 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14683916032](https://github.com/rajeevp727/turnova-platform/actions/runs/44847354008/artifacts/14683916032). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
+
+## AUTH-API-030 — oversized assistance requests remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-030 | A real Kestrel request exceeds the 16 KiB body limit on Rider trip-intent or Rider/Driver help | HTTP 413 with `Cache-Control: no-store` and `Pragma: no-cache`; the provider is not invoked | API HTTP-boundary/privacy integration | P1 |
+
+Covered by `AiAssistanceKestrelIntegrationTests.KestrelRejectsOversizedAssistanceRequestBeforeProviderInvocation`. The production API and real-Kestrel fixture share `ApiResponseCachePolicyExtensions.UseApiResponseCachePolicy`, so the regression exercises the same middleware used by `Program.cs` on the server-generated 413 path. It does not change the request limit, endpoint contract or provider behavior. This supplemental regression is outside the 19-area MVP acceptance denominator.
+
+## AI-01 — disabled provider is never invoked
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-045 | AI assistance is disabled while a deterministic fake provider reports available | Rider trip-intent and approved-help requests use deterministic in-repo behavior; provider invocation count remains zero | API service/provider-boundary unit test | P1 |
+
+Covered by `AiAssistanceServiceTests.DisabledProviderIsNeverInvokedForTripIntentOrHelp`. This proves the default-disabled configuration prevents provider execution even when an adapter is registered and available. No provider/model/credential is selected, and no external request is made. This supplemental AI-01 regression is outside the 19-area MVP acceptance denominator.
+
+## Run 20 exact-head API verification — 2026-11-21
+
+AUTH-API-030 and AI-045 source/test commits [`8ebd9da7bfdd33450f31ea6efcdab4cabb71e1ec`](https://github.com/rajeevp727/turnova-platform/commit/8ebd9da7bfdd33450f31ea6efcdab4cabb71e1ec) and [`629332afebfdb16a43602839611699d228a4d4ef`](https://github.com/rajeevp727/turnova-platform/commit/629332afebfdb16a43602839611699d228a4d4ef) passed exact-head API-only CI [#44848945046](https://github.com/rajeevp727/turnova-platform/actions/runs/44848945046) on head `1ec9229eacf3e328a94be14e6414a2ebbf8c6ddd`: **950/950 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14684841976](https://github.com/rajeevp727/turnova-platform/actions/runs/44848945046/artifacts/14684841976). Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-first phase gate.
+
+Final documentation-bearing head `8b00b0a26de514515c73de08537b586ad991f1fa` passed exact-head API-only CI [#44849422595](https://github.com/rajeevp727/turnova-platform/actions/runs/44849422595): **950/950 backend tests (0 failed, 0 skipped)**, Release build, native non-container publish/verifier and artifact [14684687093](https://github.com/rajeevp727/turnova-platform/actions/runs/44849422595/artifacts/14684687093).
+
+The status-only sync at head `8b1bab166f56818377ffd8f3ab0cbc8348b65476` passed exact-head API-only CI [#44849912355](https://github.com/rajeevp727/turnova-platform/actions/runs/44849912355): 950/950 tests, Release build, native non-container publish/verifier and artifact [14684912276](https://github.com/rajeevp727/turnova-platform/actions/runs/44849912355/artifacts/14684912276). This Run 21 documentation-only update requires its own exact-head CI; no application source changed.
+
+
+## AUTH-API-031 — blank-subject assistance rate-limit partition fallback
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-031 | A valid signed Rider JWT has an empty sub but a distinct nonblank NameIdentifier | AI-assistance requests partition by NameIdentifier rather than the empty subject; one identity reaching 10 requests and receiving 429 does not throttle a second NameIdentifier; forwarded headers are not used | API integration/security | P1 |
+
+Covered by AiAssistanceApiIntegrationTests.AssistantRateLimitUsesNameIdentifierWhenSubjectClaimIsBlank. The limiter now chooses a nonblank sub, then a nonblank ClaimTypes.NameIdentifier, then the server-observed remote IP (or anonymous when no remote address exists). Existing nonblank-subject behavior is unchanged. Source/test commit [48e921ba65a6465a9e0f92edcf42073d901728af](https://github.com/rajeevp727/turnova-platform/commit/48e921ba65a6465a9e0f92edcf42073d901728af) passed exact-head API-only CI [#44858900957](https://github.com/rajeevp727/turnova-platform/actions/runs/44858900957): **951/951 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container publish/verifier and artifact [14689540680](https://github.com/rajeevp727/turnova-platform/actions/runs/44858900957/artifacts/14689540680). This supplemental API security test is outside the 19-row MVP denominator.
+
+
+## Run 22 — AUTH-API-031 blank-subject rate-limit isolation (2026-11-21)
+
+- **Platform phase:** API in_progress; Android and iOS remain not_started. No mobile or Fleet/Ops work was advanced.
+- **Finding:** the AI-assistance rate limiter previously used null-coalescing for JWT sub. A signed token with an empty-string sub therefore selected the same empty partition instead of falling back to the caller's NameIdentifier, allowing unrelated callers with malformed subject claims to consume one another's request budget.
+- **Fix:** partition by nonblank sub, otherwise nonblank ClaimTypes.NameIdentifier, otherwise the server-observed remote IP (or anonymous if no remote address exists). This does not trust forwarded headers and leaves normal nonblank subject partitioning unchanged.
+- **Regression:** AiAssistanceApiIntegrationTests.AssistantRateLimitUsesNameIdentifierWhenSubjectClaimIsBlank sends ten allowed requests and one 429 for the first blank-subject identity, then proves a second blank-subject identity with a distinct NameIdentifier still receives HTTP 200. Test-plan ID AUTH-API-031; supplemental API security coverage, not a new MVP acceptance row.
+- **Source/test commit:** [48e921ba65a6465a9e0f92edcf42073d901728af](https://github.com/rajeevp727/turnova-platform/commit/48e921ba65a6465a9e0f92edcf42073d901728af).
+- **Exact-head API-only CI:** [#44858900957](https://github.com/rajeevp727/turnova-platform/actions/runs/44858900957) passed scope and backend jobs; **951/951 backend tests (0 failed, 0 skipped)**; .NET 10 Release build; native non-container linux-x64 publish; publish-script syntax; publish verifier (11 negative fixtures plus valid fixture); artifact [14689540680](https://github.com/rajeevp727/turnova-platform/actions/runs/44858900957/artifacts/14689540680). The build has 25 distinct pre-existing xUnit analyzer warnings and 0 errors. Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+- **PR/review state:** PR #200 is open, non-draft, unmerged and mergeable at source/test head 48e921ba65a6465a9e0f92edcf42073d901728af, 205 commits ahead / 2 behind main c9280eec23dd4fb5fab06b11e24d2a619b489235. Three recorded reviews remain owner-authored COMMENTED; independent human approvals: **0**; unresolved review threads: **0**. PR #196/#198/#205/#206 remain Draft/parked. PR #204 is trusted-LAN Android configuration only, not Android completion evidence. PR #197's earlier merge without independent human approval remains a disclosed historical exception.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos/production/provider validation and production readiness are not established.
+- **Next exact action:** synchronize progress, matrix, test-plan, API contract and Project Brain with AUTH-API-031 and this exact-head evidence; run final-head API-only CI for the documentation-bearing commit; obtain independent human approval for PR #200; merge only when repository policy permits; re-read main and conduct a fresh API phase-exit audit before Android Rider. Continue API-only safe work while approval is absent; do not advance any Draft mobile PR.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart and Staging/QA durable readiness; shared/edge rate limiting and trusted forwarded-header configuration; production identity/secrets/API hosting; Product-approved radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push providers; private-media storage/scanning/managed identity/consent/retention; support categories/escalation/retention/operational handoff; customer dispute, post-start renegotiation, non-zero-delta next-ride and cross-Union reconciliation policies; Union legal approval; Android/iOS physical-device, signing, store and TestFlight evidence.
+
+
+**Run 22 final documentation-bearing checkpoint:** head [3cb041670c4c577d56952f561c1fc000ec860092](https://github.com/rajeevp727/turnova-platform/commit/3cb041670c4c577d56952f561c1fc000ec860092) passed exact-head API-only CI [#44859381629](https://github.com/rajeevp727/turnova-platform/actions/runs/44859381629): **951/951 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14689760213](https://github.com/rajeevp727/turnova-platform/actions/runs/44859381629/artifacts/14689760213). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
+
+**Run 22 status-sync handoff:** documentation-bearing head 3cb041670c4c577d56952f561c1fc000ec860092 passed CI #44859381629. This status-only synchronization records the verified docs checkpoint and current PR base comparison; it adds no application source or tests and requires its own exact-head API-only CI.
+
+## AUTH-API-032 — blank identity rate-limit fallback ignores forwarded headers
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-032 | A valid signed Rider JWT has both an empty `sub` and an empty `ClaimTypes.NameIdentifier`; the caller changes `X-Forwarded-For` between requests | AI-assistance rate limiting remains on the server-observed remote-address partition (or the anonymous fallback when the test host supplies no remote address); changing an untrusted forwarding header does not create a fresh partition, and requests after the 10-request allowance continue returning HTTP 429 | API integration/security | P1 |
+
+Covered by `AiAssistanceApiIntegrationTests.AssistantRateLimitDoesNotTrustForwardedHeadersWhenIdentityClaimsAreBlank`. The test sends ten allowed requests, observes HTTP 429, changes the client-supplied `X-Forwarded-For` value from `198.51.100.10` to `198.51.100.11`, and confirms the next request remains HTTP 429. This verifies that the blank-subject/blank-NameIdentifier fallback does not trust arbitrary forwarding headers. Source/test commit [86b301f88f3ec1286000d07a2cd28671b9f3b734](https://github.com/rajeevp727/turnova-platform/commit/86b301f88f3ec1286000d07a2cd28671b9f3b734) passed exact-head API-only CI [#44864238109](https://github.com/rajeevp727/turnova-platform/actions/runs/44864238109): **952/952 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14689989879](https://github.com/rajeevp727/turnova-platform/actions/runs/44864238109/artifacts/14689989879). This supplemental security regression is outside the 19-row MVP denominator.
+
+
+
+**Run 23 final documentation-bearing checkpoint:** head [c64498fd53d9d968bb017b729a81e5f8a656902d](https://github.com/rajeevp727/turnova-platform/commit/c64498fd53d9d968bb017b729a81e5f8a656902d) passed exact-head API-only CI [#44864623695](https://github.com/rajeevp727/turnova-platform/actions/runs/44864623695): **952/952 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14691770088](https://github.com/rajeevp727/turnova-platform/actions/runs/44864623695/artifacts/14691770088). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
+
+
+## AUTH-API-033 — shared AI-assistance rate-limit budget
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-033 | An authenticated Rider exhausts the AI-assistance allowance through `/help`, then calls `/trip-intent` within the same fixed window | The second endpoint receives HTTP 429 with `Cache-Control: no-store` and `Pragma: no-cache`; switching endpoint paths does not reset the caller's shared per-subject budget | API integration/security | P1 |
+
+Covered by `AiAssistanceApiIntegrationTests.AssistantRateLimitIsSharedAcrossTripIntentAndHelpEndpoints`. Source/test commit [ac592dc74ccedd01efbb9dba626914e0f3b5b699](https://github.com/rajeevp727/turnova-platform/commit/ac592dc74ccedd01efbb9dba626914e0f3b5b699) passed exact-head API-only CI [#44868723740](https://github.com/rajeevp727/turnova-platform/actions/runs/44868723740): **953/953 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier and artifact [14692823915](https://github.com/rajeevp727/turnova-platform/actions/runs/44868723740/artifacts/14692823915). This supplemental security regression is outside the 19-row MVP denominator.
+
+## AI-046 — typed OpenAPI contract for AI assistance
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-046 | Generate the Testing OpenAPI v1 document for both AI assistance endpoints | Typed request and success response schemas are present; Rider/Driver Bearer security is documented; 400 validation, 401/403 authorization, 413 body-size and 429 Problem Details responses are declared accurately | API integration/OpenAPI | P1 |
+
+Covered by `AiAssistanceApiIntegrationTests.OpenApiDocumentsTypedAiAssistanceContractsAndResponses`. The endpoint returns a typed `AssistanceErrorResponse` for service validation. The 413 response is documented without a body, matching the real-Kestrel request-size-limit behavior. Source/test head [803519851ef53bc876bb15bfadf84cbd4806186b](https://github.com/rajeevp727/turnova-platform/commit/803519851ef53bc876bb15bfadf84cbd4806186b) passed exact-head API-only CI [#44869051599](https://github.com/rajeevp727/turnova-platform/actions/runs/44869051599): **954/954 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier and artifact [14692354398](https://github.com/rajeevp727/turnova-platform/actions/runs/44869051599/artifacts/14692354398). AI-046 is supplemental AI-01 coverage outside the 19-row MVP acceptance denominator.
+
+## Run 24 — API-only verification (2026-11-21)
+
+AUTH-API-033 source/test head [ac592dc74ccedd01efbb9dba626914e0f3b5b699](https://github.com/rajeevp727/turnova-platform/commit/ac592dc74ccedd01efbb9dba626914e0f3b5b699) passed CI [#44868723740](https://github.com/rajeevp727/turnova-platform/actions/runs/44868723740) with 953/953 backend tests and artifact [14692823915](https://github.com/rajeevp727/turnova-platform/actions/runs/44868723740/artifacts/14692823915). AI-046 source/test head [803519851ef53bc876bb15bfadf84cbd4806186b](https://github.com/rajeevp727/turnova-platform/commit/803519851ef53bc876bb15bfadf84cbd4806186b) passed exact-head API-only CI [#44869051599](https://github.com/rajeevp727/turnova-platform/actions/runs/44869051599) with **954/954 backend tests**, Release build and native non-container publish/verifier, artifact [14692354398](https://github.com/rajeevp727/turnova-platform/actions/runs/44869051599/artifacts/14692354398). Mobile/Android/iOS jobs were intentionally skipped under the API-first gate. API remains active pending independent human approval for PR #200 and a fresh main/API phase-exit audit.
+
+
+## AI-047 — assistance validation returns typed non-cacheable 400
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-047 | Rider submits whitespace-only trip-intent text or calls help with a rideState longer than 40 characters | Each endpoint returns HTTP 400 with the typed `AssistanceErrorResponse`, `Cache-Control: no-store` and `Pragma: no-cache`; the overlong submitted rideState is not echoed | API integration/security | P1 |
+
+Covered by `AiAssistanceApiIntegrationTests.AssistanceValidationReturnsTypedNonCacheableBadRequest`. The test exercises both routes and verifies the response body message, both cache directives and non-echo of the 41-character rideState. The first test attempt exposed only an assertion mismatch with .NET's standard `ArgumentException` parameter suffix; the corrected source/test head [ebd000dcd7e60aef373c522fca5f090f8f541deb](https://github.com/rajeevp727/turnova-platform/commit/ebd000dcd7e60aef373c522fca5f090f8f541deb) passed exact-head API-only CI [#44874466744](https://github.com/rajeevp727/turnova-platform/actions/runs/44874466744) with **955/955 backend tests**, Release build and native non-container publish/verifier (artifact [14694879905](https://github.com/rajeevp727/turnova-platform/actions/runs/44874466744/artifacts/14694879905)). AI-047 is supplemental AI-01 coverage outside the 19-row MVP denominator.
+
+## Run 25 — API-only verification (2026-11-21)
+
+AI-047 source/test head [ebd000dcd7e60aef373c522fca5f090f8f541deb](https://github.com/rajeevp727/turnova-platform/commit/ebd000dcd7e60aef373c522fca5f090f8f541deb) passed exact-head API-only CI [#44874466744](https://github.com/rajeevp727/turnova-platform/actions/runs/44874466744): **955/955 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14694879905](https://github.com/rajeevp727/turnova-platform/actions/runs/44874466744/artifacts/14694879905). The earlier attempt [#44874184266](https://github.com/rajeevp727/turnova-platform/actions/runs/44874184266) failed one test-only assertion because the expected message omitted .NET's standard parameter suffix; the corrected assertion and non-echo check passed. Latest verified documentation checkpoint [36201282042ab08ff495cc28d97f9e18a764166d](https://github.com/rajeevp727/turnova-platform/commit/36201282042ab08ff495cc28d97f9e18a764166d) passed exact-head API-only CI [#44875203026](https://github.com/rajeevp727/turnova-platform/actions/runs/44875203026) with **955/955 backend tests (0 failed, 0 skipped)**, Release build, native non-container publish/verifier and artifact [14695378950](https://github.com/rajeevp727/turnova-platform/actions/runs/44875203026/artifacts/14695378950). This follow-up status-sync commit requires its own exact-head API-only CI. Mobile/auth, Android/emulator and iOS jobs remain intentionally skipped under the API-first phase gate.
+
+## AUTH-API-034 — assistance authorization failures remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-034 | A Driver calls the Rider-only trip-intent route, or an anonymous caller invokes approved help | The API returns HTTP 403 or 401 respectively; both responses include `Cache-Control: no-store` and `Pragma: no-cache` | API integration/security | P1 |
+
+Covered by `AiAssistanceApiIntegrationTests.AssistanceAuthorizationRejectionsAreNonCacheable`. This verifies that role-based and anonymous authorization failures on the AI assistance routes do not become cacheable responses. The case is supplemental API security coverage and does not add a twentieth MVP acceptance row.
+
+
+
+## AI-048 — provider availability probe failure uses deterministic fallback
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-048 | The configured AI provider's `IsAvailable` probe throws while Rider trip-intent or approved help is requested | The API/application service returns the deterministic in-repository draft/help response and does not invoke either provider operation; provider exception details are not surfaced in the returned contract | Unit/security | P1 |
+
+Covered by `AiAssistanceServiceTests.ProviderAvailabilityProbeFailureUsesDeterministicFallbackForTripIntentAndHelp`. The regression uses a provider fake that throws a sensitive configuration message from its availability probe, verifies both use cases retain deterministic results, and asserts zero provider-operation calls. Source/test head [515180729671a7e1412ace2d930161e4d7659af8](https://github.com/rajeevp727/turnova-platform/commit/515180729671a7e1412ace2d930161e4d7659af8) passed exact-head API-only CI [#44876195519](https://github.com/rajeevp727/turnova-platform/actions/runs/44876195519) with **956/956 backend tests**, Release build and native non-container publish/verifier (artifact [14696037759](https://github.com/rajeevp727/turnova-platform/actions/runs/44876195519/artifacts/14696037759)). AI-048 is supplemental AI-01 coverage outside the 19-row MVP acceptance denominator.
+
+
+
+## AUTH-API-035 — API and ride-hub cache middleware path scope
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-035 | A TestServer endpoint sets `Cache-Control: private, max-age=60` for health live/ready, OpenAPI, `/api/v1/test` and `/hubs/rides/negotiate` | Health/OpenAPI paths keep their original private/max-age policy without API no-store/no-cache directives; API/ride-hub paths additionally receive no-store/no-cache while retaining private/max-age | API middleware integration | P1 |
+
+Covered by `ApiResponseCachePolicyTests`. The five deterministic cases use typed Cache-Control properties rather than relying on directive ordering. This supplements AUTH-API-016..029 and does not add a new MVP acceptance row.
+
+## AUTH-API-036 — Development-only loopback HTTP for TriSend
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-036 | Configure TriSend with HTTP loopback hosts in Development, remote HTTP in Development, and HTTP loopback in Testing/non-Development | Development accepts `localhost`, `127.0.0.1` and `[::1]`; remote HTTP remains rejected in Development; HTTP remains rejected outside Development. HTTPS remains the required transport elsewhere | API startup/configuration integration | P1 |
+
+Covered by `AuthApiIntegrationTests.DevelopmentAllowsLoopbackHttpTriSendBaseUrl`, `DevelopmentRejectsRemoteHttpTriSendBaseUrl` and `StartupRejectsNonHttpsOrInvalidTriSendBaseUrl`. The validator uses `Uri.IsLoopback`; it does not permit arbitrary LAN/public HTTP upstreams. This is Development-only configuration support, not a production transport exception.
+
+**Exact source/test evidence:** head [`4b38efd35d58453f7695863ca567d459f1e7d246`](https://github.com/rajeevp727/turnova-platform/commit/4b38efd35d58453f7695863ca567d459f1e7d246) passed API-only CI [#44886215146](https://github.com/rajeevp727/turnova-platform/actions/runs/44886215146): 968/968 backend tests (0 failed, 0 skipped), .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), artifact [14699888739](https://github.com/rajeevp727/turnova-platform/actions/runs/44886215146/artifacts/14699888739). Mobile/Android/iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+
+ 
+## AUTH-API-037 — cache-policy path-segment boundaries
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-037 | Request API and ride-hub paths with case variations and near-prefix paths | Case-insensitive /API/V1 and /HUBS/RIDES paths receive Cache-Control: no-store and Pragma: no-cache; /api/v10, /api/v1evil and /hubs/rideshare do not match the protected path segments and retain their endpoint cache policy | API middleware integration/security | P1 |
+
+Covered by ApiResponseCachePolicyTests.CachePolicyMatchesWholePathSegmentsCaseInsensitively. The five TestServer cases guard against both case-variation bypasses and accidental broad prefix matching. This is supplemental API cache/privacy coverage and does not add a twentieth MVP acceptance row.
+
+**Exact source/test evidence:** head [836458997952d87ec2ca1e1b131fa82387cbceed](https://github.com/rajeevp727/turnova-platform/commit/836458997952d87ec2ca1e1b131fa82387cbceed) passed API-only CI [#44887637065](https://github.com/rajeevp727/turnova-platform/actions/runs/44887637065): **973/973 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14701125570](https://github.com/rajeevp727/turnova-platform/actions/runs/44887637065/artifacts/14701125570). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+
+ 
+## AUTH-API-038 — reject authentication upstream redirects
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-038 | TriSend returns 301, 302, 303, 307 or 308 during authentication forwarding | The TriSend primary handler has automatic redirects disabled; the API rejects upstream 3xx with a generic 502, does not expose Location or upstream body, and retains auth no-store/no-cache headers | API auth integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.TriSendPrimaryHandlerDisablesAutomaticRedirects and AuthenticationUpstreamRedirectIsRejectedWithoutExposingRedirectDetails. The redirect response is treated as an upstream protocol failure before its body is read. The tests use deterministic fake upstream responses; live TriSend validation remains an external gate.
+
+**Exact source/test evidence:** head [c3e442bcb0581f1a530ab5662c28c11bfac1dfb4](https://github.com/rajeevp727/turnova-platform/commit/c3e442bcb0581f1a530ab5662c28c11bfac1dfb4) passed API-only CI [#44888455496](https://github.com/rajeevp727/turnova-platform/actions/runs/44888455496): **979/979 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14701211921](https://github.com/rajeevp727/turnova-platform/actions/runs/44888455496/artifacts/14701211921). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+
+
+## AUTH-API-039 — validate successful TriSend authentication session envelopes
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-039 | TriSend returns HTTP 2xx with malformed JSON, a non-object payload, missing access token/refresh token/user role, or a non-object/non-string role field during Rider/Driver registration or login | TurnOva returns a generic HTTP 502 without echoing the upstream body or token values; if a non-empty access token was returned but the rest of the session envelope is invalid, the API attempts logout before responding. A valid but wrong app role remains HTTP 403 after revocation | API auth integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.MalformedSuccessfulAuthenticationResponseIsRejectedWithoutExposingUpstreamContent` (seven deterministic cases), plus the existing wrong-role login revocation tests. The API now validates `accessToken`, `refreshToken` and `user.role` as non-empty strings before forwarding a successful login/register response. JSON parsing/shape failures are mapped to a generic 502; no provider body, token or role value is echoed. If the access token is available but another required session field is invalid, the API attempts best-effort logout before returning the generic 502.
+
+**Exact source/test evidence:** commit [9724a0d68687df6ac0c900a8b7098f024889db47](https://github.com/rajeevp727/turnova-platform/commit/9724a0d68687df6ac0c900a8b7098f024889db47) passed exact-head API-only CI [#44890474887](https://github.com/rajeevp727/turnova-platform/actions/runs/44890474887): **986/986 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14702480426](https://github.com/rajeevp727/turnova-platform/actions/runs/44890474887/artifacts/14702480426). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+
+## AUTH-API-040 — validate successful TriSend refresh token-pair responses
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-040 | TriSend returns HTTP 2xx for refresh with malformed JSON, a non-object payload, missing access token, missing refresh token or a non-string refresh token | TurnOva returns a generic HTTP 502 without echoing upstream content or token values; if a non-empty access token was returned but the new refresh token is invalid, the API attempts logout before responding. A valid access/refresh token pair remains pass-through | API auth integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.MalformedSuccessfulRefreshResponseIsRejectedAndRevokedWhenPossible` (five deterministic cases) and the existing `RefreshForwardsNonBlankOpaqueTokenWithoutRewritingIt` cases. The request's opaque refresh token is not trimmed or rewritten. Successful refresh responses must contain non-empty string `accessToken` and `refreshToken`; this flow intentionally does not require a `user` profile object. Invalid successful response bodies are never returned to the mobile client.
+
+**Exact source/test evidence:** commit [813ab755c880b7ec8cf8a224745af484bbbda8bf](https://github.com/rajeevp727/turnova-platform/commit/813ab755c880b7ec8cf8a224745af484bbbda8bf) passed exact-head API-only CI [#44891296182](https://github.com/rajeevp727/turnova-platform/actions/runs/44891296182): **991/991 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14702545914](https://github.com/rajeevp727/turnova-platform/actions/runs/44891296182/artifacts/14702545914). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+
+## AUTH-API-041 — bound and stream upstream identity responses
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-041 | TriSend returns an authentication/profile/refresh/logout response whose declared Content-Length or streamed body exceeds 256 KiB, including a response with unknown Content-Length | TurnOva rejects the response with generic HTTP 502 Problem Details before forwarding provider content or token values. HttpClient uses ResponseHeadersRead so it does not buffer the body before the guard; incremental reads stop at the configured limit. A single linked 15-second deadline covers response headers and body, while caller cancellation remains distinguishable. | API auth integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.OversizedAuthenticationResponseIsRejectedForKnownAndUnknownLengthBodies` (two deterministic cases). The known-length case exercises the Content-Length fast rejection. The unknown-length case uses a non-seekable stream and asserts the API stops reading before the 1 MiB payload is exhausted. Both cases assert auth no-store/no-cache headers and no provider body/token disclosure. The same `ForwardAuthRequest` boundary is used for Rider/Driver registration, login, refresh, logout and profile forwarding.
+
+**Exact source/test evidence:** head [6a0aada75b8c9bcd34e6b5a25ebc07b2d0d27503](https://github.com/rajeevp727/turnova-platform/commit/6a0aada75b8c9bcd34e6b5a25ebc07b2d0d27503) passed API-only CI [#44892910756](https://github.com/rajeevp727/turnova-platform/actions/runs/44892910756): **993/993 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14702229969](https://github.com/rajeevp727/turnova-platform/actions/runs/44892910756/artifacts/14702229969). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
+
+
+## AUTH-API-042 — preserve upstream timeout and caller-cancellation semantics
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-042 | TriSend transport cancellation occurs while acquiring response headers or reading the bounded body; separately, the API caller cancels while the upstream body stream is blocked | Upstream timeout/cancellation not caused by the caller maps to generic HTTP 504 with no-store/no-cache and no transport detail disclosure. Caller cancellation propagates as cancellation and is not converted into a 504 response. | API auth integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.TriSendHeaderTimeoutReturnsGatewayTimeoutWithoutLeakingDetails, TriSendBodyReadTimeoutReturnsGatewayTimeoutWithoutLeakingDetails and CallerCancellationDuringTriSendBodyReadIsNotMappedToGatewayTimeout. The first two use deterministic transport fixtures that surface an upstream OperationCanceledException at the header and body boundaries; they verify generic 504 mapping, cache headers and no exception-detail disclosure. The caller-cancellation case blocks a non-seekable response stream until the client cancels, then verifies cancellation propagates instead of being misreported as an upstream timeout. The production 15-second linked deadline remains implemented in ForwardAuthRequest; these fixtures validate the distinction and mapping, not a wall-clock 15-second expiry. Live TriSend timeout behavior remains an external validation gate.
+
+## AUTH-API-043 — do not buffer best-effort authentication revocation responses
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-043 | A malformed successful registration/login/refresh response contains an access token and triggers best-effort logout; the logout response has an unknown-length body | Revocation uses ResponseHeadersRead, shares the original upstream deadline, and disposes the response without buffering or reading its irrelevant body. The original generic invalid-session response remains safe and no access token is exposed. | API auth integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.MalformedLoginRevocationDoesNotBufferUpstreamLogoutBody. The fake TriSend login returns a malformed successful session with an access token, then logout returns a 1 MiB non-seekable body with no declared Content-Length. The test asserts the logout bearer token is sent to the expected endpoint, the API returns generic 502 with no-store/no-cache, the token is not exposed, and zero logout response bytes are read. RevokeAuthSessionAsync now uses ResponseHeadersRead and the same linked cancellation token as the original authentication operation. Live TriSend behavior remains external.
+
+Exact-head API-only CI [#44898077439](https://github.com/rajeevp727/turnova-platform/actions/runs/44898077439) on head [3725bdd885d9865b3d78863078d66137decabbf0](https://github.com/rajeevp727/turnova-platform/commit/3725bdd885d9865b3d78863078d66137decabbf0) passed **997/997 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14704173754](https://github.com/rajeevp727/turnova-platform/actions/runs/44898077439/artifacts/14704173754). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
+
+## AUTH-API-044 — disable pooled upstream cookie persistence
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-044 | The pooled TriSend SocketsHttpHandler processes multiple Rider/Driver authentication requests and an upstream response includes Set-Cookie | Automatic cookie handling is disabled. The shared handler does not persist or replay upstream cookies across unrelated Rider/Driver requests; bearer/opaque-token forwarding remains explicit. | API auth integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.TriSendPrimaryHandlerDisablesAutomaticCookiePersistence, which asserts the production handler has UseCookies=false. The API contract uses explicit JWT Authorization and opaque refresh-token forwarding; it does not require a shared cookie session. The test validates handler configuration, not a live TriSend cookie exchange.
+
+## AUTH-API-045 — reject credential-bearing TriSend base URLs
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-045 | Startup receives a TriSend:BaseUrl containing URI user-info, query or fragment data | Startup fails closed before any upstream request. HTTPS remains required outside Development; Development loopback HTTP remains the only cleartext exception. | API startup/configuration security | P1 |
+
+Covered by AuthApiIntegrationTests.StartupRejectsNonHttpsOrInvalidTriSendBaseUrl, which now includes user-info, query and fragment fixtures. The API uses explicit bearer/opaque-token forwarding; credentials and query tokens must not be embedded in the service base URL. No provider credential or endpoint is supplied by this change.
+
+## AUTH-API-046 — map upstream authentication response-stream I/O failures
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-046 | TriSend returns response headers and a partial authentication body, then the response stream throws IOException | The API returns generic HTTP 503 with no-store/no-cache headers. It does not expose partial access/refresh token content or the upstream exception message. | API auth integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.TriSendBodyReadIOExceptionReturnsServiceUnavailableWithoutLeakingPartialBody. A deterministic non-seekable stream emits a token-bearing prefix and then throws IOException. The API maps this upstream body-read transport failure to the same generic unavailable response used for HttpRequestException. Size-limit InvalidDataException remains HTTP 502, caller cancellation still propagates, and upstream timeout remains HTTP 504.
+
+Exact-head API-only CI [#44899879661](https://github.com/rajeevp727/turnova-platform/actions/runs/44899879661) on [d4ef721b1e1bc59b25c990563e89eee7ca35893b](https://github.com/rajeevp727/turnova-platform/commit/d4ef721b1e1bc59b25c990563e89eee7ca35893b) passed **1002/1002 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14705338204](https://github.com/rajeevp727/turnova-platform/actions/runs/44899879661/artifacts/14705338204). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-only phase gate.
+
+## AUTH-API-047 — header-stage TriSend transport I/O failures
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-047 | The TriSend handler fails with an I/O exception before response headers are returned | The API returns generic HTTP 503 with auth no-store/no-cache headers, does not expose the transport exception, and does not retry or duplicate the upstream request. | API auth integration/reliability | P1 |
+
+Covered by `AuthApiIntegrationTests.TriSendHeaderIOExceptionReturnsServiceUnavailableWithoutLeakingDetails`. A deterministic `RecordingHandler` injects an `IOException` during the upstream header/request stage. The integration test verifies HTTP 503, `Cache-Control: no-store`, `Pragma: no-cache`, a generic unavailable response, no transport-detail disclosure and exactly one upstream request. This complements AUTH-API-046, which covers a response-body stream failure after headers and partial token-bearing bytes have arrived. Both remain generic 503 outcomes; timeout remains 504, oversized/invalid response bodies remain 502, and caller cancellation remains distinct.
+
+Exact-head API-only CI [#44901611710](https://github.com/rajeevp727/turnova-platform/actions/runs/44901611710) on [a35fc7367cd201638fdf9c9c3f1f70c8e07a2031](https://github.com/rajeevp727/turnova-platform/commit/a35fc7367cd201638fdf9c9c3f1f70c8e07a2031) passed **1003/1003 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14705114722](https://github.com/rajeevp727/turnova-platform/actions/runs/44901611710/artifacts/14705114722). Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-only phase gate. AUTH-API-047 is supplemental and does not change the 19-row MVP acceptance denominator.
+
+## AUTH-API-048 — reject malformed UTF-8 identity credentials
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-048 | TriSend returns a successful authentication envelope containing invalid UTF-8 bytes inside a token value | The API returns generic HTTP 502 with auth no-store/no-cache headers. It must not silently replace invalid bytes and return a corrupted access/refresh token. | API auth integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.InvalidUtf8AuthenticationTokenIsRejectedWithoutReturningCorruptedCredentials`. The deterministic response contains an invalid UTF-8 byte inside the access-token value while the remaining JSON envelope is valid. The bounded response reader now uses a strict UTF-8 decoder and converts decoder failure to the existing generic invalid-upstream-response 502 path. The regression asserts no credential or upstream detail is returned and only one TriSend request occurs. This complements AUTH-API-046/047 transport failure coverage. The first fixture commit had an unterminated C# raw-string literal and exact-head CI [#44907320812](https://github.com/rajeevp727/turnova-platform/actions/runs/44907320812) correctly failed at Release compilation before tests. The JSON fixture was corrected to ordinary escaped C# string literals in [2ee2da37a14df79e7909b9c7f45e5bb377676927](https://github.com/rajeevp727/turnova-platform/commit/2ee2da37a14df79e7909b9c7f45e5bb377676927). Exact-head API-only CI [#44907450476](https://github.com/rajeevp727/turnova-platform/actions/runs/44907450476) then passed **1004/1004 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14708287031](https://github.com/rajeevp727/turnova-platform/actions/runs/44907450476/artifacts/14708287031). AUTH-API-048 is supplemental and does not change the 19-row MVP acceptance denominator.
+
+
+## AUTH-API-049 — constrain logout Authorization forwarding to Bearer
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-049 | `POST /api/v1/auth/logout` receives a malformed, empty or non-Bearer Authorization value | The API returns HTTP 400 with no-store/no-cache headers before calling TriSend and does not echo the supplied credential. A non-empty Bearer value, including an expired/invalid token, is forwarded unchanged so TriSend decides revocation validity. | API auth integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.LogoutRejectsUnsupportedAuthorizationBeforeCallingTriSend` (Basic with credentials, Basic without a parameter, bare Bearer and Negotiate) and `AuthApiIntegrationTests.LogoutForwardsExpiredBearerUnchangedWithoutLocalTokenValidation`. The route preserves no-header best-effort logout behavior. Initial CI [#44912545025](https://github.com/rajeevp727/turnova-platform/actions/runs/44912545025) caught a missing test namespace at compile time; the test was corrected to use `TryAddWithoutValidation`. Exact source/test CI [#44912697970](https://github.com/rajeevp727/turnova-platform/actions/runs/44912697970) passed **1009/1009 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container publish/verifier and artifact [14709948593](https://github.com/rajeevp727/turnova-platform/actions/runs/44912697970/artifacts/14709948593). AUTH-API-049 is supplemental and does not change the 19-row acceptance denominator.
+
+
+## AUTH-API-050 — distinguish absent and present blank logout Authorization headers
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-050 | `POST /api/v1/auth/logout` receives a present whitespace-only Authorization header | HTTP 400 with auth no-store/no-cache headers, no credential echo and no TriSend request; a genuinely absent header preserves best-effort logout without upstream Authorization | API integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.LogoutRejectsUnsupportedAuthorizationBeforeCallingTriSend` (whitespace-only value) and `LogoutWithoutAuthorizationHeaderKeepsBestEffortForwarding`. The runtime uses header-key presence rather than `IsNullOrWhiteSpace` to decide whether a value was supplied, then requires every present value to parse as non-empty Bearer. The test harness's HttpClient elides a zero-length header during serialization, so the empty-string fixture was removed; a whitespace-only present header exercises the fail-closed branch. Exact source/test CI [#44917764343](https://github.com/rajeevp727/turnova-platform/actions/runs/44917764343), rerun attempt 2, passed 1011/1011 tests, Release build and native non-container publish/verifier. AUTH-API-050 is supplemental and does not change the 19-row acceptance denominator.
+
+
+## AUTH-API-051 — reject multiple Authorization field values on logout
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-051 | `POST /api/v1/auth/logout` receives more than one Authorization field value | HTTP 400 with auth no-store/no-cache headers before TriSend; no supplied credential is echoed; a single non-empty Bearer is forwarded unchanged and a genuinely absent header preserves best-effort logout | API integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.LogoutRejectsMultipleAuthorizationFieldValuesBeforeCallingTriSend`. The test supplies two Bearer field values and asserts HTTP 400, no-store/no-cache, no token echo and zero upstream requests. The endpoint treats Authorization as a singleton field, checks the `StringValues` count before parsing, and never flattens multiple values into one ambiguous string. Exact source/test CI [#44921975301](https://github.com/rajeevp727/turnova-platform/actions/runs/44921975301) passed 1012/1012 backend tests, .NET 10 Release build, native non-container linux-x64 publish and verifier (11 negative fixtures plus valid fixture), artifact [14714315930](https://github.com/rajeevp727/turnova-platform/actions/runs/44921975301/artifacts/14714315930). AUTH-API-051 is supplemental and does not change the 19-row MVP acceptance denominator.
+
+## AUTH-API-052 — enforce RFC 6750 Bearer token68 syntax on logout
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-052 | `POST /api/v1/auth/logout` receives a single Authorization field whose Bearer parameter uses generic auth-param syntax, comma separators, embedded whitespace, leading padding or interior padding | HTTP 400 with auth no-store/no-cache headers before TriSend; no credential echo; valid RFC 6750 token68 values (including allowed punctuation and trailing padding) are forwarded unchanged; absent header retains best-effort logout | API integration/security | P1 |
+
+Covered by `AuthApiIntegrationTests.LogoutRejectsUnsupportedAuthorizationBeforeCallingTriSend` with comma auth-param, embedded whitespace, leading padding and interior padding cases. The .NET `AuthenticationHeaderValue` parser intentionally supports generic authentication parameter syntax and is not by itself a Bearer-token validator. The API now enforces token68: one or more ASCII alphanumerics or `-._~+/`, followed only by optional trailing `=` padding. The expired-token pass-through test also covers an opaque value containing allowed punctuation and trailing padding. Exact-head API-only CI [#44928158100](https://github.com/rajeevp727/turnova-platform/actions/runs/44928158100) passed **1017/1017 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish/verifier and artifact [14716875650](https://github.com/rajeevp727/turnova-platform/actions/runs/44928158100/artifacts/14716875650). AUTH-API-052 is supplemental and does not change the 19-row MVP acceptance denominator.
+
+
+## Run 44 — API auth-token validation and phase handoff (2026-11-21)
+
+- **Platform phase:** API `in_progress`; Android and iOS remain `not_started`. No mobile or Fleet/Ops Phase 2 work was advanced.
+- **Current repository state:** main `c9280eec23dd4fb5fab06b11e24d2a619b489235`; PR #200 branch `test/api-nondev-support-readiness-20261120`; latest source/test head `fe90e1351eb523a995706ee780ddf303de339ed1`. Compare: 407 commits ahead / 2 behind main. The two main-only commits remain the weekly-build workflow and PR #204's trusted-LAN Android cleartext configuration; do not merge those unrelated changes into this API PR.
+- **AUTH-API-053 implemented:** before successful Rider/Driver register/login or refresh responses are returned, validate the TriSend access JWT using the same configured `JwtBearer` signature, issuer, audience and lifetime parameters. Require a non-empty subject and exactly one role claim; role-specific login/register also require the JWT role to match both the requested app role and `user.role`. Invalid upstream JWTs return a generic 502 and are revoked only when the credential is a safe token68 value no longer than 16 KiB; role mismatches return 403. No token values are logged or echoed.
+- **Deterministic evidence:** valid Rider/Driver registration, login and refresh fixtures now use signed JWTs. Regression tests cover invalid signature, issuer, audience, expiry, missing role, missing subject, user/JWT role mismatch, and malformed/oversized credentials that must not be placed in an outbound logout header.
+- **Source/test CI:** [#44933849417](https://github.com/rajeevp727/turnova-platform/actions/runs/44933849417) passed on `fe90e1351eb523a995706ee780ddf303de339ed1`: .NET 10 Release build; **1,026/1,026 backend tests passed (0 failed, 0 skipped)**; native non-container linux-x64 publish passed (43,982,298 bytes); publish-script syntax passed; verifier passed 11 negative fixtures plus one valid fixture. There were 25 existing xUnit analyzer warnings and 0 build errors. Artifact: [14719071354](https://github.com/rajeevp727/turnova-platform/actions/runs/44933849417/artifacts/14719071354).
+- **Failed checkpoint disclosed:** CI #44933486884 on the earlier test head had 1 failing expired-token fixture because its expiration preceded its `notBefore`. The fixture was corrected to use an earlier `notBefore`; the later exact-head run above passed. No production code failure remained from that checkpoint.
+- **Phase scope:** mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped by the API-first phase gate. The source/test head is executable evidence only for the API; no Android/iOS completion, live backend integration, physical-device acceptance, live Cosmos or production readiness is claimed. The final documentation-bearing PR head receives its own CI verification.
+- **Review gate:** PR #200 remains open and unmerged. Three reviews are owner-authored COMMENTED only; independent human approvals: **0**; unresolved review threads: **0**. Do not self-approve, bypass protections or merge without independent human approval and repository permission. PR #197's earlier merge without independent approval remains a disclosed historical process exception.
+- **Parked work:** PRs #196/#198 remain parked. PRs #205/#206 remain Draft. Their branch phase files still incorrectly say API complete / Android in progress; PR #206 also carries stale `turnova:api-phase-complete` and `turnova:android-phase-approved` labels. Run 44 comments on #205/#206 explicitly state these stale values are not authorization and require both PRs to remain Draft. PR #204 is configuration-only trusted-LAN Android HTTP, not app completion evidence.
+- **Strict acceptance:** **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. Production readiness is not established.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart and Staging/QA durable readiness; shared/edge rate limiting and trusted forwarded-header configuration; production identity/secrets/API hosting and live TriSend validation; Product-approved dispatch radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention; support/escalation/retention/operational handoff; reconciliation policy decisions; Union legal approval; Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next exact action:** verify the final documentation-bearing PR head's CI, obtain independent human approval for PR #200, and merge only when final-head checks remain green and repository policy permits. Then re-read main and conduct a fresh API phase-exit audit before Android Rider. Until then, continue safe API-phase work and keep mobile PRs parked.
+
+
+### AUTH-API-053 — validate TriSend access JWTs before issuing sessions
+
+| Scenario | Expected result | Evidence |
+|---|---|---|
+| Successful Rider/Driver registration or login returns a valid JWT signed by the configured key, issuer and audience, within lifetime, with a subject and one role claim matching the route and `user.role` | Preserve the upstream success status and response | `SuccessfulRiderAndDriverLoginForwardsNormalizedIdentityAndReturnsMatchingSession`; Rider/Driver registration integration tests |
+| JWT signature, issuer, audience or lifetime is invalid; subject or role is missing | Generic 502; do not expose the token; best-effort revoke only when token68-safe and within 16 KiB | `LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy` |
+| JWT role differs from the requested app role or the validated user profile role | 403; revoke the returned session | `LoginRejectsJwtRoleThatDiffersFromTheUserRoleAndRevokesReturnedSession` |
+| Refresh returns an invalid JWT, missing subject or missing/multiple role claims | Generic 502; best-effort safe revocation | `RefreshForwardsNonBlankOpaqueTokenWithoutRewritingIt` and malformed refresh response integration tests |
+| Malformed or oversized access-token values are present in a rejected response | Never construct an outbound Authorization header from those values | `LoginDoesNotAttemptRevocationWithMalformedOrOversizedAccessToken` |
+
+The validator reuses the exact configured `JwtBearerOptions.TokenValidationParameters` so the API does not return a session token that its own authorization middleware would reject. The 16 KiB bound also prevents oversized upstream values from being copied into a best-effort logout header.
+
+
+### AUTH-API-054 — require exactly one subject claim in upstream session JWTs
+
+| Scenario | Expected result | Evidence |
+|---|---|---|
+| Upstream Rider/Driver login/register JWT contains no subject claim | Generic 502; do not return the session; attempt bounded best-effort revocation | LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy; refresh subject regression |
+| Upstream login/register JWT contains multiple sub claims | Generic 502; do not return the session; attempt bounded best-effort revocation | LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy duplicate-subject case |
+| Upstream refresh JWT contains no subject or multiple subject claims | Generic 502; do not return the session; attempt bounded best-effort revocation | RefreshRejectsAccessTokenWithoutExactlyOneSubjectAndRevokesReturnedSession |
+| Upstream JWT contains one supported subject identity claim with a non-empty value | Continue existing signature, issuer, audience, lifetime and single-role validation | Existing valid Rider/Driver login and refresh integration tests |
+
+The API counts both JWT sub and legacy ClaimTypes.NameIdentifier identity claims and requires exactly one non-empty value. This prevents an ambiguous subject from being silently accepted by selecting only the first claim. AUTH-API-054 is supplemental authentication hardening and does not change the 19-row MVP denominator.
+
+## AUTH-API-055 — accept a single legacy NameIdentifier subject
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-055 | TriSend returns a valid Rider/Driver login JWT containing exactly one non-empty legacy `ClaimTypes.NameIdentifier` claim and no `sub` claim | The API accepts the session, returns the unchanged access token with auth no-store/no-cache headers, and does not issue an unnecessary revocation request | API integration/security | P1 |
+
+## AUTH-API-056 — reject mixed duplicate and blank session subjects
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-056 | TriSend returns a JWT with both `sub` and legacy `ClaimTypes.NameIdentifier` subject claims, or exactly one subject claim whose value is blank, during login or refresh | The API returns generic HTTP 502 with no-store/no-cache; no upstream body/token is disclosed; the bounded valid access token is best-effort revoked. Both login and refresh paths are covered | API integration/security | P1 |
+
+## Run 46 — API subject-claim regression expansion (2026-11-22)
+- Added a positive legacy-only `ClaimTypes.NameIdentifier` login case and negative mixed `sub` + legacy duplicate and blank-subject cases for login and refresh.
+- Source/test commit: `cde5dcf1b201c5ea1c93efd88ac339c0ffc1fa5e`.
+- Baseline exact-head CI before this test increment: [#44935961280](https://github.com/rajeevp727/turnova-platform/actions/runs/44935961280), 1,029/1,029 backend tests, Release build and native non-container publish/verifier. The new source/test head and synchronized documentation head require fresh exact-head CI; no pass is claimed for them yet.
+
+
+## AUTH-API-057 — recognize the standard JWT NameIdentifier wire alias
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-057 | TriSend returns a JWT containing exactly one non-empty `nameid` claim (the standard JwtSecurityTokenHandler outbound alias for `ClaimTypes.NameIdentifier`) without `sub`, or combines `nameid` with `sub`, or supplies a blank `nameid` | A single `nameid` is accepted on login and refresh; mixed duplicate or blank subjects are rejected with generic 502, no-store/no-cache and bounded best-effort revocation. | API integration/security | P1 |
+
+The API deliberately keeps inbound JWT claim mapping disabled. It therefore recognizes the standard `nameid` wire alias explicitly alongside the raw `ClaimTypes.NameIdentifier` URI and `sub`; this preserves exact-one-subject validation without enabling global inbound claim remapping.
+
+
+## Run 47 — AUTH-API-057 exact-head evidence
+- The validator recognizes `nameid`, the standard JWT wire alias for `ClaimTypes.NameIdentifier`, while inbound claim mapping remains disabled.
+- Positive login and refresh cases accept one non-empty `nameid`; mixed `sub`+`nameid` and blank `nameid` cases are rejected and the bounded access token is best-effort revoked.
+- Source/test head: [`fb93bccb6bde94fef382994320d1def6f41c054e`](https://github.com/rajeevp727/turnova-platform/commit/fb93bccb6bde94fef382994320d1def6f41c054e).
+- Exact-head API-only CI [#44943774814](https://github.com/rajeevp727/turnova-platform/actions/runs/44943774814) passed **1,040/1,040 tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14721694937](https://github.com/rajeevp727/turnova-platform/actions/runs/44943774814/artifacts/14721694937).
+- Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped because API remains the active phase. No Docker/container build or deployment was used.
+
+
+## Run 47 documentation-head verification
+- Documentation/progress head [`954743343f70ea55ddda6ab3417174fb3c46c2ba`](https://github.com/rajeevp727/turnova-platform/commit/954743343f70ea55ddda6ab3417174fb3c46c2ba) passed exact-head API-only CI [#44944143544](https://github.com/rajeevp727/turnova-platform/actions/runs/44944143544): 1,040/1,040 backend tests, .NET 10 Release build, native non-container Linux x64 publish/verifier, artifact [14722743425](https://github.com/rajeevp727/turnova-platform/actions/runs/44944143544/artifacts/14722743425).
+- The current follow-up tracker correction is docs-only; its exact-head CI must be checked before merge consideration.

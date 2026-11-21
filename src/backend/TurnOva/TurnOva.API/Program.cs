@@ -124,8 +124,12 @@ builder.Services.AddOptions<TriSendSettings>()
     .Validate(settings =>
         !string.IsNullOrWhiteSpace(settings.BaseUrl) &&
         Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri) &&
-        uri.Scheme == Uri.UriSchemeHttps,
-        "TriSend:BaseUrl must be a valid HTTPS URL.")
+        string.IsNullOrEmpty(uri.UserInfo) &&
+        string.IsNullOrEmpty(uri.Query) &&
+        string.IsNullOrEmpty(uri.Fragment) &&
+        (uri.Scheme == Uri.UriSchemeHttps ||
+         (builder.Environment.IsDevelopment() && uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)),
+        "TriSend:BaseUrl must be HTTPS (or Development loopback HTTP) and must not contain user-info, query or fragment data.")
     .ValidateOnStart();
 
 builder.Services.AddHttpClient("TriSend", (services, client) =>
@@ -133,7 +137,8 @@ builder.Services.AddHttpClient("TriSend", (services, client) =>
     var settings = services.GetRequiredService<IOptions<TriSendSettings>>().Value;
     client.BaseAddress = new Uri(settings.BaseUrl!, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(15);
-});
+})
+.ConfigurePrimaryHttpMessageHandler(TriSendHttpClientPolicy.CreatePrimaryHandler);
 
 
 var cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"];
@@ -273,8 +278,6 @@ if (useCosmos)
     await app.Services.GetRequiredService<CosmosMigrationRunner>().RunAsync();
 }
 
-app.UseCors();
-
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
@@ -288,6 +291,12 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         .ExecuteAsync(context);
 }));
 
+// API and realtime responses can contain private profile/ride data, auth tokens or
+// SignalR connection credentials. Keep health checks and development OpenAPI outside this policy.
+app.UseApiResponseCachePolicy();
+// CORS preflight can short-circuit the pipeline, so keep it inside the auth cache policy.
+// Keep CORS before HTTPS redirection so Development preflight requests are not redirected.
+app.UseCors();
 if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
@@ -296,9 +305,17 @@ app.UseAuthentication();
 // A demo JWT is never accepted by normal authenticated application routes.
 app.Use(async (context, next) =>
 {
+    var demoEndpointsEnabled = DemoAuthPolicy.IsEnabled(
+        app.Environment.EnvironmentName,
+        app.Configuration.GetValue<bool>("DemoAuth:Enabled"));
+    var explicitlyMarkedDemoEndpoint =
+        demoEndpointsEnabled &&
+        (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)) &&
+        context.Request.Path.StartsWithSegments("/api/v1/demo") &&
+        context.GetEndpoint()?.Metadata.GetMetadata<DemoEndpointMetadata>() is not null;
     if (context.User.Identity?.IsAuthenticated == true &&
         context.User.HasClaim("demo", "true") &&
-        !context.Request.Path.StartsWithSegments("/api/v1/demo"))
+        !explicitlyMarkedDemoEndpoint)
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         await context.Response.WriteAsJsonAsync(new { message = "Demo sessions are restricted to demo endpoints." });
@@ -321,6 +338,43 @@ if (app.Environment.IsEnvironment("Testing"))
     {
         throw new InvalidOperationException("sensitive-test-exception");
     }).ExcludeFromDescription();
+
+    app.MapGet("/api/v1/auth/__test/throw", () =>
+    {
+        throw new InvalidOperationException("sensitive-auth-test-exception");
+    }).ExcludeFromDescription();
+
+    app.MapGet("/api/v1/__test/throw", () =>
+    {
+        throw new InvalidOperationException("sensitive-api-test-exception");
+    }).ExcludeFromDescription();
+
+    app.MapGet("/api/v1/auth/__test/private-cache", (HttpContext context) =>
+    {
+        context.Response.Headers["Cache-Control"] = "private, max-age=60";
+        return Results.Ok(new { status = "ok" });
+    }).ExcludeFromDescription();
+
+    // These fixtures prove that a URL prefix alone never grants demo-token access.
+    app.MapGet("/api/v1/demo/__test/unmarked", () => Results.Ok(new { status = "reached" }))
+        .RequireAuthorization()
+        .ExcludeFromDescription();
+    app.MapGet("/api/v1/demo/__test/marked", () => Results.Ok(new { status = "reached" }))
+        .RequireAuthorization()
+        .WithMetadata(new DemoEndpointMetadata())
+        .ExcludeFromDescription();
+    app.MapPost("/api/v1/demo/__test/marked-write", () => Results.Ok(new { status = "reached" }))
+        .RequireAuthorization()
+        .WithMetadata(new DemoEndpointMetadata())
+        .ExcludeFromDescription();
+    app.MapMethods("/api/v1/demo/__test/marked-head", [HttpMethods.Head], () => Results.Ok())
+        .RequireAuthorization()
+        .WithMetadata(new DemoEndpointMetadata())
+        .ExcludeFromDescription();
+    app.MapGet("/api/v1/demo-outside/__test/marked", () => Results.Ok(new { status = "reached" }))
+        .RequireAuthorization()
+        .WithMetadata(new DemoEndpointMetadata())
+        .ExcludeFromDescription();
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
@@ -1470,7 +1524,7 @@ var authGroup = app.MapGroup("/api/v1/auth").WithTags("Authentication");
 authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
 {
     // Demo access is opt-in and issues a short-lived, non-production identity.
-    if (!configuration.GetValue<bool>("DemoAuth:Enabled"))
+    if (!DemoAuthPolicy.IsEnabled(app.Environment.EnvironmentName, configuration.GetValue<bool>("DemoAuth:Enabled")))
         return Results.NotFound();
 
     var normalizedRole = role.Trim().ToLowerInvariant();
@@ -1502,18 +1556,23 @@ authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
         new Claim("demo", "true")
     };
     var jwt = new JwtSecurityToken(issuer, audience, claims, now, now.AddMinutes(30), credentials);
-    return Results.Ok(new
-    {
-        accessToken = new JwtSecurityTokenHandler().WriteToken(jwt),
-        refreshToken = (string?)null,
-        expiresIn = 1800,
-        isDemo = true,
-        user = new { id = subject, email, name, role = appRole, isDemo = true }
-    });
-}).AllowAnonymous();
+    return Results.Ok(new DemoSessionResponse(
+        new JwtSecurityTokenHandler().WriteToken(jwt),
+        RefreshToken: null,
+        ExpiresIn: 1800,
+        IsDemo: true,
+        User: new DemoSessionUserResponse(subject, email, name, appRole, IsDemo: true)));
+}).AllowAnonymous()
+  .RequireRateLimiting(DemoAuthPolicy.RateLimitPolicyName)
+  .WithSummary("Issue a restricted Rider or Driver demo session")
+  .WithDescription("Returns a fixed 30-minute demo identity only when DemoAuth is explicitly enabled in an allowlisted non-production environment. Demo tokens cannot access normal Rider/Driver APIs. Issuance is limited to 10 requests per server-observed remote IP per minute.")
+  .Produces<DemoSessionResponse>(StatusCodes.Status200OK)
+  .Produces(StatusCodes.Status404NotFound)
+  .ProducesProblem(StatusCodes.Status429TooManyRequests)
+  .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
-    CancellationToken ct) =>
+    IOptionsMonitor<JwtBearerOptions> jwtOptions, CancellationToken ct) =>
 {
     if (role is not ("driver" or "rider"))
         return Results.NotFound();
@@ -1529,11 +1588,12 @@ authGroup.MapPost("/{role}/register", async (
         role = role == "driver" ? "Driver" : "Rider",
         replaceOldest = request.ReplaceOldest
     };
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/register", payload, null, role == "driver" ? "Driver" : "Rider", ct);
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/register", payload, null, role == "driver" ? "Driver" : "Rider", ct,
+        tokenValidationParameters: jwtOptions.Get(JwtBearerDefaults.AuthenticationScheme).TokenValidationParameters);
 });
 authGroup.MapPost("/{role}/login", async (
     string role, PasswordLoginRequest request, IHttpClientFactory clients,
-    CancellationToken ct) =>
+    IOptionsMonitor<JwtBearerOptions> jwtOptions, CancellationToken ct) =>
 {
     if (role is not ("driver" or "rider"))
         return Results.NotFound();
@@ -1547,21 +1607,77 @@ authGroup.MapPost("/{role}/login", async (
         appId = "turnova",
         replaceOldest = request.ReplaceOldest
     };
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/login", payload, null, role == "driver" ? "Driver" : "Rider", ct);
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/login", payload, null, role == "driver" ? "Driver" : "Rider", ct,
+        tokenValidationParameters: jwtOptions.Get(JwtBearerDefaults.AuthenticationScheme).TokenValidationParameters);
 });
 authGroup.MapPost("/refresh", async (
-    RefreshTokenRequest? request, IHttpClientFactory clients, CancellationToken ct) =>
+    RefreshTokenRequest? request, IHttpClientFactory clients,
+    IOptionsMonitor<JwtBearerOptions> jwtOptions, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request?.RefreshToken))
         return Results.BadRequest(new { message = "Refresh token is required." });
 
     return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/refresh",
-        new { refreshToken = request.RefreshToken }, null, null, ct);
+        new { refreshToken = request.RefreshToken }, null, null, ct, validateRefreshResponse: true,
+        tokenValidationParameters: jwtOptions.Get(JwtBearerDefaults.AuthenticationScheme).TokenValidationParameters);
 });
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
-    await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
-        context.Request.Headers.Authorization.ToString(), null, ct));
+{
+    var authorizationValues = context.Request.Headers.Authorization;
+    var hasAuthorizationHeader = context.Request.Headers.ContainsKey("Authorization");
+    string? authorization = null;
+    if (hasAuthorizationHeader)
+    {
+        // Authorization is a singleton HTTP field. Reject multiple field values rather than
+        // flattening them into a comma-separated string that could be parsed ambiguously.
+        if (authorizationValues.Count != 1 ||
+            !AuthenticationHeaderValue.TryParse(authorizationValues[0], out var header) ||
+            !header.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) ||
+            !IsValidBearerToken68(header.Parameter))
+            return Results.BadRequest(new { message = "A valid Bearer authorization value is required." });
+
+        authorization = authorizationValues[0];
+    }
+
+    // Expiry/signature validation remains the identity provider's responsibility for logout.
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
+        authorization, null, ct);
+});
+// AuthenticationHeaderValue intentionally parses generic authentication parameters, including
+// comma-separated auth-param values. RFC 6750 Bearer credentials are narrower: token68 only.
+// Enforce that grammar before forwarding so a coalesced/malformed value cannot be treated as a token.
+static bool IsValidBearerToken68(string? token)
+{
+    if (string.IsNullOrEmpty(token))
+        return false;
+
+    var hasTokenCharacter = false;
+    var paddingStarted = false;
+    foreach (var character in token)
+    {
+        if (character == '=')
+        {
+            if (!hasTokenCharacter)
+                return false;
+
+            paddingStarted = true;
+            continue;
+        }
+
+        if (paddingStarted ||
+            !((character >= 'A' && character <= 'Z') ||
+              (character >= 'a' && character <= 'z') ||
+              (character >= '0' && character <= '9') ||
+              character is '-' or '.' or '_' or '~' or '+' or '/'))
+            return false;
+
+        hasTokenCharacter = true;
+    }
+
+    return hasTokenCharacter;
+}
+
 authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
     await ForwardAuthRequest(clients, HttpMethod.Get, "/auth/me", null,
         context.Request.Headers.Authorization.ToString(), null, ct))
@@ -1569,7 +1685,9 @@ authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, 
 
 static async Task<IResult> ForwardAuthRequest(
     IHttpClientFactory clients, HttpMethod method, string path, object? body,
-    string? authorization, string? expectedRole, CancellationToken ct)
+    string? authorization, string? expectedRole, CancellationToken ct,
+    bool validateRefreshResponse = false,
+    TokenValidationParameters? tokenValidationParameters = null)
 {
     using var request = new HttpRequestMessage(method, path);
     if (body is not null)
@@ -1580,35 +1698,263 @@ static async Task<IResult> ForwardAuthRequest(
 
     try
     {
-        using var response = await clients.CreateClient("TriSend").SendAsync(request, ct);
-        var content = await response.Content.ReadAsStringAsync(ct);
+        // ResponseHeadersRead keeps HttpClient from buffering an untrusted body before the size guard.
+        // Keep one deadline across both header acquisition and the bounded stream read.
+        using var upstreamTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        upstreamTimeout.CancelAfter(TimeSpan.FromSeconds(15));
+        using var response = await clients.CreateClient("TriSend").SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, upstreamTimeout.Token);
+        if ((int)response.StatusCode is >= 300 and < 400)
+            return Results.Problem(
+                "Authentication service returned an unsupported redirect.",
+                statusCode: StatusCodes.Status502BadGateway);
+
+        // Identity responses are small JSON contracts. Bound both declared and streamed bodies so a
+        // misconfigured or compromised upstream cannot force unbounded memory allocation per request.
+        const int maximumAuthResponseBytes = 256 * 1024;
+        var content = await ReadBoundedResponseBodyAsync(
+            response.Content, maximumAuthResponseBytes, upstreamTimeout.Token);
+        if (response.IsSuccessStatusCode && validateRefreshResponse)
+        {
+            JsonDocument json;
+            try
+            {
+                json = JsonDocument.Parse(content);
+            }
+            catch (JsonException)
+            {
+                return InvalidAuthenticationResponse();
+            }
+
+            using (json)
+            {
+                var root = json.RootElement;
+                if (root.ValueKind != JsonValueKind.Object ||
+                    !TryGetNonEmptyString(root, "accessToken", out var accessToken))
+                    return InvalidAuthenticationResponse();
+
+                if (!TryGetNonEmptyString(root, "refreshToken", out _))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return InvalidAuthenticationResponse();
+                }
+
+                var validatedPrincipal = TryValidateAccessToken(accessToken, tokenValidationParameters);
+                if (validatedPrincipal is null ||
+                    !HasSingleSessionSubject(validatedPrincipal) ||
+                    !TryGetSingleRoleClaim(validatedPrincipal, out _))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return InvalidAuthenticationResponse();
+                }
+            }
+        }
+
         if (response.IsSuccessStatusCode && expectedRole is not null)
         {
-            using var json = JsonDocument.Parse(content);
-            var actualRole = json.RootElement.GetProperty("user").GetProperty("role").GetString();
-            if (!string.Equals(actualRole, expectedRole, StringComparison.Ordinal))
+            JsonDocument json;
+            try
             {
-                var accessToken = json.RootElement.GetProperty("accessToken").GetString();
-                if (!string.IsNullOrWhiteSpace(accessToken))
+                json = JsonDocument.Parse(content);
+            }
+            catch (JsonException)
+            {
+                return InvalidAuthenticationResponse();
+            }
+
+            using (json)
+            {
+                var root = json.RootElement;
+                if (root.ValueKind != JsonValueKind.Object ||
+                    !TryGetNonEmptyString(root, "accessToken", out var accessToken))
+                    return InvalidAuthenticationResponse();
+
+                var hasRefreshToken = TryGetNonEmptyString(root, "refreshToken", out _);
+                var hasUser = root.TryGetProperty("user", out var user) &&
+                    user.ValueKind == JsonValueKind.Object;
+                var actualRole = string.Empty;
+                var hasRole = hasUser && TryGetNonEmptyString(user, "role", out actualRole);
+                if (!hasRefreshToken || !hasRole)
                 {
-                    using var logout = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
-                    logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                    using var ignored = await clients.CreateClient("TriSend").SendAsync(logout, ct);
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return InvalidAuthenticationResponse();
                 }
-                return Results.Problem($"This account is registered as {actualRole}, not {expectedRole}.", statusCode: 403);
+
+                if (!string.Equals(actualRole, expectedRole, StringComparison.Ordinal))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return Results.Problem(
+                        "The authentication service returned an account with a different app role.",
+                        statusCode: StatusCodes.Status403Forbidden);
+                }
+
+                var validatedPrincipal = TryValidateAccessToken(accessToken, tokenValidationParameters);
+                if (validatedPrincipal is null ||
+                    !HasSingleSessionSubject(validatedPrincipal) ||
+                    !TryGetSingleRoleClaim(validatedPrincipal, out var tokenRole))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return InvalidAuthenticationResponse();
+                }
+
+                if (!string.Equals(tokenRole, expectedRole, StringComparison.Ordinal))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return Results.Problem(
+                        "The authentication service returned a token with a different app role.",
+                        statusCode: StatusCodes.Status403Forbidden);
+                }
             }
         }
         return Results.Content(content, "application/json", Encoding.UTF8, (int)response.StatusCode);
+    }
+    catch (InvalidDataException)
+    {
+        return Results.Problem(
+            "Authentication service returned an invalid response.",
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (IOException)
+    {
+        // A response stream can fail after headers arrive. Treat that as an upstream
+        // availability failure; never fall through to the generic API 500 handler or
+        // expose a partial body that may contain credentials or tokens.
+        return Results.Problem("Authentication service is temporarily unavailable.", statusCode: 503);
     }
     catch (HttpRequestException)
     {
         return Results.Problem("Authentication service is temporarily unavailable.", statusCode: 503);
     }
-    catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
     {
         return Results.Problem("Authentication service timed out.", statusCode: 504);
     }
 }
+
+static ClaimsPrincipal? TryValidateAccessToken(
+    string accessToken,
+    TokenValidationParameters? tokenValidationParameters)
+{
+    const int maximumAccessTokenCharacters = 16 * 1024;
+    if (tokenValidationParameters is null ||
+        string.IsNullOrWhiteSpace(accessToken) ||
+        accessToken.Length > maximumAccessTokenCharacters)
+        return null;
+
+    try
+    {
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+        if (!handler.CanReadToken(accessToken))
+            return null;
+
+        return handler.ValidateToken(accessToken, tokenValidationParameters.Clone(), out _);
+    }
+    catch (Exception exception) when (
+        exception is SecurityTokenException or ArgumentException or FormatException or InvalidOperationException or CryptographicException)
+    {
+        return null;
+    }
+}
+
+static bool HasSingleSessionSubject(ClaimsPrincipal principal)
+{
+    var subjects = principal.Claims
+        .Where(claim =>
+            claim.Type == ClaimTypes.NameIdentifier ||
+            claim.Type == JwtRegisteredClaimNames.Sub ||
+            // JwtSecurityTokenHandler's standard outbound alias for NameIdentifier is "nameid".
+            // Inbound mapping is intentionally disabled here, so count the wire alias explicitly.
+            string.Equals(claim.Type, "nameid", StringComparison.Ordinal))
+        .Select(claim => claim.Value)
+        .ToArray();
+
+    return subjects.Length == 1 && !string.IsNullOrWhiteSpace(subjects[0]);
+}
+
+static bool TryGetSingleRoleClaim(ClaimsPrincipal principal, out string role)
+{
+    var roles = principal.FindAll("role").Select(claim => claim.Value).ToArray();
+    if (roles.Length != 1 || string.IsNullOrWhiteSpace(roles[0]))
+    {
+        role = string.Empty;
+        return false;
+    }
+
+    role = roles[0];
+    return true;
+}
+
+static async Task<string> ReadBoundedResponseBodyAsync(
+    HttpContent content, int maximumBytes, CancellationToken ct)
+{
+    if (content.Headers.ContentLength is long contentLength && contentLength > maximumBytes)
+        throw new InvalidDataException("Authentication response exceeded its size limit.");
+
+    await using var stream = await content.ReadAsStreamAsync(ct);
+    using var buffer = new MemoryStream();
+    var chunk = new byte[8192];
+
+    while (true)
+    {
+        var bytesRead = await stream.ReadAsync(chunk.AsMemory(), ct);
+        if (bytesRead == 0)
+            break;
+
+        if (buffer.Length + bytesRead > maximumBytes)
+            throw new InvalidDataException("Authentication response exceeded its size limit.");
+
+        await buffer.WriteAsync(chunk.AsMemory(0, bytesRead), ct);
+    }
+
+    try
+    {
+        // Authentication tokens must not be silently rewritten by UTF-8 replacement fallback.
+        // A replacement character in a token can turn an invalid upstream response into a
+        // seemingly successful but unusable credential envelope.
+        return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+            .GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
+    }
+    catch (DecoderFallbackException exception)
+    {
+        throw new InvalidDataException("Authentication response was not valid UTF-8.", exception);
+    }
+}
+
+
+static bool TryGetNonEmptyString(JsonElement element, string propertyName, out string value)
+{
+    value = string.Empty;
+    if (element.ValueKind != JsonValueKind.Object ||
+        !element.TryGetProperty(propertyName, out var property) ||
+        property.ValueKind != JsonValueKind.String)
+        return false;
+
+    value = property.GetString() ?? string.Empty;
+    return !string.IsNullOrWhiteSpace(value);
+}
+
+static async Task RevokeAuthSessionAsync(
+    IHttpClientFactory clients,
+    string accessToken,
+    CancellationToken cancellationToken)
+{
+    // Do not place an oversized or malformed upstream value in an outbound header.
+    if (accessToken.Length is 0 or > 16 * 1024 || !IsValidBearerToken68(accessToken))
+        return;
+
+    using var logout = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
+    logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+    using var client = clients.CreateClient("TriSend");
+    // Logout is best-effort and its response body is irrelevant. Read headers only, then dispose
+    // the response so a compromised identity provider cannot force an unbounded body buffer.
+    using var ignored = await client.SendAsync(
+        logout, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+}
+
+static IResult InvalidAuthenticationResponse() =>
+    Results.Problem(
+        "Authentication service returned an invalid response.",
+        statusCode: StatusCodes.Status502BadGateway);
 
 var onboarding = app.MapGroup("/api/v1/driver/onboarding").RequireAuthorization(policy => policy.RequireRole("Driver")).WithTags("Driver onboarding");
 onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>

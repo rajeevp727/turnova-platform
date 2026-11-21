@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using TurnOva.Application.Assistance;
+using TurnOva.API;
 
 namespace TurnOva.API.Assistance;
 
@@ -31,24 +32,43 @@ public static class AiAssistanceEndpoints
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.OnRejected = async (context, cancellationToken) =>
             {
-                context.HttpContext.Response.ContentType = "application/problem+json";
-                await context.HttpContext.Response.WriteAsJsonAsync(
-                    new { title = "Too many assistant requests. Please retry later.", status = StatusCodes.Status429TooManyRequests },
-                    cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                await Results.Problem(
+                    title: "Too many requests. Please retry later.",
+                    statusCode: StatusCodes.Status429TooManyRequests)
+                    .ExecuteAsync(context.HttpContext);
             };
             options.AddPolicy(RateLimitPolicy, context =>
             {
+                var subject = context.User.FindFirstValue("sub");
+                var nameIdentifier = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+                // A signed token may contain an empty sub claim. Do not let that collapse
+                // unrelated callers into one shared limiter partition.
                 var partitionKey =
-                    context.User.FindFirstValue("sub") ??
-                    context.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-                    context.Connection.RemoteIpAddress?.ToString() ??
-                    "anonymous";
+                    !string.IsNullOrWhiteSpace(subject) ? subject :
+                    !string.IsNullOrWhiteSpace(nameIdentifier) ? nameIdentifier :
+                    context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
 
                 return RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey,
                     _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = requestsPerMinute,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    });
+            });
+            options.AddPolicy(DemoAuthPolicy.RateLimitPolicyName, context =>
+            {
+                // Demo issuance is anonymous: partition only by the server-observed remote IP.
+                // Do not trust an arbitrary client-supplied forwarding header here.
+                var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = DemoAuthPolicy.RequestsPerMinute,
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0,
                         AutoReplenishment = true
@@ -83,11 +103,16 @@ public static class AiAssistanceEndpoints
                 loggerFactory.CreateLogger("TurnOva.AiAssistance").LogWarning(
                     "Assistant request rejected. UseCase {UseCase} ValidationType {ValidationType}",
                     "TripIntent", exception.GetType().Name);
-                return Results.BadRequest(new { message = exception.Message });
+                return Results.BadRequest(new AssistanceErrorResponse(exception.Message));
             }
         }).RequireAuthorization(policy => policy.RequireRole("Rider"))
             .WithMetadata(new RequestSizeLimitAttribute(16 * 1024))
-            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+            .Produces<TripIntentDraftResponse>(StatusCodes.Status200OK)
+            .Produces<AssistanceErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         group.MapPost("/help", async Task<IResult> (
             HelpRequest request,
@@ -108,11 +133,16 @@ public static class AiAssistanceEndpoints
                 loggerFactory.CreateLogger("TurnOva.AiAssistance").LogWarning(
                     "Assistant request rejected. UseCase {UseCase} ValidationType {ValidationType}",
                     "Help", exception.GetType().Name);
-                return Results.BadRequest(new { message = exception.Message });
+                return Results.BadRequest(new AssistanceErrorResponse(exception.Message));
             }
         }).RequireAuthorization(policy => policy.RequireRole("Rider", "Driver"))
             .WithMetadata(new RequestSizeLimitAttribute(16 * 1024))
-            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+            .Produces<HelpResponse>(StatusCodes.Status200OK)
+            .Produces<AssistanceErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         return app;
     }

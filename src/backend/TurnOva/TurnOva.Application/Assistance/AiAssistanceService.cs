@@ -35,6 +35,8 @@ public sealed record HelpRequest(string? Question, string? RideState = null);
 
 public sealed record HelpResponse(string Answer, string SourceId, bool EscalationRequired, string Source);
 
+public sealed record AssistanceErrorResponse(string Message);
+
 public sealed record SafeTripIntentPrompt(
     string IntentSummary,
     string PickupToken,
@@ -158,7 +160,7 @@ public sealed class AiAssistanceService
             "A selected Driver is reserved against overlapping negotiations and active rides. Cancellation or expiry releases only the reservation belonging to that exact ride.",
             ["overlap", "reservation", "reserved"]),
         new("queue-status",
-            "Rider discovery does not use FIFO queue rank or automatic assignment. Riders see eligible approved Cab Drivers grouped by Union and ordered by pickup proximity, then select one. Whether legacy FIFO remains an internal fairness mechanism is unresolved; do not infer a customer ranking or dispatch rule from it.",
+            "Rider discovery does not show a queue position or automatically assign a Driver. Riders choose an eligible Cab Driver from approved nearby Unions; the list is grouped by Union and ordered by Driver-to-pickup proximity.",
             ["queue", "queued", "fifo"]),
         new("availability-status",
             "Online is one input to server-side Cab eligibility and nearby discovery; it does not guarantee that a Driver will be shown or selected. Offline means the Driver is not available for new ride discovery. Rider selection is explicit and no FIFO assignment occurs.",
@@ -211,7 +213,7 @@ public sealed class AiAssistanceService
         int? passengerCount = invalidPassengerCount ? null : explicitPassengerCount;
 
         if (pickup is not null && dropoff is not null && !invalidPassengerCount &&
-            _options.Enabled && _provider.IsAvailable)
+            IsProviderAvailable())
         {
             var prompt = BuildSafeTripPrompt(normalized, routeMatch);
             var providerResult = await InvokeProviderAsync(
@@ -259,7 +261,7 @@ public sealed class AiAssistanceService
         var source = "deterministic-fallback";
         HelpEntry? selectedEntry = null;
 
-        if (_options.Enabled && _provider.IsAvailable)
+        if (IsProviderAvailable())
         {
             var prompt = new SafeHelpPrompt(
                 safeKeywords,
@@ -283,6 +285,24 @@ public sealed class AiAssistanceService
             return UnsupportedHelp(source);
 
         return EnsureHelpOutputLimit(new HelpResponse(selectedEntry.Answer, selectedEntry.Id, false, source));
+    }
+
+    private bool IsProviderAvailable()
+    {
+        if (!_options.Enabled)
+            return false;
+
+        try
+        {
+            return _provider.IsAvailable;
+        }
+        catch (Exception)
+        {
+            // Provider availability may depend on optional configuration or adapter setup.
+            // Treat a broken/unconfigured adapter as unavailable and retain deterministic
+            // in-repository behavior instead of turning a draft/help request into HTTP 500.
+            return false;
+        }
     }
 
     private string ValidateInput(string? value, string parameterName)
