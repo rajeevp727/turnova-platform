@@ -74,6 +74,45 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/rides"))
                     context.Token = accessToken;
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var identities = context.Principal?.Identities.ToArray() ?? Array.Empty<ClaimsIdentity>();
+                if (identities.Length != 1)
+                {
+                    context.Fail("The token must contain exactly one authenticated identity.");
+                    return Task.CompletedTask;
+                }
+
+                var identity = identities[0];
+                var subjectClaims = identity.Claims
+                    .Where(claim =>
+                        claim.Type == ClaimTypes.NameIdentifier ||
+                        claim.Type == JwtRegisteredClaimNames.Sub ||
+                        string.Equals(claim.Type, "nameid", StringComparison.Ordinal))
+                    .ToArray();
+                var roleClaims = identity.FindAll("role").ToArray();
+                if (!identity.IsAuthenticated ||
+                    subjectClaims.Length != 1 ||
+                    string.IsNullOrWhiteSpace(subjectClaims[0].Value) ||
+                    roleClaims.Length != 1 ||
+                    string.IsNullOrWhiteSpace(roleClaims[0].Value))
+                {
+                    context.Fail("The token must contain exactly one non-empty subject and role claim.");
+                    return Task.CompletedTask;
+                }
+
+                // Inbound claim mapping stays disabled. Normalize only the standard
+                // JwtSecurityTokenHandler outbound alias so every API endpoint resolves
+                // the same canonical user identifier as sub/NameIdentifier tokens.
+                if (string.Equals(subjectClaims[0].Type, "nameid", StringComparison.Ordinal))
+                {
+                    var subject = subjectClaims[0].Value;
+                    identity.RemoveClaim(subjectClaims[0]);
+                    identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, subject));
+                }
+
+                return Task.CompletedTask;
             }
         };
         options.TokenValidationParameters = new TokenValidationParameters

@@ -1878,6 +1878,53 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task DriverEndpointAcceptsSingleMappedNameIdSubject()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Driver availability must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(subjectClaimCount: 0, includeMappedLegacySubject: true, mappedLegacySubjectValue: "driver-nameid-42"));
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Offline", body.RootElement.GetProperty("availabilityStatus").GetString());
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("missing-subject")]
+    [InlineData("blank-subject")]
+    [InlineData("duplicate-subject")]
+    [InlineData("mixed-subject")]
+    [InlineData("duplicate-role")]
+    public async Task DriverEndpointRejectsTokenWithAmbiguousIdentityClaims(string failure)
+    {
+        var token = failure switch
+        {
+            "missing-subject" => CreateToken(subjectClaimCount: 0),
+            "blank-subject" => CreateToken(subjectValue: " "),
+            "duplicate-subject" => CreateToken(subjectClaimCount: 2),
+            "mixed-subject" => CreateToken(includeMappedLegacySubject: true),
+            "duplicate-role" => CreateToken(additionalRole: "UnionManager"),
+            _ => throw new ArgumentOutOfRangeException(nameof(failure))
+        };
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Authorization must reject before calling TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task ValidDriverTokenCanAccessDriverEndpoint()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Driver availability must not call TriSend."));
@@ -2016,7 +2063,8 @@ public sealed class AuthApiIntegrationTests
         bool includeLegacySubject = false,
         string? subjectValue = null,
         bool includeMappedLegacySubject = false,
-        string? mappedLegacySubjectValue = null)
+        string? mappedLegacySubjectValue = null,
+        string? additionalRole = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -2029,6 +2077,8 @@ public sealed class AuthApiIntegrationTests
             claims.Add(new Claim("nameid", mappedLegacySubjectValue ?? "legacy-driver-1"));
         if (includeRole)
             claims.Add(new Claim("role", role));
+        if (additionalRole is not null)
+            claims.Add(new Claim("role", additionalRole));
         if (demo)
             claims.Add(new Claim("demo", "true"));
         var token = new JwtSecurityToken(
