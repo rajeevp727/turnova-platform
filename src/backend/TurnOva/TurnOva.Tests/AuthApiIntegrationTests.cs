@@ -697,6 +697,50 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal(2, handler.Requests.Count);
     }
 
+    [Theory]
+    [InlineData("Basic dXNlcjpwYXNz")]
+    [InlineData("Basic")]
+    [InlineData("Bearer")]
+    [InlineData("Negotiate token")]
+    public async Task LogoutRejectsUnsupportedAuthorizationBeforeCallingTriSend(string authorization)
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Unsupported logout authorization must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", authorization);
+
+        using var response = await client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("dXNlcjpwYXNz", body, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task LogoutForwardsExpiredBearerUnchangedWithoutLocalTokenValidation()
+    {
+        const string expiredBearer = "expired-or-invalid-token";
+        using var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", expiredBearer);
+
+        using var response = await client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("POST", request.Method);
+        Assert.Equal("/auth/logout", request.Path);
+        Assert.Equal("Bearer", request.AuthorizationScheme);
+        Assert.Equal(expiredBearer, request.AuthorizationParameter);
+    }
+
     [Fact]
     public async Task MeEndpointRejectsAnonymousRequestBeforeCallingTriSend()
     {
