@@ -727,8 +727,8 @@ public sealed class AuthApiIntegrationTests
             Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", expiredBearer);
+        client.DefaultRequestHeaders.TryAddWithoutValidation(
+            "Authorization", $"Bearer {expiredBearer}");
 
         using var response = await client.PostAsync("/api/v1/auth/logout", content: null);
 
