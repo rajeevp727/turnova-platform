@@ -2316,7 +2316,7 @@ The logout endpoint now rejects a supplied malformed, empty or non-Bearer Author
 
 AUTH-API-051 adds singleton Authorization-field validation to POST /api/v1/auth/logout. The endpoint now rejects multiple Authorization field values before TriSend, rather than flattening them and risking ambiguous credential forwarding. A single non-empty Bearer value is forwarded unchanged, including expired/invalid tokens; a genuinely absent header retains best-effort logout.
 
-- Runtime commit [7362637786f022cb2b73180d90ade03e5bde757f] (https://github.com/rajeevp727/turnova-platform/commit/7362637786f022cb2b73180d90ade03e5bde757f); test commit [b9749ce9c6aa4a98a5a8c7d332b4990255d9412a](https://github.com/rajeevp727/turnova-platform/commit/b9749ce9c6aa4a98a5a8c7d332b4990255d9412a).
+- Runtime commit [7362637786f022cb2b73180d90ade03e5bde757f](https://github.com/rajeevp727/turnova-platform/commit/7362637786f022cb2b73180d90ade03e5bde757f); test commit [b9749ce9c6aa4a98a5a8c7d332b4990255d9412a](https://github.com/rajeevp727/turnova-platform/commit/b9749ce9c6aa4a98a5a8c7d332b4990255d9412a).
 - Regression: two Authorization field values produce HTTP 400, no credential echo and zero TriSend requests; existing whitespace-only, absent-header and single-Bearer cases remain covered.
 - Exact source/test CI [#44921975301](https://github.com/rajeevp727/turnova-platform/actions/runs/44921975301) passed 1012/1012 tests, Release build, native non-container publish/verifier and artifact [14714315930](https://github.com/rajeevp727/turnova-platform/actions/runs/44921975301/artifacts/14714315930).
 - Supplemental; excluded from the 19-row denominator. API phase remains active pending independent human approval, permitted merge and a fresh main/API phase-exit audit.
