@@ -40,11 +40,14 @@ public static class AiAssistanceEndpoints
             };
             options.AddPolicy(RateLimitPolicy, context =>
             {
+                var subject = context.User.FindFirstValue("sub");
+                var nameIdentifier = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+                // A signed token may contain an empty sub claim. Do not let that collapse
+                // unrelated callers into one shared limiter partition.
                 var partitionKey =
-                    context.User.FindFirstValue("sub") ??
-                    context.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-                    context.Connection.RemoteIpAddress?.ToString() ??
-                    "anonymous";
+                    !string.IsNullOrWhiteSpace(subject) ? subject :
+                    !string.IsNullOrWhiteSpace(nameIdentifier) ? nameIdentifier :
+                    context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
 
                 return RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey,

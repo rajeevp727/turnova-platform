@@ -102,6 +102,32 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task AssistantRateLimitUsesNameIdentifierWhenSubjectClaimIsBlank()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var firstCaller = factory.CreateClientWithBlankSubject("Rider", "ai-rate-limit-blank-first");
+        using var secondCaller = factory.CreateClientWithBlankSubject("Rider", "ai-rate-limit-blank-second");
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            using var allowed = await firstCaller.PostAsJsonAsync(
+                "/api/v1/assistance/help",
+                new { question = "What does queue status mean?" });
+            Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        }
+
+        using var rejected = await firstCaller.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "What does queue status mean?" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+
+        using var otherCaller = await secondCaller.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "What does queue status mean?" });
+        Assert.Equal(HttpStatusCode.OK, otherCaller.StatusCode);
+    }
+
+    [Fact]
     public async Task AssistantRateLimitRejectionIsNonCacheable()
     {
         using var factory = new AiAssistanceApiFactory();
@@ -276,6 +302,18 @@ public sealed class AiAssistanceApiIntegrationTests
             return client;
         }
 
+        public HttpClient CreateClientWithBlankSubject(string role, string nameIdentifier)
+        {
+            var client = base.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = new Uri("https://localhost")
+            });
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", CreateTokenWithBlankSubject(role, nameIdentifier));
+            return client;
+        }
+
         public HttpClient CreateAnonymousClient() =>
             base.CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -301,6 +339,26 @@ public sealed class AiAssistanceApiIntegrationTests
                 notBefore: DateTime.UtcNow.AddMinutes(-1),
                 expires: DateTime.UtcNow.AddMinutes(10),
                 signingCredentials: credentials);
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private static string CreateTokenWithBlankSubject(string role, string nameIdentifier)
+        {
+            var credentials = new SigningCredentials(
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)),
+                SecurityAlgorithms.HmacSha256);
+            var payload = new JwtPayload
+            {
+                ["iss"] = Issuer,
+                ["aud"] = Audience,
+                ["sub"] = string.Empty,
+                ["role"] = role,
+                ["name"] = nameIdentifier,
+                [ClaimTypes.NameIdentifier] = nameIdentifier,
+                ["nbf"] = DateTimeOffset.UtcNow.AddMinutes(-1).ToUnixTimeSeconds(),
+                ["exp"] = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds()
+            };
+            var token = new JwtSecurityToken(new JwtHeader(credentials), payload);
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
