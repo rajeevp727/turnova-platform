@@ -1235,6 +1235,32 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task TriSendBodyReadIOExceptionReturnsServiceUnavailableWithoutLeakingPartialBody()
+    {
+        const string partialBody = """{"accessToken":"provider-secret","refreshToken":"next-refresh",""";
+        using var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new FailingAfterPrefixReadStream(Encoding.UTF8.GetBytes(partialBody)))
+            }));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/rider/login",
+            new { email = "rider@example.com", password = "StrongPassword!123" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("temporarily unavailable", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("provider-secret", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("next-refresh", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("private upstream stream failure", body, StringComparison.Ordinal);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
     public async Task CallerCancellationDuringTriSendBodyReadIsNotMappedToGatewayTimeout()
     {
         var readStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1678,6 +1704,54 @@ public sealed class AuthApiIntegrationTests
             byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
             Task.FromException<int>(
                 new OperationCanceledException("private upstream body timeout"));
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class FailingAfterPrefixReadStream(byte[] prefix) : Stream
+    {
+        private bool _prefixReturned;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_prefixReturned)
+                throw new IOException("private upstream stream failure");
+
+            _prefixReturned = true;
+            var bytesToCopy = Math.Min(count, prefix.Length);
+            Array.Copy(prefix, 0, buffer, offset, bytesToCopy);
+            return bytesToCopy;
+        }
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_prefixReturned)
+                return ValueTask.FromException<int>(new IOException("private upstream stream failure"));
+
+            _prefixReturned = true;
+            var bytesToCopy = Math.Min(buffer.Length, prefix.Length);
+            prefix.AsMemory(0, bytesToCopy).CopyTo(buffer);
+            return ValueTask.FromResult(bytesToCopy);
+        }
+
+        public override Task<int> ReadAsync(
+            byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
         public override void Flush() { }
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
