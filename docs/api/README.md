@@ -377,3 +377,11 @@ The shared ASP.NET rate-limiter rejection callback is used by both AI assistance
 
 
 AUTH-API-029 specifically verifies that the allowed-origin `OPTIONS /hubs/rides/negotiate` preflight returns HTTP 204 with the expected CORS origin and the same no-store/no-cache response policy, without calling TriSend. Source/test CI [#44847354008](https://github.com/rajeevp727/turnova-platform/actions/runs/44847354008) passed 949/949 backend tests and native non-container API publish/verifier; artifact [14683916032](https://github.com/rajeevp727/turnova-platform/actions/runs/44847354008/artifacts/14683916032).
+
+## AUTH-API-030 — oversized assistance requests remain non-cacheable
+
+The 16 KiB request-size limit on Rider trip-intent and Rider/Driver help is enforced at the real Kestrel boundary. The production API and Kestrel test host share `ApiResponseCachePolicyExtensions.UseApiResponseCachePolicy`; oversized requests return HTTP 413 with `Cache-Control: no-store` and `Pragma: no-cache`, without invoking the provider. Exact-head API-only CI [#44848945046](https://github.com/rajeevp727/turnova-platform/actions/runs/44848945046) passed 950/950 backend tests and native non-container .NET 10 publish/verifier; artifact [14684841976](https://github.com/rajeevp727/turnova-platform/actions/runs/44848945046/artifacts/14684841976).
+
+## AI-045 — disabled provider invocation boundary
+
+When `AiAssistant:Enabled=false`, Rider trip-intent and approved-help use deterministic in-repo behavior even if an available provider adapter is registered; the provider invocation count remains zero. No paid provider, model or credential is selected. Exact-head API-only CI [#44848945046](https://github.com/rajeevp727/turnova-platform/actions/runs/44848945046) passed 950/950 backend tests and native non-container publish/verifier. This is supplemental AI-01 coverage outside the 19-row denominator.
