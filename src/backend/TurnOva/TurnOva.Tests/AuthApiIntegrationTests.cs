@@ -1284,8 +1284,8 @@ public sealed class AuthApiIntegrationTests
     [Fact]
     public async Task InvalidUtf8AuthenticationTokenIsRejectedWithoutReturningCorruptedCredentials()
     {
-        var prefix = Encoding.UTF8.GetBytes("""{"accessToken":"provider-secret""");
-        var suffix = Encoding.UTF8.GetBytes("""","refreshToken":"next-refresh","user":{"role":"Rider"}}""");
+        var prefix = Encoding.UTF8.GetBytes("{\"accessToken\":\"provider-secret");
+        var suffix = Encoding.UTF8.GetBytes("\",\"refreshToken\":\"next-refresh\",\"user\":{\"role\":\"Rider\"}}");
         var responseBody = new byte[prefix.Length + 1 + suffix.Length];
         Buffer.BlockCopy(prefix, 0, responseBody, 0, prefix.Length);
         responseBody[prefix.Length] = 0xFF;
