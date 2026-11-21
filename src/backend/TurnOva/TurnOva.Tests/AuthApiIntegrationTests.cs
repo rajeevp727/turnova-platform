@@ -507,6 +507,20 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task UnmatchedRideHubRouteReturnsNotFoundWithNoStoreHeaders()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Unmatched hub routes must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/hubs/rides/unmapped");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
