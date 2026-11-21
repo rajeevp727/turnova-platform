@@ -1185,6 +1185,8 @@ public sealed class AuthApiIntegrationTests
     [InlineData("missing-role")]
     [InlineData("missing-subject")]
     [InlineData("duplicate-subject")]
+    [InlineData("duplicate-mixed-subject")]
+    [InlineData("empty-subject")]
     public async Task LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy(string failure)
     {
         var accessToken = failure switch
@@ -1196,6 +1198,8 @@ public sealed class AuthApiIntegrationTests
             "missing-role" => CreateToken(includeRole: false),
             "missing-subject" => CreateToken(subjectClaimCount: 0),
             "duplicate-subject" => CreateToken(subjectClaimCount: 2),
+            "duplicate-mixed-subject" => CreateToken(subjectClaimCount: 1, includeLegacySubject: true),
+            "empty-subject" => CreateToken(subjectClaimCount: 1, subjectValue: " "),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
         using var handler = new RecordingHandler((request, _) =>
@@ -1222,6 +1226,33 @@ public sealed class AuthApiIntegrationTests
         Assert.DoesNotContain(accessToken, body, StringComparison.Ordinal);
         Assert.Equal(new[] { "/auth/login", "/auth/logout" }, handler.Requests.Select(x => x.Path));
         Assert.Equal(accessToken, handler.Requests[1].AuthorizationParameter);
+    }
+
+    [Fact]
+    public async Task LoginAcceptsSingleLegacyNameIdentifierSubjectClaim()
+    {
+        var accessToken = CreateToken(subjectClaimCount: 0, includeLegacySubject: true);
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/auth/login", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new
+            {
+                accessToken,
+                refreshToken = "refresh",
+                user = new { role = "Driver" }
+            })));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/driver/login",
+            new { email = "driver@example.com", password = "password" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(accessToken, body.RootElement.GetProperty("accessToken").GetString());
+        Assert.Single(handler.Requests);
     }
 
     [Theory]
@@ -1596,11 +1627,18 @@ public sealed class AuthApiIntegrationTests
     [Theory]
     [InlineData("missing-subject")]
     [InlineData("duplicate-subject")]
+    [InlineData("duplicate-mixed-subject")]
+    [InlineData("empty-subject")]
     public async Task RefreshRejectsAccessTokenWithoutExactlyOneSubjectAndRevokesReturnedSession(string failure)
     {
-        var accessToken = failure == "missing-subject"
-            ? CreateToken("Rider", subjectClaimCount: 0)
-            : CreateToken("Rider", subjectClaimCount: 2);
+        var accessToken = failure switch
+        {
+            "missing-subject" => CreateToken("Rider", subjectClaimCount: 0),
+            "duplicate-subject" => CreateToken("Rider", subjectClaimCount: 2),
+            "duplicate-mixed-subject" => CreateToken("Rider", subjectClaimCount: 1, includeLegacySubject: true),
+            "empty-subject" => CreateToken("Rider", subjectClaimCount: 1, subjectValue: " "),
+            _ => throw new ArgumentOutOfRangeException(nameof(failure))
+        };
         using var handler = new RecordingHandler((request, _) =>
         {
             if (request.Path == "/auth/refresh")
@@ -1906,13 +1944,17 @@ public sealed class AuthApiIntegrationTests
         DateTime? expires = null,
         bool demo = false,
         bool includeRole = true,
-        int subjectClaimCount = 1)
+        int subjectClaimCount = 1,
+        bool includeLegacySubject = false,
+        string? subjectValue = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var claims = new List<Claim>();
         for (var index = 0; index < subjectClaimCount; index++)
-            claims.Add(new Claim(JwtRegisteredClaimNames.Sub, $"driver-{index + 1}"));
+            claims.Add(new Claim(JwtRegisteredClaimNames.Sub, subjectValue ?? $"driver-{index + 1}"));
+        if (includeLegacySubject)
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, "legacy-driver-1"));
         if (includeRole)
             claims.Add(new Claim("role", role));
         if (demo)
