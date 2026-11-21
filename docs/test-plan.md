@@ -4320,3 +4320,15 @@ Covered by `AuthApiIntegrationTests.LogoutRejectsUnsupportedAuthorizationBeforeC
 | Malformed or oversized access-token values are present in a rejected response | Never construct an outbound Authorization header from those values | `LoginDoesNotAttemptRevocationWithMalformedOrOversizedAccessToken` |
 
 The validator reuses the exact configured `JwtBearerOptions.TokenValidationParameters` so the API does not return a session token that its own authorization middleware would reject. The 16 KiB bound also prevents oversized upstream values from being copied into a best-effort logout header.
+
+
+### AUTH-API-054 — require exactly one subject claim in upstream session JWTs
+
+| Scenario | Expected result | Evidence |
+|---|---|---|
+| Upstream Rider/Driver login/register JWT contains no subject claim | Generic 502; do not return the session; attempt bounded best-effort revocation | LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy; refresh subject regression |
+| Upstream login/register JWT contains multiple sub claims | Generic 502; do not return the session; attempt bounded best-effort revocation | LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy duplicate-subject case |
+| Upstream refresh JWT contains no subject or multiple subject claims | Generic 502; do not return the session; attempt bounded best-effort revocation | RefreshRejectsAccessTokenWithoutExactlyOneSubjectAndRevokesReturnedSession |
+| Upstream JWT contains one supported subject identity claim with a non-empty value | Continue existing signature, issuer, audience, lifetime and single-role validation | Existing valid Rider/Driver login and refresh integration tests |
+
+The API counts both JWT sub and legacy ClaimTypes.NameIdentifier identity claims and requires exactly one non-empty value. This prevents an ambiguous subject from being silently accepted by selecting only the first claim. AUTH-API-054 is supplemental authentication hardening and does not change the 19-row MVP denominator.
