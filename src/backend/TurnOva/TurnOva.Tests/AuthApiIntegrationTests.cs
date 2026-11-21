@@ -1187,6 +1187,8 @@ public sealed class AuthApiIntegrationTests
     [InlineData("duplicate-subject")]
     [InlineData("duplicate-mixed-subject")]
     [InlineData("empty-subject")]
+    [InlineData("duplicate-mapped-legacy-subject")]
+    [InlineData("empty-mapped-legacy-subject")]
     public async Task LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy(string failure)
     {
         var accessToken = failure switch
@@ -1200,6 +1202,8 @@ public sealed class AuthApiIntegrationTests
             "duplicate-subject" => CreateToken(subjectClaimCount: 2),
             "duplicate-mixed-subject" => CreateToken(subjectClaimCount: 1, includeLegacySubject: true),
             "empty-subject" => CreateToken(subjectClaimCount: 1, subjectValue: " "),
+            "duplicate-mapped-legacy-subject" => CreateToken(subjectClaimCount: 1, includeMappedLegacySubject: true),
+            "empty-mapped-legacy-subject" => CreateToken(subjectClaimCount: 0, includeMappedLegacySubject: true, mappedLegacySubjectValue: " "),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
         using var handler = new RecordingHandler((request, _) =>
@@ -1232,6 +1236,33 @@ public sealed class AuthApiIntegrationTests
     public async Task LoginAcceptsSingleLegacyNameIdentifierSubjectClaim()
     {
         var accessToken = CreateToken(subjectClaimCount: 0, includeLegacySubject: true);
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/auth/login", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new
+            {
+                accessToken,
+                refreshToken = "refresh",
+                user = new { role = "Driver" }
+            })));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/driver/login",
+            new { email = "driver@example.com", password = "password" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(accessToken, body.RootElement.GetProperty("accessToken").GetString());
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task LoginAcceptsSingleMappedNameIdSubjectClaim()
+    {
+        var accessToken = CreateToken(subjectClaimCount: 0, includeMappedLegacySubject: true);
         using var handler = new RecordingHandler((request, _) =>
         {
             Assert.Equal("/auth/login", request.Path);
@@ -1624,11 +1655,40 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal(refreshToken, request.Body.GetProperty("refreshToken").GetString());
     }
 
+    [Fact]
+    public async Task RefreshAcceptsSingleMappedNameIdSubjectClaim()
+    {
+        var accessToken = CreateToken("Rider", subjectClaimCount: 0, includeMappedLegacySubject: true);
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/auth/refresh", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new
+            {
+                accessToken,
+                refreshToken = "next-refresh-token"
+            })));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new { refreshToken = "opaque-refresh-token" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(accessToken, body.RootElement.GetProperty("accessToken").GetString());
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("/auth/refresh", request.Path);
+    }
+
     [Theory]
     [InlineData("missing-subject")]
     [InlineData("duplicate-subject")]
     [InlineData("duplicate-mixed-subject")]
     [InlineData("empty-subject")]
+    [InlineData("duplicate-mapped-legacy-subject")]
+    [InlineData("empty-mapped-legacy-subject")]
     public async Task RefreshRejectsAccessTokenWithoutExactlyOneSubjectAndRevokesReturnedSession(string failure)
     {
         var accessToken = failure switch
@@ -1637,6 +1697,8 @@ public sealed class AuthApiIntegrationTests
             "duplicate-subject" => CreateToken("Rider", subjectClaimCount: 2),
             "duplicate-mixed-subject" => CreateToken("Rider", subjectClaimCount: 1, includeLegacySubject: true),
             "empty-subject" => CreateToken("Rider", subjectClaimCount: 1, subjectValue: " "),
+            "duplicate-mapped-legacy-subject" => CreateToken("Rider", subjectClaimCount: 1, includeMappedLegacySubject: true),
+            "empty-mapped-legacy-subject" => CreateToken("Rider", subjectClaimCount: 0, includeMappedLegacySubject: true, mappedLegacySubjectValue: " "),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
         using var handler = new RecordingHandler((request, _) =>
@@ -1946,7 +2008,9 @@ public sealed class AuthApiIntegrationTests
         bool includeRole = true,
         int subjectClaimCount = 1,
         bool includeLegacySubject = false,
-        string? subjectValue = null)
+        string? subjectValue = null,
+        bool includeMappedLegacySubject = false,
+        string? mappedLegacySubjectValue = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -1955,6 +2019,8 @@ public sealed class AuthApiIntegrationTests
             claims.Add(new Claim(JwtRegisteredClaimNames.Sub, subjectValue ?? $"driver-{index + 1}"));
         if (includeLegacySubject)
             claims.Add(new Claim(ClaimTypes.NameIdentifier, "legacy-driver-1"));
+        if (includeMappedLegacySubject)
+            claims.Add(new Claim("nameid", mappedLegacySubjectValue ?? "legacy-driver-1"));
         if (includeRole)
             claims.Add(new Claim("role", role));
         if (demo)

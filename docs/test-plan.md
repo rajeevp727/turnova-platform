@@ -4347,3 +4347,11 @@ The API counts both JWT sub and legacy ClaimTypes.NameIdentifier identity claims
 - Added a positive legacy-only `ClaimTypes.NameIdentifier` login case and negative mixed `sub` + legacy duplicate and blank-subject cases for login and refresh.
 - Source/test commit: `cde5dcf1b201c5ea1c93efd88ac339c0ffc1fa5e`.
 - Baseline exact-head CI before this test increment: [#44935961280](https://github.com/rajeevp727/turnova-platform/actions/runs/44935961280), 1,029/1,029 backend tests, Release build and native non-container publish/verifier. The new source/test head and synchronized documentation head require fresh exact-head CI; no pass is claimed for them yet.
+
+
+## AUTH-API-057 — recognize the standard JWT NameIdentifier wire alias
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-057 | TriSend returns a JWT containing exactly one non-empty `nameid` claim (the standard JwtSecurityTokenHandler outbound alias for `ClaimTypes.NameIdentifier`) without `sub`, or combines `nameid` with `sub`, or supplies a blank `nameid` | A single `nameid` is accepted on login and refresh; mixed duplicate or blank subjects are rejected with generic 502, no-store/no-cache and bounded best-effort revocation. | API integration/security | P1 |
+
+The API deliberately keeps inbound JWT claim mapping disabled. It therefore recognizes the standard `nameid` wire alias explicitly alongside the raw `ClaimTypes.NameIdentifier` URI and `sub`; this preserves exact-one-subject validation without enabling global inbound claim remapping.

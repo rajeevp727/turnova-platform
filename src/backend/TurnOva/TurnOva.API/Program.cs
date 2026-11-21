@@ -1861,7 +1861,10 @@ static bool HasSingleSessionSubject(ClaimsPrincipal principal)
     var subjects = principal.Claims
         .Where(claim =>
             claim.Type == ClaimTypes.NameIdentifier ||
-            claim.Type == JwtRegisteredClaimNames.Sub)
+            claim.Type == JwtRegisteredClaimNames.Sub ||
+            // JwtSecurityTokenHandler's standard outbound alias for NameIdentifier is "nameid".
+            // Inbound mapping is intentionally disabled here, so count the wire alias explicitly.
+            string.Equals(claim.Type, "nameid", StringComparison.Ordinal))
         .Select(claim => claim.Value)
         .ToArray();
 

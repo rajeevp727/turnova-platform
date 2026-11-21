@@ -463,3 +463,8 @@ Successful Rider/Driver registration, login and refresh responses are not return
 ## Exactly-one subject identity validation
 
 The API rejects upstream Rider/Driver login, registration and refresh JWTs unless they contain exactly one non-empty subject identity claim across JWT sub and the legacy ClaimTypes.NameIdentifier claim type. Missing or duplicate subject identities are rejected before returning the session; safe revocation remains bounded by the existing token68 and 16 KiB checks. Deterministic login and refresh integration tests cover missing, duplicate and blank subjects. AUTH-API-055 additionally proves that one non-empty legacy `ClaimTypes.NameIdentifier` claim without `sub` remains accepted; AUTH-API-056 proves that mixed `sub` plus legacy NameIdentifier claims are rejected as duplicates on both login and refresh. These are supplemental authentication hardening and do not alter MVP acceptance scope.
+
+
+## JWT subject wire compatibility
+
+The API validates upstream access tokens with inbound claim mapping disabled so role-claim handling remains explicit. In addition to `sub` and the raw `ClaimTypes.NameIdentifier` URI, the subject validator recognizes the standard JWT `nameid` wire alias emitted by `JwtSecurityTokenHandler` for `ClaimTypes.NameIdentifier`. Exactly one non-empty subject is still required; mixed or blank aliases are rejected on login and refresh. This avoids silently accepting a token whose subject is present only in the mapped legacy wire form.
