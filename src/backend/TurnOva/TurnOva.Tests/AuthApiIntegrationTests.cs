@@ -721,6 +721,27 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task LogoutRejectsMultipleAuthorizationFieldValuesBeforeCallingTriSend()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Ambiguous logout authorization must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation(
+            "Authorization",
+            new[] { "Bearer first-token", "Bearer second-token" });
+
+        using var response = await client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("first-token", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("second-token", body, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task LogoutWithoutAuthorizationHeaderKeepsBestEffortForwarding()
     {
         using var handler = new RecordingHandler((_, _) =>
