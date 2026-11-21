@@ -1538,6 +1538,9 @@ public sealed class AuthApiIntegrationTests
     [InlineData("http://localhost:5001")]
     [InlineData("not-a-valid-url")]
     [InlineData(" ")]
+    [InlineData("https://user:secret@auth.test.invalid")]
+    [InlineData("https://auth.test.invalid/?access_token=secret")]
+    [InlineData("https://auth.test.invalid/#access_token=secret")]
     public void StartupRejectsNonHttpsOrInvalidTriSendBaseUrl(string baseUrl)
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Startup validation must run before TriSend."));
