@@ -45,13 +45,13 @@ public sealed class ApiResponseCachePolicyTests
         var context = new DefaultHttpContext();
         context.Request.Path = path;
         context.Response.Body = new MemoryStream();
-        context.Response.Headers.CacheControl = "private, max-age=60";
+        context.Response.Headers["Cache-Control"] = "private, max-age=60";
 
         await app(context);
         await context.Response.StartAsync();
 
-        Assert.Contains("private, max-age=60", context.Response.Headers.CacheControl.ToString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no-store", context.Response.Headers.CacheControl.ToString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(context.Response.Headers["Pragma"].ToString(), "no-cache", StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("private, max-age=60", context.Response.Headers["Cache-Control"].ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no-store", context.Response.Headers["Cache-Control"].ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no-cache", context.Response.Headers["Pragma"].ToString(), StringComparison.OrdinalIgnoreCase);
     }
 }
