@@ -102,6 +102,30 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task AssistantRateLimitIsSharedAcrossTripIntentAndHelpEndpoints()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var rider = factory.CreateClient("Rider", "ai-rate-limit-shared-endpoints");
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            using var allowed = await rider.PostAsJsonAsync(
+                "/api/v1/assistance/help",
+                new { question = "What does queue status mean?" });
+            Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        }
+
+        using var rejected = await rider.PostAsJsonAsync(
+            "/api/v1/assistance/trip-intent",
+            new { text = "Cab from Nizampet to HITEC City for 2 passengers" });
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        Assert.True(rejected.Headers.CacheControl?.NoStore);
+        Assert.Contains(rejected.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task AssistantRateLimitUsesNameIdentifierWhenSubjectClaimIsBlank()
     {
         using var factory = new AiAssistanceApiFactory();
