@@ -1730,6 +1730,13 @@ static async Task<IResult> ForwardAuthRequest(
             "Authentication service returned an invalid response.",
             statusCode: StatusCodes.Status502BadGateway);
     }
+    catch (IOException)
+    {
+        // A response stream can fail after headers arrive. Treat that as an upstream
+        // availability failure; never fall through to the generic API 500 handler or
+        // expose a partial body that may contain credentials or tokens.
+        return Results.Problem("Authentication service is temporarily unavailable.", statusCode: 503);
+    }
     catch (HttpRequestException)
     {
         return Results.Problem("Authentication service is temporarily unavailable.", statusCode: 503);
