@@ -6,6 +6,40 @@ namespace TurnOva.Tests;
 public sealed class AiAssistanceServiceTests
 {
     [Fact]
+    public async Task DisabledProviderIsNeverInvokedForTripIntentOrHelp()
+    {
+        var providerCalls = 0;
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) =>
+            {
+                providerCalls++;
+                return Task.FromResult<TripIntentProviderResult?>(
+                    new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab"));
+            },
+            HelpHandler = (_, _) =>
+            {
+                providerCalls++;
+                return Task.FromResult<HelpProviderResult?>(new HelpProviderResult("fare-negotiation"));
+            }
+        };
+        var service = CreateService(provider);
+
+        var trip = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+        var help = await service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("deterministic-fallback", trip.Source);
+        Assert.Equal("deterministic-fallback", help.Source);
+        Assert.Equal("fare-negotiation", help.SourceId);
+        Assert.Equal(0, providerCalls);
+    }
+
+    [Fact]
     public async Task TripIntentBuildsCabDraftAndRequiresRiderReviewWhenProviderIsUnavailable()
     {
         var service = CreateService(new UnavailableAiAssistantProvider());
