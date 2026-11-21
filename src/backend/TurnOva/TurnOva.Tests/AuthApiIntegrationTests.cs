@@ -702,6 +702,8 @@ public sealed class AuthApiIntegrationTests
     [InlineData("Basic")]
     [InlineData("Bearer")]
     [InlineData("Negotiate token")]
+    [InlineData("")]
+    [InlineData(" ")]
     public async Task LogoutRejectsUnsupportedAuthorizationBeforeCallingTriSend(string authorization)
     {
         using var handler = new RecordingHandler((_, _) =>
@@ -717,6 +719,25 @@ public sealed class AuthApiIntegrationTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("dXNlcjpwYXNz", body, StringComparison.Ordinal);
         Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task LogoutWithoutAuthorizationHeaderKeepsBestEffortForwarding()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsync("/api/v1/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("POST", request.Method);
+        Assert.Equal("/auth/logout", request.Path);
+        Assert.Null(request.AuthorizationScheme);
+        Assert.Null(request.AuthorizationParameter);
     }
 
     [Fact]
