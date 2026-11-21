@@ -1741,7 +1741,7 @@ static async Task<IResult> ForwardAuthRequest(
 
                 var validatedPrincipal = TryValidateAccessToken(accessToken, tokenValidationParameters);
                 if (validatedPrincipal is null ||
-                    !HasSessionSubject(validatedPrincipal) ||
+                    !HasSingleSessionSubject(validatedPrincipal) ||
                     !TryGetSingleRoleClaim(validatedPrincipal, out _))
                 {
                     await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
@@ -1790,7 +1790,7 @@ static async Task<IResult> ForwardAuthRequest(
 
                 var validatedPrincipal = TryValidateAccessToken(accessToken, tokenValidationParameters);
                 if (validatedPrincipal is null ||
-                    !HasSessionSubject(validatedPrincipal) ||
+                    !HasSingleSessionSubject(validatedPrincipal) ||
                     !TryGetSingleRoleClaim(validatedPrincipal, out var tokenRole))
                 {
                     await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
@@ -1856,11 +1856,16 @@ static ClaimsPrincipal? TryValidateAccessToken(
     }
 }
 
-static bool HasSessionSubject(ClaimsPrincipal principal)
+static bool HasSingleSessionSubject(ClaimsPrincipal principal)
 {
-    var subject = principal.FindFirstValue(ClaimTypes.NameIdentifier) ??
-        principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-    return !string.IsNullOrWhiteSpace(subject);
+    var subjects = principal.Claims
+        .Where(claim =>
+            claim.Type == ClaimTypes.NameIdentifier ||
+            claim.Type == JwtRegisteredClaimNames.Sub)
+        .Select(claim => claim.Value)
+        .ToArray();
+
+    return subjects.Length == 1 && !string.IsNullOrWhiteSpace(subjects[0]);
 }
 
 static bool TryGetSingleRoleClaim(ClaimsPrincipal principal, out string role)
