@@ -1181,6 +1181,75 @@ public sealed class AuthApiIntegrationTests
                 "The API must stop reading the upstream stream as soon as the configured size limit is exceeded.");
     }
 
+    [Fact]
+    public async Task TriSendHeaderTimeoutReturnsGatewayTimeoutWithoutLeakingDetails()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            Task.FromException<HttpResponseMessage>(
+                new OperationCanceledException("private upstream header timeout")));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/rider/login",
+            new { email = "rider@example.com", password = "StrongPassword!123" });
+
+        Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("timed out", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("private upstream header timeout", body, StringComparison.Ordinal);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task TriSendBodyReadTimeoutReturnsGatewayTimeoutWithoutLeakingDetails()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new TimedOutReadStream())
+            }));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/rider/login",
+            new { email = "rider@example.com", password = "StrongPassword!123" });
+
+        Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("timed out", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("private upstream body timeout", body, StringComparison.Ordinal);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task CallerCancellationDuringTriSendBodyReadIsNotMappedToGatewayTimeout()
+    {
+        var readStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new BlockingReadStream(readStarted))
+            }));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        using var cancellation = new CancellationTokenSource();
+
+        var pending = client.PostAsJsonAsync(
+            "/api/v1/auth/rider/login",
+            new { email = "rider@example.com", password = "StrongPassword!123" },
+            cancellation.Token);
+
+        await readStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.Single(handler.Requests);
+    }
+
     [Theory]
     [InlineData("opaque-refresh-token")]
     [InlineData(" opaque-refresh-token ")]
@@ -1533,6 +1602,69 @@ public sealed class AuthApiIntegrationTests
                 services.AddHttpClient("TriSend")
                     .ConfigurePrimaryHttpMessageHandler(() => handler));
         }
+    }
+
+    private sealed class TimedOutReadStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new OperationCanceledException("private upstream body timeout");
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            new(Task.FromException<int>(
+                new OperationCanceledException("private upstream body timeout")));
+
+        public override Task<int> ReadAsync(
+            byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            Task.FromException<int>(
+                new OperationCanceledException("private upstream body timeout"));
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class BlockingReadStream(TaskCompletionSource<bool> readStarted) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            readStarted.TrySetResult(true);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
+        }
+
+        public override Task<int> ReadAsync(
+            byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private sealed class NonSeekableReadStream(Stream inner) : Stream
