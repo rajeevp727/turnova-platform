@@ -1895,13 +1895,29 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task DriverEndpointUsesNameIdWhenSubjectClaimIsBlank()
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Driver availability must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(subjectValue: " ", includeMappedLegacySubject: true, mappedLegacySubjectValue: "driver-nameid-43"));
+
+        using var response = await client.GetAsync("/api/v1/driver/availability");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Empty(handler.Requests);
+    }
+
     [Theory]
-    [InlineData("missing-subject")]
-    [InlineData("blank-subject")]
-    [InlineData("duplicate-subject")]
-    [InlineData("mixed-subject")]
-    [InlineData("duplicate-role")]
-    public async Task DriverEndpointRejectsTokenWithAmbiguousIdentityClaims(string failure)
+    [InlineData("missing-subject", HttpStatusCode.Forbidden)]
+    [InlineData("blank-subject", HttpStatusCode.Forbidden)]
+    [InlineData("duplicate-subject", HttpStatusCode.Unauthorized)]
+    [InlineData("mixed-subject", HttpStatusCode.Unauthorized)]
+    [InlineData("duplicate-role", HttpStatusCode.Unauthorized)]
+    public async Task DriverEndpointRejectsTokenWithInvalidIdentityClaims(string failure, HttpStatusCode expectedStatus)
     {
         var token = failure switch
         {
@@ -1919,7 +1935,7 @@ public sealed class AuthApiIntegrationTests
 
         using var response = await client.GetAsync("/api/v1/driver/availability");
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(expectedStatus, response.StatusCode);
         AssertNoStoreHeaders(response);
         Assert.Empty(handler.Requests);
     }

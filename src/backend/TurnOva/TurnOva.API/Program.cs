@@ -91,24 +91,28 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                         claim.Type == JwtRegisteredClaimNames.Sub ||
                         string.Equals(claim.Type, "nameid", StringComparison.Ordinal))
                     .ToArray();
+                var nonEmptySubjectClaims = subjectClaims
+                    .Where(claim => !string.IsNullOrWhiteSpace(claim.Value))
+                    .ToArray();
                 var roleClaims = identity.FindAll("role").ToArray();
                 if (!identity.IsAuthenticated ||
-                    subjectClaims.Length != 1 ||
-                    string.IsNullOrWhiteSpace(subjectClaims[0].Value) ||
+                    nonEmptySubjectClaims.Length > 1 ||
                     roleClaims.Length != 1 ||
                     string.IsNullOrWhiteSpace(roleClaims[0].Value))
                 {
-                    context.Fail("The token must contain exactly one non-empty subject and role claim.");
+                    context.Fail("The token must contain at most one non-empty subject and exactly one non-empty role claim.");
                     return Task.CompletedTask;
                 }
 
-                // Inbound claim mapping stays disabled. Normalize only the standard
-                // JwtSecurityTokenHandler outbound alias so every API endpoint resolves
-                // the same canonical user identifier as sub/NameIdentifier tokens.
-                if (string.Equals(subjectClaims[0].Type, "nameid", StringComparison.Ordinal))
+                // Inbound claim mapping stays disabled. Canonicalize the one non-empty
+                // subject alias so ownership lookups and SignalR user identity agree.
+                // Subject-less signed tokens remain usable only on endpoints whose own
+                // policy permits IP-partitioned behavior; user-owned endpoints still fail closed.
+                if (nonEmptySubjectClaims.Length == 1)
                 {
-                    var subject = subjectClaims[0].Value;
-                    identity.RemoveClaim(subjectClaims[0]);
+                    var subject = nonEmptySubjectClaims[0].Value;
+                    foreach (var claim in subjectClaims)
+                        identity.RemoveClaim(claim);
                     identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, subject));
                 }
 
