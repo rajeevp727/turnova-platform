@@ -1250,6 +1250,44 @@ public sealed class AuthApiIntegrationTests
         Assert.Single(handler.Requests);
     }
 
+    [Fact]
+    public async Task MalformedLoginRevocationDoesNotBufferUpstreamLogoutBody()
+    {
+        var logoutPayload = Encoding.UTF8.GetBytes(new string('x', MaximumAuthResponseBytes * 4));
+        var logoutStream = new NonSeekableReadStream(new MemoryStream(logoutPayload));
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            if (request.Path == "/auth/login")
+                return Task.FromResult(JsonResponse(HttpStatusCode.OK,
+                    """{"accessToken":"revoked-access"}"""));
+
+            if (request.Path == "/auth/logout")
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StreamContent(logoutStream)
+                });
+
+            throw new InvalidOperationException("Unexpected TriSend request path.");
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/rider/login",
+            new { email = "rider@example.com", password = "StrongPassword!123" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("invalid response", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("revoked-access", body, StringComparison.Ordinal);
+        Assert.Equal(new[] { "/auth/login", "/auth/logout" },
+            handler.Requests.Select(request => request.Path));
+        Assert.Equal("Bearer", handler.Requests[1].AuthorizationScheme);
+        Assert.Equal("revoked-access", handler.Requests[1].AuthorizationParameter);
+        Assert.Equal(0, logoutStream.BytesRead);
+    }
+
     [Theory]
     [InlineData("opaque-refresh-token")]
     [InlineData(" opaque-refresh-token ")]
