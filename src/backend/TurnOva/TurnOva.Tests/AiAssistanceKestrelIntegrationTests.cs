@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TurnOva.API;
 using TurnOva.API.Assistance;
 using TurnOva.Application.Assistance;
 
@@ -58,6 +59,7 @@ public sealed class AiAssistanceKestrelIntegrationTests
         builder.Services.AddSingleton<IAiAssistantProvider>(provider);
 
         await using var app = builder.Build();
+        app.UseApiResponseCachePolicy();
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseRateLimiter();
