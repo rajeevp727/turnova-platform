@@ -577,7 +577,7 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
-    public async Task QueueHelpExplainsRiderSelectionWithoutInventingInternalFifoPolicy()
+    public async Task QueueHelpExplainsRiderSelectionWithoutExposingInternalQueuePolicy()
     {
         var service = CreateService(new UnavailableAiAssistantProvider());
 
@@ -587,8 +587,12 @@ public sealed class AiAssistanceServiceTests
             CancellationToken.None);
 
         Assert.Equal("queue-status", result.SourceId);
-        Assert.Contains("does not use FIFO", result.Answer, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("unresolved", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not show a queue position", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("automatically assign", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pickup proximity", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("FIFO", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("unresolved", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("internal", result.Answer, StringComparison.OrdinalIgnoreCase);
         Assert.False(result.EscalationRequired);
     }
 
