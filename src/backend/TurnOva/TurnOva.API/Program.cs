@@ -124,8 +124,9 @@ builder.Services.AddOptions<TriSendSettings>()
     .Validate(settings =>
         !string.IsNullOrWhiteSpace(settings.BaseUrl) &&
         Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri) &&
-        uri.Scheme == Uri.UriSchemeHttps,
-        "TriSend:BaseUrl must be a valid HTTPS URL.")
+        (uri.Scheme == Uri.UriSchemeHttps ||
+         (builder.Environment.IsDevelopment() && uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)),
+        "TriSend:BaseUrl must be HTTPS; loopback HTTP is allowed only in Development.")
     .ValidateOnStart();
 
 builder.Services.AddHttpClient("TriSend", (services, client) =>
