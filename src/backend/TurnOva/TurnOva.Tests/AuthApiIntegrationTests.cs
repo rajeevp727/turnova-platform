@@ -1184,6 +1184,7 @@ public sealed class AuthApiIntegrationTests
     [InlineData("expired")]
     [InlineData("missing-role")]
     [InlineData("missing-subject")]
+    [InlineData("duplicate-subject")]
     public async Task LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy(string failure)
     {
         var accessToken = failure switch
@@ -1193,7 +1194,8 @@ public sealed class AuthApiIntegrationTests
             "audience" => CreateToken("Driver", audience: "wrong-audience"),
             "expired" => CreateToken("Driver", notBefore: DateTime.UtcNow.AddMinutes(-10), expires: DateTime.UtcNow.AddMinutes(-5)),
             "missing-role" => CreateToken(includeRole: false),
-            "missing-subject" => CreateToken(includeSubject: false),
+            "missing-subject" => CreateToken(subjectClaimCount: 0),
+            "duplicate-subject" => CreateToken(subjectClaimCount: 2),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
         using var handler = new RecordingHandler((request, _) =>
@@ -1592,6 +1594,39 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Theory]
+    [InlineData("missing-subject")]
+    [InlineData("duplicate-subject")]
+    public async Task RefreshRejectsAccessTokenWithoutExactlyOneSubjectAndRevokesReturnedSession(string failure)
+    {
+        var accessToken = failure == "missing-subject"
+            ? CreateToken("Rider", subjectClaimCount: 0)
+            : CreateToken("Rider", subjectClaimCount: 2);
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            if (request.Path == "/auth/refresh")
+                return Task.FromResult(JsonResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    accessToken,
+                    refreshToken = "next-refresh-token"
+                })));
+
+            Assert.Equal("/auth/logout", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"success":true}"""));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new { refreshToken = "opaque-refresh-token" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Equal(new[] { "/auth/refresh", "/auth/logout" },
+            handler.Requests.Select(request => request.Path));
+        Assert.Equal(accessToken, handler.Requests[1].AuthorizationParameter);
+    }
+
+    [Theory]
     [InlineData("{}")]
     [InlineData("{\"refreshToken\":null}")]
     [InlineData("{\"refreshToken\":\"\"}")]
@@ -1871,13 +1906,13 @@ public sealed class AuthApiIntegrationTests
         DateTime? expires = null,
         bool demo = false,
         bool includeRole = true,
-        bool includeSubject = true)
+        int subjectClaimCount = 1)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var claims = new List<Claim>();
-        if (includeSubject)
-            claims.Add(new Claim(JwtRegisteredClaimNames.Sub, "driver-1"));
+        for (var index = 0; index < subjectClaimCount; index++)
+            claims.Add(new Claim(JwtRegisteredClaimNames.Sub, $"driver-{index + 1}"));
         if (includeRole)
             claims.Add(new Claim("role", role));
         if (demo)
