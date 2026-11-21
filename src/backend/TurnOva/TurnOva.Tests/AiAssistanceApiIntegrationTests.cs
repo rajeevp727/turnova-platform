@@ -128,6 +128,36 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task AssistantRateLimitDoesNotTrustForwardedHeadersWhenIdentityClaimsAreBlank()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var caller = factory.CreateClientWithBlankSubject("Rider", string.Empty);
+
+        caller.DefaultRequestHeaders.TryAddWithoutValidation("X-Forwarded-For", "198.51.100.10");
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            using var allowed = await caller.PostAsJsonAsync(
+                "/api/v1/assistance/help",
+                new { question = "What does queue status mean?" });
+            Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        }
+
+        using var rejected = await caller.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "What does queue status mean?" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+
+        caller.DefaultRequestHeaders.Remove("X-Forwarded-For");
+        caller.DefaultRequestHeaders.TryAddWithoutValidation("X-Forwarded-For", "198.51.100.11");
+
+        using var spoofedPartitionAttempt = await caller.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "What does queue status mean?" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, spoofedPartitionAttempt.StatusCode);
+    }
+
+    [Fact]
     public async Task AssistantRateLimitRejectionIsNonCacheable()
     {
         using var factory = new AiAssistanceApiFactory();
