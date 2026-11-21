@@ -21,7 +21,11 @@ public sealed class ApiResponseCachePolicyTests
         using var response = await client.GetAsync(path);
 
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("private, max-age=60", response.Headers.CacheControl?.ToString());
+        var cacheControl = response.Headers.CacheControl;
+        Assert.NotNull(cacheControl);
+        Assert.True(cacheControl.Private);
+        Assert.Equal(TimeSpan.FromSeconds(60), cacheControl.MaxAge);
+        Assert.False(cacheControl.NoStore);
         Assert.Empty(response.Headers.Pragma);
     }
 
@@ -36,9 +40,11 @@ public sealed class ApiResponseCachePolicyTests
         using var response = await client.GetAsync(path);
 
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
-        var cacheControl = response.Headers.CacheControl?.ToString() ?? string.Empty;
-        Assert.Contains("private, max-age=60", cacheControl, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no-store", cacheControl, StringComparison.OrdinalIgnoreCase);
+        var cacheControl = response.Headers.CacheControl;
+        Assert.NotNull(cacheControl);
+        Assert.True(cacheControl.Private);
+        Assert.Equal(TimeSpan.FromSeconds(60), cacheControl.MaxAge);
+        Assert.True(cacheControl.NoStore);
         Assert.Contains(response.Headers.Pragma, value =>
             value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
     }
