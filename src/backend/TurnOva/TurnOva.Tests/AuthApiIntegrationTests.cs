@@ -613,7 +613,7 @@ public sealed class AuthApiIntegrationTests
     public async Task DriverRegistrationForwardsNormalizedIdentityAndServerOwnedRole()
     {
         using var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.Created,
-            """{"accessToken":"access","refreshToken":"refresh","user":{"role":"Driver"}}""")));
+            JsonSerializer.Serialize(new { accessToken = CreateToken("Driver"), refreshToken = "refresh", user = new { role = "Driver" } }))));
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
 
@@ -637,7 +637,7 @@ public sealed class AuthApiIntegrationTests
     public async Task RiderRegistrationForwardsNormalizedIdentityAndServerOwnedRole()
     {
         using var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.Created,
-            """{"accessToken":"access","refreshToken":"refresh","user":{"role":"Rider"}}""")));
+            JsonSerializer.Serialize(new { accessToken = CreateToken("Rider"), refreshToken = "refresh", user = new { role = "Rider" } }))));
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
 
@@ -670,7 +670,7 @@ public sealed class AuthApiIntegrationTests
             if (Interlocked.Increment(ref callCount) == 1)
             {
                 return Task.FromResult(JsonResponse(HttpStatusCode.Created,
-                    """{"accessToken":"first-access","refreshToken":"first-refresh","user":{"role":"Rider"}}"""));
+                    JsonSerializer.Serialize(new { accessToken = CreateToken("Rider"), refreshToken = "first-refresh", user = new { role = "Rider" } })));
             }
 
             return Task.FromResult(JsonResponse(HttpStatusCode.Conflict,
@@ -949,16 +949,16 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Theory]
-    [InlineData("/api/v1/auth/rider/login", "RIDER@example.com", "rider@example.com", "Rider", "rider-access-token", "rider-refresh-token")]
-    [InlineData("/api/v1/auth/driver/login", "DRIVER@example.com", "driver@example.com", "Driver", "driver-access-token", "driver-refresh-token")]
+    [InlineData("/api/v1/auth/rider/login", "RIDER@example.com", "rider@example.com", "Rider")]
+    [InlineData("/api/v1/auth/driver/login", "DRIVER@example.com", "driver@example.com", "Driver")]
     public async Task SuccessfulRiderAndDriverLoginForwardsNormalizedIdentityAndReturnsMatchingSession(
         string route,
         string submittedEmail,
         string normalizedEmail,
-        string expectedRole,
-        string accessToken,
-        string refreshToken)
+        string expectedRole)
     {
+        var accessToken = CreateToken(expectedRole);
+        const string refreshToken = "valid-refresh-token";
         using var handler = new RecordingHandler((request, _) =>
         {
             Assert.Equal("/auth/login", request.Path);
@@ -1146,6 +1146,78 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal(new[] { "/auth/login", "/auth/logout" }, handler.Requests.Select(x => x.Path));
         Assert.Equal("Bearer", handler.Requests[1].AuthorizationScheme);
         Assert.Equal("wrong-role-access-token", handler.Requests[1].AuthorizationParameter);
+    }
+
+
+    [Fact]
+    public async Task LoginRejectsJwtRoleThatDiffersFromTheUserRoleAndRevokesReturnedSession()
+    {
+        var accessToken = CreateToken("Rider");
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            if (request.Path == "/auth/login")
+                return Task.FromResult(JsonResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    accessToken,
+                    refreshToken = "refresh",
+                    user = new { role = "Driver" }
+                })));
+
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"success":true}"""));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/driver/login",
+            new { email = "driver@example.com", password = "password" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Equal(new[] { "/auth/login", "/auth/logout" }, handler.Requests.Select(x => x.Path));
+        Assert.Equal(accessToken, handler.Requests[1].AuthorizationParameter);
+    }
+
+    [Theory]
+    [InlineData("signature")]
+    [InlineData("issuer")]
+    [InlineData("audience")]
+    [InlineData("expired")]
+    [InlineData("missing-role")]
+    public async Task LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy(string failure)
+    {
+        var accessToken = failure switch
+        {
+            "signature" => CreateToken("Driver", signingKey: "different-signing-key-for-tests-32-bytes"),
+            "issuer" => CreateToken("Driver", issuer: "wrong-issuer"),
+            "audience" => CreateToken("Driver", audience: "wrong-audience"),
+            "expired" => CreateToken("Driver", expires: DateTime.UtcNow.AddMinutes(-5)),
+            "missing-role" => CreateToken(includeRole: false),
+            _ => throw new ArgumentOutOfRangeException(nameof(failure))
+        };
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            if (request.Path == "/auth/login")
+                return Task.FromResult(JsonResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    accessToken,
+                    refreshToken = "refresh",
+                    user = new { role = "Driver" }
+                })));
+
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"success":true}"""));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/driver/login",
+            new { email = "driver@example.com", password = "password" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(accessToken, body, StringComparison.Ordinal);
+        Assert.Equal(new[] { "/auth/login", "/auth/logout" }, handler.Requests.Select(x => x.Path));
+        Assert.Equal(accessToken, handler.Requests[1].AuthorizationParameter);
     }
 
     [Theory]
@@ -1471,7 +1543,7 @@ public sealed class AuthApiIntegrationTests
     public async Task RefreshForwardsNonBlankOpaqueTokenWithoutRewritingIt(string refreshToken)
     {
         using var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK,
-            """{"accessToken":"new-access","refreshToken":"new-refresh"}""")));
+            JsonSerializer.Serialize(new { accessToken = CreateToken("Rider"), refreshToken = "new-refresh" }))));
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
 
@@ -1764,15 +1836,17 @@ public sealed class AuthApiIntegrationTests
         string signingKey = SigningKey,
         DateTime? notBefore = null,
         DateTime? expires = null,
-        bool demo = false)
+        bool demo = false,
+        bool includeRole = true)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, "driver-1"),
-            new("role", role)
+            new(JwtRegisteredClaimNames.Sub, "driver-1")
         };
+        if (includeRole)
+            claims.Add(new Claim("role", role));
         if (demo)
             claims.Add(new Claim("demo", "true"));
         var token = new JwtSecurityToken(
