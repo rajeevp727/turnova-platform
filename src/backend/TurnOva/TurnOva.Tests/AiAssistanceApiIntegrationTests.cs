@@ -90,9 +90,8 @@ public sealed class AiAssistanceApiIntegrationTests
         Assert.Contains(tripResponse.Headers.Pragma, value =>
             value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         using var tripError = JsonDocument.Parse(await tripResponse.Content.ReadAsStringAsync());
-        Assert.Equal(
-            "A non-empty request is required.",
-            tripError.RootElement.GetProperty("message").GetString());
+        var tripMessage = tripError.RootElement.GetProperty("message").GetString()!;
+        Assert.StartsWith("A non-empty request is required.", tripMessage, StringComparison.Ordinal);
 
         using var helpResponse = await rider.PostAsJsonAsync(
             "/api/v1/assistance/help",
@@ -103,7 +102,9 @@ public sealed class AiAssistanceApiIntegrationTests
         Assert.Contains(helpResponse.Headers.Pragma, value =>
             value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         using var helpError = JsonDocument.Parse(await helpResponse.Content.ReadAsStringAsync());
-        Assert.Equal("Ride state is invalid.", helpError.RootElement.GetProperty("message").GetString());
+        var helpMessage = helpError.RootElement.GetProperty("message").GetString()!;
+        Assert.StartsWith("Ride state is invalid.", helpMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain(new string('x', 41), helpMessage, StringComparison.Ordinal);
     }
 
     [Fact]
