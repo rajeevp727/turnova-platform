@@ -19,7 +19,7 @@ The document is generated from ASP.NET Core endpoint metadata. Contract integrat
 | `POST /api/v1/auth/{role}/register` | Public; server fixes app ID and allowed Rider/Driver role |
 | `POST /api/v1/auth/{role}/login` | Public; server fixes app ID and verifies returned role |
 | `POST /api/v1/auth/refresh` | Public refresh-token exchange; opaque token is forwarded unchanged |
-| `POST /api/v1/auth/logout` | Best-effort upstream revocation; an optional supplied credential must be a non-empty Bearer value. Expired/invalid Bearer values are forwarded unchanged for TriSend to evaluate; malformed/non-Bearer schemes are rejected locally with HTTP 400 |
+| `POST /api/v1/auth/logout` | Best-effort upstream revocation when the Authorization header is absent. If the header is present (including an empty/whitespace value), it must parse as a non-empty Bearer value; expired/invalid Bearer values are forwarded unchanged for TriSend to evaluate, while malformed/blank/non-Bearer values are rejected locally with HTTP 400 |
 | `GET /api/v1/auth/me` | Valid TurnOva JWT required; request is rejected locally before TriSend is called when unauthenticated |
 | `POST /api/v1/auth/demo/{role}` | Public but disabled by default; requires explicit DemoAuth:Enabled=true and valid JWT issuer/audience/signing-key configuration; supports only Rider/Driver demo identities |
 | Rider endpoints | JWT with `role=Rider` |
@@ -443,3 +443,8 @@ Authentication forwarding treats an IOException raised after response headers ar
 ## Logout Authorization boundary
 
 The logout endpoint does not locally validate token expiry/signature because revocation must still be attempted for expired or invalid Bearer values. If an Authorization header is supplied, it must parse as a non-empty Bearer value; Basic, Negotiate, malformed and empty-scheme values are rejected with HTTP 400 before TriSend is called. The API never echoes the supplied credential. Omitting the header retains best-effort no-token logout behavior.
+
+
+### AUTH-API-050 — present blank logout Authorization values
+
+The logout handler checks whether the Authorization header key is present separately from its value. A present whitespace-only value is rejected with HTTP 400 before TriSend; an absent header retains best-effort no-token logout. A supplied non-empty Bearer value (including expired/invalid credentials) is forwarded unchanged for upstream revocation. The deterministic integration suite verifies the whitespace-only rejection, absent-header forwarding, existing Basic/bare-Bearer/Negotiate rejection and exact expired-Bearer pass-through. Exact source/test API-only CI [#44917764343](https://github.com/rajeevp727/turnova-platform/actions/runs/44917764343), rerun attempt 2, passed 1011/1011 backend tests, .NET 10 Release build, native non-container publish/verifier and artifact [14712661472](https://github.com/rajeevp727/turnova-platform/actions/runs/44917764343/artifacts/14712661472). A zero-length Authorization value is not emitted by the HttpClient integration fixture; the implementation still treats an empty value as invalid when the server receives a present header. This is supplemental API security coverage, outside the 19-row acceptance denominator.
