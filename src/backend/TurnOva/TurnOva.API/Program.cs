@@ -4811,9 +4811,10 @@ app.MapPost("/api/v1/queues/{zoneId}/{serviceClass}/offer-timeout", async (
 
 app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     if (!RideLifecycle.AreCoordinatesValid(location.Latitude, location.Longitude))
         return Results.BadRequest(new { message = "Invalid coordinates." });
-    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId || !ride.LocationSharingActive || !RideLifecycle.IsLocationSharingActive(ride.Status))
         return Results.NotFound(new { message = "Active ride not found." });
@@ -5012,6 +5013,7 @@ app.MapPost("/api/v1/rides/{rideId}/start", async (
     ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
     if (ride.Status == "InProgress") return Results.Ok(ToDriverRideHistoryItem(ride));
@@ -5043,6 +5045,7 @@ app.MapPost("/api/v1/rides/{rideId}/complete", async (
     ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
     if (ride.Status == "Completed")
@@ -5141,6 +5144,7 @@ app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
 app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.RiderId != riderId) return Results.NotFound();
     if (ride.Status == "Cancelled") return Results.Ok(ToRiderRideDetailsResponse(ride));
@@ -5158,6 +5162,7 @@ app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string
 async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, string expected, string next, CancellationToken ct)
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
     if (ride.Status == next) return Results.Ok(ToDriverRideHistoryItem(ride));
@@ -5532,6 +5537,7 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
 app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
 {
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
     var ride = await FindRideAsync(
         rideId, ct,
         candidate => string.Equals(candidate.RiderId, riderId, StringComparison.Ordinal));

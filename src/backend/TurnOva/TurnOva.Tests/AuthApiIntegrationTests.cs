@@ -1877,6 +1877,32 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
+    [Theory]
+    [InlineData("Driver", "POST", "/api/v1/rides/no-subject/location")]
+    [InlineData("Driver", "POST", "/api/v1/rides/no-subject/start")]
+    [InlineData("Driver", "POST", "/api/v1/rides/no-subject/complete")]
+    [InlineData("Driver", "POST", "/api/v1/rides/no-subject/arrive")]
+    [InlineData("Rider", "POST", "/api/v1/rides/no-subject/cancel")]
+    [InlineData("Rider", "GET", "/api/v1/rides/no-subject")]
+    public async Task SubjectlessTokensCannotAccessUserOwnedRideEndpoints(string role, string method, string path)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Subjectless tokens must be rejected before ride access."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", CreateToken(role: role, subjectClaimCount: 0));
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+        if (path.EndsWith("/location", StringComparison.Ordinal))
+            request.Content = JsonContent.Create(new { latitude = 17.385, longitude = 78.4867 });
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Empty(handler.Requests);
+    }
+
     [Fact]
     public async Task DriverEndpointAcceptsSingleMappedNameIdSubject()
     {
