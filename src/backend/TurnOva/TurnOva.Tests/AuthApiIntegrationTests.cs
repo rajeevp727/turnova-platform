@@ -23,6 +23,7 @@ public sealed class AuthApiIntegrationTests
     private const string Issuer = "turnova-auth-tests";
     private const string Audience = "turnova-api";
     private const string SigningKey = "turnova-auth-integration-test-signing-key-32-bytes";
+    private const int MaximumAuthResponseBytes = 256 * 1024;
 
     [Fact]
     public async Task DemoSessionIsDisabledUnlessExplicitlyEnabled()
@@ -1140,6 +1141,42 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OversizedAuthenticationResponseIsRejectedForKnownAndUnknownLengthBodies(bool knownLength)
+    {
+        var payload = Encoding.UTF8.GetBytes(
+            """{"accessToken":"provider-secret","refreshToken":"next-refresh"}""" +
+            new string('x', MaximumAuthResponseBytes));
+        HttpContent content;
+        if (knownLength)
+        {
+            content = new ByteArrayContent(payload);
+        }
+        else
+        {
+            content = new StreamContent(new NonSeekableReadStream(new MemoryStream(payload)));
+        }
+        content.Headers.ContentType = new("application/json");
+
+        using var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content }));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/rider/login",
+            new { email = "rider@example.com", password = "StrongPassword!123" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("invalid response", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("provider-secret", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("next-refresh", body, StringComparison.Ordinal);
+        Assert.Single(handler.Requests);
+    }
+
+    [Theory]
     [InlineData("opaque-refresh-token")]
     [InlineData(" opaque-refresh-token ")]
     public async Task RefreshForwardsNonBlankOpaqueTokenWithoutRewritingIt(string refreshToken)
@@ -1490,6 +1527,34 @@ public sealed class AuthApiIntegrationTests
             builder.ConfigureTestServices(services =>
                 services.AddHttpClient("TriSend")
                     .ConfigurePrimaryHttpMessageHandler(() => handler));
+        }
+    }
+
+    private sealed class NonSeekableReadStream(Stream inner) : Stream
+    {
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            inner.ReadAsync(buffer, cancellationToken);
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                inner.Dispose();
+            base.Dispose(disposing);
         }
     }
 
