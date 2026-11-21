@@ -1620,8 +1620,9 @@ authGroup.MapPost("/refresh", async (
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
 {
+    var hasAuthorizationHeader = context.Request.Headers.ContainsKey("Authorization");
     var authorization = context.Request.Headers.Authorization.ToString();
-    if (!string.IsNullOrWhiteSpace(authorization) &&
+    if (hasAuthorizationHeader &&
         (!AuthenticationHeaderValue.TryParse(authorization, out var header) ||
          !header.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) ||
          string.IsNullOrWhiteSpace(header.Parameter)))
