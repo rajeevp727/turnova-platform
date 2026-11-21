@@ -560,6 +560,30 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task HealthAndOpenApiRemainOutsideApiResponseCachePolicy()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Public health and OpenAPI endpoints must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var healthResponse = await client.GetAsync("/health/live");
+
+        Assert.Equal(HttpStatusCode.OK, healthResponse.StatusCode);
+        Assert.False(healthResponse.Headers.CacheControl?.NoStore ?? false);
+        Assert.DoesNotContain(healthResponse.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        using var openApiResponse = await client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.OK, openApiResponse.StatusCode);
+        Assert.False(openApiResponse.Headers.CacheControl?.NoStore ?? false);
+        Assert.DoesNotContain(openApiResponse.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task DriverRegistrationForwardsNormalizedIdentityAndServerOwnedRole()
     {
         using var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.Created,
