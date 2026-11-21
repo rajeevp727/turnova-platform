@@ -1740,7 +1740,9 @@ static async Task<IResult> ForwardAuthRequest(
                 }
 
                 var validatedPrincipal = TryValidateAccessToken(accessToken, tokenValidationParameters);
-                if (validatedPrincipal is null || !TryGetSingleRoleClaim(validatedPrincipal, out _))
+                if (validatedPrincipal is null ||
+                    !HasSessionSubject(validatedPrincipal) ||
+                    !TryGetSingleRoleClaim(validatedPrincipal, out _))
                 {
                     await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
                     return InvalidAuthenticationResponse();
@@ -1787,7 +1789,9 @@ static async Task<IResult> ForwardAuthRequest(
                 }
 
                 var validatedPrincipal = TryValidateAccessToken(accessToken, tokenValidationParameters);
-                if (validatedPrincipal is null || !TryGetSingleRoleClaim(validatedPrincipal, out var tokenRole))
+                if (validatedPrincipal is null ||
+                    !HasSessionSubject(validatedPrincipal) ||
+                    !TryGetSingleRoleClaim(validatedPrincipal, out var tokenRole))
                 {
                     await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
                     return InvalidAuthenticationResponse();
@@ -1846,10 +1850,17 @@ static ClaimsPrincipal? TryValidateAccessToken(
         return handler.ValidateToken(accessToken, tokenValidationParameters.Clone(), out _);
     }
     catch (Exception exception) when (
-        exception is SecurityTokenException or ArgumentException or FormatException or InvalidOperationException)
+        exception is SecurityTokenException or ArgumentException or FormatException or InvalidOperationException or CryptographicException)
     {
         return null;
     }
+}
+
+static bool HasSessionSubject(ClaimsPrincipal principal)
+{
+    var subject = principal.FindFirstValue(ClaimTypes.NameIdentifier) ??
+        principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
+    return !string.IsNullOrWhiteSpace(subject);
 }
 
 static bool TryGetSingleRoleClaim(ClaimsPrincipal principal, out string role)
