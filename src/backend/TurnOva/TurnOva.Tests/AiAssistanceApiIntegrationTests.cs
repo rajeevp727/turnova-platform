@@ -76,6 +76,37 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task AssistanceValidationReturnsTypedNonCacheableBadRequest()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var rider = factory.CreateClient("Rider", "ai-validation");
+
+        using var tripResponse = await rider.PostAsJsonAsync(
+            "/api/v1/assistance/trip-intent",
+            new { text = " " });
+
+        Assert.Equal(HttpStatusCode.BadRequest, tripResponse.StatusCode);
+        Assert.True(tripResponse.Headers.CacheControl?.NoStore);
+        Assert.Contains(tripResponse.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        using var tripError = JsonDocument.Parse(await tripResponse.Content.ReadAsStringAsync());
+        Assert.Equal(
+            "A non-empty request is required.",
+            tripError.RootElement.GetProperty("message").GetString());
+
+        using var helpResponse = await rider.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "What does queue status mean?", rideState = new string('x', 41) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, helpResponse.StatusCode);
+        Assert.True(helpResponse.Headers.CacheControl?.NoStore);
+        Assert.Contains(helpResponse.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        using var helpError = JsonDocument.Parse(await helpResponse.Content.ReadAsStringAsync());
+        Assert.Equal("Ride state is invalid.", helpError.RootElement.GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task OpenApiDocumentsTypedAiAssistanceContractsAndResponses()
     {
         using var factory = new AiAssistanceApiFactory();
