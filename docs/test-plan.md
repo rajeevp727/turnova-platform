@@ -4332,3 +4332,18 @@ The validator reuses the exact configured `JwtBearerOptions.TokenValidationParam
 | Upstream JWT contains one supported subject identity claim with a non-empty value | Continue existing signature, issuer, audience, lifetime and single-role validation | Existing valid Rider/Driver login and refresh integration tests |
 
 The API counts both JWT sub and legacy ClaimTypes.NameIdentifier identity claims and requires exactly one non-empty value. This prevents an ambiguous subject from being silently accepted by selecting only the first claim. AUTH-API-054 is supplemental authentication hardening and does not change the 19-row MVP denominator.
+
+## AUTH-API-055 — accept a single legacy NameIdentifier subject
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-055 | TriSend returns a valid Rider/Driver login JWT containing exactly one non-empty legacy `ClaimTypes.NameIdentifier` claim and no `sub` claim | The API accepts the session, returns the unchanged access token with auth no-store/no-cache headers, and does not issue an unnecessary revocation request | API integration/security | P1 |
+
+## AUTH-API-056 — reject mixed duplicate and blank session subjects
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-056 | TriSend returns a JWT with both `sub` and legacy `ClaimTypes.NameIdentifier` subject claims, or exactly one subject claim whose value is blank, during login or refresh | The API returns generic HTTP 502 with no-store/no-cache; no upstream body/token is disclosed; the bounded valid access token is best-effort revoked. Both login and refresh paths are covered | API integration/security | P1 |
+
+## Run 46 — API subject-claim regression expansion (2026-11-22)
+- Added a positive legacy-only `ClaimTypes.NameIdentifier` login case and negative mixed `sub` + legacy duplicate and blank-subject cases for login and refresh.
+- Source/test commit: `cde5dcf1b201c5ea1c93efd88ac339c0ffc1fa5e`.
+- Baseline exact-head CI before this test increment: [#44935961280](https://github.com/rajeevp727/turnova-platform/actions/runs/44935961280), 1,029/1,029 backend tests, Release build and native non-container publish/verifier. The new source/test head and synchronized documentation head require fresh exact-head CI; no pass is claimed for them yet.
