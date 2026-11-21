@@ -1769,7 +1769,18 @@ static async Task<string> ReadBoundedResponseBodyAsync(
         await buffer.WriteAsync(chunk.AsMemory(0, bytesRead), ct);
     }
 
-    return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
+    try
+    {
+        // Authentication tokens must not be silently rewritten by UTF-8 replacement fallback.
+        // A replacement character in a token can turn an invalid upstream response into a
+        // seemingly successful but unusable credential envelope.
+        return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+            .GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
+    }
+    catch (DecoderFallbackException exception)
+    {
+        throw new InvalidDataException("Authentication response was not valid UTF-8.", exception);
+    }
 }
 
 
