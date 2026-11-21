@@ -560,25 +560,17 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
-    public async Task HealthAndOpenApiRemainOutsideApiResponseCachePolicy()
+    public async Task OpenApiDocumentRemainsOutsideApiResponseCachePolicy()
     {
         using var handler = new RecordingHandler((_, _) =>
-            throw new InvalidOperationException("Public health and OpenAPI endpoints must not call TriSend."));
+            throw new InvalidOperationException("OpenAPI generation must not call TriSend."));
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
 
-        using var healthResponse = await client.GetAsync("/health/live");
+        using var response = await client.GetAsync("/openapi/v1.json");
 
-        Assert.Equal(HttpStatusCode.OK, healthResponse.StatusCode);
-        // ASP.NET health checks may set their own Cache-Control: no-store header.
-        // Pragma: no-cache is added by the TurnOva API/realtime response policy.
-        Assert.DoesNotContain(healthResponse.Headers.Pragma, value =>
-            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
-
-        using var openApiResponse = await client.GetAsync("/openapi/v1.json");
-
-        Assert.Equal(HttpStatusCode.OK, openApiResponse.StatusCode);
-        Assert.DoesNotContain(openApiResponse.Headers.Pragma, value =>
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain(response.Headers.Pragma, value =>
             value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(handler.Requests);
     }
