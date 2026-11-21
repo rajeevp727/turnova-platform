@@ -1246,12 +1246,49 @@ public sealed class AuthApiIntegrationTests
 
     [Theory]
     [InlineData("http://auth.test.invalid")]
+    [InlineData("http://localhost:5001")]
     [InlineData("not-a-valid-url")]
     [InlineData(" ")]
     public void StartupRejectsNonHttpsOrInvalidTriSendBaseUrl(string baseUrl)
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Startup validation must run before TriSend."));
         using var factory = new AuthApiFactory(handler, new Dictionary<string, string?> { ["TriSend:BaseUrl"] = baseUrl });
+
+        var exception = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(exception);
+        Assert.Contains("TriSend:BaseUrl", exception.ToString(), StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("http://localhost:5001")]
+    [InlineData("http://127.0.0.1:5001")]
+    [InlineData("http://[::1]:5001")]
+    public void DevelopmentAllowsLoopbackHttpTriSendBaseUrl(string baseUrl)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Startup validation must run before TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["TriSend:BaseUrl"] = baseUrl },
+            environmentName: "Development");
+
+        using var client = factory.CreateClient();
+
+        Assert.NotNull(client);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("http://auth.test.invalid")]
+    [InlineData("http://192.0.2.10:5001")]
+    public void DevelopmentRejectsRemoteHttpTriSendBaseUrl(string baseUrl)
+    {
+        using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Startup validation must run before TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["TriSend:BaseUrl"] = baseUrl },
+            environmentName: "Development");
 
         var exception = Record.Exception(() => factory.CreateClient());
 
