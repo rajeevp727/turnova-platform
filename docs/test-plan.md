@@ -4012,3 +4012,11 @@ Source/test commit [`9afa592967b3655606f347bca868af7b11d479ff`](https://github.c
 | AUTH-API-030 | A real Kestrel request exceeds the 16 KiB body limit on Rider trip-intent or Rider/Driver help | HTTP 413 with `Cache-Control: no-store` and `Pragma: no-cache`; the provider is not invoked | API HTTP-boundary/privacy integration | P1 |
 
 Covered by `AiAssistanceKestrelIntegrationTests.KestrelRejectsOversizedAssistanceRequestBeforeProviderInvocation`. The production API and real-Kestrel fixture share `ApiResponseCachePolicyExtensions.UseApiResponseCachePolicy`, so the regression exercises the same middleware used by `Program.cs` on the server-generated 413 path. It does not change the request limit, endpoint contract or provider behavior. This supplemental regression is outside the 19-area MVP acceptance denominator.
+
+## AI-01 — disabled provider is never invoked
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-045 | AI assistance is disabled while a deterministic fake provider reports available | Rider trip-intent and approved-help requests use deterministic in-repo behavior; provider invocation count remains zero | API service/provider-boundary unit test | P1 |
+
+Covered by `AiAssistanceServiceTests.DisabledProviderIsNeverInvokedForTripIntentOrHelp`. This proves the default-disabled configuration prevents provider execution even when an adapter is registered and available. No provider/model/credential is selected, and no external request is made. This supplemental AI-01 regression is outside the 19-area MVP acceptance denominator.
