@@ -103,11 +103,16 @@ public static class AiAssistanceEndpoints
                 loggerFactory.CreateLogger("TurnOva.AiAssistance").LogWarning(
                     "Assistant request rejected. UseCase {UseCase} ValidationType {ValidationType}",
                     "TripIntent", exception.GetType().Name);
-                return Results.BadRequest(new { message = exception.Message });
+                return Results.BadRequest(new AssistanceErrorResponse(exception.Message));
             }
         }).RequireAuthorization(policy => policy.RequireRole("Rider"))
             .WithMetadata(new RequestSizeLimitAttribute(16 * 1024))
-            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+            .Produces<TripIntentDraftResponse>(StatusCodes.Status200OK)
+            .Produces<AssistanceErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         group.MapPost("/help", async Task<IResult> (
             HelpRequest request,
@@ -128,11 +133,16 @@ public static class AiAssistanceEndpoints
                 loggerFactory.CreateLogger("TurnOva.AiAssistance").LogWarning(
                     "Assistant request rejected. UseCase {UseCase} ValidationType {ValidationType}",
                     "Help", exception.GetType().Name);
-                return Results.BadRequest(new { message = exception.Message });
+                return Results.BadRequest(new AssistanceErrorResponse(exception.Message));
             }
         }).RequireAuthorization(policy => policy.RequireRole("Rider", "Driver"))
             .WithMetadata(new RequestSizeLimitAttribute(16 * 1024))
-            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+            .Produces<HelpResponse>(StatusCodes.Status200OK)
+            .Produces<AssistanceErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         return app;
     }

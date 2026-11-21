@@ -35,6 +35,8 @@ public sealed record HelpRequest(string? Question, string? RideState = null);
 
 public sealed record HelpResponse(string Answer, string SourceId, bool EscalationRequired, string Source);
 
+public sealed record AssistanceErrorResponse(string Message);
+
 public sealed record SafeTripIntentPrompt(
     string IntentSummary,
     string PickupToken,

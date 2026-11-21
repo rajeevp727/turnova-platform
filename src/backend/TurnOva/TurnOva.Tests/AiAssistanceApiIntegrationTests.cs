@@ -76,6 +76,99 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task OpenApiDocumentsTypedAiAssistanceContractsAndResponses()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var client = factory.CreateAnonymousClient();
+
+        using var response = await client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        var paths = root.GetProperty("paths");
+
+        var tripIntent = paths.GetProperty("/api/v1/assistance/trip-intent").GetProperty("post");
+        var help = paths.GetProperty("/api/v1/assistance/help").GetProperty("post");
+
+        AssertBearerRequired(tripIntent);
+        AssertBearerRequired(help);
+
+        var tripRequest = ResolveSchema(
+            root,
+            tripIntent.GetProperty("requestBody").GetProperty("content")
+                .GetProperty("application/json").GetProperty("schema"));
+        Assert.True(tripRequest.GetProperty("properties").TryGetProperty("text", out _));
+
+        var tripResponses = tripIntent.GetProperty("responses");
+        var tripDraft = ResolveSchema(
+            root,
+            tripResponses.GetProperty("200").GetProperty("content")
+                .GetProperty("application/json").GetProperty("schema"));
+        foreach (var property in new[]
+        {
+            "pickup", "dropoff", "serviceClass", "passengerCount",
+            "needsClarification", "missingFields", "requiresUserConfirmation", "source"
+        })
+            Assert.True(tripDraft.GetProperty("properties").TryGetProperty(property, out _),
+                $"Trip-intent response is missing {property}.");
+        AssertErrorResponses(root, tripResponses);
+
+        var helpRequest = ResolveSchema(
+            root,
+            help.GetProperty("requestBody").GetProperty("content")
+                .GetProperty("application/json").GetProperty("schema"));
+        var helpRequestProperties = helpRequest.GetProperty("properties");
+        Assert.True(helpRequestProperties.TryGetProperty("question", out _));
+        Assert.True(helpRequestProperties.TryGetProperty("rideState", out _));
+
+        var helpResponses = help.GetProperty("responses");
+        var helpResponse = ResolveSchema(
+            root,
+            helpResponses.GetProperty("200").GetProperty("content")
+                .GetProperty("application/json").GetProperty("schema"));
+        foreach (var property in new[] { "answer", "sourceId", "escalationRequired", "source" })
+            Assert.True(helpResponse.GetProperty("properties").TryGetProperty(property, out _),
+                $"Help response is missing {property}.");
+        AssertErrorResponses(root, helpResponses);
+    }
+
+    private static void AssertBearerRequired(JsonElement operation)
+    {
+        Assert.Contains(operation.GetProperty("security").EnumerateArray(),
+            requirement => requirement.TryGetProperty("Bearer", out _));
+    }
+
+    private static void AssertErrorResponses(JsonElement root, JsonElement responses)
+    {
+        var validationError = ResolveSchema(
+            root,
+            responses.GetProperty("400").GetProperty("content")
+                .GetProperty("application/json").GetProperty("schema"));
+        Assert.True(validationError.GetProperty("properties").TryGetProperty("message", out _));
+
+        var tooManyRequests = responses.GetProperty("429");
+        Assert.True(tooManyRequests.GetProperty("content").TryGetProperty("application/problem+json", out _));
+
+        foreach (var status in new[] { "401", "403", "413" })
+        {
+            Assert.True(responses.TryGetProperty(status, out var response),
+                $"Assistance contract is missing HTTP {status}.");
+            Assert.False(response.TryGetProperty("content", out _),
+                $"HTTP {status} is documented without a response body.");
+        }
+    }
+
+    private static JsonElement ResolveSchema(JsonElement root, JsonElement schema)
+    {
+        if (!schema.TryGetProperty("$ref", out var schemaReference))
+            return schema;
+
+        var schemaName = schemaReference.GetString()!.Split('/').Last();
+        return root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
+    }
+
+    [Fact]
     public async Task AssistantRateLimitIsPartitionedByAuthenticatedSubject()
     {
         using var factory = new AiAssistanceApiFactory();
