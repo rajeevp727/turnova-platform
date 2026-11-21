@@ -1674,7 +1674,7 @@ static async Task<IResult> ForwardAuthRequest(
 
                 if (!TryGetNonEmptyString(root, "refreshToken", out _))
                 {
-                    await RevokeAuthSessionAsync(clients, accessToken, ct);
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
                     return InvalidAuthenticationResponse();
                 }
             }
@@ -1706,13 +1706,13 @@ static async Task<IResult> ForwardAuthRequest(
                 var hasRole = hasUser && TryGetNonEmptyString(user, "role", out actualRole);
                 if (!hasRefreshToken || !hasRole)
                 {
-                    await RevokeAuthSessionAsync(clients, accessToken, ct);
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
                     return InvalidAuthenticationResponse();
                 }
 
                 if (!string.Equals(actualRole, expectedRole, StringComparison.Ordinal))
                 {
-                    await RevokeAuthSessionAsync(clients, accessToken, ct);
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
                     return Results.Problem(
                         "The authentication service returned an account with a different app role.",
                         statusCode: StatusCodes.Status403Forbidden);
@@ -1783,7 +1783,10 @@ static async Task RevokeAuthSessionAsync(
     using var logout = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
     logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
     using var client = clients.CreateClient("TriSend");
-    using var ignored = await client.SendAsync(logout, cancellationToken);
+    // Logout is best-effort and its response body is irrelevant. Read headers only, then dispose
+    // the response so a compromised identity provider cannot force an unbounded body buffer.
+    using var ignored = await client.SendAsync(
+        logout, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 }
 
 static IResult InvalidAuthenticationResponse() =>
