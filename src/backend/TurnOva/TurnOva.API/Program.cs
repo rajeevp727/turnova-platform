@@ -105,14 +105,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 }
 
                 // Inbound claim mapping stays disabled. Canonicalize the one non-empty
-                // subject alias so ownership lookups and SignalR user identity agree.
-                // Subject-less signed tokens remain usable only on endpoints whose own
-                // policy permits IP-partitioned behavior; user-owned endpoints still fail closed.
+                // subject to both claim names used by this API: sub for audit actor snapshots
+                // and NameIdentifier for ownership/SignalR user identity. Subject-less signed
+                // tokens remain limited to endpoints that deliberately permit IP fallback.
                 if (nonEmptySubjectClaims.Length == 1)
                 {
                     var subject = nonEmptySubjectClaims[0].Value;
                     foreach (var claim in subjectClaims)
                         identity.RemoveClaim(claim);
+                    identity.AddClaim(new Claim(JwtRegisteredClaimNames.Sub, subject));
                     identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, subject));
                 }
 

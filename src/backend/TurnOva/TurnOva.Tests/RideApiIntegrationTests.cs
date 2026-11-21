@@ -1745,7 +1745,7 @@ public sealed partial class RideApiIntegrationTests
             ProfilePhotoReviewReason = null
         };
 
-        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-review");
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-review", subjectClaimType: "nameid");
         using var retryManager = factory.CreateUnionManagerClient(unionId, "union-manager-review-retry");
         using var otherManager = factory.CreateUnionManagerClient("another-union", "other-union-manager");
         using var managerWithoutUnion = factory.CreateClient("UnionManager", "manager-without-union");
@@ -8043,7 +8043,7 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
             }
         }
 
-        public HttpClient CreateClient(string role, string subject, string? unionId = null)
+        public HttpClient CreateClient(string role, string subject, string? unionId = null, string subjectClaimType = "sub")
         {
             var client = CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -8051,7 +8051,7 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
                 BaseAddress = new Uri("https://localhost")
             });
             client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject, unionId));
+                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject, unionId, subjectClaimType));
             if (role == "Driver")
             {
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -8071,17 +8071,17 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
             return client;
         }
 
-        public HttpClient CreateUnionManagerClient(string unionId, string subject) =>
-            CreateClient("UnionManager", subject, unionId);
+        public HttpClient CreateUnionManagerClient(string unionId, string subject, string subjectClaimType = "sub") =>
+            CreateClient("UnionManager", subject, unionId, subjectClaimType);
 
-        private static string CreateToken(string role, string subject, string? unionId)
+        private static string CreateToken(string role, string subject, string? unionId, string subjectClaimType)
         {
             var credentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)),
                 SecurityAlgorithms.HmacSha256);
             var claims = new List<Claim>
             {
-                new("sub", subject),
+                new(subjectClaimType, subject),
                 new("role", role),
                 new("name", subject)
             };
