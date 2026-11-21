@@ -88,6 +88,9 @@ public sealed class AiAssistanceKestrelIntegrationTests
                 HttpCompletionOption.ResponseHeadersRead);
 
             Assert.Equal((HttpStatusCode)413, response.StatusCode);
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.Contains(response.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
             Assert.Equal(0, provider.InvocationCount);
         }
         finally
