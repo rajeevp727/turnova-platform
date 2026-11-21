@@ -4363,3 +4363,8 @@ The API deliberately keeps inbound JWT claim mapping disabled. It therefore reco
 - Source/test head: [`fb93bccb6bde94fef382994320d1def6f41c054e`](https://github.com/rajeevp727/turnova-platform/commit/fb93bccb6bde94fef382994320d1def6f41c054e).
 - Exact-head API-only CI [#44943774814](https://github.com/rajeevp727/turnova-platform/actions/runs/44943774814) passed **1,040/1,040 tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14721694937](https://github.com/rajeevp727/turnova-platform/actions/runs/44943774814/artifacts/14721694937).
 - Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped because API remains the active phase. No Docker/container build or deployment was used.
+
+
+## Run 47 documentation-head verification
+- Documentation/progress head [`954743343f70ea55ddda6ab3417174fb3c46c2ba`](https://github.com/rajeevp727/turnova-platform/commit/954743343f70ea55ddda6ab3417174fb3c46c2ba) passed exact-head API-only CI [#44944143544](https://github.com/rajeevp727/turnova-platform/actions/runs/44944143544): 1,040/1,040 backend tests, .NET 10 Release build, native non-container Linux x64 publish/verifier, artifact [14722743425](https://github.com/rajeevp727/turnova-platform/actions/runs/44944143544/artifacts/14722743425).
+- The current follow-up tracker correction is docs-only; its exact-head CI must be checked before merge consideration.
