@@ -4212,3 +4212,11 @@ Covered by AuthApiIntegrationTests.TriSendHeaderTimeoutReturnsGatewayTimeoutWith
 Covered by AuthApiIntegrationTests.MalformedLoginRevocationDoesNotBufferUpstreamLogoutBody. The fake TriSend login returns a malformed successful session with an access token, then logout returns a 1 MiB non-seekable body with no declared Content-Length. The test asserts the logout bearer token is sent to the expected endpoint, the API returns generic 502 with no-store/no-cache, the token is not exposed, and zero logout response bytes are read. RevokeAuthSessionAsync now uses ResponseHeadersRead and the same linked cancellation token as the original authentication operation. Live TriSend behavior remains external.
 
 Exact-head API-only CI [#44898077439](https://github.com/rajeevp727/turnova-platform/actions/runs/44898077439) on head [3725bdd885d9865b3d78863078d66137decabbf0](https://github.com/rajeevp727/turnova-platform/commit/3725bdd885d9865b3d78863078d66137decabbf0) passed **997/997 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14704173754](https://github.com/rajeevp727/turnova-platform/actions/runs/44898077439/artifacts/14704173754). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
+
+## AUTH-API-044 — disable pooled upstream cookie persistence
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-044 | The pooled TriSend SocketsHttpHandler processes multiple Rider/Driver authentication requests and an upstream response includes Set-Cookie | Automatic cookie handling is disabled. The shared handler does not persist or replay upstream cookies across unrelated Rider/Driver requests; bearer/opaque-token forwarding remains explicit. | API auth integration/security | P1 |
+
+Covered by AuthApiIntegrationTests.TriSendPrimaryHandlerDisablesAutomaticCookiePersistence, which asserts the production handler has UseCookies=false. The API contract uses explicit JWT Authorization and opaque refresh-token forwarding; it does not require a shared cookie session. The test validates handler configuration, not a live TriSend cookie exchange.
