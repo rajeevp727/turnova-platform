@@ -1572,7 +1572,7 @@ authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
   .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 authGroup.MapPost("/{role}/register", async (
     string role, PasswordRegisterRequest request, IHttpClientFactory clients,
-    CancellationToken ct) =>
+    IOptionsMonitor<JwtBearerOptions> jwtOptions, CancellationToken ct) =>
 {
     if (role is not ("driver" or "rider"))
         return Results.NotFound();
@@ -1588,11 +1588,12 @@ authGroup.MapPost("/{role}/register", async (
         role = role == "driver" ? "Driver" : "Rider",
         replaceOldest = request.ReplaceOldest
     };
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/register", payload, null, role == "driver" ? "Driver" : "Rider", ct);
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/register", payload, null, role == "driver" ? "Driver" : "Rider", ct,
+        tokenValidationParameters: jwtOptions.Get(JwtBearerDefaults.AuthenticationScheme).TokenValidationParameters);
 });
 authGroup.MapPost("/{role}/login", async (
     string role, PasswordLoginRequest request, IHttpClientFactory clients,
-    CancellationToken ct) =>
+    IOptionsMonitor<JwtBearerOptions> jwtOptions, CancellationToken ct) =>
 {
     if (role is not ("driver" or "rider"))
         return Results.NotFound();
@@ -1606,16 +1607,19 @@ authGroup.MapPost("/{role}/login", async (
         appId = "turnova",
         replaceOldest = request.ReplaceOldest
     };
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/login", payload, null, role == "driver" ? "Driver" : "Rider", ct);
+    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/login", payload, null, role == "driver" ? "Driver" : "Rider", ct,
+        tokenValidationParameters: jwtOptions.Get(JwtBearerDefaults.AuthenticationScheme).TokenValidationParameters);
 });
 authGroup.MapPost("/refresh", async (
-    RefreshTokenRequest? request, IHttpClientFactory clients, CancellationToken ct) =>
+    RefreshTokenRequest? request, IHttpClientFactory clients,
+    IOptionsMonitor<JwtBearerOptions> jwtOptions, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request?.RefreshToken))
         return Results.BadRequest(new { message = "Refresh token is required." });
 
     return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/refresh",
-        new { refreshToken = request.RefreshToken }, null, null, ct, validateRefreshResponse: true);
+        new { refreshToken = request.RefreshToken }, null, null, ct, validateRefreshResponse: true,
+        tokenValidationParameters: jwtOptions.Get(JwtBearerDefaults.AuthenticationScheme).TokenValidationParameters);
 });
 authGroup.MapPost("/logout", async (
     HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
@@ -1682,7 +1686,8 @@ authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, 
 static async Task<IResult> ForwardAuthRequest(
     IHttpClientFactory clients, HttpMethod method, string path, object? body,
     string? authorization, string? expectedRole, CancellationToken ct,
-    bool validateRefreshResponse = false)
+    bool validateRefreshResponse = false,
+    TokenValidationParameters? tokenValidationParameters = null)
 {
     using var request = new HttpRequestMessage(method, path);
     if (body is not null)
@@ -1733,6 +1738,13 @@ static async Task<IResult> ForwardAuthRequest(
                     await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
                     return InvalidAuthenticationResponse();
                 }
+
+                var validatedPrincipal = TryValidateAccessToken(accessToken, tokenValidationParameters);
+                if (validatedPrincipal is null || !TryGetSingleRoleClaim(validatedPrincipal, out _))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return InvalidAuthenticationResponse();
+                }
             }
         }
 
@@ -1773,6 +1785,21 @@ static async Task<IResult> ForwardAuthRequest(
                         "The authentication service returned an account with a different app role.",
                         statusCode: StatusCodes.Status403Forbidden);
                 }
+
+                var validatedPrincipal = TryValidateAccessToken(accessToken, tokenValidationParameters);
+                if (validatedPrincipal is null || !TryGetSingleRoleClaim(validatedPrincipal, out var tokenRole))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return InvalidAuthenticationResponse();
+                }
+
+                if (!string.Equals(tokenRole, expectedRole, StringComparison.Ordinal))
+                {
+                    await RevokeAuthSessionAsync(clients, accessToken, upstreamTimeout.Token);
+                    return Results.Problem(
+                        "The authentication service returned a token with a different app role.",
+                        statusCode: StatusCodes.Status403Forbidden);
+                }
             }
         }
         return Results.Content(content, "application/json", Encoding.UTF8, (int)response.StatusCode);
@@ -1798,6 +1825,44 @@ static async Task<IResult> ForwardAuthRequest(
     {
         return Results.Problem("Authentication service timed out.", statusCode: 504);
     }
+}
+
+static ClaimsPrincipal? TryValidateAccessToken(
+    string accessToken,
+    TokenValidationParameters? tokenValidationParameters)
+{
+    const int maximumAccessTokenCharacters = 16 * 1024;
+    if (tokenValidationParameters is null ||
+        string.IsNullOrWhiteSpace(accessToken) ||
+        accessToken.Length > maximumAccessTokenCharacters)
+        return null;
+
+    try
+    {
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+        if (!handler.CanReadToken(accessToken))
+            return null;
+
+        return handler.ValidateToken(accessToken, tokenValidationParameters.Clone(), out _);
+    }
+    catch (Exception exception) when (
+        exception is SecurityTokenException or ArgumentException or FormatException or InvalidOperationException)
+    {
+        return null;
+    }
+}
+
+static bool TryGetSingleRoleClaim(ClaimsPrincipal principal, out string role)
+{
+    var roles = principal.FindAll("role").Select(claim => claim.Value).ToArray();
+    if (roles.Length != 1 || string.IsNullOrWhiteSpace(roles[0]))
+    {
+        role = string.Empty;
+        return false;
+    }
+
+    role = roles[0];
+    return true;
 }
 
 static async Task<string> ReadBoundedResponseBodyAsync(
@@ -1854,6 +1919,10 @@ static async Task RevokeAuthSessionAsync(
     string accessToken,
     CancellationToken cancellationToken)
 {
+    // Do not place an oversized or malformed upstream value in an outbound header.
+    if (accessToken.Length is 0 or > 16 * 1024 || !IsValidBearerToken68(accessToken))
+        return;
+
     using var logout = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
     logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
     using var client = clients.CreateClient("TriSend");
