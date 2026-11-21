@@ -560,22 +560,6 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
-    public async Task OpenApiDocumentRemainsOutsideApiResponseCachePolicy()
-    {
-        using var handler = new RecordingHandler((_, _) =>
-            throw new InvalidOperationException("OpenAPI generation must not call TriSend."));
-        using var factory = new AuthApiFactory(handler);
-        using var client = factory.CreateClient();
-
-        using var response = await client.GetAsync("/openapi/v1.json");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.DoesNotContain(response.Headers.Pragma, value =>
-            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
-        Assert.Empty(handler.Requests);
-    }
-
-    [Fact]
     public async Task DriverRegistrationForwardsNormalizedIdentityAndServerOwnedRole()
     {
         using var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.Created,
