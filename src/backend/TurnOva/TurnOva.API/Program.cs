@@ -1637,7 +1637,7 @@ static async Task<IResult> ForwardAuthRequest(
 
     try
     {
-        using var response = await clients.CreateClient("TriSend").SendAsync(request, ct);
+        using var response = await clients.CreateClient("TriSend").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if ((int)response.StatusCode is >= 300 and < 400)
             return Results.Problem(
                 "Authentication service returned an unsupported redirect.",
