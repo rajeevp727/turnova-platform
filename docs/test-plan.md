@@ -4004,3 +4004,11 @@ Source/test commit [`113041810017b77bdf2bc10fe6a587914aad1275`](https://github.c
 Covered by `AuthApiIntegrationTests.RideHubCorsPreflightReturnsNoStoreHeaders`. This verifies the response-start cache policy wraps the CORS middleware's preflight short-circuit on the SignalR negotiate path. It adds no hub endpoint and does not change authentication or authorization. This supplemental regression is outside the 19-area MVP acceptance denominator.
 
 Source/test commit [`9afa592967b3655606f347bca868af7b11d479ff`](https://github.com/rajeevp727/turnova-platform/commit/9afa592967b3655606f347bca868af7b11d479ff) passed exact-head API-only CI [#44847354008](https://github.com/rajeevp727/turnova-platform/actions/runs/44847354008): **949/949 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14683916032](https://github.com/rajeevp727/turnova-platform/actions/runs/44847354008/artifacts/14683916032). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-first phase gate.
+
+## AUTH-API-030 — oversized assistance requests remain non-cacheable
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-030 | A real Kestrel request exceeds the 16 KiB body limit on Rider trip-intent or Rider/Driver help | HTTP 413 with `Cache-Control: no-store` and `Pragma: no-cache`; the provider is not invoked | API HTTP-boundary/privacy integration | P1 |
+
+Covered by `AiAssistanceKestrelIntegrationTests.KestrelRejectsOversizedAssistanceRequestBeforeProviderInvocation`. This extends the existing real-server request-size regression to assert the API-wide response cache policy on the server-generated 413 path. It does not change the request limit, endpoint contract or provider behavior. This supplemental regression is outside the 19-area MVP acceptance denominator.
