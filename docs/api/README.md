@@ -434,3 +434,8 @@ The named TriSend HttpClient uses a SocketsHttpHandler with automatic redirects 
 ## AUTH-API-041 — bounded TriSend identity response bodies
 
 All authentication forwarding through `ForwardAuthRequest` now uses `HttpCompletionOption.ResponseHeadersRead` to avoid buffering an untrusted response before validation. The API rejects a declared Content-Length above 256 KiB and enforces the same limit while reading unknown-length streams incrementally. One linked 15-second deadline covers response headers and the bounded body read; caller cancellation remains distinct. Oversized upstream content returns generic HTTP 502 Problem Details without exposing provider bodies or tokens. Deterministic integration coverage exercises declared and unknown Content-Length responses and proves that the unknown-length stream is not read to completion. Exact-head API-only CI [#44892910756](https://github.com/rajeevp727/turnova-platform/actions/runs/44892910756) passed 993/993 backend tests, Release build and native non-container publish/verifier (artifact [14702229969](https://github.com/rajeevp727/turnova-platform/actions/runs/44892910756/artifacts/14702229969)).
+
+
+## AUTH-API-046 — upstream authentication body-read failures
+
+Authentication forwarding treats an IOException raised after response headers arrive as an upstream availability failure and returns generic HTTP 503. Partial response bytes are discarded; no token fragments or upstream exception details are returned. This is distinct from an oversized/invalid upstream body (HTTP 502), an upstream timeout (HTTP 504), and caller cancellation (propagated). The deterministic regression emits a token-bearing prefix and then fails the response stream.
