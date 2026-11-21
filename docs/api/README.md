@@ -19,7 +19,7 @@ The document is generated from ASP.NET Core endpoint metadata. Contract integrat
 | `POST /api/v1/auth/{role}/register` | Public; server fixes app ID and allowed Rider/Driver role |
 | `POST /api/v1/auth/{role}/login` | Public; server fixes app ID and verifies returned role |
 | `POST /api/v1/auth/refresh` | Public refresh-token exchange; opaque token is forwarded unchanged |
-| `POST /api/v1/auth/logout` | Best-effort upstream revocation; accepts an expired/invalid bearer so the auth service can decide whether revocation is possible |
+| `POST /api/v1/auth/logout` | Best-effort upstream revocation; an optional supplied credential must be a non-empty Bearer value. Expired/invalid Bearer values are forwarded unchanged for TriSend to evaluate; malformed/non-Bearer schemes are rejected locally with HTTP 400 |
 | `GET /api/v1/auth/me` | Valid TurnOva JWT required; request is rejected locally before TriSend is called when unauthenticated |
 | `POST /api/v1/auth/demo/{role}` | Public but disabled by default; requires explicit DemoAuth:Enabled=true and valid JWT issuer/audience/signing-key configuration; supports only Rider/Driver demo identities |
 | Rider endpoints | JWT with `role=Rider` |
@@ -439,3 +439,7 @@ All authentication forwarding through `ForwardAuthRequest` now uses `HttpComplet
 ## AUTH-API-046 — upstream authentication body-read failures
 
 Authentication forwarding treats an IOException raised after response headers arrive as an upstream availability failure and returns generic HTTP 503. Partial response bytes are discarded; no token fragments or upstream exception details are returned. This is distinct from an oversized/invalid upstream body (HTTP 502), an upstream timeout (HTTP 504), and caller cancellation (propagated). The deterministic regression emits a token-bearing prefix and then fails the response stream. Exact-head API-only CI [#44899879661](https://github.com/rajeevp727/turnova-platform/actions/runs/44899879661) on [d4ef721b1e1bc59b25c990563e89eee7ca35893b](https://github.com/rajeevp727/turnova-platform/commit/d4ef721b1e1bc59b25c990563e89eee7ca35893b) passed **1002/1002 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (25 existing xUnit analyzer warnings, 0 errors), native non-container linux-x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14705338204](https://github.com/rajeevp727/turnova-platform/actions/runs/44899879661/artifacts/14705338204). Mobile-auth, mobile, Android/emulator and iOS jobs were intentionally skipped under the API-only phase gate.
+
+## Logout Authorization boundary
+
+The logout endpoint does not locally validate token expiry/signature because revocation must still be attempted for expired or invalid Bearer values. If an Authorization header is supplied, it must parse as a non-empty Bearer value; Basic, Negotiate, malformed and empty-scheme values are rejected with HTTP 400 before TriSend is called. The API never echoes the supplied credential. Omitting the header retains best-effort no-token logout behavior.
