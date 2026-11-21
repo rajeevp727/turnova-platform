@@ -2276,3 +2276,7 @@ Best-effort auth session revocation now uses ResponseHeadersRead and shares the 
 ## Supplemental API security evidence — AUTH-API-044 (outside the 19-row denominator)
 
 The pooled TriSend SocketsHttpHandler now disables automatic cookies to prevent upstream Set-Cookie values from persisting in a shared CookieContainer and being replayed across unrelated Rider/Driver requests. A deterministic handler-configuration test asserts UseCookies=false. This does not change the 19-row denominator or strict Verified count. Exact-head CI is pending.
+
+## Supplemental API security evidence — AUTH-API-045 (outside the 19-row denominator)
+
+TriSend BaseUrl startup validation now rejects URI user-info, query and fragment components while retaining HTTPS everywhere and Development-only loopback HTTP. Deterministic startup tests prove those configurations fail before any upstream request. This does not change the 19-row denominator or strict Verified count. Exact-head CI is pending.
