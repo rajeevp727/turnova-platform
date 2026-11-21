@@ -4121,3 +4121,22 @@ Covered by `AiAssistanceApiIntegrationTests.AssistanceAuthorizationRejectionsAre
 
 Covered by `AiAssistanceServiceTests.ProviderAvailabilityProbeFailureUsesDeterministicFallbackForTripIntentAndHelp`. The regression uses a provider fake that throws a sensitive configuration message from its availability probe, verifies both use cases retain deterministic results, and asserts zero provider-operation calls. Source/test head [515180729671a7e1412ace2d930161e4d7659af8](https://github.com/rajeevp727/turnova-platform/commit/515180729671a7e1412ace2d930161e4d7659af8) passed exact-head API-only CI [#44876195519](https://github.com/rajeevp727/turnova-platform/actions/runs/44876195519) with **956/956 backend tests**, Release build and native non-container publish/verifier (artifact [14696037759](https://github.com/rajeevp727/turnova-platform/actions/runs/44876195519/artifacts/14696037759)). AI-048 is supplemental AI-01 coverage outside the 19-row MVP acceptance denominator.
 
+
+
+## AUTH-API-035 — API and ride-hub cache middleware path scope
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-035 | A TestServer endpoint sets `Cache-Control: private, max-age=60` for health live/ready, OpenAPI, `/api/v1/test` and `/hubs/rides/negotiate` | Health/OpenAPI paths keep their original private/max-age policy without API no-store/no-cache directives; API/ride-hub paths additionally receive no-store/no-cache while retaining private/max-age | API middleware integration | P1 |
+
+Covered by `ApiResponseCachePolicyTests`. The five deterministic cases use typed Cache-Control properties rather than relying on directive ordering. This supplements AUTH-API-016..029 and does not add a new MVP acceptance row.
+
+## AUTH-API-036 — Development-only loopback HTTP for TriSend
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-036 | Configure TriSend with HTTP loopback hosts in Development, remote HTTP in Development, and HTTP loopback in Testing/non-Development | Development accepts `localhost`, `127.0.0.1` and `[::1]`; remote HTTP remains rejected in Development; HTTP remains rejected outside Development. HTTPS remains the required transport elsewhere | API startup/configuration integration | P1 |
+
+Covered by `AuthApiIntegrationTests.DevelopmentAllowsLoopbackHttpTriSendBaseUrl`, `DevelopmentRejectsRemoteHttpTriSendBaseUrl` and `StartupRejectsNonHttpsOrInvalidTriSendBaseUrl`. The validator uses `Uri.IsLoopback`; it does not permit arbitrary LAN/public HTTP upstreams. This is Development-only configuration support, not a production transport exception.
+
+**Exact source/test evidence:** head [`4b38efd35d58453f7695863ca567d459f1e7d246`](https://github.com/rajeevp727/turnova-platform/commit/4b38efd35d58453f7695863ca567d459f1e7d246) passed API-only CI [#44886215146](https://github.com/rajeevp727/turnova-platform/actions/runs/44886215146): 968/968 backend tests (0 failed, 0 skipped), .NET 10 Release build, native non-container linux-x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), artifact [14699888739](https://github.com/rajeevp727/turnova-platform/actions/runs/44886215146/artifacts/14699888739). Mobile/Android/iOS jobs were intentionally skipped under the API-first phase gate. No Docker/container build or deployment was used.
