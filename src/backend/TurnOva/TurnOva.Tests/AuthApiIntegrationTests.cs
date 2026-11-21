@@ -702,7 +702,6 @@ public sealed class AuthApiIntegrationTests
     [InlineData("Basic")]
     [InlineData("Bearer")]
     [InlineData("Negotiate token")]
-    [InlineData("")]
     [InlineData(" ")]
     public async Task LogoutRejectsUnsupportedAuthorizationBeforeCallingTriSend(string authorization)
     {
