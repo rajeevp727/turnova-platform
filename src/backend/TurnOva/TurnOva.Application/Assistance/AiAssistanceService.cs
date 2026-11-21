@@ -213,7 +213,7 @@ public sealed class AiAssistanceService
         int? passengerCount = invalidPassengerCount ? null : explicitPassengerCount;
 
         if (pickup is not null && dropoff is not null && !invalidPassengerCount &&
-            _options.Enabled && _provider.IsAvailable)
+            IsProviderAvailable())
         {
             var prompt = BuildSafeTripPrompt(normalized, routeMatch);
             var providerResult = await InvokeProviderAsync(
@@ -261,7 +261,7 @@ public sealed class AiAssistanceService
         var source = "deterministic-fallback";
         HelpEntry? selectedEntry = null;
 
-        if (_options.Enabled && _provider.IsAvailable)
+        if (IsProviderAvailable())
         {
             var prompt = new SafeHelpPrompt(
                 safeKeywords,
@@ -285,6 +285,24 @@ public sealed class AiAssistanceService
             return UnsupportedHelp(source);
 
         return EnsureHelpOutputLimit(new HelpResponse(selectedEntry.Answer, selectedEntry.Id, false, source));
+    }
+
+    private bool IsProviderAvailable()
+    {
+        if (!_options.Enabled)
+            return false;
+
+        try
+        {
+            return _provider.IsAvailable;
+        }
+        catch (Exception)
+        {
+            // Provider availability may depend on optional configuration or adapter setup.
+            // Treat a broken/unconfigured adapter as unavailable and retain deterministic
+            // in-repository behavior instead of turning a draft/help request into HTTP 500.
+            return false;
+        }
     }
 
     private string ValidateInput(string? value, string parameterName)
