@@ -1221,6 +1221,37 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Theory]
+    [InlineData("whitespace")]
+    [InlineData("oversized")]
+    public async Task LoginDoesNotAttemptRevocationWithMalformedOrOversizedAccessToken(string failure)
+    {
+        var accessToken = failure == "whitespace"
+            ? "malformed access token"
+            : new string('a', 16 * 1024 + 1);
+        using var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/auth/login", request.Path);
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new
+            {
+                accessToken,
+                refreshToken = "refresh",
+                user = new { role = "Driver" }
+            })));
+        });
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/driver/login",
+            new { email = "driver@example.com", password = "password" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(accessToken, body, StringComparison.Ordinal);
+        Assert.Single(handler.Requests);
+    }
+
+    [Theory]
     [InlineData("not-json provider-secret", false)]
     [InlineData("[]", false)]
     [InlineData("{\"user\":{\"role\":\"Rider\"}}", false)]
