@@ -1,6 +1,5 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using TurnOva.API;
 
 namespace TurnOva.Tests;
@@ -13,22 +12,14 @@ public sealed class ApiResponseCachePolicyTests
     [InlineData("/openapi/v1.json")]
     public async Task NonApiPathsDoNotReceiveApiCacheDirectives(string path)
     {
-        using var services = new ServiceCollection().BuildServiceProvider();
-        var builder = new ApplicationBuilder(services);
-        builder.UseApiResponseCachePolicy();
-        builder.Run(_ => Task.CompletedTask);
-        var app = builder.Build();
+        using var server = CreateServer();
+        using var client = server.CreateClient();
 
-        var context = new DefaultHttpContext();
-        context.Request.Path = path;
-        context.Response.Body = new MemoryStream();
-        context.Response.Headers["Cache-Control"] = "private, max-age=60";
+        using var response = await client.GetAsync(path);
 
-        await app(context);
-        await context.Response.StartAsync();
-
-        Assert.Equal("private, max-age=60", context.Response.Headers["Cache-Control"].ToString());
-        Assert.Empty(context.Response.Headers["Pragma"].ToArray());
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("private, max-age=60", response.Headers.CacheControl?.ToString());
+        Assert.Empty(response.Headers.Pragma);
     }
 
     [Theory]
@@ -36,22 +27,27 @@ public sealed class ApiResponseCachePolicyTests
     [InlineData("/hubs/rides/negotiate")]
     public async Task ApiAndRideHubPathsReceiveNoStoreAndNoCache(string path)
     {
-        using var services = new ServiceCollection().BuildServiceProvider();
-        var builder = new ApplicationBuilder(services);
-        builder.UseApiResponseCachePolicy();
-        builder.Run(_ => Task.CompletedTask);
-        var app = builder.Build();
+        using var server = CreateServer();
+        using var client = server.CreateClient();
 
-        var context = new DefaultHttpContext();
-        context.Request.Path = path;
-        context.Response.Body = new MemoryStream();
-        context.Response.Headers["Cache-Control"] = "private, max-age=60";
+        using var response = await client.GetAsync(path);
 
-        await app(context);
-        await context.Response.StartAsync();
-
-        Assert.Contains("private, max-age=60", context.Response.Headers["Cache-Control"].ToString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no-store", context.Response.Headers["Cache-Control"].ToString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no-cache", context.Response.Headers["Pragma"].ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        var cacheControl = response.Headers.CacheControl?.ToString() ?? string.Empty;
+        Assert.Contains("private, max-age=60", cacheControl, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no-store", cacheControl, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(response.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
     }
+
+    private static TestServer CreateServer() =>
+        new(new WebHostBuilder().Configure(app =>
+        {
+            app.UseApiResponseCachePolicy();
+            app.Run(async context =>
+            {
+                context.Response.Headers["Cache-Control"] = "private, max-age=60";
+                await context.Response.WriteAsync("ok");
+            });
+        }));
 }
