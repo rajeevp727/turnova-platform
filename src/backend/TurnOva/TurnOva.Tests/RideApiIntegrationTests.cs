@@ -962,6 +962,57 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionManagerCannotUseDriverSelfServiceOrRiderWorkflowsForMemberSubject()
+    {
+        const string subject = "union-manager-driver-boundary";
+        const string unionId = "union-manager-driver-boundary-union";
+        const string selectedDriverId = "union-manager-boundary-selected-driver";
+        const string selectedUnionId = "union-manager-boundary-selected-union";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var driverProfileClient = factory.CreateClient("Driver", subject);
+        using var manager = factory.CreateUnionManagerClient(unionId, subject);
+        SeedBookableDriver(factory, subject, unionId);
+        SeedBookableDriver(factory, selectedDriverId, selectedUnionId);
+
+        // Positive control: this identity is a valid manager for the assigned Union.
+        using var unionMembers = await manager.GetAsync("/api/v1/union/drivers");
+        Assert.Equal(HttpStatusCode.OK, unionMembers.StatusCode);
+
+        using var onboarding = await manager.GetAsync("/api/v1/driver/onboarding/me");
+        Assert.Equal(HttpStatusCode.Forbidden, onboarding.StatusCode);
+        using var availability = await manager.GetAsync("/api/v1/driver/availability");
+        Assert.Equal(HttpStatusCode.Forbidden, availability.StatusCode);
+        using var driverHistory = await manager.GetAsync("/api/v1/driver/rides/mine");
+        Assert.Equal(HttpStatusCode.Forbidden, driverHistory.StatusCode);
+        using var payslip = await manager.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.Forbidden, payslip.StatusCode);
+
+        using var discovery = await manager.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.Forbidden, discovery.StatusCode);
+        using var riderHistory = await manager.GetAsync("/api/v1/rides/mine");
+        Assert.Equal(HttpStatusCode.Forbidden, riderHistory.StatusCode);
+
+        using var bookingRequest = CreateSelectedBookingRequest(
+            "union-manager-driver-boundary-booking", selectedDriverId, selectedUnionId,
+            "KPHB", "HITEC City", []);
+        using var booking = await manager.SendAsync(bookingRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, booking.StatusCode);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        Assert.Equal("Online", profiles[subject].AvailabilityStatus);
+        Assert.Equal(unionId,
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()[subject].UnionId);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync(selectedDriverId));
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync(subject));
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
     {
         using var factory = new TurnOvaApiFactory();
