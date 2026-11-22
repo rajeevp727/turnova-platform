@@ -58,7 +58,7 @@ public sealed class CosmosReservationCancellationTests
             It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
         batch.Verify(value => value.CreateItem(
             It.Is<DriverRideReservationAuditEvent>(item =>
-                item.DriverId == "driver-1" && item.RideId == "ride-1" &&
+                item.DriverId == "driver-1" && item.ReservationId == "ride-1" &&
                 item.EventType == DriverRideReservationAuditEventTypes.Acquired),
             It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
         batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
