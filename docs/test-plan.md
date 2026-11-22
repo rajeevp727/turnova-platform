@@ -9,7 +9,31 @@
 
 TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
 
-**Current phase gate (Run 80, 2026-11-22):** API remains `in_progress`; Android/iOS remain `not_started`. COSMOS-STORE-007 rejects missing/blank RideOffer expected ETags; COSMOS-STORE-008 preserves caller cancellation precedence before that local rejection; COSMOS-STORE-009 centralizes observed-ETag validation across RideOffer, Driver/Rider reservation batches and four direct API conditional-write paths. Twenty strict-mock reservation cases cover null/empty/space/tab across five operations and assert no transactional batch is created; five policy cases cover invalid and valid ETags. Exact-head API-only CI [#45039513358](https://github.com/rajeevp727/turnova-platform/actions/runs/45039513358) passed **1,149/1,149 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (24 warnings, 0 errors), native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture) and artifact validation [14761715373](https://github.com/rajeevp727/turnova-platform/actions/runs/45039513358/artifacts/14761715373) (17,006,473 bytes; SHA-256 `1d230d0c89b2ea1869ed6633a02e6893edac8dc8657b4eccd0a4ac2570f15bef`). Run 79 CI [#45039106922](https://github.com/rajeevp727/turnova-platform/actions/runs/45039106922) passed 1,124/1,124 and Run 78 CI [#45038556978](https://github.com/rajeevp727/turnova-platform/actions/runs/45038556978) passed 1,123/1,123. Live Cosmos ETag/multi-instance/restart remains external; these are deterministic mocks. PR #200 still requires independent human approval, permitted merge and a fresh main/API phase-exit audit. No Android work is authorized.
+**Current phase gate (Run 82, 2026-11-22):** API remains `in_progress`; Android/iOS remain `not_started`. COSMOS-STORE-013 removes the Operations Union status read/modify/unconditional-upsert path and replaces it with observed-ETag conditional Cosmos replacement; the in-memory adapter uses compare-and-swap. Thirteen deterministic cases cover metadata preservation, missing records, null/empty/space/tab ETags, 409/412 races and cancellation boundaries. Exact-head API-only CI [#45044729900](https://github.com/rajeevp727/turnova-platform/actions/runs/45044729900) passed **1,177/1,177 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture), artifact [14763336854](https://github.com/rajeevp727/turnova-platform/actions/runs/45044729900/artifacts/14763336854) (17,008,266 bytes; SHA-256 `a4d913924591ba0e4b45d62be20df406b0bd6f3c489ad208c8081e9fc12bbe04`). Existing per-Driver reservation lease protection for Union assignment/transfer remains unchanged. These are deterministic tests, not live Cosmos validation. PR #200 still requires independent human approval and a permitted merge, followed by a fresh main/API phase-exit audit. No Android work is authorized.
+
+## Operations Union status conditional update (COSMOS-STORE-013)
+
+The Operations status route must not overwrite a newer Union document with a stale read snapshot. Cosmos updates require the ETag returned by the same point read and use conditional `ReplaceItemAsync`; missing/blank ETags fail closed with HTTP 409. A 404 remains not found and a 409/412 precondition race maps to HTTP 409. The in-memory adapter uses `ConcurrentDictionary.TryUpdate` compare-and-swap. Union assignment/transfer remains protected by the shared per-Driver reservation lease.
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-STORE-013-001 | In-memory status update | Status and UpdatedAt change while Union metadata is preserved | Unit | P0 |
+| COSMOS-STORE-013-002 | In-memory missing Union | NotFound, no mutation | Unit | P0 |
+| COSMOS-STORE-013-003 | Cosmos status update with observed ETag | Replace uses the exact IfMatchEtag and preserves other Union fields | Strict mock | P0 |
+| COSMOS-STORE-013-004 | Cosmos read returns null ETag | Conflict; no ReplaceItem call | Strict mock | P0 |
+| COSMOS-STORE-013-005 | Cosmos read returns empty ETag | Conflict; no ReplaceItem call | Strict mock | P0 |
+| COSMOS-STORE-013-006 | Cosmos read returns whitespace ETag | Conflict; no ReplaceItem call | Strict mock | P0 |
+| COSMOS-STORE-013-007 | Cosmos read returns tab ETag | Conflict; no ReplaceItem call | Strict mock | P0 |
+| COSMOS-STORE-013-008 | Union is absent at point read | NotFound; no replacement | Strict mock | P0 |
+| COSMOS-STORE-013-009 | Conditional replacement returns 412 | Conflict; stale write is not retried unconditionally | Strict mock | P0 |
+| COSMOS-STORE-013-010 | Conditional replacement returns 409 | Conflict; no unconditional fallback | Strict mock | P0 |
+| COSMOS-STORE-013-011 | Union is deleted before replacement | NotFound | Strict mock | P0 |
+| COSMOS-STORE-013-012 | Caller is cancelled before read | OperationCanceledException; no Cosmos call | Strict mock | P0 |
+| COSMOS-STORE-013-013 | Caller is cancelled after read and before replacement | OperationCanceledException; no replacement | Strict mock | P0 |
+
+Exact-head API-only CI [#45044729900](https://github.com/rajeevp727/turnova-platform/actions/runs/45044729900) passed **1,177/1,177 backend tests (0 failed, 0 skipped)**, .NET 10 Release build and native non-container Linux x64 publish/verifier (11 negative fixtures plus valid fixture). Artifact [14763336854](https://github.com/rajeevp727/turnova-platform/actions/runs/45044729900/artifacts/14763336854) is 17,008,266 bytes; ZIP SHA-256 `a4d913924591ba0e4b45d62be20df406b0bd6f3c489ad208c8081e9fc12bbe04`. These deterministic mocks do not establish live Cosmos contention or multi-instance/restart readiness.
+
+
 
 ## TriSend upstream base URL policy (AUTH-API-061)
 

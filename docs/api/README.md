@@ -150,7 +150,7 @@ Operations-only routes require `X-Driver-Admin-Key`; they are controlled integra
 
 - `POST /api/v1/ops/unions` — creates an active Cab-serving Union. The request must specify exactly the Cab service class. The code is trimmed and uppercased, and a deterministic SHA-256-derived ID is used for new records. A successful create returns HTTP 201; an equivalent normalized code returns HTTP 409. Cosmos uses create-if-absent in the existing `Unions` container partitioned by `/unionId`; the in-memory adapter uses `ConcurrentDictionary.TryAdd`. Existing legacy Union IDs and records are not rewritten.
 - `GET /api/v1/ops/unions` and `GET /api/v1/ops/unions/{unionId}` — list/read Union records.
-- `PUT /api/v1/ops/unions/{unionId}/status` — update Union status.
+- `PUT /api/v1/ops/unions/{unionId}/status` — update Union status using a point-read and conditional `ReplaceItemAsync` with the observed Cosmos ETag. Missing/blank ETags and stale 409/412 writes fail closed as HTTP 409; a missing Union returns HTTP 404. The in-memory adapter uses `ConcurrentDictionary.TryUpdate`; no unconditional upsert fallback is used.
 - `GET /api/v1/ops/unions/{unionId}/drivers` — read the Union's assigned Driver members.
 - `PUT /api/v1/ops/unions/{unionId}/drivers/{driverId}/selfie-review` — controlled Operations review path; public Rider visibility still requires approval by the Driver's current authenticated UnionManager.
 
