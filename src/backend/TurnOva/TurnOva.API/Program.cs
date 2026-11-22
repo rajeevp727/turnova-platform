@@ -702,12 +702,6 @@ async Task<DriverUnionAssignment?> FindUnionAssignmentAsync(string driverId, Can
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
-async Task SaveUnionAssignmentAsync(DriverUnionAssignment assignment, CancellationToken ct)
-{
-    if (unionAssignmentContainer is null) { unionAssignments[assignment.DriverId] = assignment; return; }
-    await unionAssignmentContainer.UpsertItemAsync(assignment, new PartitionKey(assignment.DriverId), cancellationToken: ct);
-}
-
 async Task<DriverUnionAuditEvent?> FindUnionAuditEventAsync(string driverId, string eventId, CancellationToken ct)
 {
     if (unionAuditContainer is null)
@@ -3117,7 +3111,14 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
 
         var previous = await FindUnionAssignmentAsync(driverId, ct);
         if (previous is not null)
+        {
             await EnsureUnionAssignmentAuditAsync(previous, ct);
+            // Audit recovery may clear the pending snapshot with a conditional write.
+            // Refresh the exact expected snapshot before the assignment compare-and-swap.
+            previous = await FindUnionAssignmentAsync(driverId, ct);
+            if (previous is null)
+                return Results.Conflict(new { message = "The driver's Union assignment changed while its audit snapshot was being reconciled. Refresh and retry." });
+        }
 
         if (DriverProfileReviewGuard.HasConflictingReviewMetadata(profile))
             return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before transfer." });
@@ -3198,7 +3199,10 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             previous?.AssignedAtUtc ?? now, now, assignmentReason,
             eventId, eventType, actor, previous?.UnionId, previous?.UnionName, now,
             operationKey, true);
-        await SaveUnionAssignmentAsync(assignment, ct);
+        if (!await UnionAssignmentWriter.TrySaveAsync(
+                unionAssignmentContainer, unionAssignments, assignment, previous, ct))
+            return Results.Conflict(new { message = "The driver's Union assignment changed while the transfer was being saved. Refresh and retry." });
+
         await EnsureUnionAssignmentAuditAsync(assignment, ct);
         return Results.Ok(await FindUnionAssignmentAsync(driverId, ct) ?? assignment);
     }
