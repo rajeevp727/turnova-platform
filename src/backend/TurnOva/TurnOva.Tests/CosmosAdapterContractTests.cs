@@ -28,6 +28,8 @@ public sealed class CosmosAdapterContractTests
             .RemoveAsync("driver-1", "hyderabad-central", "cab", CancellationToken.None);
 
         Assert.False(result);
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
         container.VerifyNoOtherCalls();
     }
@@ -51,6 +53,8 @@ public sealed class CosmosAdapterContractTests
             .MoveToBackAsync("driver-1", "hyderabad-central", "cab", CancellationToken.None);
 
         Assert.False(result);
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
         container.VerifyNoOtherCalls();
     }
@@ -74,6 +78,8 @@ public sealed class CosmosAdapterContractTests
             .MoveToBackOnceAsync("driver-1", "hyderabad-central", "cab", "offer-1", CancellationToken.None);
 
         Assert.False(result);
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
         container.VerifyNoOtherCalls();
     }
