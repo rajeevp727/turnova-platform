@@ -11,6 +11,18 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 
 **Current phase gate (Run 75, 2026-11-22):** API remains `in_progress`; Android/iOS remain `not_started`. API-PRIVACY-017 adds `RideApiIntegrationTests.NonDriverRolesCannotReadDriverUnionAssignmentForSameDriverSubject`, a three-case Rider/Ops/UnionManager theory for a same-subject assigned Cab Driver. Ops also carries the valid Operations admin key; UnionManager carries the matching `unionId`. All three receive HTTP 403 with no-store/no-cache for `GET /api/v1/driver/union`; the assignment remains unchanged. The scoped UnionManager retains its own `GET /api/v1/union/drivers` member-list access and the real Driver can still read its assignment. Exact-head API-only CI [#45029626071](https://github.com/rajeevp727/turnova-platform/actions/runs/45029626071) passed **1,101/1,101 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (24 warnings, 0 errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture); artifact [14757042307](https://github.com/rajeevp727/turnova-platform/actions/runs/45029626071/artifacts/14757042307), 17,006,008 bytes, ZIP SHA-256 `36da7c311d18ffa36879eeaca8f5cc5c2f31ef42f4b4a42c27b13088134ca27a`. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-first gate. PR #200 remains open/ready with three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked); live Cosmos/provider/production readiness is not claimed.
 
+## TriSend upstream base URL policy (AUTH-API-061)
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AUTH-API-061-001 | HTTPS TriSend URL in Development and non-Development | Allowed when absolute and free of user-info, query and fragment | Unit | P0 |
+| AUTH-API-061-002 | HTTP loopback URL in Development | Allowed for localhost, IPv4 loopback and IPv6 loopback | Unit | P0 |
+| AUTH-API-061-003 | Remote HTTP URL in Development | Rejected | Unit + startup integration | P0 |
+| AUTH-API-061-004 | Loopback HTTP URL outside Development | Rejected | Unit | P0 |
+| AUTH-API-061-005 | Blank, malformed, credential-bearing, query-bearing or fragment-bearing URL | Rejected | Unit | P0 |
+
+The policy predicate is shared by startup options validation and deterministic unit tests. The WebApplicationFactory startup regression asserts that invalid Development configuration prevents host startup and makes no TriSend request; it does not depend on the wrapper preserving an inner OptionsValidationException after failed-host cleanup.
+
 ## API contract and authentication hardening
 
 | ID | Scenario | Expected result | Type | Priority |

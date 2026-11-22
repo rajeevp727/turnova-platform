@@ -167,13 +167,7 @@ builder.Services.AddSingleton<ConcurrentDictionary<string, DriverRideReservation
 builder.Services.AddOptions<TriSendSettings>()
     .Bind(builder.Configuration.GetSection("TriSend"))
     .Validate(settings =>
-        !string.IsNullOrWhiteSpace(settings.BaseUrl) &&
-        Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri) &&
-        string.IsNullOrEmpty(uri.UserInfo) &&
-        string.IsNullOrEmpty(uri.Query) &&
-        string.IsNullOrEmpty(uri.Fragment) &&
-        (uri.Scheme == Uri.UriSchemeHttps ||
-         (builder.Environment.IsDevelopment() && uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)),
+        TriSendBaseUrlPolicy.IsAllowed(settings.BaseUrl, builder.Environment.IsDevelopment()),
         "TriSend:BaseUrl must be HTTPS (or Development loopback HTTP) and must not contain user-info, query or fragment data.")
     .ValidateOnStart();
 

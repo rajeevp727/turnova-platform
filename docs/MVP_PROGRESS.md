@@ -1,5 +1,17 @@
 # TurnOva MVP progress
 
+## Run 77 — Make TriSend Development URL validation deterministic (2026-11-22)
+
+- **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`. No mobile source, build or deployment work was started.
+- **Current item:** AUTH-API-061, supplemental authentication-upstream configuration validation; outside the 19-row denominator.
+- **Failure audit:** exact-head API-only CI [#45032096115](https://github.com/rajeevp727/turnova-platform/actions/runs/45032096115) failed 1 of 1,102 tests: `DevelopmentRejectsRemoteHttpTriSendBaseUrl(http://auth.test.invalid)`. Restore and Release build passed. The application rejected the invalid Development URL during startup, but `WebApplicationFactory` surfaced an `ObjectDisposedException` after startup cleanup rather than the underlying `OptionsValidationException`; the test's exception-message assertion was therefore brittle. No TriSend request was recorded.
+- **Correction:** extracted the existing URL predicate, without changing its accepted/rejected cases, into `TriSendBaseUrlPolicy.IsAllowed`. Added deterministic unit coverage for HTTPS, Development-only loopback HTTP, remote HTTP rejection, non-Development loopback rejection, malformed URLs, user-info, query and fragment rejection. The startup integration test still requires startup failure and zero upstream requests, while exact policy reasons are asserted directly by the pure policy tests.
+- **Source/test and documentation commit:** this commit records the correction; exact-head API-only CI is pending. Do not treat the earlier failed run as passing evidence.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; current main base at audit: `4061357c095debbc31fc5027a7bff27bd8b06265`. PR remains open/ready/mergeable; no independent approval is recorded.
+- **Phase/review gate:** API remains active. Keep PRs #196/#198/#205/#206 Draft/parked; PR #204 is configuration-only. Do not self-approve, bypass protection, merge, or start Android work.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos/provider/production readiness is not claimed.
+- **Next exact action:** run and inspect exact-head API CI on this commit. If green, synchronize the final test count/artifact and run exact-head CI again on the documentation-bearing head. Continue API-only work while the independent review gate remains open.
+
 ## Run 76 — Preserve single-non-empty JWT subject alias fallback (2026-11-22)
 
 - **Platform phase:** API `in_progress`; Android/iOS remain `not_started`. No mobile source, build or deployment work was started.

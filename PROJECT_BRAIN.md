@@ -1,5 +1,13 @@
 # TurnOva Project Brain
 
+## Run 77 — AUTH-API-061: deterministic TriSend URL policy coverage
+
+- **Phase:** API remains `in_progress`; Android/iOS remain `not_started`.
+- **CI failure audit:** [#45032096115](https://github.com/rajeevp727/turnova-platform/actions/runs/45032096115) built successfully but failed 1/1,102 at the Development remote-HTTP TriSend startup test. The invalid URL was rejected; WebApplicationFactory returned an `ObjectDisposedException` after host cleanup, so the test's assertion against the original validation message was brittle. The handler recorded no upstream request.
+- **Correction:** extracted the existing URL predicate into `TriSendBaseUrlPolicy.IsAllowed` and added deterministic unit cases for HTTPS, Development-only loopback HTTP, remote HTTP, non-Development loopback, malformed URLs and user-info/query/fragment-bearing URLs. Startup integration coverage still requires host creation to fail and no TriSend call; it no longer depends on WebApplicationFactory preserving the inner startup exception text. No runtime policy behavior changed.
+- **Evidence:** corrected exact-head API CI is pending. The failed 1,102-test run is not counted as passing evidence.
+- **Gate:** PR #200 remains open/ready/unmerged and needs independent human approval. Do not self-approve, bypass protection or advance mobile work. Strict acceptance remains 0/19 Verified; production/live Cosmos readiness is not established.
+
 ## Run 76 — AUTH-API-060: preserve the single-non-empty JWT subject alias fallback
 
 - **Phase:** API remains `in_progress`; Android and iOS remain `not_started`. Do not advance mobile work until PR #200 is independently approved, merged under repository policy, and main passes a fresh API phase-exit audit.

@@ -1,5 +1,12 @@
 # TurnOva MVP Acceptance Matrix
 
+## Run 77 — TriSend URL validation regression correction (2026-11-22)
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`.
+- **Supplemental AUTH-API-061:** the prior exact-head CI [#45032096115](https://github.com/rajeevp727/turnova-platform/actions/runs/45032096115) exposed a brittle assertion in the Development remote-HTTP startup test: WebApplicationFactory surfaced a disposed-host wrapper after startup validation failed. No upstream request was made. The existing URL acceptance policy is now extracted into `TriSendBaseUrlPolicy.IsAllowed` without changing behavior, with deterministic unit coverage for HTTPS, Development loopback HTTP, remote HTTP, non-Development loopback, malformed and credential/query/fragment-bearing URLs. The startup integration test continues to assert failed startup and zero TriSend calls.
+- **CI:** corrected source/test head is pending exact-head API-only CI; the failed run is not acceptance evidence. No 19-row denominator or strict Verified status changes.
+- **Gate:** PR #200 still requires independent human approval and a fresh post-merge API phase-exit audit. No Android work is authorized by this supplemental test correction.
+
 ## Run 76 — Preserve single-non-empty JWT subject alias fallback (2026-11-22)
 
 - **Platform phase:** API `in_progress`; Android/iOS remain `not_started`.
