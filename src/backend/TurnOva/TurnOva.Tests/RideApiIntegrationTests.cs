@@ -1749,6 +1749,21 @@ public sealed partial class RideApiIntegrationTests
         using var retryManager = factory.CreateUnionManagerClient(unionId, "union-manager-review-retry");
         using var otherManager = factory.CreateUnionManagerClient("another-union", "other-union-manager");
         using var managerWithoutUnion = factory.CreateClient("UnionManager", "manager-without-union");
+        using var managerWithoutSubject = factory.CreateUnionManagerClient(
+            unionId, "union-manager-without-subject", subjectClaimType: "unrecognized-subject");
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+
+        using var subjectlessMemberRead = await managerWithoutSubject.GetAsync("/api/v1/union/drivers");
+        Assert.Equal(HttpStatusCode.Forbidden, subjectlessMemberRead.StatusCode);
+        using var subjectlessSelfieReview = await managerWithoutSubject.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.Forbidden, subjectlessSelfieReview.StatusCode);
+        Assert.Equal("Pending", profiles[driverId].ProfilePhotoApprovalStatus);
+        Assert.DoesNotContain(unionAudit.Values,
+            item => item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion");
+        Assert.False(await reservations.HasActiveAsync(driverId));
 
         var members = await manager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers");
         var member = Assert.Single(members!);
@@ -1792,7 +1807,6 @@ public sealed partial class RideApiIntegrationTests
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
         Assert.Equal(HttpStatusCode.NotFound, wrongUnionReview.StatusCode);
 
-        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
         Assert.False(await reservations.HasActiveAsync(driverId));
         using var noClaimReview = await managerWithoutUnion.PutAsJsonAsync(
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
@@ -1828,7 +1842,6 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, repeatedApproval.StatusCode);
         Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
         Assert.Equal(unionId, profiles[driverId].ProfilePhotoApprovedByUnionId);
-        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
         var approvalAudit = Assert.Single(unionAudit.Values.Where(item =>
             item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion"));
         Assert.Equal("union-manager-review", approvalAudit.Actor);
