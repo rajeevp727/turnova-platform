@@ -7395,6 +7395,95 @@ public sealed partial class RideApiIntegrationTests
     }
 
 
+    [Fact]
+    public async Task OpsRoleCannotUseRideAgreementEndpointsForSamePartySubjects()
+    {
+        const string riderId = "agreement-ops-boundary-rider";
+        const string driverId = "agreement-ops-boundary-driver";
+        const string rideId = "RIDE-AGREEMENT-OPS-BOUNDARY";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedAgreementRide(factory, rideId, riderId, driverId);
+
+        using var opsAsRider = factory.CreateClient("Ops", riderId);
+        using var opsAsDriver = factory.CreateClient("Ops", driverId);
+        opsAsRider.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+        opsAsDriver.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var initialRide = rides[rideId];
+
+        static HttpRequestMessage Proposal(string rideId, string key, decimal amount)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var deniedRiderProposalRequest = Proposal(rideId, "agreement-ops-rider-key", 250m);
+        using var deniedRiderProposal = await opsAsRider.SendAsync(deniedRiderProposalRequest);
+        using var deniedDriverProposalRequest = Proposal(rideId, "agreement-ops-driver-key", 300m);
+        using var deniedDriverProposal = await opsAsDriver.SendAsync(deniedDriverProposalRequest);
+        foreach (var denied in new[] { deniedRiderProposal, deniedDriverProposal })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+        Assert.Equal(initialRide, rides[rideId]);
+
+        // A real party can use the exact keys rejected for the same-subject Ops tokens.
+        using var riderProposalRequest = Proposal(rideId, "agreement-ops-rider-key", 250m);
+        using var riderProposal = await rider.SendAsync(riderProposalRequest);
+        Assert.Equal(HttpStatusCode.Created, riderProposal.StatusCode);
+        using var driverProposalRequest = Proposal(rideId, "agreement-ops-driver-key", 300m);
+        using var driverProposal = await driver.SendAsync(driverProposalRequest);
+        Assert.Equal(HttpStatusCode.Created, driverProposal.StatusCode);
+
+        using var opsRiderHistory = await opsAsRider.GetAsync($"/api/v1/rides/{rideId}/agreements");
+        using var opsDriverHistory = await opsAsDriver.GetAsync($"/api/v1/rides/{rideId}/agreements");
+        foreach (var denied in new[] { opsRiderHistory, opsDriverHistory })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var beforeDeniedConfirmation = rides[rideId];
+        using var deniedRiderConfirmation = await opsAsRider.PostAsync(
+            $"/api/v1/rides/{rideId}/agreements/2/confirm", content: null);
+        using var deniedDriverConfirmation = await opsAsDriver.PostAsync(
+            $"/api/v1/rides/{rideId}/agreements/2/confirm", content: null);
+        foreach (var denied in new[] { deniedRiderConfirmation, deniedDriverConfirmation })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+        Assert.Equal(beforeDeniedConfirmation, rides[rideId]);
+        Assert.Empty(rides[rideId].AgreementConfirmations ?? []);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/2/confirm", content: null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/2/confirm", content: null)).StatusCode);
+        var completedAgreement = rides[rideId];
+        Assert.Equal(2, completedAgreement.AgreementVersions?.Count);
+        Assert.Equal(new[] { "Rider", "Driver" },
+            completedAgreement.AgreementConfirmations?.Select(item => item.Party).OrderBy(item => item).ToArray());
+        Assert.DoesNotContain(completedAgreement.AuditEvents ?? [],
+            item => item.ActorRole == "Ops");
+    }
+
     [Theory]
     [InlineData(500.00, 400.00, 100.00)]
     [InlineData(500.00, 500.00, 0.00)]
@@ -7764,8 +7853,8 @@ public sealed partial class RideApiIntegrationTests
         using var firstRequest = CreatePaymentReportRequest(rideId, "payment-race-a", 400m);
         using var secondRequest = CreatePaymentReportRequest(rideId, "payment-race-b", 450m);
         var responses = await Task.WhenAll(driver.SendAsync(firstRequest), driver.SendAsync(secondRequest));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.OK));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
         foreach (var response in responses) response.Dispose();
         Assert.Contains(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId]
             .PaymentReconciliation!.AmountReceived, new[] { 400m, 450m });
