@@ -581,6 +581,26 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task SubjectlessBearerDoesNotBlockPublicDemoSessionEndpoint()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Public demo issuance must not call TriSend."));
+        using var factory = new AuthApiFactory(
+            handler,
+            new Dictionary<string, string?> { ["DemoAuth:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer", CreateToken(role: "Rider", subjectClaimCount: 0));
+
+        using var response = await client.PostAsync("/api/v1/auth/demo/rider", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task SubjectlessTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken()
     {
         using var handler = new RecordingHandler((_, _) =>
