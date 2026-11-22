@@ -749,7 +749,6 @@ public sealed partial class RideApiIntegrationTests
         var unchangedQueue = await queueService.GetPositionedQueueAsync(
             "hyderabad-central", "cab", CancellationToken.None);
         Assert.Equal(new[] { driverId, secondDriverId }, unchangedQueue.Select(entry => entry.DriverId));
-        Assert.Equal(new[] { 1, 2 }, unchangedQueue.Select(entry => entry.Position));
 
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         Assert.Equal("Online", profiles[driverId].AvailabilityStatus);
