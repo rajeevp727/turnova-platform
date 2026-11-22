@@ -199,6 +199,27 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
+    public async Task NullProviderTasksUseDeterministicFallbackForTripIntentAndHelp()
+    {
+        var service = CreateService(new NullTaskProvider(), enabled: true);
+
+        var trip = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+        var help = await service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("Nizampet", trip.Pickup);
+        Assert.Equal("HITEC City", trip.Dropoff);
+        Assert.Equal("deterministic-fallback", trip.Source);
+        Assert.Equal("fare-negotiation", help.SourceId);
+        Assert.Equal("deterministic-fallback", help.Source);
+        Assert.False(help.EscalationRequired);
+    }
+
+    [Fact]
     public async Task ProviderTimeoutUsesDeterministicTripFallback()
     {
         var provider = new FakeProvider
@@ -786,6 +807,19 @@ public sealed class AiAssistanceServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
         Assert.True(providerToken.IsCancellationRequested);
         pendingProvider.TrySetResult(null);
+    }
+
+    private sealed class NullTaskProvider : IAiAssistantProvider
+    {
+        public bool IsAvailable => true;
+
+        public Task<TripIntentProviderResult?> DraftTripIntentAsync(
+            SafeTripIntentPrompt request,
+            CancellationToken cancellationToken) => null!;
+
+        public Task<HelpProviderResult?> ClassifyHelpAsync(
+            SafeHelpPrompt request,
+            CancellationToken cancellationToken) => null!;
     }
 
     private static AiAssistanceService CreateService(
