@@ -1,6 +1,7 @@
 using Microsoft.Azure.Cosmos;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Infrastructure.Dispatch;
 
@@ -85,7 +86,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
         cancellationToken.ThrowIfCancellationRequested();
 
         // A missing observed ETag must never degrade into an unconditional Cosmos replacement.
-        if (string.IsNullOrWhiteSpace(expectedETag))
+        if (!CosmosEtagPolicy.HasObservedEtag(expectedETag))
             return false;
 
         try
