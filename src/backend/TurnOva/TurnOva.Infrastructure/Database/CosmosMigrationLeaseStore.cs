@@ -19,6 +19,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(owner);
 
         var document = new CosmosMigrationLeaseDocument
@@ -36,20 +37,24 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return null;
         }
     }
 
     public async Task<CosmosMigrationLease?> ReadAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             var response = await locks.ReadItemAsync<CosmosMigrationLeaseDocument>(
                 LeaseId, new PartitionKey(LeaseId), cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             return ToLease(response.Resource, response.ETag);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return null;
         }
     }
@@ -60,6 +65,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(expected);
         if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(expected.Owner) ||
@@ -88,6 +94,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         catch (CosmosException ex) when (
             ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // The lease disappeared or another runner replaced it after the read.
             // Both outcomes mean this acquisition/renewal attempt lost its race.
             return null;
@@ -98,6 +105,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         CosmosMigrationLease expected,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(expected);
         if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(expected.Owner) ||
@@ -116,6 +124,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         catch (CosmosException ex) when (
             ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Never delete a lease that another API instance has replaced.
             return false;
         }
