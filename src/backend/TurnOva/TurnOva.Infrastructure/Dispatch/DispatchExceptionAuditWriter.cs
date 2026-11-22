@@ -16,6 +16,7 @@ public sealed class DispatchExceptionAuditWriter(IQueueAuditEventStore store)
         string reasonCategory,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var partitionKey = $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
         var auditEvent = new QueueAuditEvent(
             $"dispatch-exception-{traceId}",
@@ -29,7 +30,9 @@ public sealed class DispatchExceptionAuditWriter(IQueueAuditEventStore store)
         if (await store.TryCreateAsync(auditEvent, partitionKey, cancellationToken))
             return;
 
+        cancellationToken.ThrowIfCancellationRequested();
         var existing = await store.ReadAsync(auditEvent.EventId, partitionKey, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsSameAudit(existing, auditEvent))
             return;
 
