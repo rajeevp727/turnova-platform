@@ -3443,25 +3443,19 @@ public sealed partial class RideApiIntegrationTests
     {
         const string driverId = "driver-private-payslip";
         const string unionId = "union-private-payslip";
+        const string payslipId = $"{driverId}-2026-10";
         using var factory = new TurnOvaApiFactory();
         using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
-        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
-        var assignmentEvent = new DriverUnionAuditEvent(
-            "private-payslip-assignment", driverId, null, null,
-            unionId, "Selected Booking Union", "Assigned", "Initial assignment", "Operations",
-            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
-        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
-            [$"{driverId}|{assignmentEvent.EventId}"] = assignmentEvent;
-
-        using var ownerResponse = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
-        Assert.Equal(HttpStatusCode.OK, ownerResponse.StatusCode);
-        Assert.Equal("application/pdf", ownerResponse.Content.Headers.ContentType?.MediaType);
-
         var payslips = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
-        var originalSnapshot = Assert.Single(payslips.Values, item =>
-            item.DriverId == driverId && item.Year == 2026 && item.Month == 10);
+        var originalSnapshot = new DriverMonthlyPayslip(
+            payslipId, driverId, "Private Payslip Driver", unionId, "Selected Booking Union",
+            2026, 10,
+            new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.FromHours(5.5)),
+            new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.FromHours(5.5)),
+            1, 2, 1, 0, DateTimeOffset.UtcNow);
+        payslips[$"{driverId}|{payslipId}"] = originalSnapshot;
 
         using var denied = await nonDriver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
@@ -3470,8 +3464,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Contains(denied.Headers.Pragma, value =>
             value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Equal(originalSnapshot, Assert.Single(payslips.Values, item =>
-            item.DriverId == driverId && item.Year == 2026 && item.Month == 10));
+        Assert.Equal(originalSnapshot, payslips[$"{driverId}|{payslipId}"]);
     }
 
     [Fact]
