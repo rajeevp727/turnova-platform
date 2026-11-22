@@ -55,6 +55,20 @@ public sealed class CosmosAdapterContractTests
     }
 
     [Fact]
+    public async Task RideOfferReplacementHonorsCancellationBeforeMissingEtagValidation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object)
+                .TryReplaceAsync(CreateRideOfferState(), " ", cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task RideOfferCreateConflictReturnsFalseWithoutOverwritingTheExistingAggregate()
     {
         var state = CreateRideOfferState() with { ETag = "stale-etag" };
