@@ -762,6 +762,9 @@ public sealed partial class RideApiIntegrationTests
         using (var pendingJson = JsonDocument.Parse(await driverPending.Content.ReadAsStringAsync()))
             Assert.Equal(ride.RideId, pendingJson.RootElement.GetProperty("rideId").GetString());
 
+        using var secondDriverPending = await secondDriver.GetAsync("/api/v1/driver/offers/pending");
+        Assert.Equal(HttpStatusCode.NoContent, secondDriverPending.StatusCode);
+
         using var driverAvailable = await driver.GetAsync("/api/v1/driver/rides/available");
         Assert.Equal(HttpStatusCode.OK, driverAvailable.StatusCode);
         using (var availableJson = JsonDocument.Parse(await driverAvailable.Content.ReadAsStringAsync()))
