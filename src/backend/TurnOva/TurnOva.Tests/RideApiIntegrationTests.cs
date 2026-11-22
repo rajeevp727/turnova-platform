@@ -617,25 +617,44 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
-    public async Task RiderCannotReadInternalDriverFifoQueue()
+    public async Task RiderCannotReadOrMutateInternalDriverFifoQueue()
     {
         using var factory = new TurnOvaApiFactory();
         using var rider = factory.CreateClient("Rider", "rider-fifo-privacy");
         using var driver = factory.CreateClient("Driver", "driver-fifo-privacy");
         var queueService = factory.Services.GetRequiredService<QueueService>();
+        const string queuePath = "/api/v1/zones/hyderabad-central/queues/cab";
+        const string ownQueuePath = queuePath + "/me";
 
         await queueService.JoinAsync(new DriverQueueEntry(
             "driver-fifo-privacy", "hyderabad-central", "cab", DateTimeOffset.UtcNow, 0, true));
 
-        using var riderResponse = await rider.GetAsync("/api/v1/zones/hyderabad-central/queues/cab");
-        Assert.Equal(HttpStatusCode.Forbidden, riderResponse.StatusCode);
+        using var riderQueueResponse = await rider.GetAsync(queuePath);
+        Assert.Equal(HttpStatusCode.Forbidden, riderQueueResponse.StatusCode);
 
-        using var driverResponse = await driver.GetAsync("/api/v1/zones/hyderabad-central/queues/cab");
-        Assert.Equal(HttpStatusCode.OK, driverResponse.StatusCode);
-        var entries = await driverResponse.Content.ReadFromJsonAsync<List<QueueEntryTest>>();
+        using var riderPositionResponse = await rider.GetAsync(ownQueuePath);
+        Assert.Equal(HttpStatusCode.Forbidden, riderPositionResponse.StatusCode);
+
+        using var riderLeaveResponse = await rider.DeleteAsync(ownQueuePath);
+        Assert.Equal(HttpStatusCode.Forbidden, riderLeaveResponse.StatusCode);
+
+        using var riderJoinResponse = await rider.PostAsJsonAsync(
+            "/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "cab" });
+        Assert.Equal(HttpStatusCode.Forbidden, riderJoinResponse.StatusCode);
+
+        // Denied Rider operations must not mutate or hide the Driver's internal queue state.
+        using var driverQueueResponse = await driver.GetAsync(queuePath);
+        Assert.Equal(HttpStatusCode.OK, driverQueueResponse.StatusCode);
+        var entries = await driverQueueResponse.Content.ReadFromJsonAsync<List<QueueEntryTest>>();
         var entry = Assert.Single(entries!);
         Assert.Equal("driver-fifo-privacy", entry.DriverId);
         Assert.Equal(1, entry.Position);
+
+        using var driverPositionResponse = await driver.GetAsync(ownQueuePath);
+        Assert.Equal(HttpStatusCode.OK, driverPositionResponse.StatusCode);
+        using var positionJson = JsonDocument.Parse(await driverPositionResponse.Content.ReadAsStringAsync());
+        Assert.True(positionJson.RootElement.GetProperty("isQueued").GetBoolean());
+        Assert.Equal(1, positionJson.RootElement.GetProperty("position").GetInt32());
     }
 
     [Fact]
