@@ -75,16 +75,18 @@ public sealed class AiAssistanceApiIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
     }
 
-    [Fact]
-    public async Task UnionManagerCannotUseRiderOrDriverAssistanceEndpoints()
+    [Theory]
+    [InlineData("UnionManager")]
+    [InlineData("Ops")]
+    public async Task OpsAndUnionManagerCannotUseRiderOrDriverAssistanceEndpoints(string role)
     {
         using var factory = new AiAssistanceApiFactory();
-        using var manager = factory.CreateClient("UnionManager", "ai-union-manager");
+        using var nonRiderDriver = factory.CreateClient(role, $"ai-{role.ToLowerInvariant()}");
 
-        using var tripIntent = await manager.PostAsJsonAsync(
+        using var tripIntent = await nonRiderDriver.PostAsJsonAsync(
             "/api/v1/assistance/trip-intent",
             new { text = "Cab from KPHB to HITEC City for 2 passengers" });
-        using var help = await manager.PostAsJsonAsync(
+        using var help = await nonRiderDriver.PostAsJsonAsync(
             "/api/v1/assistance/help",
             new { question = "What does queue status mean?" });
 
