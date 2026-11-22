@@ -943,6 +943,10 @@ async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
         if (!DriverUnionAuditSnapshotRecovery.Matches(expected, currentExpected))
             throw new InvalidOperationException("The Union assignment audit snapshot changed before completion. Refusing to clear it.");
 
+        ct.ThrowIfCancellationRequested();
+        if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+            throw new InvalidOperationException("The Union assignment cannot be safely completed without an observed Cosmos ETag.");
+
         try
         {
             await unionAssignmentContainer.ReplaceItemAsync(
@@ -1102,6 +1106,10 @@ async Task<bool> TryUpdateDriverProfileAsync(
 
         var updated = update(response.Resource);
         if (updated is null)
+            return false;
+
+        ct.ThrowIfCancellationRequested();
+        if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
             return false;
 
         try
@@ -4699,6 +4707,9 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
             return Results.Conflict(new { message = "This ride belongs to a different dispatch zone or vehicle queue." });
         if (response.Resource.Passengers > approvedProfile.PassengerCapacity)
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
+        ct.ThrowIfCancellationRequested();
+        if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+            return Results.Conflict(new { message = "This ride cannot be accepted safely right now. Refresh and retry." });
         if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct,
             new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.LegacyRideAccept)))
             return Results.Conflict(new { message = "You already have an active ride. Complete or cancel it before accepting another ride." });
@@ -5436,7 +5447,12 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
         {
             var response = await rideContainer.ReadItemAsync<DemoRide>(
                 current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
+            ct.ThrowIfCancellationRequested();
             if (!IsSameRideSnapshot(response.Resource, current))
+            {
+                replaced = false;
+            }
+            else if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
             {
                 replaced = false;
             }
