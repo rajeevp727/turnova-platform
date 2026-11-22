@@ -7406,6 +7406,8 @@ public sealed partial class RideApiIntegrationTests
         const string adminKey = "integration-test-admin-key-32chars";
 
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var memberDriver = factory.CreateClient("Driver", subject);
+        using var selectedDriver = factory.CreateClient("Driver", selectedDriverId);
         SeedBookableDriver(factory, subject, memberUnionId);
         SeedBookableDriver(factory, selectedDriverId, selectedUnionId);
 
