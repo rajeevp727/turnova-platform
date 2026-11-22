@@ -693,6 +693,47 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderCannotRejectInternalFifoOffer()
+    {
+        const string riderId = "rider-cannot-reject-fifo";
+        const string rideOwnerId = "ride-owner-for-rider-reject";
+        const string secondDriverId = "driver-after-reject-attempt";
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(rideOfferAdvancer: advancer);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var riderDriverProfile = factory.CreateClient("Driver", riderId);
+        using var rideOwner = factory.CreateClient("Rider", rideOwnerId);
+        using var secondDriver = factory.CreateClient("Driver", secondDriverId);
+        SeedBookableDriver(factory, riderId, "union-rider-reject");
+        SeedBookableDriver(factory, secondDriverId, "union-second-reject");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            riderId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-2), 0, true));
+        await queueService.JoinAsync(new DriverQueueEntry(
+            secondDriverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true));
+        var ride = await CreateRideAsync(rideOwner, "request-rider-cannot-reject-001");
+
+        using var denied = await rider.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        var queue = await factory.Services.GetRequiredService<IQueueStore>()
+            .GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(new[] { riderId, secondDriverId }, queue.Select(entry => entry.DriverId));
+
+        var offer = await factory.Services.GetRequiredService<IRideOfferStore>()
+            .GetByRideAsync(ride.RideId, CancellationToken.None);
+        Assert.NotNull(offer);
+        Assert.Equal(riderId, offer.DriverId);
+        Assert.Equal(RideOfferStatuses.Pending, offer.Status);
+        Assert.Empty(advancer.AdvancedRideIds);
+
+        var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        Assert.Empty(ledger.Values.Where(item =>
+            item.DriverId == riderId && item.ActivityType == "Rejected"));
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
     {
         using var factory = new TurnOvaApiFactory();
