@@ -82,7 +82,8 @@ public static class AiAssistanceEndpoints
     public static WebApplication MapAiAssistanceEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/assistance")
-            .RequireRateLimiting(RateLimitPolicy);
+            .RequireRateLimiting(RateLimitPolicy)
+            .WithMetadata(new AllowSubjectlessPrincipalMetadata());
 
         group.MapPost("/trip-intent", async Task<IResult> (
             TripIntentRequest request,
