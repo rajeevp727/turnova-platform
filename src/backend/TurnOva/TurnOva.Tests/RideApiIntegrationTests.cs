@@ -800,6 +800,58 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderCannotReadOrMutateDriverAvailabilityOrLocation()
+    {
+        const string driverId = "driver-availability-private";
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", driverId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, "union-driver-availability-private");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            driverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow, 0, true));
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var before = profiles[driverId];
+
+        using var riderRead = await rider.GetAsync("/api/v1/driver/availability");
+        Assert.Equal(HttpStatusCode.Forbidden, riderRead.StatusCode);
+
+        using var riderOffline = await rider.PostAsJsonAsync(
+            "/api/v1/driver/availability", new { isOnline = false });
+        Assert.Equal(HttpStatusCode.Forbidden, riderOffline.StatusCode);
+
+        using var riderLocation = await rider.PostAsJsonAsync(
+            "/api/v1/driver/location",
+            new
+            {
+                latitude = 17.500,
+                longitude = 78.410,
+                capturedAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1)
+            });
+        Assert.Equal(HttpStatusCode.Forbidden, riderLocation.StatusCode);
+
+        using var driverRead = await driver.GetAsync("/api/v1/driver/availability");
+        Assert.Equal(HttpStatusCode.OK, driverRead.StatusCode);
+        using (var availability = JsonDocument.Parse(await driverRead.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("Online", availability.RootElement.GetProperty("availabilityStatus").GetString());
+            Assert.True(availability.RootElement.GetProperty("isOnline").GetBoolean());
+        }
+
+        var after = profiles[driverId];
+        Assert.Equal(before.AvailabilityStatus, after.AvailabilityStatus);
+        Assert.Equal(before.CurrentLatitude, after.CurrentLatitude);
+        Assert.Equal(before.CurrentLongitude, after.CurrentLongitude);
+        Assert.Equal(before.LocationUpdatedAtUtc, after.LocationUpdatedAtUtc);
+
+        var queue = await queueService.GetPositionedQueueAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        var entry = Assert.Single(queue);
+        Assert.Equal(driverId, entry.DriverId);
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
     {
         using var factory = new TurnOvaApiFactory();
