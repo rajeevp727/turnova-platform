@@ -734,6 +734,68 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderCannotReadOrAcceptInternalDriverOffers()
+    {
+        const string riderId = "rider-cannot-read-driver-offers";
+        const string rideOwnerId = "ride-owner-for-driver-offer-read";
+        const string secondDriverId = "driver-after-rider-offer-read";
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(rideOfferAdvancer: advancer);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", riderId);
+        using var rideOwner = factory.CreateClient("Rider", rideOwnerId);
+        SeedBookableDriver(factory, riderId, "union-rider-offer-read");
+        SeedBookableDriver(factory, secondDriverId, "union-second-offer-read");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            riderId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-2), 0, true));
+        await queueService.JoinAsync(new DriverQueueEntry(
+            secondDriverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true));
+        var ride = await CreateRideAsync(rideOwner, "request-rider-cannot-read-driver-offers-001");
+
+        // Positive controls prove the pending offer and actionable ride exist for the
+        // same subject when authenticated as Driver rather than Rider.
+        using var driverPending = await driver.GetAsync("/api/v1/driver/offers/pending");
+        Assert.Equal(HttpStatusCode.OK, driverPending.StatusCode);
+        using (var pendingJson = JsonDocument.Parse(await driverPending.Content.ReadAsStringAsync()))
+            Assert.Equal(ride.RideId, pendingJson.RootElement.GetProperty("rideId").GetString());
+
+        using var driverAvailable = await driver.GetAsync("/api/v1/driver/rides/available");
+        Assert.Equal(HttpStatusCode.OK, driverAvailable.StatusCode);
+        using (var availableJson = JsonDocument.Parse(await driverAvailable.Content.ReadAsStringAsync()))
+        {
+            var availableRide = Assert.Single(availableJson.RootElement.EnumerateArray());
+            Assert.Equal(ride.RideId, availableRide.GetProperty("rideId").GetString());
+        }
+
+        using var riderPending = await rider.GetAsync("/api/v1/driver/offers/pending");
+        Assert.Equal(HttpStatusCode.Forbidden, riderPending.StatusCode);
+
+        using var riderAvailable = await rider.GetAsync("/api/v1/driver/rides/available");
+        Assert.Equal(HttpStatusCode.Forbidden, riderAvailable.StatusCode);
+
+        using var riderAccept = await rider.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
+        Assert.Equal(HttpStatusCode.Forbidden, riderAccept.StatusCode);
+
+        var offer = await factory.Services.GetRequiredService<IRideOfferStore>()
+            .GetByRideAsync(ride.RideId, CancellationToken.None);
+        Assert.NotNull(offer);
+        Assert.Equal(riderId, offer.DriverId);
+        Assert.Equal(RideOfferStatuses.Pending, offer.Status);
+
+        var queue = await queueService.GetPositionedQueueAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(new[] { riderId, secondDriverId }, queue.Select(entry => entry.DriverId));
+
+        using var rideResponse = await rideOwner.GetAsync($"/api/v1/rides/{ride.RideId}");
+        Assert.Equal(HttpStatusCode.OK, rideResponse.StatusCode);
+        var unchangedRide = await ReadRideAsync(rideResponse);
+        Assert.Equal("Requested", unchangedRide.Status);
+        Assert.Empty(advancer.AdvancedRideIds);
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
     {
         using var factory = new TurnOvaApiFactory();
