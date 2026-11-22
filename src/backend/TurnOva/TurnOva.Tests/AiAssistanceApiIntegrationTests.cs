@@ -76,6 +76,29 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionManagerCannotUseRiderOrDriverAssistanceEndpoints()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var manager = factory.CreateClient("UnionManager", "ai-union-manager");
+
+        using var tripIntent = await manager.PostAsJsonAsync(
+            "/api/v1/assistance/trip-intent",
+            new { text = "Cab from KPHB to HITEC City for 2 passengers" });
+        using var help = await manager.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "What does queue status mean?" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, tripIntent.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, help.StatusCode);
+        Assert.True(tripIntent.Headers.CacheControl?.NoStore);
+        Assert.True(help.Headers.CacheControl?.NoStore);
+        Assert.Contains(tripIntent.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(help.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task AssistanceAuthorizationRejectionsAreNonCacheable()
     {
         using var factory = new AiAssistanceApiFactory();
