@@ -237,6 +237,7 @@ public sealed partial class RideApiIntegrationTests
         const string unionId = "union-oversight-role-boundary-union";
 
         using var factory = new TurnOvaApiFactory();
+        using var driverProfile = factory.CreateClient("Driver", driverId, unionId);
         using var nonManager = factory.CreateClient(role, driverId, unionId);
         SeedBookableDriver(factory, driverId, unionId);
 
