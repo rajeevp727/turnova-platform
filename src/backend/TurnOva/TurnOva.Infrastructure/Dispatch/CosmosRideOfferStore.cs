@@ -82,6 +82,8 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
 
     public async Task<bool> TryReplaceAsync(RideOfferState state, string expectedETag, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // A missing observed ETag must never degrade into an unconditional Cosmos replacement.
         if (string.IsNullOrWhiteSpace(expectedETag))
             return false;
