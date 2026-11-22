@@ -21,9 +21,11 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(key) });
 
         var entries = new List<DriverQueueEntry>();
-        while (iterator.HasMoreResults)
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!iterator.HasMoreResults) break;
+
             var page = await iterator.ReadNextAsync(cancellationToken);
             entries.AddRange(page.Select(x => new DriverQueueEntry(
                 x.DriverId, x.ZoneId, x.ServiceClass, x.JoinedAt, x.Sequence, x.IsEligible)));
@@ -186,9 +188,11 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         using var iterator = queueContainer.GetItemQueryIterator<QueueAuditEvent>(
             query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(key) });
         var events = new List<QueueAuditEvent>();
-        while (iterator.HasMoreResults)
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!iterator.HasMoreResults) break;
+
             events.AddRange(await iterator.ReadNextAsync(cancellationToken));
         }
         cancellationToken.ThrowIfCancellationRequested();
