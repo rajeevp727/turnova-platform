@@ -1044,6 +1044,21 @@ public sealed partial class RideApiIntegrationTests
         using var driverLocation = await manager.SendAsync(driverLocationRequest);
         Assert.Equal(HttpStatusCode.Forbidden, driverLocation.StatusCode);
 
+        // UnionManager membership does not grant the separate Operations admin-key authority.
+        using var opsDriverDetails = await manager.GetAsync($"/api/v1/ops/drivers/{subject}");
+        Assert.Equal(HttpStatusCode.Unauthorized, opsDriverDetails.StatusCode);
+        using var opsUnionList = await manager.GetAsync("/api/v1/ops/unions");
+        Assert.Equal(HttpStatusCode.Unauthorized, opsUnionList.StatusCode);
+        using var opsUnionMembers = await manager.GetAsync($"/api/v1/ops/unions/{unionId}/drivers");
+        Assert.Equal(HttpStatusCode.Unauthorized, opsUnionMembers.StatusCode);
+        using var opsSelfieReviewRequest = new HttpRequestMessage(
+            HttpMethod.Put, $"/api/v1/ops/unions/{unionId}/drivers/{subject}/selfie-review")
+        {
+            Content = JsonContent.Create(new { status = "Approved", reason = (string?)null })
+        };
+        using var opsSelfieReview = await manager.SendAsync(opsSelfieReviewRequest);
+        Assert.Equal(HttpStatusCode.Unauthorized, opsSelfieReview.StatusCode);
+
         using var paymentReportRequest = CreatePaymentReportRequest(
             agreementRideId, "union-manager-payment-report", 100m);
         using var paymentReport = await manager.SendAsync(paymentReportRequest);
