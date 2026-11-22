@@ -377,6 +377,7 @@ app.Use(async (context, next) =>
     var endpoint = context.GetEndpoint();
     var allowsAnonymous = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
     var allowsSubjectless = endpoint?.Metadata.GetMetadata<AllowSubjectlessPrincipalMetadata>() is not null;
+    var requiresAuthorization = endpoint?.Metadata.GetOrderedMetadata<IAuthorizeData>().Count > 0;
     var isApiOrRealtime = context.Request.Path.StartsWithSegments("/api/v1") ||
                          context.Request.Path.StartsWithSegments("/hubs/rides");
     var hasCanonicalSubject = !string.IsNullOrWhiteSpace(
@@ -384,6 +385,7 @@ app.Use(async (context, next) =>
 
     if (isApiOrRealtime &&
         endpoint is not null &&
+        requiresAuthorization &&
         !allowsAnonymous &&
         !allowsSubjectless &&
         context.User.Identity?.IsAuthenticated == true &&
