@@ -3446,6 +3446,7 @@ public sealed partial class RideApiIntegrationTests
         const string payslipId = $"{driverId}-2026-10";
         using var factory = new TurnOvaApiFactory();
         using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         var payslips = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
