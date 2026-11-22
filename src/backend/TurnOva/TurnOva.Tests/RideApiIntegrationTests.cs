@@ -851,12 +851,15 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(driverId, entry.DriverId);
     }
 
-    [Fact]
-    public async Task RiderCannotReadOrModifyDriverOnboardingOrPrivateMedia()
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadOrModifyDriverOnboardingOrPrivateMedia(string nonDriverRole)
     {
         const string driverId = "driver-private-onboarding";
         using var factory = new TurnOvaApiFactory();
-        using var rider = factory.CreateClient("Rider", driverId);
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, "union-private-onboarding");
         using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, "union-private-onboarding");
 
@@ -873,6 +876,9 @@ public sealed partial class RideApiIntegrationTests
         var reference = uploadedJson.RootElement.GetProperty("storageReference").GetString();
         Assert.False(string.IsNullOrWhiteSpace(reference));
 
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var originalProfile = profiles[driverId];
+
         var mediaPath = $"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(reference!)}";
         using var driverMedia = await driver.GetAsync(mediaPath);
         Assert.Equal(HttpStatusCode.OK, driverMedia.StatusCode);
@@ -880,10 +886,8 @@ public sealed partial class RideApiIntegrationTests
         Assert.Contains("no-store", driverMedia.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("nosniff", driverMedia.Headers.GetValues("X-Content-Type-Options").Single());
 
-        using var riderProfile = await rider.GetAsync("/api/v1/driver/onboarding/me");
-        Assert.Equal(HttpStatusCode.Forbidden, riderProfile.StatusCode);
-
-        using var riderUpload = await rider.PostAsJsonAsync(
+        using var nonDriverProfile = await nonDriver.GetAsync("/api/v1/driver/onboarding/me");
+        using var nonDriverUpload = await nonDriver.PostAsJsonAsync(
             "/api/v1/driver/onboarding/media",
             new
             {
@@ -891,25 +895,34 @@ public sealed partial class RideApiIntegrationTests
                 contentType = "image/jpeg",
                 contentBase64 = "/9j/4AAQSkZJRg=="
             });
-        Assert.Equal(HttpStatusCode.Forbidden, riderUpload.StatusCode);
-
-        using var riderMedia = await rider.GetAsync(mediaPath);
-        Assert.Equal(HttpStatusCode.Forbidden, riderMedia.StatusCode);
-        using var riderMediaStatus = await rider.GetAsync($"{mediaPath}/status");
-        Assert.Equal(HttpStatusCode.Forbidden, riderMediaStatus.StatusCode);
-
-        using var riderSelfieUpdate = await rider.PutAsJsonAsync(
+        using var nonDriverMedia = await nonDriver.GetAsync(mediaPath);
+        using var nonDriverMediaStatus = await nonDriver.GetAsync($"{mediaPath}/status");
+        using var nonDriverSelfieUpdate = await nonDriver.PutAsJsonAsync(
             "/api/v1/driver/onboarding/selfie",
             new { profilePhotoStorageReference = reference });
-        Assert.Equal(HttpStatusCode.Forbidden, riderSelfieUpdate.StatusCode);
-
-        using var riderOnboardingUpdate = await rider.PostAsJsonAsync(
+        using var nonDriverOnboardingUpdate = await nonDriver.PostAsJsonAsync(
             "/api/v1/driver/onboarding", ValidOnboardingRequest());
-        Assert.Equal(HttpStatusCode.Forbidden, riderOnboardingUpdate.StatusCode);
+
+        foreach (var denied in new[]
+        {
+            nonDriverProfile,
+            nonDriverUpload,
+            nonDriverMedia,
+            nonDriverMediaStatus,
+            nonDriverSelfieUpdate,
+            nonDriverOnboardingUpdate
+        })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        Assert.Equal(originalProfile, profiles[driverId]);
 
         using var driverProfile = await driver.GetAsync("/api/v1/driver/onboarding/me");
         Assert.Equal(HttpStatusCode.OK, driverProfile.StatusCode);
-        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         Assert.Equal("cab", profiles[driverId].ServiceClass);
         Assert.Equal("Approved", profiles[driverId].Status);
     }
