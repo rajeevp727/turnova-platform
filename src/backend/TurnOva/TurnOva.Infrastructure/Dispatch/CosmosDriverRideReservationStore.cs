@@ -211,9 +211,13 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             cancellationToken.ThrowIfCancellationRequested();
             using var iterator = container.GetItemQueryIterator<DriverRideReservation>(
                 DriverRideReservationQuery.Create(batch));
-            while (iterator.HasMoreResults)
+            while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!iterator.HasMoreResults) break;
+
                 var page = await iterator.ReadNextAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 reservations.AddRange(page);
             }
         }
