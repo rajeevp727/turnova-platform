@@ -1021,6 +1021,29 @@ public sealed partial class RideApiIntegrationTests
             $"/api/v1/rides/{agreementRideId}/agreements/1/confirm", content: null);
         Assert.Equal(HttpStatusCode.NotFound, agreementConfirmation.StatusCode);
 
+        // Union membership grants scoped oversight, not Rider or Driver authority over a live ride.
+        using var rideDetails = await manager.GetAsync($"/api/v1/rides/{agreementRideId}");
+        Assert.Equal(HttpStatusCode.Forbidden, rideDetails.StatusCode);
+        using var riderCancel = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/cancel", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, riderCancel.StatusCode);
+        using var driverAccept = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/accept", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverAccept.StatusCode);
+        using var driverReject = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/reject", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverReject.StatusCode);
+        using var driverArrive = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/arrive", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverArrive.StatusCode);
+        using var driverStart = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/start", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverStart.StatusCode);
+        using var driverComplete = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/complete", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverComplete.StatusCode);
+        using var driverLocationRequest = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/v1/rides/{agreementRideId}/location")
+        {
+            Content = JsonContent.Create(new { latitude = 17.493, longitude = 78.399 })
+        };
+        using var driverLocation = await manager.SendAsync(driverLocationRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, driverLocation.StatusCode);
+
         using var paymentReportRequest = CreatePaymentReportRequest(
             agreementRideId, "union-manager-payment-report", 100m);
         using var paymentReport = await manager.SendAsync(paymentReportRequest);
