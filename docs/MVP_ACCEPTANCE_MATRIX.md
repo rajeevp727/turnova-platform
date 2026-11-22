@@ -1,5 +1,18 @@
 # TurnOva MVP Acceptance Matrix
 
+## Run 92 — committed queue and reservation writes remain authoritative after cancellation (2026-11-23)
+
+- **Platform phase:** API remains `in_progress`; Android and iOS remain `not_started`. No mobile or Fleet/Ops Phase 2 work was advanced.
+- **Current item:** COSMOS-STORE-016..018, supplemental API persistence cancellation/commit-point verification outside the 19-row acceptance denominator.
+- **Audit finding:** Cosmos transactional batches atomically persist queue/reservation state with append-only audit events. Once `ExecuteAsync` returns a successful committed response, a cancellation arriving immediately after that commit must not turn the successful write into an `OperationCanceledException`; callers must not be encouraged to retry a write that has already committed.
+- **Deterministic coverage:** `CosmosQueueCancellationTests.QueueJoinRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit`, `CosmosReservationCancellationTests.DriverAcquireRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit`, and `CosmosReservationCancellationTests.RiderAcquireRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit` each cancel the token inside a successful batch response callback and assert the committed operation remains successful with both the state item and audit event in the same batch.
+- **Source/test head:** [`ee27511e41c93be76e99d3c5627b84e58ce2b1c2`](https://github.com/rajeevp727/turnova-platform/commit/ee27511e41c93be76e99d3c5627b84e58ce2b1c2). These are test-only changes; no production runtime code changed.
+- **Exact-head CI:** pending at this handoff. Do not claim test/build/publish success until the final-head API-only workflow completes.
+- **Repository/PR state:** main remains `c9280eec23dd4fb5fab06b11e24d2a619b489235`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR, open, non-draft, mergeable and unmerged. PRs #196/#198/#205/#206 remain Draft/parked. The PR branch phase file remains API `in_progress`, Android/iOS `not_started`.
+- **Review gate:** PR #200 has three owner-authored COMMENTED reviews, **0 independent approvals**, and 0 unresolved review threads. Do not self-approve, bypass protections or merge. PR #197's earlier merge without independent human approval remains a disclosed historical process exception.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No live Cosmos, hosted API, provider, physical-device or production readiness is claimed.
+- **Next exact action:** verify exact-head API-only CI on the documentation-bearing head. If green, record actual test count/artifact and continue API-only source/test/docs/security/persistence gap work while awaiting independent human review. Do not advance Android before a permitted PR #200 merge and fresh API phase-exit audit.
+
 ## Run 91 — support-request canonical-read provider failure coverage (2026-11-23)
 
 - **Platform phase:** API remains `in_progress`; Android and iOS remain `not_started`. No mobile or Fleet/Ops Phase 2 work was advanced.

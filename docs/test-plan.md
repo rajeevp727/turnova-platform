@@ -4617,3 +4617,23 @@ The deterministic test models an initial history point-read 404, marker create 4
 
 The strict-Moq test verifies one create attempt, one canonical point-read, HTTP 503 propagation and no additional Cosmos calls. Exact source/test head [`2132f9f2dd24517d7e8872228a4bfdeb45eaa651`](https://github.com/rajeevp727/turnova-platform/commit/2132f9f2dd24517d7e8872228a4bfdeb45eaa651) passed API-only CI [#45073718411](https://github.com/rajeevp727/turnova-platform/actions/runs/45073718411): 1,261/1,261 backend tests, .NET 10 Release build, native non-container Linux x64 publish/verifier, artifact [14774766206](https://github.com/rajeevp727/turnova-platform/actions/runs/45073718411/artifacts/14774766206). Live Cosmos behavior and production readiness remain external.
 
+## COSMOS-STORE-016 — queue join remains successful after committed batch cancellation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-STORE-016 | Queue join transactional batch commits successfully and the cancellation token is cancelled immediately after the commit response | `AddAsync` completes successfully; queue entry and append-only Joined audit event are created in the same batch; no retry/duplicate is implied | `CosmosQueueCancellationTests.QueueJoinRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit` | P0 |
+
+## COSMOS-STORE-017 — driver reservation acquisition remains successful after committed batch cancellation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-STORE-017 | Driver reservation plus Acquired audit event batch commits successfully and cancellation arrives immediately after the commit response | `TryAcquireTemporaryAsync` returns true; reservation and audit fact remain authoritative; no duplicate acquisition retry is implied | `CosmosReservationCancellationTests.DriverAcquireRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit` | P0 |
+
+## COSMOS-STORE-018 — rider reservation acquisition remains successful after committed batch cancellation
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-STORE-018 | Rider active-booking reservation plus Acquired audit event batch commits successfully and cancellation arrives immediately after the commit response | `TryAcquireAsync` returns Acquired; reservation and audit fact remain authoritative; no duplicate acquisition retry is implied | `CosmosReservationCancellationTests.RiderAcquireRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit` | P0 |
+
+These deterministic tests cancel the token inside the mocked successful `TransactionalBatchResponse` callback. They assert that a committed write remains the authoritative outcome and that both the state document and append-only audit event were submitted in the same transactional batch. Source/test head [`ee27511e41c93be76e99d3c5627b84e58ce2b1c2`](https://github.com/rajeevp727/turnova-platform/commit/ee27511e41c93be76e99d3c5627b84e58ce2b1c2); exact-head API-only CI is pending. No production runtime code changed.
+
