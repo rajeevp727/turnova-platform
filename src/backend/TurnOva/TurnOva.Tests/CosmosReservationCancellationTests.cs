@@ -370,4 +370,18 @@ public sealed class CosmosReservationCancellationTests
         return page;
     }
 
+    [Fact]
+    public async Task DriverBatchReadHonorsPreCancelledTokenBeforeCreatingQuery()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosDriverRideReservationStore(container.Object).GetActiveForDriversAsync(
+                ["driver-1"], cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
+
 }
