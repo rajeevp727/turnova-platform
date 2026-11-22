@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
@@ -365,6 +366,35 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(new { message = "Demo sessions are restricted to demo endpoints." });
         return;
     }
+    await next();
+});
+
+// Application ownership, Union audit and SignalR user identity require a canonical subject.
+// Only the AI assistance group opts into subject-less, server-IP-partitioned rate limiting.
+// Public auth endpoints remain usable when a stale/subject-less bearer happens to be present.
+app.Use(async (context, next) =>
+{
+    var endpoint = context.GetEndpoint();
+    var allowsAnonymous = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
+    var allowsSubjectless = endpoint?.Metadata.GetMetadata<AllowSubjectlessPrincipalMetadata>() is not null;
+    var isApiOrRealtime = context.Request.Path.StartsWithSegments("/api/v1") ||
+                         context.Request.Path.StartsWithSegments("/hubs/rides");
+    var hasCanonicalSubject = !string.IsNullOrWhiteSpace(
+        context.User.FindFirstValue(JwtRegisteredClaimNames.Sub));
+
+    if (isApiOrRealtime &&
+        endpoint is not null &&
+        !allowsAnonymous &&
+        !allowsSubjectless &&
+        context.User.Identity?.IsAuthenticated == true &&
+        !hasCanonicalSubject)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(
+            new { message = "A subject claim is required for this endpoint." });
+        return;
+    }
+
     await next();
 });
 app.UseAuthorization();
