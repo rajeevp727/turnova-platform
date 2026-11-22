@@ -33,9 +33,9 @@ For successful Rider/Driver registration, login and refresh, the API validates t
 
 ### Authenticated subject requirement
 
-After JWT signature, issuer, audience and lifetime validation, the API canonicalizes the single accepted subject into both `sub` and `ClaimTypes.NameIdentifier`. Every authenticated application endpoint under `/api/v1` and the ride SignalR hub requires that canonical subject; a signed token with no usable subject receives HTTP 403 before user-owned route handlers, Union reads/reviews, reservation changes, audit writes or SignalR membership execute. Public auth endpoints marked `AllowAnonymous` remain unaffected.
+After JWT signature, issuer, audience and lifetime validation, the API canonicalizes the single accepted subject into both `sub` and `ClaimTypes.NameIdentifier`. Every application endpoint under `/api/v1` or the ride SignalR hub that carries explicit authorization metadata requires that canonical subject; a signed token with no usable subject receives HTTP 403 before authenticated handlers, Union reads/reviews, reservation changes, audit writes or SignalR membership execute. Unauthenticated public routes, operations routes protected by the separate API-key policy, and auth endpoints marked `AllowAnonymous` remain unaffected.
 
-The only subject-less exception is the explicitly marked `/api/v1/assistance` group. Its approved rate limiter falls back to the server-observed remote IP when no subject exists; it does not access or mutate user-owned ride/Union state. Arbitrary forwarded-for values are not used as the fallback partition. AUTH-API-059 covers the subjectless UnionManager, auth-profile and AI-assistance cases.
+The only subject-less exception among authenticated endpoints is the explicitly marked `/api/v1/assistance` group. Its approved rate limiter falls back to the server-observed remote IP when no subject exists; it does not access or mutate user-owned ride/Union state. Arbitrary forwarded-for values are not used as the fallback partition. AUTH-API-059 covers subjectless UnionManager reads/selfie review, auth-profile access, SignalR negotiation, public-auth bypass and AI-assistance IP fallback.
 
 ### API and realtime response cache policy
 
