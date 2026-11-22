@@ -258,7 +258,7 @@ public sealed class CosmosMigrationRunnerTests
             It.IsAny<CancellationToken>()), Times.Once);
         historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
         Assert.NotNull(leaseStore.ReleasedLease);
     }
 
