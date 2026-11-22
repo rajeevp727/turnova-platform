@@ -1,12 +1,31 @@
 # TurnOva Project Brain
 
-## Run 78 — COSMOS-STORE-007: missing RideOffer ETag fails closed
+## Run 80 — Fail closed across Cosmos conditional writes (2026-11-22)
 
-- **Phase:** API remains `in_progress`; Android/iOS remain `not_started`.
-- **Finding:** `CosmosRideOfferStore.TryReplaceAsync` accepted a null/blank expected ETag. Passing that value to Cosmos `IfMatchEtag` could omit the condition and turn a compare-and-swap into an unconditional replace.
-- **Correction:** return false before provider access for null/empty/whitespace expected ETags. Added strict-mock cases for null, empty, space and tab, proving no Cosmos call. Valid ETag and 412/404 handling are unchanged.
-- **Evidence:** exact-head API CI for the source/test increment is pending. Previous final docs checkpoint [#45037988379](https://github.com/rajeevp727/turnova-platform/actions/runs/45037988379) passed 1,119/1,119 tests, Release build and native non-container publish/verifier.
-- **Gate:** PR #200 remains open/ready/unmerged and requires independent human approval. Do not self-approve, bypass protection or advance mobile work. Strict acceptance remains 0/19 Verified; live Cosmos/production readiness is not established.
+- **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`.
+- **Current item:** COSMOS-STORE-009, supplemental persistence/concurrency hardening outside the 19-row denominator.
+- **Audit finding:** four direct API `ReplaceItemAsync` paths in `Program.cs` and five Driver/Rider reservation transactional-batch writes passed read-response ETags directly to Cosmos. If a successful read ever yielded a missing/blank ETag, the SDK could omit the If-Match condition and an intended compare-and-swap could become unconditional. `CosmosMigrationLeaseStore` already validates expected and returned ETags; it was inspected and required no change.
+- **Correction:** introduced `CosmosEtagPolicy.HasObservedEtag` and applied it to RideOffer replacement, Driver reservation promotion/expiry/release, Rider reservation promotion/release, Driver profile update, Union assignment audit-snapshot completion, legacy ride acceptance and ride aggregate replacement. Cancellation is checked before local ETag rejection. Missing ETags cause no write: store/profile/ride paths fail closed, legacy acceptance returns conflict before acquiring a reservation, and Union audit recovery throws rather than clearing a pending marker.
+- **Automated evidence:** five reservation operations each have strict-mock null/empty/space/tab cases (20 cases) proving no transactional batch is created; five policy cases cover invalid and valid ETags. Existing valid-ETag conditional-write tests remain.
+- **Source/test commits:** helper [d3bdd33](https://github.com/rajeevp727/turnova-platform/commit/d3bdd33d317696fb17c0026c16ecaa5f7ea0c9c4), RideOffer reuse [b748883](https://github.com/rajeevp727/turnova-platform/commit/b748883acd3f6bef90927e15687cb8e029c1987c), Driver reservation guards [d2c7e70](https://github.com/rajeevp727/turnova-platform/commit/d2c7e70afc310559173eb9f870e016056cbe0b17), Rider reservation guards [14f1102](https://github.com/rajeevp727/turnova-platform/commit/14f11024f197b94d34551daf37580cace6a26a9e), API conditional-write guards [c554baf](https://github.com/rajeevp727/turnova-platform/commit/c554baf72dd8d4f126dafe94aa8f54acfeecb098), tests [637768e](https://github.com/rajeevp727/turnova-platform/commit/637768ea0c9910c163e929afaeef3fda902aa30e).
+- **Exact-head API-only CI:** [#45039513358](https://github.com/rajeevp727/turnova-platform/actions/runs/45039513358) passed on `637768ea0c9910c163e929afaeef3fda902aa30e`: **1,149/1,149 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (24 warnings, 0 errors); native non-container Linux x64 publish; publish-script syntax; native verifier (11 negative fixtures plus valid fixture); artifact validation. Artifact [14761715373](https://github.com/rajeevp727/turnova-platform/actions/runs/45039513358/artifacts/14761715373) is 17,006,473 bytes; ZIP SHA-256 `1d230d0c89b2ea1869ed6633a02e6893edac8dc8657b4eccd0a4ac2570f15bef`. Mobile/Android/iOS jobs were intentionally skipped.
+- **Gate:** this is deterministic mocked-adapter/API evidence, not live Cosmos validation. PR #200 still requires independent human approval, permitted merge and a fresh main/API phase-exit audit. No Android work is authorized.
+
+## Run 79 — Preserve cancellation precedence in RideOffer ETag validation (2026-11-22)
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`.
+- **Correction:** `CosmosRideOfferStore.TryReplaceAsync` now calls `cancellationToken.ThrowIfCancellationRequested()` before rejecting a missing/blank observed ETag. This preserves the in-memory store's cancellation contract and prevents an already-cancelled caller from receiving a normal conflict result.
+- **Test:** `RideOfferReplacementHonorsCancellationBeforeMissingEtagValidation` asserts `OperationCanceledException` and zero Cosmos calls using a strict mock.
+- **Source/test head:** [33865cdb](https://github.com/rajeevp727/turnova-platform/commit/33865cdb1f8f9805e83cb8c4b565989ff5accbaa).
+- **Exact-head API-only CI:** [#45039106922](https://github.com/rajeevp727/turnova-platform/actions/runs/45039106922) passed **1,124/1,124 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (24 warnings, 0 errors), native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture). Artifact [14760389776](https://github.com/rajeevp727/turnova-platform/actions/runs/45039106922/artifacts/14760389776), 17,006,118 bytes; ZIP SHA-256 `c6ec0e74df1aed550bdb76df282718e0f5b8c969c5d72f9275e247a44ac522c5`. Mobile jobs were intentionally skipped.
+
+## Run 78 — Fail closed on missing RideOffer ETag (2026-11-22)
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`.
+- **Current item:** COSMOS-STORE-007, supplemental RideOffer compare-and-swap guard.
+- **Correction:** `CosmosRideOfferStore.TryReplaceAsync` returns false before Cosmos access for null, empty or whitespace expected ETags; valid ETag, stale 412 and missing-item 404 behavior remains unchanged.
+- **Source/test head:** [0c17a631](https://github.com/rajeevp727/turnova-platform/commit/0c17a631147470f86f64615e7f7032bff32f491e).
+- **Exact-head API-only CI:** [#45038556978](https://github.com/rajeevp727/turnova-platform/actions/runs/45038556978) passed **1,123/1,123 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (24 warnings, 0 errors), native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture). Artifact [14760593229](https://github.com/rajeevp727/turnova-platform/actions/runs/45038556978/artifacts/14760593229), 17,006,135 bytes; ZIP SHA-256 `74c47523f1ea3456b9dd2c3b8745849ec57a73709c1bc917fadb3d63167f5e23`.
 
 ## Run 77 — AUTH-API-061: deterministic TriSend URL policy coverage
 
