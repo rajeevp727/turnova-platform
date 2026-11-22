@@ -154,6 +154,8 @@ The Cosmos create-if-absent boundary treats only HTTP 409 as a duplicate result.
 
 The zone/queue and `/api/v1/rides/request`, pending-offer, available-ride, accept/reject and offer-timeout endpoints remain legacy compatibility surfaces. They must not introduce customer-facing FIFO ranking, automatic assignment or automatic next-driver advancement into the approved Rider-selected Cab flow. Existing non-Cab history is preserved and is not converted to Cab.
 
+- `GET /api/v1/zones/{zoneId}/queues/{serviceClass}` is Driver-role-only and exposes only the internal legacy queue view; Rider JWTs receive HTTP 403. `GET /api/v1/zones/{zoneId}/queues/{serviceClass}/me` is also Driver-role-only. These routes do not feed Rider discovery or assignment. Regression: `RiderCannotReadInternalDriverFifoQueue` (DISPATCH-02-API-001).
+
 ## Approved AI assistance (AI-01 supplemental)
 
 AI-01 is approved supplemental Rider/Driver functionality and is outside the 19-row acceptance denominator.
