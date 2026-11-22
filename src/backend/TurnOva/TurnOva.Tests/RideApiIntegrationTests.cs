@@ -7478,7 +7478,7 @@ public sealed partial class RideApiIntegrationTests
             (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/2/confirm", content: null)).StatusCode);
         var completedAgreement = rides[rideId];
         Assert.Equal(2, completedAgreement.AgreementVersions?.Count);
-        Assert.Equal(new[] { "Rider", "Driver" },
+        Assert.Equal(new[] { "Driver", "Rider" },
             completedAgreement.AgreementConfirmations?.Select(item => item.Party).OrderBy(item => item).ToArray());
         Assert.DoesNotContain(completedAgreement.AuditEvents ?? [],
             item => item.ActorRole == "Ops");
