@@ -3111,14 +3111,7 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
 
         var previous = await FindUnionAssignmentAsync(driverId, ct);
         if (previous is not null)
-        {
             await EnsureUnionAssignmentAuditAsync(previous, ct);
-            // Audit recovery may clear the pending snapshot with a conditional write.
-            // Refresh the exact expected snapshot before the assignment compare-and-swap.
-            previous = await FindUnionAssignmentAsync(driverId, ct);
-            if (previous is null)
-                return Results.Conflict(new { message = "The driver's Union assignment changed while its audit snapshot was being reconciled. Refresh and retry." });
-        }
 
         if (DriverProfileReviewGuard.HasConflictingReviewMetadata(profile))
             return Results.Conflict(new { message = "Conflicting private selfie-review snapshots require audit resolution before transfer." });
