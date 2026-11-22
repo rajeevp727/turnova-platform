@@ -185,4 +185,139 @@ public sealed class CosmosQueueCancellationTests
             "dispatch-exception-trace-3", "zone-a|cab", cancellation.Token), Times.Once);
         store.VerifyNoOtherCalls();
     }
+
+    [Fact]
+    public async Task GetEligibleStopsBeforeReadingNextPageWhenCancellationArrivesAfterFirstPage()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
+        {
+            DriverId = "driver-1",
+            ZoneId = "zone-a",
+            ServiceClass = "Cab",
+            JoinedAt = DateTimeOffset.Parse("2026-11-23T00:00:00Z"),
+            Sequence = 1,
+            IsEligible = true
+        });
+        var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(page.Object);
+            });
+        var container = CreateQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).GetEligibleAsync("zone-a", "Cab", cancellation.Token));
+
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetEligibleHonorsCancellationAfterFinalPageBeforeReturningResults()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
+        {
+            DriverId = "driver-1",
+            ZoneId = "zone-a",
+            ServiceClass = "Cab",
+            JoinedAt = DateTimeOffset.Parse("2026-11-23T00:00:00Z"),
+            Sequence = 1,
+            IsEligible = true
+        });
+        var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(page.Object);
+            });
+        var container = CreateQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).GetEligibleAsync("zone-a", "Cab", cancellation.Token));
+
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetAuditEventsStopsBeforeReadingNextPageWhenCancellationArrivesAfterFirstPage()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var page = CreatePage(new QueueAuditEvent(
+            "event-1",
+            "zone-a|cab",
+            "driver-1",
+            QueueAuditEventTypes.Joined,
+            DateTimeOffset.Parse("2026-11-23T00:00:00Z")));
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(page.Object);
+            });
+        var container = CreateQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync("zone-a", "Cab", cancellation.Token));
+
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetAuditEventsHonorsCancellationAfterFinalPageBeforeReturningResults()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var page = CreatePage(new QueueAuditEvent(
+            "event-1",
+            "zone-a|cab",
+            "driver-1",
+            QueueAuditEventTypes.Joined,
+            DateTimeOffset.Parse("2026-11-23T00:00:00Z")));
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(page.Object);
+            });
+        var container = CreateQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync("zone-a", "Cab", cancellation.Token));
+
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    private static Mock<Container> CreateQueryContainer<T>(Mock<FeedIterator<T>> iterator)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<T>(
+                It.IsAny<QueryDefinition>(),
+                It.IsAny<string?>(),
+                It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        return container;
+    }
+
+    private static Mock<FeedResponse<T>> CreatePage<T>(params T[] items)
+    {
+        var page = new Mock<FeedResponse<T>>(MockBehavior.Strict);
+        page.As<IEnumerable<T>>()
+            .Setup(value => value.GetEnumerator())
+            .Returns(() => items.AsEnumerable().GetEnumerator());
+        return page;
+    }
+
 }
