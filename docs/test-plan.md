@@ -4387,3 +4387,12 @@ The documentation-bearing PR #200 head [`caaf176035dc728f1fcb9454d72ac922a8744cf
 ## Run 50 — AUTH-API-058 final exact-head verification
 
 Documentation-bearing PR #200 head [`7b25880ce4af43496e5e216b9bdcd4d765cea79d`](https://github.com/rajeevp727/turnova-platform/commit/7b25880ce4af43496e5e216b9bdcd4d765cea79d) passed exact-head API-only CI [#44955161998](https://github.com/rajeevp727/turnova-platform/actions/runs/44955161998): **1,059/1,059 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact [14726919397](https://github.com/rajeevp727/turnova-platform/actions/runs/44955161998/artifacts/14726919397). This verifies the docs-only handoff head after AUTH-API-058 source/test head `470100bafe8b2970459656994e11fe03f704a217`; it adds no mobile or live/production evidence.
+
+
+## AI-049 — unsupported-help copy requires escalation without assuming a contact
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| AI-049 | Rider or Driver asks an unsupported help question, or a known approved explanation exceeds the configured output limit | The API returns `sourceId=unsupported` and `escalationRequired=true`; the answer explicitly requires support-team escalation and does not imply that a configured support contact exists or invent contact details | API unit/privacy | P1 |
+
+**Evidence:** `AiAssistanceServiceTests.UnsupportedHelpEscalatesInsteadOfInventingAnAnswer` and `AiAssistanceServiceTests.KnownRideStateExceedingConfiguredOutputLimitUsesBoundedEscalation` assert the explicit escalation wording and absence of a contact reference. Source/test head [`68e490031780a7819bf75a09c7e7c34730624cd0`](https://github.com/rajeevp727/turnova-platform/commit/68e490031780a7819bf75a09c7e7c34730624cd0) passed exact-head API-only CI [#44964899118](https://github.com/rajeevp727/turnova-platform/actions/runs/44964899118): **1,059/1,059 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax, publish verifier (11 negative fixtures plus valid fixture), and artifact [14731476627](https://github.com/rajeevp727/turnova-platform/actions/runs/44964899118/artifacts/14731476627). AI-049 is supplemental AI-01 coverage outside the 19-area MVP acceptance denominator.
