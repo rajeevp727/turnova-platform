@@ -123,14 +123,15 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
 
     public async Task<bool> MoveToBackOnceAsync(string driverId, string zoneId, string serviceClass, string offerId, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(offerId)) throw new ArgumentException("Offer ID is required.", nameof(offerId));
         var key = QueueKey(zoneId, serviceClass);
         try
         {
             var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(driverId, new PartitionKey(key), cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             var document = response.Resource;
             if (document.LastRotationOfferId == offerId) return true;
-            cancellationToken.ThrowIfCancellationRequested();
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
                 return false;
             document.JoinedAt = DateTimeOffset.UtcNow;
