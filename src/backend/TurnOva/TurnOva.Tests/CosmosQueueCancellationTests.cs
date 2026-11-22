@@ -246,8 +246,12 @@ public sealed class CosmosQueueCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosQueueStore(container.Object).GetEligibleAsync("zone-a", "Cab", cancellation.Token));
 
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
-        container.VerifyNoOtherCalls();
+        container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
+            It.IsAny<QueryDefinition>(),
+            It.IsAny<string?>(),
+            It.IsAny<QueryRequestOptions?>()), Times.Once);
     }
 
     [Fact]
@@ -273,8 +277,12 @@ public sealed class CosmosQueueCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosQueueStore(container.Object).GetAuditEventsAsync("zone-a", "Cab", cancellation.Token));
 
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
-        container.VerifyNoOtherCalls();
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(),
+            It.IsAny<string?>(),
+            It.IsAny<QueryRequestOptions?>()), Times.Once);
     }
 
     [Fact]
@@ -300,8 +308,12 @@ public sealed class CosmosQueueCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosQueueStore(container.Object).GetAuditEventsAsync("zone-a", "Cab", cancellation.Token));
 
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
-        container.VerifyNoOtherCalls();
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(),
+            It.IsAny<string?>(),
+            It.IsAny<QueryRequestOptions?>()), Times.Once);
     }
 
     private static Mock<Container> CreateQueryContainer<T>(Mock<FeedIterator<T>> iterator)
