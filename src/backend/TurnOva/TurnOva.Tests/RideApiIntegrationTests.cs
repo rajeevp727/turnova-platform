@@ -915,6 +915,52 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task DriverRoleCannotUseRiderDiscoveryOrSelectedBookingForDualRoleSubject()
+    {
+        const string dualRoleSubject = "dual-role-rider-driver";
+        const string dualRoleUnionId = "dual-role-rider-driver-union";
+        const string selectedDriverId = "dual-role-selected-driver";
+        const string selectedUnionId = "dual-role-selected-union";
+        const string idempotencyKey = "dual-role-selected-booking-key";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var driver = factory.CreateClient("Driver", dualRoleSubject);
+        using var rider = factory.CreateClient("Rider", dualRoleSubject);
+        SeedBookableDriver(factory, dualRoleSubject, dualRoleUnionId);
+        SeedBookableDriver(factory, selectedDriverId, selectedUnionId);
+
+        const string discoveryPath =
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1";
+        using var deniedDiscovery = await driver.GetAsync(discoveryPath);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedDiscovery.StatusCode);
+
+        using var allowedDiscovery = await rider.GetAsync(discoveryPath);
+        Assert.Equal(HttpStatusCode.OK, allowedDiscovery.StatusCode);
+
+        using var deniedBookingRequest = CreateSelectedBookingRequest(
+            idempotencyKey, selectedDriverId, selectedUnionId, "KPHB", "HITEC City", []);
+        using var deniedBooking = await driver.SendAsync(deniedBookingRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedBooking.StatusCode);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var idempotencyRecords = factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
+        var driverReservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var riderReservations = factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
+        Assert.Empty(rides);
+        Assert.Empty(idempotencyRecords);
+        Assert.Null(await driverReservations.GetActiveAsync(selectedDriverId));
+        Assert.Null(await riderReservations.GetActiveAsync(dualRoleSubject));
+
+        using var allowedBookingRequest = CreateSelectedBookingRequest(
+            idempotencyKey, selectedDriverId, selectedUnionId, "KPHB", "HITEC City", []);
+        using var allowedBooking = await rider.SendAsync(allowedBookingRequest);
+        Assert.Equal(HttpStatusCode.Created, allowedBooking.StatusCode);
+        Assert.Single(rides);
+        Assert.NotNull(await driverReservations.GetActiveAsync(selectedDriverId));
+        Assert.NotNull(await riderReservations.GetActiveAsync(dualRoleSubject));
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
     {
         using var factory = new TurnOvaApiFactory();
