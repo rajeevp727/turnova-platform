@@ -640,7 +640,7 @@ In-memory store concurrency tests and API-level selected-booking/availability/Un
 | OFFER-005 | Driver reconnects with pending offer | Pending-offer endpoint returns offer and expiry | API | P0 |
 | OFFER-006 | Wrong driver, resolved offer or expired offer accepts | HTTP 409 and no assignment | API/security | P0 |
 
-Cross-document atomicity, outbox retries, and next-driver progression after rejection/expiry remain production blockers.
+Cross-document atomicity and next-driver progression after rejection/expiry remain production blockers. Outbox retry code is implemented and deterministically tested in memory; live Cosmos multi-instance ETag/restart and real SignalR transport/backplane validation remain external.
 
 
 ## Durable offer rejection
@@ -681,9 +681,9 @@ These tests exercise the in-memory adapter. Cosmos ETag conflict and persistence
 | OFFER-NEXT-003 | Next queue entry is offline, unapproved or incompatible | Entry is removed and selection continues | API/store | P0 |
 | OFFER-NEXT-004 | Two advancement calls race | At most one ETag replacement succeeds and one next offer is persisted | Concurrency | P0 |
 | OFFER-NEXT-005 | No eligible queue entry remains | No new attempt or notification; ride remains Requested with no pending offer | API | P0 |
-| OFFER-NEXT-006 | Process stops after persistence but before SignalR send | Pending-offer fetch returns authoritative offer after reconnect; outbox remains a gap | Failure injection | P0 |
+| OFFER-NEXT-006 | Worker starts after offer state is persisted but before SignalR delivery | A newly started worker scans the ride-partitioned Pending notification and sends the current offer with stable rideId/offerId/expiry; a transient send failure leaves it Pending for retry; concurrent workers may redeliver the same offerId for client de-duplication | Worker/store/failure injection | P0 |
 
-These scenarios still need API/SignalR and multi-instance Cosmos integration coverage; no such integration execution is claimed by in-memory CI.
+The deterministic in-memory worker suite covers startup scanning of persisted Pending notifications, stale-offer suppression, transient SignalR send failure/retry and two-worker duplicate delivery with stable offerId. It does not prove live SignalR transport/backplane or Cosmos multi-instance ETag/process-restart behaviour; those remain external production gates.
 
 
 ## Durable offer notification outbox
@@ -711,11 +711,11 @@ The outbox is stored in the ride-partitioned offer aggregate. Delivery is at-lea
 
 ## 10. Offer notification outbox reliability tests
 
-- Verify a current pending offer is delivered to the authenticated driver's SignalR group and the sent marker is persisted.
-- Verify a stale pending-list snapshot is re-read and suppressed after the offer is resolved.
-- Verify a transient SignalR send failure leaves the outbox item pending and a later poll retries it.
-- Run two workers against a barrier-controlled shared store to prove at-least-once duplicate delivery can occur while the same offerId remains stable for client de-duplication.
-- These tests use the in-memory store; Cosmos multi-instance persistence, process-restart and ETag failure-injection remain separate required gates.
+- `WorkerSendsCurrentPendingOfferAndMarksNotificationSent` verifies worker-startup scanning, authenticated Driver group targeting, stable rideId/offerId/expiry payload and the Sent marker/timestamp.
+- `WorkerSkipsNotificationWhenOfferIsNoLongerPending` re-reads the current aggregate and suppresses a stale pending-list snapshot after the offer is resolved.
+- `WorkerRetriesNotificationAfterTransientSignalRFailure` asserts the notification remains Pending after the first failed send and is marked Sent only after a later successful poll.
+- `ConcurrentWorkersMayRedeliverSameOfferButKeepStableOfferIdForClientDeduplication` uses a barrier-controlled shared store to prove at-least-once duplicate delivery can occur while the same offerId remains stable for client de-duplication.
+- These tests use an in-memory store and recording hub context; Cosmos multi-instance persistence, process-restart/ETag failure-injection and live SignalR backplane/device delivery remain separate required gates.
 
 
 ## 11. Rider ride-request validation coverage
