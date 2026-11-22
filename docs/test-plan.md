@@ -9,7 +9,31 @@
 
 TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
 
-**Current phase gate (Run 82, 2026-11-22):** API remains `in_progress`; Android/iOS remain `not_started`. COSMOS-STORE-013 removes the Operations Union status read/modify/unconditional-upsert path and replaces it with observed-ETag conditional Cosmos replacement; the in-memory adapter uses compare-and-swap. Thirteen deterministic cases cover metadata preservation, missing records, null/empty/space/tab ETags, 409/412 races and cancellation boundaries. Exact-head API-only CI [#45044729900](https://github.com/rajeevp727/turnova-platform/actions/runs/45044729900) passed **1,177/1,177 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture), artifact [14763336854](https://github.com/rajeevp727/turnova-platform/actions/runs/45044729900/artifacts/14763336854) (17,008,266 bytes; SHA-256 `a4d913924591ba0e4b45d62be20df406b0bd6f3c489ad208c8081e9fc12bbe04`). Existing per-Driver reservation lease protection for Union assignment/transfer remains unchanged. These are deterministic tests, not live Cosmos validation. PR #200 still requires independent human approval and a permitted merge, followed by a fresh main/API phase-exit audit. No Android work is authorized.
+**Current phase gate (Run 83, 2026-11-22):** API remains `in_progress`; Android/iOS remain `not_started`. COSMOS-STORE-014 removes the sole Union assignment read/modify/unconditional-upsert path and replaces it with create-if-absent or exact-snapshot plus observed-ETag conditional replacement. In-memory assignment writes use compare-and-swap. Eighteen deterministic cases cover duplicate creation, stale snapshots, missing ETags, conditional races, missing records, cancellation and provider failure propagation. Exact-head API-only CI [#45048176506](https://github.com/rajeevp727/turnova-platform/actions/runs/45048176506) passed **1,195/1,195 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture), and artifact [14763848787](https://github.com/rajeevp727/turnova-platform/actions/runs/45048176506/artifacts/14763848787) (17,008,804 bytes; SHA-256 `f469ba8a6ecba927bb2a2597044b08a5103a26f1ec4b0a81c26ce082a223d87a`). If audit recovery changes the expected assignment snapshot, the first transfer attempt returns conflict rather than rebasing onto a newer assignment; retry with fresh state. These are deterministic tests, not live Cosmos validation. PR #200 still requires independent human approval and a permitted merge, followed by a fresh main/API phase-exit audit. No Android work is authorized.
+
+## Union assignment create/transfer compare-and-swap (COSMOS-STORE-014)
+
+The Operations Union assignment/transfer path must not overwrite a newer Driver-to-Union assignment if a request outlives its temporary per-Driver reservation lease. When no assignment was observed, Cosmos uses `CreateItemAsync`; a duplicate create is a conflict, never an upsert. When an assignment was observed, Cosmos point-reads the current item, compares the full value snapshot with the caller's expected snapshot, requires a nonblank ETag from that read, and performs `ReplaceItemAsync` with `IfMatchEtag`. Missing items and 409/412 conditional-write races fail closed as HTTP 409. The in-memory adapter uses `TryAdd`/`TryUpdate`. Audit snapshot recovery does not refresh/rebase the caller's expected snapshot: if recovery changed it, the request conflicts and can be retried after re-reading current state.
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-STORE-014-001 | In-memory create | Add only when no assignment exists | Unit | P0 |
+| COSMOS-STORE-014-002 | In-memory update | Replace only when the exact expected snapshot is current | Unit | P0 |
+| COSMOS-STORE-014-003 | In-memory stale update | Return conflict and preserve current assignment | Unit | P0 |
+| COSMOS-STORE-014-004 | Cosmos create | Use CreateItemAsync, never UpsertItemAsync | Unit | P0 |
+| COSMOS-STORE-014-005 | Duplicate Cosmos create | Return conflict without overwriting | Unit | P0 |
+| COSMOS-STORE-014-006 | Cosmos replacement | Use the ETag observed from the exact point read | Unit | P0 |
+| COSMOS-STORE-014-007 | Changed expected snapshot | Do not issue ReplaceItemAsync | Unit | P0 |
+| COSMOS-STORE-014-008..011 | Null/empty/space/tab ETag | Fail closed without replacement | Theory | P0 |
+| COSMOS-STORE-014-012..013 | Conditional 409/412 | Return conflict; do not retry unconditionally | Theory | P0 |
+| COSMOS-STORE-014-014 | Missing item before read | Return conflict; no replacement | Unit | P0 |
+| COSMOS-STORE-014-015 | Item deleted before replace | Return conflict | Unit | P0 |
+| COSMOS-STORE-014-016 | Cancellation before create | Propagate cancellation without write | Unit | P1 |
+| COSMOS-STORE-014-017 | Cancellation after read | Propagate cancellation without replacement | Unit | P1 |
+| COSMOS-STORE-014-018 | Provider 503 | Propagate provider failure; do not disguise as conflict | Unit | P1 |
+
+**Evidence:** `UnionAssignmentWriterTests`; source/test head [`ec68e371382cfd89660f5ba76a970973a6dca3bb`](https://github.com/rajeevp727/turnova-platform/commit/ec68e371382cfd89660f5ba76a970973a6dca3bb); exact-head API-only CI [#45048176506](https://github.com/rajeevp727/turnova-platform/actions/runs/45048176506) passed **1,195/1,195 tests**, .NET 10 Release build, native non-container Linux x64 publish/verifier and artifact [14763848787](https://github.com/rajeevp727/turnova-platform/actions/runs/45048176506/artifacts/14763848787). No live Cosmos or production validation is implied.
+
 
 ## Operations Union status conditional update (COSMOS-STORE-013)
 
