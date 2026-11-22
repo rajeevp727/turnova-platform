@@ -253,6 +253,31 @@ public sealed class AiAssistanceApiIntegrationTests
     }
 
     [Fact]
+    public async Task SubjectlessPrincipalUsesIpRateLimitOnlyOnAssistanceEndpoints()
+    {
+        using var factory = new AiAssistanceApiFactory();
+        using var subjectless = factory.CreateClientWithoutSubject("Rider");
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            using var allowed = await subjectless.PostAsJsonAsync(
+                "/api/v1/assistance/help",
+                new { question = "What does queue status mean?" });
+            Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        }
+
+        using var limited = await subjectless.PostAsJsonAsync(
+            "/api/v1/assistance/help",
+            new { question = "What does queue status mean?" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        Assert.True(limited.Headers.CacheControl?.NoStore);
+
+        using var rejectedIdentityRead = await subjectless.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.Forbidden, rejectedIdentityRead.StatusCode);
+        Assert.True(rejectedIdentityRead.Headers.CacheControl?.NoStore);
+    }
+
+    [Fact]
     public async Task AssistantRateLimitIsSharedAcrossTripIntentAndHelpEndpoints()
     {
         using var factory = new AiAssistanceApiFactory();
@@ -519,6 +544,18 @@ public sealed class AiAssistanceApiIntegrationTests
             return client;
         }
 
+        public HttpClient CreateClientWithoutSubject(string role)
+        {
+            var client = base.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = new Uri("https://localhost")
+            });
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", CreateTokenWithoutSubject(role));
+            return client;
+        }
+
         public HttpClient CreateAnonymousClient() =>
             base.CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -536,6 +573,26 @@ public sealed class AiAssistanceApiIntegrationTests
                 new Claim("sub", subject),
                 new Claim("role", role),
                 new Claim("name", subject)
+            };
+            var token = new JwtSecurityToken(
+                issuer: Issuer,
+                audience: Audience,
+                claims: claims,
+                notBefore: DateTime.UtcNow.AddMinutes(-1),
+                expires: DateTime.UtcNow.AddMinutes(10),
+                signingCredentials: credentials);
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private static string CreateTokenWithoutSubject(string role)
+        {
+            var credentials = new SigningCredentials(
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)),
+                SecurityAlgorithms.HmacSha256);
+            var claims = new[]
+            {
+                new Claim("role", role),
+                new Claim("name", "subjectless-assistance-test")
             };
             var token = new JwtSecurityToken(
                 issuer: Issuer,
