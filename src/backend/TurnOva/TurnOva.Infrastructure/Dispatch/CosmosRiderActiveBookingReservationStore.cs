@@ -13,11 +13,13 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         CancellationToken cancellationToken = default,
         DriverRideReservationAuditContext? auditContext = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (reservation.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
             return RiderBookingReservationAcquireResult.Conflict;
 
         for (var attempt = 0; attempt < 3; attempt++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var audit = RiderActiveBookingReservationAuditEvent.Create(
                 reservation, RiderActiveBookingReservationAuditEventTypes.Acquired,
                 auditContext, previousExpiresAtUtc: null, reservation.ExpiresAtUtc);
@@ -29,6 +31,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             if (batch.IsSuccessStatusCode)
                 return RiderBookingReservationAcquireResult.Acquired;
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (batch[0].StatusCode != System.Net.HttpStatusCode.Conflict)
                 throw BatchFailure("acquire", batch.StatusCode);
 
@@ -42,8 +45,11 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             }
             catch (CosmosException missing) when (missing.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 continue;
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             // An expired record is never stolen here. The API first reconciles its ride.
             if (current.RideId == reservation.RideId &&
@@ -61,15 +67,19 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         string riderId,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            return (await container.ReadItemAsync<RiderActiveBookingReservation>(
+            var current = await container.ReadItemAsync<RiderActiveBookingReservation>(
                 RiderActiveBookingReservation.DocumentId,
                 new PartitionKey(riderId),
-                cancellationToken: cancellationToken)).Resource;
+                cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return current.Resource;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return null;
         }
     }
@@ -81,8 +91,10 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         DriverRideReservationAuditContext? auditContext = null,
         bool allowExpiredForAuthoritativeActiveRide = false)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         for (var attempt = 0; attempt < 3; attempt++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ItemResponse<RiderActiveBookingReservation> current;
             try
             {
@@ -93,9 +105,11 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return false;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (current.Resource.RideId != rideId)
                 return false;
             if (current.Resource.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow &&
@@ -122,6 +136,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
 
             if (batch.IsSuccessStatusCode)
                 return true;
+            cancellationToken.ThrowIfCancellationRequested();
             if (IsReservationWriteConflict(batch))
                 continue;
             throw BatchFailure("promote", batch.StatusCode);
@@ -137,8 +152,10 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         CancellationToken cancellationToken = default,
         DriverRideReservationAuditContext? auditContext = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         for (var attempt = 0; attempt < 3; attempt++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ItemResponse<RiderActiveBookingReservation> current;
             try
             {
@@ -149,9 +166,11 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return false;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (current.Resource.RideId != rideId)
                 return false;
 
@@ -171,6 +190,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
 
             if (batch.IsSuccessStatusCode)
                 return true;
+            cancellationToken.ThrowIfCancellationRequested();
             if (IsReservationWriteConflict(batch))
                 continue;
             throw BatchFailure("release", batch.StatusCode);
