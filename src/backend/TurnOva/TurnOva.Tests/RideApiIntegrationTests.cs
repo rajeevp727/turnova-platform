@@ -617,6 +617,28 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderCannotReadInternalDriverFifoQueue()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-fifo-privacy");
+        using var driver = factory.CreateClient("Driver", "driver-fifo-privacy");
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+
+        await queueService.JoinAsync(new DriverQueueEntry(
+            "driver-fifo-privacy", "hyderabad-central", "cab", DateTimeOffset.UtcNow, 0, true));
+
+        using var riderResponse = await rider.GetAsync("/api/v1/zones/hyderabad-central/queues/cab");
+        Assert.Equal(HttpStatusCode.Forbidden, riderResponse.StatusCode);
+
+        using var driverResponse = await driver.GetAsync("/api/v1/zones/hyderabad-central/queues/cab");
+        Assert.Equal(HttpStatusCode.OK, driverResponse.StatusCode);
+        var entries = await driverResponse.Content.ReadFromJsonAsync<List<QueueEntryTest>>();
+        var entry = Assert.Single(entries!);
+        Assert.Equal("driver-fifo-privacy", entry.DriverId);
+        Assert.Equal(1, entry.Position);
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
     {
         using var factory = new TurnOvaApiFactory();
