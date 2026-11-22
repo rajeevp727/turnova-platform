@@ -92,16 +92,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                         claim.Type == JwtRegisteredClaimNames.Sub ||
                         string.Equals(claim.Type, "nameid", StringComparison.Ordinal))
                     .ToArray();
-                var nonEmptySubjectClaims = subjectClaims
-                    .Where(claim => !string.IsNullOrWhiteSpace(claim.Value))
-                    .ToArray();
                 var roleClaims = identity.FindAll("role").ToArray();
                 if (!identity.IsAuthenticated ||
-                    nonEmptySubjectClaims.Length > 1 ||
+                    subjectClaims.Length > 1 ||
+                    (subjectClaims.Length == 1 && string.IsNullOrWhiteSpace(subjectClaims[0].Value)) ||
                     roleClaims.Length != 1 ||
                     string.IsNullOrWhiteSpace(roleClaims[0].Value))
                 {
-                    context.Fail("The token must contain at most one non-empty subject and exactly one non-empty role claim.");
+                    context.Fail("The token must contain zero or one non-empty subject claim and exactly one non-empty role claim.");
                     return Task.CompletedTask;
                 }
 
@@ -109,9 +107,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 // subject to both claim names used by this API: sub for audit actor snapshots
                 // and NameIdentifier for ownership/SignalR user identity. Subject-less signed
                 // tokens remain limited to endpoints that deliberately permit IP fallback.
-                if (nonEmptySubjectClaims.Length == 1)
+                if (subjectClaims.Length == 1)
                 {
-                    var subject = nonEmptySubjectClaims[0].Value;
+                    var subject = subjectClaims[0].Value;
                     foreach (var claim in subjectClaims)
                         identity.RemoveClaim(claim);
                     identity.AddClaim(new Claim(JwtRegisteredClaimNames.Sub, subject));
