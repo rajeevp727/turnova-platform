@@ -968,8 +968,11 @@ public sealed partial class RideApiIntegrationTests
         const string unionId = "union-manager-driver-boundary-union";
         const string selectedDriverId = "union-manager-boundary-selected-driver";
         const string selectedUnionId = "union-manager-boundary-selected-union";
+        const string agreementRideId = "union-manager-boundary-agreement-ride";
+        const string agreementRiderId = "union-manager-boundary-agreement-rider";
 
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        SeedAgreementRide(factory, agreementRideId, agreementRiderId, subject);
         using var driverProfileClient = factory.CreateClient("Driver", subject);
         using var selectedDriverProfileClient = factory.CreateClient("Driver", selectedDriverId);
         using var manager = factory.CreateUnionManagerClient(unionId, subject);
@@ -1001,11 +1004,41 @@ public sealed partial class RideApiIntegrationTests
         using var booking = await manager.SendAsync(bookingRequest);
         Assert.Equal(HttpStatusCode.Forbidden, booking.StatusCode);
 
+        using var agreementHistory = await manager.GetAsync(
+            $"/api/v1/rides/{agreementRideId}/agreements");
+        Assert.Equal(HttpStatusCode.NotFound, agreementHistory.StatusCode);
+
+        using var agreementProposalRequest = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/v1/rides/{agreementRideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 250m, currency = "INR" })
+        };
+        agreementProposalRequest.Headers.Add("Idempotency-Key", "union-manager-agreement-proposal");
+        using var agreementProposal = await manager.SendAsync(agreementProposalRequest);
+        Assert.Equal(HttpStatusCode.NotFound, agreementProposal.StatusCode);
+
+        using var agreementConfirmation = await manager.PostAsync(
+            $"/api/v1/rides/{agreementRideId}/agreements/1/confirm", content: null);
+        Assert.Equal(HttpStatusCode.NotFound, agreementConfirmation.StatusCode);
+
+        using var paymentReportRequest = CreatePaymentReportRequest(
+            agreementRideId, "union-manager-payment-report", 100m);
+        using var paymentReport = await manager.SendAsync(paymentReportRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, paymentReport.StatusCode);
+
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         Assert.Equal("Online", profiles[subject].AvailabilityStatus);
         Assert.Equal(unionId,
             factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()[subject].UnionId);
-        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var protectedRide = Assert.Single(rides.Values);
+        Assert.Equal(agreementRideId, protectedRide.RideId);
+        Assert.Empty(protectedRide.AgreementVersions ?? []);
+        Assert.Empty(protectedRide.AgreementConfirmations ?? []);
+        Assert.Null(protectedRide.PaymentReconciliation);
+        Assert.Empty(protectedRide.AuditEvents ?? []);
+
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
         Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .GetActiveAsync(selectedDriverId));
