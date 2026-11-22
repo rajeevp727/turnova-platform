@@ -134,6 +134,41 @@ public sealed class CosmosSupportRequestStoreCancellationTests
     }
 
     [Fact]
+    public async Task CanonicalReadProviderFailurePropagatesAfterCreateConflict()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var conflict = new CosmosException(
+            "support request already exists", HttpStatusCode.Conflict, 0, "support-request-test", 0);
+        var unavailable = new CosmosException(
+            "canonical support request read unavailable", HttpStatusCode.ServiceUnavailable, 0, "support-request-test", 0);
+        var request = CreateRequest();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<SupportRequest>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(conflict);
+        container.Setup(value => value.ReadItemAsync<SupportRequest>(
+                request.Id,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(unavailable);
+
+        var exception = await Assert.ThrowsAsync<CosmosException>(() =>
+            new CosmosSupportRequestStore(container.Object).CreateOrGetAsync(request));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, exception.StatusCode);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<SupportRequest>(
+            request.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task SuccessfulCreateRemainsAuthoritativeWhenCancellationArrivesAfterCommit()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
