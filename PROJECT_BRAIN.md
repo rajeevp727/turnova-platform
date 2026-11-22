@@ -1,5 +1,16 @@
 # TurnOva Project Brain
 
+## Run 74 — API-PRIVACY-016: isolate internal Driver FIFO from Ops/UnionManager
+
+- **Phase:** API remains `in_progress`; Android and iOS remain `not_started`. Do not advance mobile work until PR #200 is independently approved, merged under repository policy, and main passes a fresh API phase-exit audit.
+- **Source/test:** [`998d749185f8fb07e8943bdbebba47adf0d24141`](https://github.com/rajeevp727/turnova-platform/commit/998d749185f8fb07e8943bdbebba47adf0d24141) adds a two-case Ops/UnionManager theory for same-subject internal FIFO isolation; [`148d07b035017bf262452954002926d2ce989f82`](https://github.com/rajeevp727/turnova-platform/commit/148d07b035017bf262452954002926d2ce989f82) corrects the test fixture assertion after the first build exposed that `DriverQueueEntry` has no `Position` property. Ops has a valid admin key; UnionManager has the matching `unionId`. Both receive 403/no-store/no-cache for queue listing, own position, leave, join and offer-timeout. Queue order and Driver profile/location are unchanged; the real Driver retains the queue and timeout controls.
+- **Exact-head API CI:** [#45028388510](https://github.com/rajeevp727/turnova-platform/actions/runs/45028388510) passed **1,098/1,098 backend tests**, .NET 10 Release build (24 warnings, 0 errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14756866566](https://github.com/rajeevp727/turnova-platform/actions/runs/45028388510/artifacts/14756866566), 17,005,978 bytes; ZIP SHA-256 `dd6215fd4985c33c0ba70fe9e0bf569169fb9084b06f43579119975fd6746a64`.
+- **Repository:** PR #200 remains open/ready/mergeable/unmerged. Main is `c9280eec23dd4fb5fab06b11e24d2a619b489235`; branch is 583 ahead / 2 behind. The two main-only commits remain weekly-build workflow and PR #204 trusted-LAN Android configuration; neither is Android completion evidence.
+- **Review:** three owner-authored COMMENTED reviews, zero independent approvals, zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only. PR #197's historical merge without independent human approval remains disclosed. Never self-approve or merge.
+- **Acceptance/readiness:** strict acceptance 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); supplemental API-PRIVACY-016 does not change the denominator. Live Cosmos/provider/production readiness is not established.
+- **Next:** continue API-only code/test/docs work, obtain independent human approval, then merge only if permitted. Re-read main and perform the full API exit audit before Android Rider, then Android Driver, then iOS Rider and Driver.
+
+
 ## Run 73 — API-PRIVACY-015: Operations cannot use Rider discovery/booking (2026-11-22)
 
 - **Phase:** API remains `in_progress`; Android and iOS remain `not_started`. Do not advance mobile work until PR #200 is independently approved, merged under repository policy, and main passes a fresh API phase-exit audit.
