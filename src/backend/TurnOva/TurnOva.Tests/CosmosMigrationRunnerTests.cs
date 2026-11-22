@@ -222,6 +222,120 @@ public sealed class CosmosMigrationRunnerTests
     }
 
     [Fact]
+    public async Task ExistingHistoryMarkerMakesMigrationCreateConflictIdempotent()
+    {
+        var (client, historyContainer) = CreateCosmosClient();
+        var conflict = new CosmosException(
+            "migration history marker already exists", HttpStatusCode.Conflict, 0, "migration-history-test", 0);
+        historyContainer.Setup(container => container.CreateItemAsync(
+                It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(conflict);
+        historyContainer.Setup(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+                It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Mock.Of<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>());
+        var leaseStore = new LeaseLostStore();
+        var migration = new CountingMigration();
+        var runner = new CosmosMigrationRunner(
+            client,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [migration],
+            CreateCoordinator(leaseStore, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        await runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, migration.CallCount);
+        historyContainer.Verify(container => container.CreateItemAsync(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(leaseStore.ReleasedLease);
+    }
+
+    [Fact]
+    public async Task HistoryCreateConflictWithoutCanonicalMarkerPreservesConflictFailure()
+    {
+        var (client, historyContainer) = CreateCosmosClient();
+        var conflict = new CosmosException(
+            "migration history marker conflict", HttpStatusCode.Conflict, 0, "migration-history-test", 0);
+        historyContainer.Setup(container => container.CreateItemAsync(
+                It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(conflict);
+        var leaseStore = new LeaseLostStore();
+        var migration = new CountingMigration();
+        var runner = new CosmosMigrationRunner(
+            client,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [migration],
+            CreateCoordinator(leaseStore, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        var exception = await Assert.ThrowsAsync<CosmosException>(() =>
+            runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Equal(HttpStatusCode.Conflict, exception.StatusCode);
+        Assert.Equal(1, migration.CallCount);
+        historyContainer.Verify(container => container.CreateItemAsync(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(leaseStore.ReleasedLease);
+    }
+
+    [Fact]
+    public async Task CancellationAfterHistoryCreateConflictStopsBeforeCanonicalRead()
+    {
+        var (client, historyContainer) = CreateCosmosClient();
+        using var cancellation = new CancellationTokenSource();
+        var conflict = new CosmosException(
+            "migration history marker conflict", HttpStatusCode.Conflict, 0, "migration-history-test", 0);
+        historyContainer.Setup(container => container.CreateItemAsync(
+                It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>(conflict);
+            });
+        var leaseStore = new LeaseLostStore();
+        var migration = new CountingMigration();
+        var runner = new CosmosMigrationRunner(
+            client,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [migration],
+            CreateCoordinator(leaseStore, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runner.RunAsync(cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Equal(1, migration.CallCount);
+        historyContainer.Verify(container => container.CreateItemAsync(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        Assert.NotNull(leaseStore.ReleasedLease);
+    }
+
+    [Fact]
     public async Task LeaseRenewalLossCancelsMigrationBeforeHistoryMarkerIsWritten()
     {
         var migrationStarted = NewSignal();
