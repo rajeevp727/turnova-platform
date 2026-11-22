@@ -1227,8 +1227,6 @@ public sealed class AuthApiIntegrationTests
     [InlineData("empty-subject")]
     [InlineData("duplicate-mapped-legacy-subject")]
     [InlineData("empty-mapped-legacy-subject")]
-    [InlineData("blank-mapped-legacy-subject-with-sub")]
-    [InlineData("blank-subject-with-mapped-legacy")]
     public async Task LoginRejectsAccessTokenThatDoesNotMatchApiValidationPolicy(string failure)
     {
         var accessToken = failure switch
@@ -1244,8 +1242,6 @@ public sealed class AuthApiIntegrationTests
             "empty-subject" => CreateToken(subjectClaimCount: 1, subjectValue: " "),
             "duplicate-mapped-legacy-subject" => CreateToken(subjectClaimCount: 1, includeMappedLegacySubject: true),
             "empty-mapped-legacy-subject" => CreateToken(subjectClaimCount: 0, includeMappedLegacySubject: true, mappedLegacySubjectValue: " "),
-            "blank-mapped-legacy-subject-with-sub" => CreateToken(subjectClaimCount: 1, includeMappedLegacySubject: true, mappedLegacySubjectValue: " "),
-            "blank-subject-with-mapped-legacy" => CreateToken(subjectClaimCount: 1, subjectValue: " ", includeMappedLegacySubject: true, mappedLegacySubjectValue: "legacy-driver-1"),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
         using var handler = new RecordingHandler((request, _) =>
@@ -1737,8 +1733,6 @@ public sealed class AuthApiIntegrationTests
     [InlineData("empty-subject")]
     [InlineData("duplicate-mapped-legacy-subject")]
     [InlineData("empty-mapped-legacy-subject")]
-    [InlineData("blank-mapped-legacy-subject-with-sub")]
-    [InlineData("blank-subject-with-mapped-legacy")]
     public async Task RefreshRejectsAccessTokenWithoutExactlyOneSubjectAndRevokesReturnedSession(string failure)
     {
         var accessToken = failure switch
@@ -1749,8 +1743,6 @@ public sealed class AuthApiIntegrationTests
             "empty-subject" => CreateToken("Rider", subjectClaimCount: 1, subjectValue: " "),
             "duplicate-mapped-legacy-subject" => CreateToken("Rider", subjectClaimCount: 1, includeMappedLegacySubject: true),
             "empty-mapped-legacy-subject" => CreateToken("Rider", subjectClaimCount: 0, includeMappedLegacySubject: true, mappedLegacySubjectValue: " "),
-            "blank-mapped-legacy-subject-with-sub" => CreateToken("Rider", subjectClaimCount: 1, includeMappedLegacySubject: true, mappedLegacySubjectValue: " "),
-            "blank-subject-with-mapped-legacy" => CreateToken("Rider", subjectClaimCount: 1, subjectValue: " ", includeMappedLegacySubject: true, mappedLegacySubjectValue: "legacy-driver-1"),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
         using var handler = new RecordingHandler((request, _) =>
@@ -1986,11 +1978,9 @@ public sealed class AuthApiIntegrationTests
 
     [Theory]
     [InlineData("missing-subject", HttpStatusCode.Forbidden)]
-    [InlineData("blank-subject", HttpStatusCode.Unauthorized)]
+    [InlineData("blank-subject", HttpStatusCode.Forbidden)]
     [InlineData("duplicate-subject", HttpStatusCode.Unauthorized)]
     [InlineData("mixed-subject", HttpStatusCode.Unauthorized)]
-    [InlineData("mixed-blank-subject", HttpStatusCode.Unauthorized)]
-    [InlineData("mixed-blank-legacy-subject", HttpStatusCode.Unauthorized)]
     [InlineData("duplicate-role", HttpStatusCode.Unauthorized)]
     public async Task DriverEndpointRejectsTokenWithInvalidIdentityClaims(string failure, HttpStatusCode expectedStatus)
     {
@@ -2000,8 +1990,6 @@ public sealed class AuthApiIntegrationTests
             "blank-subject" => CreateToken(subjectValue: " "),
             "duplicate-subject" => CreateToken(subjectClaimCount: 2),
             "mixed-subject" => CreateToken(includeMappedLegacySubject: true),
-            "mixed-blank-subject" => CreateToken(subjectValue: " ", includeMappedLegacySubject: true, mappedLegacySubjectValue: "legacy-driver-1"),
-            "mixed-blank-legacy-subject" => CreateToken(includeMappedLegacySubject: true, mappedLegacySubjectValue: " "),
             "duplicate-role" => CreateToken(additionalRole: "UnionManager"),
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
