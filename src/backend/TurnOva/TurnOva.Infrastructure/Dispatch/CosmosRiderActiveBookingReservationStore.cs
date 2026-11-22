@@ -1,6 +1,7 @@
 using Microsoft.Azure.Cosmos;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Infrastructure.Dispatch;
 
@@ -103,6 +104,10 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             if (current.Resource.ExpiresAtUtc is null)
                 return true;
 
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
+                return false;
+
             var updated = current.Resource with { ExpiresAtUtc = null };
             var audit = RiderActiveBookingReservationAuditEvent.Create(
                 updated, RiderActiveBookingReservationAuditEventTypes.MadePermanent,
@@ -148,6 +153,10 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             }
 
             if (current.Resource.RideId != rideId)
+                return false;
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
                 return false;
 
             var audit = RiderActiveBookingReservationAuditEvent.Create(
