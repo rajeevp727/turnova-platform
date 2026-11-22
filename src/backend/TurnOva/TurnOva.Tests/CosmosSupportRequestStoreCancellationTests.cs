@@ -88,6 +88,9 @@ public sealed class CosmosSupportRequestStoreCancellationTests
         container.Verify(value => value.CreateItemAsync(
             It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<SupportRequest>(
             request.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -124,6 +127,9 @@ public sealed class CosmosSupportRequestStoreCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosSupportRequestStore(container.Object).CreateOrGetAsync(request, cancellation.Token));
 
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.CreateItemAsync(
             It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
