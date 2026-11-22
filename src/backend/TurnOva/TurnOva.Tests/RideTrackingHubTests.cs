@@ -50,14 +50,16 @@ public sealed class RideTrackingHubTests
         Assert.Null(RideTrackingHubAuthorization.ResolveDriverNotificationGroup(driver, "driver-2", null));
     }
 
-    [Fact]
-    public void NonRiderAndNonDriverCannotJoinRideOrDriverGroups()
+    [Theory]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public void NonRiderAndNonDriverCannotJoinRideOrDriverGroups(string role)
     {
-        var unionManager = CreatePrincipal("union-manager-1", "UnionManager");
+        var nonDriver = CreatePrincipal($"{role.ToLowerInvariant()}-1", role);
 
-        Assert.False(RideTrackingHubAuthorization.CanRequestRideGroup(unionManager, "ride-1"));
-        Assert.False(RideTrackingHubAuthorization.CanJoinRideGroup(unionManager, "ride-1", CreateRide("rider-1", "driver-1")));
-        Assert.Null(RideTrackingHubAuthorization.ResolveDriverNotificationGroup(unionManager, "driver-1", null));
+        Assert.False(RideTrackingHubAuthorization.CanRequestRideGroup(nonDriver, "ride-1"));
+        Assert.False(RideTrackingHubAuthorization.CanJoinRideGroup(nonDriver, "ride-1", CreateRide("rider-1", "driver-1")));
+        Assert.Null(RideTrackingHubAuthorization.ResolveDriverNotificationGroup(nonDriver, "driver-1", null));
     }
 
     [Fact]
