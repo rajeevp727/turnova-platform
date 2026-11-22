@@ -581,6 +581,24 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task SubjectlessTokenCannotNegotiateSignalRHubUsingQueryStringAccessToken()
+    {
+        using var handler = new RecordingHandler((_, _) =>
+            throw new InvalidOperationException("Subjectless hub negotiation must not call TriSend."));
+        using var factory = new AuthApiFactory(handler);
+        using var client = factory.CreateClient();
+        var accessToken = CreateToken(role: "Rider", subjectClaimCount: 0);
+
+        var negotiatePath =
+            $"/hubs/rides/negotiate?negotiateVersion=1&access_token={Uri.EscapeDataString(accessToken)}";
+        using var response = await client.PostAsync(negotiatePath, null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task UnmatchedRideHubRouteReturnsNotFoundWithNoStoreHeaders()
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Unmatched hub routes must not call TriSend."));
