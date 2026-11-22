@@ -744,6 +744,7 @@ public sealed partial class RideApiIntegrationTests
         using var rider = factory.CreateClient("Rider", riderId);
         using var driver = factory.CreateClient("Driver", riderId);
         using var rideOwner = factory.CreateClient("Rider", rideOwnerId);
+        using var secondDriver = factory.CreateClient("Driver", secondDriverId);
         SeedBookableDriver(factory, riderId, "union-rider-offer-read");
         SeedBookableDriver(factory, secondDriverId, "union-second-offer-read");
 
