@@ -15,18 +15,22 @@ public sealed class CosmosMigrationRunner(
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var databaseResponse = await client.CreateDatabaseIfNotExistsAsync(
             options.DatabaseName, throughput: 400, cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var database = databaseResponse.Database;
 
         var historyResponse = await database.CreateContainerIfNotExistsAsync(
             new ContainerProperties(HistoryContainerName, "/id"),
             cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var history = historyResponse.Container;
 
         await database.CreateContainerIfNotExistsAsync(
             new ContainerProperties(LockContainerName, "/id"),
             cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var migrationDatabase = new CosmosMigrationDatabase(database);
         var lease = await leaseCoordinator.AcquireAsync(cancellationToken);
@@ -36,6 +40,7 @@ public sealed class CosmosMigrationRunner(
 
         try
         {
+            migrationCancellation.Token.ThrowIfCancellationRequested();
             foreach (var migration in migrations.OrderBy(x => x.Id, StringComparer.Ordinal))
             {
                 var migrationToken = migrationCancellation.Token;
@@ -104,14 +109,17 @@ public sealed class CosmosMigrationRunner(
     private static async Task<bool> IsAppliedAsync(
         Container history, string migrationId, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             await history.ReadItemAsync<MigrationHistoryDocument>(
                 migrationId, new PartitionKey(migrationId), cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             return true;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return false;
         }
     }
