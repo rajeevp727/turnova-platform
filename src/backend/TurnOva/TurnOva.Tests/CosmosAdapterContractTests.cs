@@ -38,6 +38,22 @@ public sealed class CosmosAdapterContractTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task RideOfferReplacementFailsClosedWithoutObservedEtag(string? expectedETag)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        var result = await new CosmosRideOfferStore(container.Object)
+            .TryReplaceAsync(CreateRideOfferState(), expectedETag!);
+
+        Assert.False(result);
+        container.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task RideOfferCreateConflictReturnsFalseWithoutOverwritingTheExistingAggregate()
     {

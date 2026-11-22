@@ -82,6 +82,10 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
 
     public async Task<bool> TryReplaceAsync(RideOfferState state, string expectedETag, CancellationToken cancellationToken = default)
     {
+        // A missing observed ETag must never degrade into an unconditional Cosmos replacement.
+        if (string.IsNullOrWhiteSpace(expectedETag))
+            return false;
+
         try
         {
             await container.ReplaceItemAsync(state with { ETag = null }, state.RideId, new PartitionKey(state.RideId),

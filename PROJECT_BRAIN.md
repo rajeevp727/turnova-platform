@@ -1,5 +1,13 @@
 # TurnOva Project Brain
 
+## Run 78 — COSMOS-STORE-007: missing RideOffer ETag fails closed
+
+- **Phase:** API remains `in_progress`; Android/iOS remain `not_started`.
+- **Finding:** `CosmosRideOfferStore.TryReplaceAsync` accepted a null/blank expected ETag. Passing that value to Cosmos `IfMatchEtag` could omit the condition and turn a compare-and-swap into an unconditional replace.
+- **Correction:** return false before provider access for null/empty/whitespace expected ETags. Added strict-mock cases for null, empty, space and tab, proving no Cosmos call. Valid ETag and 412/404 handling are unchanged.
+- **Evidence:** exact-head API CI for the source/test increment is pending. Previous final docs checkpoint [#45037988379](https://github.com/rajeevp727/turnova-platform/actions/runs/45037988379) passed 1,119/1,119 tests, Release build and native non-container publish/verifier.
+- **Gate:** PR #200 remains open/ready/unmerged and requires independent human approval. Do not self-approve, bypass protection or advance mobile work. Strict acceptance remains 0/19 Verified; live Cosmos/production readiness is not established.
+
 ## Run 77 — AUTH-API-061: deterministic TriSend URL policy coverage
 
 - **Phase:** API remains `in_progress`; Android/iOS remain `not_started`.

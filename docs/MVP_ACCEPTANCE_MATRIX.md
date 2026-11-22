@@ -1,5 +1,12 @@
 # TurnOva MVP Acceptance Matrix
 
+## Run 78 — COSMOS-STORE-007: missing RideOffer ETag fails closed (2026-11-22)
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`.
+- **Supplemental persistence guard:** `CosmosRideOfferStore.TryReplaceAsync` now returns false before any provider call when the expected ETag is null, empty or whitespace. This prevents a missing observed ETag from becoming an unconditional Cosmos replacement. Strict-mock tests cover null, empty, space and tab; valid ETag, 412 and 404 behavior remains unchanged.
+- **CI:** new source/test head pending exact-head API-only CI. Prior docs checkpoint [#45037988379](https://github.com/rajeevp727/turnova-platform/actions/runs/45037988379) passed 1,119/1,119 tests and native non-container publish/verifier.
+- **Gate:** this supplemental test does not change the 19-row denominator. PR #200 still requires independent human approval and a fresh post-merge API phase-exit audit. No Android work is authorized.
+
 ## Run 77 — TriSend URL validation regression correction (2026-11-22)
 
 - **Phase:** API `in_progress`; Android/iOS `not_started`.
@@ -362,7 +369,7 @@ External gates above are not reported as completed. Strict acceptance remains 0/
 
 | Phase | Exit evidence | State |
 |---|---|---|
-| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs and native non-container .NET 10 publish. PR #200 includes QA/demo-auth hardening, AUTH-API-017 through AUTH-API-061, DISPATCH-02-API-001..004, DISPATCH-03-CANCEL-013, API-PRIVACY-001..017 and approved AI-01 supplemental work. | Source/test head [`19d78bb26425b1e97b9a9f4c72ef72774c731b82`](https://github.com/rajeevp727/turnova-platform/commit/19d78bb26425b1e97b9a9f4c72ef72774c731b82) passed exact-head API-only CI [#45036939531](https://github.com/rajeevp727/turnova-platform/actions/runs/45036939531): **1,119/1,119 backend tests**, .NET 10 Release build, native non-container Linux x64 publish/verifier (artifact [14760082160](https://github.com/rajeevp727/turnova-platform/actions/runs/45036939531/artifacts/14760082160)). Mobile jobs were intentionally skipped. API remains `in_progress` pending independent human approval, permitted merge and a fresh main/API exit audit; live Cosmos/production readiness is not claimed. |
+| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs and native non-container .NET 10 publish. PR #200 includes QA/demo-auth hardening, AUTH-API-017 through AUTH-API-061, DISPATCH-02-API-001..004, DISPATCH-03-CANCEL-013, API-PRIVACY-001..017, COSMOS-STORE-007 and approved AI-01 supplemental work. | Source/test head [`19d78bb26425b1e97b9a9f4c72ef72774c731b82`](https://github.com/rajeevp727/turnova-platform/commit/19d78bb26425b1e97b9a9f4c72ef72774c731b82) passed exact-head API-only CI [#45036939531](https://github.com/rajeevp727/turnova-platform/actions/runs/45036939531): **1,119/1,119 backend tests**, .NET 10 Release build, native non-container Linux x64 publish/verifier (artifact [14760082160](https://github.com/rajeevp727/turnova-platform/actions/runs/45036939531/artifacts/14760082160)). Mobile jobs were intentionally skipped. API remains `in_progress` pending independent human approval, permitted merge and a fresh main/API exit audit; live Cosmos/production readiness is not claimed. |
 | Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | **Gated — Rider first, Driver second** |
 | iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after both Android apps exit | **Gated — not started** |
 

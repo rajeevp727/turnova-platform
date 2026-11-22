@@ -1,5 +1,17 @@
 # TurnOva MVP progress
 
+## Run 78 — Fail closed on missing RideOffer ETag (2026-11-22)
+
+- **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`.
+- **Current item:** COSMOS-STORE-007, supplemental persistence concurrency guard; outside the 19-row denominator.
+- **Finding:** `CosmosRideOfferStore.TryReplaceAsync` passed the caller-supplied ETag directly into `ItemRequestOptions.IfMatchEtag`. If a missing/blank ETag reached this adapter, the SDK could receive no If-Match condition and an intended compare-and-swap could degrade into an unconditional replacement. The in-memory adapter already fails closed because the observed ETag does not match.
+- **Correction:** return `false` before any Cosmos call when the expected ETag is null, empty or whitespace. Added strict-mock adapter tests for null, empty, space and tab; each proves no Cosmos operation occurs. Valid ETag, stale-ETag 412 and missing-item 404 behavior is unchanged.
+- **Source/test:** this Run 78 commit adds COSMOS-STORE-007; exact-head API-only CI is pending. The preceding documentation checkpoint [`dcb039b9a309b117ddba0fb4cfa20224b3cef855`](https://github.com/rajeevp727/turnova-platform/commit/dcb039b9a309b117ddba0fb4cfa20224b3cef855) passed [CI #45037988379](https://github.com/rajeevp727/turnova-platform/actions/runs/45037988379): 1,119/1,119 tests, Release build and native non-container Linux x64 publish/verifier.
+- **Active PR/base:** [PR #200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main base `4061357c095debbc31fc5027a7bff27bd8b06265`. PR remains open/ready/mergeable with no independent approval.
+- **Phase/review gate:** API remains active. Do not self-approve, bypass protection, merge or start Android work. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos ETag/multi-instance/restart and production readiness are not established.
+- **Next exact action:** verify source/test CI on this head. If green, synchronize the exact test count/artifact in docs and run exact-head CI on the final documentation-bearing head.
+
 ## Run 77 — Make TriSend Development URL validation deterministic (2026-11-22)
 
 - **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`. No mobile source, build or deployment work was started.
