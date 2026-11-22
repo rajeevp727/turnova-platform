@@ -971,6 +971,7 @@ public sealed partial class RideApiIntegrationTests
 
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         using var driverProfileClient = factory.CreateClient("Driver", subject);
+        using var selectedDriverProfileClient = factory.CreateClient("Driver", selectedDriverId);
         using var manager = factory.CreateUnionManagerClient(unionId, subject);
         SeedBookableDriver(factory, subject, unionId);
         SeedBookableDriver(factory, selectedDriverId, selectedUnionId);
