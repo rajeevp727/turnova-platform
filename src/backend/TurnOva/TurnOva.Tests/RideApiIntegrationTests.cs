@@ -3435,6 +3435,45 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.Forbidden, riderResponse.StatusCode);
     }
 
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadPersistedDriverPayslipForSameSubject(string nonDriverRole)
+    {
+        const string driverId = "driver-private-payslip";
+        const string unionId = "union-private-payslip";
+        using var factory = new TurnOvaApiFactory();
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var assignmentEvent = new DriverUnionAuditEvent(
+            "private-payslip-assignment", driverId, null, null,
+            unionId, "Selected Booking Union", "Assigned", "Initial assignment", "Operations",
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero));
+        factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>()
+            [$"{driverId}|{assignmentEvent.EventId}"] = assignmentEvent;
+
+        using var ownerResponse = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.OK, ownerResponse.StatusCode);
+        Assert.Equal("application/pdf", ownerResponse.Content.Headers.ContentType?.MediaType);
+
+        var payslips = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
+        var originalSnapshot = Assert.Single(payslips.Values, item =>
+            item.DriverId == driverId && item.Year == 2026 && item.Month == 10);
+
+        using var denied = await nonDriver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.NotEqual("application/pdf", denied.Content.Headers.ContentType?.MediaType);
+        Assert.True(denied.Headers.CacheControl?.NoStore);
+        Assert.Contains(denied.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(originalSnapshot, Assert.Single(payslips.Values, item =>
+            item.DriverId == driverId && item.Year == 2026 && item.Month == 10));
+    }
+
     [Fact]
     public async Task RiderCanCreateRideAndRepeatRequestWithoutCreatingDuplicate()
     {
