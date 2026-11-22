@@ -5230,6 +5230,7 @@ public sealed partial class RideApiIntegrationTests
             legacyFifoRiderRequestsEnabled: false,
             rideOfferAdvancer: advancer);
         using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
         SeedBookableDriver(factory, driverId, unionId);
 
         using var request = CreateSelectedBookingRequest(
