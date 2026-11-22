@@ -5220,6 +5220,48 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderCancellingSelectedNegotiationDoesNotAdvanceLegacyFifoOffer()
+    {
+        const string riderId = "selected-cancel-no-fifo-rider";
+        const string driverId = "selected-cancel-no-fifo-driver";
+        const string unionId = "selected-cancel-no-fifo-union";
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            rideOfferAdvancer: advancer);
+        using var rider = factory.CreateClient("Rider", riderId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var request = CreateSelectedBookingRequest(
+            "selected-cancel-no-fifo-key", driverId, unionId, "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var driverReservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var riderReservations = factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
+        Assert.True(await driverReservations.HasActiveAsync(driverId));
+        Assert.NotNull(await riderReservations.GetActiveAsync(riderId));
+
+        using var cancelled = await rider.PostAsync($"/api/v1/rides/{rideId}/cancel", null);
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+
+        var cancelledRide = rides[rideId];
+        Assert.Equal("Cancelled", cancelledRide.Status);
+        var cancellationEvent = Assert.Single(cancelledRide.AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Cancelled");
+        Assert.Equal(riderId, cancellationEvent.ActorId);
+        Assert.Equal("Rider", cancellationEvent.ActorRole);
+        Assert.Equal("Negotiating", cancellationEvent.PreviousStatus);
+
+        Assert.Empty(advancer.AdvancedRideIds);
+        Assert.False(await driverReservations.HasActiveAsync(driverId));
+        Assert.Null(await riderReservations.GetActiveAsync(riderId));
+    }
+
+    [Fact]
     public async Task DriverDecliningSelectedBookingDoesNotAdvanceLegacyFifoOffer()
     {
         const string riderId = "selected-decline-no-fifo-rider";
