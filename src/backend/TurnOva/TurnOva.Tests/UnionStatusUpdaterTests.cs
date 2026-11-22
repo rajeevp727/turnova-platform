@@ -203,7 +203,7 @@ public sealed class UnionStatusUpdaterTests
             UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
-            It.Is<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
