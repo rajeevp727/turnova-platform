@@ -3482,6 +3482,46 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(originalSnapshot, payslips[$"{driverId}|{payslipId}"]);
     }
 
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReportDirectPaymentForSameDriverSubject(string nonDriverRole)
+    {
+        const string driverId = "driver-private-payment-report";
+        const string unionId = "union-private-payment-report";
+        const string idempotencyKey = "payment-report-role-boundary";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "payment-report-role-boundary-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "payment-report-role-boundary-booking", 500m);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var before = rides[rideId];
+        Assert.Null(before.PaymentReconciliation);
+
+        using var deniedRequest = CreatePaymentReportRequest(rideId, idempotencyKey, 400m);
+        using var denied = await nonDriver.SendAsync(deniedRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.True(denied.Headers.CacheControl?.NoStore);
+        Assert.Contains(denied.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        var afterDenied = rides[rideId];
+        Assert.Equal(before, afterDenied);
+        Assert.Null(afterDenied.PaymentReconciliation);
+
+        // Authorization must run before payment-report idempotency is consumed.
+        using var allowedRequest = CreatePaymentReportRequest(rideId, idempotencyKey, 400m);
+        using var allowed = await driver.SendAsync(allowedRequest);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        Assert.Equal(400m, rides[rideId].PaymentReconciliation!.AmountReceived);
+        Assert.Equal("DriverReportedUnverified", rides[rideId].PaymentReconciliation!.Status);
+    }
+
     [Fact]
     public async Task RiderCanCreateRideAndRepeatRequestWithoutCreatingDuplicate()
     {
