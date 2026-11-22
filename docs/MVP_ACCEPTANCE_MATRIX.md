@@ -1,3 +1,11 @@
+## Run 96 engineering evidence update — API query cancellation
+
+- API-only source/test head [`bc537ce60da2505e664e8e2d96941afcc5a834a8`](https://github.com/rajeevp727/turnova-platform/commit/bc537ce60da2505e664e8e2d96941afcc5a834a8) passed [CI #45083933104](https://github.com/rajeevp727/turnova-platform/actions/runs/45083933104): **1,278/1,278 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (24 warnings, 0 errors), native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), and artifact validation. Artifact [14777354888](https://github.com/rajeevp727/turnova-platform/actions/runs/45083933104/artifacts/14777354888), 17,009,263 bytes, ZIP SHA-256 `df15f31dfa777524bf5a777ac7df967511c946433396a9f387d62096d1f755a7`.
+- Supplemental COSMOS-STORE-026..032 adds cancellation-before-iterator-state checks for queue eligibility, queue-audit and Driver reservation batch queries, with seven deterministic first-page/final-page/pre-cancelled tests. This does not change any MVP acceptance row or the 19-row denominator.
+- Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-first phase gate. No live Cosmos, hosted API, provider, mobile, physical-device or production readiness is claimed.
+- PR #200 remains open/unmerged and requires independent human approval. The branch phase remains API `in_progress`; Android/iOS remain `not_started`.
+
+
 # TurnOva MVP Acceptance Matrix
 
 ## Run 95 documentation checkpoint — exact-head verification
