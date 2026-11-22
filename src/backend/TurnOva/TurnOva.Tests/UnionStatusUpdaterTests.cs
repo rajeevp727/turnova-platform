@@ -115,6 +115,8 @@ public sealed class UnionStatusUpdaterTests
 
         Assert.Equal(UnionStatusUpdateOutcome.Conflict, result.Outcome);
         Assert.Null(result.Union);
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -138,6 +140,8 @@ public sealed class UnionStatusUpdaterTests
             CancellationToken.None);
 
         Assert.Equal(UnionStatusUpdateOutcome.NotFound, result.Outcome);
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -166,6 +170,8 @@ public sealed class UnionStatusUpdaterTests
 
         Assert.Equal(UnionStatusUpdateOutcome.Conflict, result.Outcome);
         Assert.Null(result.Union);
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
             It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "union-status-etag"),
@@ -193,6 +199,11 @@ public sealed class UnionStatusUpdaterTests
 
         Assert.Equal(UnionStatusUpdateOutcome.NotFound, result.Outcome);
         Assert.Null(result.Union);
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
+            It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
