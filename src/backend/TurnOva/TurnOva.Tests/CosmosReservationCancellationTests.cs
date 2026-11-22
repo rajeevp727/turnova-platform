@@ -22,6 +22,51 @@ public sealed class CosmosReservationCancellationTests
     }
 
     [Fact]
+    public async Task DriverAcquireRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        var response = new Mock<TransactionalBatchResponse>();
+        response.SetupGet(value => value.IsSuccessStatusCode).Returns(true);
+        using var cancellation = new CancellationTokenSource();
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(response.Object);
+            });
+        container.Setup(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosDriverRideReservationStore(container.Object)
+            .TryAcquireTemporaryAsync(
+                "driver-1", "ride-1", DateTimeOffset.UtcNow.AddMinutes(5), cancellation.Token);
+
+        Assert.True(result);
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("driver-1")))), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<DriverRideReservation>(item => item.DriverId == "driver-1" && item.RideId == "ride-1"),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<DriverRideReservationAuditEvent>(item =>
+                item.DriverId == "driver-1" && item.RideId == "ride-1" &&
+                item.EventType == DriverRideReservationAuditEventTypes.Acquired),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+        batch.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task DriverPromotionHonorsCancellationAfterReadBeforeAlreadyPermanentNoOp()
     {
         var read = new Mock<ItemResponse<DriverRideReservation>>();
@@ -127,6 +172,53 @@ public sealed class CosmosReservationCancellationTests
                 reservation, cancellation.Token));
 
         container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RiderAcquireRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        var response = new Mock<TransactionalBatchResponse>();
+        response.SetupGet(value => value.IsSuccessStatusCode).Returns(true);
+        using var cancellation = new CancellationTokenSource();
+        var reservation = new RiderActiveBookingReservation(
+            "rider-1", "ride-1", "request-hash", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5));
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(response.Object);
+            });
+        container.Setup(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosRiderActiveBookingReservationStore(container.Object)
+            .TryAcquireAsync(reservation, cancellation.Token);
+
+        Assert.Equal(RiderBookingReservationAcquireResult.Acquired, result);
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("rider-1")))), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<RiderActiveBookingReservation>(item =>
+                item.RiderId == "rider-1" && item.RideId == "ride-1"),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<RiderActiveBookingReservationAuditEvent>(item =>
+                item.RiderId == "rider-1" && item.RideId == "ride-1" &&
+                item.EventType == RiderActiveBookingReservationAuditEventTypes.Acquired),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+        batch.VerifyNoOtherCalls();
     }
 
     [Fact]

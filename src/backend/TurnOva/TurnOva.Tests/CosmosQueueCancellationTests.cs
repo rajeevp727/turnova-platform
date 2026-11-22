@@ -77,6 +77,51 @@ public sealed class CosmosQueueCancellationTests
     }
 
     [Fact]
+    public async Task QueueJoinRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        var response = new Mock<TransactionalBatchResponse>();
+        response.SetupGet(value => value.IsSuccessStatusCode).Returns(true);
+        using var cancellation = new CancellationTokenSource();
+        var entry = new DriverQueueEntry("driver-1", "zone-a", "Cab", DateTimeOffset.UtcNow, 1, true);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<CosmosQueueStore.QueueEntryDocument>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<QueueAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(response.Object);
+            });
+        container.Setup(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()))
+            .Returns(batch.Object);
+
+        await new CosmosQueueStore(container.Object).AddAsync(entry, cancellation.Token);
+
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("zone-a|cab")))), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<CosmosQueueStore.QueueEntryDocument>(item =>
+                item.DriverId == "driver-1" && item.ZoneServiceKey == "zone-a|cab"),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<QueueAuditEvent>(item =>
+                item.DriverId == "driver-1" &&
+                item.ZoneServiceKey == "zone-a|cab" &&
+                item.EventType == QueueAuditEventTypes.Joined),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+        batch.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task DispatchExceptionAuditHonorsPreCancelledTokenBeforeStoreCall()
     {
         var store = new Mock<IQueueAuditEventStore>(MockBehavior.Strict);
