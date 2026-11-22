@@ -1,5 +1,20 @@
 # TurnOva MVP progress
 
+## Run 76 — Preserve single-non-empty JWT subject alias fallback (2026-11-22)
+
+- **Platform phase:** API `in_progress`; Android/iOS remain `not_started`. No mobile source, build or deployment work was started.
+- **Current item:** AUTH-API-060, supplemental authentication compatibility evidence outside the 19-row denominator.
+- **Audit finding:** the established bearer-token contract accepts one non-empty supported subject alias when another supported alias is blank, then canonicalizes the non-empty value to both `sub` and `ClaimTypes.NameIdentifier`. The existing positive regression already covered blank `sub` plus non-empty `nameid`; the stricter raw-claim-count proposal was therefore reverted before merge to preserve this behavior. More than one non-empty alias remains invalid; a lone blank/no usable subject remains subjectless and is blocked from user-owned routes.
+- **Retained test:** `AuthApiIntegrationTests.DriverEndpointCanonicalizesTheSingleNonEmptySubjectAlias` is now a two-case theory covering both blank-`sub`/non-empty-`nameid` and non-empty-`sub`/blank-`nameid`. Existing negative cases still cover lone blank subjects and multiple non-empty aliases. Upstream login/refresh validation continues to require exactly one subject claim.
+- **Source/test commit:** [`ff6f1609a175aaedd235bad994b1bd38eaa01ddf`](https://github.com/rajeevp727/turnova-platform/commit/ff6f1609a175aaedd235bad994b1bd38eaa01ddf); test-only, no runtime behavior change.
+- **Exact-head CI:** pending for the final documentation-bearing head; do not infer success from prior API runs.
+- **Active PR/base:** [PR #200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main `c9280eec23dd4fb5fab06b11e24d2a619b489235`. Source/test checkpoint compare: 592 ahead / 2 behind; GitHub reports mergeable.
+- **Review/phase gate:** PR #200 remains open/ready/unmerged; three owner-authored COMMENTED reviews, zero independent approvals, zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only. PR #197's historical merge without independent human approval remains disclosed. API remains the active phase.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos/provider/production readiness is not established.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart and durable Staging/QA; shared/edge rate limiting and trusted-proxy configuration; production identity/secrets/TriSend/API hosting; Product-approved dispatch radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next exact action:** verify exact-head API-only CI on the final docs head; continue API-only safe engineering; obtain independent human approval. Do not self-approve, bypass protections or merge. After a permitted approved merge, re-read main and conduct the full API phase-exit audit before Android Rider.
+
+
 ## Run 75 — Non-Driver roles cannot read a same-subject Driver Union assignment (2026-11-22)
 
 - **Platform phase:** API `in_progress`; Android/iOS remain `not_started`. No mobile source, build or deployment work was started.
