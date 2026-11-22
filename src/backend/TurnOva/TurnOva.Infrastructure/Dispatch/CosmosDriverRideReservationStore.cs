@@ -1,6 +1,7 @@
 using Microsoft.Azure.Cosmos;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Infrastructure.Dispatch;
 
@@ -94,6 +95,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             if (current.Resource.ExpiresAtUtc is null)
                 return true;
 
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
+                return false;
+
             var updated = current.Resource with { ExpiresAtUtc = null };
             var auditEvent = DriverRideReservationAuditEvent.Create(
                 updated, DriverRideReservationAuditEventTypes.MadePermanent, auditContext,
@@ -133,6 +138,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 return false;
             if (current.Resource.ExpiresAtUtc == expiresAtUtc)
                 return true;
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
+                return false;
 
             var updated = current.Resource with { ExpiresAtUtc = expiresAtUtc };
             var auditEvent = DriverRideReservationAuditEvent.Create(
@@ -209,6 +218,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var current = await container.ReadItemAsync<DriverRideReservation>(
                 driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
             if (current.Resource.RideId != rideId)
+                return false;
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
                 return false;
 
             var auditEvent = DriverRideReservationAuditEvent.Create(
