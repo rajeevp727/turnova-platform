@@ -1,5 +1,16 @@
 # TurnOva Project Brain
 
+## Run 75 — API-PRIVACY-017: Driver Union assignment is not a non-Driver self-service read
+
+- **Phase:** API remains `in_progress`; Android and iOS remain `not_started`. Do not advance mobile work until PR #200 is independently approved, merged under repository policy, and main passes a fresh API phase-exit audit.
+- **Source/test:** [`823af1a2748f6ab2f0eb0c39bd05a4e885935d88`](https://github.com/rajeevp727/turnova-platform/commit/823af1a2748f6ab2f0eb0c39bd05a4e885935d88) adds `NonDriverRolesCannotReadDriverUnionAssignmentForSameDriverSubject`, a Rider/Ops/UnionManager theory. Ops carries the valid admin key; UnionManager carries the matching `unionId`. All three are denied 403/no-store/no-cache for `GET /api/v1/driver/union`; assignment remains unchanged. The scoped manager's own member list and Driver owner read are positive controls.
+- **Exact-head API CI:** [#45029626071](https://github.com/rajeevp727/turnova-platform/actions/runs/45029626071) passed **1,101/1,101 backend tests**, .NET 10 Release build (24 warnings, 0 errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14757042307](https://github.com/rajeevp727/turnova-platform/actions/runs/45029626071/artifacts/14757042307), 17,006,008 bytes; ZIP SHA-256 `36da7c311d18ffa36879eeaca8f5cc5c2f31ef42f4b4a42c27b13088134ca27a`.
+- **Repository:** PR #200 remains open/ready/mergeable/unmerged. Main is `c9280eec23dd4fb5fab06b11e24d2a619b489235`; branch is 586 ahead / 2 behind at the source/test checkpoint.
+- **Review:** three owner-authored COMMENTED reviews, zero independent approvals, zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only. PR #197's historical merge without independent human approval remains disclosed. Never self-approve or merge.
+- **Acceptance/readiness:** strict acceptance 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); API-PRIVACY-017 is supplemental and does not change the denominator. Live Cosmos/provider/production readiness is not established.
+- **Next:** continue API-only code/test/docs work, obtain independent human approval, then merge only if permitted. Re-read main and perform the full API exit audit before Android Rider, then Android Driver, then iOS Rider and Driver.
+
+
 ## Run 74 — API-PRIVACY-016: isolate internal Driver FIFO from Ops/UnionManager
 
 - **Phase:** API remains `in_progress`; Android and iOS remain `not_started`. Do not advance mobile work until PR #200 is independently approved, merged under repository policy, and main passes a fresh API phase-exit audit.

@@ -89,6 +89,8 @@ Only `rider` and `driver` route values are accepted. The API owns `appId=turnova
 
 The Driver availability GET/POST and location POST routes require the `Driver` role. Rider, Ops and scoped UnionManager principals sharing the same subject as a Driver receive 403 with no-store/no-cache headers; denied reads/updates do not change the Driver's availability, coordinates, location timestamp or compatibility queue membership.
 - `GET /api/v1/driver/union`
+
+The current Driver Union-assignment route requires the `Driver` role. Rider, Ops and scoped UnionManager principals sharing the same Driver subject receive 403 with no-store/no-cache, even when Ops supplies the Operations admin key or UnionManager supplies the matching `unionId`; the manager retains access to its own scoped `/api/v1/union/drivers` member list. Regression: `NonDriverRolesCannotReadDriverUnionAssignmentForSameDriverSubject` (API-PRIVACY-017).
 - `GET /api/v1/driver/payslips/{year}/{month}.pdf`
 
 The monthly payslip endpoint requires the `Driver` role and derives the Driver identifier exclusively from the authenticated subject; a caller-supplied `driverId` is not an authorization input. Rider, Ops and UnionManager principals cannot read a persisted payslip even when they share the same subject as a Driver; the UnionManager case is tested with the matching `unionId` claim.
