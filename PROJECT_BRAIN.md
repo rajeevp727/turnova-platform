@@ -1,13 +1,12 @@
 ## Run 96 — API query cancellation verification (2026-11-23)
 
-- Phase remains API `in_progress`; Android/iOS remain `not_started`. Main is `c9280eec23dd4fb5fab06b11e24d2a619b489235`; PR #200 is the sole ready/active API PR at source/test head `bc537ce60da2505e664e8e2d96941afcc5a834a8`.
-- Cosmos query cancellation gaps in queue eligibility, queue audit and Driver reservation batch reads were fixed and covered by seven deterministic tests (COSMOS-STORE-026..032). All 33 infrastructure C# files were audited for query iterators; CosmosRideOfferStore already had post-page cancellation checks.
-- Exact-head API-only CI #45083933104 passed: 1,278/1,278 tests, 0 failed/skipped; .NET 10 Release build (24 warnings, 0 errors); native non-container Linux x64 publish, script syntax, verifier and artifact validation passed. Artifact 14777354888; SHA-256 `df15f31dfa777524bf5a777ac7df967511c946433396a9f387d62096d1f755a7`.
+- Phase remains API `in_progress`; Android/iOS remain `not_started`. Main is `c9280eec23dd4fb5fab06b11e24d2a619b489235`; PR #200's final documentation head is `8d7a424a71f79bea3355e0693d41706dc9daabfc`.
+- Seven deterministic tests cover cancellation boundaries for queue eligibility, queue audit and Driver reservation batch reads (COSMOS-STORE-026..032). All 33 Infrastructure C# files were audited for query iterators; CosmosRideOfferStore already checks cancellation after each page.
+- Source/test CI #45083933104 passed 1,278/1,278 tests and native non-container publish. Documentation-head CI #45084440429 also passed 1,278/1,278, Release build, native non-container publish and verifier. Latest artifact 14779040944; SHA-256 `7aa896f94506cffd71a02ebfc1d4aa0186d12d46674d66c24f29f8666703a368`.
 - PR #200 remains open/unmerged, mergeable/clean, with three owner-authored COMMENTED reviews, no independent approval and no unresolved threads. PRs #196/#198/#205/#206 remain Draft. Never self-approve or bypass protection.
 - Branch phase metadata is API `in_progress`, Android/iOS `not_started`; main's phase file is stale and must not authorize Android work. Main-only commits are weekly-build and PR #204's trusted-LAN Android config; do not merge them into the API branch solely for synchronization.
 - Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). This does not mean no implementation exists. Live Cosmos, hosted API, provider and production readiness remain unproven.
-- Next: verify exact-head CI after documentation sync; obtain independent human approval for PR #200; merge only when repository policy permits; re-read main and perform a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver.
-
+- Next: obtain independent human review for PR #200; continue API-only safe work while approval is pending. After permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver.
 
 # TurnOva Project Brain
 
