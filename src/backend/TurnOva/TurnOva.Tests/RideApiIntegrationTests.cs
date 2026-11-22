@@ -7771,6 +7771,89 @@ public sealed partial class RideApiIntegrationTests
             .PaymentReconciliation!.AmountReceived, new[] { 400m, 450m });
     }
 
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Driver")]
+    [InlineData("Ops")]
+    public async Task NonUnionRolesCannotAccessUnionOversightRoutesForSameDriverSubject(string role)
+    {
+        const string driverId = "union-oversight-private-driver";
+        const string unionId = "union-oversight-private-union";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "union-oversight-private-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "union-oversight-private-booking", 500m);
+        using var reportRequest = CreatePaymentReportRequest(
+            rideId, "union-oversight-private-payment-report", 450m);
+        using var report = await driver.SendAsync(reportRequest);
+        Assert.Equal(HttpStatusCode.OK, report.StatusCode);
+
+        // The non-Union role deliberately shares the Driver subject and carries the
+        // matching unionId claim. Even an Operations token with its valid admin key
+        // must not cross into the separate UnionManager authorization boundary.
+        using var nonManager = factory.CreateClient(role, driverId, unionId);
+        if (role == "Ops")
+            nonManager.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-oversight-authorized-manager");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var pendingProfile = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null
+        };
+        profiles[driverId] = pendingProfile;
+
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var assignmentBefore = assignments[driverId];
+        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var auditBefore = unionAudit.Values.Where(item => item.DriverId == driverId).ToArray();
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var rideBefore = rides[rideId];
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var reservationBefore = await reservations.GetActiveAsync(driverId);
+
+        using var memberList = await nonManager.GetAsync("/api/v1/union/drivers");
+        using var reconciliation = await nonManager.GetAsync("/api/v1/union/reconciliation");
+        using var privateDocument = await nonManager.GetAsync(
+            $"/api/v1/union/drivers/{driverId}/documents/DrivingLicence");
+        using var selfieReview = await nonManager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+
+        foreach (var denied in new[] { memberList, reconciliation, privateDocument, selfieReview })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        Assert.Equal(pendingProfile, profiles[driverId]);
+        Assert.Equal(assignmentBefore, assignments[driverId]);
+        Assert.Equal(auditBefore, unionAudit.Values.Where(item => item.DriverId == driverId).ToArray());
+        Assert.Equal(rideBefore, rides[rideId]);
+        Assert.Equal(reservationBefore, await reservations.GetActiveAsync(driverId));
+
+        // Positive controls prove that the scoped UnionManager still receives the
+        // member view and the minimal reconciliation projection for its own Union.
+        using var authorizedMembers = await manager.GetAsync("/api/v1/union/drivers");
+        Assert.Equal(HttpStatusCode.OK, authorizedMembers.StatusCode);
+        using var authorizedReconciliation = await manager.GetAsync("/api/v1/union/reconciliation");
+        Assert.Equal(HttpStatusCode.OK, authorizedReconciliation.StatusCode);
+        using var reconciliationJson = JsonDocument.Parse(
+            await authorizedReconciliation.Content.ReadAsStringAsync());
+        var authorizedRecord = Assert.Single(reconciliationJson.RootElement.EnumerateArray());
+        Assert.Equal(rideId, authorizedRecord.GetProperty("rideId").GetString());
+        Assert.Equal(unionId, authorizedRecord.GetProperty("unionId").GetString());
+    }
+
     [Fact]
     public async Task UnionManagerSeesOnlyItsMinimalPaymentReconciliationRecords()
     {
