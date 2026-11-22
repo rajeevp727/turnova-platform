@@ -1,6 +1,7 @@
 using Microsoft.Azure.Cosmos;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Infrastructure.Dispatch;
 
@@ -59,15 +60,34 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
         var key = QueueKey(zoneId, serviceClass);
-        var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.Left);
-        var response = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
-            .DeleteItem(driverId)
-            .CreateItem(audit)
-            .ExecuteAsync(cancellationToken);
-        if (response.IsSuccessStatusCode) return true;
-        if (response[0].StatusCode == System.Net.HttpStatusCode.NotFound) return false;
-        throw new InvalidOperationException(
-            $"Queue leave and audit event could not be committed atomically (Cosmos status {(int)response.StatusCode}).");
+        try
+        {
+            var current = await queueContainer.ReadItemAsync<QueueEntryDocument>(
+                driverId, new PartitionKey(key), cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // A leave must not delete a queue entry that was replaced or rejoined after
+            // this read. Without an observed ETag, fail closed rather than issuing an
+            // unconditional transactional delete.
+            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
+                return false;
+
+            var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.Left);
+            var response = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
+                .DeleteItem(driverId, new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
+                .CreateItem(audit)
+                .ExecuteAsync(cancellationToken);
+            if (response.IsSuccessStatusCode) return true;
+            if (response[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+                return false;
+            throw new InvalidOperationException(
+                $"Queue leave and audit event could not be committed atomically (Cosmos status {(int)response.StatusCode}).");
+        }
+        catch (CosmosException ex) when (
+            ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
+        {
+            return false;
+        }
     }
 
     public async Task<bool> MoveToBackAsync(
@@ -78,6 +98,9 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         {
             var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(
                 driverId, new PartitionKey(key), cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+                return false;
             var document = response.Resource;
             document.JoinedAt = DateTimeOffset.UtcNow;
             document.Sequence = document.JoinedAt.UtcTicks;
@@ -107,6 +130,9 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(driverId, new PartitionKey(key), cancellationToken: cancellationToken);
             var document = response.Resource;
             if (document.LastRotationOfferId == offerId) return true;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+                return false;
             document.JoinedAt = DateTimeOffset.UtcNow;
             document.Sequence = document.JoinedAt.UtcTicks;
             document.LastRotationOfferId = offerId;
@@ -164,7 +190,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
 
-    private sealed class QueueEntryDocument
+    internal sealed class QueueEntryDocument
     {
         public string Id { get; set; } = string.Empty;
         public string DriverId { get; set; } = string.Empty;
