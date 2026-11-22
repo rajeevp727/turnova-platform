@@ -852,6 +852,69 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderCannotReadOrModifyDriverOnboardingOrPrivateMedia()
+    {
+        const string driverId = "driver-private-onboarding";
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", driverId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, "union-private-onboarding");
+
+        using var upload = await driver.PostAsJsonAsync(
+            "/api/v1/driver/onboarding/media",
+            new
+            {
+                documentType = "ProfilePhoto",
+                contentType = "image/jpeg",
+                contentBase64 = "/9j/4AAQSkZJRg=="
+            });
+        Assert.Equal(HttpStatusCode.Created, upload.StatusCode);
+        using var uploadedJson = JsonDocument.Parse(await upload.Content.ReadAsStringAsync());
+        var reference = uploadedJson.RootElement.GetProperty("storageReference").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(reference));
+
+        var mediaPath = $"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(reference!)}";
+        using var driverMedia = await driver.GetAsync(mediaPath);
+        Assert.Equal(HttpStatusCode.OK, driverMedia.StatusCode);
+        Assert.Contains("private", driverMedia.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no-store", driverMedia.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("nosniff", driverMedia.Headers.GetValues("X-Content-Type-Options").Single());
+
+        using var riderProfile = await rider.GetAsync("/api/v1/driver/onboarding/me");
+        Assert.Equal(HttpStatusCode.Forbidden, riderProfile.StatusCode);
+
+        using var riderUpload = await rider.PostAsJsonAsync(
+            "/api/v1/driver/onboarding/media",
+            new
+            {
+                documentType = "ProfilePhoto",
+                contentType = "image/jpeg",
+                contentBase64 = "/9j/4AAQSkZJRg=="
+            });
+        Assert.Equal(HttpStatusCode.Forbidden, riderUpload.StatusCode);
+
+        using var riderMedia = await rider.GetAsync(mediaPath);
+        Assert.Equal(HttpStatusCode.Forbidden, riderMedia.StatusCode);
+        using var riderMediaStatus = await rider.GetAsync($"{mediaPath}/status");
+        Assert.Equal(HttpStatusCode.Forbidden, riderMediaStatus.StatusCode);
+
+        using var riderSelfieUpdate = await rider.PutAsJsonAsync(
+            "/api/v1/driver/onboarding/selfie",
+            new { profilePhotoStorageReference = reference });
+        Assert.Equal(HttpStatusCode.Forbidden, riderSelfieUpdate.StatusCode);
+
+        using var riderOnboardingUpdate = await rider.PostAsJsonAsync(
+            "/api/v1/driver/onboarding", ValidOnboardingRequest());
+        Assert.Equal(HttpStatusCode.Forbidden, riderOnboardingUpdate.StatusCode);
+
+        using var driverProfile = await driver.GetAsync("/api/v1/driver/onboarding/me");
+        Assert.Equal(HttpStatusCode.OK, driverProfile.StatusCode);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        Assert.Equal("cab", profiles[driverId].ServiceClass);
+        Assert.Equal("Approved", profiles[driverId].Status);
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
     {
         using var factory = new TurnOvaApiFactory();
