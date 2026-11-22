@@ -4643,3 +4643,20 @@ The latest documentation-bearing PR #200 head `0b14107015c8b222153ecf52d1ae5bc65
 
 Live `refs/heads/main` is `c9280eec23dd4fb5fab06b11e24d2a619b489235`. PR #200's stored base SHA is stale at `4061357c095debbc31fc5027a7bff27bd8b06265`; comparison against actual main is 681 ahead / 2 behind, with main-only changes limited to `.github/workflows/weekly-build.yml` and PR #204's Rider/Driver Android LAN HTTP flags. Do not merge main into the API branch solely to pull unrelated files. PR #200 remains unapproved independently and must not be merged.
 
+
+
+## COSMOS-STORE-019..025 — queue audit adapter cancellation contract
+
+The single-item Cosmos queue-audit adapter must observe cancellation before I/O, preserve cancellation when translating expected 409/404 outcomes, and avoid returning a read snapshot after cancellation. A successful durable create remains authoritative if cancellation arrives after Cosmos confirms the commit.
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| COSMOS-STORE-019 | Create or read receives a pre-cancelled token | Throw before any Cosmos call | `BothOperationsHonorPreCancelledTokenBeforeCosmosWork` | P1 |
+| COSMOS-STORE-020 | Queue-audit create returns HTTP 409 while cancellation is signalled | Throw cancellation rather than returning `false` | `CreateConflictDoesNotHideCancellation` | P1 |
+| COSMOS-STORE-021 | Queue-audit point read returns HTTP 404 while cancellation is signalled | Throw cancellation rather than returning `null` | `MissingReadDoesNotHideCancellation` | P1 |
+| COSMOS-STORE-022 | Successful queue-audit read completes after cancellation | Throw before returning the resource snapshot | `SuccessfulReadHonorsCancellationBeforeReturningSnapshot` | P1 |
+| COSMOS-STORE-023 | Queue-audit create commits successfully and cancellation arrives after the successful response | Return success; do not imply a retry of the durable write | `SuccessfulCreateRemainsAuthoritativeWhenCancellationArrivesAfterCommit` | P1 |
+| COSMOS-STORE-024 | Queue-audit create returns HTTP 409 without cancellation | Preserve the existing `false` conflict result | `CreateConflictWithoutCancellationStillReturnsFalse` | P1 |
+| COSMOS-STORE-025 | Queue-audit point read returns HTTP 404 without cancellation | Preserve the existing `null` missing-item result | `MissingReadWithoutCancellationStillReturnsNull` | P1 |
+
+**Evidence:** implementation commit [`335206b4b2e93db2eb0c68c15db190443c1c9c60`](https://github.com/rajeevp727/turnova-platform/commit/335206b4b2e93db2eb0c68c15db190443c1c9c60); test-harness verification correction [`1a42823fc1d46cddacf70a9dffb27a2185513a16`](https://github.com/rajeevp727/turnova-platform/commit/1a42823fc1d46cddacf70a9dffb27a2185513a16). Exact-head API-only CI [#45081004684](https://github.com/rajeevp727/turnova-platform/actions/runs/45081004684) passed **1,271/1,271 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (24 warnings, 0 errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture), and artifact [14777282256](https://github.com/rajeevp727/turnova-platform/actions/runs/45081004684/artifacts/14777282256) (17,009,244 bytes; SHA-256 `391998b4e882e785f00fdaac573800a99aa5369c70feef23deeb8f8967e144aa`). The initial run [#45080674094](https://github.com/rajeevp727/turnova-platform/actions/runs/45080674094) had two test-only Moq verification failures (1,269/1,271); the explicit verifications were added before the successful final-head run. No live Cosmos behavior is implied. This supplemental persistence item is outside the 19-row MVP acceptance denominator.
