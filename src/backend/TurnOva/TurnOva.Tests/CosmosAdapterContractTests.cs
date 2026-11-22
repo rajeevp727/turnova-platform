@@ -3,6 +3,7 @@ using Microsoft.Azure.Cosmos;
 using Moq;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Tests;
 
@@ -66,6 +67,17 @@ public sealed class CosmosAdapterContractTests
                 .TryReplaceAsync(CreateRideOfferState(), " ", cancellation.Token));
 
         container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData(" ", false)]
+    [InlineData("\t", false)]
+    [InlineData("observed-etag", true)]
+    public void CosmosEtagPolicyRequiresANonWhitespaceObservedValue(string? etag, bool expected)
+    {
+        Assert.Equal(expected, CosmosEtagPolicy.HasObservedEtag(etag));
     }
 
     [Fact]
@@ -138,6 +150,147 @@ public sealed class CosmosAdapterContractTests
                 partitionKey.HasValue && partitionKey.Value.Equals(new PartitionKey(state.RideId))),
             It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "expected-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task DriverReservationPromotionFailsClosedWithoutObservedEtag(string? etag)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var reservation = new DriverRideReservation("driver-1", "ride-1", now, now.AddMinutes(10));
+        var read = new Mock<ItemResponse<DriverRideReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns(etag!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await new CosmosDriverRideReservationStore(container.Object)
+            .TryMakePermanentAsync("driver-1", "ride-1");
+
+        Assert.False(result);
+        container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task DriverReservationExpiryChangeFailsClosedWithoutObservedEtag(string? etag)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var reservation = new DriverRideReservation("driver-1", "ride-1", now, null);
+        var read = new Mock<ItemResponse<DriverRideReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns(etag!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await new CosmosDriverRideReservationStore(container.Object)
+            .TrySetExpiryAsync("driver-1", "ride-1", now.AddMinutes(10));
+
+        Assert.False(result);
+        container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task DriverReservationReleaseFailsClosedWithoutObservedEtag(string? etag)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var reservation = new DriverRideReservation("driver-1", "ride-1", now);
+        var read = new Mock<ItemResponse<DriverRideReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns(etag!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await new CosmosDriverRideReservationStore(container.Object)
+            .TryReleaseAsync("driver-1", "ride-1");
+
+        Assert.False(result);
+        container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task RiderReservationPromotionFailsClosedWithoutObservedEtag(string? etag)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var reservation = new RiderActiveBookingReservation(
+            "rider-1", "ride-1", "request-hash", now, now.AddMinutes(10));
+        var read = new Mock<ItemResponse<RiderActiveBookingReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns(etag!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+                RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await new CosmosRiderActiveBookingReservationStore(container.Object)
+            .TryMakePermanentAsync("rider-1", "ride-1");
+
+        Assert.False(result);
+        container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+            RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task RiderReservationReleaseFailsClosedWithoutObservedEtag(string? etag)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var reservation = new RiderActiveBookingReservation(
+            "rider-1", "ride-1", "request-hash", now, null);
+        var read = new Mock<ItemResponse<RiderActiveBookingReservation>>();
+        read.SetupGet(value => value.Resource).Returns(reservation);
+        read.SetupGet(value => value.ETag).Returns(etag!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+                RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await new CosmosRiderActiveBookingReservationStore(container.Object)
+            .TryReleaseAsync("rider-1", "ride-1");
+
+        Assert.False(result);
+        container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+            RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
     }
 
     [Fact]
