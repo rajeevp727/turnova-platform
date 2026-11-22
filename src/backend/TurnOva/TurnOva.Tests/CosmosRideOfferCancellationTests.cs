@@ -66,6 +66,8 @@ public sealed class CosmosRideOfferCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosRideOfferStore(container.Object).GetByRideAsync("ride-1", cancellation.Token));
 
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            "ride-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -177,6 +179,8 @@ public sealed class CosmosRideOfferCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosRideOfferStore(container.Object).TryCreateAsync(state, cancellation.Token));
 
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<RideOfferState>(), It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -199,6 +203,9 @@ public sealed class CosmosRideOfferCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosRideOfferStore(container.Object).TryReplaceAsync(state, "observed-etag", cancellation.Token));
 
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<RideOfferState>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -250,7 +257,7 @@ public sealed class CosmosRideOfferCancellationTests
         Mock<FeedResponse<RideOfferState>> page,
         Func<Task<FeedResponse<RideOfferState>>>? readNext = null)
     {
-        var iterator = new Mock<FeedIterator<RideOfferState>>(MockBehavior.Strict);
+        var iterator = new Mock<FeedIterator<RideOfferState>>();
         iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
         iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
             .Returns(readNext ?? (() => Task.FromResult(page.Object)));
