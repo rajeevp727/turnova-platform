@@ -154,7 +154,7 @@ The Cosmos create-if-absent boundary treats only HTTP 409 as a duplicate result.
 
 The zone/queue and `/api/v1/rides/request`, pending-offer, available-ride, accept/reject and offer-timeout endpoints remain legacy compatibility surfaces. They must not introduce customer-facing FIFO ranking, automatic assignment or automatic next-driver advancement into the approved Rider-selected Cab flow. Existing non-Cab history is preserved and is not converted to Cab.
 
-- `GET /api/v1/zones/{zoneId}/queues/{serviceClass}` is Driver-role-only and exposes only the internal legacy queue view; Rider JWTs receive HTTP 403. `GET /api/v1/zones/{zoneId}/queues/{serviceClass}/me` is also Driver-role-only. These routes do not feed Rider discovery or assignment. Regression: `RiderCannotReadInternalDriverFifoQueue` (DISPATCH-02-API-001).
+- `GET /api/v1/zones/{zoneId}/queues/{serviceClass}`, `GET /api/v1/zones/{zoneId}/queues/{serviceClass}/me`, `DELETE /api/v1/zones/{zoneId}/queues/{serviceClass}/me` and `POST /api/v1/queues/join` are Driver-role-only. Rider JWTs receive HTTP 403 for all four; an authenticated Driver can still read the internal queue and own position. Denied Rider operations do not mutate queue state. Regression: `RiderCannotReadOrMutateInternalDriverFifoQueue` (DISPATCH-02-API-001).
 
 ## Approved AI assistance (AI-01 supplemental)
 
@@ -227,7 +227,7 @@ The 16 KiB request-body limit is declared through endpoint metadata and document
 
 ## Legacy FIFO compatibility boundary
 
-`POST /api/v1/rides/request` is retained only for Development/Testing compatibility regressions. It returns HTTP 409 outside those local/test environments even if `Dispatch:LegacyFifoRiderRequestsEnabled` is set. The current Rider flow is Union-grouped discovery followed by explicit `POST /api/v1/rider/bookings`; no customer-facing FIFO ranking or automatic Driver assignment is part of the MVP.
+`POST /api/v1/rides/request` is retained only for Development/Testing compatibility regressions. It returns HTTP 409 outside those local/test environments even if `Dispatch:LegacyFifoRiderRequestsEnabled` is set. The current Rider flow is Union-grouped discovery followed by explicit `POST /api/v1/rider/bookings`; no customer-facing FIFO ranking or automatic Driver assignment is part of the MVP. Selected Rider cancellation remains terminal reservation cleanup, not a FIFO handoff: `RiderCancellingSelectedNegotiationDoesNotAdvanceLegacyFifoOffer` (DISPATCH-03-CANCEL-013) verifies Rider-owned cancellation audit, exact Rider/Driver reservation release and zero `IRideOfferAdvancer` calls.
 
 When the compatibility route is enabled in Development/Testing, it uses full GUID ride IDs, create-if-absent persistence and Rider-owner-scoped idempotency replay. Both selected-booking and legacy replay lookups verify the referenced ride belongs to the authenticated Rider before returning a response, including the Cosmos legacy conflict path. A stale/corrupt mapping cannot return another Rider's ride, and a ride-ID collision cannot overwrite an existing ride.
 

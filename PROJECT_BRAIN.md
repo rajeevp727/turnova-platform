@@ -1,5 +1,19 @@
 # TurnOva Project Brain
 
+## Run 56 — DISPATCH-02 queue-role and DISPATCH-03 cancellation FIFO regressions (2026-11-22)
+
+- **Platform phase:** API `in_progress`; Android and iOS remain `not_started`. No mobile implementation/build work was started.
+- **Current items:** DISPATCH-02-API-001 and DISPATCH-03-CANCEL-013.
+- **API test coverage:** `RiderCannotReadOrMutateInternalDriverFifoQueue` proves Rider HTTP 403 for legacy queue-list GET, own-position GET, queue-join POST and queue-leave DELETE; an authenticated Driver can still read the internal queue and own position, and denied Rider operations do not mutate queue state. `RiderCancellingSelectedNegotiationDoesNotAdvanceLegacyFifoOffer` proves selected Rider cancellation records Rider-owned Negotiating → Cancelled audit, releases the matching Rider and Driver reservations, and makes zero `IRideOfferAdvancer` calls.
+- **Source/test head:** [`382e0979526d124eb1b2ceb515ec558adf75068a`](https://github.com/rajeevp727/turnova-platform/commit/382e0979526d124eb1b2ceb515ec558adf75068a).
+- **Exact-head API-only CI:** [#44984188666](https://github.com/rajeevp727/turnova-platform/actions/runs/44984188666) passed the scope detector, .NET 10 Release build, **1,066/1,066 backend tests (0 failed, 0 skipped)**, native non-container Linux x64 publish, publish-script syntax, native publish verifier (11 negative fixtures plus valid fixture), and artifact [14739362267](https://github.com/rajeevp727/turnova-platform/actions/runs/44984188666/artifacts/14739362267) (17,006,006 bytes). Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-first gate.
+- **Intermediate test correction:** CI #44983888925 exposed one fixture omission: the new cancellation test had not created its authenticated Driver client before `SeedBookableDriver`. Commit `382e097` adds that required fixture setup; the final exact-head run above is green.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; sole ready/active feature PR. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 remains configuration-only and is not Android completion evidence.
+- **Review gate:** PR #200 remains open, ready and mergeable. Three owner-authored COMMENTED reviews, zero independent human approvals and zero unresolved review threads. Never self-approve, bypass protection or merge without independent approval. PR #197's earlier merge without independent approval remains a disclosed historical process exception.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos/provider/production readiness is not established.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart and Staging/QA durable readiness; Product-approved radius/zones/location freshness/negotiation lifetime; production identity/secrets/API hosting and live TriSend; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policies; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next exact action:** continue API-only source/test/docs audit while PR #200 awaits independent human approval; after an approved permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider. Do not advance mobile work while the API phase gate is active.
+
 ## Run 55 — DISPATCH-02 internal FIFO visibility regression (2026-11-22)
 
 - **Platform phase:** API `in_progress`; Android and iOS remain `not_started`. No mobile source/build work was started.
