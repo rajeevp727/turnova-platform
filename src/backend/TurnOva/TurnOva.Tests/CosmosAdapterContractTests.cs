@@ -9,6 +9,189 @@ namespace TurnOva.Tests;
 
 public sealed class CosmosAdapterContractTests
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task QueueRemovalFailsClosedWithoutObservedEtag(string? etag)
+    {
+        var read = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>();
+        read.SetupGet(value => value.Resource).Returns(CreateQueueEntryDocument());
+        read.SetupGet(value => value.ETag).Returns(etag!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await new CosmosQueueStore(container.Object)
+            .RemoveAsync("driver-1", "hyderabad-central", "cab", CancellationToken.None);
+
+        Assert.False(result);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task QueueRotationFailsClosedWithoutObservedEtag(string? etag)
+    {
+        var read = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>();
+        read.SetupGet(value => value.Resource).Returns(CreateQueueEntryDocument());
+        read.SetupGet(value => value.ETag).Returns(etag!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await new CosmosQueueStore(container.Object)
+            .MoveToBackAsync("driver-1", "hyderabad-central", "cab", CancellationToken.None);
+
+        Assert.False(result);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task OfferScopedQueueRotationFailsClosedWithoutObservedEtag(string? etag)
+    {
+        var read = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>();
+        read.SetupGet(value => value.Resource).Returns(CreateQueueEntryDocument());
+        read.SetupGet(value => value.ETag).Returns(etag!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+
+        var result = await new CosmosQueueStore(container.Object)
+            .MoveToBackOnceAsync("driver-1", "hyderabad-central", "cab", "offer-1", CancellationToken.None);
+
+        Assert.False(result);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task QueueRemovalUsesObservedEtagAndAppendsAuditAtomically()
+    {
+        var read = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>();
+        read.SetupGet(value => value.Resource).Returns(CreateQueueEntryDocument());
+        read.SetupGet(value => value.ETag).Returns("queue-remove-etag");
+        var (container, batch, getPartitionKey) = CreateSuccessfulBatch();
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        batch.Setup(value => value.DeleteItem(
+                "driver-1", It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<QueueAuditEvent>(), It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosQueueStore(container.Object)
+            .RemoveAsync("driver-1", "hyderabad-central", "cab", CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(new PartitionKey("hyderabad-central|cab"), getPartitionKey());
+        batch.Verify(value => value.DeleteItem(
+            "driver-1",
+            It.Is<TransactionalBatchItemRequestOptions>(options => options.IfMatchEtag == "queue-remove-etag")), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<QueueAuditEvent>(item =>
+                item.DriverId == "driver-1" &&
+                item.ZoneServiceKey == "hyderabad-central|cab" &&
+                item.EventType == QueueAuditEventTypes.Left),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task QueueRotationUsesObservedEtagAndAppendsAuditAtomically()
+    {
+        var read = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>();
+        read.SetupGet(value => value.Resource).Returns(CreateQueueEntryDocument());
+        read.SetupGet(value => value.ETag).Returns("queue-rotate-etag");
+        var (container, batch, getPartitionKey) = CreateSuccessfulBatch();
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        batch.Setup(value => value.ReplaceItem(
+                "driver-1", It.IsAny<CosmosQueueStore.QueueEntryDocument>(), It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<QueueAuditEvent>(), It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosQueueStore(container.Object)
+            .MoveToBackAsync("driver-1", "hyderabad-central", "cab", CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(new PartitionKey("hyderabad-central|cab"), getPartitionKey());
+        batch.Verify(value => value.ReplaceItem(
+            "driver-1",
+            It.Is<CosmosQueueStore.QueueEntryDocument>(item => item.Sequence > 0 && item.JoinedAt > DateTimeOffset.MinValue),
+            It.Is<TransactionalBatchItemRequestOptions>(options => options.IfMatchEtag == "queue-rotate-etag")), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<QueueAuditEvent>(item => item.EventType == QueueAuditEventTypes.MovedToBack),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task OfferScopedQueueRotationUsesObservedEtagAndAppendsAuditAtomically()
+    {
+        var read = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>();
+        read.SetupGet(value => value.Resource).Returns(CreateQueueEntryDocument());
+        read.SetupGet(value => value.ETag).Returns("queue-offer-rotate-etag");
+        var (container, batch, getPartitionKey) = CreateSuccessfulBatch();
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        batch.Setup(value => value.ReplaceItem(
+                "driver-1", It.IsAny<CosmosQueueStore.QueueEntryDocument>(), It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<QueueAuditEvent>(), It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        var result = await new CosmosQueueStore(container.Object)
+            .MoveToBackOnceAsync("driver-1", "hyderabad-central", "cab", "offer-1", CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(new PartitionKey("hyderabad-central|cab"), getPartitionKey());
+        batch.Verify(value => value.ReplaceItem(
+            "driver-1",
+            It.Is<CosmosQueueStore.QueueEntryDocument>(item =>
+                item.LastRotationOfferId == "offer-1" &&
+                item.Sequence > 0 &&
+                item.JoinedAt > DateTimeOffset.MinValue),
+            It.Is<TransactionalBatchItemRequestOptions>(options => options.IfMatchEtag == "queue-offer-rotate-etag")), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<QueueAuditEvent>(item =>
+                item.EventType == QueueAuditEventTypes.RotatedToBack && item.OfferId == "offer-1"),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+    }
+
+    private static CosmosQueueStore.QueueEntryDocument CreateQueueEntryDocument(string? lastRotationOfferId = null) =>
+        new()
+        {
+            Id = "driver-1",
+            DriverId = "driver-1",
+            ZoneId = "hyderabad-central",
+            ServiceClass = "cab",
+            ZoneServiceKey = "hyderabad-central|cab",
+            JoinedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            Sequence = DateTimeOffset.UtcNow.AddMinutes(-5).UtcTicks,
+            IsEligible = true,
+            LastRotationOfferId = lastRotationOfferId
+        };
+
     [Fact]
     public async Task RideOfferReplacementUsesExpectedEtag()
     {
