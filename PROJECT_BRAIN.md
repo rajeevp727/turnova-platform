@@ -1,5 +1,15 @@
 # TurnOva Project Brain
 
+## Run 76 — AUTH-API-060: preserve the single-non-empty JWT subject alias fallback
+
+- **Phase:** API remains `in_progress`; Android and iOS remain `not_started`. Do not advance mobile work until PR #200 is independently approved, merged under repository policy, and main passes a fresh API phase-exit audit.
+- **Audit decision:** bearer authentication intentionally canonicalizes the one non-empty supported subject alias even if another supported alias is blank. Existing test `DriverEndpointUsesNameIdWhenSubjectClaimIsBlank` established that compatibility. The attempted stricter raw-claim-count change was reverted before merge; no runtime change is retained.
+- **Source/test:** [`ff6f1609a175aaedd235bad994b1bd38eaa01ddf`](https://github.com/rajeevp727/turnova-platform/commit/ff6f1609a175aaedd235bad994b1bd38eaa01ddf) converts the existing positive regression to a two-case theory: blank `sub` with non-empty `nameid`, and non-empty `sub` with blank `nameid`. Multiple non-empty aliases and a lone blank subject remain negative cases. Upstream login/refresh validation still requires exactly one subject claim.
+- **Docs:** `docs/test-plan.md` adds AUTH-API-060; `docs/api/README.md` clarifies the bearer compatibility rule; matrix/progress are synchronized. No new MVP acceptance row is added.
+- **CI/review:** exact-head API-only CI for the final documentation-bearing commit is pending. PR #200 remains open/ready with three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. Never self-approve or merge.
+- **Acceptance/readiness:** strict acceptance 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Live Cosmos/provider/production readiness remains unverified.
+
+
 ## Run 75 — API-PRIVACY-017: Driver Union assignment is not a non-Driver self-service read
 
 - **Phase:** API remains `in_progress`; Android and iOS remain `not_started`. Do not advance mobile work until PR #200 is independently approved, merged under repository policy, and main passes a fresh API phase-exit audit.
