@@ -1884,7 +1884,8 @@ public sealed class AuthApiIntegrationTests
     [InlineData("Driver", "POST", "/api/v1/rides/no-subject/arrive")]
     [InlineData("Rider", "POST", "/api/v1/rides/no-subject/cancel")]
     [InlineData("Rider", "GET", "/api/v1/rides/no-subject")]
-    public async Task SubjectlessTokensCannotAccessUserOwnedRideEndpoints(string role, string method, string path)
+    [InlineData("Rider", "GET", "/api/v1/auth/me")]
+    public async Task SubjectlessTokensCannotAccessUserOwnedOrIdentityEndpoints(string role, string method, string path)
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Subjectless tokens must be rejected before ride access."));
         using var factory = new AuthApiFactory(handler);
