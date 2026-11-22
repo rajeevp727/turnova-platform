@@ -11,8 +11,8 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
         SupportRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
 
         try
         {
@@ -24,12 +24,14 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
         }
         catch (CosmosException exception) when (exception.StatusCode == HttpStatusCode.Conflict)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var existing = (await container.ReadItemAsync<SupportRequest>(
                     request.Id,
                     new PartitionKey(request.ReporterId),
                     cancellationToken: cancellationToken)).Resource;
+                cancellationToken.ThrowIfCancellationRequested();
 
                 var sameSubmission =
                     string.Equals(existing.ReporterId, request.ReporterId, StringComparison.Ordinal) &&
@@ -45,6 +47,7 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
             }
             catch (CosmosException missing) when (missing.StatusCode == HttpStatusCode.NotFound)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return new SupportRequestWriteResult(SupportRequestWriteStatus.Conflict, request);
             }
         }
