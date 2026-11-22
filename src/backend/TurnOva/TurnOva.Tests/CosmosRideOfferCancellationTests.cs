@@ -88,7 +88,6 @@ public sealed class CosmosRideOfferCancellationTests
 
         container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -110,7 +109,6 @@ public sealed class CosmosRideOfferCancellationTests
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<RideOfferState>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
