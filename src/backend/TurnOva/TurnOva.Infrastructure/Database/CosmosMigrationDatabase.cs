@@ -11,6 +11,7 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
         CancellationToken cancellationToken,
         int? defaultTimeToLive = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(containerName))
             throw new ArgumentException("Container name is required.", nameof(containerName));
         if (string.IsNullOrWhiteSpace(partitionKeyPath) || !partitionKeyPath.StartsWith("/", StringComparison.Ordinal))
@@ -26,10 +27,13 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
 
         if (defaultTimeToLive.HasValue)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var current = await response.Container.ReadContainerAsync(cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (current.Resource.DefaultTimeToLive != defaultTimeToLive)
             {
                 current.Resource.DefaultTimeToLive = defaultTimeToLive;
+                cancellationToken.ThrowIfCancellationRequested();
                 await response.Container.ReplaceContainerAsync(
                     current.Resource,
                     cancellationToken: cancellationToken);
