@@ -658,6 +658,41 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderCannotTriggerInternalFifoOfferTimeout()
+    {
+        const string riderId = "rider-cannot-timeout";
+        const string driverId = "driver-after-rider-timeout";
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", riderId);
+        // Seed a valid online Driver profile for the same subject so this test proves
+        // the endpoint's role policy, not merely a missing-profile check.
+        using var riderDriverProfile = factory.CreateClient("Driver", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, riderId, "rider-timeout-union");
+        SeedBookableDriver(factory, driverId, "driver-timeout-union");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            riderId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-2), 0, true));
+        await queueService.JoinAsync(new DriverQueueEntry(
+            driverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true));
+
+        using var denied = await rider.PostAsync(
+            "/api/v1/queues/hyderabad-central/cab/offer-timeout", null);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        // A Rider must not rotate the internal Driver queue, even when its subject
+        // also has an otherwise eligible Driver profile and is at the queue head.
+        using var driverQueue = await driver.GetAsync(
+            "/api/v1/zones/hyderabad-central/queues/cab");
+        Assert.Equal(HttpStatusCode.OK, driverQueue.StatusCode);
+        var entries = await driverQueue.Content.ReadFromJsonAsync<List<QueueEntryTest>>();
+        Assert.NotNull(entries);
+        Assert.Equal(new[] { riderId, driverId }, entries.Select(entry => entry.DriverId));
+        Assert.Equal(new[] { 1, 2 }, entries.Select(entry => entry.Position));
+    }
+
+    [Fact]
     public async Task DriverCannotGoOnlineWithoutActiveCabUnionAndApprovedDocuments()
     {
         using var factory = new TurnOvaApiFactory();
