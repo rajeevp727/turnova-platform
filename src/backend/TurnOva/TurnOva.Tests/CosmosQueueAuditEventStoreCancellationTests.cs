@@ -161,6 +161,11 @@ public sealed class CosmosQueueAuditEventStoreCancellationTests
             .TryCreateAsync(CreateEvent(), "zone-a|cab", CancellationToken.None);
 
         Assert.False(created);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<QueueAuditEvent>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -181,6 +186,11 @@ public sealed class CosmosQueueAuditEventStoreCancellationTests
             .ReadAsync("event-1", "zone-a|cab", CancellationToken.None);
 
         Assert.Null(result);
+        container.Verify(value => value.ReadItemAsync<QueueAuditEvent>(
+            "event-1",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
