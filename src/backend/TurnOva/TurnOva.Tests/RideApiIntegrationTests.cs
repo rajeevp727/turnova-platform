@@ -799,14 +799,18 @@ public sealed partial class RideApiIntegrationTests
         Assert.Empty(advancer.AdvancedRideIds);
     }
 
-    [Fact]
-    public async Task RiderCannotReadOrMutateDriverAvailabilityOrLocation()
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadOrMutateDriverAvailabilityOrLocation(string nonDriverRole)
     {
         const string driverId = "driver-availability-private";
+        const string unionId = "union-driver-availability-private";
         using var factory = new TurnOvaApiFactory();
-        using var rider = factory.CreateClient("Rider", driverId);
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
         using var driver = factory.CreateClient("Driver", driverId);
-        SeedBookableDriver(factory, driverId, "union-driver-availability-private");
+        SeedBookableDriver(factory, driverId, unionId);
 
         var queueService = factory.Services.GetRequiredService<QueueService>();
         await queueService.JoinAsync(new DriverQueueEntry(
@@ -814,14 +818,16 @@ public sealed partial class RideApiIntegrationTests
         var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         var before = profiles[driverId];
 
-        using var riderRead = await rider.GetAsync("/api/v1/driver/availability");
-        Assert.Equal(HttpStatusCode.Forbidden, riderRead.StatusCode);
+        using var nonDriverRead = await nonDriver.GetAsync("/api/v1/driver/availability");
+        Assert.Equal(HttpStatusCode.Forbidden, nonDriverRead.StatusCode);
+        AssertNoStore(nonDriverRead);
 
-        using var riderOffline = await rider.PostAsJsonAsync(
+        using var nonDriverOffline = await nonDriver.PostAsJsonAsync(
             "/api/v1/driver/availability", new { isOnline = false });
-        Assert.Equal(HttpStatusCode.Forbidden, riderOffline.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, nonDriverOffline.StatusCode);
+        AssertNoStore(nonDriverOffline);
 
-        using var riderLocation = await rider.PostAsJsonAsync(
+        using var nonDriverLocation = await nonDriver.PostAsJsonAsync(
             "/api/v1/driver/location",
             new
             {
@@ -829,7 +835,8 @@ public sealed partial class RideApiIntegrationTests
                 longitude = 78.410,
                 capturedAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1)
             });
-        Assert.Equal(HttpStatusCode.Forbidden, riderLocation.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, nonDriverLocation.StatusCode);
+        AssertNoStore(nonDriverLocation);
 
         using var driverRead = await driver.GetAsync("/api/v1/driver/availability");
         Assert.Equal(HttpStatusCode.OK, driverRead.StatusCode);
@@ -849,6 +856,13 @@ public sealed partial class RideApiIntegrationTests
             "hyderabad-central", "cab", CancellationToken.None);
         var entry = Assert.Single(queue);
         Assert.Equal(driverId, entry.DriverId);
+
+        static void AssertNoStore(HttpResponseMessage response)
+        {
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.Contains(response.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     [Theory]
