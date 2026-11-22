@@ -1960,14 +1960,18 @@ public sealed class AuthApiIntegrationTests
         Assert.Empty(handler.Requests);
     }
 
-    [Fact]
-    public async Task DriverEndpointUsesNameIdWhenSubjectClaimIsBlank()
+    [Theory]
+    [InlineData(" ", "driver-nameid-43")]
+    [InlineData("driver-sub-43", " ")]
+    public async Task DriverEndpointCanonicalizesTheSingleNonEmptySubjectAlias(
+        string subjectValue,
+        string mappedLegacySubjectValue)
     {
         using var handler = new RecordingHandler((_, _) => throw new InvalidOperationException("Driver availability must not call TriSend."));
         using var factory = new AuthApiFactory(handler);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-            "Bearer", CreateToken(subjectValue: " ", includeMappedLegacySubject: true, mappedLegacySubjectValue: "driver-nameid-43"));
+            "Bearer", CreateToken(subjectValue: subjectValue, includeMappedLegacySubject: true, mappedLegacySubjectValue: mappedLegacySubjectValue));
 
         using var response = await client.GetAsync("/api/v1/driver/availability");
 
