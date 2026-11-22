@@ -292,4 +292,82 @@ public sealed class CosmosReservationCancellationTests
 
         container.VerifyNoOtherCalls();
     }
+    [Fact]
+    public async Task DriverBatchReadStopsBeforeCheckingNextPageWhenCancellationArrivesAfterFirstPage()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var page = CreateDriverReservationPage(new DriverRideReservation(
+            "driver-1", "ride-1", DateTimeOffset.UtcNow));
+        var iterator = new Mock<FeedIterator<DriverRideReservation>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(page.Object);
+            });
+        var container = CreateDriverReservationQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosDriverRideReservationStore(container.Object).GetActiveForDriversAsync(
+                ["driver-1"], cancellation.Token));
+
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<DriverRideReservation>(
+            It.IsAny<QueryDefinition>(),
+            It.IsAny<string?>(),
+            It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DriverBatchReadHonorsCancellationAfterFinalPageBeforeReturningReservations()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var page = CreateDriverReservationPage(new DriverRideReservation(
+            "driver-1", "ride-1", DateTimeOffset.UtcNow));
+        var iterator = new Mock<FeedIterator<DriverRideReservation>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(page.Object);
+            });
+        var container = CreateDriverReservationQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosDriverRideReservationStore(container.Object).GetActiveForDriversAsync(
+                ["driver-1"], cancellation.Token));
+
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<DriverRideReservation>(
+            It.IsAny<QueryDefinition>(),
+            It.IsAny<string?>(),
+            It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
+    private static Mock<Container> CreateDriverReservationQueryContainer(
+        Mock<FeedIterator<DriverRideReservation>> iterator)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<DriverRideReservation>(
+                It.IsAny<QueryDefinition>(),
+                It.IsAny<string?>(),
+                It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        return container;
+    }
+
+    private static Mock<FeedResponse<DriverRideReservation>> CreateDriverReservationPage(
+        DriverRideReservation reservation)
+    {
+        var page = new Mock<FeedResponse<DriverRideReservation>>(MockBehavior.Strict);
+        page.As<IEnumerable<DriverRideReservation>>()
+            .Setup(value => value.GetEnumerator())
+            .Returns(() => new[] { reservation }.AsEnumerable().GetEnumerator());
+        return page;
+    }
+
 }
