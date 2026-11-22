@@ -7396,6 +7396,76 @@ public sealed partial class RideApiIntegrationTests
 
 
     [Fact]
+    public async Task OpsRoleCannotReadOrMutateRiderAndDriverRideLifecycleForSamePartySubjects()
+    {
+        const string riderId = "ops-ride-boundary-rider";
+        const string driverId = "ops-ride-boundary-driver";
+        const string rideId = "RIDE-OPS-LIFECYCLE-BOUNDARY";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedAgreementRide(factory, rideId, riderId, driverId);
+        SeedBookableDriver(factory, driverId, "agreement-union");
+
+        using var opsAsRider = factory.CreateClient("Ops", riderId);
+        using var opsAsDriver = factory.CreateClient("Ops", driverId);
+        opsAsRider.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+        opsAsDriver.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        // The same identities retain their own role-specific access, and the Ops
+        // identity retains its separate admin-key authority.
+        using var riderDetails = await rider.GetAsync($"/api/v1/rides/{rideId}");
+        Assert.Equal(HttpStatusCode.OK, riderDetails.StatusCode);
+        using var driverHistory = await driver.GetAsync("/api/v1/driver/rides/mine");
+        Assert.Equal(HttpStatusCode.OK, driverHistory.StatusCode);
+        using var opsAdminRead = await opsAsDriver.GetAsync($"/api/v1/ops/drivers/{driverId}");
+        Assert.Equal(HttpStatusCode.OK, opsAdminRead.StatusCode);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var initialRide = rides[rideId];
+
+        static void AssertForbidden(HttpResponseMessage response) =>
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        using var opsRiderDetails = await opsAsRider.GetAsync($"/api/v1/rides/{rideId}");
+        AssertForbidden(opsRiderDetails);
+        using var opsRiderHistory = await opsAsRider.GetAsync("/api/v1/rides/mine");
+        AssertForbidden(opsRiderHistory);
+        using var opsRiderCancel = await opsAsRider.PostAsync($"/api/v1/rides/{rideId}/cancel", content: null);
+        AssertForbidden(opsRiderCancel);
+
+        using var opsDriverHistory = await opsAsDriver.GetAsync("/api/v1/driver/rides/mine");
+        AssertForbidden(opsDriverHistory);
+        using var opsDriverPendingOffers = await opsAsDriver.GetAsync("/api/v1/driver/offers/pending");
+        AssertForbidden(opsDriverPendingOffers);
+        using var opsDriverAvailableRides = await opsAsDriver.GetAsync("/api/v1/driver/rides/available");
+        AssertForbidden(opsDriverAvailableRides);
+        using var opsDriverAccept = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/accept", content: null);
+        AssertForbidden(opsDriverAccept);
+        using var opsDriverReject = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/reject", content: null);
+        AssertForbidden(opsDriverReject);
+        using var opsDriverArrive = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/arrive", content: null);
+        AssertForbidden(opsDriverArrive);
+        using var opsDriverStart = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/start", content: null);
+        AssertForbidden(opsDriverStart);
+        using var opsDriverComplete = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/complete", content: null);
+        AssertForbidden(opsDriverComplete);
+        using var opsDriverLocation = await opsAsDriver.PostAsJsonAsync(
+            $"/api/v1/rides/{rideId}/location",
+            new { latitude = 17.493, longitude = 78.399 });
+        AssertForbidden(opsDriverLocation);
+
+        Assert.Equal(initialRide, rides[rideId]);
+        Assert.Empty(rides[rideId].AuditEvents ?? []);
+        Assert.Null(rides[rideId].PaymentReconciliation);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync(driverId));
+    }
+
+    [Fact]
     public async Task OpsRoleCannotUseRideAgreementEndpointsForSamePartySubjects()
     {
         const string riderId = "agreement-ops-boundary-rider";
