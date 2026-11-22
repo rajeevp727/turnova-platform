@@ -956,6 +956,47 @@ public sealed partial class RideApiIntegrationTests
     [InlineData("Rider")]
     [InlineData("Ops")]
     [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadDriverUnionAssignmentForSameDriverSubject(string nonDriverRole)
+    {
+        const string driverId = "driver-union-assignment-private";
+        const string unionId = "union-driver-assignment-private";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        if (nonDriverRole == "Ops")
+            nonDriver.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        SeedBookableDriver(factory, driverId, unionId);
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var originalAssignment = assignments[driverId];
+
+        using var denied = await nonDriver.GetAsync("/api/v1/driver/union");
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.True(denied.Headers.CacheControl?.NoStore);
+        Assert.Contains(denied.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(originalAssignment, assignments[driverId]);
+
+        if (nonDriverRole == "UnionManager")
+        {
+            // The same principal remains authorized for its own scoped Union oversight.
+            using var scopedMembers = await nonDriver.GetAsync("/api/v1/union/drivers");
+            Assert.Equal(HttpStatusCode.OK, scopedMembers.StatusCode);
+        }
+
+        using var allowed = await driver.GetAsync("/api/v1/driver/union");
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        using var json = JsonDocument.Parse(await allowed.Content.ReadAsStringAsync());
+        Assert.Equal(unionId, json.RootElement.GetProperty("unionId").GetString());
+        Assert.Equal(originalAssignment, assignments[driverId]);
+    }
+
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
     public async Task NonDriverRolesCannotReadOrModifyDriverOnboardingOrPrivateMedia(string nonDriverRole)
     {
         const string driverId = "driver-private-onboarding";
