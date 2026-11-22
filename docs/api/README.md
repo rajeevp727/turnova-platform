@@ -86,6 +86,8 @@ Only `rider` and `driver` route values are accepted. The API owns `appId=turnova
 - `GET /api/v1/driver/availability`
 - `POST /api/v1/driver/availability`
 - `POST /api/v1/driver/location`
+
+The Driver availability GET/POST and location POST routes require the `Driver` role. Rider, Ops and scoped UnionManager principals sharing the same subject as a Driver receive 403 with no-store/no-cache headers; denied reads/updates do not change the Driver's availability, coordinates, location timestamp or compatibility queue membership.
 - `GET /api/v1/driver/union`
 - `GET /api/v1/driver/payslips/{year}/{month}.pdf`
 
