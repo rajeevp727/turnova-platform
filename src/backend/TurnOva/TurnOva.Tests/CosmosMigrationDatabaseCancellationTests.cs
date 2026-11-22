@@ -69,7 +69,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(createResponse.Object);
         container.Setup(value => value.ReadContainerAsync(
-                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<ContainerRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
             .Returns(() =>
             {
@@ -82,9 +82,9 @@ public sealed class CosmosMigrationDatabaseCancellationTests
                 "SupportRequests", "/reporterId", cancellation.Token, defaultTimeToLive: 604800));
 
         container.Verify(value => value.ReadContainerAsync(
-            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceContainerAsync(
-            It.IsAny<ContainerProperties>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
     }
 
@@ -134,12 +134,12 @@ public sealed class CosmosMigrationDatabaseCancellationTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(createResponse.Object);
         container.Setup(value => value.ReadContainerAsync(
-                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<ContainerRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(readResponse.Object);
         container.Setup(value => value.ReplaceContainerAsync(
                 It.IsAny<ContainerProperties>(),
-                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<ContainerRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
             .Returns(() =>
             {
@@ -151,10 +151,10 @@ public sealed class CosmosMigrationDatabaseCancellationTests
             "SupportRequests", "/reporterId", cancellation.Token, defaultTimeToLive: 604800);
 
         container.Verify(value => value.ReadContainerAsync(
-            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceContainerAsync(
             It.Is<ContainerProperties>(properties => properties.DefaultTimeToLive == 604800),
-            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<ContainerRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
