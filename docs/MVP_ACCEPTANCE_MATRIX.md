@@ -1,5 +1,14 @@
 # TurnOva MVP Acceptance Matrix
 
+## Run 59 — Rider cannot read or accept internal Driver offers (2026-11-22)
+
+- **Platform phase:** API `in_progress`; Android/iOS remain `not_started`.
+- **Current item:** DISPATCH-02-API-004, Rider denial for Driver pending/available offer reads and acceptance.
+- **Evidence:** `RiderCannotReadOrAcceptInternalDriverOffers` verifies positive Driver access to the assigned pending offer and available ride, HTTP 204 for a different Driver, and HTTP 403 for Rider pending-offer GET, available-ride GET and accept POST. It asserts the pending offer remains Pending, the queue is unchanged, the ride remains Requested and no FIFO advancement occurs.
+- **Source/test head:** [`bc6b0fc589c18f8cadbddf0d0249d3dce4c5c443`](https://github.com/rajeevp727/turnova-platform/commit/bc6b0fc589c18f8cadbddf0d0249d3dce4c5c443).
+- **Exact-head API-only CI:** [#44991955044](https://github.com/rajeevp727/turnova-platform/actions/runs/44991955044) passed **1,069/1,069 backend tests**, .NET 10 Release build, native non-container Linux x64 publish/verifier and artifact [14742576267](https://github.com/rajeevp727/turnova-platform/actions/runs/44991955044/artifacts/14742576267). The initial fixture failure in #44991643401 was corrected before this final-head pass; mobile jobs were intentionally skipped.
+- **Gate:** PR #200 remains the sole ready API PR, mergeable but without independent approval. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked). No live Cosmos/production readiness is claimed.
+
 ## Run 58 — Rider cannot reject an internal FIFO offer (2026-11-22)
 
 - **Platform phase:** API `in_progress`; Android and iOS remain `not_started`. No mobile source, build or deployment work was started.
@@ -128,7 +137,7 @@ The 7 Rider profile/help/theme/navigation cases are deterministic helper/source-
 | RIDER-02 | Immutable agreement versions, actor-scoped idempotency, mutual confirmation and current-version start guard implemented | Live Cosmos ETag/multi-instance/restart; mobile negotiation/confirmation/reconnect acceptance; currency policy |
 | RIDER-03 | Explicit selected-Driver booking, route/stops persistence, Rider/Driver reservations, idempotency, expiry and audit implemented | Positive approved negotiation lifetime; live Cosmos and physical-device booking/cancel/expiry |
 | DISPATCH-01 | Typed zone/radius resolution fails closed on invalid or missing configuration | Product approval of positive radius, global overlap policy and location freshness; live Cosmos |
-| DISPATCH-02 | API discovery does not use customer-facing FIFO or auto-assignment; Rider explicitly selects | Android/iOS selection UI later; internal FIFO fairness decision remains unresolved; live Cosmos/device acceptance |
+| DISPATCH-02 | API discovery does not expose customer-facing FIFO or auto-assignment; Rider explicitly selects. API role boundaries now deny Rider access to queue reads/mutations, FIFO timeout/reject, Driver pending/available offers and offer acceptance (DISPATCH-02-API-001..004). | Android/iOS selection UI later; internal FIFO fairness decision remains unresolved; live Cosmos/device acceptance |
 | DISPATCH-03 | Lease expiry, cancellation, audit and no automatic next-Driver advancement implemented | Approved negotiation lifetime; live Cosmos ETag/restart and device acceptance |
 | DISPATCH-04 | Exclusive Driver reservation covers selected negotiation, active ride and Union membership changes | Live Cosmos contention/multi-instance/restart; device concurrency acceptance |
 | REALTIME-01 | Authenticated SignalR membership and ride/agreement event contracts implemented | Live WebSocket/backplane, multi-instance delivery, long-outage reconnect and device acceptance |
@@ -152,7 +161,7 @@ External gates above are not reported as completed. Strict acceptance remains 0/
 
 | Phase | Exit evidence | State |
 |---|---|---|
-| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs and native non-container .NET 10 publish. PR #200 includes QA/demo-auth hardening, AUTH-API-017 through AUTH-API-059, DISPATCH-02-API-001, DISPATCH-03-CANCEL-013 and approved AI-01 supplemental work. | Source/test head [`382e0979526d124eb1b2ceb515ec558adf75068a`](https://github.com/rajeevp727/turnova-platform/commit/382e0979526d124eb1b2ceb515ec558adf75068a) passed exact-head API-only CI [#44984188666](https://github.com/rajeevp727/turnova-platform/actions/runs/44984188666): **1,066/1,066 backend tests**, .NET 10 Release build, native non-container Linux x64 publish/verifier (artifact [14739362267](https://github.com/rajeevp727/turnova-platform/actions/runs/44984188666/artifacts/14739362267)). Mobile jobs were intentionally skipped. API remains `in_progress` pending independent human approval, permitted merge and a fresh main/API exit audit; live Cosmos/production readiness is not claimed. |
+| API | In-scope API implementation, role-scoped response/privacy checks, deterministic API/domain/persistence tests, OpenAPI contract/docs and native non-container .NET 10 publish. PR #200 includes QA/demo-auth hardening, AUTH-API-017 through AUTH-API-059, DISPATCH-02-API-001..004, DISPATCH-03-CANCEL-013 and approved AI-01 supplemental work. | Source/test head [`bc6b0fc589c18f8cadbddf0d0249d3dce4c5c443`](https://github.com/rajeevp727/turnova-platform/commit/bc6b0fc589c18f8cadbddf0d0249d3dce4c5c443) passed exact-head API-only CI [#44991955044](https://github.com/rajeevp727/turnova-platform/actions/runs/44991955044): **1,069/1,069 backend tests**, .NET 10 Release build, native non-container Linux x64 publish/verifier (artifact [14742576267](https://github.com/rajeevp727/turnova-platform/actions/runs/44991955044/artifacts/14742576267)). Mobile jobs were intentionally skipped. API remains `in_progress` pending independent human approval, permitted merge and a fresh main/API exit audit; live Cosmos/production readiness is not claimed. |
 | Android | Rider and Driver flows/tests, debug/release builds, emulator install/launch smoke for both apps; starts only after API exit | **Gated — Rider first, Driver second** |
 | iOS | Rider and Driver flows/tests, Simulator builds and install/launch smoke for both apps; starts only after both Android apps exit | **Gated — not started** |
 

@@ -1,5 +1,15 @@
 # TurnOva Project Brain
 
+## Run 59 — Rider cannot read or accept internal Driver offers (2026-11-22)
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`.
+- **Current item:** DISPATCH-02-API-004. The Rider JWT is denied HTTP 403 for Driver pending-offer GET, available-ride GET and legacy offer-accept POST even when the same subject also has an eligible approved Cab Driver profile at the FIFO head. Driver positive controls confirm the assigned Driver can see the pending offer/available ride; another Driver receives no pending offer. The test asserts the pending offer remains Pending, queue order unchanged, ride remains Requested and no FIFO advancement occurs.
+- **Source/test head:** [`bc6b0fc589c18f8cadbddf0d0249d3dce4c5c443`](https://github.com/rajeevp727/turnova-platform/commit/bc6b0fc589c18f8cadbddf0d0249d3dce4c5c443).
+- **Exact-head API-only CI:** [#44991955044](https://github.com/rajeevp727/turnova-platform/actions/runs/44991955044) passed **1,069/1,069 tests**, Release build, native non-container Linux x64 publish/verifier and artifact [14742576267](https://github.com/rajeevp727/turnova-platform/actions/runs/44991955044/artifacts/14742576267). The first fixture attempt failed because the second Driver's profile was not initialized; the test setup was corrected and final-head CI passed.
+- **PR/review gate:** PR #200 remains sole ready API PR, open/mergeable with three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is Android LAN config only. PR #197's merge without independent approval remains a disclosed historical exception.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). API remains in progress pending independent human approval, permitted merge and a fresh main/API exit audit; no live Cosmos/production readiness is claimed.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart; shared/edge rate limiting and trusted proxy; production identity/secrets/API hosting/TriSend; Product radius/zones/freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private media storage/scanning/consent/retention; support/escalation and reconciliation policies; Union legal approval; later Android/iOS device/signing/store/TestFlight evidence.
+
 ## Run 58 — Rider cannot reject an internal FIFO offer (2026-11-22)
 
 - **Platform phase:** API `in_progress`; Android and iOS remain `not_started`. No mobile source, build or deployment work was started.
