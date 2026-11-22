@@ -1,3 +1,5 @@
+# TurnOva MVP progress
+
 ## Run 57 — Rider FIFO offer-timeout role isolation (2026-11-22)
 
 - **Platform phase:** API `in_progress`; Android and iOS remain `not_started`. No mobile source, build or deployment work was started.
@@ -12,7 +14,6 @@
 - **External gates:** live Cosmos ETag/partition/multi-instance/restart and Staging/QA durable readiness; shared/edge rate limiting and trusted proxy configuration; production identity/secrets/API hosting and live TriSend; Product-approved dispatch radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
 - **Next exact action:** continue API-only source/test/docs gap work while PR #200 awaits independent human approval. After an approved permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider. Do not advance mobile work while the API phase gate is active.
 
-# TurnOva MVP progress
 
 ## Run 56 — DISPATCH-02 queue-role and DISPATCH-03 cancellation FIFO regressions (2026-11-22)
 
