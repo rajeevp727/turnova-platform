@@ -12,6 +12,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     public async Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = QueueKey(zoneId, serviceClass);
         var query = new QueryDefinition(
                 "SELECT * FROM c WHERE c.zoneServiceKey = @key AND c.isEligible = true")
@@ -22,16 +23,19 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         var entries = new List<DriverQueueEntry>();
         while (iterator.HasMoreResults)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var page = await iterator.ReadNextAsync(cancellationToken);
             entries.AddRange(page.Select(x => new DriverQueueEntry(
                 x.DriverId, x.ZoneId, x.ServiceClass, x.JoinedAt, x.Sequence, x.IsEligible)));
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         return entries.OrderBy(x => x.Sequence).ThenBy(x => x.JoinedAt).ToArray();
     }
 
     public async Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var document = new QueueEntryDocument
         {
             Id = entry.DriverId,
@@ -50,6 +54,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             .CreateItem(audit)
             .ExecuteAsync(cancellationToken);
         if (response.IsSuccessStatusCode) return;
+        cancellationToken.ThrowIfCancellationRequested();
         if (response[0].StatusCode == System.Net.HttpStatusCode.Conflict)
             throw new InvalidOperationException("Driver is already in this queue.");
         throw new InvalidOperationException(
@@ -59,6 +64,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     public async Task<bool> RemoveAsync(
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = QueueKey(zoneId, serviceClass);
         try
         {
@@ -78,6 +84,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                 .CreateItem(audit)
                 .ExecuteAsync(cancellationToken);
             if (response.IsSuccessStatusCode) return true;
+            cancellationToken.ThrowIfCancellationRequested();
             if (response[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
                 return false;
             throw new InvalidOperationException(
@@ -86,6 +93,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         catch (CosmosException ex) when (
             ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return false;
         }
     }
@@ -93,6 +101,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     public async Task<bool> MoveToBackAsync(
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = QueueKey(zoneId, serviceClass);
         try
         {
@@ -110,6 +119,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                 .CreateItem(audit)
                 .ExecuteAsync(cancellationToken);
             if (batch.IsSuccessStatusCode) return true;
+            cancellationToken.ThrowIfCancellationRequested();
             if (batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
                 return false;
             throw new InvalidOperationException(
@@ -117,6 +127,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         }
         catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return false;
         }
     }
@@ -143,13 +154,14 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                 .CreateItem(audit)
                 .ExecuteAsync(cancellationToken);
             if (batch.IsSuccessStatusCode) return true;
+            cancellationToken.ThrowIfCancellationRequested();
             if (batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
                 return false;
             throw new InvalidOperationException(
                 $"Offer rotation and audit event could not be committed atomically (Cosmos status {(int)batch.StatusCode}).");
         }
         catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
-        { return false; }
+        { cancellationToken.ThrowIfCancellationRequested(); return false; }
     }
 
     public Task RecordDispatchExceptionAsync(
@@ -165,6 +177,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     public async Task<IReadOnlyList<QueueAuditEvent>> GetAuditEventsAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = QueueKey(zoneId, serviceClass);
         var query = new QueryDefinition(
                 "SELECT * FROM c WHERE c.zoneServiceKey = @key AND c.documentType = @documentType ORDER BY c.occurredAtUtc DESC")
@@ -174,7 +187,11 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(key) });
         var events = new List<QueueAuditEvent>();
         while (iterator.HasMoreResults)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             events.AddRange(await iterator.ReadNextAsync(cancellationToken));
+        }
+        cancellationToken.ThrowIfCancellationRequested();
         return events;
     }
 
