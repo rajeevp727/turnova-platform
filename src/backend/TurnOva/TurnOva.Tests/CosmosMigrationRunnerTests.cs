@@ -233,9 +233,12 @@ public sealed class CosmosMigrationRunnerTests
                 It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(conflict);
-        historyContainer.Setup(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+        var missing = new CosmosException(
+            "migration history marker not found before migration", HttpStatusCode.NotFound, 0, "migration-history-test", 0);
+        historyContainer.SetupSequence(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
                 It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
+            .ThrowsAsync(missing)
             .ReturnsAsync(Mock.Of<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>());
         var leaseStore = new LeaseLostStore();
         var migration = new CountingMigration();
@@ -291,7 +294,7 @@ public sealed class CosmosMigrationRunnerTests
             It.IsAny<CancellationToken>()), Times.Once);
         historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
         Assert.NotNull(leaseStore.ReleasedLease);
     }
 
@@ -331,7 +334,7 @@ public sealed class CosmosMigrationRunnerTests
             It.IsAny<CancellationToken>()), Times.Once);
         historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<CancellationToken>()), Times.Once);
         Assert.NotNull(leaseStore.ReleasedLease);
     }
 
