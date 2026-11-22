@@ -686,12 +686,6 @@ async Task<DriverUnion?> FindUnionAsync(string unionId, CancellationToken ct)
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
-async Task SaveUnionAsync(DriverUnion union, CancellationToken ct)
-{
-    if (unionContainer is null) { unions[union.UnionId] = union; return; }
-    await unionContainer.UpsertItemAsync(union, new PartitionKey(union.UnionId), cancellationToken: ct);
-}
-
 static string NormalizeUnionCode(string? code) =>
     (code ?? string.Empty).Trim().ToUpperInvariant();
 
@@ -2563,11 +2557,17 @@ opsUnions.MapPut("/{unionId}/status", async (HttpContext context, string unionId
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
     if (request.Status is not ("Active" or "Inactive" or "Suspended"))
         return Results.BadRequest(new { message = "Status must be Active, Inactive or Suspended." });
-    var union = await FindUnionAsync(unionId, ct);
-    if (union is null) return Results.NotFound();
-    var updated = union with { Status = request.Status, UpdatedAtUtc = DateTimeOffset.UtcNow };
-    await SaveUnionAsync(updated, ct);
-    return Results.Ok(updated);
+    var update = await UnionStatusUpdater.TryUpdateStatusAsync(
+        unionContainer, unions, unionId, request.Status, DateTimeOffset.UtcNow, ct);
+    if (update.Outcome == UnionStatusUpdateOutcome.Updated)
+        return Results.Ok(update.Union);
+    if (update.Outcome == UnionStatusUpdateOutcome.NotFound)
+        return Results.NotFound();
+
+    return Results.Conflict(new
+    {
+        message = "Union changed while its status was being updated. Refresh and retry."
+    });
 });
 
 opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionId, CancellationToken ct) =>
