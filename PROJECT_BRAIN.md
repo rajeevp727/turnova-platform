@@ -1,5 +1,15 @@
 # TurnOva Project Brain
 
+## Run 73 — API-PRIVACY-015: Operations cannot use Rider discovery/booking (2026-11-22)
+
+- **Phase:** API remains `in_progress`; Android and iOS remain `not_started`. Do not advance mobile work until PR #200 is independently approved, merged under repository policy, and main passes a fresh API phase-exit audit.
+- **Source/test commit:** [`2ba5a9dc8c79ea3e66d0ea98cdd907e9aa74f45a`](https://github.com/rajeevp727/turnova-platform/commit/2ba5a9dc8c79ea3e66d0ea98cdd907e9aa74f45a) adds `OpsRoleCannotUseRiderDiscoveryOrSelectedBookingForSamePartySubject`. An Ops JWT with the valid admin key and same subject as a Rider/eligible Cab Driver receives 403 for discovery and selected booking; no ride, idempotency record or reservation is created. The real Rider can use the same subject and Idempotency-Key successfully. Test-only; no runtime behavior change.
+- **Validation:** Run 72 exact-head CI [#45023067142](https://github.com/rajeevp727/turnova-platform/actions/runs/45023067142) passed 1,095/1,095 backend tests, .NET 10 Release build and native non-container Linux x64 publish/verifier. Exact-head CI for commit `2ba5a9d...` and the subsequent documentation sync is pending/not yet visible; do not count the new test as passed.
+- **Repository:** PR #200 remains sole ready API PR. Main is `c9280eec23dd4fb5fab06b11e24d2a619b489235`; PR branch `test/api-nondev-support-readiness-20261120` was 565 ahead / 2 behind at the source/test checkpoint. Main phase metadata is stale; the PR branch correctly keeps API `in_progress`, Android/iOS `not_started`.
+- **Review:** three owner-authored COMMENTED reviews, zero independent approvals, zero unresolved threads. Never self-approve or merge. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is config-only. PR #197's historical merge without independent approval remains disclosed.
+- **Acceptance/readiness:** strict acceptance 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); this is not an implementation percentage. Live Cosmos/provider/production readiness is not established.
+- **Next:** verify exact-head CI, continue API-only safe work, obtain independent human review, then merge only if permitted. Re-read main and perform the full API exit audit before Android Rider, then Android Driver, then iOS Rider and Driver.
+
 ## Run 72 — Operations role isolation from Rider/Driver ride and realtime APIs (2026-11-22)
 
 - **Platform phase:** API `in_progress`; Android/iOS remain `not_started`. No mobile source, build or deployment work was started.
