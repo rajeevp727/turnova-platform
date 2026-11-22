@@ -85,6 +85,45 @@ public sealed class CosmosAdapterContractTests
     }
 
     [Fact]
+    public async Task OfferScopedQueueRotationHonorsCancellationBeforeReading()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).MoveToBackOnceAsync(
+                "driver-1", "hyderabad-central", "cab", "offer-1", cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task OfferScopedQueueRotationHonorsCancellationBeforeIdempotentNoOp()
+    {
+        var read = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>();
+        read.SetupGet(value => value.Resource).Returns(CreateQueueEntryDocument("offer-1"));
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(read.Object);
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).MoveToBackOnceAsync(
+                "driver-1", "hyderabad-central", "cab", "offer-1", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task QueueRemovalUsesObservedEtagAndAppendsAuditAtomically()
     {
         var read = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>();
