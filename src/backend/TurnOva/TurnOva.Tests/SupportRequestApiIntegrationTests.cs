@@ -131,18 +131,22 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    [Fact]
-    public async Task NonRiderDriverRoleCannotSubmitSupportRequest()
+    [Theory]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonRiderDriverRoleCannotSubmitSupportRequest(string role)
     {
-        using var factory = new SupportApiFactory();
+        var store = new CapturingSupportRequestStore();
+        using var factory = new SupportApiFactory(supportStore: store);
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Ops"));
-        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-ops-01");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(role));
+        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-non-rider-driver-01");
 
         using var response = await client.PostAsJsonAsync("/api/v1/support/requests",
             new { subject = "Trip update issue", description = "The trip status did not refresh after reconnecting." });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(store.LastRequest);
     }
 
     [Fact]
