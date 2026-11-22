@@ -692,6 +692,94 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(new[] { 1, 2 }, entries.Select(entry => entry.Position));
     }
 
+    [Theory]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadOrMutateInternalDriverFifoQueueForSameDriverSubject(string nonDriverRole)
+    {
+        const string driverId = "non-driver-fifo-boundary";
+        const string secondDriverId = "non-driver-fifo-second";
+        const string unionId = "non-driver-fifo-union";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var secondDriver = factory.CreateClient("Driver", secondDriverId);
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        if (nonDriverRole == "Ops")
+            nonDriver.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        SeedBookableDriver(factory, driverId, unionId);
+        SeedBookableDriver(factory, secondDriverId, "non-driver-fifo-second-union");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        var now = DateTimeOffset.UtcNow;
+        await queueService.JoinAsync(new DriverQueueEntry(
+            driverId, "hyderabad-central", "cab", now.AddMinutes(-2), 0, true));
+        await queueService.JoinAsync(new DriverQueueEntry(
+            secondDriverId, "hyderabad-central", "cab", now.AddMinutes(-1), 0, true));
+
+        static void AssertDenied(HttpResponseMessage response)
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.Contains(response.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        const string queuePath = "/api/v1/zones/hyderabad-central/queues/cab";
+        const string ownQueuePath = queuePath + "/me";
+
+        using var deniedQueueRead = await nonDriver.GetAsync(queuePath);
+        AssertDenied(deniedQueueRead);
+        using var deniedPositionRead = await nonDriver.GetAsync(ownQueuePath);
+        AssertDenied(deniedPositionRead);
+        using var deniedLeave = await nonDriver.DeleteAsync(ownQueuePath);
+        AssertDenied(deniedLeave);
+        using var deniedJoin = await nonDriver.PostAsJsonAsync(
+            "/api/v1/queues/join",
+            new { zoneId = "hyderabad-central", serviceClass = "cab" });
+        AssertDenied(deniedJoin);
+        using var deniedTimeout = await nonDriver.PostAsync(
+            "/api/v1/queues/hyderabad-central/cab/offer-timeout", content: null);
+        AssertDenied(deniedTimeout);
+
+        // Neither a matching Driver subject, a matching Union claim, nor the separate
+        // Operations admin key grants access to the internal Driver-only FIFO surface.
+        var unchangedQueue = await queueService.GetPositionedQueueAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(new[] { driverId, secondDriverId }, unchangedQueue.Select(entry => entry.DriverId));
+        Assert.Equal(new[] { 1, 2 }, unchangedQueue.Select(entry => entry.Position));
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        Assert.Equal("Online", profiles[driverId].AvailabilityStatus);
+        Assert.Equal(17.493, profiles[driverId].CurrentLatitude);
+        Assert.Equal(78.399, profiles[driverId].CurrentLongitude);
+
+        // Positive controls: the real Driver can inspect its queue position and invoke
+        // the existing compatibility timeout; the denied non-Driver calls did not rotate it.
+        using var driverQueueRead = await driver.GetAsync(queuePath);
+        Assert.Equal(HttpStatusCode.OK, driverQueueRead.StatusCode);
+        var visibleQueue = await driverQueueRead.Content.ReadFromJsonAsync<List<QueueEntryTest>>();
+        Assert.NotNull(visibleQueue);
+        Assert.Equal(new[] { driverId, secondDriverId }, visibleQueue.Select(entry => entry.DriverId));
+
+        using var driverPositionRead = await driver.GetAsync(ownQueuePath);
+        Assert.Equal(HttpStatusCode.OK, driverPositionRead.StatusCode);
+        using (var positionJson = JsonDocument.Parse(await driverPositionRead.Content.ReadAsStringAsync()))
+        {
+            Assert.True(positionJson.RootElement.GetProperty("isQueued").GetBoolean());
+            Assert.Equal(1, positionJson.RootElement.GetProperty("position").GetInt32());
+        }
+
+        using var allowedTimeout = await driver.PostAsync(
+            "/api/v1/queues/hyderabad-central/cab/offer-timeout", content: null);
+        Assert.Equal(HttpStatusCode.OK, allowedTimeout.StatusCode);
+        var queueAfterDriverTimeout = await queueService.GetPositionedQueueAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(new[] { secondDriverId, driverId }, queueAfterDriverTimeout.Select(entry => entry.DriverId));
+    }
+
     [Fact]
     public async Task RiderCannotRejectInternalFifoOffer()
     {
