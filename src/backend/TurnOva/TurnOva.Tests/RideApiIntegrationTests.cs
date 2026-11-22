@@ -7396,6 +7396,66 @@ public sealed partial class RideApiIntegrationTests
 
 
     [Fact]
+    public async Task OpsRoleCannotUseRiderDiscoveryOrSelectedBookingForSamePartySubject()
+    {
+        const string subject = "ops-discovery-booking-boundary-subject";
+        const string memberUnionId = "ops-discovery-booking-member-union";
+        const string selectedDriverId = "ops-discovery-booking-selected-driver";
+        const string selectedUnionId = "ops-discovery-booking-selected-union";
+        const string idempotencyKey = "ops-discovery-booking-boundary-key";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        SeedBookableDriver(factory, subject, memberUnionId);
+        SeedBookableDriver(factory, selectedDriverId, selectedUnionId);
+
+        using var rider = factory.CreateClient("Rider", subject);
+        using var ops = factory.CreateClient("Ops", subject);
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        const string discoveryPath =
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1";
+        using var deniedDiscovery = await ops.GetAsync(discoveryPath);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedDiscovery.StatusCode);
+        Assert.True(deniedDiscovery.Headers.CacheControl?.NoStore);
+        Assert.Contains(deniedDiscovery.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        using var allowedDiscovery = await rider.GetAsync(discoveryPath);
+        Assert.Equal(HttpStatusCode.OK, allowedDiscovery.StatusCode);
+
+        using var deniedBookingRequest = CreateSelectedBookingRequest(
+            idempotencyKey, selectedDriverId, selectedUnionId, "KPHB", "HITEC City", []);
+        using var deniedBooking = await ops.SendAsync(deniedBookingRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedBooking.StatusCode);
+        Assert.True(deniedBooking.Headers.CacheControl?.NoStore);
+        Assert.Contains(deniedBooking.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var idempotencyRecords = factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
+        var driverReservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var riderReservations = factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
+        Assert.Empty(rides);
+        Assert.Empty(idempotencyRecords);
+        Assert.Null(await driverReservations.GetActiveAsync(subject));
+        Assert.Null(await driverReservations.GetActiveAsync(selectedDriverId));
+        Assert.Null(await riderReservations.GetActiveAsync(subject));
+
+        // A real Rider sharing the exact subject and idempotency key can still book;
+        // the denied Operations request must not consume either reservation or key.
+        using var allowedBookingRequest = CreateSelectedBookingRequest(
+            idempotencyKey, selectedDriverId, selectedUnionId, "KPHB", "HITEC City", []);
+        using var allowedBooking = await rider.SendAsync(allowedBookingRequest);
+        Assert.Equal(HttpStatusCode.Created, allowedBooking.StatusCode);
+        Assert.Single(rides);
+        Assert.Single(idempotencyRecords);
+        Assert.Null(await driverReservations.GetActiveAsync(subject));
+        Assert.NotNull(await driverReservations.GetActiveAsync(selectedDriverId));
+        Assert.NotNull(await riderReservations.GetActiveAsync(subject));
+    }
+
+    [Fact]
     public async Task OpsRoleCannotReadOrMutateRiderAndDriverRideLifecycleForSamePartySubjects()
     {
         const string riderId = "ops-ride-boundary-rider";
