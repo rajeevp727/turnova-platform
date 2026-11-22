@@ -483,7 +483,8 @@ public sealed class AiAssistanceServiceTests
 
         Assert.Equal("unsupported", result.SourceId);
         Assert.True(result.EscalationRequired);
-        Assert.Contains("support contact", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("support-team escalation", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("contact", result.Answer, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -508,7 +509,8 @@ public sealed class AiAssistanceServiceTests
         Assert.Equal("unsupported", result.SourceId);
         Assert.True(result.EscalationRequired);
         Assert.Equal("deterministic-fallback", result.Source);
-        Assert.Contains("support contact", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("support-team escalation", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("contact", result.Answer, StringComparison.OrdinalIgnoreCase);
         Assert.InRange(result.Answer.Length, 1, 100);
     }
 

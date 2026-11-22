@@ -86,7 +86,7 @@ public sealed class AiAssistanceService
 {
     private const string PickupToken = "[PICKUP]";
     private const string DropoffToken = "[DROPOFF]";
-    private const string UnsupportedHelpAnswer = "This is outside approved help. Please use the support contact.";
+    private const string UnsupportedHelpAnswer = "This is outside approved help and requires support-team escalation.";
 
     private static readonly Regex RoutePattern = new(
         @"\bfrom\s+(?<pickup>.+?)\s+to\s+(?<dropoff>.+?)(?:\s+(?:for|with)\s+(?<passengers>\d{1,2})\s+(?:passengers?|people|persons?)|\s+for\s+(?:a\s+)?(?:family|party)\s+of\s+(?<familyPassengers>\d{1,2}))?\s*[.!?]*$",
