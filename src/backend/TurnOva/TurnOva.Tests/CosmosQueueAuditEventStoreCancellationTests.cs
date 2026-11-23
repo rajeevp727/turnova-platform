@@ -231,4 +231,43 @@ public sealed class CosmosQueueAuditEventStoreCancellationTests
         response.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("event-other", "zone-a|cab")]
+    [InlineData("event-1", "zone-b|cab")]
+    public async Task SuccessfulReadRejectsResourceForDifferentEventOrPartition(
+        string returnedEventId,
+        string returnedPartitionKey)
+    {
+        const string requestedEventId = "event-1";
+        const string requestedPartitionKey = "zone-a|cab";
+        var auditEvent = CreateEvent() with
+        {
+            EventId = returnedEventId,
+            ZoneServiceKey = returnedPartitionKey
+        };
+        var response = new Mock<ItemResponse<QueueAuditEvent>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(auditEvent);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<QueueAuditEvent>(
+                requestedEventId,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueAuditEventStore(container.Object)
+                .ReadAsync(requestedEventId, requestedPartitionKey, CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue audit event resource.", exception.Message);
+        container.Verify(value => value.ReadItemAsync<QueueAuditEvent>(
+            requestedEventId,
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
 }

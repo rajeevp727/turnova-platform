@@ -244,4 +244,50 @@ public sealed class CosmosSupportRequestStoreCancellationTests
         response.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("request-other", "reporter-1")]
+    [InlineData("request-1", "reporter-2")]
+    public async Task CanonicalReadRejectsResourceForDifferentRequestOrReporter(
+        string returnedRequestId,
+        string returnedReporterId)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var conflict = new CosmosException(
+            "support request already exists", HttpStatusCode.Conflict, 0, "support-request-test", 0);
+        var request = CreateRequest();
+        var existing = request with
+        {
+            Id = returnedRequestId,
+            ReporterId = returnedReporterId
+        };
+        var response = new Mock<ItemResponse<SupportRequest>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(existing);
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<SupportRequest>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(conflict);
+        container.Setup(value => value.ReadItemAsync<SupportRequest>(
+                request.Id,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosSupportRequestStore(container.Object).CreateOrGetAsync(request));
+
+        Assert.Equal("Cosmos returned a malformed support request resource.", exception.Message);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<SupportRequest>(
+            request.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
 }
