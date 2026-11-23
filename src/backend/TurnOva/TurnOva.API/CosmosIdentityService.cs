@@ -172,13 +172,14 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
         ct.ThrowIfCancellationRequested();
         var user = readResponse.Resource;
-        if (!IsExpectedIdentity(user, candidate.Id, normalizedRole) ||
-            !string.Equals(user.Email, email, StringComparison.Ordinal) ||
-            !VerifyPassword(request.Password, user.PasswordSalt, user.PasswordHash))
-            return InvalidCredentials();
-        // PBKDF2 is synchronous; honor a disconnect that occurred while verifying the password
-        // before rotating and persisting the refresh token.
+        var credentialsValid = IsExpectedIdentity(user, candidate.Id, normalizedRole) &&
+            string.Equals(user.Email, email, StringComparison.Ordinal);
+        if (credentialsValid)
+            credentialsValid = VerifyPassword(request.Password, user.PasswordSalt, user.PasswordHash);
+        // PBKDF2 is synchronous; honor a disconnect that occurred while verifying the password,
+        // including when the supplied password is incorrect, before returning or rotating a session.
         ct.ThrowIfCancellationRequested();
+        if (!credentialsValid) return InvalidCredentials();
         if (!HasUsableEtag(readResponse.ETag)) return StorageUnavailable();
 
         var refreshToken = CreateRefreshToken();
