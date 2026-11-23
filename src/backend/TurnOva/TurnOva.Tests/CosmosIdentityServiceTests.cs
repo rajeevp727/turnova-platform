@@ -838,6 +838,121 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task RegisterStopsBeforeBatchExecutionWhenCancellationArrivesDuringBatchPreparation()
+    {
+        using var cts = new CancellationTokenSource();
+        var (container, batch, _) = CreateBatchResponse(HttpStatusCode.OK, success: true);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                It.IsAny<TransactionalBatchItemRequestOptions?>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return batch.Object;
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", Password, "Rider"),
+            cts.Token));
+
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginStopsBeforeRefreshTokenWriteWhenCancellationArrivesDuringIdentityHydration()
+    {
+        using var cts = new CancellationTokenSource();
+        var user = CreateIdentity();
+        var (container, _) = SetupIdentityQuery(user);
+        var read = CreateItemResponse(user, "login-hydration-cancelled-etag", cts.Cancel);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            cts.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefreshStopsBeforeTokenRotationWhenCancellationArrivesDuringIdentityHydration()
+    {
+        using var cts = new CancellationTokenSource();
+        const string refreshToken = "refresh-token-hydration-cancelled";
+        var user = CreateIdentity(refreshTokenHash: HashRefreshToken(refreshToken));
+        var (container, _) = SetupIdentityQuery(user);
+        var read = CreateItemResponse(user, "refresh-hydration-cancelled-etag", cts.Cancel);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest(refreshToken), cts.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LogoutStopsBeforeRevocationWhenCancellationArrivesDuringIdentityHydration()
+    {
+        using var cts = new CancellationTokenSource();
+        var user = CreateIdentity(refreshTokenHash: "active-refresh-hash");
+        var read = CreateItemResponse(user, "logout-hydration-cancelled-etag", cts.Cancel);
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LogoutAsync(CreateRiderPrincipal(), cts.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private static CosmosIdentityService CreateService(Container container) =>
         new(null, CreateConfiguration(), container);
 
@@ -904,10 +1019,15 @@ public sealed class CosmosIdentityServiceTests
 
     private static Mock<ItemResponse<CosmosIdentityService.IdentityDocument>> CreateItemResponse(
         CosmosIdentityService.IdentityDocument user,
-        string etag)
+        string etag,
+        Action? onResourceRead = null)
     {
         var response = new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>();
-        response.SetupGet(value => value.Resource).Returns(user);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            onResourceRead?.Invoke();
+            return user;
+        });
         response.SetupGet(value => value.ETag).Returns(etag);
         return response;
     }
