@@ -117,6 +117,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
         var container = await GetContainerAsync(ct);
         if (container is null) return StorageUnavailable();
+        ct.ThrowIfCancellationRequested();
 
         IdentityDocument? candidate;
         try
@@ -130,6 +131,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             while (iterator.HasMoreResults && candidate is null)
             {
                 var page = await iterator.ReadNextAsync(ct);
+                ct.ThrowIfCancellationRequested();
                 candidate = page.FirstOrDefault();
             }
         }
@@ -158,6 +160,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             return StorageUnavailable();
         }
 
+        ct.ThrowIfCancellationRequested();
         var user = readResponse.Resource;
         if (!IsExpectedIdentity(user, candidate.Id, normalizedRole) ||
             !string.Equals(user.Email, email, StringComparison.Ordinal) ||
@@ -195,6 +198,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             return Results.BadRequest(new { message = "Refresh token is required." });
         var container = await GetContainerAsync(ct);
         if (container is null) return StorageUnavailable();
+        ct.ThrowIfCancellationRequested();
 
         var tokenHash = HashRefreshToken(request.RefreshToken);
         foreach (var role in new[] { "Rider", "Driver" })
@@ -209,6 +213,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                 while (iterator.HasMoreResults)
                 {
                     var page = await iterator.ReadNextAsync(ct);
+                    ct.ThrowIfCancellationRequested();
                     var candidate = page.FirstOrDefault();
                     if (candidate is null) continue;
                     if (!IsExpectedIdentity(candidate, candidate.Id, role))
@@ -229,6 +234,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                         return StorageUnavailable();
                     }
 
+                    ct.ThrowIfCancellationRequested();
                     var user = readResponse.Resource;
                     if (!IsExpectedIdentity(user, candidate.Id, role) ||
                         !FixedTimeEquals(user.RefreshTokenHash, tokenHash) ||
@@ -277,11 +283,13 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         if (string.IsNullOrWhiteSpace(userId) || role is null) return Results.Unauthorized();
         var container = await GetContainerAsync(ct);
         if (container is null) return StorageUnavailable();
+        ct.ThrowIfCancellationRequested();
 
         var id = $"user:{userId}";
         var partitionKey = new PartitionKey(role);
         for (var attempt = 0; attempt < 3; attempt++)
         {
+            ct.ThrowIfCancellationRequested();
             ItemResponse<IdentityDocument> readResponse;
             try
             {
@@ -297,6 +305,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                 return StorageUnavailable();
             }
 
+            ct.ThrowIfCancellationRequested();
             var user = readResponse.Resource;
             if (!IsExpectedIdentity(user, id, role)) return StorageUnavailable();
             if (string.IsNullOrWhiteSpace(user.RefreshTokenHash) && user.RefreshTokenExpiresAtUtc is null)
