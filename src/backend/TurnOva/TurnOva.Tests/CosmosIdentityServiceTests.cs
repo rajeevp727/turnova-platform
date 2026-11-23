@@ -183,7 +183,7 @@ public sealed class CosmosIdentityServiceTests
         var write = Assert.Single(container.Invocations.Where(invocation => invocation.Method.Name == "ReplaceItemAsync"));
         var updatedUser = Assert.IsType<CosmosIdentityService.IdentityDocument>(write.Arguments[0]);
         Assert.NotEqual(tokenHash, updatedUser.RefreshTokenHash);
-        Assert.True(updatedUser.RefreshTokenExpiresAtUtc > DateTimeOffset.UtcNow);
+        Assert.True(updatedUser.RefreshTokenExpiresAtUtc.HasValue && updatedUser.RefreshTokenExpiresAtUtc.Value > DateTimeOffset.UtcNow);
         Assert.Equal("refresh-success-etag", (write.Arguments[3] as ItemRequestOptions)?.IfMatchEtag);
     }
 
