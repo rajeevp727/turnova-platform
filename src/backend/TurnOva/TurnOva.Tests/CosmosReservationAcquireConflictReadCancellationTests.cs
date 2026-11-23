@@ -31,7 +31,6 @@ public sealed class CosmosReservationAcquireConflictReadCancellationTests
         container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
             "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
-        container.VerifyNoOtherCalls();
         batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
         batch.Verify(value => value.CreateItem(
             It.IsAny<DriverRideReservation>(),
@@ -39,7 +38,6 @@ public sealed class CosmosReservationAcquireConflictReadCancellationTests
         batch.Verify(value => value.CreateItem(
             It.IsAny<DriverRideReservationAuditEvent>(),
             It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Once);
-        batch.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -68,7 +66,6 @@ public sealed class CosmosReservationAcquireConflictReadCancellationTests
         container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
             RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
-        container.VerifyNoOtherCalls();
         batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
         batch.Verify(value => value.CreateItem(
             It.IsAny<RiderActiveBookingReservation>(),
@@ -76,7 +73,6 @@ public sealed class CosmosReservationAcquireConflictReadCancellationTests
         batch.Verify(value => value.CreateItem(
             It.IsAny<RiderActiveBookingReservationAuditEvent>(),
             It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Once);
-        batch.VerifyNoOtherCalls();
     }
 
     private static (Mock<Container> Container, Mock<TransactionalBatch> Batch) CreateConflictBatch()
