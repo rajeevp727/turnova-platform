@@ -206,6 +206,35 @@ public sealed class CosmosQueueResourceContractTests
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
     }
 
+    [Theory]
+    [InlineData("", "hyderabad-central|cab", "driver-1", "Joined")]
+    [InlineData("event-1", "another-zone|cab", "driver-1", "Joined")]
+    [InlineData("event-1", "hyderabad-central|cab", "", "Joined")]
+    [InlineData("event-1", "hyderabad-central|cab", "driver-1", "")]
+    public async Task QueueAuditReadRejectsMalformedOrCrossPartitionQueryItem(
+        string eventId,
+        string zoneServiceKey,
+        string driverId,
+        string eventType)
+    {
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage(new QueueAuditEvent(
+            eventId, zoneServiceKey, driverId, eventType, DateTimeOffset.UtcNow));
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue audit event query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
     private static Mock<Container> CreateQueryContainer<T>(Mock<FeedIterator<T>> iterator)
     {
         var container = new Mock<Container>(MockBehavior.Strict);

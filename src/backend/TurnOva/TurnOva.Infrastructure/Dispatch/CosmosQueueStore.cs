@@ -205,7 +205,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             foreach (var item in page)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                events.Add(RequireAuditQueryItem(item));
+                events.Add(RequireAuditQueryItem(item, key));
             }
         }
         cancellationToken.ThrowIfCancellationRequested();
@@ -242,9 +242,21 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         return document;
     }
 
-    private static QueueAuditEvent RequireAuditQueryItem(QueueAuditEvent? auditEvent) =>
-        auditEvent ?? throw new InvalidOperationException(
-            "Cosmos returned an empty queue audit event query item.");
+    private static QueueAuditEvent RequireAuditQueryItem(
+        QueueAuditEvent? auditEvent,
+        string expectedZoneServiceKey)
+    {
+        if (auditEvent is null)
+            throw new InvalidOperationException("Cosmos returned an empty queue audit event query item.");
+
+        if (string.IsNullOrWhiteSpace(auditEvent.EventId) ||
+            string.IsNullOrWhiteSpace(auditEvent.DriverId) ||
+            string.IsNullOrWhiteSpace(auditEvent.EventType) ||
+            !string.Equals(auditEvent.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal))
+            throw new InvalidOperationException("Cosmos returned a malformed queue audit event query item.");
+
+        return auditEvent;
+    }
 
     private static QueueEntryDocument RequireResource(ItemResponse<QueueEntryDocument> response) =>
         response.Resource ?? throw new InvalidOperationException(
