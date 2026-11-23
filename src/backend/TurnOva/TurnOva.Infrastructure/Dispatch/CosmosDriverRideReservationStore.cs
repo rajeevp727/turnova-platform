@@ -68,7 +68,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
-                var currentReservation = RequireResource(current);
+                var currentReservation = RequireResource(current, driverId);
 
                 // Expiry must be reconciled against the authoritative ride state by the API.
                 // Never steal/delete a lease here: doing so could leave an active Negotiating
@@ -97,7 +97,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var current = await container.ReadItemAsync<DriverRideReservation>(
                 driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var currentReservation = RequireResource(current);
+            var currentReservation = RequireResource(current, driverId);
             if (currentReservation.RideId != rideId)
                 return false;
             if (currentReservation.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
@@ -148,7 +148,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var current = await container.ReadItemAsync<DriverRideReservation>(
                 driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var currentReservation = RequireResource(current);
+            var currentReservation = RequireResource(current, driverId);
             if (currentReservation.RideId != rideId)
                 return false;
             if (currentReservation.ExpiresAtUtc == expiresAtUtc)
@@ -193,7 +193,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var current = await container.ReadItemAsync<DriverRideReservation>(
                 driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            return RequireResource(current);
+            return RequireResource(current, driverId);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -224,7 +224,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 foreach (var reservation in page)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    reservations.Add(RequireQueryItem(reservation));
+                    reservations.Add(RequireQueryItem(reservation, batch));
                 }
             }
         }
@@ -250,7 +250,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var current = await container.ReadItemAsync<DriverRideReservation>(
                 driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var currentReservation = RequireResource(current);
+            var currentReservation = RequireResource(current, driverId);
             if (currentReservation.RideId != rideId)
                 return false;
 
@@ -280,13 +280,35 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         }
     }
 
-    private static DriverRideReservation RequireQueryItem(DriverRideReservation? reservation) =>
-        reservation ?? throw new InvalidOperationException(
-            "Cosmos returned an empty driver reservation query item.");
+    private static DriverRideReservation RequireQueryItem(
+        DriverRideReservation? reservation,
+        IReadOnlyCollection<string> expectedDriverIds)
+    {
+        if (reservation is null)
+            throw new InvalidOperationException("Cosmos returned an empty driver reservation query item.");
 
-    private static DriverRideReservation RequireResource(ItemResponse<DriverRideReservation> response) =>
-        response.Resource ?? throw new InvalidOperationException(
+        if (string.IsNullOrWhiteSpace(reservation.DriverId) ||
+            string.IsNullOrWhiteSpace(reservation.RideId) ||
+            !expectedDriverIds.Contains(reservation.DriverId, StringComparer.Ordinal))
+            throw new InvalidOperationException("Cosmos returned a malformed driver reservation query item.");
+
+        return reservation;
+    }
+
+    private static DriverRideReservation RequireResource(
+        ItemResponse<DriverRideReservation> response,
+        string expectedDriverId)
+    {
+        var reservation = response.Resource ?? throw new InvalidOperationException(
             "Cosmos returned an empty driver reservation resource.");
+
+        if (string.IsNullOrWhiteSpace(expectedDriverId) ||
+            !string.Equals(reservation.DriverId, expectedDriverId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(reservation.RideId))
+            throw new InvalidOperationException("Cosmos returned a malformed driver reservation resource.");
+
+        return reservation;
+    }
 
     private static bool IsReservationWriteConflict(TransactionalBatchResponse batch) =>
         batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed;
