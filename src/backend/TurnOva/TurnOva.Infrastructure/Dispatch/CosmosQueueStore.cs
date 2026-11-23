@@ -73,6 +73,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             var current = await queueContainer.ReadItemAsync<QueueEntryDocument>(
                 driverId, new PartitionKey(key), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            _ = RequireResource(current);
 
             // A leave must not delete a queue entry that was replaced or rejoined after
             // this read. Without an observed ETag, fail closed rather than issuing an
@@ -110,9 +111,9 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(
                 driverId, new PartitionKey(key), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            var document = RequireResource(response);
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
                 return false;
-            var document = response.Resource;
             document.JoinedAt = DateTimeOffset.UtcNow;
             document.Sequence = document.JoinedAt.UtcTicks;
             var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.MovedToBack);
@@ -143,7 +144,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         {
             var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(driverId, new PartitionKey(key), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var document = response.Resource;
+            var document = RequireResource(response);
             if (document.LastRotationOfferId == offerId) return true;
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
                 return false;
@@ -208,6 +209,10 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         string? reasonCategory = null) =>
         new(Guid.NewGuid().ToString("N"), zoneServiceKey, driverId, eventType,
             DateTimeOffset.UtcNow, offerId, traceId, reasonCategory);
+
+    private static QueueEntryDocument RequireResource(ItemResponse<QueueEntryDocument> response) =>
+        response.Resource ?? throw new InvalidOperationException(
+            "Cosmos returned an empty queue entry resource.");
 
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";

@@ -14,7 +14,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
         {
             var response = await container.ReadItemAsync<RideOfferState>(rideId, new PartitionKey(rideId), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            return response.Resource with { ETag = response.ETag };
+            return RequireResource(response) with { ETag = response.ETag };
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -60,7 +60,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                 cancellationToken.ThrowIfCancellationRequested();
                 var response = await container.ReadItemAsync<RideOfferState>(item.RideId, new PartitionKey(item.RideId), cancellationToken: cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                results.Add(response.Resource with { ETag = response.ETag });
+                results.Add(RequireResource(response) with { ETag = response.ETag });
                 if (results.Count >= maxItems) break;
             }
         }
@@ -87,13 +87,17 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                 cancellationToken.ThrowIfCancellationRequested();
                 var response = await container.ReadItemAsync<RideOfferState>(item.RideId, new PartitionKey(item.RideId), cancellationToken: cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                results.Add(response.Resource with { ETag = response.ETag });
+                results.Add(RequireResource(response) with { ETag = response.ETag });
                 if (results.Count >= maxItems) break;
             }
         }
         cancellationToken.ThrowIfCancellationRequested();
         return results;
     }
+
+    private static RideOfferState RequireResource(ItemResponse<RideOfferState> response) =>
+        response.Resource ?? throw new InvalidOperationException(
+            "Cosmos returned an empty ride offer resource.");
 
     public async Task<bool> TryCreateAsync(RideOfferState state, CancellationToken cancellationToken = default)
     {
