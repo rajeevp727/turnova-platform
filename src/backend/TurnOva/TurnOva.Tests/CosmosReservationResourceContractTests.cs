@@ -63,6 +63,9 @@ public sealed class CosmosReservationResourceContractTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new CosmosDriverRideReservationStore(container.Object).TryReleaseAsync("driver-1", "ride-1"));
 
+        container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
         container.VerifyNoOtherCalls();
     }
@@ -81,6 +84,9 @@ public sealed class CosmosReservationResourceContractTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new CosmosRiderActiveBookingReservationStore(container.Object).TryReleaseAsync("rider-1", "ride-1"));
 
+        container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+            RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
         container.VerifyNoOtherCalls();
     }
