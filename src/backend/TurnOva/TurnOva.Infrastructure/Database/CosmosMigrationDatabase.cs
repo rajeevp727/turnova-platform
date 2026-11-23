@@ -28,7 +28,9 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
         if (defaultTimeToLive.HasValue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var current = await response.Container.ReadContainerAsync(cancellationToken: cancellationToken);
+            var container = response.Container ?? throw new InvalidOperationException(
+                "Cosmos returned an empty container handle for TTL configuration.");
+            var current = await container.ReadContainerAsync(cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var currentProperties = current.Resource ?? throw new InvalidOperationException(
                 "Cosmos returned an empty container resource for TTL configuration.");
@@ -41,7 +43,7 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
             {
                 currentProperties.DefaultTimeToLive = defaultTimeToLive;
                 cancellationToken.ThrowIfCancellationRequested();
-                await response.Container.ReplaceContainerAsync(
+                await container.ReplaceContainerAsync(
                     currentProperties,
                     cancellationToken: cancellationToken);
             }
