@@ -10,6 +10,7 @@
 - **Strict acceptance:** **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Production readiness is not established.
 - **External gates:** live Cosmos transaction/partition/ETag contention/multi-instance/restart; production JWT key, Cosmos credentials and non-container API hosting; existing-account migration and profile-edit product decision; shared rate limiting/trusted proxy; approved dispatch zones/radius/location freshness/negotiation lifetime; maps/routing and SignalR/call/chat/push providers; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
 - **Next exact action:** continue API-only safe persistence/auth/privacy/contract work on PR #200; obtain independent human approval. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider. Do not advance parked mobile PRs.
+- [Run 112 handoff](handoffs/2026-11-23-run-112.md).
 
 ## Run 111 — Cosmos identity container bootstrap integrity and cancellation (2026-11-23)
 
