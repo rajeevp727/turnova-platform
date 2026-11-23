@@ -92,9 +92,9 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             batch.CreateItem(user);
             ct.ThrowIfCancellationRequested();
             using var response = await batch.ExecuteAsync(ct);
-            ct.ThrowIfCancellationRequested();
             if (!response.IsSuccessStatusCode)
             {
+                ct.ThrowIfCancellationRequested();
                 return response.StatusCode == System.Net.HttpStatusCode.Conflict
                     ? Results.Conflict(new { message = "An account with this email already exists for this app." })
                     : StorageUnavailable();
