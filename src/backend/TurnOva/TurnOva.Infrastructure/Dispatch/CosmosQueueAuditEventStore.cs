@@ -1,5 +1,6 @@
 using Microsoft.Azure.Cosmos;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Infrastructure.Dispatch;
 
@@ -37,10 +38,12 @@ internal sealed class CosmosQueueAuditEventStore(Container container) : IQueueAu
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var response = await container.ReadItemAsync<QueueAuditEvent>(
-                eventId,
-                new PartitionKey(partitionKey),
-                cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<QueueAuditEvent>(
+                    eventId,
+                    new PartitionKey(partitionKey),
+                    cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var auditEvent = response.Resource ?? throw new InvalidOperationException(
                 "Cosmos returned an empty queue audit event resource.");
