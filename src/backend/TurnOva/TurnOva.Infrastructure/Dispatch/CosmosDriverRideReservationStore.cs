@@ -59,9 +59,9 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 try
                 {
                     current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
-                () => container.ReadItemAsync<DriverRideReservation>(
-                    driverId, new PartitionKey(driverId), cancellationToken: cancellationToken),
-                cancellationToken);
+                        () => container.ReadItemAsync<DriverRideReservation>(
+                            driverId, new PartitionKey(driverId), cancellationToken: cancellationToken),
+                        cancellationToken);
                 }
                 catch (CosmosException missing) when (missing.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {

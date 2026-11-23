@@ -65,7 +65,7 @@ public sealed class CosmosReservationReadCancellationPrecedenceTests
     public async Task DriverQueryPageCancellationTakesPrecedenceOverProviderFailure()
     {
         using var cancellation = new CancellationTokenSource();
-        var iterator = new Mock<FeedIterator<DriverRideReservation>>(MockBehavior.Strict);
+        var iterator = new Mock<FeedIterator<DriverRideReservation>>();
         iterator.Setup(value => value.HasMoreResults).Returns(true);
         iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
             .Returns(() =>
