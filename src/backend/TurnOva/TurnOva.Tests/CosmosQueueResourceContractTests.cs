@@ -43,6 +43,70 @@ public sealed class CosmosQueueResourceContractTests
         VerifyReadOnly(container, response);
     }
 
+    [Theory]
+    [InlineData("remove")]
+    [InlineData("rotate")]
+    [InlineData("rotate-once")]
+    public async Task QueueMutationRejectsResourceForDifferentDriverBeforeStartingWrite(string operation)
+    {
+        var (container, response) = CreateResourceRead(new CosmosQueueStore.QueueEntryDocument
+        {
+            Id = "different-driver",
+            DriverId = "different-driver",
+            ZoneId = "hyderabad-central",
+            ServiceClass = "cab",
+            ZoneServiceKey = "hyderabad-central|cab",
+            JoinedAt = DateTimeOffset.UtcNow,
+            Sequence = 1,
+            IsEligible = true
+        });
+        var store = new CosmosQueueStore(container.Object);
+        Func<Task<bool>> action = operation switch
+        {
+            "remove" => () => store.RemoveAsync(
+                "driver-1", "hyderabad-central", "cab", CancellationToken.None),
+            "rotate" => () => store.MoveToBackAsync(
+                "driver-1", "hyderabad-central", "cab", CancellationToken.None),
+            "rotate-once" => () => store.MoveToBackOnceAsync(
+                "driver-1", "hyderabad-central", "cab", "offer-1", CancellationToken.None),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await action());
+
+        Assert.Equal("Cosmos returned a malformed queue entry resource.", exception.Message);
+        VerifyReadOnly(container, response);
+    }
+
+    [Theory]
+    [InlineData("hyderabad-north", "cab", "hyderabad-north|cab")]
+    [InlineData("hyderabad-central", "bike", "hyderabad-central|bike")]
+    [InlineData("hyderabad-central", "cab", "another-zone|cab")]
+    public async Task QueueRotationRejectsResourceFromAnotherPartitionBeforeStartingReplaceBatch(
+        string zoneId,
+        string serviceClass,
+        string zoneServiceKey)
+    {
+        var (container, response) = CreateResourceRead(new CosmosQueueStore.QueueEntryDocument
+        {
+            Id = "driver-1",
+            DriverId = "driver-1",
+            ZoneId = zoneId,
+            ServiceClass = serviceClass,
+            ZoneServiceKey = zoneServiceKey,
+            JoinedAt = DateTimeOffset.UtcNow,
+            Sequence = 1,
+            IsEligible = true
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).MoveToBackAsync(
+                "driver-1", "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue entry resource.", exception.Message);
+        VerifyReadOnly(container, response);
+    }
+
     [Fact]
     public async Task QueueEligibilityReturnsValidatedCabQueueEntry()
     {
@@ -253,6 +317,20 @@ public sealed class CosmosQueueResourceContractTests
             .Setup(value => value.GetEnumerator())
             .Returns(() => items.AsEnumerable().GetEnumerator());
         return page;
+    }
+
+    private static (Mock<Container> Container, Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>> Response)
+        CreateResourceRead(CosmosQueueStore.QueueEntryDocument resource)
+    {
+        var response = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(resource);
+        response.SetupGet(value => value.ETag).Returns("observed-queue-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        return (container, response);
     }
 
     private static (Mock<Container> Container, Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>> Response)

@@ -79,7 +79,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             var current = await queueContainer.ReadItemAsync<QueueEntryDocument>(
                 driverId, new PartitionKey(key), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            _ = RequireResource(current);
+            _ = RequireResource(current, driverId, key);
 
             // A leave must not delete a queue entry that was replaced or rejoined after
             // this read. Without an observed ETag, fail closed rather than issuing an
@@ -117,7 +117,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(
                 driverId, new PartitionKey(key), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var document = RequireResource(response);
+            var document = RequireResource(response, driverId, key);
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
                 return false;
             document.JoinedAt = DateTimeOffset.UtcNow;
@@ -258,9 +258,26 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         return auditEvent;
     }
 
-    private static QueueEntryDocument RequireResource(ItemResponse<QueueEntryDocument> response) =>
-        response.Resource ?? throw new InvalidOperationException(
+    private static QueueEntryDocument RequireResource(
+        ItemResponse<QueueEntryDocument> response,
+        string expectedDriverId,
+        string expectedZoneServiceKey)
+    {
+        var document = response.Resource ?? throw new InvalidOperationException(
             "Cosmos returned an empty queue entry resource.");
+
+        if (string.IsNullOrWhiteSpace(document.Id) ||
+            string.IsNullOrWhiteSpace(document.DriverId) ||
+            !string.Equals(document.Id, expectedDriverId, StringComparison.Ordinal) ||
+            !string.Equals(document.DriverId, expectedDriverId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(document.ZoneId) ||
+            string.IsNullOrWhiteSpace(document.ServiceClass) ||
+            !string.Equals(document.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal) ||
+            !string.Equals(QueueKey(document.ZoneId, document.ServiceClass), expectedZoneServiceKey, StringComparison.Ordinal))
+            throw new InvalidOperationException("Cosmos returned a malformed queue entry resource.");
+
+        return document;
+    }
 
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
