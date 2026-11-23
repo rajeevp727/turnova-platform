@@ -154,6 +154,40 @@ public sealed class CosmosIdentityServiceTests
     }
 
     [Fact]
+    public async Task RefreshUsesObservedEtagAndPersistsANewRefreshTokenHash()
+    {
+        const string refreshToken = "refresh-token-success-test";
+        var tokenHash = HashRefreshToken(refreshToken);
+        var user = CreateIdentity(refreshTokenHash: tokenHash);
+        var iterator = CreateQueryIterator(user);
+        var read = CreateItemResponse(user, "refresh-success-etag");
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "refresh-success-etag"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+        var service = CreateService(container.Object);
+
+        var result = await service.RefreshAsync(new CosmosRefreshRequest(refreshToken), CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status200OK, GetStatusCode(result));
+        var write = Assert.Single(container.Invocations.Where(invocation => invocation.Method.Name == "ReplaceItemAsync"));
+        var updatedUser = Assert.IsType<CosmosIdentityService.IdentityDocument>(write.Arguments[0]);
+        Assert.NotEqual(tokenHash, updatedUser.RefreshTokenHash);
+        Assert.True(updatedUser.RefreshTokenExpiresAtUtc > DateTimeOffset.UtcNow);
+        Assert.Equal("refresh-success-etag", (write.Arguments[3] as ItemRequestOptions)?.IfMatchEtag);
+    }
+
+    [Fact]
     public async Task RefreshRejectsAStaleConcurrentRotationUsingTheObservedEtag()
     {
         const string refreshToken = "refresh-token-for-concurrency-test";
