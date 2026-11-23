@@ -15,7 +15,8 @@ Last updated: 2026-11-24 (Run 115)
 - Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
 - Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
 - Source/test head: `da294bd06835c8ce1494a3bd6338de19e9e5dcb7`; exact-head API-only CI [#45256999918](https://github.com/rajeevp727/turnova-platform/actions/runs/45256999918) passed **1,243/1,243 backend tests**, Release build (0 warnings/0 errors), native non-container Linux x64 publish/verifier. Artifact [14857769673](https://github.com/rajeevp727/turnova-platform/actions/runs/45256999918/artifacts/14857769673), 17,015,320 bytes, SHA-256 `8c7ba46ca4a6817dd0d433d6d95e73b815197289e60fe7688246ca01bdba2b8f`.
-- Source/test branch comparison at this checkpoint: 863 ahead / 0 behind main; GitHub reports mergeable. The 173-file diff contains no mobile paths or Docker/container files. The documentation sync in this run must pass its own exact-head API-only CI before merge consideration.
+- Documentation-bearing head: `bb63e9bca0e5191d85e107b4a43e94d808e93d95`; exact-head API-only CI [#45257892556](https://github.com/rajeevp727/turnova-platform/actions/runs/45257892556) also passed 1,243/1,243 tests, Release build (0 warnings/0 errors), native non-container publish/verifier; artifact [14859416923](https://github.com/rajeevp727/turnova-platform/actions/runs/45257892556/artifacts/14859416923), 17,015,317 bytes, SHA-256 `724ad1e0b2813eb0b7cbee972839134c3bb2b848d1f71b3bedb9da5f1a95b979`.
+- Source/test branch comparison: 863 ahead / 0 behind main, 173 files. Documentation-bearing PR head `bb63e9bca0e5191d85e107b4a43e94d808e93d95`: 864 ahead / 0 behind, 174 files; GitHub reports mergeable. Both diffs contain no mobile paths or Docker/container files. The documentation-bearing head passed its own exact-head API-only CI.
 - PR #200 has three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. Never self-approve or bypass protection. Do not begin Android until an independent review, permitted merge and fresh main/API phase-exit audit are complete.
 - PRs #196/#198/#205/#206 remain Draft/parked. PR #204 is trusted-LAN Android cleartext configuration only, not Android completion evidence.
 - Main phase metadata is stale (`api=complete`, `android=in_progress`); PR #200 branch metadata remains API `in_progress`, Android/iOS `not_started`.
@@ -33,7 +34,7 @@ Last updated: 2026-11-24 (Run 115)
 
 - Strict acceptance: **0/19 Verified**, 16 In Progress, 3 Blocked (DISPATCH-01, DRIVER-04, SUPPORT-01).
 - This is not an implementation percentage. Substantial in-scope engineering exists and is tested, but full acceptance evidence remains incomplete.
-- No 19-row acceptance status changed in Run 114. Production readiness and live Cosmos/provider validation are not established.
+- No 19-row acceptance status changed in Run 115. Production readiness and live Cosmos/provider validation are not established.
 
 ## External gates
 
@@ -46,8 +47,8 @@ Last updated: 2026-11-24 (Run 115)
 
 ## Next exact action
 
-1. Keep API as the active phase; verify exact-head CI for the documentation-bearing PR #200 head following source/test head `253c7e364ebf4146e229ddfcc7793bc89aa92e51`.
-2. Obtain independent human review/approval. Merge only when repository policy permits.
+1. Keep API as the active phase; the documentation-bearing head `bb63e9bca0e5191d85e107b4a43e94d808e93d95` passed exact-head API-only CI [#45257892556](https://github.com/rajeevp727/turnova-platform/actions/runs/45257892556). Continue API-only write-path cancellation, auth/authorization, privacy, persistence and contract audits.
+2. Obtain independent human review/approval for PR #200. Merge only when repository policy permits and all final-head checks are green.
 3. Re-read main and perform a fresh API phase-exit audit before Android Rider.
 4. Complete Android Rider, Android Driver, iOS Rider and iOS Driver strictly in that order.
 
