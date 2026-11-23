@@ -44,15 +44,19 @@ public sealed class CosmosQueueResourceContractTests
     }
 
     [Theory]
-    [InlineData("remove")]
-    [InlineData("rotate")]
-    [InlineData("rotate-once")]
-    public async Task QueueMutationRejectsResourceForDifferentDriverBeforeStartingWrite(string operation)
+    [InlineData("remove", "different-driver", "driver-1")]
+    [InlineData("remove", "driver-1", "different-driver")]
+    [InlineData("rotate", "different-driver", "driver-1")]
+    [InlineData("rotate", "driver-1", "different-driver")]
+    [InlineData("rotate-once", "different-driver", "driver-1")]
+    [InlineData("rotate-once", "driver-1", "different-driver")]
+    public async Task QueueMutationRejectsResourceWhenDocumentIdOrDriverIdDoesNotMatchBeforeStartingWrite(
+        string operation, string documentId, string resourceDriverId)
     {
         var (container, response) = CreateResourceRead(new CosmosQueueStore.QueueEntryDocument
         {
-            Id = "different-driver",
-            DriverId = "different-driver",
+            Id = documentId,
+            DriverId = resourceDriverId,
             ZoneId = "hyderabad-central",
             ServiceClass = "cab",
             ZoneServiceKey = "hyderabad-central|cab",
