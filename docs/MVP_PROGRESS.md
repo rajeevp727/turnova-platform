@@ -24,8 +24,9 @@
 
 - Live main: `c9280eec23dd4fb5fab06b11e24d2a619b489235`.
 - Sole ready feature PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
-- Current source/test head: `48d476e2cfdf81c69693b6ce99022b31e1ed3b8a`; exact-head API-only CI passed as recorded above.
-- Live compare: 748 commits ahead / 2 behind main; merge base `4061357c095debbc31fc5027a7bff27bd8b06265`. The two main-only commits remain the weekly-build workflow and PR #204's trusted-LAN Android app configuration. Do not merge unrelated mobile configuration into the API PR solely to synchronize.
+- Source/test head: `48d476e2cfdf81c69693b6ce99022b31e1ed3b8a`; exact-head API-only CI [#45133278455](https://github.com/rajeevp727/turnova-platform/actions/runs/45133278455) passed as recorded above.
+- Current documentation/handoff head: `1eb4eeac45debba2264b8a09caf9c518b2a81454`; exact-head API-only CI [#45133946707](https://github.com/rajeevp727/turnova-platform/actions/runs/45133946707) also passed **1,328/1,328 tests**, Release build 0 warnings/0 errors, native non-container publish/verifier and artifact [14798698718](https://github.com/rajeevp727/turnova-platform/actions/runs/45133946707/artifacts/14798698718) (17,011,081 bytes; ZIP SHA-256 `29aed04f7faded6877add276b5113199fccdb975d243d458b08ef9887b3765bb`).
+- Live compare: 749 commits ahead / 2 behind main; merge base `4061357c095debbc31fc5027a7bff27bd8b06265`. The two main-only commits remain the weekly-build workflow and PR #204's trusted-LAN Android app configuration. Do not merge unrelated mobile configuration into the API PR solely to synchronize.
 - PR #200 is open, non-draft, mergeable and unmerged. Three recorded reviews are owner-authored COMMENTED; **0 independent approvals** and 0 unresolved review threads. Never self-approve, bypass protections or merge without independent human approval and repository permission.
 - PRs #196/#198/#205/#206 remain Draft/parked. PR #204 is configuration-only, not Android completion evidence. PR #197's historical merge without independent human approval remains disclosed.
 - The PR branch phase file is API `in_progress`, Android/iOS `not_started`. Main's phase file remains stale (`api=complete`, `android=in_progress`) and does not authorize mobile work.
