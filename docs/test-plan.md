@@ -4677,3 +4677,14 @@ The single-item Cosmos queue-audit adapter must observe cancellation before I/O,
 
 **Evidence:** source/test head [`bc537ce60da2505e664e8e2d96941afcc5a834a8`](https://github.com/rajeevp727/turnova-platform/commit/bc537ce60da2505e664e8e2d96941afcc5a834a8) passed API-only CI [#45083933104](https://github.com/rajeevp727/turnova-platform/actions/runs/45083933104): 1,278/1,278 backend tests (0 failed, 0 skipped), .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14777354888](https://github.com/rajeevp727/turnova-platform/actions/runs/45083933104/artifacts/14777354888) is 17,009,263 bytes; ZIP SHA-256 `df15f31dfa777524bf5a777ac7df967511c946433396a9f387d62096d1f755a7`. Live Cosmos iterator/disposal, ETag, partition, multi-instance and restart behavior remain external validation.
 
+
+## COSMOS-STORE-033..036 — active reservation resource integrity
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| COSMOS-STORE-033 | Driver reservation point read returns HTTP success with a null resource | Treat the persisted reservation as malformed; throw a generic storage-integrity failure rather than reporting no active Driver reservation | `CosmosReservationResourceContractTests.DriverActiveReadRejectsNullResourceInsteadOfReportingNoReservation` | P0 |
+| COSMOS-STORE-034 | Rider active-booking reservation point read returns HTTP success with a null resource | Treat the persisted reservation as malformed; throw a generic storage-integrity failure rather than reporting no active Rider booking | `CosmosReservationResourceContractTests.RiderActiveReadRejectsNullResourceInsteadOfReportingNoReservation` | P0 |
+| COSMOS-STORE-035 | Driver reservation release reads a null resource | Fail before creating a transactional delete/audit batch; preserve the unknown reservation record | `CosmosReservationResourceContractTests.DriverReleaseRejectsNullResourceBeforeStartingDeleteBatch` | P0 |
+| COSMOS-STORE-036 | Rider active-booking reservation release reads a null resource | Fail before creating a transactional delete/audit batch; preserve the unknown reservation record | `CosmosReservationResourceContractTests.RiderReleaseRejectsNullResourceBeforeStartingDeleteBatch` | P0 |
+
+Both reservation adapters apply the same null-resource guard to acquire-conflict read-back, promotion, expiry change, active read and release. A successful Cosmos HTTP response with no deserialized resource is not equivalent to a 404/missing reservation: treating it as absent could misstate availability. No reservation is deleted or overwritten on this malformed response. Live Cosmos response/deserialization and multi-instance behaviour remain external validation.
