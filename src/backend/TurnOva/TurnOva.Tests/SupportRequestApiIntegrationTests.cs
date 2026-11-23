@@ -339,8 +339,8 @@ public sealed class SupportRequestApiIntegrationTests
         var endpoints = factory.Services.GetServices<EndpointDataSource>()
             .SelectMany(source => source.Endpoints)
             .OfType<RouteEndpoint>();
-        var endpoint = Assert.Single(endpoints.Where(candidate =>
-            string.Equals(candidate.RoutePattern.RawText, "/api/v1/support/requests", StringComparison.Ordinal)));
+        var endpoint = Assert.Single(endpoints, candidate =>
+            string.Equals(candidate.RoutePattern.RawText, "/api/v1/support/requests", StringComparison.Ordinal));
 
         var limit = endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>();
         Assert.NotNull(limit);

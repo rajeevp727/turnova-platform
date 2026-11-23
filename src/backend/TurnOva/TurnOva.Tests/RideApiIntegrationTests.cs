@@ -182,9 +182,9 @@ public sealed partial class RideApiIntegrationTests
 
         using var unauthorizedAttempt = await rider.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
         Assert.Equal(HttpStatusCode.Forbidden, unauthorizedAttempt.StatusCode);
-        Assert.Empty((await queueStore.GetAuditEventsAsync(
-            "hyderabad-central", "cab", CancellationToken.None))
-            .Where(item => item.EventType == QueueAuditEventTypes.DispatchException));
+        Assert.DoesNotContain(
+            await queueStore.GetAuditEventsAsync("hyderabad-central", "cab", CancellationToken.None),
+            item => item.EventType == QueueAuditEventTypes.DispatchException);
 
         queueStore.FailNextRead();
         using var response = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
@@ -199,8 +199,8 @@ public sealed partial class RideApiIntegrationTests
 
         var auditEvents = await queueStore.GetAuditEventsAsync(
             "hyderabad-central", "cab", CancellationToken.None);
-        var audit = Assert.Single(auditEvents.Where(item =>
-            item.EventType == QueueAuditEventTypes.DispatchException));
+        var audit = Assert.Single(auditEvents, item =>
+            item.EventType == QueueAuditEventTypes.DispatchException);
         Assert.Equal("hyderabad-central|cab", audit.ZoneServiceKey);
         Assert.Equal(driverId, audit.DriverId);
         Assert.Equal(traceId, audit.TraceId);
@@ -500,7 +500,7 @@ public sealed partial class RideApiIntegrationTests
         var updated = profiles["driver-selfie-preserve-latest"];
         Assert.Null(updated.ProfilePhotoBase64);
         Assert.NotNull(updated.ProfilePhotoStorageReference);
-        Assert.True(updated.ProfilePhotoStorageReference.StartsWith("drvmedia_", StringComparison.Ordinal));
+        Assert.StartsWith("drvmedia_", updated.ProfilePhotoStorageReference!, StringComparison.Ordinal);
         var responseProfile = await response.Content.ReadFromJsonAsync<DriverOnboardingProfile>();
         Assert.Equal("/9j/4AAQSkZJRg==", responseProfile?.ProfilePhotoBase64);
         Assert.Equal("Pending", updated.ProfilePhotoApprovalStatus);
@@ -816,8 +816,8 @@ public sealed partial class RideApiIntegrationTests
         Assert.Empty(advancer.AdvancedRideIds);
 
         var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
-        Assert.Empty(ledger.Values.Where(item =>
-            item.DriverId == riderId && item.ActivityType == "Rejected"));
+        Assert.DoesNotContain(ledger.Values, item =>
+            item.DriverId == riderId && item.ActivityType == "Rejected");
     }
 
     [Fact]
@@ -1532,7 +1532,7 @@ public sealed partial class RideApiIntegrationTests
             .GetActiveAsync("legacy-active-rider"));
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("legacy-active-new-driver"));
-        Assert.Single(rides.Values.Where(ride => ride.RiderId == "legacy-active-rider"));
+        Assert.Single(rides.Values, ride => ride.RiderId == "legacy-active-rider");
     }
 
     [Fact]
@@ -2325,7 +2325,7 @@ public sealed partial class RideApiIntegrationTests
             new { unionId = newUnionId, reason = "Contact operator@example.com" });
         Assert.Equal(HttpStatusCode.BadRequest, transfer.StatusCode);
         Assert.Equal(originalAssignment, assignments[driverId]);
-        Assert.Empty(audit.Values.Where(item => item.DriverId == driverId));
+        Assert.DoesNotContain(audit.Values, item => item.DriverId == driverId);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>().HasActiveAsync(driverId));
 
         // Older stored free text is not echoed to UnionManager member projections.
@@ -2465,8 +2465,8 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, repeatedApproval.StatusCode);
         Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
         Assert.Equal(unionId, profiles[driverId].ProfilePhotoApprovedByUnionId);
-        var approvalAudit = Assert.Single(unionAudit.Values.Where(item =>
-            item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion"));
+        var approvalAudit = Assert.Single(unionAudit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion");
         Assert.Equal("union-manager-review", approvalAudit.Actor);
 
         using var discoveryAfterApproval = await rider.GetAsync(
@@ -3034,8 +3034,8 @@ public sealed partial class RideApiIntegrationTests
             $"/api/v1/ops/drivers/{driverId}/union-assignment",
             new { unionId = newUnionId, reason = "Driver moved to the new Cab union." });
         Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
-        var transferAudit = Assert.Single(auditStore.Values.Where(item =>
-            item.DriverId == driverId && item.EventType == "Transferred"));
+        var transferAudit = Assert.Single(auditStore.Values, item =>
+            item.DriverId == driverId && item.EventType == "Transferred");
         Assert.Equal("Operations", transferAudit.Actor);
 
         var transferredProfile = profiles[driverId];
@@ -3264,7 +3264,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal("Requested", stillAvailable.Status);
 
         var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
-        Assert.Single(ledger.Values.Where(item => item.DriverId == "driver-decline-test" && item.ActivityType == "Rejected"));
+        Assert.Single(ledger.Values, item => item.DriverId == "driver-decline-test" && item.ActivityType == "Rejected");
     }
 
 
@@ -3741,8 +3741,8 @@ public sealed partial class RideApiIntegrationTests
             firstDriver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null),
             secondDriver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null));
 
-        Assert.Single(results.Where(response => response.StatusCode == HttpStatusCode.OK));
-        Assert.Single(results.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        Assert.Single(results, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(results, response => response.StatusCode == HttpStatusCode.Conflict);
     }
 
     [Fact]
@@ -5649,8 +5649,8 @@ public sealed partial class RideApiIntegrationTests
         using var requestB = CreateSelectedBookingRequest("selected-key-b", "selected-shared-driver",
             "selected-shared-union", "KPHB", "Madhapur", []);
         var responses = await Task.WhenAll(riderA.SendAsync(requestA), riderB.SendAsync(requestB));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Created));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
         var created = responses.Single(response => response.StatusCode == HttpStatusCode.Created);
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var rideId = createdJson.RootElement.GetProperty("rideId").GetString()!;

@@ -150,8 +150,8 @@ public sealed class DispatchExceptionAuditWriterTests
                 "driver-actor-2", "zone-a", "cab", "trace-reused",
                 QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None)));
 
-        Assert.Single(outcomes.Where(exception => exception is null));
-        Assert.IsType<InvalidOperationException>(Assert.Single(outcomes.Where(exception => exception is not null)));
+        Assert.Single(outcomes, exception => exception is null);
+        Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, exception => exception is not null));
         Assert.Equal(2, store.CreateAttempts);
         Assert.Equal(1, store.ReadCount);
         var canonical = Assert.Single(store.Events);

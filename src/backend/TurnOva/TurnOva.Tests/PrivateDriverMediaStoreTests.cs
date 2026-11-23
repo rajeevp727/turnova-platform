@@ -15,7 +15,7 @@ public sealed class PrivateDriverMediaStoreTests
             "driver-a", "DrivingLicence", "application/pdf", content, CancellationToken.None);
 
         Assert.NotNull(upload);
-        Assert.True(upload.Reference.StartsWith("drvmedia_", StringComparison.Ordinal));
+        Assert.StartsWith("drvmedia_", upload.Reference, StringComparison.Ordinal);
         Assert.False(upload.Reference.Contains("driver-a", StringComparison.Ordinal));
         Assert.Equal("Clean", upload.ScanStatus);
         Assert.True(await store.IsOwnedAndCleanAsync(

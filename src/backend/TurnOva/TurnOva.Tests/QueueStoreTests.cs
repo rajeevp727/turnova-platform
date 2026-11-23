@@ -67,7 +67,7 @@ public sealed class QueueStoreTests
             }
         }));
 
-        Assert.Single(attempts.Where(succeeded => succeeded));
+        Assert.Single(attempts, succeeded => succeeded);
         var queue = await store.GetEligibleAsync("zone-a", "auto", CancellationToken.None);
         Assert.Single(queue);
         Assert.Equal("driver-concurrent-join", queue[0].DriverId);
@@ -188,10 +188,10 @@ public sealed class QueueStoreTests
         var events = await store.GetAuditEventsAsync("zone-a", "auto", CancellationToken.None);
         Assert.Equal(5, events.Count);
         Assert.Equal(2, events.Count(item => item.EventType == QueueAuditEventTypes.Joined));
-        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.RotatedToBack));
-        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.Left));
-        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.MovedToBack));
-        Assert.Equal("offer-1", Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.RotatedToBack)).OfferId);
+        Assert.Single(events, item => item.EventType == QueueAuditEventTypes.RotatedToBack);
+        Assert.Single(events, item => item.EventType == QueueAuditEventTypes.Left);
+        Assert.Single(events, item => item.EventType == QueueAuditEventTypes.MovedToBack);
+        Assert.Equal("offer-1", Assert.Single(events, item => item.EventType == QueueAuditEventTypes.RotatedToBack).OfferId);
         Assert.All(events, item => Assert.Equal("zone-a|auto", item.ZoneServiceKey));
         Assert.DoesNotContain(events, item => item.DriverId == "driver-c");
         Assert.DoesNotContain(events, item => item.EventType == QueueAuditEventTypes.DispatchException);

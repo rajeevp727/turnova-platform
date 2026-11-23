@@ -30,7 +30,7 @@ public sealed partial class RideApiIntegrationTests
         var reference = body.RootElement.GetProperty("storageReference").GetString();
         Assert.NotNull(reference);
         var mediaReference = reference!;
-        Assert.True(mediaReference.StartsWith("drvmedia_", StringComparison.Ordinal));
+        Assert.StartsWith("drvmedia_", mediaReference, StringComparison.Ordinal);
         Assert.False(mediaReference.Contains("private-media-owner", StringComparison.Ordinal));
         Assert.Equal("Clean", body.RootElement.GetProperty("scanStatus").GetString());
 
@@ -104,7 +104,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Null(saved.ProfilePhotoBase64);
         Assert.Equal(ownerSelfie, saved.ProfilePhotoStorageReference);
         Assert.All(saved.Documents, document =>
-            Assert.True(document.StorageReference.StartsWith("drvmedia_", StringComparison.Ordinal)));
+            Assert.StartsWith("drvmedia_", document.StorageReference, StringComparison.Ordinal)));
 
         var ownProfile = await owner.GetFromJsonAsync<DriverOnboardingProfile>("/api/v1/driver/onboarding/me");
         Assert.NotNull(ownProfile);
