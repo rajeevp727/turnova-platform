@@ -86,7 +86,7 @@ public sealed class CosmosReservationAcquireConflictReadCancellationTests
         var operation = new Mock<TransactionalBatchOperationResult>(MockBehavior.Strict);
         operation.SetupGet(value => value.StatusCode).Returns(HttpStatusCode.Conflict);
 
-        var response = new Mock<TransactionalBatchResponse>(MockBehavior.Strict);
+        var response = new Mock<TransactionalBatchResponse>();
         response.SetupGet(value => value.IsSuccessStatusCode).Returns(false);
         response.Setup(value => value[0]).Returns(operation.Object);
 
