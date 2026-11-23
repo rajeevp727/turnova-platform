@@ -510,7 +510,6 @@ export default function App() {
   const themePicker = <View style={styles.themePicker} accessibilityRole="radiogroup" accessibilityLabel="App theme">
     {(["system", "light", "dark"] as const).map(option => <Pressable key={option} testID={`rider-theme-${option}`} {...getRiderThemeOptionProps(option,themePreference===option)} onPress={() => selectTheme(option)} style={[styles.themeOption, themePreference === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, themePreference === option && styles.themeOptionTextSelected]}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</Text></Pressable>)}
   </View>;
-  const authSubmitDisabled=loading||!email.trim()||!password;
   const authSubmitDisabled=loading||!email.trim()||!password||(mode==="register"&&!name.trim());
   if(loading&&!user)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}} accessibilityLabel="Restoring your Rider session"/></SafeAreaView>;
   if(!user)return <SafeAreaView style={styles.safe}>
