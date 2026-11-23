@@ -10,7 +10,29 @@ namespace TurnOva.Infrastructure.Database;
 /// </summary>
 public static class CosmosReadResponseGuard
 {
-    public static T RequireResource<T>(
+    public static async Task<T> AwaitWithCancellationPrecedenceAsync<T>(
+            Func<Task<T>> operation,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+            cancellationToken.ThrowIfCancellationRequested();
+    
+            try
+            {
+                var result = await operation();
+                cancellationToken.ThrowIfCancellationRequested();
+                return result;
+            }
+            catch
+            {
+                // A provider failure can race request cancellation. Preserve cancellation
+                // semantics instead of leaking a stale Cosmos/provider error to the caller.
+                cancellationToken.ThrowIfCancellationRequested();
+                throw;
+            }
+        }
+    
+            public static T RequireResource<T>(
         T? resource,
         Func<T, bool> identityMatches,
         string resourceDescription)

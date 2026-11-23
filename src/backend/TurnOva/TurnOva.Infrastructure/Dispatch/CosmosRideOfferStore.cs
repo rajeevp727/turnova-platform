@@ -12,7 +12,10 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var response = await container.ReadItemAsync<RideOfferState>(rideId, new PartitionKey(rideId), cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<RideOfferState>(
+                    rideId, new PartitionKey(rideId), cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             return RequireResource(response, rideId) with { ETag = response.ETag };
         }
@@ -33,7 +36,9 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
         while (iterator.HasMoreResults)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var page = await iterator.ReadNextAsync(cancellationToken);
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             foreach (var item in page)
             {
@@ -61,14 +66,18 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
         while (iterator.HasMoreResults && results.Count < maxItems)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var page = await iterator.ReadNextAsync(cancellationToken);
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             foreach (var item in page)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var candidate = RequireQueryItem(item);
-                var response = await container.ReadItemAsync<RideOfferState>(
-                    candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken);
+                var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<RideOfferState>(
+                        candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken),
+                    cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 results.Add(RequireResource(response, candidate.RideId, candidate.DriverId) with { ETag = response.ETag });
                 if (results.Count >= maxItems) break;
@@ -90,14 +99,18 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
         while (iterator.HasMoreResults && results.Count < maxItems)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var page = await iterator.ReadNextAsync(cancellationToken);
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             foreach (var item in page)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var candidate = RequireQueryItem(item);
-                var response = await container.ReadItemAsync<RideOfferState>(
-                    candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken);
+                var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<RideOfferState>(
+                        candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken),
+                    cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 results.Add(RequireResource(response, candidate.RideId, candidate.DriverId) with { ETag = response.ETag });
                 if (results.Count >= maxItems) break;

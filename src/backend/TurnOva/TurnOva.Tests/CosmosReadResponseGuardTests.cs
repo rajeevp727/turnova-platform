@@ -8,6 +8,44 @@ namespace TurnOva.Tests;
 
 public sealed class CosmosReadResponseGuardTests
 {
+    [Fact]
+    public async Task AwaitWithCancellationPrecedenceReturnsSuccessfulProviderResult()
+    {
+        var result = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => Task.FromResult("provider-result"),
+            CancellationToken.None);
+
+        Assert.Equal("provider-result", result);
+    }
+
+    [Fact]
+    public async Task AwaitWithCancellationPrecedencePrefersCancellationOverProviderFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () =>
+                {
+                    cancellation.Cancel();
+                    return Task.FromException<string>(Unavailable());
+                },
+                cancellation.Token));
+    }
+
+    [Fact]
+    public async Task AwaitWithCancellationPrecedencePropagatesProviderFailureWhenNotCancelled()
+    {
+        var exception = Unavailable();
+
+        var actual = await Assert.ThrowsAsync<CosmosException>(() =>
+            CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => Task.FromException<string>(exception),
+                CancellationToken.None));
+
+        Assert.Same(exception, actual);
+    }
+
     private const string UnionId = "union-read-guard";
     private const string DriverId = "driver-read-guard";
 

@@ -242,6 +242,97 @@ public sealed class CosmosRideOfferCancellationTests
             .TryReplaceAsync(state, "observed-etag", replaceCancellation.Token));
     }
 
+    [Fact]
+    public async Task GetByRideCancellationTakesPrecedenceOverOtherProviderFailure()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<RideOfferState>(
+                "ride-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<RideOfferState>>(Unavailable());
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).GetByRideAsync("ride-1", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            "ride-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetPendingForDriverCancellationTakesPrecedenceOverQueryProviderFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var page = CreatePage<RideOfferState>([]);
+        var iterator = CreateIterator(page, () =>
+        {
+            cancellation.Cancel();
+            return Task.FromException<FeedResponse<RideOfferState>>(Unavailable());
+        });
+        var container = CreateQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).GetPendingForDriverAsync("driver-1", cancellation.Token));
+
+        container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetExpiredCancellationTakesPrecedenceOverHydratedPointReadProviderFailure()
+    {
+        var state = CreateState();
+        var page = CreatePage([state]);
+        var iterator = CreateIterator(page);
+        var container = CreateQueryContainer(iterator);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<RideOfferState>(
+                state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<RideOfferState>>(Unavailable());
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).GetExpiredAsync(
+                DateTimeOffset.UtcNow, 1, cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetPendingNotificationsCancellationTakesPrecedenceOverHydratedPointReadProviderFailure()
+    {
+        var state = CreateState();
+        var page = CreatePage([state]);
+        var iterator = CreateIterator(page);
+        var container = CreateQueryContainer(iterator);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<RideOfferState>(
+                state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<RideOfferState>>(Unavailable());
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).GetPendingNotificationsAsync(1, cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static Mock<Container> CreateQueryContainer(Mock<FeedIterator<RideOfferState>> iterator)
     {
         var container = new Mock<Container>(MockBehavior.Strict);
@@ -278,6 +369,9 @@ public sealed class CosmosRideOfferCancellationTests
         response.SetupGet(value => value.ETag).Returns("observed-etag");
         return response;
     }
+
+    private static CosmosException Unavailable() =>
+        new("Cosmos is unavailable.", HttpStatusCode.ServiceUnavailable, 0, "ride-offer-cancellation-test", 0);
 
     private static RideOfferState CreateState()
     {
