@@ -7,7 +7,11 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace TurnOva.API;
 
-public sealed class CosmosIdentityService(CosmosClient? cosmosClient, IConfiguration configuration)
+public sealed record CosmosRegisterRequest(string Email, string Password, string? Name);
+public sealed record CosmosLoginRequest(string Email, string Password);
+public sealed record CosmosRefreshRequest(string? RefreshToken);
+
+public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, IConfiguration? configuration = null)
 {
     private const string DatabaseNameDefault = "TurnOvaDb";
     private const string ContainerName = "TurnOvaUsers";
@@ -39,7 +43,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient, IConfigura
         public string DocumentType { get; init; } = "email-reservation";
     }
 
-    public async Task<IResult> RegisterAsync(string role, PasswordRegisterRequest request, CancellationToken ct)
+    public async Task<IResult> RegisterAsync(string role, CosmosRegisterRequest request, CancellationToken ct)
     {
         var normalizedRole = NormalizeRole(role);
         if (normalizedRole is null) return Results.NotFound();
@@ -103,7 +107,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient, IConfigura
         return Results.Ok(CreateSession(user, refreshToken));
     }
 
-    public async Task<IResult> LoginAsync(string role, PasswordLoginRequest request, CancellationToken ct)
+    public async Task<IResult> LoginAsync(string role, CosmosLoginRequest request, CancellationToken ct)
     {
         var normalizedRole = NormalizeRole(role);
         if (normalizedRole is null) return Results.NotFound();
@@ -145,7 +149,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient, IConfigura
         return Results.Ok(CreateSession(user, refreshToken));
     }
 
-    public async Task<IResult> RefreshAsync(RefreshTokenRequest? request, CancellationToken ct)
+    public async Task<IResult> RefreshAsync(CosmosRefreshRequest? request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request?.RefreshToken))
             return Results.BadRequest(new { message = "Refresh token is required." });
@@ -218,7 +222,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient, IConfigura
         try
         {
             if (_container is not null) return _container;
-            var database = cosmosClient.GetDatabase(configuration["CosmosDb:DatabaseName"] ?? DatabaseNameDefault);
+            var database = cosmosClient!.GetDatabase(configuration?["CosmosDb:DatabaseName"] ?? DatabaseNameDefault);
             await database.CreateContainerIfNotExistsAsync(new ContainerProperties(ContainerName, "/role"), cancellationToken: ct);
             _container = database.GetContainer(ContainerName);
             return _container;
@@ -229,9 +233,9 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient, IConfigura
 
     private object CreateSession(IdentityDocument user, string refreshToken)
     {
-        var issuer = configuration["Auth:Jwt:Issuer"];
-        var audience = configuration["Auth:Jwt:Audience"];
-        var signingKey = configuration["Auth:Jwt:SigningKey"];
+        var issuer = configuration?["Auth:Jwt:Issuer"];
+        var audience = configuration?["Auth:Jwt:Audience"];
+        var signingKey = configuration?["Auth:Jwt:SigningKey"];
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience) ||
             string.IsNullOrWhiteSpace(signingKey) || Encoding.UTF8.GetByteCount(signingKey) < 32)
             throw new InvalidOperationException("JWT issuer, audience and a signing key of at least 32 bytes must be configured.");
