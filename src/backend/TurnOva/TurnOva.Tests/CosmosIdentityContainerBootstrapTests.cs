@@ -19,8 +19,7 @@ public sealed class CosmosIdentityContainerBootstrapTests
         string? returnedId,
         string returnedPartitionKeyPath)
     {
-        var (service, database, container) = CreateService(
-            CreateResponse(returnedId, returnedPartitionKeyPath, includeContainer: true));
+        var (service, database, container) = CreateService(returnedId, returnedPartitionKeyPath, includeContainer: true);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(
             "rider",
@@ -44,8 +43,7 @@ public sealed class CosmosIdentityContainerBootstrapTests
     [Fact]
     public async Task RegisterRejectsMissingContainerHandleBeforeWriting()
     {
-        var (service, database, container) = CreateService(
-            CreateResponse("TurnOvaUsers", "/role", includeContainer: false));
+        var (service, database, container) = CreateService("TurnOvaUsers", "/role", includeContainer: false);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(
             "rider",
@@ -64,9 +62,7 @@ public sealed class CosmosIdentityContainerBootstrapTests
     [Fact]
     public async Task RegisterUsesValidatedBootstrapResponseContainer()
     {
-        var (service, database, container) = CreateService(
-            CreateResponse("TurnOvaUsers", "/role", includeContainer: true),
-            successfulBatch: true);
+        var (service, database, container) = CreateService("TurnOvaUsers", "/role", includeContainer: true, successfulBatch: true);
 
         var result = await service.RegisterAsync(
             "rider",
@@ -85,10 +81,17 @@ public sealed class CosmosIdentityContainerBootstrapTests
     }
 
     private static (CosmosIdentityService Service, Mock<Database> Database, Mock<Container> Container) CreateService(
-        Mock<ContainerResponse> response,
+        string? returnedId,
+        string returnedPartitionKeyPath,
+        bool includeContainer,
         bool successfulBatch = false)
     {
         var container = new Mock<Container>(MockBehavior.Strict);
+        var response = new Mock<ContainerResponse>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(
+            returnedId is null ? null! : new ContainerProperties(returnedId, returnedPartitionKeyPath));
+        response.SetupGet(value => value.Container).Returns(
+            includeContainer ? container.Object : null!);
         if (successfulBatch)
         {
             var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
@@ -130,17 +133,4 @@ public sealed class CosmosIdentityContainerBootstrapTests
         return (new CosmosIdentityService(client.Object, configuration), database, container);
     }
 
-    private static Mock<ContainerResponse> CreateResponse(
-        string? id,
-        string partitionKeyPath,
-        bool includeContainer)
-    {
-        var container = new Mock<Container>(MockBehavior.Strict);
-        var response = new Mock<ContainerResponse>(MockBehavior.Strict);
-        response.SetupGet(value => value.Resource).Returns(
-            id is null ? null! : new ContainerProperties(id, partitionKeyPath));
-        response.SetupGet(value => value.Container).Returns(
-            includeContainer ? container.Object : null!);
-        return response;
-    }
 }
