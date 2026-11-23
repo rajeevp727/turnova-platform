@@ -405,7 +405,13 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                 "Cosmos returned an empty identity container handle after bootstrap.");
             return _container;
         }
-        catch (CosmosException) { return null; }
+        catch (CosmosException)
+        {
+            // Preserve request cancellation when the SDK surfaces a provider failure
+            // concurrently with an aborted request.
+            ct.ThrowIfCancellationRequested();
+            return null;
+        }
         finally { _containerLock.Release(); }
     }
 
