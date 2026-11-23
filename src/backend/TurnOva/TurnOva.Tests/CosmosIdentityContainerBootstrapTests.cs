@@ -80,6 +80,39 @@ public sealed class CosmosIdentityContainerBootstrapTests
             It.Is<PartitionKey>(key => key.Equals(new PartitionKey("Rider")))), Times.Once);
     }
 
+    [Fact]
+    public async Task RegisterPreservesCancellationWhenContainerBootstrapReturnsCosmosFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var database = new Mock<Database>(MockBehavior.Strict);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<ContainerResponse>(
+                    new CosmosException("request cancelled", HttpStatusCode.RequestTimeout, 0, "auth-bootstrap-test", 0));
+            });
+
+        var client = new Mock<CosmosClient>(MockBehavior.Strict);
+        client.Setup(value => value.GetDatabase("TurnOvaDb")).Returns(database.Object);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Auth:Jwt:Issuer"] = "turnova-auth-tests",
+            ["Auth:Jwt:Audience"] = "turnova-api",
+            ["Auth:Jwt:SigningKey"] = SigningKey
+        }).Build();
+        var service = new CosmosIdentityService(client.Object, configuration);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            cts.Token));
+    }
+
     private static (CosmosIdentityService Service, Mock<Database> Database, Mock<Container> Container) CreateService(
         string? returnedId,
         string returnedPartitionKeyPath,
