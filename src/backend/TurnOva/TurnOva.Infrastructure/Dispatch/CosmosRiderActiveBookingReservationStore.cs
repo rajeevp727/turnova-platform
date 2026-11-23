@@ -38,10 +38,12 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             RiderActiveBookingReservation current;
             try
             {
-                current = RequireResource(await container.ReadItemAsync<RiderActiveBookingReservation>(
-                    RiderActiveBookingReservation.DocumentId,
-                    new PartitionKey(reservation.RiderId),
-                    cancellationToken: cancellationToken), reservation.RiderId);
+                current = RequireResource(await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<RiderActiveBookingReservation>(
+                        RiderActiveBookingReservation.DocumentId,
+                        new PartitionKey(reservation.RiderId),
+                        cancellationToken: cancellationToken),
+                    cancellationToken), reservation.RiderId);
             }
             catch (CosmosException missing) when (missing.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -70,10 +72,12 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var current = await container.ReadItemAsync<RiderActiveBookingReservation>(
-                RiderActiveBookingReservation.DocumentId,
-                new PartitionKey(riderId),
-                cancellationToken: cancellationToken);
+            var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<RiderActiveBookingReservation>(
+                        RiderActiveBookingReservation.DocumentId,
+                        new PartitionKey(riderId),
+                        cancellationToken: cancellationToken),
+                    cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             return RequireResource(current, riderId);
         }
@@ -98,10 +102,12 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             ItemResponse<RiderActiveBookingReservation> current;
             try
             {
-                current = await container.ReadItemAsync<RiderActiveBookingReservation>(
-                    RiderActiveBookingReservation.DocumentId,
-                    new PartitionKey(riderId),
-                    cancellationToken: cancellationToken);
+                current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<RiderActiveBookingReservation>(
+                        RiderActiveBookingReservation.DocumentId,
+                        new PartitionKey(riderId),
+                        cancellationToken: cancellationToken),
+                    cancellationToken);
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -160,10 +166,12 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             ItemResponse<RiderActiveBookingReservation> current;
             try
             {
-                current = await container.ReadItemAsync<RiderActiveBookingReservation>(
-                    RiderActiveBookingReservation.DocumentId,
-                    new PartitionKey(riderId),
-                    cancellationToken: cancellationToken);
+                current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<RiderActiveBookingReservation>(
+                        RiderActiveBookingReservation.DocumentId,
+                        new PartitionKey(riderId),
+                        cancellationToken: cancellationToken),
+                    cancellationToken);
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {

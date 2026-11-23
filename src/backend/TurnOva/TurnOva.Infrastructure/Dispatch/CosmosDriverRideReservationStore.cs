@@ -58,8 +58,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 ItemResponse<DriverRideReservation> current;
                 try
                 {
-                    current = await container.ReadItemAsync<DriverRideReservation>(
-                        driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
+                    current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<DriverRideReservation>(
+                    driverId, new PartitionKey(driverId), cancellationToken: cancellationToken),
+                cancellationToken);
                 }
                 catch (CosmosException missing) when (missing.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
@@ -94,8 +96,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var current = await container.ReadItemAsync<DriverRideReservation>(
-                driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
+            var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<DriverRideReservation>(
+                    driverId, new PartitionKey(driverId), cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var currentReservation = RequireResource(current, driverId);
             if (currentReservation.RideId != rideId)
@@ -145,8 +149,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
 
         try
         {
-            var current = await container.ReadItemAsync<DriverRideReservation>(
-                driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
+            var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<DriverRideReservation>(
+                    driverId, new PartitionKey(driverId), cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var currentReservation = RequireResource(current, driverId);
             if (currentReservation.RideId != rideId)
@@ -190,8 +196,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         {
             // Return expired leases too. The API must expire/reconcile the linked ride
             // before releasing the reservation; the store cannot infer ride lifecycle.
-            var current = await container.ReadItemAsync<DriverRideReservation>(
-                driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
+            var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<DriverRideReservation>(
+                    driverId, new PartitionKey(driverId), cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             return RequireResource(current, driverId);
         }
@@ -219,7 +227,9 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!iterator.HasMoreResults) break;
 
-                var page = await iterator.ReadNextAsync(cancellationToken);
+                var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => iterator.ReadNextAsync(cancellationToken),
+                    cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 foreach (var reservation in page)
                 {
@@ -247,8 +257,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var current = await container.ReadItemAsync<DriverRideReservation>(
-                driverId, new PartitionKey(driverId), cancellationToken: cancellationToken);
+            var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<DriverRideReservation>(
+                    driverId, new PartitionKey(driverId), cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var currentReservation = RequireResource(current, driverId);
             if (currentReservation.RideId != rideId)
