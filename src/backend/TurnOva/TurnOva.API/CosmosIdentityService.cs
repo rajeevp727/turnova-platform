@@ -99,10 +99,12 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
+            ct.ThrowIfCancellationRequested();
             return Results.Conflict(new { message = "An account with this email already exists for this app." });
         }
         catch (CosmosException)
         {
+            ct.ThrowIfCancellationRequested();
             return StorageUnavailable();
         }
 
@@ -139,6 +141,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         }
         catch (CosmosException)
         {
+            ct.ThrowIfCancellationRequested();
             return StorageUnavailable();
         }
 
@@ -155,10 +158,12 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
+            ct.ThrowIfCancellationRequested();
             return InvalidCredentials();
         }
         catch (CosmosException)
         {
+            ct.ThrowIfCancellationRequested();
             return StorageUnavailable();
         }
 
@@ -184,10 +189,12 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
         {
+            ct.ThrowIfCancellationRequested();
             return SessionChanged();
         }
         catch (CosmosException)
         {
+            ct.ThrowIfCancellationRequested();
             return StorageUnavailable();
         }
 
@@ -229,10 +236,12 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                     }
                     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
+                        ct.ThrowIfCancellationRequested();
                         return InvalidRefreshToken();
                     }
                     catch (CosmosException)
                     {
+                        ct.ThrowIfCancellationRequested();
                         return StorageUnavailable();
                     }
 
@@ -259,10 +268,12 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                     }
                     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
                     {
+                        ct.ThrowIfCancellationRequested();
                         return InvalidRefreshToken();
                     }
                     catch (CosmosException)
                     {
+                        ct.ThrowIfCancellationRequested();
                         return StorageUnavailable();
                     }
 
@@ -271,6 +282,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             }
             catch (CosmosException)
             {
+                ct.ThrowIfCancellationRequested();
                 return StorageUnavailable();
             }
         }
@@ -300,10 +312,12 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
+                ct.ThrowIfCancellationRequested();
                 return Results.NoContent();
             }
             catch (CosmosException)
             {
+                ct.ThrowIfCancellationRequested();
                 return StorageUnavailable();
             }
 
@@ -328,12 +342,14 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
             {
+                ct.ThrowIfCancellationRequested();
                 // A concurrent login/refresh changed the document. Re-read and revoke the
                 // latest refresh token rather than reporting logout success on a stale write.
                 continue;
             }
             catch (CosmosException)
             {
+                ct.ThrowIfCancellationRequested();
                 return StorageUnavailable();
             }
         }
