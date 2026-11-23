@@ -32,6 +32,8 @@ The first authentication use also validates the successful `CreateContainerIfNot
 
 Every CosmosException translation path in registration, login, refresh and logout rechecks the request token before returning a conflict, invalid-credential, no-content or storage-unavailable result. If cancellation raced with the provider failure, cancellation propagates and no later read, write or retry is started. Ten deterministic failure-race tests cover registration conflicts/provider failures, login and refresh query/read/ETag failures, and logout point-read failures; an existing regression covers cancellation during logout ETag retry. These are SDK-mock tests, not live Cosmos behavior.
 
+The auth service also checks cancellation after synchronous PBKDF2 work, before executing the registration batch, after login password verification (whether credentials are valid or invalid), and before refresh/logout ETag writes. If a registration batch returns a non-success response while cancellation is signaled, cancellation takes precedence over conflict/503 mapping. A successful transactional response remains authoritative after commit, so a late request cancellation does not turn a committed registration into an apparent failure. Eight deterministic test cases cover these boundaries; exact-head API-only CI [#45240051473](https://github.com/rajeevp727/turnova-platform/actions/runs/45240051473) passed 1,210/1,210 tests.
+
 
 `GET /api/v1/auth/me` is read-only. The PRD does not define editable profile fields, validation or role-specific ownership rules, so no profile-update endpoint is invented; obtain a product decision before adding one.
 
