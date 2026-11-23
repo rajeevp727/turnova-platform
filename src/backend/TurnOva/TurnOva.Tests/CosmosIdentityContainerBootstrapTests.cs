@@ -95,7 +95,7 @@ public sealed class CosmosIdentityContainerBootstrapTests
         if (successfulBatch)
         {
             var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
-            var batchResponse = new Mock<TransactionalBatchResponse>(MockBehavior.Strict);
+            var batchResponse = new Mock<TransactionalBatchResponse>();
             batchResponse.SetupGet(value => value.StatusCode).Returns(HttpStatusCode.OK);
             batchResponse.SetupGet(value => value.IsSuccessStatusCode).Returns(true);
             batch.Setup(value => value.CreateItem(
