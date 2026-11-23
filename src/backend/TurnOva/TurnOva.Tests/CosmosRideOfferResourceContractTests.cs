@@ -1,6 +1,5 @@
 using Microsoft.Azure.Cosmos;
 using Moq;
-using Moq.Protected;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
 
@@ -75,7 +74,7 @@ public sealed class CosmosRideOfferResourceContractTests
             It.IsAny<CancellationToken>()), Times.Never);
         iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
-        iterator.Protected().Verify("Dispose", Times.Once(), true);
+        iterator.Verify(value => value.Dispose(), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -97,7 +96,7 @@ public sealed class CosmosRideOfferResourceContractTests
             It.IsAny<CancellationToken>()), Times.Never);
         iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
-        iterator.Protected().Verify("Dispose", Times.Once(), true);
+        iterator.Verify(value => value.Dispose(), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
