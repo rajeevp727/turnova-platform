@@ -1,7 +1,6 @@
 using System.Net;
 using Microsoft.Azure.Cosmos;
 using Moq;
-using Moq.Protected;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Database;
 
@@ -22,7 +21,7 @@ public sealed class CosmosReadResponseGuardTests
             UnionId,
             () => Task.FromResult(response.Object));
 
-        var result = await CosmosReadResponseGuard.ReadItemAsync(
+        var result = await CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
             container.Object,
             UnionId,
             new PartitionKey(UnionId),
@@ -47,7 +46,7 @@ public sealed class CosmosReadResponseGuardTests
             UnionId,
             () => Task.FromException<ItemResponse<DriverUnion>>(NotFound()));
 
-        var result = await CosmosReadResponseGuard.ReadItemAsync(
+        var result = await CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
             container.Object,
             UnionId,
             new PartitionKey(UnionId),
@@ -71,7 +70,7 @@ public sealed class CosmosReadResponseGuardTests
             () => Task.FromResult(response.Object));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CosmosReadResponseGuard.ReadItemAsync(
+            CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
                 container.Object,
                 UnionId,
                 new PartitionKey(UnionId),
@@ -94,7 +93,7 @@ public sealed class CosmosReadResponseGuardTests
             () => Task.FromResult(response.Object));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CosmosReadResponseGuard.ReadItemAsync(
+            CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
                 container.Object,
                 UnionId,
                 new PartitionKey(UnionId),
@@ -113,7 +112,7 @@ public sealed class CosmosReadResponseGuardTests
         var container = new Mock<Container>(MockBehavior.Strict);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            CosmosReadResponseGuard.ReadItemAsync(
+            CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
                 container.Object,
                 UnionId,
                 new PartitionKey(UnionId),
@@ -138,7 +137,7 @@ public sealed class CosmosReadResponseGuardTests
             });
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            CosmosReadResponseGuard.ReadItemAsync(
+            CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
                 container.Object,
                 UnionId,
                 new PartitionKey(UnionId),
@@ -166,7 +165,7 @@ public sealed class CosmosReadResponseGuardTests
             });
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            CosmosReadResponseGuard.ReadItemAsync(
+            CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
                 container.Object,
                 UnionId,
                 new PartitionKey(UnionId),
@@ -191,7 +190,7 @@ public sealed class CosmosReadResponseGuardTests
             });
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            CosmosReadResponseGuard.ReadItemAsync(
+            CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
                 container.Object,
                 UnionId,
                 new PartitionKey(UnionId),
@@ -211,7 +210,7 @@ public sealed class CosmosReadResponseGuardTests
             () => Task.FromException<ItemResponse<DriverUnion>>(Unavailable()));
 
         await Assert.ThrowsAsync<CosmosException>(() =>
-            CosmosReadResponseGuard.ReadItemAsync(
+            CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
                 container.Object,
                 UnionId,
                 new PartitionKey(UnionId),
@@ -263,7 +262,7 @@ public sealed class CosmosReadResponseGuardTests
             "Union",
             CancellationToken.None);
 
-        Assert.Equal([first, second], results);
+        Assert.Equal(new[] { first, second }, results);
         iterator.Verify(value => value.HasMoreResults, Times.Exactly(3));
         iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Exactly(2));
         iterator.VerifyNoOtherCalls();

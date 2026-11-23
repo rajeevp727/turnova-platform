@@ -635,7 +635,7 @@ async Task<DriverUnion?> FindUnionAsync(string unionId, CancellationToken ct)
             "Union");
     }
 
-    return await CosmosReadResponseGuard.ReadItemAsync(
+    return await CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
         unionContainer,
         unionId,
         new PartitionKey(unionId),
@@ -666,7 +666,7 @@ async Task<DriverUnionAssignment?> FindUnionAssignmentAsync(string driverId, Can
             "Driver Union assignment");
     }
 
-    return await CosmosReadResponseGuard.ReadItemAsync(
+    return await CosmosReadResponseGuard.ReadItemAsync<DriverUnionAssignment>(
         unionAssignmentContainer,
         driverId,
         new PartitionKey(driverId),
@@ -689,7 +689,7 @@ async Task<DriverUnionAuditEvent?> FindUnionAuditEventAsync(string driverId, str
             "Driver Union audit event");
     }
 
-    return await CosmosReadResponseGuard.ReadItemAsync(
+    return await CosmosReadResponseGuard.ReadItemAsync<DriverUnionAuditEvent>(
         unionAuditContainer,
         eventId,
         new PartitionKey(driverId),
