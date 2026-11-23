@@ -80,6 +80,138 @@ public sealed class CosmosRideOfferResourceContractTests
         VerifyNullQueryOnly(container, iterator);
     }
 
+    [Fact]
+    public async Task GetByRideRejectsResourceForDifferentRideId()
+    {
+        const string requestedRideId = "ride-requested";
+        var returnedState = CreateState() with { RideId = "ride-other" };
+        var (container, response) = CreateResourceRead(requestedRideId, returnedState);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosRideOfferStore(container.Object).GetByRideAsync(requestedRideId));
+
+        Assert.Equal("Cosmos returned a malformed ride offer resource.", exception.Message);
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            requestedRideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetPendingForDriverRejectsQueryItemForDifferentDriver()
+    {
+        var state = CreateState() with { DriverId = "driver-2" };
+        var (container, iterator) = CreateQueryWithItem(state);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosRideOfferStore(container.Object).GetPendingForDriverAsync("driver-1"));
+
+        Assert.Equal("Cosmos returned a malformed ride offer query item.", exception.Message);
+        VerifyQueryOnly(container, iterator);
+    }
+
+    [Fact]
+    public async Task GetExpiredRejectsQueryItemWithBlankRideIdBeforeHydrating()
+    {
+        var state = CreateState() with { RideId = " " };
+        var (container, iterator) = CreateQueryWithItem(state);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosRideOfferStore(container.Object).GetExpiredAsync(DateTimeOffset.UtcNow, 1));
+
+        Assert.Equal("Cosmos returned a malformed ride offer query item.", exception.Message);
+        VerifyQueryOnly(container, iterator);
+    }
+
+    [Fact]
+    public async Task GetExpiredRejectsHydratedResourceForDifferentRideId()
+    {
+        var candidate = CreateState();
+        var returnedState = candidate with { RideId = "ride-other" };
+        var (container, iterator, response) = CreateQueryWithResource(candidate, returnedState);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosRideOfferStore(container.Object).GetExpiredAsync(DateTimeOffset.UtcNow, 1));
+
+        Assert.Equal("Cosmos returned a malformed ride offer resource.", exception.Message);
+        VerifyHydratedRead(container, iterator, response, candidate.RideId);
+    }
+
+    [Fact]
+    public async Task GetPendingNotificationsRejectsHydratedResourceForDifferentDriver()
+    {
+        var candidate = CreateState();
+        var returnedState = candidate with { DriverId = "driver-2" };
+        var (container, iterator, response) = CreateQueryWithResource(candidate, returnedState);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosRideOfferStore(container.Object).GetPendingNotificationsAsync(1));
+
+        Assert.Equal("Cosmos returned a malformed ride offer resource.", exception.Message);
+        VerifyHydratedRead(container, iterator, response, candidate.RideId);
+    }
+
+    private static (Mock<Container> Container, Mock<FeedIterator<RideOfferState>> Iterator)
+        CreateQueryWithItem(RideOfferState item)
+    {
+        var page = new Mock<FeedResponse<RideOfferState>>(MockBehavior.Strict);
+        page.As<IEnumerable<RideOfferState>>()
+            .Setup(value => value.GetEnumerator())
+            .Returns(() => new[] { item }.AsEnumerable().GetEnumerator());
+        var iterator = new Mock<FeedIterator<RideOfferState>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
+        iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(page.Object);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<RideOfferState>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        return (container, iterator);
+    }
+
+    private static (Mock<Container> Container, Mock<ItemResponse<RideOfferState>> Response)
+        CreateResourceRead(string requestedRideId, RideOfferState resource)
+    {
+        var response = new Mock<ItemResponse<RideOfferState>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(resource);
+        response.SetupGet(value => value.ETag).Returns("observed-ride-offer-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RideOfferState>(
+                requestedRideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        return (container, response);
+    }
+
+    private static (Mock<Container> Container, Mock<FeedIterator<RideOfferState>> Iterator,
+        Mock<ItemResponse<RideOfferState>> Response) CreateQueryWithResource(
+            RideOfferState candidate,
+            RideOfferState resource)
+    {
+        var (container, iterator) = CreateQueryWithItem(candidate);
+        var (unusedContainer, response) = CreateResourceRead(candidate.RideId, resource);
+        container.Setup(value => value.ReadItemAsync<RideOfferState>(
+                candidate.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        return (container, iterator, response);
+    }
+
+    private static void VerifyQueryOnly(
+        Mock<Container> container,
+        Mock<FeedIterator<RideOfferState>> iterator)
+    {
+        container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static (Mock<Container> Container, Mock<FeedIterator<RideOfferState>> Iterator)
         CreateQueryWithNullItem()
     {
