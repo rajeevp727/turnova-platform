@@ -343,6 +343,9 @@ public sealed class CosmosRideOfferCancellationTests
 
         container.Verify(value => value.ReadItemAsync<RideOfferState>(
             state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+        iterator.Protected().Verify("Dispose", Times.Once(), true, true);
         container.VerifyNoOtherCalls();
     }
 
