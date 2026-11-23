@@ -1,6 +1,6 @@
 # TurnOva Project Brain — Current Snapshot
 
-**Last updated:** 2026-11-23 (Run 103)
+**Last updated:** 2026-11-23 (Run 104)
 
 ## Product and scope
 
@@ -20,10 +20,11 @@ Unions own approved membership, Cab vehicle/document verification and selfie app
 ## Current platform phase and repository
 
 - API: `in_progress`; Android/iOS: `not_started`.
-- Main: `c9280eec23dd4fb5fab06b11e24d2a619b489235`.
+- Live main: `c9280eec23dd4fb5fab06b11e24d2a619b489235`.
 - Sole active feature PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
-- Latest source/test checkpoint: `6996b81b44b8f371b9e114d132319268950da925`; exact API-only CI [#45125685120](https://github.com/rajeevp727/turnova-platform/actions/runs/45125685120) passed 1,319/1,319 backend tests, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish/verifier and artifact [14795427939](https://github.com/rajeevp727/turnova-platform/actions/runs/45125685120/artifacts/14795427939).
-- Run 103 hardens Driver/Rider reservation resource identity and Driver batch-query ownership; malformed/cross-owner resources fail closed before mutation. No schema, ETag/CAS, lifecycle or FIFO behavior changed.
+- Run 104 hardens Cosmos ride-offer query/point-read identity: requested RideId and candidate DriverId must match hydrated resources; pending-driver query results must belong to the requested Driver. Malformed/blank identity fails closed before an offer is exposed.
+- Source/test head `52a4904548ce7581d4eb3976e1529718c03e6c26`; exact API-only CI [#45128278439](https://github.com/rajeevp727/turnova-platform/actions/runs/45128278439) passed **1,324/1,324 tests**, .NET 10 Release build 0 warnings/errors, native non-container Linux x64 publish/verifier and artifact [14796717309](https://github.com/rajeevp727/turnova-platform/actions/runs/45128278439/artifacts/14796717309). These are mocked Cosmos adapter checks, not live Cosmos evidence.
+- Current documentation sync requires its own exact-head CI; the source/test CI above is not reused for the documentation-bearing commit.
 - PR #200 remains open/non-draft/mergeable/unmerged with three owner-authored COMMENTED reviews, 0 independent approvals and 0 unresolved threads. Do not self-approve or bypass protections.
 - PRs #196/#198/#205/#206 are Draft/parked; PR #204 is Android trusted-LAN configuration only. PR #197's historical merge without independent human approval remains disclosed.
 - Main's phase metadata is stale (API complete/Android in_progress); the active PR branch phase metadata remains API in_progress and Android/iOS not_started. Do not start Android from main's stale metadata.
@@ -32,11 +33,11 @@ Unions own approved membership, Cab vehicle/document verification and selfie app
 
 Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Production readiness is not established.
 
-External gates: live Cosmos ETag/partition/multi-instance/restart and durable Staging/QA; production identity/TriSend/secrets/API hosting/shared rate limiting/trusted proxy; Product-approved dispatch radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device/signing/store/TestFlight evidence.
+External gates: live Cosmos ETag/partition/multi-instance/restart and durable Staging/QA; production identity/TriSend/secrets/API hosting/shared rate limiting/trusted proxy; Product-approved dispatch radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention/deletion; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device/signing/store/TestFlight evidence.
 
 ## Next exact action
 
-Verify the documentation-bearing PR #200 head's API-only CI, continue API-only code/test/docs audit, obtain independent human approval, and merge only when repository policy permits. Re-read main and perform a fresh API phase-exit audit before Android Rider.
+Verify the documentation-bearing PR #200 head's API-only CI, continue API-only source/test/docs audit, obtain independent human approval, and merge only when repository policy permits. Re-read main and perform a fresh API phase-exit audit before Android Rider.
 
 ## Historical project notes
 
