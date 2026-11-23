@@ -75,7 +75,7 @@ public sealed class CosmosReservationResourceContractTests
         container.VerifyNoOtherCalls();
         iterator.Verify(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
-        iterator.VerifyNoOtherCalls();
+        iterator.Verify(value => value.Dispose(), Times.Once);
     }
 
     [Fact]
