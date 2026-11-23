@@ -221,6 +221,8 @@ builder.Services.Configure<DispatchOfferExpiryOptions>(builder.Configuration.Get
 builder.Services.AddHostedService<RideOfferExpiryWorker>();
 builder.Services.AddScoped<QueueService>();
 
+builder.Services.AddSingleton<CosmosIdentityService>();
+
 var app = builder.Build();
 var supportRequestsEnabled = SupportRequestEndpoints.IsEnabledForEnvironment(app.Environment, app.Configuration);
 var supportRetentionTtlSeconds = SupportRequestEndpoints.GetRetentionTtlSeconds(app.Configuration);
@@ -1421,8 +1423,6 @@ app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, Cance
     }
 });
 
-
-builder.Services.AddSingleton<CosmosIdentityService>();
 
 var authGroup = app.MapGroup("/api/v1/auth").WithTags("Authentication");
 authGroup.MapPost("/{role}/register", async (
