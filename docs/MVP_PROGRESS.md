@@ -1,3 +1,18 @@
+## Run 115 — Cosmos read identity and cancellation guard for Union and driver discovery (2026-11-24)
+
+- **Platform phase:** API remains `in_progress`; Android and iOS remain `not_started` for completion work. No mobile implementation or build work was started.
+- **Main / active PR:** main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; sole active feature PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, final source/test head `da294bd06835c8ce1494a3bd6338de19e9e5dcb7`. Compare: **863 commits ahead / 0 behind**; GitHub reports mergeable. The 173-file PR diff contains no mobile paths or container/Docker files.
+- **Audit finding:** Union, assignment, audit, Union-list and Driver-profile point/query reads trusted successful Cosmos responses without consistently checking returned resource identity, and several query/read paths did not recheck cancellation after a successful page or mapped provider failure. Driver discovery also needed an explicit post-query guard for document ID/DriverId, requested zone, Approved status, Online availability and Cab service class.
+- **Implementation:** added `CosmosReadResponseGuard` to fail closed on null or mismatched point-read resources and query rows, while preserving caller cancellation before/after provider operations and page iteration. Applied it to Union point/list reads, Driver-to-Union assignment point/list reads, Union audit point/list reads, Driver profile point reads and eligible Cab discovery query results. In-memory equivalents now validate dictionary-key/resource identity and observe cancellation. Successful writes and persistence state are untouched.
+- **Deterministic evidence:** 24 test cases in `CosmosReadResponseGuardTests` cover valid/missing/null/mismatched point reads, Union assignment/audit/profile identity, multi-page query aggregation, null/mismatched query rows, Cab/zone/approval/availability filters, pre-cancellation, cancellation after success and cancellation racing 404/other provider failures.
+- **Exact-head API-only CI:** [#45256999918](https://github.com/rajeevp727/turnova-platform/actions/runs/45256999918) passed on `da294bd06835c8ce1494a3bd6338de19e9e5dcb7`: **1,243/1,243 backend tests (0 failed, 0 skipped)**; .NET 10 Release build **0 warnings / 0 errors**; native non-container Linux x64 publish; publish-script syntax; verifier (11 negative fixtures plus valid fixture). Artifact [14857769673](https://github.com/rajeevp727/turnova-platform/actions/runs/45256999918/artifacts/14857769673), 17,015,320 bytes, SHA-256 `8c7ba46ca4a6817dd0d433d6d95e73b815197289e60fe7688246ca01bdba2b8f`. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-first gate.
+- **Correction transparency:** intermediate exact-head attempts caught generic type-inference and test-harness verification/fixture issues; the corrections were committed before the successful final-head run above. The final successful run is the evidence of record.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No acceptance row changed; this is not an implementation percentage. Deterministic Cosmos SDK mocks do not establish live Cosmos or production readiness.
+- **Review/phase gate:** PR #200 remains open/non-draft/mergeable with three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved review threads. PRs #196/#198/#205/#206 remain Draft/parked. PR #204 is trusted-LAN Android cleartext configuration only, not Android completion evidence. Main phase metadata remains stale (`api=complete`, `android=in_progress`); PR #200 branch phase metadata remains API `in_progress`, Android/iOS `not_started`.
+- **Historical process exceptions:** PRs #197 and #207 were merged without independent human approval; these remain disclosed exceptions, not approval precedent.
+- **External gates:** live Cosmos transaction/partition/ETag/multi-instance/restart evidence; production JWT/Cosmos credentials and non-container hosting; existing-account migration/profile-edit decisions; shared multi-instance auth rate limiting/trusted proxy; Product-approved dispatch radius/zones/location freshness/negotiation lifetime; maps/routing, SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policies; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next exact action:** verify the documentation-bearing head's own exact-head API-only CI; continue API-only write-path cancellation, auth/authorization, privacy, persistence and contract gap audits; obtain independent human review/approval for PR #200. Merge only when repository policy and explicit human approval permit. Then re-read main and conduct a fresh API phase-exit audit before Android Rider.
+
 ## Run 114 — preserve cancellation across Union Cosmos conflict mappings (2026-11-24)
 
 - **Platform phase:** API remains `in_progress`; Android and iOS remain `not_started` for completion work. No mobile source/build work was started.
@@ -106,41 +121,40 @@
 
 ## Latest engineering checkpoint
 
-**COSMOS-MIG-036..043 — migration History/Lock bootstrap response integrity** is implemented in the active API PR.
-
-- CosmosMigrationRunner now validates both MigrationHistory and MigrationLocks creation responses before lease acquisition or migration execution.
-- Each response must contain a non-null resource whose container ID matches the requested name, whose partition-key path is exactly /id, and a non-null container handle. Null/mismatched resources and missing handles fail closed.
-- Eight deterministic cases cover null resource, wrong ID, wrong partition-key path and missing handle independently for History and Lock containers. Existing cancellation tests now provide correct response metadata and continue to prove cancellation after either create prevents later bootstrap/lease work.
-- Source/test implementation: [e3f7f8a](https://github.com/rajeevp727/turnova-platform/commit/e3f7f8a1cf74f08e9865f451625f4f1e104482ff); compile correction: [8a384a2](https://github.com/rajeevp727/turnova-platform/commit/8a384a2c30866a485f2a5c3158d82de5e05b88bd).
-- Exact-head API-only CI [#45160544999](https://github.com/rajeevp727/turnova-platform/actions/runs/45160544999) passed **1,342/1,342 backend tests (0 failed, 0 skipped)**; .NET 10 Release build **0 warnings / 0 errors**; native non-container Linux x64 publish **44,005,758 bytes**; publish-script syntax; verifier (11 negative fixtures plus valid fixture); artifact [14809629894](https://github.com/rajeevp727/turnova-platform/actions/runs/45160544999/artifacts/14809629894) (**17,011,781 bytes**).
-- Correction transparency: initial CI [#45160375851](https://github.com/rajeevp727/turnova-platform/actions/runs/45160375851) failed compilation because the infrastructure namespace's Database name shadowed the Cosmos SDK type in the new helper. The helper now uses the explicit CosmosDatabase alias; the final exact-head run above passed.
-- These are deterministic Cosmos SDK mock-contract tests, not live Cosmos partition/ETag/multi-instance/restart evidence. No endpoint, schema, reservation, ride-state, FIFO or customer-facing dispatch behavior changed.
+- **Platform phase:** API `in_progress`; Android/iOS `not_started` for completion work.
+- **Main:** `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- **Sole active API PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, current source/test head `da294bd06835c8ce1494a3bd6338de19e9e5dcb7`; 863 ahead / 0 behind main, mergeable, 173 changed files with no mobile paths.
+- **Exact-head API-only CI:** [#45256999918](https://github.com/rajeevp727/turnova-platform/actions/runs/45256999918) passed 1,243/1,243 tests, Release build (0 warnings/0 errors), native non-container Linux x64 publish, script syntax, verifier (11 negative fixtures plus valid fixture), artifact [14857769673](https://github.com/rajeevp727/turnova-platform/actions/runs/45256999918/artifacts/14857769673) (17,015,320 bytes; SHA-256 `8c7ba46ca4a6817dd0d433d6d95e73b815197289e60fe7688246ca01bdba2b8f`).
+- **Engineering:** Cosmos read guard validates non-null/identity-matched point and query resources, preserves cancellation around provider success/failure and paging, and is applied to Union, assignment, audit, Union list, Driver profile and Cab discovery reads. Discovery results are revalidated for Driver identity, zone, Approved/Online status and Cab class. No route/schema or write semantics changed.
+- This is deterministic Cosmos SDK mock evidence, not live Cosmos validation. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-first phase gate.
 
 ## Active repository gate
 
-- Live main: e5366ad58a2f3ff1d39c9c0641fbb74a1d348860.
-- Sole ready feature PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch test/api-nondev-support-readiness-20261120.
-- Source/test correction commit: b3c885b79d4949a63d26b170c27e9abb3e3b9e20. The documentation-bearing branch checkpoint was 03a3e7f1379d1483ac95ab455ff2c4364da9cb4c before the remaining Run 108 doc sync commits; refresh the live ref before acting. Exact-head CI is pending; the last PR CI #45162925132 failed 2/1,345 tests on prior head c9f8801 and the two test-harness assertions were corrected in b3c885b.
-- Compare at Run 108 checkpoint: **775 commits ahead / 6 behind** live main; merge base 4061357c095debbc31fc5027a7bff27bd8b06265; GitHub reports dirty/conflicting. Main-only changes now include PR #207's Cosmos-native auth API and mobile sign-in changes as well as the weekly-build workflow and PR #204 configuration. Resolve Program.cs and AuthApiIntegrationTests.cs deliberately; do not overwrite either side.
-- PR #200 remains open, non-draft and unmerged. Three reviews are owner-authored COMMENTED, with **0 independent approvals** and **0 unresolved threads**. Do not self-approve, bypass protection or merge without independent human approval.
-- PR #207 was merged at 779939d109216b0d7de6e98735b4b92b1d95671f despite zero recorded reviews. Its native auth code is now on main; recorded gaps remain non-transactional registration cleanup, missing ETag concurrency, missing successful persistence/rotation tests and missing public-auth rate limiting. Treat the merge as a historical process exception; continue API-only work.
-- PRs #196/#198/#205/#206 remain Draft/parked. PR #204 is configuration-only, not Android completion evidence. PR #197's historical merge without independent human approval remains disclosed.
-- PR branch phase file: API in_progress; Android/iOS not_started. Main phase metadata remains stale (api=complete, android=in_progress) and must not authorize Android work.
+- PR #200 remains open, non-draft and mergeable. Three reviews are owner-authored COMMENTED; independent approvals: **0**; unresolved review threads: **0**. Never self-approve, bypass protection or merge without the independent approval required by repository policy.
+- PRs #196/#198/#205/#206 remain Draft/parked. PR #204 is trusted-LAN Android HTTP configuration only and does not constitute Android completion evidence.
+- Main `.github/turnova-phase.json` remains stale (`api=complete`, `android=in_progress`); PR #200 branch metadata correctly records API `in_progress`, Android/iOS `not_started`.
+- PRs #197 and #207 were historically merged without independent human approval. Disclose these process exceptions; they are not approval precedent.
 
 ## Strict acceptance accounting
 
-**0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Run 107 adds supplemental API migration-bootstrap integrity evidence only; no 19-row acceptance status changed. This is strict full-evidence accounting, not an implementation percentage and not a statement that nothing is implemented.
+- **Strictly Verified: 0/19.** 16 rows are In Progress; 3 are Blocked: DISPATCH-01, DRIVER-04 and SUPPORT-01.
+- Substantial in-scope engineering and automated evidence exists; 0/19 does not mean nothing is implemented. No row is marked Verified without all acceptance evidence, including external gates.
+- AI-01 remains supplemental and outside the 19-row denominator.
 
 ## Production readiness and external gates
 
-Production readiness is **not established**. Remaining external evidence includes live Cosmos ETag/partition/multi-instance/restart and durable Staging/QA; production identity and account migration decisions, secrets, API hosting, shared auth rate limiting/trusted proxy; Product-approved dispatch radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention/deletion; support/escalation and reconciliation policy; Union legal approval; and later Android/iOS physical-device, signing, store and TestFlight evidence.
+- Live Cosmos partition/ETag/transaction/multi-instance/restart validation; production JWT signing and Cosmos credentials; supported non-container hosting and deployment.
+- Existing TriSend-account migration and single-session/profile-edit product decisions; shared multi-instance auth rate limiting and trusted-proxy configuration.
+- Product-approved dispatch radius/zones, location freshness and negotiation lifetime; maps/routing; SignalR/call/chat/push providers.
+- Private media storage, malware scanning, managed identity, consent and retention; support/escalation and reconciliation policy; Union partnership legal approval.
+- Physical Android/iOS device tests, signing certificates/profiles, store/TestFlight evidence remain later phase gates and must not be started ahead of the API/Android phase exits.
 
 ## Next exact actions
 
-1. Synchronize PR #200 with current main and resolve Program.cs/AuthApiIntegrationTests.cs while preserving API hardening and Cosmos-native auth.
-2. Add deterministic native-auth persistence, rollback, ETag concurrency and auth rate-limit tests; then run exact-head API-only CI, native publish and verifier.
-3. Update API contract, test plan, progress, matrix and phase metadata from actual evidence; obtain independent human approval. Do not self-approve, bypass or merge.
-4. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver.
+1. Verify exact-head API-only CI on the documentation-bearing head.
+2. Continue API-only write-path cancellation, auth/authorization, privacy, persistence and contract audits; keep one active feature PR.
+3. Obtain independent human review/approval for PR #200. Merge only if repository policy permits and all final-head checks are green.
+4. Re-read main and perform a fresh API phase-exit audit after any permitted merge. Only then begin Android Rider, followed by Android Driver, iOS Rider and iOS Driver.
 
 ## Historical run log
 
