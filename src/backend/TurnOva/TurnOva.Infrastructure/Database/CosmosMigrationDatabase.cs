@@ -25,6 +25,13 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
             properties,
             cancellationToken: cancellationToken);
 
+        var createdProperties = response.Resource ?? throw new InvalidOperationException(
+            "Cosmos returned an empty container resource after container creation.");
+        if (!string.Equals(createdProperties.Id, containerName, StringComparison.Ordinal) ||
+            !string.Equals(createdProperties.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "Cosmos returned a container resource that does not match the requested name and partition-key path after container creation.");
+
         if (defaultTimeToLive.HasValue)
         {
             cancellationToken.ThrowIfCancellationRequested();
