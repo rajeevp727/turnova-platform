@@ -1,6 +1,6 @@
 # TurnOva Project Brain — Current Snapshot
 
-**Last updated:** 2026-11-23 (Run 107)
+**Last updated:** 2026-11-23 (Run 108)
 
 ## Product and scope
 
@@ -20,14 +20,14 @@ Unions own approved membership, Cab vehicle/document verification and selfie app
 ## Current platform phase and repository
 
 - API: in_progress; Android/iOS: not_started.
-- Live main: c9280eec23dd4fb5fab06b11e24d2a619b489235.
-- Sole active feature PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch test/api-nondev-support-readiness-20261120, current head 8a384a2c30866a485f2a5c3158d82de5e05b88bd.
+- Live main: e5366ad58a2f3ff1d39c9c0641fbb74a1d348860.
+- Sole active feature PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch test/api-nondev-support-readiness-20261120, current head b3c885b79d4949a63d26b170c27e9abb3e3b9e20. Compare is 769 ahead / 6 behind main and GitHub reports dirty; Program.cs and AuthApiIntegrationTests.cs require deliberate reconciliation.
 - Run 107 validates both Cosmos migration bootstrap responses before lease acquisition: MigrationHistory and MigrationLocks must each return a non-null resource with exact container ID and /id partition-key path, plus a non-null handle. Eight deterministic regressions cover null resource, wrong ID/path and missing handle for both containers.
 - Exact-head API-only CI [#45160544999](https://github.com/rajeevp727/turnova-platform/actions/runs/45160544999) passed **1,342/1,342 backend tests**, Release build 0 warnings/0 errors, native non-container Linux x64 publish 44,005,758 bytes, publish verifier (11 negative fixtures plus valid fixture), and artifact [14809629894](https://github.com/rajeevp727/turnova-platform/actions/runs/45160544999/artifacts/14809629894) (17,011,781 bytes). Initial CI #45160375851 exposed a compile-time namespace/type collision in the new helper; the explicit CosmosDatabase alias correction is in 8a384a2, and the final-head CI passed.
 - These are deterministic SDK mock contracts, not live Cosmos ETag/partition/multi-instance/restart evidence.
-- Current compare: **764 commits ahead / 2 behind** main, merge base 4061357c095debbc31fc5027a7bff27bd8b06265. The two main-only commits are the weekly-build workflow and PR #204's trusted-LAN Android app configuration; do not merge unrelated mobile changes into the API PR.
-- PR #200 remains open/non-draft/mergeable/unmerged. Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. Do not self-approve, bypass protection or merge without independent human approval.
-- PR #207 is Draft/parked because it mixes native Cosmos authentication API work with out-of-sequence mobile changes; recorded review findings include missing successful Cosmos persistence tests, ETag concurrency, atomic registration/cleanup and public-auth rate limiting. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only. PR #197's historical merge without independent human approval remains disclosed.
+- Current compare: **769 commits ahead / 6 behind** main, merge base 4061357c095debbc31fc5027a7bff27bd8b06265. Main includes PR #207's native Cosmos auth API and real sign-in UI as well as earlier workflow/configuration changes. Do not overwrite either PR #200 API hardening or the merged native auth implementation.
+- PR #200 remains open/non-draft/unmerged and is currently dirty. Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. Prior CI #45162925132 failed 2/1,345 tests on c9f8801 due two unverified iterator Dispose calls; test-only correction b3c885b adds protected Dispose verification, but exact-head CI is pending. Do not self-approve, bypass protection or merge without independent human approval.
+- PR #207 was merged at 779939d109216b0d7de6e98735b4b92b1d95671f despite zero recorded reviews; this is a historical process exception. Main CI #45168231027 passed 866/866 backend tests (26 warnings, 0 errors); its Android build/emulator checks do not satisfy Android phase exit. Native-auth API gaps remain: non-transactional registration cleanup, no ETag conditional refresh/login/logout, missing successful persistence/concurrency tests, and no auth-specific public-route rate limit. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only. PR #197's historical merge without independent human approval remains disclosed.
 - PR branch phase file is API in_progress, Android/iOS not_started. Main phase metadata remains stale and must not authorize Android work.
 
 ## Acceptance and external gates
@@ -38,7 +38,7 @@ External gates: live Cosmos ETag/partition/multi-instance/restart and durable St
 
 ## Next exact action
 
-Continue API-only Cosmos persistence/auth/privacy/contract audit. Next inspect CosmosQueueStore rotation reads and CosmosRideOfferStore point reads for null/mismatched successful Resource handling, adding deterministic cases only for confirmed gaps. Keep PR #207 Draft. Obtain independent human approval for PR #200; after a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider.
+Synchronize main into PR #200, deliberately resolving Program.cs and AuthApiIntegrationTests.cs while preserving API hardening and Cosmos-native auth. Add deterministic auth persistence/rollback/ETag concurrency/rate-limit tests, run exact-head API-only CI and native publish/verifier, then obtain independent human approval. After permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider.
 
 ## Historical project notes
 
