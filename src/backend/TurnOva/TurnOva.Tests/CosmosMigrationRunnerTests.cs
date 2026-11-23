@@ -239,7 +239,7 @@ public sealed class CosmosMigrationRunnerTests
                 It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(missing)
-            .ReturnsAsync(Mock.Of<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>());
+            .ReturnsAsync(CreateHistoryResponse("test-counting-migration"));
         var leaseStore = new LeaseLostStore();
         var migration = new CountingMigration();
         var runner = new CosmosMigrationRunner(
@@ -260,6 +260,48 @@ public sealed class CosmosMigrationRunnerTests
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Exactly(2));
         Assert.NotNull(leaseStore.ReleasedLease);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("unexpected-migration")]
+    public async Task SuccessfulHistoryReadRejectsMissingOrMismatchedResourceAndReleasesLease(string? resourceId)
+    {
+        var (client, historyContainer) = CreateCosmosClient();
+        var response = new Mock<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(
+            resourceId is null ? null! : new CosmosMigrationRunner.MigrationHistoryDocument { Id = resourceId });
+        historyContainer.Setup(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+                "test-counting-migration", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        var leaseStore = new LeaseLostStore();
+        var migration = new CountingMigration();
+        var runner = new CosmosMigrationRunner(
+            client,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [migration],
+            CreateCoordinator(leaseStore, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Equal(
+            "Cosmos returned a migration history marker that does not match the requested ID.",
+            exception.Message);
+        Assert.Equal(0, migration.CallCount);
+        historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            "test-counting-migration", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        historyContainer.Verify(container => container.CreateItemAsync(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+        Assert.NotNull(leaseStore.ReleasedLease);
+        Assert.Equal("schema-migrations", leaseStore.ReleasedLease!.Id);
     }
 
     [Fact]
@@ -513,6 +555,15 @@ public sealed class CosmosMigrationRunnerTests
 
     private static TaskCompletionSource NewSignal() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private static ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument> CreateHistoryResponse(
+        string migrationId)
+    {
+        var response = new Mock<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>();
+        response.SetupGet(value => value.Resource).Returns(
+            new CosmosMigrationRunner.MigrationHistoryDocument { Id = migrationId });
+        return response.Object;
+    }
 
     private static (CosmosClient Client, Mock<Container> HistoryContainer) CreateCosmosClient()
     {
