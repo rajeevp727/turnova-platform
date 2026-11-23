@@ -625,9 +625,23 @@ bool IsUnionManagerFor(ClaimsPrincipal user, string unionId) =>
 
 async Task<DriverUnion?> FindUnionAsync(string unionId, CancellationToken ct)
 {
-    if (unionContainer is null) return unions.TryGetValue(unionId, out var value) ? value : null;
-    try { return (await unionContainer.ReadItemAsync<DriverUnion>(unionId, new PartitionKey(unionId), cancellationToken: ct)).Resource; }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+    ct.ThrowIfCancellationRequested();
+    if (unionContainer is null)
+    {
+        if (!unions.TryGetValue(unionId, out var value)) return null;
+        return CosmosReadResponseGuard.RequireResource(
+            value,
+            item => string.Equals(item.UnionId, unionId, StringComparison.Ordinal),
+            "Union");
+    }
+
+    return await CosmosReadResponseGuard.ReadItemAsync(
+        unionContainer,
+        unionId,
+        new PartitionKey(unionId),
+        item => string.Equals(item.UnionId, unionId, StringComparison.Ordinal),
+        "Union",
+        ct);
 }
 
 static string NormalizeUnionCode(string? code) =>
@@ -641,25 +655,48 @@ Task<bool> TryCreateUnionIfAbsentAsync(DriverUnion union, CancellationToken ct) 
 
 async Task<DriverUnionAssignment?> FindUnionAssignmentAsync(string driverId, CancellationToken ct)
 {
-    if (unionAssignmentContainer is null) return unionAssignments.TryGetValue(driverId, out var value) ? value : null;
-    try { return (await unionAssignmentContainer.ReadItemAsync<DriverUnionAssignment>(driverId, new PartitionKey(driverId), cancellationToken: ct)).Resource; }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+    ct.ThrowIfCancellationRequested();
+    if (unionAssignmentContainer is null)
+    {
+        if (!unionAssignments.TryGetValue(driverId, out var value)) return null;
+        return CosmosReadResponseGuard.RequireResource(
+            value,
+            item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(item.UnionId),
+            "Driver Union assignment");
+    }
+
+    return await CosmosReadResponseGuard.ReadItemAsync(
+        unionAssignmentContainer,
+        driverId,
+        new PartitionKey(driverId),
+        item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(item.UnionId),
+        "Driver Union assignment",
+        ct);
 }
 
 async Task<DriverUnionAuditEvent?> FindUnionAuditEventAsync(string driverId, string eventId, CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     if (unionAuditContainer is null)
-        return unionAudit.TryGetValue(driverId + "|" + eventId, out var value) ? value : null;
+    {
+        if (!unionAudit.TryGetValue(driverId + "|" + eventId, out var value)) return null;
+        return CosmosReadResponseGuard.RequireResource(
+            value,
+            item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+                string.Equals(item.EventId, eventId, StringComparison.Ordinal),
+            "Driver Union audit event");
+    }
 
-    try
-    {
-        return (await unionAuditContainer.ReadItemAsync<DriverUnionAuditEvent>(
-            eventId, new PartitionKey(driverId), cancellationToken: ct)).Resource;
-    }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-    {
-        return null;
-    }
+    return await CosmosReadResponseGuard.ReadItemAsync(
+        unionAuditContainer,
+        eventId,
+        new PartitionKey(driverId),
+        item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+            string.Equals(item.EventId, eventId, StringComparison.Ordinal),
+        "Driver Union audit event",
+        ct);
 }
 
 void RecordUnionAuditOutcome(Activity? activity, string? eventType, string outcome)
@@ -946,29 +983,72 @@ async Task<IReadOnlyList<DriverOnboardingProfile>> ListOnlineCabProfilesForDisco
 
 async Task<IReadOnlyList<DriverUnionAssignment>> ListActiveUnionAssignmentsAsync(CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     if (unionAssignmentContainer is null)
-        return unionAssignments.Values.Where(item => item.Status == "Active").ToArray();
+    {
+        var inMemoryResults = new List<DriverUnionAssignment>();
+        foreach (var pair in unionAssignments.ToArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!string.Equals(pair.Value.Status, "Active", StringComparison.Ordinal)) continue;
+            inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
+                pair.Value,
+                item => string.Equals(pair.Key, item.DriverId, StringComparison.Ordinal) &&
+                    !string.IsNullOrWhiteSpace(item.UnionId) &&
+                    string.Equals(item.Status, "Active", StringComparison.Ordinal),
+                "active Driver Union assignment"));
+        }
+
+        return inMemoryResults;
+    }
 
     var query = new QueryDefinition("SELECT * FROM c WHERE c.status = 'Active'");
-    var results = new List<DriverUnionAssignment>();
     using var iterator = unionAssignmentContainer.GetItemQueryIterator<DriverUnionAssignment>(query);
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
-    return results;
+    return await CosmosReadResponseGuard.ReadAllAsync(
+        iterator,
+        item => !string.IsNullOrWhiteSpace(item.DriverId) &&
+            !string.IsNullOrWhiteSpace(item.UnionId) &&
+            string.Equals(item.Status, "Active", StringComparison.Ordinal),
+        "active Driver Union assignment",
+        ct);
 }
 
 async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string driverId, CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     // The current assignment retains the latest event snapshot so an audit write that
     // failed after assignment persistence can be repaired before history is returned.
     var currentAssignment = await FindUnionAssignmentAsync(driverId, ct);
     if (currentAssignment is not null)
         await EnsureUnionAssignmentAuditAsync(currentAssignment, ct);
 
-    if (unionAuditContainer is null) return unionAudit.Values.Where(item => item.DriverId == driverId).OrderByDescending(item => item.OccurredAtUtc).ToArray();
+    if (unionAuditContainer is null)
+    {
+        var inMemoryResults = new List<DriverUnionAuditEvent>();
+        foreach (var pair in unionAudit.ToArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!string.Equals(pair.Value.DriverId, driverId, StringComparison.Ordinal)) continue;
+            inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
+                pair.Value,
+                item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+                    !string.IsNullOrWhiteSpace(item.EventId),
+                "Driver Union audit event"));
+        }
+
+        return inMemoryResults.OrderByDescending(item => item.OccurredAtUtc).ToArray();
+    }
+
     var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId").WithParameter("@driverId", driverId);
-    var results = new List<DriverUnionAuditEvent>();
-    using var iterator = unionAuditContainer.GetItemQueryIterator<DriverUnionAuditEvent>(query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    using var iterator = unionAuditContainer.GetItemQueryIterator<DriverUnionAuditEvent>(
+        query,
+        requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
+    var results = await CosmosReadResponseGuard.ReadAllAsync(
+        iterator,
+        item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(item.EventId),
+        "Driver Union audit event",
+        ct);
     return results.OrderByDescending(item => item.OccurredAtUtc).ToArray();
 }
 
