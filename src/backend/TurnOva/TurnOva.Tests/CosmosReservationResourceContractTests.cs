@@ -1,5 +1,6 @@
 using Microsoft.Azure.Cosmos;
 using Moq;
+using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
 
 namespace TurnOva.Tests;
