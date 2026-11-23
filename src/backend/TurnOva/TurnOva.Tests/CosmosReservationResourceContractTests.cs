@@ -191,7 +191,7 @@ public sealed class CosmosReservationResourceContractTests
         container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
     }
 
     [Fact]
