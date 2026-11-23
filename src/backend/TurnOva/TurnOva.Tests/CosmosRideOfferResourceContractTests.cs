@@ -191,7 +191,9 @@ public sealed class CosmosRideOfferResourceContractTests
             RideOfferState resource)
     {
         var (container, iterator) = CreateQueryWithItem(candidate);
-        var (unusedContainer, response) = CreateResourceRead(candidate.RideId, resource);
+        var response = new Mock<ItemResponse<RideOfferState>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(resource);
+        response.SetupGet(value => value.ETag).Returns("observed-ride-offer-etag");
         container.Setup(value => value.ReadItemAsync<RideOfferState>(
                 candidate.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
