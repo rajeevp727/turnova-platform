@@ -104,7 +104,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Null(saved.ProfilePhotoBase64);
         Assert.Equal(ownerSelfie, saved.ProfilePhotoStorageReference);
         Assert.All(saved.Documents, document =>
-            Assert.StartsWith("drvmedia_", document.StorageReference, StringComparison.Ordinal)));
+            Assert.StartsWith("drvmedia_", document.StorageReference, StringComparison.Ordinal));
 
         var ownProfile = await owner.GetFromJsonAsync<DriverOnboardingProfile>("/api/v1/driver/onboarding/me");
         Assert.NotNull(ownProfile);
