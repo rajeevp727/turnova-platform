@@ -97,7 +97,7 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             !string.IsNullOrWhiteSpace(parameters.ValidAudience) &&
             parameters.IssuerSigningKey is SymmetricSecurityKey signingKey &&
             signingKey.KeySize >= 256;
-    }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.")
+    }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a signing key of at least 32 characters.")
     .ValidateOnStart();
 builder.Services.AddAuthorization();
 if (builder.Environment.IsEnvironment("Testing"))
@@ -174,18 +174,6 @@ if (useCosmos)
 else
 {
     var queueStore = new InMemoryQueueStore();
-    if (builder.Environment.IsDevelopment())
-    {
-        var demoDrivers = new[]
-        {
-            new DriverQueueEntry("DRV-1001", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
-            new DriverQueueEntry("DRV-1002", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
-            new DriverQueueEntry("DRV-1003", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
-        };
-        foreach (var driver in demoDrivers)
-            await queueStore.AddAsync(driver, CancellationToken.None);
-    }
-
     builder.Services.AddSingleton<IQueueStore>(queueStore);
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
@@ -274,19 +262,6 @@ if (app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 app.UseAuthentication();
-// A demo JWT is never accepted by normal authenticated application routes.
-app.Use(async (context, next) =>
-{
-    if (context.User.Identity?.IsAuthenticated == true &&
-        context.User.HasClaim("demo", "true") &&
-        !context.Request.Path.StartsWithSegments("/api/v1/demo"))
-    {
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new { message = "Demo sessions are restricted to demo endpoints." });
-        return;
-    }
-    await next();
-});
 app.UseAuthorization();
 app.UseRateLimiter();
 if (OpenApiEndpointPolicy.IsEnabled(app.Environment.EnvironmentName))
