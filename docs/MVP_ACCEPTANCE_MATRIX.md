@@ -1,3 +1,14 @@
+## Run 108 — current-main reconciliation and iterator-disposal test correction (2026-11-23)
+
+- **Platform phase:** API remains in_progress; Android/iOS remain not_started for completion work. No Android/iOS completion work was started.
+- **Main:** `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`. PR #207 merged native Cosmos auth and real Rider/Driver sign-in at `779939d109216b0d7de6e98735b4b92b1d95671f` despite zero recorded reviews. Main head CI [#45168231027](https://github.com/rajeevp727/turnova-platform/actions/runs/45168231027) passed 866/866 backend tests; Android jobs on main are not Android phase-exit evidence.
+- **PR #200:** current head `b3c885b79d4949a63d26b170c27e9abb3e3b9e20`; compare 769 ahead / 6 behind, merge base `4061357c095debbc31fc5027a7bff27bd8b06265`; GitHub reports dirty. Conflicts are in Program.cs and AuthApiIntegrationTests.cs. Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads.
+- **Test correction:** PR CI [#45162925132](https://github.com/rajeevp727/turnova-platform/actions/runs/45162925132) on prior head `c9f8801` failed 2/1,345 tests due unverified nested `FeedIterator.Dispose(true)` calls; 1,343 passed and Release build succeeded with 0 warnings/0 errors. Test-only commit [`b3c885b`](https://github.com/rajeevp727/turnova-platform/commit/b3c885b79d4949a63d26b170c27e9abb3e3b9e20) adds protected disposal verification to both cases. Exact-head CI on b3c885b is pending; do not claim it passed.
+- **Merged native-auth API gaps:** registration reservation/user creation is non-transactional and cancellation can prevent reservation cleanup; login/refresh/logout lack ETag conditional writes; successful Cosmos auth persistence/rotation/rollback/concurrency tests are missing; public register/login/refresh lack auth-specific rate limiting. Address these in the API phase. Existing TriSend account migration remains an owner/operations decision.
+- Main phase metadata is stale (`api=complete`, `android=in_progress`); PR #200 branch phase metadata remains API in_progress / Android/iOS not_started. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); no row status changed. Production readiness is not established.
+- **Next:** reconcile main into PR #200 with deliberate resolution of the two conflicting files; preserve API hardening and native auth; add deterministic auth persistence/concurrency/rate-limit tests; run exact-head API-only CI and update evidence. Obtain independent human approval; do not self-approve or merge. Do not start Android before API phase exit and fresh main audit.
+- [Run 108 handoff](handoffs/2026-11-23-run-108.md).
+
 ## Run 107 — migration History/Lock bootstrap response integrity (2026-11-23)
 
 - **Platform phase:** API remains in_progress; Android/iOS remain not_started. No mobile completion work, Fleet/Ops Phase 2, Docker/container builds, images, registries or deployments were started.
