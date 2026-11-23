@@ -1,5 +1,7 @@
 "use strict";
 
+const { isStrictIsoTimestampWithOffset } = require("./riderTimestamp");
+
 const SUPPORT_FIELDS = Object.freeze({
   subject: {
     label: "Support request subject",
@@ -76,7 +78,7 @@ function parseRiderSupportRequestResponse(value) {
   const submittedAtUtc = value.submittedAtUtc;
   const replayed = value.replayed;
   if (!requestId || requestId.length > 128 || typeof submittedAtUtc !== "string" ||
-      !Number.isFinite(Date.parse(submittedAtUtc)) || typeof replayed !== "boolean") {
+      !isStrictIsoTimestampWithOffset(submittedAtUtc) || typeof replayed !== "boolean") {
     throw new TypeError("Support service returned an invalid response.");
   }
   return Object.freeze({ requestId, submittedAtUtc, replayed });

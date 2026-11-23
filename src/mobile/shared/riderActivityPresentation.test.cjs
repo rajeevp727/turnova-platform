@@ -6,11 +6,18 @@ const path = require("node:path");
 const test = require("node:test");
 const {
   getRiderAgreementVersionAccessibilityLabel,
+  getRiderRideStatusLabel,
+  isRiderRideAgreementEventValid,
+  isRiderRideLocationTimestampValid,
+  isRiderRideStatusEventValid,
   getRiderAgreementVersionCreatedAtLabel,
   getRiderAgreementVersionRouteLabel,
   getRiderHistoryAccessibilityLabel,
+  getRiderHistoryRequestedAtLabel,
   getRiderRideStatusMessage,
-  isRiderCancellationResponseValid
+  isRiderCancellationResponseValid,
+  normalizeRiderAgreementHistory,
+  shouldApplyRiderAgreementHistoryResponse
 } = require("./riderActivityPresentation.js");
 
 test("Rider Activity status presentation covers the server lifecycle without inventing payment or dispatch outcomes", () => {
@@ -43,6 +50,10 @@ test("Rider negotiation status announces a valid deadline and fails safely for i
     "Your selected driver is negotiating the fare with you. Negotiation deadline is unavailable."
   );
   assert.equal(
+    getRiderRideStatusMessage({ status: "Negotiating", negotiationExpiresAtUtc: "2026-02-30T00:15:00Z" }),
+    "Your selected driver is negotiating the fare with you. Negotiation deadline is unavailable."
+  );
+  assert.equal(
     getRiderRideStatusMessage({ status: "Negotiating", negotiationExpiresAtUtc: null }),
     "Your selected driver is negotiating the fare with you. Negotiation deadline is unavailable."
   );
@@ -60,15 +71,19 @@ test("Rider trip-history accessibility summary includes route, status, passenger
   };
   assert.equal(
     getRiderHistoryAccessibilityLabel(item),
-    "Trip from Nizampet to Gachibowli. Status Completed. 2 passengers. Service class CAB. Requested " +
+    "Trip from Nizampet to Gachibowli. Status COMPLETED. 2 passengers. Service class CAB. Requested " +
       new Date(item.requestedAt).toLocaleString() + ". Reference ride-123."
   );
 });
 
-test("Rider trip-history accessibility summary handles missing display values without crashing", () => {
+test("Rider trip-history accessibility summary handles missing values and singular passenger grammar", () => {
   assert.equal(
     getRiderHistoryAccessibilityLabel({ rideId: "", pickup: "", dropoff: "", passengers: null, serviceClass: "", status: "", requestedAt: "bad-date" }),
-    "Trip from Pickup unavailable to Drop-off unavailable. Status Unavailable. Unknown passengers. Service class UNKNOWN. Requested Date unavailable. Reference Unavailable."
+    "Trip from Pickup unavailable to Drop-off unavailable. Status STATUS UNAVAILABLE. Unknown passengers. Service class UNKNOWN. Requested Date unavailable. Reference Unavailable."
+  );
+  assert.equal(
+    getRiderHistoryAccessibilityLabel({ rideId: "ride-123", pickup: "A", dropoff: "B", passengers: 1, serviceClass: "cab", status: "Completed", requestedAt: "2026-02-30T10:15:00Z" }),
+    "Trip from A to B. Status COMPLETED. 1 passenger. Service class CAB. Requested Date unavailable. Reference ride-123."
   );
 });
 
@@ -107,12 +122,15 @@ test("Rider agreement version route and creation-time helpers fail safely for ma
   const item = { pickup: " ", dropoff: "", stops: [null, 3, "  "], createdAtUtc: "not-a-date" };
   assert.equal(getRiderAgreementVersionRouteLabel(item), "Route: Pickup unavailable to Drop-off unavailable.");
   assert.equal(getRiderAgreementVersionCreatedAtLabel(item), "Creation time unavailable.");
+  assert.equal(getRiderAgreementVersionCreatedAtLabel({ ...item, createdAtUtc: "2026-04-31T10:00:00Z" }), "Creation time unavailable.");
 });
 
-test("Rider cancellation response validation requires the exact ride and a non-empty status", () => {
+test("Rider cancellation response requires the exact ride and Cancelled terminal status", () => {
   assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "Cancelled" }, "ride-123"), true);
-  assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "Requested" }, "ride-123"), true);
-  assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "InProgress" }, "ride-123"), true);
+  assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "Requested" }, "ride-123"), false);
+  assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "InProgress" }, "ride-123"), false);
+  assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "Completed" }, "ride-123"), false);
+  assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "Expired" }, "ride-123"), false);
   assert.equal(isRiderCancellationResponseValid({ rideId: "ride-other", status: "Cancelled" }, "ride-123"), false);
   assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "" }, "ride-123"), false);
   assert.equal(isRiderCancellationResponseValid({ rideId: "ride-123", status: "   " }, "ride-123"), false);
@@ -133,4 +151,289 @@ test("Rider Activity screen wires tested status, agreement, history and cancella
   assert.ok(source.includes("getRiderAgreementVersionCreatedAtLabel(item)"));
   assert.ok(source.includes("accessibilityLabel={getRiderHistoryAccessibilityLabel(item)}"));
   assert.ok(source.includes("isRiderCancellationResponseValid(updated,rideId)"));
+  const cancelStart = source.indexOf("const cancelRide");
+  const cancelEnd = source.indexOf("const requestSelectedDriver", cancelStart);
+  assert.ok(cancelStart >= 0 && cancelEnd > cancelStart);
+  const cancelSource = source.slice(cancelStart, cancelEnd);
+  assert.ok(cancelSource.includes("await loadRideHistory(()=>isCurrent())"));
 });
+
+
+test("Rider lifecycle labels are readable and expose only known lifecycle values", () => {
+  const expected = {
+    Requested: "REQUESTED",
+    Matching: "FINDING DRIVER",
+    Offered: "WAITING FOR DRIVER",
+    Negotiating: "NEGOTIATING",
+    AgreementConfirmed: "AGREEMENT CONFIRMED",
+    Accepted: "DRIVER ACCEPTED",
+    Arrived: "DRIVER ARRIVED",
+    InProgress: "IN PROGRESS",
+    Completed: "COMPLETED",
+    Cancelled: "CANCELLED",
+    Expired: "EXPIRED"
+  };
+  for (const [status, label] of Object.entries(expected)) {
+    assert.equal(getRiderRideStatusLabel(status), label);
+  }
+  assert.equal(getRiderRideStatusLabel("FutureServerStatus"), "STATUS UNAVAILABLE");
+  assert.equal(getRiderRideStatusLabel(""), "STATUS UNAVAILABLE");
+  assert.equal(getRiderRideStatusLabel(null), "STATUS UNAVAILABLE");
+});
+
+test("Rider status events reject malformed identity/status but allow unknown future lifecycle values", () => {
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "InProgress" }, "ride-123"), true);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "FutureServerStatus" }, "ride-123"), true);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-other", status: "Completed" }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "" }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "  " }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed " }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "x".repeat(65) }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed\n" }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed\u0085" }, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid(null, "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid([], "ride-123"), false);
+  assert.equal(isRiderRideStatusEventValid({ rideId: "ride-123", status: "Completed" }, " ride-123"), false);
+});
+
+test("Rider Activity uses safe labels and validates live status events before applying them", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.ok(source.includes("getRiderRideStatusLabel(ride.status)"));
+  assert.ok(source.includes("getRiderRideStatusLabel(item.status)"));
+  assert.ok(source.includes("accessibilityLabel={`Ride status ${getRiderRideStatusLabel(ride.status)}`}"));
+  assert.ok(source.includes("isRiderRideStatusEventValid(update,ride.rideId)"));
+});
+
+test("Rider history accessibility hides unknown raw lifecycle values", () => {
+  const label = getRiderHistoryAccessibilityLabel({
+    rideId: "ride-unknown",
+    pickup: "Pickup",
+    dropoff: "Destination",
+    passengers: 1,
+    serviceClass: "cab",
+    status: "FutureServerStatus",
+    requestedAt: "2026-11-18T10:15:00.000Z"
+  });
+  assert.match(label, /Status STATUS UNAVAILABLE/);
+  assert.doesNotMatch(label, /FutureServerStatus/);
+});
+
+function validRiderAgreementVersion(overrides = {}) {
+  return {
+    rideId: "ride-agreement-123",
+    version: 1,
+    riderId: "private-rider-id",
+    driverId: "private-driver-id",
+    unionId: "private-union-id",
+    amount: 425.5,
+    currency: "INR",
+    pickup: "Nizampet",
+    dropoff: "Gachibowli",
+    stops: ["Miyapur"],
+    proposedBy: "Driver",
+    createdAtUtc: "2026-11-19T00:00:00.000Z",
+    riderConfirmed: false,
+    riderConfirmedAtUtc: null,
+    driverConfirmed: true,
+    driverConfirmedAtUtc: "2026-11-19T00:01:00.000Z",
+    ...overrides
+  };
+}
+
+test("Rider agreement history validates ride identity, immutable versions and projects only public agreement fields", () => {
+  const first = validRiderAgreementVersion();
+  const second = validRiderAgreementVersion({
+    version: 2,
+    amount: 450,
+    proposedBy: "Rider",
+    createdAtUtc: "2026-11-19T00:02:00+00:00",
+    riderConfirmed: true,
+    riderConfirmedAtUtc: "2026-11-19T00:03:00+00:00",
+    driverConfirmed: false,
+    driverConfirmedAtUtc: null
+  });
+  const normalized = normalizeRiderAgreementHistory([first, second], "ride-agreement-123");
+  assert.equal(normalized?.length, 2);
+  assert.equal(normalized?.[1].version, 2);
+  assert.deepEqual(Object.keys(normalized?.[0] ?? {}).sort(), [
+    "amount", "createdAtUtc", "currency", "driverConfirmed",
+    "driverConfirmedAtUtc", "dropoff", "pickup", "proposedBy", "rideId",
+    "riderConfirmed", "riderConfirmedAtUtc", "stops", "version"
+  ]);
+  assert.equal(normalized?.[0].driverConfirmedAtUtc, first.driverConfirmedAtUtc);
+  assert.deepEqual(normalizeRiderAgreementHistory([], "ride-agreement-123"), []);
+});
+
+test("RIDER-AGREEMENT-RESPONSE-001: agreement route snapshots accept the API 250-character text limit", () => {
+  const maximumRouteText = "x".repeat(250);
+  const response = validRiderAgreementVersion({
+    pickup: maximumRouteText,
+    dropoff: maximumRouteText,
+    stops: [maximumRouteText]
+  });
+  const normalized = normalizeRiderAgreementHistory([response], "ride-agreement-123");
+  assert.equal(normalized?.[0].pickup, maximumRouteText);
+  assert.equal(normalized?.[0].dropoff, maximumRouteText);
+  assert.deepEqual(normalized?.[0].stops, [maximumRouteText]);
+  assert.equal(
+    normalizeRiderAgreementHistory([validRiderAgreementVersion({ dropoff: "x".repeat(251) })], "ride-agreement-123"),
+    null
+  );
+});
+
+test("Rider agreement history rejects malformed, cross-ride, duplicate, skipped or out-of-order versions", () => {
+  const valid = validRiderAgreementVersion();
+  const invalid = [
+    null,
+    {},
+    [null],
+    [{ ...valid, rideId: "another-ride" }],
+    [{ ...valid, version: 0 }],
+    [{ ...valid, version: 2 }],
+    [{ ...valid, version: 1 }, { ...valid, version: 1 }],
+    [{ ...valid, version: 1 }, { ...valid, version: 3 }],
+    [{ ...valid, version: 2 }, { ...valid, version: 1 }],
+    [{ ...valid, amount: 0 }],
+    [{ ...valid, amount: 10.123 }],
+    [{ ...valid, currency: "inr" }],
+    [{ ...valid, pickup: " " }],
+    [{ ...valid, pickup: "x".repeat(251) }],
+    [{ ...valid, dropoff: "x".repeat(251) }],
+    [{ ...valid, stops: ["x".repeat(251)] }],
+    [{ ...valid, stops: [""] }],
+    [{ ...valid, stops: new Array(11).fill("Stop") }],
+    [{ ...valid, proposedBy: "System" }]
+  ];
+  for (const response of invalid) assert.equal(normalizeRiderAgreementHistory(response, "ride-agreement-123"), null);
+  assert.equal(normalizeRiderAgreementHistory([valid], " ride-agreement-123"), null);
+});
+
+test("Rider agreement history requires consistent confirmation timestamps after immutable creation", () => {
+  const valid = validRiderAgreementVersion();
+  const invalid = [
+    { ...valid, riderConfirmed: true, riderConfirmedAtUtc: null },
+    { ...valid, riderConfirmed: false, riderConfirmedAtUtc: "2026-11-19T00:01:00Z" },
+    { ...valid, driverConfirmed: true, driverConfirmedAtUtc: null },
+    { ...valid, driverConfirmed: false, driverConfirmedAtUtc: "2026-11-19T00:01:00Z" },
+    { ...valid, createdAtUtc: "2026-11-19T00:00:00" },
+    { ...valid, createdAtUtc: "not-a-date" },
+    { ...valid, createdAtUtc: "2026-02-30T00:00:00Z" },
+    { ...valid, driverConfirmedAtUtc: "2026-04-31T00:01:00Z" },
+    { ...valid, driverConfirmedAtUtc: "2026-11-18T23:59:00Z" }
+  ];
+  for (const item of invalid) assert.equal(normalizeRiderAgreementHistory([item], "ride-agreement-123"), null);
+});
+
+test("Rider agreement history latest-request sequence rejects stale responses", () => {
+  assert.equal(shouldApplyRiderAgreementHistoryResponse(2, 2), true);
+  assert.equal(shouldApplyRiderAgreementHistoryResponse(1, 2), false);
+  assert.equal(shouldApplyRiderAgreementHistoryResponse(0, 2), false);
+});
+
+test("Rider Activity screen validates agreement history and fences stale agreement reads before state updates", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  assert.match(source, /agreementHistoryRequestSequence=useRef\(0\)/);
+  assert.match(source, /normalizeRiderAgreementHistory\(response,rideId\)/);
+  assert.match(source, /shouldApplyRiderAgreementHistoryResponse\(requestSequence,agreementHistoryRequestSequence\.current\)/);
+  assert.match(source, /loadAgreementHistory\(ride\.rideId,\(\)=>active\)/);
+  assert.match(source, /agreementHistoryRequestSequence\.current \+= 1/);
+});
+
+
+test("Rider agreement realtime events require an exact ride identity and object payload", () => {
+  assert.equal(isRiderRideAgreementEventValid({ rideId: "ride-1" }, "ride-1"), true);
+  for (const invalid of [
+    null,
+    [],
+    "ride-1",
+    {},
+    { rideId: "ride-2" },
+    { rideId: " ride-1" },
+    { rideId: "ride-1\n" }
+  ]) {
+    assert.equal(isRiderRideAgreementEventValid(invalid, "ride-1"), false);
+  }
+});
+
+test("RIDER-AGREEMENT-REALTIME-001: SignalR agreement refresh validates and sequences history before state commit", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const eventStart = source.indexOf('connection.on("RideAgreementChanged"');
+  const eventEnd = source.indexOf("connection.onreconnected", eventStart);
+  assert.ok(eventStart >= 0 && eventEnd > eventStart);
+  const eventHandler = source.slice(eventStart, eventEnd);
+  assert.match(eventHandler, /isRiderRideAgreementEventValid\(update,ride\.rideId\)/);
+
+  const refreshStart = source.indexOf("const refreshAgreements=async()=>{");
+  const refreshEnd = source.indexOf("const refreshRiderState", refreshStart);
+  assert.ok(refreshStart >= 0 && refreshEnd > refreshStart);
+  const refresh = source.slice(refreshStart, refreshEnd);
+  const request = refresh.indexOf("apiFetch(");
+  const sequence = refresh.indexOf("shouldApplyRiderAgreementHistoryResponse(");
+  const normalization = refresh.indexOf("normalizeRiderAgreementHistory(response,ride.rideId)");
+  const commit = refresh.indexOf("setAgreementHistory(history)");
+  assert.ok(sequence >= 0 && sequence < request && normalization > request && commit > normalization);
+});
+
+
+test("RIDER-AGREEMENT-RESPONSE-002: rejects impossible calendar dates in immutable agreement timestamps", () => {
+  const valid = validRiderAgreementVersion();
+  for (const item of [
+    { ...valid, createdAtUtc: "2026-11-31T00:00:00Z" },
+    { ...valid, riderConfirmed: true, riderConfirmedAtUtc: "2026-11-31T00:01:00Z" },
+    { ...valid, driverConfirmed: true, driverConfirmedAtUtc: "2026-11-31T00:01:00Z" },
+    { ...valid, createdAtUtc: "2026-11-19T25:00:00Z" },
+    { ...valid, createdAtUtc: "2026-11-19T00:00:00+24:00" }
+  ]) {
+    assert.equal(normalizeRiderAgreementHistory([item], "ride-agreement-123"), null);
+  }
+
+  const leapDay = {
+    ...valid,
+    createdAtUtc: "2024-02-29T00:00:00Z",
+    riderConfirmed: true,
+    riderConfirmedAtUtc: "2024-02-29T00:01:00Z",
+    driverConfirmed: true,
+    driverConfirmedAtUtc: "2024-02-29T00:02:00Z"
+  };
+  assert.ok(normalizeRiderAgreementHistory([leapDay], "ride-agreement-123"));
+});
+
+test("RIDER-HISTORY-010: visible trip-history date uses strict calendar validation", () => {
+  const valid = "2026-11-18T10:15:00.000Z";
+  assert.equal(getRiderHistoryRequestedAtLabel({ requestedAt: valid }), new Date(valid).toLocaleString());
+  assert.equal(getRiderHistoryRequestedAtLabel({ requestedAt: "2026-11-31T10:15:00Z" }), "Date unavailable");
+  assert.equal(getRiderHistoryRequestedAtLabel({ requestedAt: "not-a-date" }), "Date unavailable");
+});
+
+test("RIDER-LOCATION-UI-004: reject impossible or malformed SignalR location timestamps before shared ordering", () => {
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationCapturedAtUtc: "2026-11-19T00:00:00Z",
+    locationUpdatedAt: "2026-11-19T00:00:01Z"
+  }), true);
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationCapturedAtUtc: "2026-11-31T00:00:00Z",
+    locationUpdatedAt: "2026-12-01T00:00:01Z"
+  }), false);
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationUpdatedAt: "2026-11-31T00:00:01Z"
+  }), false);
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationCapturedAtUtc: "2026-11-19T00:00:00+24:00"
+  }), false);
+  assert.equal(isRiderRideLocationTimestampValid({
+    locationCapturedAtUtc: null,
+    locationUpdatedAt: "2026-11-19T00:00:01Z"
+  }), true);
+  assert.equal(isRiderRideLocationTimestampValid(null), false);
+
+  const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
+  const eventStart = source.indexOf('connection.on("DriverLocationUpdated"');
+  const eventEnd = source.indexOf('connection.on("RideStatusChanged"', eventStart);
+  assert.ok(eventStart >= 0 && eventEnd > eventStart);
+  const eventSource = source.slice(eventStart, eventEnd);
+  const timestampGuard = eventSource.indexOf("isRiderRideLocationTimestampValid(update)");
+  const sharedOrdering = eventSource.indexOf("shouldApplyTripLocationUpdate(current,update)");
+  assert.ok(timestampGuard >= 0 && sharedOrdering > timestampGuard);
+  assert.match(source, /getRiderHistoryRequestedAtLabel\(item\)/);
+});
+

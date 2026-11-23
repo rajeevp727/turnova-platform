@@ -1,15 +1,143 @@
 "use strict";
 
+const { isStrictIsoTimestampWithOffset } = require("./riderTimestamp");
 const { agreementConfirmationLabel } = require("./agreementConfirmation");
 const { formatAgreementAmount } = require("./agreementFormatting");
 
-const RIDE_STATUSES = new Set([
-  "Requested", "Matching", "Offered", "Negotiating", "AgreementConfirmed",
-  "Accepted", "Arrived", "InProgress", "Completed", "Cancelled", "Expired"
-]);
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSafeAgreementText(value, maximumLength = 250) {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= maximumLength &&
+    value === value.trim() &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value);
+}
+
+function normalizeAgreementTimestamp(value) {
+  return isSafeAgreementText(value, 64) && isStrictIsoTimestampWithOffset(value)
+    ? value
+    : null;
+}
+
+function normalizeOptionalAgreementTimestamp(value) {
+  if (value === null) return null;
+  return normalizeAgreementTimestamp(value);
+}
+
+function normalizeRiderAgreementHistory(value, expectedRideId) {
+  if (!Array.isArray(value) || !isSafeAgreementText(expectedRideId, 128)) return null;
+  const result = [];
+  let previousVersion = 0;
+
+  for (const item of value) {
+    if (!isRecord(item) ||
+        item.rideId !== expectedRideId ||
+        !Number.isSafeInteger(item.version) ||
+        item.version !== previousVersion + 1 ||
+        !Number.isFinite(item.amount) ||
+        item.amount <= 0 ||
+        Math.abs(item.amount * 100 - Math.round(item.amount * 100)) > 0.000001 ||
+        typeof item.currency !== "string" ||
+        !/^[A-Z]{3}$/.test(item.currency) ||
+        !isSafeAgreementText(item.pickup) ||
+        !isSafeAgreementText(item.dropoff) ||
+        !Array.isArray(item.stops) ||
+        item.stops.length > 10 ||
+        item.stops.some(stop => !isSafeAgreementText(stop)) ||
+        !["Rider", "Driver"].includes(item.proposedBy) ||
+        typeof item.riderConfirmed !== "boolean" ||
+        typeof item.driverConfirmed !== "boolean") return null;
+
+    const createdAtUtc = normalizeAgreementTimestamp(item.createdAtUtc);
+    const riderConfirmedAtUtc = normalizeOptionalAgreementTimestamp(item.riderConfirmedAtUtc);
+    const driverConfirmedAtUtc = normalizeOptionalAgreementTimestamp(item.driverConfirmedAtUtc);
+    if (!createdAtUtc ||
+        (item.riderConfirmedAtUtc !== null && !riderConfirmedAtUtc) ||
+        (item.driverConfirmedAtUtc !== null && !driverConfirmedAtUtc) ||
+        (item.riderConfirmed && !riderConfirmedAtUtc) ||
+        (!item.riderConfirmed && item.riderConfirmedAtUtc !== null) ||
+        (item.driverConfirmed && !driverConfirmedAtUtc) ||
+        (!item.driverConfirmed && item.driverConfirmedAtUtc !== null) ||
+        (riderConfirmedAtUtc && Date.parse(riderConfirmedAtUtc) < Date.parse(createdAtUtc)) ||
+        (driverConfirmedAtUtc && Date.parse(driverConfirmedAtUtc) < Date.parse(createdAtUtc))) return null;
+
+    result.push({
+      rideId: expectedRideId,
+      version: item.version,
+      amount: item.amount,
+      currency: item.currency,
+      pickup: item.pickup,
+      dropoff: item.dropoff,
+      stops: [...item.stops],
+      proposedBy: item.proposedBy,
+      createdAtUtc,
+      riderConfirmed: item.riderConfirmed,
+      riderConfirmedAtUtc,
+      driverConfirmed: item.driverConfirmed,
+      driverConfirmedAtUtc
+    });
+    previousVersion = item.version;
+  }
+
+  return result;
+}
+
+function shouldApplyRiderAgreementHistoryResponse(requestSequence, currentSequence) {
+  return Number.isSafeInteger(requestSequence) &&
+    requestSequence > 0 &&
+    Number.isSafeInteger(currentSequence) &&
+    requestSequence === currentSequence;
+}
 
 function displayText(value, fallback) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+const RIDE_STATUS_LABELS = new Map([
+  ["Requested", "REQUESTED"],
+  ["Matching", "FINDING DRIVER"],
+  ["Offered", "WAITING FOR DRIVER"],
+  ["Negotiating", "NEGOTIATING"],
+  ["AgreementConfirmed", "AGREEMENT CONFIRMED"],
+  ["Accepted", "DRIVER ACCEPTED"],
+  ["Arrived", "DRIVER ARRIVED"],
+  ["InProgress", "IN PROGRESS"],
+  ["Completed", "COMPLETED"],
+  ["Cancelled", "CANCELLED"],
+  ["Expired", "EXPIRED"]
+]);
+
+function getRiderRideStatusLabel(status) {
+  return RIDE_STATUS_LABELS.get(status) ?? "STATUS UNAVAILABLE";
+}
+
+function isRiderRideAgreementEventValid(update, expectedRideId) {
+  return isSafeAgreementText(expectedRideId, 128) &&
+    isRecord(update) &&
+    update.rideId === expectedRideId;
+}
+
+function isRiderRideLocationTimestampValid(update) {
+  return isRecord(update) &&
+    (update.locationCapturedAtUtc === undefined || update.locationCapturedAtUtc === null ||
+      isStrictIsoTimestampWithOffset(update.locationCapturedAtUtc)) &&
+    (update.locationUpdatedAt === undefined || update.locationUpdatedAt === null ||
+      isStrictIsoTimestampWithOffset(update.locationUpdatedAt));
+}
+
+function isRiderRideStatusEventValid(update, expectedRideId) {
+  if (typeof expectedRideId !== "string" || expectedRideId.length === 0 || expectedRideId !== expectedRideId.trim()) return false;
+  if (!update || typeof update !== "object" || Array.isArray(update)) return false;
+  return update.rideId === expectedRideId &&
+    typeof update.status === "string" &&
+    update.status.length > 0 &&
+    update.status.length <= 64 &&
+    update.status === update.status.trim() &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(update.status);
 }
 
 function getRiderRideStatusMessage(ride) {
@@ -21,7 +149,7 @@ function getRiderRideStatusMessage(ride) {
       return "Your ride request is waiting for a Driver response.";
     case "Negotiating": {
       const expiryValue = typeof ride.negotiationExpiresAtUtc === "string" ? ride.negotiationExpiresAtUtc.trim() : "";
-      const expiry = expiryValue ? new Date(expiryValue) : null;
+      const expiry = isStrictIsoTimestampWithOffset(expiryValue) ? new Date(expiryValue) : null;
       const deadline = expiry && Number.isFinite(expiry.getTime())
         ? "Negotiation expires at " + expiry.toLocaleTimeString() + "."
         : "Negotiation deadline is unavailable.";
@@ -46,14 +174,21 @@ function getRiderRideStatusMessage(ride) {
   }
 }
 
+function getRiderHistoryRequestedAtLabel(item) {
+  const requestedAt = isStrictIsoTimestampWithOffset(item?.requestedAt) ? new Date(item.requestedAt) : null;
+  return requestedAt && Number.isFinite(requestedAt.getTime()) ? requestedAt.toLocaleString() : "Date unavailable";
+}
+
 function getRiderHistoryAccessibilityLabel(item) {
-  const requestedAt = typeof item?.requestedAt === "string" ? new Date(item.requestedAt) : null;
-  const requestedAtLabel = requestedAt && Number.isFinite(requestedAt.getTime()) ? requestedAt.toLocaleString() : "Date unavailable";
-  const passengers = Number.isInteger(item?.passengers) && item.passengers >= 0 ? item.passengers : "Unknown";
+  const requestedAtLabel = getRiderHistoryRequestedAtLabel(item);
+  const passengerCount = Number.isInteger(item?.passengers) && item.passengers >= 0 ? item.passengers : null;
+  const passengerLabel = passengerCount === null
+    ? "Unknown passengers"
+    : passengerCount === 1 ? "1 passenger" : passengerCount + " passengers";
   return "Trip from " + displayText(item?.pickup, "Pickup unavailable") +
     " to " + displayText(item?.dropoff, "Drop-off unavailable") +
-    ". Status " + displayText(item?.status, "Unavailable") +
-    ". " + passengers + " passengers. Service class " +
+    ". Status " + getRiderRideStatusLabel(item?.status) +
+    ". " + passengerLabel + ". Service class " +
     displayText(item?.serviceClass, "Unknown").toUpperCase() +
     ". Requested " + requestedAtLabel +
     ". Reference " + displayText(item?.rideId, "Unavailable") + ".";
@@ -70,7 +205,7 @@ function getRiderAgreementVersionRouteLabel(item) {
 
 function getRiderAgreementVersionCreatedAtLabel(item) {
   const value = typeof item?.createdAtUtc === "string" ? item.createdAtUtc.trim() : "";
-  const createdAt = value ? new Date(value) : null;
+  const createdAt = isStrictIsoTimestampWithOffset(value) ? new Date(value) : null;
   return createdAt && Number.isFinite(createdAt.getTime())
     ? "Created " + createdAt.toLocaleString() + "."
     : "Creation time unavailable.";
@@ -89,17 +224,21 @@ function getRiderAgreementVersionAccessibilityLabel(item) {
 function isRiderCancellationResponseValid(response, expectedRideId) {
   if (typeof expectedRideId !== "string" || expectedRideId.length === 0 || expectedRideId !== expectedRideId.trim()) return false;
   if (!response || typeof response !== "object" || Array.isArray(response)) return false;
-  return response.rideId === expectedRideId &&
-    typeof response.status === "string" &&
-    response.status === response.status.trim() &&
-    RIDE_STATUSES.has(response.status);
+  return response.rideId === expectedRideId && response.status === "Cancelled";
 }
 
 module.exports = {
+  getRiderRideStatusLabel,
+  isRiderRideAgreementEventValid,
+  isRiderRideLocationTimestampValid,
+  isRiderRideStatusEventValid,
   getRiderRideStatusMessage,
   getRiderHistoryAccessibilityLabel,
+  getRiderHistoryRequestedAtLabel,
   getRiderAgreementVersionRouteLabel,
   getRiderAgreementVersionCreatedAtLabel,
   getRiderAgreementVersionAccessibilityLabel,
-  isRiderCancellationResponseValid
+  isRiderCancellationResponseValid,
+  normalizeRiderAgreementHistory,
+  shouldApplyRiderAgreementHistoryResponse
 };
