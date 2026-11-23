@@ -155,6 +155,8 @@ public sealed class CosmosRideOfferCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosRideOfferStore(container.Object).GetPendingNotificationsAsync(1, cancellation.Token));
 
+        container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<RideOfferState>(
             state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -304,6 +306,8 @@ public sealed class CosmosRideOfferCancellationTests
             new CosmosRideOfferStore(container.Object).GetExpiredAsync(
                 DateTimeOffset.UtcNow, 1, cancellation.Token));
 
+        container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<RideOfferState>(
             state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
