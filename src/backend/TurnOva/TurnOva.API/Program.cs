@@ -64,7 +64,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         var jwtSigningKey = builder.Configuration["Auth:Jwt:SigningKey"];
         if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience) ||
             string.IsNullOrWhiteSpace(jwtSigningKey) || jwtSigningKey.Length < 32)
-            throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.");
+            throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey for TurnOva.");
 
         options.MapInboundClaims = false;
         options.Events = new JwtBearerEvents
@@ -144,7 +144,7 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             !string.IsNullOrWhiteSpace(parameters.ValidAudience) &&
             parameters.IssuerSigningKey is SymmetricSecurityKey signingKey &&
             signingKey.KeySize >= 256;
-    }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.")
+    }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey for TurnOva.")
     .ValidateOnStart();
 builder.Services.AddAuthorization();
 if (builder.Environment.IsEnvironment("Testing"))
