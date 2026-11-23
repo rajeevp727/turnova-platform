@@ -32,6 +32,11 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
             cancellationToken.ThrowIfCancellationRequested();
             var currentProperties = current.Resource ?? throw new InvalidOperationException(
                 "Cosmos returned an empty container resource for TTL configuration.");
+            if (!string.Equals(currentProperties.Id, containerName, StringComparison.Ordinal) ||
+                !string.Equals(currentProperties.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Cosmos returned a container resource that does not match the requested name and partition-key path for TTL configuration.");
+
             if (currentProperties.DefaultTimeToLive != defaultTimeToLive)
             {
                 currentProperties.DefaultTimeToLive = defaultTimeToLive;

@@ -200,4 +200,53 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         readResponse.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("OtherContainer", "/reporterId")]
+    [InlineData("SupportRequests", "/otherReporterId")]
+    public async Task TtlReadRejectsContainerResourceWithMismatchedIdentityBeforeReplace(
+        string returnedContainerName,
+        string returnedPartitionKeyPath)
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        var readResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        readResponse.SetupGet(value => value.Resource).Returns(
+            new ContainerProperties(returnedContainerName, returnedPartitionKeyPath));
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+        container.Setup(value => value.ReadContainerAsync(
+                It.IsAny<ContainerRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(readResponse.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", CancellationToken.None, defaultTimeToLive: 604800));
+
+        Assert.Equal(
+            "Cosmos returned a container resource that does not match the requested name and partition-key path for TTL configuration.",
+            exception.Message);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties =>
+                properties.Id == "SupportRequests" && properties.PartitionKeyPath == "/reporterId"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        createResponse.VerifyGet(value => value.Container, Times.Once);
+        readResponse.VerifyGet(value => value.Resource, Times.Once);
+        database.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+        readResponse.VerifyNoOtherCalls();
+    }
+
 }
