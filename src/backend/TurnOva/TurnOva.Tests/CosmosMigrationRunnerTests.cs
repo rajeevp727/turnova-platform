@@ -106,8 +106,14 @@ public sealed class CosmosMigrationRunnerTests
         var database = new Mock<Database>(MockBehavior.Strict);
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
-        var containerResponse = new Mock<ContainerResponse>();
-        containerResponse.SetupGet(value => value.Container).Returns(new Mock<Container>().Object);
+        var historyResponse = new Mock<ContainerResponse>();
+        historyResponse.SetupGet(value => value.Container).Returns(new Mock<Container>().Object);
+        historyResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties(
+            CosmosMigrationRunner.HistoryContainerName, "/id"));
+        var lockResponse = new Mock<ContainerResponse>();
+        lockResponse.SetupGet(value => value.Container).Returns(new Mock<Container>().Object);
+        lockResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties(
+            CosmosMigrationRunner.LockContainerName, "/id"));
         using var cancellation = new CancellationTokenSource();
         var containerCreateCount = 0;
         client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
@@ -122,7 +128,8 @@ public sealed class CosmosMigrationRunnerTests
                 containerCreateCount++;
                 if (containerCreateCount == 2)
                     cancellation.Cancel();
-                return Task.FromResult(containerResponse.Object);
+                return Task.FromResult(
+                    containerCreateCount == 1 ? historyResponse.Object : lockResponse.Object);
             });
         var leaseStore = new Mock<ICosmosMigrationLeaseStore>(MockBehavior.Strict);
         var runner = new CosmosMigrationRunner(
@@ -571,10 +578,17 @@ public sealed class CosmosMigrationRunnerTests
         var database = new Mock<Database>();
         var databaseResponse = new Mock<DatabaseResponse>();
         var historyContainer = new Mock<Container>();
-        var containerResponse = new Mock<ContainerResponse>();
+        var lockContainer = new Mock<Container>();
+        var historyResponse = new Mock<ContainerResponse>();
+        var lockResponse = new Mock<ContainerResponse>();
 
         databaseResponse.SetupGet(response => response.Database).Returns(database.Object);
-        containerResponse.SetupGet(response => response.Container).Returns(historyContainer.Object);
+        historyResponse.SetupGet(response => response.Container).Returns(historyContainer.Object);
+        historyResponse.SetupGet(response => response.Resource).Returns(new ContainerProperties(
+            CosmosMigrationRunner.HistoryContainerName, "/id"));
+        lockResponse.SetupGet(response => response.Container).Returns(lockContainer.Object);
+        lockResponse.SetupGet(response => response.Resource).Returns(new ContainerProperties(
+            CosmosMigrationRunner.LockContainerName, "/id"));
 
         client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
                 "TurnOvaMigrationTest",
@@ -583,12 +597,13 @@ public sealed class CosmosMigrationRunnerTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(databaseResponse.Object);
 
-        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+        database.SetupSequence(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(),
                 It.IsAny<int?>(),
                 It.IsAny<RequestOptions?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(containerResponse.Object);
+            .ReturnsAsync(historyResponse.Object)
+            .ReturnsAsync(lockResponse.Object);
 
         historyContainer.Setup(value => value.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
                 It.IsAny<string>(),

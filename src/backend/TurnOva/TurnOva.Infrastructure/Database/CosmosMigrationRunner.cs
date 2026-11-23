@@ -21,16 +21,14 @@ public sealed class CosmosMigrationRunner(
         cancellationToken.ThrowIfCancellationRequested();
         var database = databaseResponse.Database;
 
-        var historyResponse = await database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties(HistoryContainerName, "/id"),
-            cancellationToken: cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-        var history = historyResponse.Container;
+        var history = await CreateValidatedContainerAsync(
+            database, HistoryContainerName, cancellationToken);
 
-        await database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties(LockContainerName, "/id"),
-            cancellationToken: cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
+        // The lease store is constructed from this database during host setup. Validate
+        // the bootstrap response here as well so a malformed lock-container response
+        // cannot let migrations proceed against an unknown container identity/handle.
+        _ = await CreateValidatedContainerAsync(
+            database, LockContainerName, cancellationToken);
 
         var migrationDatabase = new CosmosMigrationDatabase(database);
         var lease = await leaseCoordinator.AcquireAsync(cancellationToken);
@@ -104,6 +102,29 @@ public sealed class CosmosMigrationRunner(
                 }
             }
         }
+    }
+
+    private static async Task<Container> CreateValidatedContainerAsync(
+        Database database,
+        string containerName,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        const string partitionKeyPath = "/id";
+        var response = await database.CreateContainerIfNotExistsAsync(
+            new ContainerProperties(containerName, partitionKeyPath),
+            cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var properties = response.Resource ?? throw new InvalidOperationException(
+            "Cosmos returned an empty migration container resource after bootstrap.");
+        if (!string.Equals(properties.Id, containerName, StringComparison.Ordinal) ||
+            !string.Equals(properties.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "Cosmos returned a migration container resource that does not match the requested name and partition-key path after bootstrap.");
+
+        return response.Container ?? throw new InvalidOperationException(
+            "Cosmos returned an empty migration container handle after bootstrap.");
     }
 
     private static async Task<bool> IsAppliedAsync(
