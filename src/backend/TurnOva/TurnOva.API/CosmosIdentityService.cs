@@ -65,6 +65,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         ct.ThrowIfCancellationRequested();
         var salt = RandomNumberGenerator.GetBytes(PasswordSaltBytes);
         var hash = Rfc2898DeriveBytes.Pbkdf2(request.Password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, PasswordHashBytes);
+        ct.ThrowIfCancellationRequested();
         var userId = Guid.NewGuid().ToString("N");
         var reservation = new EmailReservation
         {
@@ -89,6 +90,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             var batch = container.CreateTransactionalBatch(new PartitionKey(normalizedRole));
             batch.CreateItem(reservation);
             batch.CreateItem(user);
+            ct.ThrowIfCancellationRequested();
             using var response = await batch.ExecuteAsync(ct);
             if (!response.IsSuccessStatusCode)
             {
@@ -173,6 +175,9 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             !string.Equals(user.Email, email, StringComparison.Ordinal) ||
             !VerifyPassword(request.Password, user.PasswordSalt, user.PasswordHash))
             return InvalidCredentials();
+        // PBKDF2 is synchronous; honor a disconnect that occurred while verifying the password
+        // before rotating and persisting the refresh token.
+        ct.ThrowIfCancellationRequested();
         if (!HasUsableEtag(readResponse.ETag)) return StorageUnavailable();
 
         var refreshToken = CreateRefreshToken();
@@ -257,6 +262,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                     var nextRefresh = CreateRefreshToken();
                     user.RefreshTokenHash = HashRefreshToken(nextRefresh);
                     user.RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(RefreshTokenDays);
+                    ct.ThrowIfCancellationRequested();
                     try
                     {
                         await container.ReplaceItemAsync(
@@ -330,6 +336,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
             user.RefreshTokenHash = null;
             user.RefreshTokenExpiresAtUtc = null;
+            ct.ThrowIfCancellationRequested();
             try
             {
                 await container.ReplaceItemAsync(
