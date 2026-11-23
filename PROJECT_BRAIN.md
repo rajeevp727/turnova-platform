@@ -14,7 +14,8 @@ Last updated: 2026-11-23 (Run 111)
 
 - Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
 - Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
-- Final source/test head: `3f25926863f1a69e008064053b85810184efc03f`; compare is 812 ahead / 0 behind main; GitHub reports mergeable. The 167-file PR diff has no mobile paths.
+- Current documentation head: `8e81ca7bfd44e2f3b769e3614f4027a715e5bbfc`; compare is 818 ahead / 0 behind main; GitHub reports mergeable. The 168-file PR diff has no mobile paths.
+- Source/test checkpoint: `3f25926863f1a69e008064053b85810184efc03f`; compare is 812 ahead / 0 behind main.
 - Exact-head API-only CI [#45230648203](https://github.com/rajeevp727/turnova-platform/actions/runs/45230648203) passed 1,192/1,192 backend tests, .NET 10 Release build (0 warnings/0 errors), native non-container Linux x64 publish and verifier. Artifact [14845617764](https://github.com/rajeevp727/turnova-platform/actions/runs/45230648203/artifacts/14845617764).
 - PR #200 has three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. Do not self-approve, bypass protection or merge without independent human approval.
 - PRs #196/#198/#205/#206 remain Draft/parked. PR #207 and PR #197's merges without independent approval remain disclosed historical process exceptions.
