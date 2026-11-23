@@ -27,6 +27,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         var container = new Mock<Container>(MockBehavior.Strict);
         var createResponse = new Mock<ContainerResponse>();
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         using var cancellation = new CancellationTokenSource();
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(),
@@ -59,6 +60,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         var container = new Mock<Container>(MockBehavior.Strict);
         var createResponse = new Mock<ContainerResponse>();
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var readResponse = new Mock<ContainerResponse>();
         readResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         using var cancellation = new CancellationTokenSource();
@@ -93,6 +95,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
     {
         var database = new Mock<Database>(MockBehavior.Strict);
         var createResponse = new Mock<ContainerResponse>();
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("Rides", "/id"));
         using var cancellation = new CancellationTokenSource();
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(),
@@ -123,6 +126,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         var container = new Mock<Container>(MockBehavior.Strict);
         var createResponse = new Mock<ContainerResponse>();
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var readResponse = new Mock<ContainerResponse>();
         readResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var replaceResponse = new Mock<ContainerResponse>();
@@ -166,6 +170,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         var container = new Mock<Container>(MockBehavior.Strict);
         var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var readResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         readResponse.SetupGet(value => value.Resource).Returns((ContainerProperties)null!);
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
@@ -211,6 +216,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         var container = new Mock<Container>(MockBehavior.Strict);
         var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var readResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         readResponse.SetupGet(value => value.Resource).Returns(
             new ContainerProperties(returnedContainerName, returnedPartitionKeyPath));
@@ -256,6 +262,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         var database = new Mock<Database>(MockBehavior.Strict);
         var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         createResponse.SetupGet(value => value.Container).Returns((Container)null!);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(),
                 It.IsAny<int?>(),
@@ -273,6 +280,66 @@ public sealed class CosmosMigrationDatabaseCancellationTests
                 properties.Id == "SupportRequests" && properties.PartitionKeyPath == "/reporterId"),
             It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         createResponse.VerifyGet(value => value.Container, Times.Once);
+        database.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+    }
+
+
+    [Theory]
+    [InlineData("OtherContainer", "/reporterId")]
+    [InlineData("SupportRequests", "/otherReporterId")]
+    public async Task CreateResponseResourceRejectsMismatchedIdentityEvenWithoutTtl(
+        string returnedContainerName,
+        string returnedPartitionKeyPath)
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Resource).Returns(
+            new ContainerProperties(returnedContainerName, returnedPartitionKeyPath));
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", CancellationToken.None));
+
+        Assert.Equal(
+            "Cosmos returned a container resource that does not match the requested name and partition-key path after container creation.",
+            exception.Message);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties =>
+                properties.Id == "SupportRequests" && properties.PartitionKeyPath == "/reporterId"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Never);
+        database.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task NullCreateResponseResourceFailsClosedEvenWithoutTtl()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Resource).Returns((ContainerProperties)null!);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "Rides", "/id", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned an empty container resource after container creation.", exception.Message);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Never);
         database.VerifyNoOtherCalls();
         createResponse.VerifyNoOtherCalls();
     }
