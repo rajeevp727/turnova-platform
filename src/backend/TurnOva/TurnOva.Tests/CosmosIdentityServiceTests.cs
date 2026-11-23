@@ -978,6 +978,28 @@ public sealed class CosmosIdentityServiceTests
         batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task RegisterReturnsCommittedSessionWhenCancellationArrivesAfterSuccessfulBatchResponse()
+    {
+        using var cts = new CancellationTokenSource();
+        var (container, batch, response) = CreateBatchResponse(HttpStatusCode.OK, success: true);
+        batch.Setup(value => value.ExecuteAsync(It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromResult(response.Object);
+            });
+        var service = CreateService(container.Object);
+
+        var result = await service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", Password, "Rider"),
+            cts.Token);
+
+        Assert.Equal(StatusCodes.Status200OK, GetStatusCode(result));
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static CosmosIdentityService CreateService(Container container) =>
         new(null, CreateConfiguration(), container);
 
