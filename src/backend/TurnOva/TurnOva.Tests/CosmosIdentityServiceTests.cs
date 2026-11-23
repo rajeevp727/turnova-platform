@@ -1,0 +1,325 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Configuration;
+using Moq;
+using TurnOva.API;
+
+namespace TurnOva.Tests;
+
+public sealed class CosmosIdentityServiceTests
+{
+    private const string SigningKey = "turnova-auth-integration-test-signing-key-32-bytes";
+    private const string Password = "SecurePass123";
+
+    [Fact]
+    public async Task RegisterCreatesEmailReservationAndUserInOnePartitionBatch()
+    {
+        var (container, batch, _) = CreateBatchResponse(HttpStatusCode.OK, success: true);
+        var service = CreateService(container.Object);
+
+        var result = await service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("Rider@Example.com", Password, "Rider"),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status200OK, GetStatusCode(result));
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("Rider")))), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<CosmosIdentityService.EmailReservation>(reservation =>
+                reservation.Id == "email:rider@example.com" &&
+                reservation.Role == "Rider" &&
+                reservation.Email == "rider@example.com"),
+            It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<CosmosIdentityService.IdentityDocument>(user =>
+                user.Role == "Rider" &&
+                user.Email == "rider@example.com" &&
+                !string.IsNullOrWhiteSpace(user.PasswordHash) &&
+                !string.IsNullOrWhiteSpace(user.PasswordSalt) &&
+                !string.IsNullOrWhiteSpace(user.RefreshTokenHash)),
+            It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+        Assert.DoesNotContain(container.Invocations, invocation =>
+            invocation.Method.Name is "CreateItemAsync" or "DeleteItemAsync");
+    }
+
+    [Fact]
+    public async Task RegisterConflictDoesNotAttemptCompensatingDelete()
+    {
+        var (container, batch, _) = CreateBatchResponse(HttpStatusCode.Conflict, success: false);
+        var service = CreateService(container.Object);
+
+        var result = await service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", Password, "Rider"),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status409Conflict, GetStatusCode(result));
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+        Assert.DoesNotContain(container.Invocations, invocation =>
+            invocation.Method.Name is "CreateItemAsync" or "DeleteItemAsync");
+    }
+
+    [Fact]
+    public async Task RegisterPropagatesCancellationWithoutRunningCompensation()
+    {
+        var (container, batch, _) = CreateBatchResponse(HttpStatusCode.OK, success: true);
+        batch.Setup(value => value.ExecuteAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", Password, "Rider"),
+            CancellationToken.None));
+
+        Assert.DoesNotContain(container.Invocations, invocation =>
+            invocation.Method.Name is "CreateItemAsync" or "DeleteItemAsync");
+    }
+
+    [Fact]
+    public async Task LoginUsesPointReadEtagForRefreshTokenRotation()
+    {
+        var user = CreateIdentity();
+        var (container, iterator) = SetupIdentityQuery(user);
+        var read = CreateItemResponse(user, "login-observed-etag");
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "login-observed-etag"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+        var service = CreateService(container.Object);
+
+        var result = await service.LoginAsync(
+            "RIDER",
+            new CosmosLoginRequest("RIDER@example.com", Password),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status200OK, GetStatusCode(result));
+        container.Verify(value => value.ReplaceItemAsync(
+            It.Is<CosmosIdentityService.IdentityDocument>(item =>
+                item.Id == user.Id && !string.IsNullOrWhiteSpace(item.RefreshTokenHash)),
+            user.Id,
+            It.Is<PartitionKey?>(key => key.HasValue && key.Value.Equals(new PartitionKey("Rider"))),
+            It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "login-observed-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginRejectsStaleEtagInsteadOfReturningAnUnpersistedSession()
+    {
+        var user = CreateIdentity();
+        var read = CreateItemResponse(user, "login-stale-etag");
+        var container = new Mock<Container>();
+        var iterator = CreateQueryIterator(user);
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "auth-test", 0));
+        var service = CreateService(container.Object);
+
+        var result = await service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status409Conflict, GetStatusCode(result));
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            user.Id,
+            It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "login-stale-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshRejectsAStaleConcurrentRotationUsingTheObservedEtag()
+    {
+        const string refreshToken = "refresh-token-for-concurrency-test";
+        var tokenHash = HashRefreshToken(refreshToken);
+        var user = CreateIdentity(refreshTokenHash: tokenHash);
+        var iterator = CreateQueryIterator(user);
+        var read = CreateItemResponse(user, "refresh-observed-etag");
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "refresh-observed-etag"),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "auth-test", 0));
+        var service = CreateService(container.Object);
+
+        var result = await service.RefreshAsync(new CosmosRefreshRequest(refreshToken), CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, GetStatusCode(result));
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            user.Id,
+            It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "refresh-observed-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LogoutRetriesAfterConcurrentSessionChangeAndUsesFreshEtag()
+    {
+        var user = CreateIdentity(refreshTokenHash: "old-refresh-hash");
+        var refreshedUser = user with
+        {
+            RefreshTokenHash = "new-refresh-hash",
+            RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(1)
+        };
+        var firstRead = CreateItemResponse(user, "logout-old-etag");
+        var secondRead = CreateItemResponse(refreshedUser, "logout-new-etag");
+        var container = new Mock<Container>();
+        container.SetupSequence(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(firstRead.Object)
+            .ReturnsAsync(secondRead.Object);
+        container.SetupSequence(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "auth-test", 0))
+            .ReturnsAsync(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+        var service = CreateService(container.Object);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(JwtRegisteredClaimNames.Sub, "user-1"),
+            new Claim("role", "Rider")
+        ], "integration-test"));
+
+        var result = await service.LogoutAsync(principal, CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status204NoContent, GetStatusCode(result));
+        var writes = container.Invocations.Where(invocation => invocation.Method.Name == "ReplaceItemAsync").ToArray();
+        Assert.Equal(2, writes.Length);
+        Assert.Equal("logout-old-etag", (writes[0].Arguments[3] as ItemRequestOptions)?.IfMatchEtag);
+        Assert.Equal("logout-new-etag", (writes[1].Arguments[3] as ItemRequestOptions)?.IfMatchEtag);
+        Assert.Null((writes[1].Arguments[0] as CosmosIdentityService.IdentityDocument)?.RefreshTokenHash);
+    }
+
+    private static CosmosIdentityService CreateService(Container container) =>
+        new(null, CreateConfiguration(), container);
+
+    private static IConfiguration CreateConfiguration() =>
+        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Auth:Jwt:Issuer"] = "turnova-auth-tests",
+            ["Auth:Jwt:Audience"] = "turnova-api",
+            ["Auth:Jwt:SigningKey"] = SigningKey
+        }).Build();
+
+    private static (Mock<Container> Container, Mock<TransactionalBatch> Batch, Mock<TransactionalBatchResponse> Response)
+        CreateBatchResponse(HttpStatusCode statusCode, bool success)
+    {
+        var container = new Mock<Container>();
+        var batch = new Mock<TransactionalBatch>();
+        var response = new Mock<TransactionalBatchResponse>();
+        response.SetupGet(value => value.StatusCode).Returns(statusCode);
+        response.SetupGet(value => value.IsSuccessStatusCode).Returns(success);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<CosmosIdentityService.EmailReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions?>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                It.IsAny<TransactionalBatchItemRequestOptions?>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.ExecuteAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        container.Setup(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()))
+            .Returns(batch.Object);
+        return (container, batch, response);
+    }
+
+    private static (Mock<Container> Container, Mock<FeedIterator<CosmosIdentityService.IdentityDocument>> Iterator)
+        SetupIdentityQuery(CosmosIdentityService.IdentityDocument user)
+    {
+        var iterator = CreateQueryIterator(user);
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        return (container, iterator);
+    }
+
+    private static Mock<FeedIterator<CosmosIdentityService.IdentityDocument>> CreateQueryIterator(
+        CosmosIdentityService.IdentityDocument user)
+    {
+        var page = new Mock<FeedResponse<CosmosIdentityService.IdentityDocument>>();
+        page.As<IEnumerable<CosmosIdentityService.IdentityDocument>>()
+            .Setup(value => value.GetEnumerator())
+            .Returns(() => new[] { user }.AsEnumerable().GetEnumerator());
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
+        iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(page.Object);
+        return iterator;
+    }
+
+    private static Mock<ItemResponse<CosmosIdentityService.IdentityDocument>> CreateItemResponse(
+        CosmosIdentityService.IdentityDocument user,
+        string etag)
+    {
+        var response = new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>();
+        response.SetupGet(value => value.Resource).Returns(user);
+        response.SetupGet(value => value.ETag).Returns(etag);
+        return response;
+    }
+
+    private static CosmosIdentityService.IdentityDocument CreateIdentity(string? refreshTokenHash = null)
+    {
+        var salt = Enumerable.Range(1, 16).Select(value => (byte)value).ToArray();
+        var passwordHash = Rfc2898DeriveBytes.Pbkdf2(
+            Password, salt, 210_000, HashAlgorithmName.SHA256, 32);
+        return new CosmosIdentityService.IdentityDocument
+        {
+            Id = "user:user-1",
+            Role = "Rider",
+            Email = "rider@example.com",
+            Name = "Rider",
+            PasswordHash = Convert.ToBase64String(passwordHash),
+            PasswordSalt = Convert.ToBase64String(salt),
+            RefreshTokenHash = refreshTokenHash,
+            RefreshTokenExpiresAtUtc = refreshTokenHash is null ? null : DateTimeOffset.UtcNow.AddDays(1),
+            CreatedAtUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static string HashRefreshToken(string token) =>
+        Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    private static int GetStatusCode(IResult result) =>
+        Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode ?? 0;
+}
