@@ -550,33 +550,32 @@ while true; do
   capture_app_runtime_logcat
 done
 
-# PR #199 replaced the email/password login screen with a restricted demo
-# entry point. Verify the actual role-specific demo CTA and read-only notice
-# instead of asserting text that no longer exists in either app.
+# Verify the real email/password authentication screen on a fresh install.
+# Demo access is intentionally not part of the Rider or Driver apps.
 case "$EXPECTED_ID" in
   com.turnova.rider)
-    expected_demo_cta="Continue as Demo Rider"
-    expected_demo_resource="rider-demo-login"
+    expected_role_label="RIDER ACCOUNT"
+    expected_submit="Sign in as Rider"
     ;;
   com.turnova.driver)
-    expected_demo_cta="Continue as Demo Driver"
-    expected_demo_resource="driver-demo-login"
+    expected_role_label="DRIVER PARTNER"
+    expected_submit="Sign in as Driver"
     ;;
   *)
-    echo "No Android demo-screen smoke expectations are configured for $EXPECTED_ID." >&2
+    echo "No Android authentication-screen smoke expectations are configured for $EXPECTED_ID." >&2
     exit 2
     ;;
 esac
 
-for expected_text in "Offline demo access" "$expected_demo_cta" "Demo mode is read-only"; do
-  if ! grep -Fq "$expected_text" "$OUTPUT_DIR/ui-hierarchy.xml"; then
-    echo "Android demo screen is missing expected visible/accessibility text: $expected_text" >&2
+for expected_text in "$expected_role_label" "Sign in" "Sign up" "EMAIL" "PASSWORD" "$expected_submit"; do
+  if ! grep -Fq "text=\"$expected_text\"" "$OUTPUT_DIR/ui-hierarchy.xml"; then
+    echo "Android authentication screen is missing expected visible text: $expected_text" >&2
     cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
     exit 1
   fi
 done
-if ! grep -Fq "resource-id=\"$expected_demo_resource\"" "$OUTPUT_DIR/ui-hierarchy.xml"; then
-  echo "Android demo CTA is missing its stable accessibility resource ID: $expected_demo_resource" >&2
+if grep -Eiq 'text="[^"]*demo[^"]*"' "$OUTPUT_DIR/ui-hierarchy.xml"; then
+  echo "Android authentication screen unexpectedly exposes demo access." >&2
   cat "$OUTPUT_DIR/ui-hierarchy.xml" >&2
   exit 1
 fi
@@ -675,7 +674,7 @@ with open(output, "w", encoding="utf-8") as stream:
         "install": "passed",
         "launch": "passed",
         "processStableAfterStartup": True,
-        "demoEntryScreenTextVerified": True,
+        "authenticationScreenTextVerified": True,
         "staleSessionErrorAbsent": True,
         "systemUiRecovery": {
             "pixelLauncherAnrWaitAttempts": int(pixel_launcher_wait_attempts),

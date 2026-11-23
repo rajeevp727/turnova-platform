@@ -101,11 +101,14 @@ test("Rider auth field helper rejects unknown fields and modes", () => {
   assert.throws(() => getRiderAuthFieldProps("email", "other"), /mode must be login or register/);
 });
 
-test("Rider demo entry is accessible and clearly read-only", () => {
+test("Rider authentication offers real sign-up and sign-in with no demo entry", () => {
   const source = fs.readFileSync(path.join(__dirname, "../rider-app/App.tsx"), "utf8");
-  assert.match(source, /testID="rider-demo-login"/);
-  assert.match(source, /Continue as Demo Rider/);
-  assert.match(source, /Demo mode is read-only/);
-  assert.match(source, /real booking, payment and live tracking are unavailable/);
-  assert.match(source, /if\(!user&&!demoMode\)return/);
+  assert.match(source, /testID="rider-auth-sign-in-tab"/);
+  assert.match(source, /testID="rider-auth-sign-up-tab"/);
+  assert.match(source, /testID="rider-auth-email"/);
+  assert.match(source, /testID="rider-auth-password"/);
+  assert.match(source, /testID="rider-auth-submit"/);
+  assert.match(source, /\/api\/v1\/auth\/rider\/register/);
+  assert.match(source, /\/api\/v1\/auth\/rider\/login/);
+  assert.doesNotMatch(source, /rider-demo-login|Continue as Demo Rider|demoMode/);
 });
