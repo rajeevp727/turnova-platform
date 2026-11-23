@@ -1,3 +1,11 @@
+## Run 97 final documentation-head CI — 2026-11-23
+
+- Documentation-bearing head [d605b77](https://github.com/rajeevp727/turnova-platform/commit/d605b77243cb3f8001a382c274b02d0a48f964c8) passed exact-head API-only [CI #45087228509](https://github.com/rajeevp727/turnova-platform/actions/runs/45087228509): scope/backend passed; **1,278/1,278 tests passed (0 failed, 0 skipped)**; .NET 10 Release build had **0 warnings and 0 errors**; native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture) and artifact validation passed.
+- Publish output: 43,997,526 bytes. Artifact [14780330085](https://github.com/rajeevp727/turnova-platform/actions/runs/45087228509/artifacts/14780330085): 17,009,246 bytes; ZIP SHA-256 `35070a393535b55eeea0242bc2b7e28e078a02cd5c49bb7400abbe11cbf9ab7c`.
+- Source/test head [2171cc7](https://github.com/rajeevp727/turnova-platform/commit/2171cc794d776e7f4fed4357a3c267df6696f0d6) independently passed exact-head API-only [CI #45086656644](https://github.com/rajeevp727/turnova-platform/actions/runs/45086656644) with the same 1,278/1,278 tests, 0 warnings/errors and native publish/verifier.
+- Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-only phase gate. No live Cosmos, hosted API, production identity/provider, device or production readiness is claimed.
+- This documentation update records the verified parent head; the new handoff-only documentation head created by this commit still requires its own exact-head CI before it can be called verified.
+
 ## Run 97 — API test analyzer cleanup and exact-head verification (2026-11-23)
 
 - **Platform phase:** API remains `in_progress`; Android and iOS remain `not_started`. No mobile implementation, Fleet/Ops Phase 2, Docker/container build, image, registry or deployment work was started.
