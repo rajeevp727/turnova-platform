@@ -18,6 +18,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
     private const int AccessTokenMinutes = 30;
     private const int RefreshTokenDays = 30;
     private const int Pbkdf2Iterations = 210_000;
+    private const int PasswordSaltBytes = 16;
+    private const int PasswordHashBytes = 32;
     private Container? _container = identityContainer;
     private readonly SemaphoreSlim _containerLock = new(1, 1);
 
@@ -61,8 +63,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         if (container is null) return StorageUnavailable();
 
         ct.ThrowIfCancellationRequested();
-        var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(request.Password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, 32);
+        var salt = RandomNumberGenerator.GetBytes(PasswordSaltBytes);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(request.Password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, PasswordHashBytes);
         var userId = Guid.NewGuid().ToString("N");
         var reservation = new EmailReservation
         {
@@ -354,6 +356,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         user is not null &&
         !string.IsNullOrWhiteSpace(expectedId) &&
         expectedId.StartsWith("user:", StringComparison.Ordinal) &&
+        expectedId.Length > "user:".Length &&
+        !string.IsNullOrWhiteSpace(expectedId["user:".Length..]) &&
         string.Equals(user.Id, expectedId, StringComparison.Ordinal) &&
         string.Equals(user.Role, expectedRole, StringComparison.Ordinal) &&
         string.Equals(user.DocumentType, "user", StringComparison.Ordinal) &&
@@ -428,7 +432,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         {
             var salt = Convert.FromBase64String(saltValue);
             var expected = Convert.FromBase64String(hashValue);
-            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, expected.Length);
+            if (salt.Length != PasswordSaltBytes || expected.Length != PasswordHashBytes) return false;
+            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, PasswordHashBytes);
             return CryptographicOperations.FixedTimeEquals(actual, expected);
         }
         catch (FormatException) { return false; }
