@@ -316,6 +316,124 @@ public sealed class CosmosQueueCancellationTests
             It.IsAny<QueryRequestOptions?>()), Times.Once);
     }
 
+    [Fact]
+    public async Task GetEligibleCancellationTakesPrecedenceOverQueryProviderFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
+        iterator.Setup(value => value.HasMoreResults).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<FeedResponse<CosmosQueueStore.QueueEntryDocument>>(Unavailable());
+            });
+        var container = CreateQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).GetEligibleAsync("zone-a", "Cab", cancellation.Token));
+
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetAuditEventsCancellationTakesPrecedenceOverQueryProviderFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.Setup(value => value.HasMoreResults).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<FeedResponse<QueueAuditEvent>>(Unavailable());
+            });
+        var container = CreateQueryContainer(iterator);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync("zone-a", "Cab", cancellation.Token));
+
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RemoveCancellationTakesPrecedenceOverPointReadProviderFailure()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosQueueStore.QueueEntryDocument>>(Unavailable());
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).RemoveAsync("driver-1", "zone-a", "Cab", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task MoveToBackCancellationTakesPrecedenceOverPointReadProviderFailure()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosQueueStore.QueueEntryDocument>>(Unavailable());
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).MoveToBackAsync("driver-1", "zone-a", "Cab", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task MoveToBackOnceCancellationTakesPrecedenceOverPointReadProviderFailure()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosQueueStore.QueueEntryDocument>>(Unavailable());
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).MoveToBackOnceAsync(
+                "driver-1", "zone-a", "Cab", "offer-1", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    private static CosmosException Unavailable() =>
+        new("Cosmos is unavailable.", System.Net.HttpStatusCode.ServiceUnavailable, 0, "queue-cancellation-test", 0);
+
     private static Mock<Container> CreateQueryContainer<T>(Mock<FeedIterator<T>> iterator)
     {
         var container = new Mock<Container>(MockBehavior.Strict);
