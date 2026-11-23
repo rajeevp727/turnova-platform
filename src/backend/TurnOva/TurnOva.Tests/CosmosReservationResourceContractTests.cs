@@ -72,10 +72,10 @@ public sealed class CosmosReservationResourceContractTests
         Assert.Equal("Cosmos returned an empty driver reservation query item.", exception.Message);
         container.Verify(value => value.GetItemQueryIterator<DriverRideReservation>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
         iterator.Verify(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
         iterator.Verify(value => value.Dispose(), Times.Once);
+        container.VerifyNoOtherCalls();
     }
 
     [Fact]
