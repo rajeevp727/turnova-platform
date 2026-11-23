@@ -4888,3 +4888,18 @@ Before the first authentication operation, `CosmosIdentityService` creates or op
 - CI correction transparency: initial run [#45229329521](https://github.com/rajeevp727/turnova-platform/actions/runs/45229329521) failed 1/1,191 because a strict mocked `TransactionalBatchResponse` rejected SDK disposal; the fixture was corrected. Exact-head CI [#45229895001](https://github.com/rajeevp727/turnova-platform/actions/runs/45229895001) then passed 1,191/1,191 before the additional cancellation-precedence case. The final 1,192-test run above is the evidence of record.
 
 These deterministic tests use Cosmos SDK mocks. They do not establish live Cosmos partition, ETag, transaction, multi-instance, restart or process-crash behavior. No 19-row acceptance status changes.
+
+## COSMOS-STORE-037..041 — ride-offer read cancellation precedence
+
+`CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync` is used around the read-only Cosmos provider awaits in `CosmosRideOfferStore`. It preserves caller cancellation if a provider failure races a cancelled request, while preserving the original provider exception when cancellation was not requested. Successful read responses and ETags are unchanged; no write/commit path is wrapped or reclassified.
+
+| ID | Scenario | Expected result | Automated evidence |
+|---|---|---|---|
+| COSMOS-STORE-037 | Wrapper returns a successful provider result; propagates a provider exception when the token is not cancelled; cancellation races a provider exception | Success remains success; uncancelled provider error is preserved; cancellation wins the race | `CosmosReadResponseGuardTests.AwaitWithCancellationPrecedence*` |
+| COSMOS-STORE-038 | `GetByRideAsync` point-read provider failure races caller cancellation | `OperationCanceledException` is observed; stale provider error is not returned | `CosmosRideOfferCancellationTests.GetByRideCancellationTakesPrecedenceOverOtherProviderFailure` |
+| COSMOS-STORE-039 | `GetPendingForDriverAsync` query-page provider failure races caller cancellation | `OperationCanceledException` is observed; iterator is disposed | `CosmosRideOfferCancellationTests.GetPendingForDriverCancellationTakesPrecedenceOverQueryProviderFailure` |
+| COSMOS-STORE-040 | `GetExpiredAsync` hydrated point-read provider failure races caller cancellation | `OperationCanceledException` is observed; iterator is disposed | `CosmosRideOfferCancellationTests.GetExpiredCancellationTakesPrecedenceOverHydratedPointReadProviderFailure` |
+| COSMOS-STORE-041 | `GetPendingNotificationsAsync` hydrated point-read provider failure races caller cancellation | `OperationCanceledException` is observed; iterator is disposed | `CosmosRideOfferCancellationTests.GetPendingNotificationsCancellationTakesPrecedenceOverHydratedPointReadProviderFailure` |
+
+Exact source/test evidence: [CI #45260778123](https://github.com/rajeevp727/turnova-platform/actions/runs/45260778123) — 1,250/1,250 backend tests, Release build, native non-container publish and verifier. These deterministic mocks do not establish live Cosmos behavior.
+
