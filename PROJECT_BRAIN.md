@@ -1,6 +1,6 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 117)
+Last updated: 2026-11-24 (Run 118)
 
 ## Platform phase
 
@@ -9,6 +9,14 @@ Last updated: 2026-11-24 (Run 117)
 - iOS: `not_started`
 - Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
 - No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
+## Run 118 — reservation read cancellation handoff
+
+- Final branch head: [`02c0ef8300cce2dd8886d40f83f2d2453ef85a0d`](https://github.com/rajeevp727/turnova-platform/commit/02c0ef8300cce2dd8886d40f83f2d2453ef85a0d); source/test commit: [`9ef07d01b886cf5a9d02dbca8429176388f4a84f`](https://github.com/rajeevp727/turnova-platform/commit/9ef07d01b886cf5a9d02dbca8429176388f4a84f).
+- Applied `CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync` to all nine point-read awaits and the Driver reservation query-page await across the two reservation stores. Existing 404 mapping, ETags, transactional batches, audit facts, expiry and successful-write semantics are unchanged.
+- Eight deterministic provider-failure/cancellation-race tests were added. Exact-head API-only CI [#45276543438](https://github.com/rajeevp727/turnova-platform/actions/runs/45276543438) is still running; scope passed and backend restore was in progress at handoff. No build/test/publish pass is claimed yet.
+- PR #200 compare: 899 ahead / 0 behind main. Review gate remains three owner-authored COMMENTED reviews, zero independent approvals, zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). No production or live Cosmos readiness is claimed.
 
 ## Live repository state
 
@@ -26,6 +34,9 @@ Last updated: 2026-11-24 (Run 117)
 - PR #197 and PR #207 were historically merged without independent human approval. Disclose these exceptions; they are not approval precedent.
 
 ## Current API engineering
+
+- Run 118 applies cancellation precedence to every read await in the Cosmos Driver reservation and Rider active-booking reservation stores (nine point reads plus the Driver multi-Driver query-page read). Eight deterministic 503/cancellation-race tests were added; exact-head CI #45276543438 is running on 02c0ef8300cce2dd8886d40f83f2d2453ef85a0d. No pass is claimed until completion.
+
 
 - Cosmos-native Rider/Driver registration/login/refresh/logout and JWT issuance are on main via PR #207.
 - PR #200 contains same-partition transactional email reservation + user creation, PBKDF2-SHA256 password material, ETag-conditional login/refresh/logout, fail-closed persisted identity/password checks, bootstrap resource validation and cancellation precedence. Run 114 extends cancellation precedence to Union assignment/status conflict mappings. Run 115 adds `CosmosReadResponseGuard` and applies null/identity/cancellation checks to Union, assignment, audit, Union-list, Driver profile and Cab discovery point/query reads. Run 116 adds `AwaitWithCancellationPrecedenceAsync` and applies cancellation precedence to all ride-offer read/query/hydration paths.

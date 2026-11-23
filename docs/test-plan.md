@@ -4910,3 +4910,22 @@ These deterministic tests use Cosmos SDK mocks. They do not establish live Cosmo
 
 Exact source/test evidence: [CI #45260778123](https://github.com/rajeevp727/turnova-platform/actions/runs/45260778123) — 1,250/1,250 backend tests, Release build, native non-container publish and verifier. These deterministic mocks do not establish live Cosmos behavior.
 
+
+
+## COSMOS-RES-014..021 — Driver/Rider reservation read cancellation precedence
+
+The Driver ride-reservation and Rider active-booking reservation stores preserve request cancellation when a Cosmos read fails concurrently with cancellation. The guard is applied to point reads and the Driver multi-Driver query-page read. Existing missing-resource mapping, resource identity checks, observed ETags, transactional-batch/audit atomicity, expiry behavior and successful durable writes remain unchanged. The two create-conflict readback paths are guarded as well; their dedicated provider-failure race fixtures remain a follow-up.
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| COSMOS-RES-014 | Driver active reservation point read returns Cosmos 503 while request cancellation is signalled | Propagate OperationCanceledException, not the provider error | `DriverActiveReadCancellationTakesPrecedenceOverProviderFailure` | P1 |
+| COSMOS-RES-015 | Driver reservation promotion read returns Cosmos 503 while cancelled | Propagate cancellation; do not begin a promotion batch | `DriverPromotionReadCancellationTakesPrecedenceOverProviderFailure` | P1 |
+| COSMOS-RES-016 | Driver reservation expiry read returns Cosmos 503 while cancelled | Propagate cancellation; do not begin an expiry batch | `DriverExpiryReadCancellationTakesPrecedenceOverProviderFailure` | P1 |
+| COSMOS-RES-017 | Driver reservation release read returns Cosmos 503 while cancelled | Propagate cancellation; do not begin a delete/audit batch | `DriverReleaseReadCancellationTakesPrecedenceOverProviderFailure` | P1 |
+| COSMOS-RES-018 | Driver multi-Driver reservation query page returns Cosmos 503 while cancelled | Propagate cancellation; do not return a partial reservation snapshot | `DriverQueryPageCancellationTakesPrecedenceOverProviderFailure` | P1 |
+| COSMOS-RES-019 | Rider active-booking reservation point read returns Cosmos 503 while cancelled | Propagate cancellation rather than reporting no active booking | `RiderActiveReadCancellationTakesPrecedenceOverProviderFailure` | P1 |
+| COSMOS-RES-020 | Rider reservation promotion read returns Cosmos 503 while cancelled | Propagate cancellation; do not begin a promotion batch | `RiderPromotionReadCancellationTakesPrecedenceOverProviderFailure` | P1 |
+| COSMOS-RES-021 | Rider reservation release read returns Cosmos 503 while cancelled | Propagate cancellation; do not begin a delete/audit batch | `RiderReleaseReadCancellationTakesPrecedenceOverProviderFailure` | P1 |
+
+**Evidence:** source/test commit [`9ef07d01b886cf5a9d02dbca8429176388f4a84f`](https://github.com/rajeevp727/turnova-platform/commit/9ef07d01b886cf5a9d02dbca8429176388f4a84f); final test-fixture head [`02c0ef8300cce2dd8886d40f83f2d2453ef85a0d`](https://github.com/rajeevp727/turnova-platform/commit/02c0ef8300cce2dd8886d40f83f2d2453ef85a0d); exact-head API-only CI [#45276543438](https://github.com/rajeevp727/turnova-platform/actions/runs/45276543438) is pending at this handoff. These are deterministic Cosmos SDK mocks, not live Cosmos partition/ETag/multi-instance/restart evidence.
+
