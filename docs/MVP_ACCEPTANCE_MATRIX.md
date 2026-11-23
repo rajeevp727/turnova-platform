@@ -1,3 +1,10 @@
+## Run 98 supplemental API evidence — private-media cancellation (2026-11-23)
+
+- `UnavailablePrivateDriverMediaStore` now honors cancellation consistently across Store/Read/IsOwnedAndClean/Delete; deterministic regression `PrivateDriverMediaStoreTests.UnavailableProviderHonorsCancellationForEveryOperation`.
+- Runtime [4acb627](https://github.com/rajeevp727/turnova-platform/commit/4acb627c1f12d339520ab205d385a22d8a756de5) and test [deeb6e1](https://github.com/rajeevp727/turnova-platform/commit/deeb6e13bbf1c45e45a35a81b3105a439bc39ed3); exact source/test API-only CI [#45098371780](https://github.com/rajeevp727/turnova-platform/actions/runs/45098371780) passed 1,279/1,279 tests, 0 warnings/errors, native non-container Linux x64 publish and verifier. Artifact [14784835429](https://github.com/rajeevp727/turnova-platform/actions/runs/45098371780).
+- Supplemental adapter contract only; no MVP acceptance row or phase status changed. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked). API remains `in_progress`; Android/iOS remain `not_started`.
+- Latest docs-bearing head will require its own exact-head API-only CI. No live Cosmos/provider/production readiness is claimed.
+
 ## Run 97 final documentation-head CI — 2026-11-23
 
 - Documentation-bearing head [d605b77](https://github.com/rajeevp727/turnova-platform/commit/d605b77243cb3f8001a382c274b02d0a48f964c8) passed exact-head API-only [CI #45087228509](https://github.com/rajeevp727/turnova-platform/actions/runs/45087228509): scope/backend passed; **1,278/1,278 tests passed (0 failed, 0 skipped)**; .NET 10 Release build had **0 warnings and 0 errors**; native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture) and artifact validation passed.
