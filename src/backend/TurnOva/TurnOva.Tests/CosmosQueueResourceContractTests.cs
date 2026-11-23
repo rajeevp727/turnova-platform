@@ -157,6 +157,36 @@ public sealed class CosmosQueueResourceContractTests
     }
 
     [Fact]
+    public async Task QueueEligibilityRejectsQueryItemThatIsNoLongerEligible()
+    {
+        var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
+        {
+            Id = "driver-1",
+            DriverId = "driver-1",
+            ZoneId = "hyderabad-central",
+            ServiceClass = "cab",
+            ZoneServiceKey = "hyderabad-central|cab",
+            JoinedAt = DateTimeOffset.UtcNow,
+            Sequence = 1,
+            IsEligible = false
+        });
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetEligibleAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue entry query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
+    [Fact]
     public async Task QueueAuditReadRejectsNullQueryItemInsteadOfReturningMalformedAuditHistory()
     {
         var iterator = new Mock<FeedIterator<QueueAuditEvent>>();

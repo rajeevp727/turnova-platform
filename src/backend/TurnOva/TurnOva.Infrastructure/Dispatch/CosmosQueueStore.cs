@@ -234,6 +234,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             !string.Equals(document.Id, document.DriverId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(document.ZoneId) ||
             string.IsNullOrWhiteSpace(document.ServiceClass) ||
+            !document.IsEligible ||
             !string.Equals(document.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal) ||
             !string.Equals(QueueKey(document.ZoneId, document.ServiceClass), expectedZoneServiceKey, StringComparison.Ordinal))
             throw new InvalidOperationException("Cosmos returned a malformed queue entry query item.");
