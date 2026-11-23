@@ -92,6 +92,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             batch.CreateItem(user);
             ct.ThrowIfCancellationRequested();
             using var response = await batch.ExecuteAsync(ct);
+            ct.ThrowIfCancellationRequested();
             if (!response.IsSuccessStatusCode)
             {
                 return response.StatusCode == System.Net.HttpStatusCode.Conflict
