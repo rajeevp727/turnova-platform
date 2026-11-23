@@ -389,8 +389,20 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         {
             if (_container is not null) return _container;
             var database = cosmosClient!.GetDatabase(configuration?["CosmosDb:DatabaseName"] ?? DatabaseNameDefault);
-            await database.CreateContainerIfNotExistsAsync(new ContainerProperties(ContainerName, "/role"), cancellationToken: ct);
-            _container = database.GetContainer(ContainerName);
+            var response = await database.CreateContainerIfNotExistsAsync(
+                new ContainerProperties(ContainerName, "/role"),
+                cancellationToken: ct);
+            ct.ThrowIfCancellationRequested();
+
+            var properties = response.Resource ?? throw new InvalidOperationException(
+                "Cosmos returned an empty identity container resource after bootstrap.");
+            if (!string.Equals(properties.Id, ContainerName, StringComparison.Ordinal) ||
+                !string.Equals(properties.PartitionKeyPath, "/role", StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Cosmos returned an identity container resource that does not match the requested name and partition-key path after bootstrap.");
+
+            _container = response.Container ?? throw new InvalidOperationException(
+                "Cosmos returned an empty identity container handle after bootstrap.");
             return _container;
         }
         catch (CosmosException) { return null; }
