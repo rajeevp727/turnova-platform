@@ -14,25 +14,37 @@ public sealed class UnavailablePrivateDriverMediaStore : IPrivateDriverMediaStor
         string mediaType,
         string contentType,
         ReadOnlyMemory<byte> content,
-        CancellationToken cancellationToken) =>
-        Task.FromResult<PrivateDriverMediaMetadata?>(null);
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<PrivateDriverMediaMetadata?>(null);
+    }
 
     public Task<PrivateDriverMediaAsset?> ReadAsync(
         string driverId,
         string reference,
-        CancellationToken cancellationToken) =>
-        Task.FromResult<PrivateDriverMediaAsset?>(null);
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<PrivateDriverMediaAsset?>(null);
+    }
 
     public Task<bool> IsOwnedAndCleanAsync(
         string driverId,
         string mediaType,
         string reference,
-        CancellationToken cancellationToken) =>
-        Task.FromResult(false);
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(false);
+    }
 
     public Task<bool> DeleteAsync(
         string driverId,
         string reference,
-        CancellationToken cancellationToken) =>
-        Task.FromResult(false);
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(false);
+    }
 }
