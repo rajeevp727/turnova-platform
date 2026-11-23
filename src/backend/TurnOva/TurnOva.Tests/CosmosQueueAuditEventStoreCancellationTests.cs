@@ -205,6 +205,36 @@ public sealed class CosmosQueueAuditEventStoreCancellationTests
             ReasonCategory: QueueAuditReasonCategories.QueueReadFailed);
 
     [Fact]
+    public async Task ReadProviderFailureDoesNotHideCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var unavailable = new CosmosException(
+            "queue audit read unavailable", HttpStatusCode.ServiceUnavailable, 0, "queue-audit-read-test", 0);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<QueueAuditEvent>(
+                "event-1",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<QueueAuditEvent>>(unavailable);
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueAuditEventStore(container.Object)
+                .ReadAsync("event-1", "zone-a|cab", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<QueueAuditEvent>(
+            "event-1",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task SuccessfulReadRejectsNullResourceInsteadOfReturningMissingEvent()
     {
         var auditEvent = CreateEvent();
