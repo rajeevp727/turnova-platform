@@ -44,6 +44,40 @@ public sealed class CosmosQueueResourceContractTests
     }
 
     [Fact]
+    public async Task QueueEligibilityReturnsValidatedCabQueueEntry()
+    {
+        var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
+        var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
+        {
+            Id = "driver-1",
+            DriverId = "driver-1",
+            ZoneId = "Hyderabad-Central",
+            ServiceClass = "Cab",
+            ZoneServiceKey = "hyderabad-central|cab",
+            JoinedAt = DateTimeOffset.Parse("2026-11-23T00:00:00Z"),
+            Sequence = 1,
+            IsEligible = true
+        });
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var entries = await new CosmosQueueStore(container.Object).GetEligibleAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+
+        var entry = Assert.Single(entries);
+        Assert.Equal("driver-1", entry.DriverId);
+        Assert.Equal("Hyderabad-Central", entry.ZoneId);
+        Assert.Equal("Cab", entry.ServiceClass);
+        Assert.True(entry.IsEligible);
+        iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task QueueEligibilityRejectsNullQueryItemInsteadOfExposingDriver()
     {
         var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
