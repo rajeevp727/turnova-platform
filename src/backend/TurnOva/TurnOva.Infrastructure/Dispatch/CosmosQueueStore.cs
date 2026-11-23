@@ -27,8 +27,14 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             if (!iterator.HasMoreResults) break;
 
             var page = await iterator.ReadNextAsync(cancellationToken);
-            entries.AddRange(page.Select(x => new DriverQueueEntry(
-                x.DriverId, x.ZoneId, x.ServiceClass, x.JoinedAt, x.Sequence, x.IsEligible)));
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var item in page)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var entry = RequireEligibleQueryItem(item, key);
+                entries.Add(new DriverQueueEntry(
+                    entry.DriverId, entry.ZoneId, entry.ServiceClass, entry.JoinedAt, entry.Sequence, entry.IsEligible));
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -194,7 +200,13 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             cancellationToken.ThrowIfCancellationRequested();
             if (!iterator.HasMoreResults) break;
 
-            events.AddRange(await iterator.ReadNextAsync(cancellationToken));
+            var page = await iterator.ReadNextAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var item in page)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                events.Add(RequireAuditQueryItem(item));
+            }
         }
         cancellationToken.ThrowIfCancellationRequested();
         return events;
@@ -209,6 +221,29 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         string? reasonCategory = null) =>
         new(Guid.NewGuid().ToString("N"), zoneServiceKey, driverId, eventType,
             DateTimeOffset.UtcNow, offerId, traceId, reasonCategory);
+
+    private static QueueEntryDocument RequireEligibleQueryItem(
+        QueueEntryDocument? document,
+        string expectedZoneServiceKey)
+    {
+        if (document is null)
+            throw new InvalidOperationException("Cosmos returned an empty queue entry query item.");
+
+        if (string.IsNullOrWhiteSpace(document.Id) ||
+            string.IsNullOrWhiteSpace(document.DriverId) ||
+            !string.Equals(document.Id, document.DriverId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(document.ZoneId) ||
+            string.IsNullOrWhiteSpace(document.ServiceClass) ||
+            !string.Equals(document.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal) ||
+            !string.Equals(QueueKey(document.ZoneId, document.ServiceClass), expectedZoneServiceKey, StringComparison.Ordinal))
+            throw new InvalidOperationException("Cosmos returned a malformed queue entry query item.");
+
+        return document;
+    }
+
+    private static QueueAuditEvent RequireAuditQueryItem(QueueAuditEvent? auditEvent) =>
+        auditEvent ?? throw new InvalidOperationException(
+            "Cosmos returned an empty queue audit event query item.");
 
     private static QueueEntryDocument RequireResource(ItemResponse<QueueEntryDocument> response) =>
         response.Resource ?? throw new InvalidOperationException(
