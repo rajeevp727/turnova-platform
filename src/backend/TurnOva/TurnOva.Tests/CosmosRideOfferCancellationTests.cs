@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Azure.Cosmos;
 using Moq;
+using Moq.Protected;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
 
@@ -46,6 +47,9 @@ public sealed class CosmosRideOfferCancellationTests
 
         container.Verify(value => value.ReadItemAsync<RideOfferState>(
             state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+        iterator.Protected().Verify("Dispose", Times.Once(), true, true);
         container.VerifyNoOtherCalls();
     }
 
@@ -282,7 +286,9 @@ public sealed class CosmosRideOfferCancellationTests
 
         container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+        iterator.Protected().Verify("Dispose", Times.Once(), true, true);
         container.VerifyNoOtherCalls();
     }
 
@@ -310,6 +316,9 @@ public sealed class CosmosRideOfferCancellationTests
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<RideOfferState>(
             state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+        iterator.Protected().Verify("Dispose", Times.Once(), true, true);
         container.VerifyNoOtherCalls();
     }
 
