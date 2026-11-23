@@ -198,6 +198,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
             It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Never);
         createResponse.VerifyGet(value => value.Container, Times.Once);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
         readResponse.VerifyGet(value => value.Resource, Times.Once);
         database.VerifyNoOtherCalls();
         container.VerifyNoOtherCalls();
@@ -248,6 +249,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
             It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Never);
         createResponse.VerifyGet(value => value.Container, Times.Once);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
         readResponse.VerifyGet(value => value.Resource, Times.Once);
         database.VerifyNoOtherCalls();
         container.VerifyNoOtherCalls();
@@ -280,6 +282,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
                 properties.Id == "SupportRequests" && properties.PartitionKeyPath == "/reporterId"),
             It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         createResponse.VerifyGet(value => value.Container, Times.Once);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
         database.VerifyNoOtherCalls();
         createResponse.VerifyNoOtherCalls();
     }
@@ -338,6 +341,9 @@ public sealed class CosmosMigrationDatabaseCancellationTests
                 "Rides", "/id", CancellationToken.None));
 
         Assert.Equal("Cosmos returned an empty container resource after container creation.", exception.Message);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "Rides" && properties.PartitionKeyPath == "/id"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         createResponse.VerifyGet(value => value.Resource, Times.Once);
         createResponse.VerifyGet(value => value.Container, Times.Never);
         database.VerifyNoOtherCalls();
