@@ -1,6 +1,6 @@
 # TurnOva MVP Progress — Current Snapshot
 
-**Last updated:** 2026-11-23 (Run 108)
+**Last updated:** 2026-11-23 (Run 109)
 
 ## Platform phase gate
 
@@ -8,6 +8,21 @@
 - **Android Rider/Driver:** `not_started`.
 - **iOS Rider/Driver:** `not_started`.
 - Required order remains API → Android Rider → Android Driver → iOS Rider → iOS Driver. No mobile completion work may begin until API implementation, automated evidence, API documentation, available API acceptance checks, independent review/permitted merge and a fresh main audit satisfy the phase exit criteria.
+
+## Run 109 — live main/PR reconciliation and Cosmos reservation ETag audit (2026-11-23)
+
+- **Platform phase:** Backend API remains `in_progress`; Android Rider/Driver and iOS remain `not_started` for completion work. No mobile completion work was started.
+- **Live main:** `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`. Main phase metadata remains stale (`api=complete`, `android=in_progress`) and must not authorize Android work.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, pre-run docs head `409ff8a3816528316688b333c2e40e5e5e40223b`. Compare against main: **786 commits ahead / 6 behind**, merge base `4061357c095debbc31fc5027a7bff27bd8b06265`; GitHub reports non-mergeable/dirty. The two conflicting leaf files remain `Program.cs` and `AuthApiIntegrationTests.cs`.
+- **Main's native-auth change:** PR #207 merged `CosmosIdentityService` and real Rider/Driver sign-in at `779939d109216b0d7de6e98735b4b92b1d95671f` despite zero recorded reviews (historical process exception). Main head CI [#45168231027](https://github.com/rajeevp727/turnova-platform/actions/runs/45168231027) passed **866/866 backend tests**, Release build 26 warnings / 0 errors; Android build/emulator jobs passed on main but are not Android phase-exit evidence.
+- **PR #200 CI:** no workflow run/check suite is recorded for pre-run head `409ff8a`. Prior exact-head run [#45162925132](https://github.com/rajeevp727/turnova-platform/actions/runs/45162925132) on `c9f8801` failed 2/1,345 tests (1,343 passed) due nested Moq verification of `FeedIterator.Dispose(true)`. Test-only correction [`b3c885b`](https://github.com/rajeevp727/turnova-platform/commit/b3c885b79d4949a63d26b170c27e9abb3e3b9e20) adds explicit protected disposal verification. Queue identity test commit [`95fe65a`](https://github.com/rajeevp727/turnova-platform/commit/95fe65aeb411d0beb7fd0d0028fe0680aeb296e4) independently tests document-ID and Driver-ID mismatches for Remove, MoveToBack and MoveToBackOnce. Neither correction has exact-head CI evidence yet.
+- **Cosmos reservation audit:** `CosmosDriverRideReservationStore` and `CosmosRiderActiveBookingReservationStore` already use same-partition transactional acquire/audit batches and observed ETags for promotion, expiry changes and release. `CosmosAdapterContractTests` already covers missing ETags, IfMatchEtag writes and stale-write conflicts. No production change was justified by this audit.
+- **Required reconciliation:** PR #200 still contains TriSend/demo auth proxy code; main now uses Cosmos-native auth. Do not merge either side blindly. Deliberately preserve PR #200 response-cache, JWT subject, API privacy, Cosmos migration/dispatch and deterministic test hardening while adopting main's native auth; remove superseded demo/TriSend auth routes/tests. Native-auth gaps to fix before API exit: transactional email reservation + user creation, ETag-conditional login/refresh/logout, deterministic successful persistence/rotation/rollback/concurrency tests, and public auth route rate limiting.
+- **Review gate:** PR #200 remains open/non-draft/unmerged; three owner-authored COMMENTED reviews, **0 independent approvals**, zero unresolved review threads. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only. PR #207 and earlier PR #197 merges without independent human approval remain disclosed historical exceptions.
+- **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos, hosted API, production identity/provider and production readiness are not established.
+- **External gates:** live Cosmos ETag/partition/multi-instance/restart and durable Staging/QA; production secrets/hosting and existing TriSend account migration decision; shared auth rate limiting/trusted proxy; Product-approved dispatch zones/radius/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention/deletion; support/escalation and reconciliation policies; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next exact action:** reconcile main into PR #200 with deliberate `Program.cs` and `AuthApiIntegrationTests.cs` resolution, then add the native-auth persistence/concurrency/rate-limit tests and run exact-head API-only CI + native non-container publish/verifier. Obtain independent human approval; never self-approve or merge without repository permission. Re-audit main after a permitted merge before Android Rider.
+- **This run's changes:** documentation/handoff only; no source or acceptance status was changed. A fresh exact-head CI is required for the documentation-bearing head created by this handoff.
 
 ## Run 108 — current-main reconciliation and iterator-disposal test correction (2026-11-23)
 
