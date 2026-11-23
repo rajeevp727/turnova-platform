@@ -30,6 +30,8 @@ Rider/Driver identity is Cosmos-native in the `TurnOvaUsers` container partition
 
 The first authentication use also validates the successful `CreateContainerIfNotExistsAsync` response before caching the identity container: the resource must identify `TurnOvaUsers`, its partition-key path must be `/role`, and the response must include its `Container` handle. Malformed metadata fails closed before auth persistence writes; the service uses that validated response handle. Cancellation is preserved if a Cosmos provider exception races with an aborted request. `CosmosIdentityContainerBootstrapTests` covers null/mismatched resources, missing handle, valid-handle use and cancellation precedence. This remains deterministic mock evidence; live Cosmos validation is external.
 
+Every CosmosException translation path in registration, login, refresh and logout rechecks the request token before returning a conflict, invalid-credential, no-content or storage-unavailable result. If cancellation raced with the provider failure, cancellation propagates and no later read, write or retry is started. Ten deterministic failure-race tests cover registration conflicts/provider failures, login and refresh query/read/ETag failures, and logout point-read failures; an existing regression covers cancellation during logout ETag retry. These are SDK-mock tests, not live Cosmos behavior.
+
 
 `GET /api/v1/auth/me` is read-only. The PRD does not define editable profile fields, validation or role-specific ownership rules, so no profile-update endpoint is invented; obtain a product decision before adding one.
 
