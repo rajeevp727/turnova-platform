@@ -79,8 +79,6 @@ async function request(path: string, init: RequestInit = {}, token?: string) {
 
 export default function App() {
   const [user,setUser]=useState<User|null>(null);
-  const [demoMode,setDemoMode]=useState(false);
-  const [demoTab,setDemoTab]=useState<"Book"|"Activity"|"Offers"|"Profile">("Book");
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const systemColorScheme = useColorScheme(); const [tokens,setTokens]=useState<Tokens|null>(null); const refreshInFlight=useRef<Promise<string>|null>(null); const sessionEpoch=useRef(0); const authenticatedSessionEpoch=useRef<number|null>(null);
   const activeSessionStops=useRef<Set<() => unknown>>(new Set());
@@ -328,18 +326,6 @@ export default function App() {
       stopRegisteredConnections(new Set<() => unknown>([stopConnection]));
     };
   },[ride?.rideId,tab,tokens?.accessToken,apiFetch,loadRideHistory]);
-  const startDemoSession = async () => {
-    try {
-      setError("");
-      const response = await request("/api/v1/auth/demo/rider", { method: "POST" });
-      if (!response?.isDemo || response?.user?.role !== "Rider") throw new Error("Invalid demo session response.");
-      setUser(requireAppRole<User>(response.user, "Rider"));
-      setDemoTab("Book");
-      setDemoMode(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to start demo session. Check API availability and demo configuration.");
-    }
-  };
   const authenticate = async () => {
     if(!tryBeginRiderAuthSubmission(authSubmissionInFlight))return;
     let authEpoch = sessionEpoch.current;
@@ -525,44 +511,27 @@ export default function App() {
     {(["system", "light", "dark"] as const).map(option => <Pressable key={option} testID={`rider-theme-${option}`} {...getRiderThemeOptionProps(option,themePreference===option)} onPress={() => selectTheme(option)} style={[styles.themeOption, themePreference === option && styles.themeOptionSelected]}><Text style={[styles.themeOptionText, themePreference === option && styles.themeOptionTextSelected]}>{option === "system" ? "System" : option === "light" ? "Light" : "Dark"}</Text></Pressable>)}
   </View>;
   const authSubmitDisabled=loading||!email.trim()||!password;
-  if(loading&&!user&&!demoMode)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}} accessibilityLabel="Restoring your Rider session"/></SafeAreaView>;
-  if(!user&&!demoMode)return <SafeAreaView style={styles.safe}>
+  const authSubmitDisabled=loading||!email.trim()||!password||(mode==="register"&&!name.trim());
+  if(loading&&!user)return <SafeAreaView style={styles.safe}><ActivityIndicator color={colors.accent} style={{marginTop:80}} accessibilityLabel="Restoring your Rider session"/></SafeAreaView>;
+  if(!user)return <SafeAreaView style={styles.safe}>
     <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
     <View style={styles.header}><TurnOvaLogo subtitle="Everyone’s Turn Matters." /></View>
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>RIDER ACCOUNT</Text><Text style={styles.title}>Explore TurnOva</Text>
-      <Text style={styles.sub}>Registration is temporarily unavailable while the API is offline. Continue with a local demo profile to preview the Rider app.</Text>
+      <Text style={styles.eyebrow}>RIDER ACCOUNT</Text><Text style={styles.title}>{mode==="register"?"Create your account":"Welcome back"}</Text>
+      <Text style={styles.sub}>Sign up or sign in with your email. Your account is securely stored in TurnOva.</Text>
       {themePicker}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Offline demo access</Text>
-        <Text style={styles.muted}>No email or password required. The API issues a restricted demo session that cannot access real user or ride data.</Text>
-        <Pressable testID="rider-demo-login" style={styles.primary} onPress={startDemoSession}><Text style={styles.primaryText}>Continue as Demo Rider</Text></Pressable>
-        {error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.muted}>Demo mode is read-only. Booking, payments and live tracking are unavailable.</Text>
+        <View style={{flexDirection:"row",gap:8}}>
+          <Pressable testID="rider-auth-sign-in-tab" style={[styles.themeOption,mode==="login"&&styles.themeOptionSelected]} onPress={()=>{setMode("login");setError("");}}><Text style={[styles.themeOptionText,mode==="login"&&styles.themeOptionTextSelected]}>Sign in</Text></Pressable>
+          <Pressable testID="rider-auth-sign-up-tab" style={[styles.themeOption,mode==="register"&&styles.themeOptionSelected]} onPress={()=>{setMode("register");setError("");}}><Text style={[styles.themeOptionText,mode==="register"&&styles.themeOptionTextSelected]}>Sign up</Text></Pressable>
+        </View>
+        {mode==="register"&&<><Text style={styles.label}>FULL NAME</Text><TextInput testID="rider-auth-name" value={name} onChangeText={setName} autoCapitalize="words" style={styles.input} placeholder="Your name" placeholderTextColor={colors.muted} editable={!loading}/></>}
+        <Text style={styles.label}>EMAIL</Text><TextInput testID="rider-auth-email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" style={styles.input} placeholder="you@example.com" placeholderTextColor={colors.muted} editable={!loading}/>
+        <Text style={styles.label}>PASSWORD</Text><TextInput testID="rider-auth-password" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoComplete={mode==="register"?"new-password":"current-password"} style={styles.input} placeholder={mode==="register"?"At least 10 characters":"Your password"} placeholderTextColor={colors.muted} editable={!loading}/>
+        {mode==="register"&&<Text style={styles.muted}>Use at least 10 characters, including a letter and a number.</Text>}
+        <Pressable testID="rider-auth-submit" style={[styles.primary,authSubmitDisabled&&{opacity:0.55}]} disabled={authSubmitDisabled} onPress={()=>void authenticate()}><Text style={styles.primaryText}>{loading?(mode==="register"?"Creating account…":"Signing in…"):(mode==="register"?"Create Rider account":"Sign in as Rider")}</Text></Pressable>
+        {!!error&&<Text testID="rider-auth-error" accessibilityRole="alert" style={styles.error}>{error}</Text>}
       </View>
-    </ScrollView>
-  </SafeAreaView>;
-
-  if(demoMode) return <SafeAreaView style={styles.safe}>
-    <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"}/>
-    <View style={styles.header}><TurnOvaLogo subtitle="Rider demo · Offline preview" compact /></View>
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>RIDER DEMO</Text>
-      <Text style={styles.title}>{demoTab==="Book"?"Where to?":demoTab}</Text>
-      <Text style={styles.sub}>Sample content only. Demo session is restricted; real booking, payment and live tracking are unavailable.</Text>
-      {demoTab==="Book"&&<View style={styles.card}>
-        <Text style={styles.label}>SAMPLE TRIP</Text><Text style={styles.cardTitle}>Nizampet → HITEC City</Text>
-        <Text style={styles.muted}>Cab · 1 passenger · Sample estimate ₹280–₹340</Text>
-        <View style={{height:1,backgroundColor:colors.border,marginVertical:14}}/>
-        <Text style={styles.label}>NEARBY DEMO DRIVER</Text><Text style={styles.cardTitle}>Arjun Kumar</Text><Text style={styles.muted}>Maruti Swift Dzire · Demo Union · 2.4 km away</Text>
-        <Text style={styles.muted}>Driver discovery and booking are disabled in offline demo mode.</Text>
-      </View>}
-      {demoTab==="Activity"&&<View style={styles.card}><Text style={styles.label}>SAMPLE RIDE HISTORY</Text><Text style={styles.cardTitle}>Nizampet → HITEC City</Text><Text style={styles.muted}>Completed · Demo ride · ₹310 (illustrative only)</Text><Text style={styles.cardTitle}>Kukatpally → Secunderabad</Text><Text style={styles.muted}>Cancelled · Demo record</Text></View>}
-      {demoTab==="Offers"&&<View style={styles.card}><Text style={styles.cardTitle}>Offers</Text><Text style={styles.muted}>No live offers are loaded in offline demo mode.</Text></View>}
-      {demoTab==="Profile"&&<View style={styles.card}><Text style={styles.label}>DEMO RIDER PROFILE</Text><Text style={styles.cardTitle}>Raja · Sample Rider</Text><Text style={styles.muted}>Role: Rider</Text><Text style={styles.muted}>Account: Local demo profile · Not registered</Text></View>}
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:8,marginTop:16}}>
-        {(["Book","Activity","Offers","Profile"] as const).map(item=><Pressable key={item} onPress={()=>setDemoTab(item)} style={[styles.themeOption,demoTab===item&&styles.themeOptionSelected]}><Text style={[styles.themeOptionText,demoTab===item&&styles.themeOptionTextSelected]}>{item}</Text></Pressable>)}
-      </View>
-      <Pressable style={[styles.secondary,{marginTop:16}]} onPress={()=>{setDemoMode(false);setDemoTab("Book");}}><Text style={styles.secondaryText}>Exit demo</Text></Pressable>
     </ScrollView>
   </SafeAreaView>;
   if (!user) return null;
