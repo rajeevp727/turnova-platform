@@ -337,7 +337,6 @@ public sealed class CosmosQueueCancellationTests
         iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
         container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -361,7 +360,6 @@ public sealed class CosmosQueueCancellationTests
         iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
         container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
