@@ -6,8 +6,6 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net.Http.Json;
-using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
@@ -63,7 +61,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         var jwtSigningKey = builder.Configuration["Auth:Jwt:SigningKey"];
         if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience) ||
             string.IsNullOrWhiteSpace(jwtSigningKey) || jwtSigningKey.Length < 32)
-            throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey shared with TriSend.");
+            throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a signing key of at least 32 characters.");
 
         options.MapInboundClaims = false;
         options.Events = new JwtBearerEvents
@@ -119,23 +117,6 @@ builder.Services.AddSingleton<ConcurrentDictionary<string, DriverUnionAuditEvent
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverWorkActivity>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, DriverRideReservation>>();
-builder.Services.AddOptions<TriSendSettings>()
-    .Bind(builder.Configuration.GetSection("TriSend"))
-    .Validate(settings =>
-        !string.IsNullOrWhiteSpace(settings.BaseUrl) &&
-        Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri) &&
-        uri.Scheme == Uri.UriSchemeHttps,
-        "TriSend:BaseUrl must be a valid HTTPS URL.")
-    .ValidateOnStart();
-
-builder.Services.AddHttpClient("TriSend", (services, client) =>
-{
-    var settings = services.GetRequiredService<IOptions<TriSendSettings>>().Value;
-    client.BaseAddress = new Uri(settings.BaseUrl!, UriKind.Absolute);
-    client.Timeout = TimeSpan.FromSeconds(15);
-});
-
-
 var cosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"];
 var cosmosKey = builder.Configuration["CosmosDb:Key"];
 var databaseName = builder.Configuration["CosmosDb:DatabaseName"] ?? "TurnOvaDb";
