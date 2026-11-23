@@ -26,9 +26,10 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
     public async Task<RideOfferState?> GetPendingForDriverAsync(string driverId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId AND c.status = @status")
+        var query = new QueryDefinition("SELECT TOP 2 * FROM c WHERE c.driverId = @driverId AND c.status = @status")
             .WithParameter("@driverId", driverId).WithParameter("@status", RideOfferStatuses.Pending);
         using var iterator = container.GetItemQueryIterator<RideOfferState>(query);
+        RideOfferState? pendingOffer = null;
         while (iterator.HasMoreResults)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -37,11 +38,16 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
             foreach (var item in page)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return RequirePendingForDriverQueryItem(item, driverId);
+                var candidate = RequirePendingForDriverQueryItem(item, driverId);
+                if (pendingOffer is not null)
+                    throw new InvalidOperationException(
+                        "Cosmos returned multiple pending ride offers for the driver.");
+
+                pendingOffer = candidate;
             }
         }
         cancellationToken.ThrowIfCancellationRequested();
-        return null;
+        return pendingOffer;
     }
 
     public async Task<IReadOnlyList<RideOfferState>> GetExpiredAsync(DateTimeOffset nowUtc, int maxItems, CancellationToken cancellationToken = default)

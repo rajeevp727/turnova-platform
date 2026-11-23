@@ -59,6 +59,48 @@ public sealed class CosmosRideOfferResourceContractTests
     }
 
     [Fact]
+    public async Task GetPendingForDriverReturnsTheSinglePendingOffer()
+    {
+        var state = CreateState();
+        var (container, iterator) = CreateQueryWithItem(state);
+
+        var result = await new CosmosRideOfferStore(container.Object).GetPendingForDriverAsync("driver-1");
+
+        Assert.Equal(state, result);
+        container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetPendingForDriverRejectsMultiplePendingOffersAcrossPages()
+    {
+        var first = CreateState() with { RideId = "ride-first" };
+        var second = CreateState() with { RideId = "ride-second" };
+        var (container, iterator) = CreateQueryWithTwoPages(first, second);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosRideOfferStore(container.Object).GetPendingForDriverAsync("driver-1"));
+
+        Assert.Equal("Cosmos returned multiple pending ride offers for the driver.", exception.Message);
+        container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        container.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task GetExpiredRejectsNullQueryItemBeforeHydratingRideOffer()
     {
         var (container, iterator) = CreateQueryWithNullItem();
@@ -164,6 +206,35 @@ public sealed class CosmosRideOfferResourceContractTests
         iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
         iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(page.Object);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<RideOfferState>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        return (container, iterator);
+    }
+
+    private static (Mock<Container> Container, Mock<FeedIterator<RideOfferState>> Iterator)
+        CreateQueryWithTwoPages(RideOfferState first, RideOfferState second)
+    {
+        static Mock<FeedResponse<RideOfferState>> CreatePage(RideOfferState item)
+        {
+            var page = new Mock<FeedResponse<RideOfferState>>(MockBehavior.Strict);
+            page.As<IEnumerable<RideOfferState>>()
+                .Setup(value => value.GetEnumerator())
+                .Returns(() => new[] { item }.AsEnumerable().GetEnumerator());
+            return page;
+        }
+
+        var firstPage = CreatePage(first);
+        var secondPage = CreatePage(second);
+        var iterator = new Mock<FeedIterator<RideOfferState>>();
+        iterator.SetupSequence(value => value.HasMoreResults)
+            .Returns(true)
+            .Returns(true)
+            .Returns(false);
+        iterator.SetupSequence(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(firstPage.Object)
+            .ReturnsAsync(secondPage.Object);
         var container = new Mock<Container>(MockBehavior.Strict);
         container.Setup(value => value.GetItemQueryIterator<RideOfferState>(
                 It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
