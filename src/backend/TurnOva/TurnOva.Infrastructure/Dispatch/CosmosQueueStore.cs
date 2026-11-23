@@ -150,7 +150,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         {
             var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(driverId, new PartitionKey(key), cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var document = RequireResource(response);
+            var document = RequireResource(response, driverId, key);
             if (document.LastRotationOfferId == offerId) return true;
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
                 return false;
