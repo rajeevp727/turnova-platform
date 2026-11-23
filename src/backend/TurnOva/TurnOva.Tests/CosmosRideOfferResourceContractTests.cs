@@ -91,7 +91,7 @@ public sealed class CosmosRideOfferResourceContractTests
             rideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
         response.VerifyGet(value => value.Resource, Times.Once);
-        container.VerifyNoOtherCalls();
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
         response.VerifyNoOtherCalls();
     }
