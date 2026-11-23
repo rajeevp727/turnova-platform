@@ -11,6 +11,23 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 
 **Current phase gate (Run 108, 2026-11-23):** API remains `in_progress`; Android/iOS remain `not_started` for completion work. Main advanced to `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860` after PR #207 merged Cosmos-native auth and real Rider/Driver sign-in at `779939d109216b0d7de6e98735b4b92b1d95671f` despite zero recorded reviews. Main head CI [#45168231027](https://github.com/rajeevp727/turnova-platform/actions/runs/45168231027) passed 866/866 backend tests (26 warnings, 0 errors); Android jobs on main do not satisfy Android phase exit. PR #200 source/test correction commit is `b3c885b79d4949a63d26b170c27e9abb3e3b9e20`; documentation-bearing checkpoint `03a3e7f1379d1483ac95ab455ff2c4364da9cb4c` preceded the final progress/matrix sync commits; compare at that checkpoint was 775 ahead / 6 behind main, merge base `4061357c095debbc31fc5027a7bff27bd8b06265`, and GitHub reports dirty because `Program.cs` and `AuthApiIntegrationTests.cs` conflict. PR CI [#45162925132](https://github.com/rajeevp727/turnova-platform/actions/runs/45162925132) on prior head `c9f8801` failed 2/1,345 tests (1,343 passed) because two nested Moq verifications did not account for `FeedIterator.Dispose(true)`; the Release build passed with 0 warnings/0 errors. Test-only commit [`b3c885b`](https://github.com/rajeevp727/turnova-platform/commit/b3c885b79d4949a63d26b170c27e9abb3e3b9e20) adds explicit protected disposal verification in both tests. Exact-head CI on b3c885b is pending and must not be claimed green. PR #200 has three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads.
 
+## Native Cosmos identity and auth security (AUTH-COSMOS-001..008)
+
+PR #207 removed the TriSend auth proxy and demo-session issuance. Current integration evidence covers the API contract and fail-closed behavior when Cosmos is not configured. It does not prove successful live Cosmos registration/login/refresh or concurrent session rotation.
+
+| ID | Scenario | Expected result | Current automated evidence | Status |
+|---|---|---|---|---|
+| AUTH-COSMOS-001 | Register Rider/Driver with missing Cosmos configuration | Generic HTTP 503; no in-memory production fallback | AuthApiIntegrationTests.RegistrationRequiresConfiguredCosmosStorage | Covered |
+| AUTH-COSMOS-002 | Login Rider/Driver with missing Cosmos configuration | Generic HTTP 503 | AuthApiIntegrationTests.LoginRequiresConfiguredCosmosStorage | Covered |
+| AUTH-COSMOS-003 | Weak password, unsupported role or missing refresh token | 400/404 before persistence | AuthApiIntegrationTests validation cases | Covered |
+| AUTH-COSMOS-004 | Authenticated /me and logout; anonymous or subjectless JWT | Valid JWT identity returned; anonymous 401; subjectless 403 | AuthApiIntegrationTests.MeReturnsIdentityFromValidatedTurnOvaJwt; subjectless regression | Covered |
+| AUTH-COSMOS-005 | Public register/login/refresh request rate exceeds the per-IP window | 429; no-store/no-cache | AuthApiIntegrationTests.PublicAuthEndpointsAreRateLimitedByServerObservedRemoteAddress | Pending exact-head CI |
+| AUTH-COSMOS-006 | Registration email reservation and user creation fail between writes | No orphan reservation or duplicate account | Requires deterministic Cosmos adapter test; current compensation path is not transactionally atomic | Gap |
+| AUTH-COSMOS-007 | Two concurrent login/refresh/logout updates race | ETag conditional writes prevent stale token overwrite/reuse | Requires ETag/CAS adapter and service tests; current writes lack ETag guards | Gap |
+| AUTH-COSMOS-008 | Live Cosmos partition, ETag, multi-instance and restart behavior | Successful integration evidence against configured Cosmos | External infrastructure gate; not verified | Blocked |
+
+
+
 ## Cosmos audit/support canonical point-read identity integrity (COSMOS-STORE-042..045)
 
 Canonical point reads must not return a resource that belongs to another event, partition, support request or reporter. This applies to queue-audit idempotency read-back after create conflict and support-request replay/conflict read-back. The adapter fails closed on mismatched persisted identity rather than returning a foreign resource to its caller.

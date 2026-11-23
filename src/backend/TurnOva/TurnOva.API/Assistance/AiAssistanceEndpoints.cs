@@ -11,6 +11,7 @@ namespace TurnOva.API.Assistance;
 public static class AiAssistanceEndpoints
 {
     private const string RateLimitPolicy = "ai-assistance";
+    public const string PublicAuthRateLimitPolicyName = "public-auth";
 
     public static IServiceCollection AddAiAssistance(
         this IServiceCollection services,
@@ -27,6 +28,7 @@ public static class AiAssistanceEndpoints
             sp.GetRequiredService<IOptions<AiAssistantOptions>>().Value));
 
         var requestsPerMinute = configuration.GetValue<int?>("AiAssistant:MaxRequestsPerMinute") ?? 10;
+        var publicAuthRequestsPerMinute = Math.Clamp(configuration.GetValue<int?>("Auth:PublicRequestsPerMinute") ?? 10, 1, 120);
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -59,21 +61,18 @@ public static class AiAssistanceEndpoints
                         AutoReplenishment = true
                     });
             });
-            options.AddPolicy(DemoAuthPolicy.RateLimitPolicyName, context =>
+            options.AddPolicy(PublicAuthRateLimitPolicyName, context =>
             {
-                // Demo issuance is anonymous: partition only by the server-observed remote IP.
-                // Do not trust an arbitrary client-supplied forwarding header here.
                 var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
-                return RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey,
-                    _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = DemoAuthPolicy.RequestsPerMinute,
-                        Window = TimeSpan.FromMinutes(1),
-                        QueueLimit = 0,
-                        AutoReplenishment = true
-                    });
+                return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = publicAuthRequestsPerMinute,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
             });
+
         });
 
         return services;

@@ -338,5 +338,5 @@ test("AUTH-LOGIN-063 Rider replacement authentication awaits epoch-bound SecureS
   assert.ok(staleGuardIndex > cleanupIndex, "Rider authentication must recheck the session epoch after asynchronous cleanup.");
   assert.ok(requestIndex > staleGuardIndex, "No login or registration request may be sent before successful current-epoch cleanup.");
   assert.match(auth, /clearSessionTokensIfCurrent\(\s*SecureStore,\s*\(\) => sessionEpoch\.current === authEpoch\s*\)/);
-  assert.match(auth, /catch \(e\)\s*\{\s*if \(sessionEpoch\.current === authEpoch\)\s*setError/);
+  assert.match(auth, /catch \(e\)\s*\{\s*if \(sessionEpoch\.current === authEpoch\)\s*\{[\s\S]*?setError\(/);
 });
