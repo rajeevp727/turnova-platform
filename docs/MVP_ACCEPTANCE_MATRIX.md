@@ -1,3 +1,10 @@
+## Run 112 — Supplemental AUTH-COSMOS-011 cancellation/error precedence (2026-11-23)
+
+- API remains `in_progress`; Android/iOS completion phases remain `not_started`. PR #200 is the sole active API PR at head [`24b467e84e04e40a1191fb7fb2fc33d7e3b7726e`](https://github.com/rajeevp727/turnova-platform/commit/24b467e84e04e40a1191fb7fb2fc33d7e3b7726e).
+- Sixteen CosmosException catch paths in Cosmos-native auth now check caller cancellation before returning a provider-derived HTTP result. Ten deterministic failure-race tests passed in exact-head API-only CI [#45234425436](https://github.com/rajeevp727/turnova-platform/actions/runs/45234425436): 1,202/1,202 backend tests, Release build, native non-container publish/verifier, artifact [14848606717](https://github.com/rajeevp727/turnova-platform/actions/runs/45234425436/artifacts/14848606717).
+- This is supplemental API security/cancellation evidence; **no 19-row acceptance status changed**. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage.
+- Live Cosmos/provider/production readiness remains unestablished. Android/iOS remain gated by API phase exit and strict platform order.
+
 ## Run 111 — Supplemental Cosmos identity bootstrap contract (2026-11-23)
 
 - API phase remains `in_progress`; Android/iOS completion phases remain `not_started`. PR #200 is the sole active API PR. The documentation sync follows source/test checkpoint `3f25926863f1a69e008064053b85810184efc03f` (812 ahead / 0 behind main), which passed exact-head CI #45230648203. Refresh the live PR head before each run; the 168-file diff contains no mobile paths and GitHub reports mergeable.
