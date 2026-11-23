@@ -26,7 +26,9 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             cancellationToken.ThrowIfCancellationRequested();
             if (!iterator.HasMoreResults) break;
 
-            var page = await iterator.ReadNextAsync(cancellationToken);
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             foreach (var item in page)
             {
@@ -76,8 +78,10 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         var key = QueueKey(zoneId, serviceClass);
         try
         {
-            var current = await queueContainer.ReadItemAsync<QueueEntryDocument>(
-                driverId, new PartitionKey(key), cancellationToken: cancellationToken);
+            var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => queueContainer.ReadItemAsync<QueueEntryDocument>(
+                    driverId, new PartitionKey(key), cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             _ = RequireResource(current, driverId, key);
 
@@ -114,8 +118,10 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         var key = QueueKey(zoneId, serviceClass);
         try
         {
-            var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(
-                driverId, new PartitionKey(key), cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => queueContainer.ReadItemAsync<QueueEntryDocument>(
+                    driverId, new PartitionKey(key), cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var document = RequireResource(response, driverId, key);
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
@@ -148,7 +154,10 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         var key = QueueKey(zoneId, serviceClass);
         try
         {
-            var response = await queueContainer.ReadItemAsync<QueueEntryDocument>(driverId, new PartitionKey(key), cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => queueContainer.ReadItemAsync<QueueEntryDocument>(
+                    driverId, new PartitionKey(key), cancellationToken: cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var document = RequireResource(response, driverId, key);
             if (document.LastRotationOfferId == offerId) return true;
@@ -200,7 +209,9 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             cancellationToken.ThrowIfCancellationRequested();
             if (!iterator.HasMoreResults) break;
 
-            var page = await iterator.ReadNextAsync(cancellationToken);
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             foreach (var item in page)
             {
