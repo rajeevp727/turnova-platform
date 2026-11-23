@@ -1,3 +1,15 @@
+## Run 105 — Cosmos audit/support canonical-read identity integrity (2026-11-23)
+
+- **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`. No mobile completion work, Fleet/Ops Phase 2, Docker/container builds, images, registries or deployments were started.
+- **COSMOS-STORE-042..045:** queue-audit canonical point reads now require the returned EventId and ZoneServiceKey to match the requested ID/partition; support-request canonical reads after create conflict require the returned Id and ReporterId to match the attempted request. Malformed or cross-owner resources fail closed.
+- **Deterministic tests:** `SuccessfulReadRejectsResourceForDifferentEventOrPartition` covers wrong EventId and partition; `CanonicalReadRejectsResourceForDifferentRequestOrReporter` covers wrong support request Id and ReporterId. Four theory cases total.
+- **Source/test commit:** [48d476e](https://github.com/rajeevp727/turnova-platform/commit/48d476e2cfdf81c69693b6ce99022b31e1ed3b8a).
+- **Exact-head API-only CI:** [#45133278455](https://github.com/rajeevp727/turnova-platform/actions/runs/45133278455) passed **1,328/1,328 backend tests (0 failed, 0 skipped)**; .NET 10 Release build 0 warnings/0 errors; native non-container Linux x64 publish 44,003,478 bytes; publish-script syntax and verifier (11 negative fixtures plus valid fixture); artifact [14798144808](https://github.com/rajeevp727/turnova-platform/actions/runs/45133278455/artifacts/14798144808), 17,011,072 bytes, ZIP SHA-256 `4d090738f386a4caff8d3fcf4a696ccb280169d97b759796102ab3bce19074cf`.
+- These are deterministic mocked Cosmos adapter contracts, not live Cosmos partition/ETag/multi-instance/restart evidence. No endpoint, schema, reservation, ride-state, FIFO or customer-facing dispatch behavior changed.
+- **Repository:** main `c9280eec23dd4fb5fab06b11e24d2a619b489235`; PR #200 remains open/non-draft/mergeable/unmerged. Current source/test head `48d476e2cfdf81c69693b6ce99022b31e1ed3b8a`; compare is 748 commits ahead / 2 behind main, merge base `4061357c095debbc31fc5027a7bff27bd8b06265`. Three reviews remain owner-authored COMMENTED, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only. PR #197's historical merge without independent human approval remains disclosed.
+- **Acceptance/readiness:** no 19-row status changed. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); this is not an implementation percentage. Production readiness is not established.
+- **Next:** continue API-only safe persistence/auth/privacy/contract work; obtain independent human approval; do not self-approve or merge. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider.
+
 ## Run 104 — Cosmos ride-offer persisted identity integrity (2026-11-23)
 
 - **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`. No mobile completion work, Fleet/Ops Phase 2, Docker/container builds, images, registries or deployments were started.
