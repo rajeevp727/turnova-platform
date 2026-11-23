@@ -36,9 +36,9 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Theory]
-    [InlineData("rider", "Rider")]
-    [InlineData("driver", "Driver")]
-    public async Task RegistrationRequiresConfiguredCosmosStorage(string routeRole, string role)
+    [InlineData("rider")]
+    [InlineData("driver")]
+    public async Task RegistrationRequiresConfiguredCosmosStorage(string routeRole)
     {
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
