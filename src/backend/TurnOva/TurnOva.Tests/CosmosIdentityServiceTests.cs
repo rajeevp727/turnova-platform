@@ -266,6 +266,269 @@ public sealed class CosmosIdentityServiceTests
     }
 
 
+
+    [Fact]
+    public async Task RegisterPreservesCancellationWhenBatchReturnsConflict()
+    {
+        using var cts = new CancellationTokenSource();
+        var (container, batch, _) = CreateBatchResponse(HttpStatusCode.OK, success: true);
+        batch.Setup(value => value.ExecuteAsync(It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<TransactionalBatchResponse>(
+                    new CosmosException("conflict", HttpStatusCode.Conflict, 0, "auth-cancel-test", 0));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", Password, "Rider"),
+            cts.Token));
+
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegisterPreservesCancellationWhenBatchReturnsProviderFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var (container, batch, _) = CreateBatchResponse(HttpStatusCode.OK, success: true);
+        batch.Setup(value => value.ExecuteAsync(It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<TransactionalBatchResponse>(
+                    new CosmosException("provider unavailable", HttpStatusCode.ServiceUnavailable, 0, "auth-cancel-test", 0));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", Password, "Rider"),
+            cts.Token));
+
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginPreservesCancellationWhenQueryReturnsProviderFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                throw new CosmosException("provider unavailable", HttpStatusCode.ServiceUnavailable, 0, "auth-cancel-test", 0);
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest("rider@example.com", Password),
+            cts.Token));
+
+        Assert.DoesNotContain(container.Invocations, invocation => invocation.Method.Name is "ReadItemAsync" or "ReplaceItemAsync");
+    }
+
+    [Fact]
+    public async Task LoginPreservesCancellationWhenPointReadReturnsNotFound()
+    {
+        using var cts = new CancellationTokenSource();
+        var user = CreateIdentity();
+        var (container, _) = SetupIdentityQuery(user);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new CosmosException("not found", HttpStatusCode.NotFound, 0, "auth-cancel-test", 0));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            cts.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginPreservesCancellationWhenRefreshTokenRotationReturnsPreconditionFailed()
+    {
+        using var cts = new CancellationTokenSource();
+        var user = CreateIdentity();
+        var (container, _) = SetupIdentityQuery(user);
+        var read = CreateItemResponse(user, "login-cancelled-etag");
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "auth-cancel-test", 0));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            cts.Token));
+    }
+
+    [Fact]
+    public async Task RefreshPreservesCancellationWhenQueryReturnsProviderFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                throw new CosmosException("provider unavailable", HttpStatusCode.ServiceUnavailable, 0, "auth-cancel-test", 0);
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest("refresh-token"), cts.Token));
+
+        Assert.DoesNotContain(container.Invocations, invocation => invocation.Method.Name is "ReadItemAsync" or "ReplaceItemAsync");
+    }
+
+    [Fact]
+    public async Task RefreshPreservesCancellationWhenPointReadReturnsNotFound()
+    {
+        using var cts = new CancellationTokenSource();
+        const string refreshToken = "refresh-token-not-found-cancelled";
+        var user = CreateIdentity(refreshTokenHash: HashRefreshToken(refreshToken));
+        var iterator = CreateQueryIterator(user);
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new CosmosException("not found", HttpStatusCode.NotFound, 0, "auth-cancel-test", 0));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest(refreshToken), cts.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefreshPreservesCancellationWhenTokenRotationReturnsPreconditionFailed()
+    {
+        using var cts = new CancellationTokenSource();
+        const string refreshToken = "refresh-token-rotation-cancelled";
+        var user = CreateIdentity(refreshTokenHash: HashRefreshToken(refreshToken));
+        var iterator = CreateQueryIterator(user);
+        var read = CreateItemResponse(user, "refresh-cancelled-etag");
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "auth-cancel-test", 0));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest(refreshToken), cts.Token));
+    }
+
+    [Fact]
+    public async Task LogoutPreservesCancellationWhenPointReadReturnsNotFound()
+    {
+        using var cts = new CancellationTokenSource();
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                "user:user-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new CosmosException("not found", HttpStatusCode.NotFound, 0, "auth-cancel-test", 0));
+            });
+        var service = CreateService(container.Object);
+        var principal = CreateRiderPrincipal();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LogoutAsync(principal, cts.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LogoutPreservesCancellationWhenPointReadReturnsProviderFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                "user:user-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new CosmosException("provider unavailable", HttpStatusCode.ServiceUnavailable, 0, "auth-cancel-test", 0));
+            });
+        var service = CreateService(container.Object);
+        var principal = CreateRiderPrincipal();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LogoutAsync(principal, cts.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task LoginHonorsPreCancelledTokenBeforeCosmosQuery()
     {
@@ -648,6 +911,12 @@ public sealed class CosmosIdentityServiceTests
         response.SetupGet(value => value.ETag).Returns(etag);
         return response;
     }
+
+    private static ClaimsPrincipal CreateRiderPrincipal() => new(new ClaimsIdentity(
+    [
+        new Claim(JwtRegisteredClaimNames.Sub, "user-1"),
+        new Claim("role", "Rider")
+    ], "integration-test"));
 
     private static CosmosIdentityService.IdentityDocument CreateIdentity(string? refreshTokenHash = null)
     {
