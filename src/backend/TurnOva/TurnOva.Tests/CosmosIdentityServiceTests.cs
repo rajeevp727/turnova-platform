@@ -41,7 +41,9 @@ public sealed class CosmosIdentityServiceTests
                 user.Role == "Rider" &&
                 user.Email == "rider@example.com" &&
                 !string.IsNullOrWhiteSpace(user.PasswordHash) &&
+                Convert.FromBase64String(user.PasswordHash).Length == 32 &&
                 !string.IsNullOrWhiteSpace(user.PasswordSalt) &&
+                Convert.FromBase64String(user.PasswordSalt).Length == 16 &&
                 !string.IsNullOrWhiteSpace(user.RefreshTokenHash)),
             It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Once);
         batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -488,6 +490,89 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+
+    [Fact]
+    public async Task LoginRejectsIdentityWithoutUserIdSuffixBeforePointRead()
+    {
+        var user = CreateIdentity() with { Id = "user:" };
+        var (container, _) = SetupIdentityQuery(user);
+        var service = CreateService(container.Object);
+
+        var result = await service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, GetStatusCode(result));
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefreshRejectsIdentityWithoutUserIdSuffixBeforePointRead()
+    {
+        const string refreshToken = "refresh-token-malformed-user-id";
+        var user = CreateIdentity(refreshTokenHash: HashRefreshToken(refreshToken)) with { Id = "user:" };
+        var (container, _) = SetupIdentityQuery(user);
+        var service = CreateService(container.Object);
+
+        var result = await service.RefreshAsync(new CosmosRefreshRequest(refreshToken), CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, GetStatusCode(result));
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginRejectsPersistedPasswordHashWithUnexpectedLength()
+    {
+        var user = CreateIdentity() with { PasswordHash = Convert.ToBase64String(new byte[1]) };
+        var (container, _) = SetupIdentityQuery(user);
+        var read = CreateItemResponse(user, "malformed-hash-etag");
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        var service = CreateService(container.Object);
+
+        var result = await service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, GetStatusCode(result));
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginRejectsPersistedPasswordSaltWithUnexpectedLength()
+    {
+        var user = CreateIdentity() with { PasswordSalt = Convert.ToBase64String(new byte[1]) };
+        var (container, _) = SetupIdentityQuery(user);
+        var read = CreateItemResponse(user, "malformed-salt-etag");
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        var service = CreateService(container.Object);
+
+        var result = await service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, GetStatusCode(result));
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     private static CosmosIdentityService CreateService(Container container) =>
