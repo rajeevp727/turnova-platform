@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Azure.Cosmos;
 using TurnOva.Application.Support;
 using TurnOva.Domain.Support;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Infrastructure.Support;
 
@@ -27,10 +28,12 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var existingResponse = await container.ReadItemAsync<SupportRequest>(
-                    request.Id,
-                    new PartitionKey(request.ReporterId),
-                    cancellationToken: cancellationToken);
+                var existingResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<SupportRequest>(
+                        request.Id,
+                        new PartitionKey(request.ReporterId),
+                        cancellationToken: cancellationToken),
+                    cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 var existing = existingResponse.Resource ?? throw new InvalidOperationException(
                     "Cosmos returned an empty support request resource.");
