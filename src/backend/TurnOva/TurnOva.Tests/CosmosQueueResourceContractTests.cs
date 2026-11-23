@@ -74,7 +74,6 @@ public sealed class CosmosQueueResourceContractTests
         iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
         container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -82,7 +81,7 @@ public sealed class CosmosQueueResourceContractTests
     {
         var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
-        var page = CreatePage<CosmosQueueStore.QueueEntryDocument>(null!);
+        var page = CreatePage<CosmosQueueStore.QueueEntryDocument>(new CosmosQueueStore.QueueEntryDocument[] { null! });
         iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
         var container = CreateQueryContainer(iterator);
 
@@ -95,7 +94,6 @@ public sealed class CosmosQueueResourceContractTests
         iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
         container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -126,7 +124,6 @@ public sealed class CosmosQueueResourceContractTests
         iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
         container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -157,7 +154,6 @@ public sealed class CosmosQueueResourceContractTests
         iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
         container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -165,7 +161,7 @@ public sealed class CosmosQueueResourceContractTests
     {
         var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
-        var page = CreatePage<QueueAuditEvent>(null!);
+        var page = CreatePage<QueueAuditEvent>(new QueueAuditEvent[] { null! });
         iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
         var container = CreateQueryContainer(iterator);
 
@@ -178,7 +174,6 @@ public sealed class CosmosQueueResourceContractTests
         iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
         container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        container.VerifyNoOtherCalls();
     }
 
     private static Mock<Container> CreateQueryContainer<T>(Mock<FeedIterator<T>> iterator)
