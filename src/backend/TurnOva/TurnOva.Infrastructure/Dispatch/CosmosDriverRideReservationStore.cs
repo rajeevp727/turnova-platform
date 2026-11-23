@@ -221,7 +221,11 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
 
                 var page = await iterator.ReadNextAsync(cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                reservations.AddRange(page);
+                foreach (var reservation in page)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    reservations.Add(RequireQueryItem(reservation));
+                }
             }
         }
 
@@ -275,6 +279,10 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             return false;
         }
     }
+
+    private static DriverRideReservation RequireQueryItem(DriverRideReservation? reservation) =>
+        reservation ?? throw new InvalidOperationException(
+            "Cosmos returned an empty driver reservation query item.");
 
     private static DriverRideReservation RequireResource(ItemResponse<DriverRideReservation> response) =>
         response.Resource ?? throw new InvalidOperationException(

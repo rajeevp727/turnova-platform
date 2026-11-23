@@ -34,9 +34,11 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
             cancellationToken.ThrowIfCancellationRequested();
             var page = await iterator.ReadNextAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var state = page.FirstOrDefault();
-            cancellationToken.ThrowIfCancellationRequested();
-            if (state is not null) return state;
+            foreach (var item in page)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return RequireQueryItem(item);
+            }
         }
         cancellationToken.ThrowIfCancellationRequested();
         return null;
@@ -58,7 +60,9 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
             foreach (var item in page)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var response = await container.ReadItemAsync<RideOfferState>(item.RideId, new PartitionKey(item.RideId), cancellationToken: cancellationToken);
+                var candidate = RequireQueryItem(item);
+                var response = await container.ReadItemAsync<RideOfferState>(
+                    candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 results.Add(RequireResource(response) with { ETag = response.ETag });
                 if (results.Count >= maxItems) break;
@@ -85,7 +89,9 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
             foreach (var item in page)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var response = await container.ReadItemAsync<RideOfferState>(item.RideId, new PartitionKey(item.RideId), cancellationToken: cancellationToken);
+                var candidate = RequireQueryItem(item);
+                var response = await container.ReadItemAsync<RideOfferState>(
+                    candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 results.Add(RequireResource(response) with { ETag = response.ETag });
                 if (results.Count >= maxItems) break;
@@ -94,6 +100,10 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
         cancellationToken.ThrowIfCancellationRequested();
         return results;
     }
+
+    private static RideOfferState RequireQueryItem(RideOfferState? state) =>
+        state ?? throw new InvalidOperationException(
+            "Cosmos returned an empty ride offer query item.");
 
     private static RideOfferState RequireResource(ItemResponse<RideOfferState> response) =>
         response.Resource ?? throw new InvalidOperationException(
