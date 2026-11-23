@@ -1,5 +1,7 @@
 # TurnOva Feature Test Plan
 
+**Authentication supersession (2026-11-23):** The active auth implementation is Cosmos-native. Current `Program.cs` maps register/login/refresh/logout/`me`; it maps no TriSend auth proxy and no demo-login route. `POST /api/v1/auth/demo/{role}` is intentionally unmapped and the negative 404 regression remains. TriSend proxy and demo-session sections below are retained for historical traceability only; they are not current routes or active acceptance evidence. The active persistence/auth cases are AUTH-COSMOS-001..010.
+
 **Scope:** TurnOva Rider and Driver Cab-only Android/iOS MVP, including authentication, union-grouped discovery, selected-driver negotiation, trip lifecycle, direct-payment reporting and release gates. Legacy FIFO cases are compatibility regression tests only; they are not the approved customer-facing Rider flow.
 **Test types:** automated unit/CI, API integration, mobile functional, security, and manual acceptance.
 **Priority:** P0 = release blocker, P1 = high, P2 = normal.
@@ -9,23 +11,24 @@
 
 TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI documentation/native non-container publish; (2) complete Rider and Driver Android implementation/tests/builds/emulator smoke; (3) complete Rider and Driver iOS implementation/tests/Simulator smoke. API-only pull requests must not start Android/iOS jobs. iOS native/simulator CI requires the explicit `turnova:ios-phase-approved` label after Android phase exit. Physical-device, live Cosmos, signing and provider checks remain separately documented external evidence.
 
-**Current phase gate (Run 108, 2026-11-23):** API remains `in_progress`; Android/iOS remain `not_started` for completion work. Main advanced to `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860` after PR #207 merged Cosmos-native auth and real Rider/Driver sign-in at `779939d109216b0d7de6e98735b4b92b1d95671f` despite zero recorded reviews. Main head CI [#45168231027](https://github.com/rajeevp727/turnova-platform/actions/runs/45168231027) passed 866/866 backend tests (26 warnings, 0 errors); Android jobs on main do not satisfy Android phase exit. PR #200 source/test correction commit is `b3c885b79d4949a63d26b170c27e9abb3e3b9e20`; documentation-bearing checkpoint `03a3e7f1379d1483ac95ab455ff2c4364da9cb4c` preceded the final progress/matrix sync commits; compare at that checkpoint was 775 ahead / 6 behind main, merge base `4061357c095debbc31fc5027a7bff27bd8b06265`, and GitHub reports dirty because `Program.cs` and `AuthApiIntegrationTests.cs` conflict. PR CI [#45162925132](https://github.com/rajeevp727/turnova-platform/actions/runs/45162925132) on prior head `c9f8801` failed 2/1,345 tests (1,343 passed) because two nested Moq verifications did not account for `FeedIterator.Dispose(true)`; the Release build passed with 0 warnings/0 errors. Test-only commit [`b3c885b`](https://github.com/rajeevp727/turnova-platform/commit/b3c885b79d4949a63d26b170c27e9abb3e3b9e20) adds explicit protected disposal verification in both tests. Exact-head CI on b3c885b is pending and must not be claimed green. PR #200 has three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads.
+**Current phase gate (Run 110, 2026-11-23):** API remains `in_progress`; Android/iOS remain `not_started` for completion work. Main is `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`. PR #200 branch `test/api-nondev-support-readiness-20261120` is mergeable and up to date with main (801 commits ahead / 0 behind at the source/test checkpoint); its diff has no mobile paths. Source/test checkpoint `3a76458b2d00f042d5b08e1919fcf988b58855c6` passed exact-head API-only CI [#45225230574](https://github.com/rajeevp727/turnova-platform/actions/runs/45225230574): 1,219/1,219 backend tests, .NET 10 Release build (0 warnings/0 errors), native non-container linux-x64 publish/verifier and artifact [14841638796](https://github.com/rajeevp727/turnova-platform/actions/runs/45225230574/artifacts/14841638796). The documentation/dead-code cleanup checkpoint in this run still requires its own final-head CI. PR #200 has three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked. PR #207 merged Cosmos-native auth but lacked independent review; this historical process exception and PR #197's earlier exception remain disclosed.
 
-## Native Cosmos identity and auth security (AUTH-COSMOS-001..008)
+## Native Cosmos identity and auth security (AUTH-COSMOS-001..010)
 
-PR #207 removed the TriSend auth proxy and demo-session issuance. Current integration evidence covers the API contract and fail-closed behavior when Cosmos is not configured. It does not prove successful live Cosmos registration/login/refresh or concurrent session rotation.
-
-| ID | Scenario | Expected result | Current automated evidence | Status |
+| ID | Scenario | Expected result | Evidence | Status |
 |---|---|---|---|---|
-| AUTH-COSMOS-001 | Register Rider/Driver with missing Cosmos configuration | Generic HTTP 503; no in-memory production fallback | AuthApiIntegrationTests.RegistrationRequiresConfiguredCosmosStorage | Covered |
-| AUTH-COSMOS-002 | Login Rider/Driver with missing Cosmos configuration | Generic HTTP 503 | AuthApiIntegrationTests.LoginRequiresConfiguredCosmosStorage | Covered |
-| AUTH-COSMOS-003 | Weak password, unsupported role or missing refresh token | 400/404 before persistence | AuthApiIntegrationTests validation cases | Covered |
-| AUTH-COSMOS-004 | Authenticated /me and logout; anonymous or subjectless JWT | Valid JWT identity returned; anonymous 401; subjectless 403 | AuthApiIntegrationTests.MeReturnsIdentityFromValidatedTurnOvaJwt; subjectless regression | Covered |
-| AUTH-COSMOS-005 | Public register/login/refresh request rate exceeds the per-IP window | 429; no-store/no-cache | AuthApiIntegrationTests.PublicAuthEndpointsAreRateLimitedByServerObservedRemoteAddress | Pending exact-head CI |
-| AUTH-COSMOS-006 | Registration email reservation and user creation fail between writes | No orphan reservation or duplicate account | Requires deterministic Cosmos adapter test; current compensation path is not transactionally atomic | Gap |
-| AUTH-COSMOS-007 | Two concurrent login/refresh/logout updates race | ETag conditional writes prevent stale token overwrite/reuse | Requires ETag/CAS adapter and service tests; current writes lack ETag guards | Gap |
-| AUTH-COSMOS-008 | Live Cosmos partition, ETag, multi-instance and restart behavior | Successful integration evidence against configured Cosmos | External infrastructure gate; not verified | Blocked |
+| AUTH-COSMOS-001 | Register Rider/Driver with missing Cosmos configuration | Generic HTTP 503; no in-memory production fallback | `AuthApiIntegrationTests.RegistrationRequiresConfiguredCosmosStorage` | Covered |
+| AUTH-COSMOS-002 | Login Rider/Driver with missing Cosmos configuration | Generic HTTP 503 | `AuthApiIntegrationTests.LoginRequiresConfiguredCosmosStorage` | Covered |
+| AUTH-COSMOS-003 | Weak password, unsupported role, missing email/password or missing refresh token | 400/404 before persistence; no token or identity write | Auth API validation integration tests | Covered |
+| AUTH-COSMOS-004 | Authenticated `/me` and logout; anonymous or subjectless JWT | Validated TurnOva JWT identity returned; anonymous 401; subjectless 403 | `AuthApiIntegrationTests.MeReturnsIdentityFromValidatedTurnOvaJwt`, subjectless regression | Covered |
+| AUTH-COSMOS-005 | Public register/login/refresh request rate exceeds the server-observed per-IP window | 429 with no-store/no-cache; client-supplied forwarding headers do not choose the bucket | `AuthApiIntegrationTests.PublicAuthEndpointsAreRateLimitedByServerObservedRemoteAddress` | Covered; exact-head CI #45225230574 (1,219/1,219) |
+| AUTH-COSMOS-006 | Register account with a role-scoped email reservation and user document | Both documents are created in one same-partition Cosmos transactional batch; conflict returns 409; no compensating delete or partial write is issued by the service | `CosmosIdentityServiceTests.RegisterCreatesEmailReservationAndUserInOnePartitionBatch`, `RegisterConflictDoesNotAttemptCompensatingDelete` | Covered with deterministic Cosmos SDK mocks; live Cosmos transaction validation external |
+| AUTH-COSMOS-007 | Login, refresh and logout race on the same account session | Point-read ETag is supplied as `IfMatchEtag`; stale login does not return an unpersisted session, stale refresh is rejected, logout re-reads/retries bounded conflicts | `LoginUsesPointReadEtagForRefreshTokenRotation`, `LoginRejectsStaleEtagInsteadOfReturningAnUnpersistedSession`, `RefreshUsesObservedEtagAndPersistsANewRefreshTokenHash`, `RefreshRejectsAStaleConcurrentRotationUsingTheObservedEtag`, `LogoutRetriesAfterConcurrentSessionChangeAndUsesFreshEtag` | Covered with deterministic mocks; live Cosmos contention/multi-instance validation external |
+| AUTH-COSMOS-008 | Live Cosmos partition, ETag, multi-instance and restart behavior | Successful integration evidence against the configured Cosmos account and deployed API | Live Cosmos deployment and restart/concurrency exercise | Blocked external infrastructure/credentials gate |
+| AUTH-COSMOS-009 | Caller cancellation before auth query, after query-page completion, after point-read completion and during logout ETag conflict | Cancellation propagates; no later query/read/write or retry starts after cancellation | Nine `CosmosIdentityServiceTests` cancellation cases | Covered; exact-head CI #45225230574 (1,219/1,219) |
+| AUTH-COSMOS-010 | Persisted user record has an empty ID suffix or password salt/hash with an unexpected byte length | Login/refresh fail closed; no session token is issued and no refresh-token mutation occurs. Registration always writes a 16-byte salt and 32-byte PBKDF2 hash | `LoginRejectsIdentityWithoutUserIdSuffixBeforePointRead`, `RefreshRejectsIdentityWithoutUserIdSuffixBeforePointRead`, malformed hash/salt login tests and registration material-length assertions | Covered; exact-head CI #45225230574 (1,219/1,219) |
 
+The 1,219-test checkpoint is deterministic mock-backed API evidence, not live Cosmos evidence. The active service uses one current refresh-token hash per account; a successful login rotates it, so a previous device's refresh token becomes invalid. Confirm this single-session-per-account behavior and any migration path for existing TriSend accounts with Product/Operations before production rollout. The auth limiter is process-local (10 requests per minute per server-observed remote IP by default); multi-instance deployments still need a shared limiter or trusted edge enforcement.
 
 
 ## Cosmos audit/support canonical point-read identity integrity (COSMOS-STORE-042..045)
@@ -219,7 +222,7 @@ Exact-head API-only CI [#45044729900](https://github.com/rajeevp727/turnova-plat
 
 
 
-## TriSend upstream base URL policy (AUTH-API-061)
+## Historical (superseded): TriSend upstream base URL policy (AUTH-API-061)
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
@@ -240,10 +243,10 @@ Exact-head API-only CI [#45036939531](https://github.com/rajeevp727/turnova-plat
 | API-OPENAPI-001 | Generate API v1 contract in Testing | `GET /openapi/v1.json` returns the v1 document and includes auth, Rider discovery/booking, Union reconciliation and Driver payment-report routes | API integration | P0 |
 | API-OPENAPI-002 | Document authorization accurately | Rider booking, Driver payment-report and Union reconciliation carry JWT Bearer; `/api/v1/ops/*` carries only `X-Driver-Admin-Key`; public login/register/refresh routes have no bearer requirement | API integration/security | P0 |
 | API-OPENAPI-003 | Keep OpenAPI out of Production | Runtime maps the generated contract only in Development/Testing | API configuration | P1 |
-| AUTH-API-015 | Local profile-read authorization | `GET /api/v1/auth/me` rejects missing/invalid JWT before calling TriSend; valid Rider/Driver tokens are forwarded unchanged | API integration/security | P0 |
-| AUTH-API-016 | Prevent HTTP caching of authentication responses | Every response under `/api/v1/auth` sets `Cache-Control: no-store` and `Pragma: no-cache`, including registration/login/refresh/profile success, disabled-demo 404, demo-issuance 429, auth rejection and upstream-error responses | API middleware integration/security | P1 |
+| AUTH-API-015 | Local profile-read authorization | `GET /api/v1/auth/me` returns subject/email/name/role from the validated TurnOva JWT; anonymous requests return 401 and subjectless signed tokens return 403; no upstream auth request is made | API integration/security | P0 |
+| AUTH-API-016 | Prevent HTTP caching of authentication responses | Register/login/refresh/logout/`me` and auth-route error responses set `Cache-Control: no-store` and `Pragma: no-cache`; removed demo-login path remains 404 and no session is issued | API middleware integration/security | P1 |
 | AUTH-API-017 | Preserve non-cacheable policy on auth-route exceptions | A Testing-only auth route throws through the exception handler; the generic HTTP 500 still carries `Cache-Control: no-store` and `Pragma: no-cache`, and sensitive exception text is absent | API middleware integration/security | P1 |
-| AUTH-API-018 | Invalid bearer on `GET /api/v1/auth/me`; demo-token 403 boundary | Invalid bearer returns 401 with `Cache-Control: no-store` and `Pragma: no-cache` without calling TriSend; demo-token 403 retains the same headers | API integration/security | P1 |
+| AUTH-API-018 | Invalid bearer and subjectless-token boundary on `GET /api/v1/auth/me` | Invalid bearer returns 401; subjectless signed bearer returns 403; both responses are non-cacheable. The removed demo route remains 404 | API integration/security | P1 |
 | AUTH-API-059 | Require a canonical subject on authenticated API/realtime routes | Subjectless signed principals receive 403 before authenticated `/api/v1` and `/hubs/rides` handlers; public auth routes remain anonymous; only explicitly marked AI assistance may use server-observed IP rate-limit fallback | API integration/security | P1 |
 | API-PRIVACY-001 | Rider access to Driver onboarding/private media for a dual-role subject | Rider JWT receives 403 for onboarding profile GET, media upload/read/status, selfie replacement and onboarding POST; Driver can upload/read its own scan-cleared selfie with `private, no-store` and `nosniff` headers | API integration/security | P1 |
 | API-PRIVACY-002 | Rider access to Driver availability/location for a dual-role subject | Rider JWT receives 403 for availability GET/POST and location POST; Driver availability and queue membership remain unchanged. The same regression now also includes Ops and scoped UnionManager under API-PRIVACY-011 | API integration/security | P1 |
@@ -272,7 +275,7 @@ AuthApiIntegrationTests.OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySch
 
 OpenAPI exposure is now explicit in `OpenApiEndpointPolicy`: only Development and Testing are allowed (case-insensitive). `OpenApiEndpointPolicyTests` reject Production, Staging, QA, custom, empty and null environment names; `AuthApiIntegrationTests.OpenApiDocumentIsNotMappedInStaging` verifies the Staging route returns 404. Production host startup is not exercised by this integration fixture because Production requires Cosmos; the Production policy is covered directly.
 
-## Supplemental demo-session checks (outside the 19-row denominator)
+## Historical (removed): supplemental demo-session checks (outside the 19-row denominator)
 
 These checks cover the restricted demo-preview capability; they do not replace Rider/Driver MVP acceptance. Existing AUTH-REG and AUTH-LOGIN requirements remain mandatory; demo mode must never replace the real authentication UI.
 
@@ -296,11 +299,11 @@ These checks cover the restricted demo-preview capability; they do not replace R
 | DEMO-MOB-005 | Accurate demo connectivity copy | UI states that demo session creation requires a reachable configured API; it must not claim offline access while calling the API | Mobile UX | Failing on main: “Offline demo access” is misleading because demo-token issuance calls the API |
 | DEMO-MOB-006 | Safe demo identity state | Demo rendering uses a non-null demo identity without weakening authenticated-user null checks | Mobile typecheck | Typecheck, Android APK build and emulator smoke passed on main CI #44690688744; this does not satisfy the separate real-auth or Rider functional acceptance gaps |
 
-**Demo API source:** Program.cs maps POST /api/v1/auth/demo/{role}; it is opt-in, requires configured JWT issuer/audience/signing key of at least 32 characters, issues a 30-minute token with demo=true and no refresh token, and uses an in-process fixed-window limit of 10 requests per server-observed remote IP per process per minute. DemoAuthPolicy permits only Development/Testing/Staging/QA/Demo and denies Production/unknown/blank environments. Demo tokens can access only explicitly marked GET/HEAD routes under `/api/v1/demo`; unmarked routes and all mutation methods are rejected before handlers run. OpenAPI documents the anonymous route and 404/429/503 responses; Testing-only fixture routes are excluded. Behind a reverse proxy, configure trusted forwarded headers; multi-instance demo hosting needs a shared or edge rate limit. No production demo business endpoints are currently mapped; these are demo-only controls, not a production identity provider.
+**Historical demo-auth implementation note:** Older commits mapped `POST /api/v1/auth/demo/{role}`; PR #207 removed that route and the current API does not map it. Keep only the negative 404 regression. Do not treat the historical DEMO-AUTH rows below as active behavior or acceptance evidence.
 
 **Android PR #199/#203 evidence:** PR #199 merged the demo-only entry screens at `238728a0bb3dffe990cd4626615a4d927f814a12`. PR #203 merged the smoke/test-harness update at main `4061357c095debbc31fc5027a7bff27bd8b06265`. Its post-merge CI [#44690688744](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744) passed Rider/Driver TypeScript, shared Node tests 286/286, Python harness 48/48, both Android debug APKs, both standalone release APKs, and both emulator install/launch smoke jobs; iOS jobs were skipped by phase gating. Artifacts: Rider debug [14609150789](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14609150789), release [14608268724](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14608268724), smoke [14609171818](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14609171818); Driver debug [14608218400](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14608218400), release [14608413875](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14608413875), smoke [14609316501](https://github.com/rajeevp727/turnova-platform/actions/runs/44690688744/artifacts/14609316501). This proves native build and emulator install/launch only, not functional auth or complete MVP acceptance. The Rider login/register UI is still replaced by demo-only content and its source assertion was weakened; the demo still shows the prohibited `₹280–₹340` estimate and misleading “Offline demo access” wording. Restore real Rider auth, keep demo optional/read-only, remove the estimate, correct the copy and restore the auth source regression before Rider can exit. Driver remains gated until Rider exits; iOS remains gated.
 
-## 1. Authentication — registration
+## Historical (superseded): TriSend-backed registration scenarios
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |
 |---|---|---|---|---|---|
@@ -319,7 +322,7 @@ These checks cover the restricted demo-preview capability; they do not replace R
 | AUTH-REG-013 | TriSend unavailable | Simulate DNS failure, connection refusal or 5xx | Stable 503 response; no credentials/tokens leaked | API | P0 |
 | AUTH-REG-014 | TriSend timeout | Simulate response beyond configured timeout | HTTP 504; client can retry safely | API | P1 |
 
-## 2. Authentication — login and token lifecycle
+## Historical (superseded): TriSend-backed login and token lifecycle scenarios
 
 | ID | Scenario | Steps / input | Expected result | Type | Priority |
 |---|---|---|---|---|---|
@@ -376,7 +379,7 @@ These checks cover the restricted demo-preview capability; they do not replace R
 | AUTH-LOGIN-063 | Rider replacement login/register clears previous SecureStore pair | Start a replacement Rider login or registration while an older access/refresh pair is stored; also fail one delete and change the session epoch while deletion is pending | Both token keys are attempted before the auth request; cleanup failure prevents network dispatch and surfaces a recoverable error; stale epochs do not delete a newer pair or send a request; queued replacement credentials survive | Shared mobile unit + Rider source contract | P0 |
 | AUTH-LOGIN-064 | Whitespace-only stored refresh token fails before provider call | Restore stored refresh-token values of empty string, spaces, tabs and CR/LF; also supply a nonblank opaque token with surrounding whitespace | Blank values reject before the refresh callback; nonblank opaque token is forwarded byte-for-byte without trimming; single-flight state is released after rejection | Shared mobile unit | P0 |
 
-## 2A. Authentication API integration contracts
+## Historical (superseded): TriSend auth-proxy API integration contracts
 
 The API contract tests use a fake named TriSend HTTP handler; CI must never call the production authentication service.
 
@@ -513,7 +516,7 @@ The GitHub Actions workflow currently runs:
 - Driver app TypeScript typecheck.
 - Rider app TypeScript typecheck.
 
-**Important:** A green CI run proves only the jobs and tests executed by that run. The backend suite includes deterministic API integration and JWT authorization coverage; it does not prove live TriSend/provider identity, live Cosmos multi-instance/restart, mobile runtime, physical-device or production end-to-end behavior. Rows marked Planned are not implemented or passed. Record external evidence separately.
+**Important:** A green CI run proves only the jobs and tests executed by that run. The backend suite includes deterministic API integration, Cosmos SDK mock, ETag/concurrency, cancellation and JWT authorization coverage; it does not prove live Cosmos transactions/ETags/multi-instance/restart, existing-account migration, mobile runtime, physical-device or production end-to-end behavior. Rows marked Planned or Blocked are not passed. Record external evidence separately.
 
 ## 9. Recommended execution order
 
@@ -528,9 +531,9 @@ The GitHub Actions workflow currently runs:
 
 The original pre-MVP backlog is superseded by later implementation and test evidence; it is retained here as a traceable checklist rather than a current list of unimplemented API work.
 
-- **TriSend/API integration tests:** implemented in `AuthApiIntegrationTests` with a recording fake `HttpMessageHandler`, signed deterministic test JWTs, and assertions that anonymous/invalid requests do not call TriSend. CI does not call the production identity provider. Latest exact-head API CI #44642122427 passed 821/821 backend tests.
+- **Cosmos-native auth tests:** `CosmosIdentityServiceTests` exercises transactional registration, conflict behavior, ETag-conditional session rotation/revocation, cancellation precedence and malformed persisted identity/password records with deterministic Cosmos SDK mocks. `AuthApiIntegrationTests` covers route-level fail-closed behavior, response-cache headers, JWT subject authorization, public auth rate limiting and the removed demo route's 404. No live TriSend provider is called.
 - **Mobile auth tests:** deterministic shared auth/session helper and source-integration coverage exists. Full Rider/Driver native UI, secure-store/Keychain, install/launch and physical-device acceptance remains in the ordered Android then iOS phases; do not begin those completion phases before the API exit gate.
-- **Token refresh concurrency:** keep explicit mobile-phase audit coverage for concurrent refresh calls and provider rotation/reuse semantics. Do not treat local storage mutation serialization as proof of network refresh single-flight. Live TriSend rotation/reuse remains an external provider gate.
+- **Token refresh concurrency:** deterministic service tests cover ETag compare-and-swap for concurrent refresh attempts. Live Cosmos multi-instance/restart contention and Android/iOS SecureStore/Keychain restore, expiry, logout and device-level refresh single-flight remain external platform/production evidence; do not treat mock-backed CAS as live provider validation.
 - **Passenger count and request validation:** API enforces Cab passenger count 1–6 and validates route, stops, coordinates and idempotency key before reservation writes; `RIDER-BOOK-INPUT-001..006` and `SelectedBookingRejectsInvalidRequestFieldsBeforeReservingDriver` / `SelectedBookingAcceptsMaximumSupportedRouteAndPassengerBoundaries` are included in exact-head API CI #44642122427.
 - **Ride idempotency:** selected booking and the Development/Testing-only legacy compatibility path have deterministic idempotency/concurrency tests; the legacy FIFO route remains disabled outside Development/Testing and does not define customer-facing ranking/assignment.
 - **Persistence, eligibility and CORS:** API repositories/adapters, driver onboarding/eligibility, Union membership and CORS validation have deterministic tests and native publish evidence. Live Cosmos ETag/transactional-batch/multi-instance/restart and production CORS-origin/hosting validation remain external.
@@ -4483,7 +4486,7 @@ Covered by AuthApiIntegrationTests.TriSendPrimaryHandlerDisablesAutomaticCookieP
 
 Covered by AuthApiIntegrationTests.StartupRejectsNonHttpsOrInvalidTriSendBaseUrl, which now includes user-info, query and fragment fixtures. The API uses explicit bearer/opaque-token forwarding; credentials and query tokens must not be embedded in the service base URL. No provider credential or endpoint is supplied by this change.
 
-## AUTH-API-046 — map upstream authentication response-stream I/O failures
+## Historical (removed): AUTH-API-046 — map upstream authentication response-stream I/O failures
 
 | ID | Scenario | Expected result | Type | Priority |
 |---|---|---|---|---|
