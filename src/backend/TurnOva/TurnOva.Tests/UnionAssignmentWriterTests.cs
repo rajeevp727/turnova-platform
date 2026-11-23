@@ -301,6 +301,93 @@ public sealed class UnionAssignmentWriterTests
         container.VerifyNoOtherCalls();
     }
 
+
+    [Fact]
+    public async Task CosmosCreateConflictPreservesCancellation()
+    {
+        var assignment = CreateAssignment();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.CreateItemAsync<DriverUnionAssignment>(
+                assignment, It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<DriverUnionAssignment>>(
+                    new CosmosException("assignment already exists", HttpStatusCode.Conflict, 0, "union-assignment-create", 0));
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UnionAssignmentWriter.TrySaveAsync(
+                container.Object, new ConcurrentDictionary<string, DriverUnionAssignment>(),
+                assignment, expectedCurrent: null, cancellation.Token));
+
+        container.Verify(value => value.CreateItemAsync<DriverUnionAssignment>(
+            assignment, It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.UpsertItemAsync<DriverUnionAssignment>(
+            It.IsAny<DriverUnionAssignment>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CosmosReplacementReadNotFoundPreservesCancellation()
+    {
+        var current = CreateAssignment();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<DriverUnionAssignment>(
+                DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<DriverUnionAssignment>>(
+                    new CosmosException("assignment not found", HttpStatusCode.NotFound, 0, "union-assignment-read", 0));
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UnionAssignmentWriter.TrySaveAsync(
+                container.Object, new ConcurrentDictionary<string, DriverUnionAssignment>(),
+                current with { UnionId = "union-next" }, current, cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<DriverUnionAssignment>(
+            DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.Conflict)]
+    [InlineData(HttpStatusCode.PreconditionFailed)]
+    public async Task CosmosReplacementConditionalFailurePreservesCancellation(HttpStatusCode statusCode)
+    {
+        var current = CreateAssignment();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        SetupRead(container, CreateReadResponse(current, "union-assignment-etag").Object);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReplaceItemAsync<DriverUnionAssignment>(
+                It.IsAny<DriverUnionAssignment>(), DriverId, It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<DriverUnionAssignment>>(
+                    new CosmosException("conditional assignment write failed", statusCode, 0, "union-assignment-write", 0));
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UnionAssignmentWriter.TrySaveAsync(
+                container.Object, new ConcurrentDictionary<string, DriverUnionAssignment>(),
+                current with { UnionId = "union-next" }, current, cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<DriverUnionAssignment>(
+            DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceItemAsync<DriverUnionAssignment>(
+            It.IsAny<DriverUnionAssignment>(), DriverId, It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static Mock<ItemResponse<DriverUnionAssignment>> CreateReadResponse(
         DriverUnionAssignment assignment,
         string? etag)

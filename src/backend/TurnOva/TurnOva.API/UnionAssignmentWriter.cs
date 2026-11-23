@@ -49,6 +49,7 @@ public static class UnionAssignmentWriter
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 // A competing create must never be converted into an overwrite.
                 return false;
             }
@@ -62,6 +63,7 @@ public static class UnionAssignmentWriter
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return false;
         }
 
@@ -84,6 +86,7 @@ public static class UnionAssignmentWriter
         catch (CosmosException ex) when (
             ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Conflict or HttpStatusCode.PreconditionFailed)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Missing, concurrently changed or stale records are retryable conflicts.
             return false;
         }

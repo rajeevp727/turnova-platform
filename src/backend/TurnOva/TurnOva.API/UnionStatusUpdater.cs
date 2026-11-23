@@ -51,6 +51,7 @@ public static class UnionStatusUpdater
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return new UnionStatusUpdateResult(UnionStatusUpdateOutcome.NotFound, null);
         }
 
@@ -78,11 +79,13 @@ public static class UnionStatusUpdater
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return new UnionStatusUpdateResult(UnionStatusUpdateOutcome.NotFound, null);
         }
         catch (CosmosException ex) when (
             ex.StatusCode is HttpStatusCode.PreconditionFailed or HttpStatusCode.Conflict)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return new UnionStatusUpdateResult(UnionStatusUpdateOutcome.Conflict, null);
         }
     }
