@@ -956,29 +956,75 @@ DriverUnionAssignment ToDriverUnionAssignmentResponse(DriverUnionAssignment assi
 
 async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
 {
-    if (unionContainer is null) return unions.Values.OrderBy(item => item.Name).ToArray();
-    var results = new List<DriverUnion>();
+    ct.ThrowIfCancellationRequested();
+    if (unionContainer is null)
+    {
+        var inMemoryResults = new List<DriverUnion>();
+        foreach (var pair in unions.ToArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
+                pair.Value,
+                item => string.Equals(pair.Key, item.UnionId, StringComparison.Ordinal),
+                "Union"));
+        }
+
+        return inMemoryResults.OrderBy(item => item.Name).ToArray();
+    }
+
     using var iterator = unionContainer.GetItemQueryIterator<DriverUnion>(new QueryDefinition("SELECT * FROM c"));
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    var results = await CosmosReadResponseGuard.ReadAllAsync(
+        iterator,
+        item => !string.IsNullOrWhiteSpace(item.UnionId),
+        "Union",
+        ct);
     return results.OrderBy(item => item.Name).ToArray();
 }
 
 async Task<IReadOnlyList<DriverOnboardingProfile>> ListOnlineCabProfilesForDiscoveryAsync(string zoneId, CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     if (driverContainer is null)
-        return driverProfiles.Values.Where(profile =>
-            profile.Status == "Approved" &&
-            profile.AvailabilityStatus == "Online" &&
-            string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)).ToArray();
+    {
+        var inMemoryResults = new List<DriverOnboardingProfile>();
+        foreach (var pair in driverProfiles.ToArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            var profile = pair.Value;
+            if (profile.Status != "Approved" ||
+                profile.AvailabilityStatus != "Online" ||
+                !string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
+                profile,
+                item => string.Equals(pair.Key, item.DriverId, StringComparison.Ordinal) &&
+                    string.Equals(item.Id, item.DriverId, StringComparison.Ordinal) &&
+                    string.Equals(item.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.Status, "Approved", StringComparison.Ordinal) &&
+                    string.Equals(item.AvailabilityStatus, "Online", StringComparison.Ordinal) &&
+                    string.Equals(item.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase),
+                "eligible Cab driver profile"));
+        }
+
+        return inMemoryResults;
+    }
 
     var query = new QueryDefinition(
         "SELECT * FROM c WHERE c.zoneId = @zoneId AND c.status = 'Approved' AND c.availabilityStatus = 'Online' AND c.serviceClass = 'cab'")
         .WithParameter("@zoneId", zoneId);
-    var results = new List<DriverOnboardingProfile>();
     using var iterator = driverContainer.GetItemQueryIterator<DriverOnboardingProfile>(query);
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
-    return results;
+    return await CosmosReadResponseGuard.ReadAllAsync(
+        iterator,
+        item => !string.IsNullOrWhiteSpace(item.DriverId) &&
+            string.Equals(item.Id, item.DriverId, StringComparison.Ordinal) &&
+            string.Equals(item.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Status, "Approved", StringComparison.Ordinal) &&
+            string.Equals(item.AvailabilityStatus, "Online", StringComparison.Ordinal) &&
+            string.Equals(item.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase),
+        "eligible Cab driver profile",
+        ct);
 }
 
 async Task<IReadOnlyList<DriverUnionAssignment>> ListActiveUnionAssignmentsAsync(CancellationToken ct)
@@ -1054,17 +1100,25 @@ async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string drive
 
 async Task<DriverOnboardingProfile?> FindDriverProfileAsync(string driverId, CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     if (driverContainer is null)
-        return driverProfiles.TryGetValue(driverId, out var profile) ? profile : null;
-    try
     {
-        return (await driverContainer.ReadItemAsync<DriverOnboardingProfile>(driverId,
-            new PartitionKey(driverId), cancellationToken: ct)).Resource;
+        if (!driverProfiles.TryGetValue(driverId, out var profile)) return null;
+        return CosmosReadResponseGuard.RequireResource(
+            profile,
+            item => string.Equals(item.Id, driverId, StringComparison.Ordinal) &&
+                string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+            "Driver onboarding profile");
     }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-    {
-        return null;
-    }
+
+    return await CosmosReadResponseGuard.ReadItemAsync<DriverOnboardingProfile>(
+        driverContainer,
+        driverId,
+        new PartitionKey(driverId),
+        item => string.Equals(item.Id, driverId, StringComparison.Ordinal) &&
+            string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+        "Driver onboarding profile",
+        ct);
 }
 
 async Task<bool> TryCreateDriverProfileAsync(DriverOnboardingProfile profile, CancellationToken ct)

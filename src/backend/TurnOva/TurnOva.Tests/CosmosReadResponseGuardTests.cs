@@ -373,6 +373,106 @@ public sealed class CosmosReadResponseGuardTests
         iterator.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task ReadItemReturnsDriverProfileOnlyWhenDocumentAndDriverIdsMatch()
+    {
+        var profile = CreateDriverProfile();
+        var response = CreateResponse(profile);
+        var container = CreateReadContainer<DriverOnboardingProfile>(
+            DriverId,
+            DriverId,
+            () => Task.FromResult(response.Object));
+
+        var result = await CosmosReadResponseGuard.ReadItemAsync<DriverOnboardingProfile>(
+            container.Object,
+            DriverId,
+            new PartitionKey(DriverId),
+            item => item.Id == DriverId && item.DriverId == DriverId,
+            "Driver onboarding profile",
+            CancellationToken.None);
+
+        Assert.Equal(profile, result);
+        container.Verify(value => value.ReadItemAsync<DriverOnboardingProfile>(
+            DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void RequireResourceRejectsMismatchedDriverProfileIdentity()
+    {
+        var profile = CreateDriverProfile(id: "driver-other");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.RequireResource(
+                profile,
+                item => item.Id == DriverId && item.DriverId == DriverId,
+                "Driver onboarding profile"));
+    }
+
+    [Fact]
+    public async Task ReadAllReturnsOnlyEligibleCabProfilesForRequestedZone()
+    {
+        var profile = CreateDriverProfile();
+        var iterator = CreateSinglePageIterator(CreatePage(profile));
+
+        var results = await CosmosReadResponseGuard.ReadAllAsync(
+            iterator.Object,
+            item => !string.IsNullOrWhiteSpace(item.DriverId) &&
+                item.Id == item.DriverId &&
+                string.Equals(item.ZoneId, "zone-a", StringComparison.OrdinalIgnoreCase) &&
+                item.Status == "Approved" &&
+                item.AvailabilityStatus == "Online" &&
+                string.Equals(item.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase),
+            "eligible Cab driver profile",
+            CancellationToken.None);
+
+        Assert.Equal(new[] { profile }, results);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReadAllRejectsDriverProfileFromAnotherZone()
+    {
+        var iterator = CreateSinglePageIterator(CreatePage(CreateDriverProfile(zoneId: "zone-b")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.ReadAllAsync(
+                iterator.Object,
+                item => item.Id == item.DriverId &&
+                    string.Equals(item.ZoneId, "zone-a", StringComparison.OrdinalIgnoreCase) &&
+                    item.Status == "Approved" &&
+                    item.AvailabilityStatus == "Online" &&
+                    string.Equals(item.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase),
+                "eligible Cab driver profile",
+                CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("Rejected", "Online", "cab")]
+    [InlineData("Approved", "Offline", "cab")]
+    [InlineData("Approved", "Online", "bike")]
+    public async Task ReadAllRejectsUnapprovedUnavailableOrNonCabProfiles(
+        string status,
+        string availabilityStatus,
+        string serviceClass)
+    {
+        var iterator = CreateSinglePageIterator(CreatePage(CreateDriverProfile(
+            status: status,
+            availabilityStatus: availabilityStatus,
+            serviceClass: serviceClass)));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.ReadAllAsync(
+                iterator.Object,
+                item => item.Id == item.DriverId &&
+                    string.Equals(item.ZoneId, "zone-a", StringComparison.OrdinalIgnoreCase) &&
+                    item.Status == "Approved" &&
+                    item.AvailabilityStatus == "Online" &&
+                    string.Equals(item.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase),
+                "eligible Cab driver profile",
+                CancellationToken.None));
+    }
+
     private static DriverUnion CreateUnion(string? unionId = null)
     {
         var id = unionId ?? UnionId;
@@ -389,6 +489,32 @@ public sealed class CosmosReadResponseGuardTests
     private static DriverUnionAuditEvent CreateAudit(string driverId, string eventId) =>
         new(eventId, driverId, null, null, "union-a", "Union A", "DriverAssigned", "Test", "actor-1",
             DateTimeOffset.Parse("2026-11-24T00:00:00Z"));
+
+    private static DriverOnboardingProfile CreateDriverProfile(
+        string? id = null,
+        string? driverId = null,
+        string zoneId = "zone-a",
+        string status = "Approved",
+        string availabilityStatus = "Online",
+        string serviceClass = "cab")
+    {
+        var expectedDriverId = driverId ?? DriverId;
+        return new DriverOnboardingProfile(
+            id ?? expectedDriverId,
+            expectedDriverId,
+            zoneId,
+            "Driver",
+            "+15555550123",
+            "Toyota",
+            "Etios",
+            "TS09AB1234",
+            serviceClass,
+            4,
+            [],
+            status,
+            DateTimeOffset.Parse("2026-11-24T00:00:00Z"),
+            AvailabilityStatus: availabilityStatus);
+    }
 
     private static Mock<ItemResponse<T>> CreateResponse<T>(T resource)
     {
