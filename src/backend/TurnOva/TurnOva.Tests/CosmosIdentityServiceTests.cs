@@ -96,7 +96,7 @@ public sealed class CosmosIdentityServiceTests
                 It.IsAny<CosmosIdentityService.IdentityDocument>(),
                 user.Id,
                 It.IsAny<PartitionKey?>(),
-                It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "login-observed-etag"),
+                It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "login-observed-etag"),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
         var service = CreateService(container.Object);
@@ -112,7 +112,7 @@ public sealed class CosmosIdentityServiceTests
                 item.Id == user.Id && !string.IsNullOrWhiteSpace(item.RefreshTokenHash)),
             user.Id,
             It.Is<PartitionKey?>(key => key.HasValue && key.Value.Equals(new PartitionKey("Rider"))),
-            It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "login-observed-etag"),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "login-observed-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -149,7 +149,7 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<CosmosIdentityService.IdentityDocument>(),
             user.Id,
             It.IsAny<PartitionKey?>(),
-            It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "login-stale-etag"),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "login-stale-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -172,7 +172,7 @@ public sealed class CosmosIdentityServiceTests
                 It.IsAny<CosmosIdentityService.IdentityDocument>(),
                 user.Id,
                 It.IsAny<PartitionKey?>(),
-                It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "refresh-observed-etag"),
+                It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "refresh-observed-etag"),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new CosmosException("etag changed", HttpStatusCode.PreconditionFailed, 0, "auth-test", 0));
         var service = CreateService(container.Object);
@@ -184,7 +184,7 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<CosmosIdentityService.IdentityDocument>(),
             user.Id,
             It.IsAny<PartitionKey?>(),
-            It.Is<ItemRequestOptions?>(options => options is not null && options.IfMatchEtag == "refresh-observed-etag"),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "refresh-observed-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
