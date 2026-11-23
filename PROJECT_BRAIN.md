@@ -1,6 +1,6 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 116)
+Last updated: 2026-11-24 (Run 117)
 
 ## Platform phase
 
@@ -14,12 +14,12 @@ Last updated: 2026-11-24 (Run 116)
 
 - Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
 - Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
-- Source/test head: `e9fe5d6271c3febde47f691f5f219dd293be7a9d`; exact-head API-only CI [#45260778123](https://github.com/rajeevp727/turnova-platform/actions/runs/45260778123) passed **1,250/1,250 backend tests**, Release build (0 warnings/0 errors), native non-container Linux x64 publish/verifier. Artifact [14859029219](https://github.com/rajeevp727/turnova-platform/actions/runs/45260778123/artifacts/14859029219), 17,016,645 bytes, SHA-256 `8b136fc03fd4c7b65da78726ecf13c4bd9326950cd14385f8796ce148b21ed46`.
+- Source/test head: [`71c6f2262d83ea54fa8a00e7d32409a74f38422d`](https://github.com/rajeevp727/turnova-platform/commit/71c6f2262d83ea54fa8a00e7d32409a74f38422d); exact-head API-only CI [#45265851337](https://github.com/rajeevp727/turnova-platform/actions/runs/45265851337) is in progress (Release build passed; backend tests in progress; no pass claimed yet). The preceding attempt #45265158876 reported 1,255/1,257 tests because two query iterator tests used recursive mock verification that observed expected iterator disposal; that verification was narrowed while preserving explicit call assertions.
 - Documentation-bearing head: [`50534fafd37ed004310e8827094e8d45e4744214`](https://github.com/rajeevp727/turnova-platform/commit/50534fafd37ed004310e8827094e8d45e4744214); exact-head API-only CI [#45261591022](https://github.com/rajeevp727/turnova-platform/actions/runs/45261591022) passed 1,250/1,250 tests, Release build (0 warnings/0 errors), native non-container publish/verifier. Artifact [14860497441](https://github.com/rajeevp727/turnova-platform/actions/runs/45261591022/artifacts/14860497441), 17,016,654 bytes, SHA-256 `8872abf82418360e02aac4a43c34e13a3be9d65da15310d520717960647218ea`.
 - Follow-up handoff-only documentation head [`a86554533aa888ad9dc4e33e01418458331ab628`](https://github.com/rajeevp727/turnova-platform/commit/a86554533aa888ad9dc4e33e01418458331ab628) passed exact-head API-only CI [#45262230425](https://github.com/rajeevp727/turnova-platform/actions/runs/45262230425): 1,250/1,250 tests, Release build (0 warnings/0 errors), native non-container publish/verifier. Artifact [14860263716](https://github.com/rajeevp727/turnova-platform/actions/runs/45262230425/artifacts/14860263716), 17,016,620 bytes, SHA-256 `4060a43237208d31cf862e60e64769f28338e1e245c8ba4a37892d95a4bf25de`.
 - This result-recording documentation commit will receive its own exact-head CI check; no pass is claimed for that next head.
 - Documentation-bearing head: `bb63e9bca0e5191d85e107b4a43e94d808e93d95`; exact-head API-only CI [#45257892556](https://github.com/rajeevp727/turnova-platform/actions/runs/45257892556) also passed 1,243/1,243 tests, Release build (0 warnings/0 errors), native non-container publish/verifier; artifact [14859416923](https://github.com/rajeevp727/turnova-platform/actions/runs/45257892556/artifacts/14859416923), 17,015,317 bytes, SHA-256 `724ad1e0b2813eb0b7cbee972839134c3bb2b848d1f71b3bedb9da5f1a95b979`.
-- Source/test branch comparison: 872 ahead / 0 behind main. Documentation-bearing head 50534 comparison: 873 ahead / 0 behind; follow-up handoff head comparison: 874 ahead / 0 behind, 175 files; GitHub reports mergeable. The diff contains no mobile paths or Docker/container build/deployment files.
+- Source/test branch comparison: 882 ahead / 0 behind main; GitHub reports PR #200 mergeable. The diff remains API/docs/tests only, with no mobile paths or Docker/container build/deployment files. Documentation-bearing head 50534 comparison: 873 ahead / 0 behind; follow-up handoff head comparison: 874 ahead / 0 behind, 175 files; GitHub reports mergeable. The diff contains no mobile paths or Docker/container build/deployment files.
 - PR #200 has three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. Never self-approve or bypass protection. Do not begin Android until an independent review, permitted merge and fresh main/API phase-exit audit are complete.
 - PRs #196/#198/#205/#206 remain Draft/parked. PR #204 is trusted-LAN Android cleartext configuration only, not Android completion evidence.
 - Main phase metadata is stale (`api=complete`, `android=in_progress`); PR #200 branch metadata remains API `in_progress`, Android/iOS `not_started`.
@@ -30,14 +30,14 @@ Last updated: 2026-11-24 (Run 116)
 - Cosmos-native Rider/Driver registration/login/refresh/logout and JWT issuance are on main via PR #207.
 - PR #200 contains same-partition transactional email reservation + user creation, PBKDF2-SHA256 password material, ETag-conditional login/refresh/logout, fail-closed persisted identity/password checks, bootstrap resource validation and cancellation precedence. Run 114 extends cancellation precedence to Union assignment/status conflict mappings. Run 115 adds `CosmosReadResponseGuard` and applies null/identity/cancellation checks to Union, assignment, audit, Union-list, Driver profile and Cab discovery point/query reads. Run 116 adds `AwaitWithCancellationPrecedenceAsync` and applies cancellation precedence to all ride-offer read/query/hydration paths.
 - Run 113 adds cancellation checks after PBKDF2, before registration batch execution, after login password verification (including invalid-password results), and before refresh/logout ETag writes. Non-success registration batch responses preserve cancellation; a successful committed batch response remains authoritative. Run 114 adds nine deterministic Union assignment/status cancellation-race cases; successful writes remain authoritative. Run 115 adds 24 deterministic Cosmos read guard cases, including Driver discovery identity/zone/eligibility checks and cancellation precedence. Run 116 adds seven deterministic tests for ride-offer provider-error/cancellation races and wrapper semantics.
-- Exact-head Run 116 CI passed 1,250/1,250 tests with 0 warnings/0 errors and native non-container Linux x64 publish/verifier. This is deterministic Cosmos SDK mock evidence, not live Cosmos proof.
+- Exact-head Run 116 CI passed 1,250/1,250 tests with 0 warnings/0 errors and native non-container Linux x64 publish/verifier. Run 117 final-head CI is still in progress; do not count its new tests as passed until the final head is green. This is deterministic Cosmos SDK mock evidence, not live Cosmos proof.
 - Current API maps no demo-login route and no TriSend auth proxy; the demo path remains a negative 404 regression. Existing TriSend-account migration and profile-edit contract require Product/Operations decisions.
 
 ## Acceptance accounting
 
 - Strict acceptance: **0/19 Verified**, 16 In Progress, 3 Blocked (DISPATCH-01, DRIVER-04, SUPPORT-01).
 - This is not an implementation percentage. Substantial in-scope engineering exists and is tested, but full acceptance evidence remains incomplete.
-- No 19-row acceptance status changed in Run 116. Production readiness and live Cosmos/provider validation are not established.
+- No 19-row acceptance status changed in Run 117. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness and live Cosmos/provider validation are not established.
 
 ## External gates
 
@@ -50,7 +50,7 @@ Last updated: 2026-11-24 (Run 116)
 
 ## Next exact action
 
-1. Keep API as the active phase; source/test head `e9fe5d6271c3febde47f691f5f219dd293be7a9d` passed [#45260778123](https://github.com/rajeevp727/turnova-platform/actions/runs/45260778123), and documentation-bearing head `50534fafd37ed004310e8827094e8d45e4744214` passed [#45261591022](https://github.com/rajeevp727/turnova-platform/actions/runs/45261591022). Verify the follow-up handoff-only documentation sync commit's exact-head CI, then continue API-only cancellation, auth/authorization, privacy, persistence and contract audits.
+1. Keep API as the active phase; verify exact-head CI [#45265851337](https://github.com/rajeevp727/turnova-platform/actions/runs/45265851337) on `71c6f2262d83ea54fa8a00e7d32409a74f38422d` (or the superseding documentation-bearing head). After a green final-head run, record the exact test count and native non-container publish/verifier evidence; continue API-only reservation-store cancellation/identity/persistence audits, then auth/authorization, privacy and contract audits.
 2. Obtain independent human review/approval for PR #200. Merge only when repository policy permits and all final-head checks are green.
 3. Re-read main and perform a fresh API phase-exit audit before Android Rider.
 4. Complete Android Rider, Android Driver, iOS Rider and iOS Driver strictly in that order.
