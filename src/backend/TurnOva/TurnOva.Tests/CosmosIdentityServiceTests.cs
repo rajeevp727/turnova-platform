@@ -861,8 +861,10 @@ public sealed class CosmosIdentityServiceTests
         batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task LoginStopsBeforeRefreshTokenWriteWhenCancellationArrivesDuringIdentityHydration()
+    [Theory]
+    [InlineData(Password)]
+    [InlineData("WrongPass123")]
+    public async Task LoginStopsBeforeRefreshTokenWriteWhenCancellationArrivesDuringIdentityHydration(string password)
     {
         using var cts = new CancellationTokenSource();
         var user = CreateIdentity();
@@ -882,7 +884,7 @@ public sealed class CosmosIdentityServiceTests
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => service.LoginAsync(
             "rider",
-            new CosmosLoginRequest(user.Email, Password),
+            new CosmosLoginRequest(user.Email, password),
             cts.Token));
 
         container.Verify(value => value.ReplaceItemAsync(
