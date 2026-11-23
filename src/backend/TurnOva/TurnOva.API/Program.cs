@@ -1466,149 +1466,23 @@ app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, Cance
 });
 
 
+builder.Services.AddSingleton<CosmosIdentityService>();
+
 var authGroup = app.MapGroup("/api/v1/auth").WithTags("Authentication");
-authGroup.MapPost("/demo/{role}", (string role, IConfiguration configuration) =>
-{
-    // Demo access is opt-in and issues a short-lived, non-production identity.
-    if (!configuration.GetValue<bool>("DemoAuth:Enabled"))
-        return Results.NotFound();
-
-    var normalizedRole = role.Trim().ToLowerInvariant();
-    if (normalizedRole is not ("rider" or "driver"))
-        return Results.NotFound();
-
-    var issuer = configuration["Auth:Jwt:Issuer"];
-    var audience = configuration["Auth:Jwt:Audience"];
-    var signingKey = configuration["Auth:Jwt:SigningKey"];
-    if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience) ||
-        string.IsNullOrWhiteSpace(signingKey) || signingKey.Length < 32)
-        return Results.Problem("Demo authentication is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
-
-    var isRider = normalizedRole == "rider";
-    var subject = isRider ? "demo-rider-001" : "demo-driver-001";
-    var email = isRider ? "rider.demo@turnova.invalid" : "driver.demo@turnova.invalid";
-    var name = isRider ? "Demo Rider" : "Demo Driver";
-    var appRole = isRider ? "Rider" : "Driver";
-    var now = DateTime.UtcNow;
-    var credentials = new SigningCredentials(
-        new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-        SecurityAlgorithms.HmacSha256);
-    var claims = new[]
-    {
-        new Claim(JwtRegisteredClaimNames.Sub, subject),
-        new Claim(JwtRegisteredClaimNames.Email, email),
-        new Claim("name", name),
-        new Claim("role", appRole),
-        new Claim("demo", "true")
-    };
-    var jwt = new JwtSecurityToken(issuer, audience, claims, now, now.AddMinutes(30), credentials);
-    return Results.Ok(new
-    {
-        accessToken = new JwtSecurityTokenHandler().WriteToken(jwt),
-        refreshToken = (string?)null,
-        expiresIn = 1800,
-        isDemo = true,
-        user = new { id = subject, email, name, role = appRole, isDemo = true }
-    });
-}).AllowAnonymous();
 authGroup.MapPost("/{role}/register", async (
-    string role, PasswordRegisterRequest request, IHttpClientFactory clients,
-    CancellationToken ct) =>
-{
-    if (role is not ("driver" or "rider"))
-        return Results.NotFound();
-    if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-        return Results.BadRequest(new { message = "Email and password are required." });
-
-    var payload = new
-    {
-        email = request.Email.Trim().ToLowerInvariant(),
-        password = request.Password,
-        name = request.Name?.Trim(),
-        appId = "turnova",
-        role = role == "driver" ? "Driver" : "Rider",
-        replaceOldest = request.ReplaceOldest
-    };
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/register", payload, null, role == "driver" ? "Driver" : "Rider", ct);
-});
+    string role, CosmosRegisterRequest request, CosmosIdentityService identity, CancellationToken ct) =>
+    await identity.RegisterAsync(role, request, ct)).AllowAnonymous();
 authGroup.MapPost("/{role}/login", async (
-    string role, PasswordLoginRequest request, IHttpClientFactory clients,
-    CancellationToken ct) =>
-{
-    if (role is not ("driver" or "rider"))
-        return Results.NotFound();
-    if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-        return Results.BadRequest(new { message = "Email and password are required." });
-
-    var payload = new
-    {
-        email = request.Email.Trim().ToLowerInvariant(),
-        password = request.Password,
-        appId = "turnova",
-        replaceOldest = request.ReplaceOldest
-    };
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/login", payload, null, role == "driver" ? "Driver" : "Rider", ct);
-});
+    string role, CosmosLoginRequest request, CosmosIdentityService identity, CancellationToken ct) =>
+    await identity.LoginAsync(role, request, ct)).AllowAnonymous();
 authGroup.MapPost("/refresh", async (
-    RefreshTokenRequest? request, IHttpClientFactory clients, CancellationToken ct) =>
-{
-    if (string.IsNullOrWhiteSpace(request?.RefreshToken))
-        return Results.BadRequest(new { message = "Refresh token is required." });
-
-    return await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/refresh",
-        new { refreshToken = request.RefreshToken }, null, null, ct);
-});
+    CosmosRefreshRequest? request, CosmosIdentityService identity, CancellationToken ct) =>
+    await identity.RefreshAsync(request, ct)).AllowAnonymous();
 authGroup.MapPost("/logout", async (
-    HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
-    await ForwardAuthRequest(clients, HttpMethod.Post, "/auth/logout", null,
-        context.Request.Headers.Authorization.ToString(), null, ct));
-authGroup.MapGet("/me", async (HttpContext context, IHttpClientFactory clients, CancellationToken ct) =>
-    await ForwardAuthRequest(clients, HttpMethod.Get, "/auth/me", null,
-        context.Request.Headers.Authorization.ToString(), null, ct))
+    ClaimsPrincipal principal, CosmosIdentityService identity, CancellationToken ct) =>
+    await identity.LogoutAsync(principal, ct)).RequireAuthorization();
+authGroup.MapGet("/me", (ClaimsPrincipal principal) => CosmosIdentityService.Me(principal))
     .RequireAuthorization();
-
-static async Task<IResult> ForwardAuthRequest(
-    IHttpClientFactory clients, HttpMethod method, string path, object? body,
-    string? authorization, string? expectedRole, CancellationToken ct)
-{
-    using var request = new HttpRequestMessage(method, path);
-    if (body is not null)
-        request.Content = JsonContent.Create(body);
-    if (!string.IsNullOrWhiteSpace(authorization) &&
-        AuthenticationHeaderValue.TryParse(authorization, out var header))
-        request.Headers.Authorization = header;
-
-    try
-    {
-        using var response = await clients.CreateClient("TriSend").SendAsync(request, ct);
-        var content = await response.Content.ReadAsStringAsync(ct);
-        if (response.IsSuccessStatusCode && expectedRole is not null)
-        {
-            using var json = JsonDocument.Parse(content);
-            var actualRole = json.RootElement.GetProperty("user").GetProperty("role").GetString();
-            if (!string.Equals(actualRole, expectedRole, StringComparison.Ordinal))
-            {
-                var accessToken = json.RootElement.GetProperty("accessToken").GetString();
-                if (!string.IsNullOrWhiteSpace(accessToken))
-                {
-                    using var logout = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
-                    logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                    using var ignored = await clients.CreateClient("TriSend").SendAsync(logout, ct);
-                }
-                return Results.Problem($"This account is registered as {actualRole}, not {expectedRole}.", statusCode: 403);
-            }
-        }
-        return Results.Content(content, "application/json", Encoding.UTF8, (int)response.StatusCode);
-    }
-    catch (HttpRequestException)
-    {
-        return Results.Problem("Authentication service is temporarily unavailable.", statusCode: 503);
-    }
-    catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-    {
-        return Results.Problem("Authentication service timed out.", statusCode: 504);
-    }
-}
 
 var onboarding = app.MapGroup("/api/v1/driver/onboarding").RequireAuthorization(policy => policy.RequireRole("Driver")).WithTags("Driver onboarding");
 onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
