@@ -169,6 +169,45 @@ public sealed class CosmosSupportRequestStoreCancellationTests
     }
 
     [Fact]
+    public async Task CanonicalReadCancellationTakesPrecedenceOverOtherProviderFailure()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var conflict = new CosmosException(
+            "support request already exists", HttpStatusCode.Conflict, 0, "support-request-test", 0);
+        var unavailable = new CosmosException(
+            "canonical support request read unavailable", HttpStatusCode.ServiceUnavailable, 0, "support-request-test", 0);
+        var request = CreateRequest();
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<SupportRequest>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(conflict);
+        container.Setup(value => value.ReadItemAsync<SupportRequest>(
+                request.Id,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<SupportRequest>>(unavailable);
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosSupportRequestStore(container.Object).CreateOrGetAsync(request, cancellation.Token));
+
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<SupportRequest>(
+            request.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task SuccessfulCreateRemainsAuthoritativeWhenCancellationArrivesAfterCommit()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
