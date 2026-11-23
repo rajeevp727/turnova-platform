@@ -18,7 +18,14 @@ public sealed class InMemoryRideOfferStore : IRideOfferStore
     public Task<RideOfferState?> GetPendingForDriverAsync(string driverId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(_states.Values.FirstOrDefault(x => x.IsPending && x.DriverId == driverId));
+        var pendingOffers = _states.Values
+            .Where(x => x.IsPending && x.DriverId == driverId)
+            .Take(2)
+            .ToArray();
+        if (pendingOffers.Length > 1)
+            throw new InvalidOperationException("Multiple pending ride offers exist for the driver.");
+
+        return Task.FromResult(pendingOffers.SingleOrDefault());
     }
 
     public Task<IReadOnlyList<RideOfferState>> GetExpiredAsync(DateTimeOffset nowUtc, int maxItems, CancellationToken cancellationToken = default)

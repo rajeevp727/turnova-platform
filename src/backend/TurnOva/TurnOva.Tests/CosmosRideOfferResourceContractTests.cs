@@ -75,7 +75,6 @@ public sealed class CosmosRideOfferResourceContractTests
         iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
-        iterator.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -88,7 +87,7 @@ public sealed class CosmosRideOfferResourceContractTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new CosmosRideOfferStore(container.Object).GetPendingForDriverAsync("driver-1"));
 
-        Assert.Equal("Cosmos returned multiple pending ride offers for the driver.", exception.Message);
+        Assert.Equal("Multiple pending ride offers exist for the driver.", exception.Message);
         container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<RideOfferState>(

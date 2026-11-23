@@ -41,7 +41,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                 var candidate = RequirePendingForDriverQueryItem(item, driverId);
                 if (pendingOffer is not null)
                     throw new InvalidOperationException(
-                        "Cosmos returned multiple pending ride offers for the driver.");
+                        "Multiple pending ride offers exist for the driver.");
 
                 pendingOffer = candidate;
             }
