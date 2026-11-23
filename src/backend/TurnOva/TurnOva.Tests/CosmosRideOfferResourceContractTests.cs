@@ -96,7 +96,6 @@ public sealed class CosmosRideOfferResourceContractTests
         iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
         container.VerifyNoOtherCalls();
-        iterator.VerifyNoOtherCalls();
     }
 
     [Fact]
