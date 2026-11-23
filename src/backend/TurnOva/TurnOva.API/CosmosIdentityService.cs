@@ -120,10 +120,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         IdentityDocument? user;
         try
         {
-            var query = new QueryDefinition("SELECT * FROM c WHERE c.id = @id AND c.documentType = 'user'")
-                .WithParameter("@id", $"user:{email}");
-            // Email is indexed as a normalized field. The query is scoped to the role partition.
-            query = new QueryDefinition("SELECT * FROM c WHERE c.email = @email AND c.documentType = 'user'")
+            // Email lookup is scoped to the role partition and only returns account documents.
+            var query = new QueryDefinition("SELECT * FROM c WHERE c.email = @email AND c.documentType = 'user'")
                 .WithParameter("@email", email);
             using var iterator = container.GetItemQueryIterator<IdentityDocument>(query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(normalizedRole), MaxItemCount = 1 });
             user = null;
