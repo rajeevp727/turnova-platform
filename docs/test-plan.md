@@ -1,6 +1,6 @@
 # TurnOva Feature Test Plan
 
-**Authentication supersession (2026-11-23):** The active auth implementation is Cosmos-native. Current `Program.cs` maps register/login/refresh/logout/`me`; it maps no TriSend auth proxy and no demo-login route. `POST /api/v1/auth/demo/{role}` is intentionally unmapped and the negative 404 regression remains. TriSend proxy and demo-session sections below are retained for historical traceability only; they are not current routes or active acceptance evidence. The active persistence/auth cases are AUTH-COSMOS-001..011.
+**Authentication supersession (2026-11-23):** The active auth implementation is Cosmos-native. Current `Program.cs` maps register/login/refresh/logout/`me`; it maps no TriSend auth proxy and no demo-login route. `POST /api/v1/auth/demo/{role}` is intentionally unmapped and the negative 404 regression remains. TriSend proxy and demo-session sections below are retained for historical traceability only; they are not current routes or active acceptance evidence. The active persistence/auth cases are AUTH-COSMOS-001..012.
 
 **Scope:** TurnOva Rider and Driver Cab-only Android/iOS MVP, including authentication, union-grouped discovery, selected-driver negotiation, trip lifecycle, direct-payment reporting and release gates. Legacy FIFO cases are compatibility regression tests only; they are not the approved customer-facing Rider flow.
 **Test types:** automated unit/CI, API integration, mobile functional, security, and manual acceptance.
