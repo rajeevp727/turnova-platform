@@ -35,13 +35,13 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             if (batch[0].StatusCode != System.Net.HttpStatusCode.Conflict)
                 throw BatchFailure("acquire", batch.StatusCode);
 
-            RiderActiveBookingReservation? current;
+            RiderActiveBookingReservation current;
             try
             {
-                current = (await container.ReadItemAsync<RiderActiveBookingReservation>(
+                current = RequireResource(await container.ReadItemAsync<RiderActiveBookingReservation>(
                     RiderActiveBookingReservation.DocumentId,
                     new PartitionKey(reservation.RiderId),
-                    cancellationToken: cancellationToken)).Resource;
+                    cancellationToken: cancellationToken));
             }
             catch (CosmosException missing) when (missing.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -75,7 +75,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
                 new PartitionKey(riderId),
                 cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            return current.Resource;
+            return RequireResource(current);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -110,22 +110,23 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            if (current.Resource.RideId != rideId)
+            var currentReservation = RequireResource(current);
+            if (currentReservation.RideId != rideId)
                 return false;
-            if (current.Resource.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow &&
+            if (currentReservation.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow &&
                 !allowExpiredForAuthoritativeActiveRide)
                 return false;
-            if (current.Resource.ExpiresAtUtc is null)
+            if (currentReservation.ExpiresAtUtc is null)
                 return true;
 
             cancellationToken.ThrowIfCancellationRequested();
             if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
                 return false;
 
-            var updated = current.Resource with { ExpiresAtUtc = null };
+            var updated = currentReservation with { ExpiresAtUtc = null };
             var audit = RiderActiveBookingReservationAuditEvent.Create(
                 updated, RiderActiveBookingReservationAuditEventTypes.MadePermanent,
-                auditContext, current.Resource.ExpiresAtUtc, expiresAtUtc: null);
+                auditContext, currentReservation.ExpiresAtUtc, expiresAtUtc: null);
             using var batch = await container.CreateTransactionalBatch(new PartitionKey(riderId))
                 .ReplaceItem(
                     RiderActiveBookingReservation.DocumentId,
@@ -171,7 +172,8 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            if (current.Resource.RideId != rideId)
+            var currentReservation = RequireResource(current);
+            if (currentReservation.RideId != rideId)
                 return false;
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -179,8 +181,8 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
                 return false;
 
             var audit = RiderActiveBookingReservationAuditEvent.Create(
-                current.Resource, RiderActiveBookingReservationAuditEventTypes.Released,
-                auditContext, current.Resource.ExpiresAtUtc, expiresAtUtc: null);
+                currentReservation, RiderActiveBookingReservationAuditEventTypes.Released,
+                auditContext, currentReservation.ExpiresAtUtc, expiresAtUtc: null);
             using var batch = await container.CreateTransactionalBatch(new PartitionKey(riderId))
                 .DeleteItem(
                     RiderActiveBookingReservation.DocumentId,
@@ -198,6 +200,11 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
 
         return false;
     }
+
+    private static RiderActiveBookingReservation RequireResource(
+        ItemResponse<RiderActiveBookingReservation> response) =>
+        response.Resource ?? throw new InvalidOperationException(
+            "Cosmos returned an empty Rider booking reservation resource.");
 
     private static bool IsReservationWriteConflict(TransactionalBatchResponse batch) =>
         batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed;
