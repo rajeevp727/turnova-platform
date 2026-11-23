@@ -101,6 +101,8 @@ public sealed class CosmosReadResponseGuardTests
                 "Union",
                 CancellationToken.None));
 
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -173,6 +175,8 @@ public sealed class CosmosReadResponseGuardTests
                 "Union",
                 cancellation.Token));
 
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -198,6 +202,8 @@ public sealed class CosmosReadResponseGuardTests
                 "Union",
                 cancellation.Token));
 
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -218,6 +224,8 @@ public sealed class CosmosReadResponseGuardTests
                 "Union",
                 CancellationToken.None));
 
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -271,7 +279,7 @@ public sealed class CosmosReadResponseGuardTests
     [Fact]
     public async Task ReadAllRejectsNullResource()
     {
-        var iterator = CreateSinglePageIterator<DriverUnion>(CreatePage<DriverUnion>(null!));
+        var iterator = CreateSinglePageIterator<DriverUnion>(CreatePage<DriverUnion>(new DriverUnion[] { null! }));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             CosmosReadResponseGuard.ReadAllAsync(
