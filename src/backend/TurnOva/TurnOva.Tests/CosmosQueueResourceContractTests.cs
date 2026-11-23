@@ -42,6 +42,130 @@ public sealed class CosmosQueueResourceContractTests
         VerifyReadOnly(container, response);
     }
 
+    [Fact]
+    public async Task QueueEligibilityRejectsNullQueryItemInsteadOfExposingDriver()
+    {
+        var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage<CosmosQueueStore.QueueEntryDocument>(null!);
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetEligibleAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned an empty queue entry query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task QueueEligibilityRejectsQueryItemWhoseIdentityDoesNotMatchDocumentId()
+    {
+        var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
+        {
+            Id = "different-driver",
+            DriverId = "driver-1",
+            ZoneId = "hyderabad-central",
+            ServiceClass = "cab",
+            ZoneServiceKey = "hyderabad-central|cab",
+            JoinedAt = DateTimeOffset.UtcNow,
+            Sequence = 1,
+            IsEligible = true
+        });
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetEligibleAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue entry query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task QueueEligibilityRejectsQueryItemForAnotherZoneOrServiceClass()
+    {
+        var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
+        {
+            Id = "driver-1",
+            DriverId = "driver-1",
+            ZoneId = "hyderabad-central",
+            ServiceClass = "Bike",
+            ZoneServiceKey = "hyderabad-central|cab",
+            JoinedAt = DateTimeOffset.UtcNow,
+            Sequence = 1,
+            IsEligible = true
+        });
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetEligibleAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue entry query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<CosmosQueueStore.QueueEntryDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task QueueAuditReadRejectsNullQueryItemInsteadOfReturningMalformedAuditHistory()
+    {
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage<QueueAuditEvent>(null!);
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned an empty queue audit event query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    private static Mock<Container> CreateQueryContainer<T>(Mock<FeedIterator<T>> iterator)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<T>(
+                It.IsAny<QueryDefinition>(),
+                It.IsAny<string?>(),
+                It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        return container;
+    }
+
+    private static Mock<FeedResponse<T>> CreatePage<T>(params T[] items)
+    {
+        var page = new Mock<FeedResponse<T>>(MockBehavior.Strict);
+        page.As<IEnumerable<T>>()
+            .Setup(value => value.GetEnumerator())
+            .Returns(() => items.AsEnumerable().GetEnumerator());
+        return page;
+    }
+
     private static (Mock<Container> Container, Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>> Response)
         CreateNullResourceRead()
     {
