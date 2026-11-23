@@ -206,4 +206,42 @@ public sealed class CosmosSupportRequestStoreCancellationTests
             "Trip update issue",
             "The trip status did not refresh after reconnecting.",
             DateTimeOffset.UtcNow);
+
+    [Fact]
+    public async Task CanonicalReadRejectsNullResourceAfterCreateConflict()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var conflict = new CosmosException(
+            "support request already exists", HttpStatusCode.Conflict, 0, "support-request-test", 0);
+        var request = CreateRequest();
+        var response = new Mock<ItemResponse<SupportRequest>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns((SupportRequest)null!);
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<SupportRequest>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(conflict);
+        container.Setup(value => value.ReadItemAsync<SupportRequest>(
+                request.Id,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosSupportRequestStore(container.Object).CreateOrGetAsync(request));
+
+        Assert.Equal("Cosmos returned an empty support request resource.", exception.Message);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<SupportRequest>(
+            request.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
 }

@@ -203,4 +203,32 @@ public sealed class CosmosQueueAuditEventStoreCancellationTests
             DateTimeOffset.Parse("2026-11-23T00:00:00Z"),
             TraceId: "trace-1",
             ReasonCategory: QueueAuditReasonCategories.QueueReadFailed);
+
+    [Fact]
+    public async Task SuccessfulReadRejectsNullResourceInsteadOfReturningMissingEvent()
+    {
+        var auditEvent = CreateEvent();
+        var response = new Mock<ItemResponse<QueueAuditEvent>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns((QueueAuditEvent)null!);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<QueueAuditEvent>(
+                auditEvent.EventId,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueAuditEventStore(container.Object)
+                .ReadAsync(auditEvent.EventId, auditEvent.ZoneServiceKey, CancellationToken.None));
+
+        Assert.Equal("Cosmos returned an empty queue audit event resource.", exception.Message);
+        container.Verify(value => value.ReadItemAsync<QueueAuditEvent>(
+            auditEvent.EventId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
 }

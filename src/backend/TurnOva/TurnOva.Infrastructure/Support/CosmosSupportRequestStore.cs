@@ -27,11 +27,13 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var existing = (await container.ReadItemAsync<SupportRequest>(
+                var existingResponse = await container.ReadItemAsync<SupportRequest>(
                     request.Id,
                     new PartitionKey(request.ReporterId),
-                    cancellationToken: cancellationToken)).Resource;
+                    cancellationToken: cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
+                var existing = existingResponse.Resource ?? throw new InvalidOperationException(
+                    "Cosmos returned an empty support request resource.");
 
                 var sameSubmission =
                     string.Equals(existing.ReporterId, request.ReporterId, StringComparison.Ordinal) &&

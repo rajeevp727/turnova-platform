@@ -30,12 +30,14 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
             cancellationToken.ThrowIfCancellationRequested();
             var current = await response.Container.ReadContainerAsync(cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            if (current.Resource.DefaultTimeToLive != defaultTimeToLive)
+            var currentProperties = current.Resource ?? throw new InvalidOperationException(
+                "Cosmos returned an empty container resource for TTL configuration.");
+            if (currentProperties.DefaultTimeToLive != defaultTimeToLive)
             {
-                current.Resource.DefaultTimeToLive = defaultTimeToLive;
+                currentProperties.DefaultTimeToLive = defaultTimeToLive;
                 cancellationToken.ThrowIfCancellationRequested();
                 await response.Container.ReplaceContainerAsync(
-                    current.Resource,
+                    currentProperties,
                     cancellationToken: cancellationToken);
             }
         }
