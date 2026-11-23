@@ -1,5 +1,6 @@
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
+using CosmosDatabase = Microsoft.Azure.Cosmos.Database;
 
 namespace TurnOva.Infrastructure.Database;
 
@@ -105,7 +106,7 @@ public sealed class CosmosMigrationRunner(
     }
 
     private static async Task<Container> CreateValidatedContainerAsync(
-        Database database,
+        CosmosDatabase database,
         string containerName,
         CancellationToken cancellationToken)
     {
