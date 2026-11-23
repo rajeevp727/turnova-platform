@@ -296,7 +296,7 @@ export default function App() {
       const accepted = await acceptSession(result, authEpoch, true);
       if (!accepted) throw new Error("Session changed. Please sign in again.");
       setPassword("");
-    } catch (e) { if (sessionEpoch.current === authEpoch) setError(e instanceof Error ? e.message : "Authentication failed."); }
+    } catch (e) { if (sessionEpoch.current === authEpoch) { const message = e instanceof Error ? e.message : "Authentication failed."; setError(/network request failed|failed to fetch|networkerror/i.test(message) ? "Unable to connect to TurnOva. Check your internet connection and try again." : message); } }
     finally { if (sessionEpoch.current === authEpoch) setLoading(false); }
   };
 
@@ -1192,7 +1192,7 @@ export default function App() {
           <Text style={styles.label}>PASSWORD</Text><TextInput testID="driver-auth-password" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoComplete={mode==="register"?"new-password":"current-password"} style={styles.input} placeholder={mode==="register"?"At least 10 characters":"Your password"} placeholderTextColor={colors.muted} editable={!loading}/>
           {mode==="register"&&<Text style={styles.muted}>Use at least 10 characters, including a letter and a number.</Text>}
           <Pressable testID="driver-auth-submit" style={[styles.primary,authSubmitDisabled&&{opacity:0.55}]} disabled={authSubmitDisabled} onPress={()=>void authenticate()}><Text style={styles.primaryText}>{loading?(mode==="register"?"Creating account…":"Signing in…"):(mode==="register"?"Create Driver account":"Sign in as Driver")}</Text></Pressable>
-          {!!error&&<Text testID="driver-auth-error" accessibilityRole="alert" style={styles.error}>{error}</Text>}
+          {!!error&&<><Text testID="driver-auth-error" accessibilityRole="alert" style={styles.error}>{error}</Text><Pressable testID="driver-auth-retry" onPress={()=>void authenticate()} disabled={loading}><Text style={styles.link}>{loading?"Connecting…":"Retry"}</Text></Pressable></>}
         </View>
       </ScrollView>
     </SafeAreaView>
