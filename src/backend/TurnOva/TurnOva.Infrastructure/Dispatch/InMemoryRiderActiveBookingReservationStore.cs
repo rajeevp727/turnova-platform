@@ -72,6 +72,7 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
         return Task.FromResult(
             _items.TryGetValue(riderId, out var state) ? state.Reservation : null);
     }
@@ -84,6 +85,8 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         bool allowExpiredForAuthoritativeActiveRide = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         while (_items.TryGetValue(riderId, out var state))
         {
             var current = state.Reservation;
@@ -118,6 +121,8 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         while (_items.TryGetValue(riderId, out var state))
         {
             var current = state.Reservation;
