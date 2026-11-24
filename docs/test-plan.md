@@ -5314,6 +5314,14 @@ JwtBearerOptions.IncludeErrorDetails is explicitly false. Invalid-token status a
 
 The bearer middleware requires exactly one non-empty `role` claim before endpoint authorization. The regression signs an otherwise valid TurnOva HS256 token containing both Rider and Driver roles and asserts HTTP 401, cache protection and no error/error_description challenge details. The existing valid Rider HS256 token remains the positive control. This is supplemental authentication hardening; it does not promote an MVP acceptance row or establish production signing-key custody.
 
+## AUTH-API-066 — reject missing or blank JWT role claims
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| AUTH-API-066 | An otherwise valid HS256 JWT has no `role` claim, or its sole `role` claim is empty/whitespace | Reject with HTTP 401 before the authenticated handler runs; retain no-store/no-cache headers and a generic Bearer challenge without validation details | `AuthApiIntegrationTests.MissingRoleClaimIsRejectedByJwtValidation`; `AuthApiIntegrationTests.BlankRoleClaimIsRejectedByJwtValidation` (empty and whitespace theory cases) | P1 |
+
+The bearer middleware already requires exactly one non-empty `role` claim. This regression complements AUTH-API-065 by covering the zero-claim and blank-value branches of that invariant, while retaining the valid HS256 Rider token as the positive control. This is supplemental API authentication hardening and does not promote an MVP acceptance row or establish production signing-key custody.
+
 ## Cosmos migration database handle identity and cancellation (COSMOS-BOOTSTRAP-027..033)
 
 Before migration bootstrap creates either `MigrationHistory` or `MigrationLocks`, the `DatabaseResponse.Database` handle must be non-null and its `Database.Id` must exactly match the configured database name. Lazy response/identity getters must preserve caller cancellation; a non-cancellation identity getter failure must propagate unchanged. Invalid handles must stop before container creation and lease acquisition.
