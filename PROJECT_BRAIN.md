@@ -1,3 +1,17 @@
+# Run 137 handoff — 2026-11-24 (API phase)
+
+Current phase: **API in progress**. Active PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head [`70a2fdc662d0e71be4212fdf6dcc678a696bfee3`](https://github.com/rajeevp727/turnova-platform/commit/70a2fdc662d0e71be4212fdf6dcc678a696bfee3). Exact-head API-only [CI #45410722622](https://github.com/rajeevp727/turnova-platform/actions/runs/45410722622) passed **1,468/1,468 backend tests (0 failed/0 skipped)**, .NET 10 Release build (0 warnings/0 errors), native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture); artifact [14928885915](https://github.com/rajeevp727/turnova-platform/actions/runs/45410722622/artifacts/14928885915), 17,027,258 bytes, SHA-256 `24b313a33f5fd6946aa6abadae3d94d1c10ac38bdb5e76243837059feb5044e2`.
+
+Run 137 adds generic cancellation-safe Cosmos response-value hydration; Cosmos-native auth Resource/ETag/Container.Id guards; and equivalent Resource/ETag guards for UnionAssignmentWriter and UnionStatusUpdater. ETags are captured once and reused for IfMatch. Tests cover nullable response values, cancellation precedence, auth token-rotation/revocation no-write behavior, identity container metadata/handle identity, and Union conditional-write cancellation. See `docs/test-plan.md` IDs `COSMOS-READ-019..022`, `AUTH-COSMOS-016..018`, `COSMOS-BOOTSTRAP-015..019`, and `COSMOS-ETAG-016..019`.
+
+Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); implementation evidence is tracked separately. Live Cosmos ETag/transaction/multi-instance/restart, production auth/hosting/provider validation, product policy, legal review and physical-device/signing gates remain external. Do not claim production readiness.
+
+PR #200 has three owner-authored COMMENTED reviews, zero unresolved threads and no independent approval/requested reviewer. Never self-approve, bypass protection or merge. PR #196/#198/#205/#206 remain Draft/parked. PR #197 and #207 were merged without independent human approval (historical process exceptions). PR #207's auth/mobile changes do not satisfy Android completion. Main `.github/turnova-phase.json` is stale (API complete/Android in_progress); PR #200 branch phase file is correct (API in_progress/Android not_started/iOS not_started).
+
+Next exact task: audit remaining direct Cosmos `ItemResponse.Resource`/`ETag` reads in API `Program.cs` local functions (Union audit snapshot, Driver profile update, Ride raw read, booking idempotency replay, Driver acceptance, ride CAS replacement, payslip read); route them through the shared guard, add deterministic cancellation/no-write tests, and rerun API-only exact-head CI. Continue API-only work; do not begin Android until independent review, permitted merge, main re-read and a fresh API phase-exit audit.
+
+---
+
 ## Run 135 — Cosmos migration TTL container-handle identity and cancellation (2026-11-24)
 
 - API remains `in_progress`; Android/iOS remain `not_started`. No mobile completion work started.
