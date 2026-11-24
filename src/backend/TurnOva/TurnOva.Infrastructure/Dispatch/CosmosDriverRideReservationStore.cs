@@ -30,6 +30,8 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         DriverRideReservationAuditContext? auditContext)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow)
             return false;
 

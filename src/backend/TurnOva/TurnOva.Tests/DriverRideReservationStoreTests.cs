@@ -296,4 +296,33 @@ public sealed class DriverRideReservationStoreTests
             expiresAtUtc: null));
     }
 
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("driver-1", "")]
+    [InlineData("driver-1", " ")]
+    public async Task AcquireRejectsBlankDriverOrRideIdBeforeStoringReservation(string driverId, string rideId)
+    {
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryAcquireAsync(driverId, rideId));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+
+    [Fact]
+    public async Task AcquireHonorsPreCancelledTokenBeforeBlankDriverOrRideIdValidation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryAcquireAsync(" ", "ride-1", cancellation.Token));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+
 }

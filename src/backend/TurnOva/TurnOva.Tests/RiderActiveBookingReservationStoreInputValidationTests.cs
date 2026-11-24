@@ -64,4 +64,38 @@ public sealed class RiderActiveBookingReservationStoreInputValidationTests
         Assert.Null(await store.GetActiveAsync("rider-1"));
         Assert.Empty(store.GetAuditEvents("rider-1"));
     }
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("rider-1", "")]
+    [InlineData("rider-1", " ")]
+    public async Task CosmosAcquireRejectsBlankRiderOrRideIdBeforeCallingCosmos(string riderId, string rideId)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var reservation = new RiderActiveBookingReservation(
+            riderId, rideId, "request-hash", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object).TryAcquireAsync(reservation));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("rider-1", "")]
+    [InlineData("rider-1", " ")]
+    public async Task InMemoryAcquireRejectsBlankRiderOrRideIdBeforeStoringReservation(string riderId, string rideId)
+    {
+        var store = new InMemoryRiderActiveBookingReservationStore();
+        var reservation = new RiderActiveBookingReservation(
+            riderId, rideId, "request-hash", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryAcquireAsync(reservation));
+
+        Assert.Null(await store.GetActiveAsync("rider-1"));
+        Assert.Empty(store.GetAuditEvents("rider-1"));
+    }
+
 }

@@ -15,6 +15,8 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
     {
         ArgumentNullException.ThrowIfNull(reservation);
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RiderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RideId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RequestHash);
         if (reservation.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
             return RiderBookingReservationAcquireResult.Conflict;

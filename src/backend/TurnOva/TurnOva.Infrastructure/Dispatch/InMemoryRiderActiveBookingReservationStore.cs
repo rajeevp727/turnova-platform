@@ -24,6 +24,8 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
     {
         ArgumentNullException.ThrowIfNull(reservation);
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RiderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RideId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RequestHash);
         if (reservation.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow())
             return Task.FromResult(RiderBookingReservationAcquireResult.Conflict);
