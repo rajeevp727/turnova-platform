@@ -441,7 +441,14 @@ async Task<IReadOnlyList<DriverWorkActivity>> GetWorkActivitiesAsync(string driv
     var results = new List<DriverWorkActivity>();
     using var iterator = workActivityContainer.GetItemQueryIterator<DriverWorkActivity>(query,
         requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+    {
+        var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => iterator.ReadNextAsync(ct),
+            ct);
+        results.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+        ct.ThrowIfCancellationRequested();
+    }
     return results;
 }
 
@@ -461,8 +468,14 @@ async Task ReconcileSelectedRideWorkActivitiesAsync(
         var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId")
             .WithParameter("@driverId", driverId);
         using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
-        while (iterator.HasMoreResults)
-            driverRides.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            driverRides.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
     }
 
     foreach (var ride in driverRides)
@@ -1454,8 +1467,14 @@ async Task<HashSet<string>> FindActiveDriverIdsAsync(
         {
             using var iterator = rideContainer.GetItemQueryIterator<ActiveDriverRideProjection>(
                 DriverActiveRideQuery.Create(batch));
-            while (iterator.HasMoreResults)
-                candidates.AddRange(await iterator.ReadNextAsync(ct));
+            while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+            {
+                var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => iterator.ReadNextAsync(ct),
+                    ct);
+                candidates.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+                ct.ThrowIfCancellationRequested();
+            }
         }
 
         foreach (var candidate in candidates)
@@ -1518,8 +1537,14 @@ async Task<DemoRide?> FindActiveRiderRideAsync(
             .WithParameter("@riderId", riderId);
         var ids = new List<string>();
         using var iterator = rideContainer.GetItemQueryIterator<string>(query);
-        while (iterator.HasMoreResults)
-            ids.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            ids.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
         candidateRideIds = ids.Distinct(StringComparer.Ordinal).ToArray();
     }
 
@@ -2243,7 +2268,14 @@ opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionI
         var query = new QueryDefinition("SELECT * FROM c WHERE c.unionId = @unionId AND c.status = 'Active'").WithParameter("@unionId", unionId);
         var results = new List<DriverUnionAssignment>();
         using var iterator = unionAssignmentContainer.GetItemQueryIterator<DriverUnionAssignment>(query);
-        while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            results.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
         assignments = results;
     }
 
@@ -2570,8 +2602,14 @@ unionManagerApi.MapGet("/reconciliation", async (ClaimsPrincipal user, Cancellat
             var query = new QueryDefinition(TurnOva.API.UnionReconciliationQuery.Sql)
                 .WithParameter("@unionId", unionId);
             using var iterator = rideContainer.GetItemQueryIterator<UnionReconciliationQueryProjection>(query);
-            while (iterator.HasMoreResults)
-                reconciliationRecords.AddRange(await iterator.ReadNextAsync(ct));
+            while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+            {
+                var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => iterator.ReadNextAsync(ct),
+                    ct);
+                reconciliationRecords.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+                ct.ThrowIfCancellationRequested();
+            }
         }
     }
 
@@ -4108,9 +4146,16 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueS
         string.Equals(x.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
         .Select(ToDriverRideHistoryItem).ToArray());
     var query = new QueryDefinition("SELECT * FROM c WHERE c.status = @status").WithParameter("@status", "Requested");
-    var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
+    using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
     var results = new List<DemoRide>();
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+    {
+        var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => iterator.ReadNextAsync(ct),
+            ct);
+        results.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+        ct.ThrowIfCancellationRequested();
+    }
     return Results.Ok(results.Where(ride =>
         ride.Passengers <= approvedProfile.PassengerCapacity &&
         string.Equals(ride.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
@@ -5193,8 +5238,14 @@ app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, Cancellatio
         var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId")
             .WithParameter("@driverId", driverId);
         using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
-        while (iterator.HasMoreResults)
-            history.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            history.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
     }
 
     var verifiedHistory = new List<DemoRide>(history.Count);
@@ -5232,8 +5283,14 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
         var query = new QueryDefinition("SELECT * FROM c WHERE c.riderId = @riderId")
             .WithParameter("@riderId", riderId);
         using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
-        while (iterator.HasMoreResults)
-            history.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            history.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
     }
 
     var verifiedHistory = new List<DemoRide>(history.Count);
