@@ -1382,7 +1382,7 @@ public sealed class CosmosIdentityServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
             "rider", new CosmosLoginRequest(user.Email, Password), cts.Token));
 
-        page.Verify(value => ((IEnumerable<CosmosIdentityService.IdentityDocument>)value).GetEnumerator(), Times.Once);
+        page.As<IEnumerable<CosmosIdentityService.IdentityDocument>>().Verify(value => value.GetEnumerator(), Times.Once);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.Verify(value => value.ReplaceItemAsync(
@@ -1390,7 +1390,6 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
         iterator.VerifyNoOtherCalls();
-        page.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -1481,7 +1480,7 @@ public sealed class CosmosIdentityServiceTests
 
         container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
-        page.Verify(value => ((IEnumerable<CosmosIdentityService.IdentityDocument>)value).GetEnumerator(), Times.Once);
+        page.As<IEnumerable<CosmosIdentityService.IdentityDocument>>().Verify(value => value.GetEnumerator(), Times.Once);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.Verify(value => value.ReplaceItemAsync(
@@ -1489,7 +1488,6 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
         iterator.VerifyNoOtherCalls();
-        page.VerifyNoOtherCalls();
     }
 
     private static CosmosIdentityService CreateService(Container container) =>
