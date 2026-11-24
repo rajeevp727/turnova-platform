@@ -57,22 +57,42 @@ public static class CosmosReadResponseGuard
         CancellationToken cancellationToken,
         string? identityMismatchMessage = null,
         string? emptyResourceMessage = null)
-        where T : class
+        where T : class =>
+        ReadResponseResource(
+            response,
+            static itemResponse => itemResponse.Resource,
+            identityMatches,
+            resourceDescription,
+            cancellationToken,
+            identityMismatchMessage,
+            emptyResourceMessage);
+
+    public static TResource ReadResponseResource<TResponse, TResource>(
+        TResponse response,
+        Func<TResponse, TResource?> resourceAccessor,
+        Func<TResource, bool> identityMatches,
+        string resourceDescription,
+        CancellationToken cancellationToken,
+        string? identityMismatchMessage = null,
+        string? emptyResourceMessage = null)
+        where TResponse : class
+        where TResource : class
     {
         ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(resourceAccessor);
         ArgumentNullException.ThrowIfNull(identityMatches);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceDescription);
         cancellationToken.ThrowIfCancellationRequested();
 
-        T? resource;
+        TResource? resource;
         try
         {
-            resource = response.Resource;
+            resource = resourceAccessor(response);
         }
         catch
         {
-            // Cosmos may hydrate/deserialise a point-read resource after the provider task
-            // has completed. Preserve request cancellation if hydration itself fails.
+            // SDK response properties can hydrate lazily after the provider task completes.
+            // Preserve caller cancellation if property hydration itself fails.
             cancellationToken.ThrowIfCancellationRequested();
             throw;
         }
