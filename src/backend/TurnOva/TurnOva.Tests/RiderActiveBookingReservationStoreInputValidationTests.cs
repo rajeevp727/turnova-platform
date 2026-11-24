@@ -8,6 +8,56 @@ namespace TurnOva.Tests;
 public sealed class RiderActiveBookingReservationStoreInputValidationTests
 {
     [Fact]
+    public async Task CosmosAcquireHonorsPreCancelledTokenBeforeNullReservationValidation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object)
+                .TryAcquireAsync(null!, cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task InMemoryAcquireHonorsPreCancelledTokenBeforeNullReservationValidation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var store = new InMemoryRiderActiveBookingReservationStore();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryAcquireAsync(null!, cancellation.Token));
+
+        Assert.Null(await store.GetActiveAsync("rider-1"));
+        Assert.Empty(store.GetAuditEvents("rider-1"));
+    }
+
+    [Fact]
+    public async Task CosmosAcquireRejectsNullReservationBeforeCallingCosmos()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object).TryAcquireAsync(null!));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task InMemoryAcquireRejectsNullReservationBeforeStoringReservation()
+    {
+        var store = new InMemoryRiderActiveBookingReservationStore();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => store.TryAcquireAsync(null!));
+
+        Assert.Null(await store.GetActiveAsync("rider-1"));
+        Assert.Empty(store.GetAuditEvents("rider-1"));
+    }
+
+    [Fact]
     public async Task CosmosAcquireHonorsPreCancelledTokenBeforeBlankRequestHashValidation()
     {
         var container = new Mock<Container>(MockBehavior.Strict);

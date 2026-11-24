@@ -22,8 +22,8 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         CancellationToken cancellationToken = default,
         DriverRideReservationAuditContext? auditContext = null)
     {
-        ArgumentNullException.ThrowIfNull(reservation);
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(reservation);
         ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RiderId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RideId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RequestHash);
