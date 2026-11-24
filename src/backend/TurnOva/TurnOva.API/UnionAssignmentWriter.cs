@@ -58,8 +58,10 @@ public static class UnionAssignmentWriter
         ItemResponse<DriverUnionAssignment> currentResponse;
         try
         {
-            currentResponse = await assignmentContainer.ReadItemAsync<DriverUnionAssignment>(
-                assignment.DriverId, partitionKey, cancellationToken: cancellationToken);
+            currentResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => assignmentContainer.ReadItemAsync<DriverUnionAssignment>(
+                    assignment.DriverId, partitionKey, cancellationToken: cancellationToken),
+                cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
@@ -67,10 +69,14 @@ public static class UnionAssignmentWriter
             return false;
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-        if (currentResponse.Resource is null ||
-            currentResponse.Resource != expectedCurrent ||
-            !CosmosEtagPolicy.HasObservedEtag(currentResponse.ETag))
+        var current = CosmosReadResponseGuard.ReadResponseValue(
+            currentResponse, static response => response.Resource, cancellationToken);
+        if (current is null || current != expectedCurrent)
+            return false;
+
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            currentResponse, static response => response.ETag, cancellationToken);
+        if (!CosmosEtagPolicy.HasObservedEtag(etag))
             return false;
 
         try
@@ -79,7 +85,7 @@ public static class UnionAssignmentWriter
                 assignment,
                 assignment.DriverId,
                 partitionKey,
-                new ItemRequestOptions { IfMatchEtag = currentResponse.ETag },
+                new ItemRequestOptions { IfMatchEtag = etag },
                 cancellationToken);
             return true;
         }
