@@ -181,11 +181,12 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         ct.ThrowIfCancellationRequested();
         var user = CosmosReadResponseGuard.ReadResponseValue(
             readResponse, static response => response.Resource, ct);
-        var credentialsValid = user is not null &&
-            IsExpectedIdentity(user, candidate.Id, normalizedRole) &&
-            string.Equals(user.Email, email, StringComparison.Ordinal);
-        if (credentialsValid && user is not null)
-            credentialsValid = VerifyPassword(request.Password, user.PasswordSalt, user.PasswordHash);
+        if (user is null ||
+            !IsExpectedIdentity(user, candidate.Id, normalizedRole) ||
+            !string.Equals(user.Email, email, StringComparison.Ordinal))
+            return InvalidCredentials();
+
+        var credentialsValid = VerifyPassword(request.Password, user.PasswordSalt, user.PasswordHash);
         // PBKDF2 is synchronous; honor a disconnect that occurred while verifying the password,
         // including when the supplied password is incorrect, before returning or rotating a session.
         ct.ThrowIfCancellationRequested();
@@ -273,7 +274,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
                     ct.ThrowIfCancellationRequested();
                     var user = CosmosReadResponseGuard.ReadResponseValue(
-            readResponse, static response => response.Resource, ct);
+                        readResponse, static response => response.Resource, ct);
                     if (user is null ||
                         !IsExpectedIdentity(user, candidate.Id, role) ||
                         !FixedTimeEquals(user.RefreshTokenHash, tokenHash) ||
@@ -362,7 +363,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
             ct.ThrowIfCancellationRequested();
             var user = CosmosReadResponseGuard.ReadResponseValue(
-            readResponse, static response => response.Resource, ct);
+                readResponse, static response => response.Resource, ct);
             if (user is null || !IsExpectedIdentity(user, id, role)) return StorageUnavailable();
             if (string.IsNullOrWhiteSpace(user.RefreshTokenHash) && user.RefreshTokenExpiresAtUtc is null)
                 return Results.NoContent();
