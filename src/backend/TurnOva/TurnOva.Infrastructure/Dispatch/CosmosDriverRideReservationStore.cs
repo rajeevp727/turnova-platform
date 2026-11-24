@@ -96,6 +96,8 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         try
         {
             var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
@@ -146,6 +148,8 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow)
             return false;
 
@@ -194,6 +198,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
         try
         {
             // Return expired leases too. The API must expire/reconcile the linked ride
@@ -257,6 +262,8 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         try
         {
             var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
