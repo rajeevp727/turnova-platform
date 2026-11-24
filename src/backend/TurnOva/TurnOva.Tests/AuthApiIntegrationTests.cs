@@ -114,6 +114,24 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task InvalidBearerTokenDoesNotExposeJwtValidationDetails()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "not-a-jwt");
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(value => value.ToString()));
+        Assert.Contains("Bearer", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error=", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error_description", challenge, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task MeReturnsIdentityFromValidatedTurnOvaJwt()
     {
         using var factory = new AuthApiFactory();

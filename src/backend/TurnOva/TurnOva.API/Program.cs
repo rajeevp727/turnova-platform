@@ -67,6 +67,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey for TurnOva.");
 
         options.MapInboundClaims = false;
+        options.IncludeErrorDetails = false;
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
