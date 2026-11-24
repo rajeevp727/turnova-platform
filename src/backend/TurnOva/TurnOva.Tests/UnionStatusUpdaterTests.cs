@@ -259,6 +259,50 @@ public sealed class UnionStatusUpdaterTests
 
 
     [Fact]
+    public async Task CosmosStatusUpdateStopsBeforeReplaceWhenCancellationArrivesDuringResourceHydration()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var read = CreateReadResponse(CreateUnion(), "union-status-etag", onResourceRead: cancellation.Cancel);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        SetupRead(container, read.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UnionStatusUpdater.TryUpdateStatusAsync(
+                container.Object, new ConcurrentDictionary<string, DriverUnion>(),
+                UnionId, "Suspended", DateTimeOffset.UtcNow, cancellation.Token));
+
+        read.VerifyGet(value => value.Resource, Times.Once);
+        read.VerifyGet(value => value.ETag, Times.Never);
+        container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
+            It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        read.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CosmosStatusUpdateStopsBeforeReplaceWhenCancellationArrivesDuringEtagHydration()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var read = CreateReadResponse(CreateUnion(), "union-status-etag", onEtagRead: cancellation.Cancel);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        SetupRead(container, read.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UnionStatusUpdater.TryUpdateStatusAsync(
+                container.Object, new ConcurrentDictionary<string, DriverUnion>(),
+                UnionId, "Suspended", DateTimeOffset.UtcNow, cancellation.Token));
+
+        read.VerifyGet(value => value.Resource, Times.Once);
+        read.VerifyGet(value => value.ETag, Times.Once);
+        container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
+            It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        read.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task CosmosStatusUpdateReadNotFoundPreservesCancellation()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
@@ -314,11 +358,23 @@ public sealed class UnionStatusUpdaterTests
         container.VerifyNoOtherCalls();
     }
 
-    private static Mock<ItemResponse<DriverUnion>> CreateReadResponse(DriverUnion union, string? etag)
+    private static Mock<ItemResponse<DriverUnion>> CreateReadResponse(
+        DriverUnion union,
+        string? etag,
+        Action? onResourceRead = null,
+        Action? onEtagRead = null)
     {
         var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
-        response.SetupGet(value => value.Resource).Returns(union);
-        response.SetupGet(value => value.ETag).Returns(etag!);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            onResourceRead?.Invoke();
+            return union;
+        });
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            onEtagRead?.Invoke();
+            return etag!;
+        });
         return response;
     }
 
