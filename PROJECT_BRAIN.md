@@ -9,9 +9,21 @@
 - Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Deterministic Cosmos mocks do not establish live Cosmos or production readiness.
 - Next: verify the final docs-head CI; continue API-only persistence audit at migration lease ETag hydration/cancellation, then auth/authorization/privacy/contract gaps; obtain independent human approval; re-audit main/API phase exit before Android Rider.
 
+## Run 136 — cancellation-safe Cosmos response ETag hydration across persistence adapters (2026-11-24)
+
+- API remains `in_progress`; Android/iOS remain `not_started`. No mobile completion work started.
+- Shared `CosmosReadResponseGuard.ReadResponseEtag<TResponse>` now checks cancellation before/after lazy ETag hydration, prefers cancellation when the getter throws while cancelled, and preserves unrelated getter failures otherwise.
+- Applied across migration lease read responses, RideOffer point/query reads, queue remove/rotation, Driver reservation promotion/expiry/release, and Rider active-booking promotion/release. Guarded ETags are captured once and reused for `IfMatchEtag`; migration lease create/replace still treats successful commits as authoritative with `CancellationToken.None`.
+- Added 15 deterministic test cases; `COSMOS-ETAG-001..015`. Existing `COSMOS-MIG-044..048` tests now use the shared guard and preserve post-commit semantics.
+- Intermediate CI #45399166994 failed 2/1,450 solely because two query tests called nested `container.VerifyNoOtherCalls()`, which recursively treated expected FeedIterator calls as unverified. Test-only fix in `8123fb1f50f261f229383c9496d6762f20dc052e` removes the redundant nested assertions while keeping strict container mocks and explicit query/read counts.
+- Exact-head API-only CI [#45399790386](https://github.com/rajeevp727/turnova-platform/actions/runs/45399790386) passed **1,450/1,450 tests**, Release build (0 warnings/errors), native non-container publish/verifier (11 negative fixtures plus valid fixture), artifact [14923405768](https://github.com/rajeevp727/turnova-platform/actions/runs/45399790386/artifacts/14923405768).
+- PR #200 remains the sole active API PR, source/test head `8123fb1f50f261f229383c9496d6762f20dc052e`, 1,033 ahead / 0 behind main; three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; #207 is a historical merge without independent approval.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). SDK mocks and native publish do not establish live Cosmos or production readiness.
+- Next: continue API-only auth/authorization/privacy/contract and persistence audits; obtain independent human approval; do not merge without it; re-audit main/API phase exit before Android Rider.
+
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 135)
+Last updated: 2026-11-24 (Run 136)
 
 ## Run 134 — Cosmos migration database handle identity and cancellation (2026-11-24)
 
@@ -258,13 +270,10 @@ Last updated: 2026-11-24 (Run 135)
 
 ## Current API engineering
 
-- Run 133 generalizes `CosmosReadResponseGuard.ReadResponseResource<TResponse,TResource>` to guard lazy SDK response-property hydration, identity validation and cancellation precedence.
-- Cosmos migration bootstrap applies the guard to `ContainerResponse.Resource` (including exact container-name and `/id` partition-path validation) and `ContainerResponse.Container`. Four deterministic regressions cover cancellation during each getter and cancellation precedence when a getter throws.
-- Source/test head [`e0f19459356a46bdfc66553f6ee1f9821722cce6`](https://github.com/rajeevp727/turnova-platform/commit/e0f19459356a46bdfc66553f6ee1f9821722cce6) passed exact-head API-only CI [#45385345419](https://github.com/rajeevp727/turnova-platform/actions/runs/45385345419): 1,414/1,414 tests, Release build (0 warnings/0 errors), native non-container Linux x64 publish/verifier, artifact [14916905435](https://github.com/rajeevp727/turnova-platform/actions/runs/45385345419/artifacts/14916905435).
-- Documentation-bearing handoff head [`8099b480993cc27aa865fec8a64b01d93aeadd22`](https://github.com/rajeevp727/turnova-platform/commit/8099b480993cc27aa865fec8a64b01d93aeadd22) passed exact-head API-only CI [#45386065711](https://github.com/rajeevp727/turnova-platform/actions/runs/45386065711): 1,414/1,414 tests, Release build (0 warnings/0 errors), native non-container publish/verifier, artifact [14915977953](https://github.com/rajeevp727/turnova-platform/actions/runs/45386065711/artifacts/14915977953). The current operational-snapshot documentation commit requires its own exact-head CI.
-- Main is `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; PR #200 is the sole active API PR, branch `test/api-nondev-support-readiness-20261120`, current pre-snapshot head `8099b480993cc27aa865fec8a64b01d93aeadd22`, 998 ahead / 0 behind, 211 changed files, mergeable. No mobile-app or Docker/container build/deployment paths are in the PR diff.
-- Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads and no requested reviewer. PRs #196/#198/#205/#206 remain Draft/parked; PRs #197/#207 are historical merges without independent approval.
-- API remains `in_progress`; Android/iOS remain `not_started`. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Live Cosmos and production readiness are not established.
+- Run 136 generalizes cancellation-safe ETag metadata hydration with `CosmosReadResponseGuard.ReadResponseEtag<TResponse>`. All current Cosmos persistence response ETag reads are routed through this guard: migration lease, RideOffer, queue, Driver reservation and Rider active-booking reservation adapters.
+- Queue and Driver/Rider reservation conditional writes reuse the one guarded ETag captured from the read response; cancellation during hydration prevents conditional batch creation. Migration lease successful create/replace remains authoritative after commit.
+- Exact source/test head [`8123fb1f50f261f229383c9496d6762f20dc052e`](https://github.com/rajeevp727/turnova-platform/commit/8123fb1f50f261f229383c9496d6762f20dc052e) passed API-only CI [#45399790386](https://github.com/rajeevp727/turnova-platform/actions/runs/45399790386): 1,450/1,450 tests, Release build (0 warnings/0 errors), native non-container Linux x64 publish/verifier, artifact [14923405768](https://github.com/rajeevp727/turnova-platform/actions/runs/45399790386/artifacts/14923405768).
+- This is deterministic SDK-mock and native publish evidence only. Live Cosmos transaction/partition/ETag contention/multi-instance/restart/RU validation remains external.
 
 ## Acceptance accounting
 
