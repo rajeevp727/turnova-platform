@@ -19,6 +19,15 @@ Last updated: 2026-11-24 (Run 120)
 - API remains `in_progress`; Android/iOS remain `not_started`. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). No production Cosmos or hosting readiness is claimed.
 - PR #200 still has no independent human approval; never self-approve, bypass protections or merge. Historical PR #197/#207 merges without independent approval remain disclosed exceptions.
 
+## Run 120 follow-on — reservation owner/ride identifier validation
+
+- Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head [`0d19935ffd386c3b970484cf4494d8e7f859ab98`](https://github.com/rajeevp727/turnova-platform/commit/0d19935ffd386c3b970484cf4494d8e7f859ab98), 916 ahead / 0 behind.
+- Cosmos and in-memory Rider/Driver acquire stores reject blank/whitespace owner IDs and RideIds before persistence. Cancellation is checked first. Rider RequestHash validation remains.
+- Exact-head API-only CI [#45303575177](https://github.com/rajeevp727/turnova-platform/actions/runs/45303575177) passed 1,292/1,292 tests, Release build (0 warnings/0 errors), native non-container Linux x64 publish and verifier; artifact [14879364230](https://github.com/rajeevp727/turnova-platform/actions/runs/45303575177/artifacts/14879364230).
+- API remains `in_progress`; Android/iOS remain `not_started`. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). Live Cosmos and production readiness are not established.
+- PR #200 still has no independent human approval; never self-approve, bypass protections or merge. Historical PR #197/#207 merges without independent approval remain disclosed exceptions.
+
 ## Run 119 — Rider reservation RequestHash integrity
 
 - Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.

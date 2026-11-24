@@ -1,3 +1,14 @@
+## Run 120 follow-on — reservation owner/ride identifier validation (2026-11-24)
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`. No mobile completion work started.
+- **Main / PR:** main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; sole active PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head [`0d19935ffd386c3b970484cf4494d8e7f859ab98`](https://github.com/rajeevp727/turnova-platform/commit/0d19935ffd386c3b970484cf4494d8e7f859ab98), 916 commits ahead / 0 behind main.
+- **Change:** Cosmos and in-memory Rider and Driver reservation acquire stores now reject blank/whitespace owner IDs and RideIds before any persistence/partition operation. Cancellation is checked first, preserving OperationCanceledException precedence. Rider RequestHash validation remains in place. Invalid inputs cannot create malformed active-reservation or audit records.
+- **Tests:** Cosmos/in-memory Rider and Driver invalid owner/RideId theories (empty and whitespace), plus pre-cancelled Driver acquire precedence. Existing Rider pre-cancelled RequestHash tests continue to prove cancellation-first ordering.
+- **Exact-head CI:** [#45303575177](https://github.com/rajeevp727/turnova-platform/actions/runs/45303575177) passed **1,292/1,292 backend tests (0 failed, 0 skipped)**; .NET 10 Release build succeeded with 0 warnings / 0 errors; native non-container Linux x64 API publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture) passed. Artifact [14879364230](https://github.com/rajeevp727/turnova-platform/actions/runs/45303575177/artifacts/14879364230), 17,019,149 bytes, SHA-256 `4c9a9873aa28d3e88729b332a08812faba494b27423fb3960ae3c51a77dd391c`.
+- **Acceptance / phase:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. Mocked Cosmos tests do not establish live Cosmos or production readiness. Mobile jobs remain intentionally skipped under API-first gating.
+- **Review gate:** PR #200 remains open, non-draft and mergeable; three owner-authored COMMENTED reviews, 0 independent approvals and 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked. PRs #197/#207 are historical merges without independent approval, disclosed exceptions, not precedent.
+- **Next:** continue API-only audits on PR #200; obtain independent human approval. Merge only after independent approval, fresh exact-head green checks and repository permission. Re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, then iOS Rider and iOS Driver.
+
 ## Run 120 — reservation create-conflict readback retry (2026-11-24)
 
 - **Phase:** API `in_progress`; Android/iOS `not_started`. No mobile completion work started.
