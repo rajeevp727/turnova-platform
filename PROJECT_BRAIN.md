@@ -1,6 +1,6 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 120)
+Last updated: 2026-11-24 (Run 121)
 
 ## Platform phase
 
@@ -9,6 +9,15 @@ Last updated: 2026-11-24 (Run 120)
 - iOS: `not_started`
 - Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
 - No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
+## Run 121 — reservation identity validation across read/mutation paths
+
+- Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head [`0050aab3ecd76c0b82289737380b196e5cd2ffdc`](https://github.com/rajeevp727/turnova-platform/commit/0050aab3ecd76c0b82289737380b196e5cd2ffdc).
+- Driver Cosmos/in-memory non-acquire GetActive, TryMakePermanent, TrySetExpiry and TryRelease now reject blank/whitespace DriverId/RideId. Rider Cosmos/in-memory GetActive, TryMakePermanent and TryRelease reject blank/whitespace RiderId/RideId. Cancellation remains first; valid ETag/expiry/idempotency/audit and bulk-query semantics are unchanged.
+- 52 deterministic tests cover empty/whitespace owner/ride IDs, no Cosmos calls/no in-memory mutation and pre-cancelled-token precedence.
+- Exact-head API-only CI [#45308873205](https://github.com/rajeevp727/turnova-platform/actions/runs/45308873205) passed 1,344/1,344 backend tests, Release build (0 warnings/0 errors), native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture); artifact [14882551446](https://github.com/rajeevp727/turnova-platform/actions/runs/45308873205/artifacts/14882551446).
+- API remains `in_progress`; Android/iOS remain `not_started`. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). Live Cosmos and production readiness are not established. PR #200 still has no independent human approval; never self-approve or bypass protection.
 
 ## Run 120 — reservation create-conflict readback retry
 
