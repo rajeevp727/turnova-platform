@@ -1395,6 +1395,8 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
         iterator.VerifyNoOtherCalls();
     }
 
@@ -1493,6 +1495,8 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
         iterator.VerifyNoOtherCalls();
     }
 
