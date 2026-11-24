@@ -113,9 +113,6 @@ public sealed class CosmosMigrationRunnerTests
         client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
             "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
-        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
-            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
-            It.IsAny<CancellationToken>()), Times.Once);
         client.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
