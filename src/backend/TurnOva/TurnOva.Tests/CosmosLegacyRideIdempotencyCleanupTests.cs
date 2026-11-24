@@ -250,4 +250,92 @@ public sealed class CosmosLegacyRideIdempotencyCleanupTests
         container.VerifyNoOtherCalls();
     }
 
+
+    [Fact]
+    public async Task DeleteDoesNotReadEtagOrDeleteWhenResourceHydrationCancels()
+    {
+        using var cancellation = new CancellationTokenSource();
+        
+        var read = new Mock<ItemResponse<RideIdempotencyRecord>>(MockBehavior.Strict);
+        read.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return new RideIdempotencyRecord(KeyId, RiderId, RideId);
+        });
+        read.SetupGet(value => value.ETag).Returns("observed-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), cancellation.Token))
+            .ReturnsAsync(read.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CosmosLegacyRideIdempotencyCleanup.TryDeleteExactAsync(container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, cancellation.Token));
+
+        read.VerifyGet(value => value.Resource, Times.Once);
+        read.VerifyGet(value => value.ETag, Times.Never);
+        read.VerifyNoOtherCalls();
+        container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReadItemAsync<RideIdempotencyRecord>(
+            KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DeleteDoesNotStartWhenEtagHydrationCancels()
+    {
+        using var cancellation = new CancellationTokenSource();
+        
+        var read = new Mock<ItemResponse<RideIdempotencyRecord>>(MockBehavior.Strict);
+        read.SetupGet(value => value.Resource).Returns(new RideIdempotencyRecord(KeyId, RiderId, RideId));
+        read.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            return "observed-etag";
+        });
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), cancellation.Token))
+            .ReturnsAsync(read.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CosmosLegacyRideIdempotencyCleanup.TryDeleteExactAsync(container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, cancellation.Token));
+
+        read.VerifyGet(value => value.Resource, Times.Once);
+        read.VerifyGet(value => value.ETag, Times.Once);
+        read.VerifyNoOtherCalls();
+        container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReadItemAsync<RideIdempotencyRecord>(
+            KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DeleteCancellationTakesPrecedenceOverReadProviderFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        
+        var failure = new CosmosException(
+            "provider-failure-after-cancellation", HttpStatusCode.ServiceUnavailable, 0,
+            "legacy-idempotency", 0);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<RideIdempotencyRecord>>(failure);
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CosmosLegacyRideIdempotencyCleanup.TryDeleteExactAsync(container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId, cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<RideIdempotencyRecord>(
+            KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), cancellation.Token), Times.Once);
+        container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
 }

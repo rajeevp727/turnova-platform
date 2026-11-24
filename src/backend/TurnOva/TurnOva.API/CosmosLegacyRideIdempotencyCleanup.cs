@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Azure.Cosmos;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.API;
 
@@ -22,20 +23,27 @@ public static class CosmosLegacyRideIdempotencyCleanup
         ItemResponse<RideIdempotencyRecord> response;
         try
         {
-            response = await container.ReadItemAsync<RideIdempotencyRecord>(
-                id, partitionKey, cancellationToken: cancellationToken);
+            response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<RideIdempotencyRecord>(
+                    id, partitionKey, cancellationToken: cancellationToken),
+                cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             return false;
         }
 
-        var record = response.Resource;
+        var record = CosmosReadResponseGuard.ReadResponseValue(
+            response, static itemResponse => itemResponse.Resource, cancellationToken);
         if (record is null ||
             !string.Equals(record.id, id, StringComparison.Ordinal) ||
             !string.Equals(record.riderId, riderId, StringComparison.Ordinal) ||
-            !string.Equals(record.rideId, rideId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(response.ETag))
+            !string.Equals(record.rideId, rideId, StringComparison.Ordinal))
+            return false;
+
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, cancellationToken);
+        if (string.IsNullOrWhiteSpace(etag))
             return false;
 
         try
@@ -43,7 +51,7 @@ public static class CosmosLegacyRideIdempotencyCleanup
             await container.DeleteItemAsync<RideIdempotencyRecord>(
                 id,
                 partitionKey,
-                new ItemRequestOptions { IfMatchEtag = response.ETag },
+                new ItemRequestOptions { IfMatchEtag = etag },
                 cancellationToken);
             return true;
         }
