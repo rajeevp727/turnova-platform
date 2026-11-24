@@ -1,3 +1,17 @@
+# Run 148 handoff — 2026-11-25 (API phase)
+
+- Active phase: API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR on `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Source/test head [bbbadb3d](https://github.com/rajeevp727/turnova-platform/commit/bbbadb3df0c2f92ed20ffb69ccf92250096ac1c5) adds AUTH-API-065: a valid HS256 token with duplicate Rider/Driver role claims receives HTTP 401, no-store/no-cache and a generic Bearer challenge. Exact-head API-only CI [#45476271703](https://github.com/rajeevp727/turnova-platform/actions/runs/45476271703) passed **1,535/1,535 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier (11 negative fixtures plus valid fixture), artifact [14960240985](https://github.com/rajeevp727/turnova-platform/actions/runs/45476271703/artifacts/14960240985).
+- Run147 Cosmos bootstrap test correction [e3ea7095](https://github.com/rajeevp727/turnova-platform/commit/e3ea7095d3daa02d96bfb11e6a7b1855fb280cb2) removed four redundant recursive Moq `DatabaseResponse.VerifyNoOtherCalls` assertions while retaining explicit getter/client call counts and strict mocks. Exact-head CI [#45475672647](https://github.com/rajeevp727/turnova-platform/actions/runs/45475672647) passed **1,534/1,534 tests** and native publish/verifier (artifact [14960900190](https://github.com/rajeevp727/turnova-platform/actions/runs/45475672647/artifacts/14960900190)).
+- Test plan, API README and architecture now describe the exactly-one non-empty JWT role-claim invariant. The documentation-bearing final head is pending its own exact-head API-only CI.
+- PR #200 remains open/non-draft; three owner-authored COMMENTED reviews, **0 independent approvals**, 0 unresolved threads. Do not self-approve, bypass protection or merge. PRs #196/#198/#205/#206 remain Draft/parked. PR #204 is configuration-only and does not authorize Android.
+- Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Engineering implementation evidence is substantial but API phase exit and production readiness are not declared.
+- Historical PR #197/#207 merges lacked independent human approval; disclose them as process exceptions, never precedent.
+- External gates remain live Cosmos ETag/partition/transaction/multi-instance/restart/failover/RU, production identity/secrets/hosting/TLS/trusted proxy/shared rate limiting, product dispatch/support/reconciliation decisions, maps/routing/SignalR/call/chat/push, private-media storage/scanning/consent/retention, Union legal approval, and later Android/iOS physical-device/signing/store/TestFlight evidence.
+- Next: verify final documentation-head CI; continue API-only auth/authorization/privacy/OpenAPI and Cosmos persistence-contract audits; obtain independent human approval. After a permitted merge, re-read main and complete a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver.
+
+---
+
 # Run 147 handoff — 2026-11-25 (API phase)
 
 - Active phase: API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR on `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
