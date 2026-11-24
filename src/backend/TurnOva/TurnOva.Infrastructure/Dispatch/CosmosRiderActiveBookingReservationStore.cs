@@ -145,7 +145,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
                 .ReplaceItem(
                     RiderActiveBookingReservation.DocumentId,
                     updated,
-                    new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
+                    new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
                 .CreateItem(audit)
                 .ExecuteAsync(cancellationToken);
 
@@ -205,7 +205,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             using var batch = await container.CreateTransactionalBatch(new PartitionKey(riderId))
                 .DeleteItem(
                     RiderActiveBookingReservation.DocumentId,
-                    new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
+                    new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
                 .CreateItem(audit)
                 .ExecuteAsync(cancellationToken);
 

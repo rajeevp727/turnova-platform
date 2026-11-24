@@ -123,7 +123,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 updated, DriverRideReservationAuditEventTypes.MadePermanent, auditContext,
                 currentReservation.ExpiresAtUtc, expiresAtUtc: null);
             using var batch = await container.CreateTransactionalBatch(new PartitionKey(driverId))
-                .ReplaceItem(driverId, updated, new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
+                .ReplaceItem(driverId, updated, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
                 .CreateItem(auditEvent)
                 .ExecuteAsync(cancellationToken);
 
@@ -177,7 +177,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 updated, DriverRideReservationAuditEventTypes.ExpiryChanged, auditContext,
                 currentReservation.ExpiresAtUtc, expiresAtUtc);
             using var batch = await container.CreateTransactionalBatch(new PartitionKey(driverId))
-                .ReplaceItem(driverId, updated, new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
+                .ReplaceItem(driverId, updated, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
                 .CreateItem(auditEvent)
                 .ExecuteAsync(cancellationToken);
 
@@ -286,7 +286,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
                 currentReservation, DriverRideReservationAuditEventTypes.Released, auditContext,
                 currentReservation.ExpiresAtUtc, expiresAtUtc: null);
             using var batch = await container.CreateTransactionalBatch(new PartitionKey(driverId))
-                .DeleteItem(driverId, new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
+                .DeleteItem(driverId, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
                 .CreateItem(auditEvent)
                 .ExecuteAsync(cancellationToken);
 
