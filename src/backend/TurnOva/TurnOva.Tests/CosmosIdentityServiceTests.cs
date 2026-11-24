@@ -1103,6 +1103,93 @@ public sealed class CosmosIdentityServiceTests
         Assert.Empty(container.Invocations);
     }
 
+    [Fact]
+    public async Task LoginHonorsCancellationWhenIdentityQueryCompletesWithoutMatches()
+    {
+        using var cts = new CancellationTokenSource();
+        var container = new Mock<Container>();
+        var iterator = CreateEmptyQueryIterator(cts.Cancel);
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest("rider@example.com", Password),
+            cts.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefreshStopsBeforeNextRoleQueryWhenCancellationArrivesAfterEmptyRiderQuery()
+    {
+        using var cts = new CancellationTokenSource();
+        var container = new Mock<Container>();
+        var riderIterator = CreateEmptyQueryIterator(cts.Cancel);
+        var driverIterator = CreateEmptyQueryIterator();
+        container.SetupSequence(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(riderIterator.Object)
+            .Returns(driverIterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest("refresh-token-no-match"),
+            cts.Token));
+
+        container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefreshHonorsCancellationWhenFinalRoleQueryCompletesWithoutMatches()
+    {
+        using var cts = new CancellationTokenSource();
+        var container = new Mock<Container>();
+        var riderIterator = CreateEmptyQueryIterator();
+        var driverIterator = CreateEmptyQueryIterator(cts.Cancel);
+        container.SetupSequence(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(riderIterator.Object)
+            .Returns(driverIterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest("refresh-token-no-match"),
+            cts.Token));
+
+        container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Exactly(2));
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private static CosmosIdentityService CreateService(Container container) =>
         new(null, CreateConfiguration(), container);
 
@@ -1180,6 +1267,31 @@ public sealed class CosmosIdentityServiceTests
         });
         response.SetupGet(value => value.ETag).Returns(etag);
         return response;
+    }
+
+    private static Mock<FeedIterator<CosmosIdentityService.IdentityDocument>> CreateEmptyQueryIterator(
+        Action? onEnumerationComplete = null)
+    {
+        var page = new Mock<FeedResponse<CosmosIdentityService.IdentityDocument>>();
+        page.As<IEnumerable<CosmosIdentityService.IdentityDocument>>()
+            .Setup(value => value.GetEnumerator())
+            .Returns(() => Array.Empty<CosmosIdentityService.IdentityDocument>().AsEnumerable().GetEnumerator());
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>();
+        var firstPage = true;
+        iterator.SetupGet(value => value.HasMoreResults).Returns(() =>
+        {
+            if (firstPage)
+            {
+                firstPage = false;
+                return true;
+            }
+
+            onEnumerationComplete?.Invoke();
+            return false;
+        });
+        iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(page.Object);
+        return iterator;
     }
 
     private static ClaimsPrincipal CreateRiderPrincipal() => new(new ClaimsIdentity(
