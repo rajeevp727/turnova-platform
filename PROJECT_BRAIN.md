@@ -215,8 +215,9 @@ Last updated: 2026-11-24 (Run 132)
 ## Live repository state
 
 - Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
-- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head `925d389272d0933d29af05d853a526c6e01f39cf`.
-- Compare: 986 commits ahead / 0 behind main, 209 changed files, mergeable. Diff remains API/docs/tests only; no mobile paths or Docker/container build/deployment files.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
+- Source/test head: `925d389272d0933d29af05d853a526c6e01f39cf`; current docs head: `6b56dac5088859bc03f270ac2c25d90fd17afe3a` (exact-head CI pending).
+- Compare: 987 commits ahead / 0 behind main, 210 changed files, mergeable. Diff remains API/docs/tests only; no mobile paths or Docker/container build/deployment files.
 - Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked.
 - Main phase metadata remains stale (`api=complete`, `android=in_progress`); PR #200 branch metadata remains API `in_progress`, Android/iOS `not_started`.
 
