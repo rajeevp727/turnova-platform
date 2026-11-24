@@ -235,7 +235,7 @@ The API issues TurnOva JWT access tokens locally with the configured issuer/audi
 
 No TriSend authentication proxy, upstream session envelope or upstream revocation call is part of the active authentication path. Existing TriSend accounts are not automatically migrated into Cosmos; any account migration or recovery process requires an explicit owner/operations decision. The OpenAPI Bearer scheme describes a TurnOva-issued JWT, not a TriSend-issued token.
 
-Logout invalidates the current refresh token, but already-issued access tokens remain valid until their 30-minute expiry because access-token validation is stateless. Immediate access-token revocation would require an online session check or a distributed revocation mechanism; neither is claimed in the MVP.
+Logout invalidates the current refresh token, but already-issued access tokens remain valid until their 30-minute expiry because access-token validation is stateless. Immediate access-token revocation would require an online session check or a distributed revocation mechanism; neither is claimed in the MVP. Bearer validation also allowlists HS256, the algorithm used by TurnOva token issuance; other signing algorithms are rejected by the API integration contract.
 
 Email/password only is in scope. Google/Microsoft OAuth and SSO are excluded. GET /api/v1/auth/me is read-only; no profile-update endpoint or editable profile fields are invented without a product contract. UnionManager identity and signed unionId claim issuance remain separate identity-provider configuration gates.
 
