@@ -14,6 +14,44 @@ Last updated: 2026-11-24 (Run 119)
 
 - Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
 - Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
+- Latest source/test head: [`908f48b814563a0b5c657cc522c07d6a1434df96`](https://github.com/rajeevp727/turnova-platform/commit/908f48b814563a0b5c657cc522c07d6a1434df96), 912 ahead / 0 behind main.
+- Cosmos Rider reservation reads reject blank persisted RequestHash; Cosmos and in-memory acquire reject blank/whitespace RequestHash before writes. Cancellation is checked first so pre-cancelled requests preserve OperationCanceledException precedence.
+- Five deterministic regressions cover persisted read, both invalid-input acquire paths and both pre-cancelled-token paths.
+- Exact-head API-only CI [#45295426701](https://github.com/rajeevp727/turnova-platform/actions/runs/45295426701) is pending; no pass is claimed. The earlier xUnit assertion failure was corrected by 126de8b; superseded runs are not counted.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). Mocked Cosmos tests do not establish live Cosmos/production readiness.
+- Review gate remains three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked. PRs #197/#207 were historical merges without independent human approval; not precedent.
+
+## Live repository state
+
+- Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
+- Latest source/test head is above; documentation-bearing successor requires its own exact-head API-only CI.
+- Diff remains API/docs/tests only; no mobile paths or Docker/container build/deployment files.
+- Main phase metadata remains stale (`api=complete`, `android=in_progress`); PR #200 branch metadata remains API `in_progress`, Android/iOS `not_started`.
+
+## Current API engineering
+
+- Cosmos-native auth and its transactional/ETag/cancellation tests remain part of the API-only branch.
+- Runs 114–118 add cancellation precedence and identity validation across Union assignment/status, Union/Driver/Cab discovery reads, ride-offer reads, support/queue reads and Driver/Rider reservation reads.
+- Run 119 adds acquisition conflict-read cancellation regressions, persisted RequestHash validation, pre-write RequestHash validation and cancellation-precedence tests in both Cosmos and in-memory Rider reservation stores.
+- Live Cosmos ETag/transaction/partition/multi-instance/restart, production identity/hosting/provider, Product dispatch/location/expiry, realtime/maps, private media, support/reconciliation, legal and later device/signing gates remain external.
+
+# PROJECT BRAIN — TurnOva
+
+Last updated: 2026-11-24 (Run 119)
+
+## Platform phase
+
+- API: `in_progress`
+- Android: `not_started`
+- iOS: `not_started`
+- Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
+- No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
+## Run 119 — Rider reservation RequestHash integrity
+
+- Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
 - Corrected source/test head: [`126de8b11170eeae9cbb7152ac80b38824ec0ade`](https://github.com/rajeevp727/turnova-platform/commit/126de8b11170eeae9cbb7152ac80b38824ec0ade), 909 ahead / 0 behind main.
 - Cosmos Rider reservation reads reject blank persisted RequestHash; Cosmos and in-memory acquire reject blank/whitespace RequestHash before any write. Valid replay and ETag/transaction/audit behavior is unchanged.
 - Tests: `RiderActiveReadRejectsBlankRequestHash`, `CosmosAcquireRejectsBlankRequestHashBeforeCallingCosmos`, `InMemoryAcquireRejectsBlankRequestHashBeforeStoringReservation`.
