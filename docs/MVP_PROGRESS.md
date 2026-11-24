@@ -1,3 +1,27 @@
+## Run 144 — 2026-11-24 — Suppress JWT validation details in Bearer challenges
+
+- **Platform phase:** API remains in progress; Android and iOS remain not started. PR #200 remains the sole active feature PR.
+- **Security finding:** ASP.NET Core JWT bearer challenges could include parser/signature/issuer/audience error details in the public WWW-Authenticate header. These diagnostics are not required by Rider/Driver clients and unnecessarily disclose validation internals.
+- **Implementation:** JwtBearerOptions.IncludeErrorDetails is now explicitly false. Invalid tokens still return HTTP 401 and authorization behavior is unchanged; the challenge remains a generic Bearer challenge without error or error_description parameters.
+- **Deterministic test:** AUTH-API-063 adds an integration test that submits a malformed bearer token to the authenticated /api/v1/auth/me endpoint and asserts 401, no-store headers, a Bearer challenge and no error/error_description fields.
+- **Source/test head:** [41cbbad4](https://github.com/rajeevp727/turnova-platform/commit/41cbbad47e5ab89951ff072df46e897f0b272d1d), exact-head API-only CI [#45453041386](https://github.com/rajeevp727/turnova-platform/actions/runs/45453041386) passed **1,511/1,511 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish (44,066,000 bytes), publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14948084053](https://github.com/rajeevp727/turnova-platform/actions/runs/45453041386/artifacts/14948084053).
+- **Prior documentation checkpoint:** Run143 documentation head [70f0b8a4](https://github.com/rajeevp727/turnova-platform/commit/70f0b8a4039680cc5e3b2905f67602acde23bc07) passed exact-head API-only CI [#45452154161](https://github.com/rajeevp727/turnova-platform/actions/runs/45452154161), 1,510/1,510 tests and native non-container publish/verifier. This Run144 documentation-bearing commit still requires its own exact-head CI.
+- **Review/scope:** PR #200 remains open/non-draft; three owner-authored COMMENTED reviews, 0 independent approvals and 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; #206 labels do not authorize Android. No mobile or Docker/container build/deployment paths were added.
+- **Acceptance:** strict status remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). AUTH-API-063 is supporting evidence only; no acceptance row is promoted. Live Cosmos and production readiness remain unproven.
+
+## Next exact action
+
+1. Verify exact-head API-only CI for the Run144 documentation-bearing head.
+2. Continue API-only authentication/authorization/privacy and Cosmos persistence-contract audits.
+3. Obtain independent human review/approval for PR #200; never self-approve, bypass protection or merge without repository permission.
+4. After a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider, then Android Driver, then iOS Rider and iOS Driver.
+
+## External gates
+
+Live Cosmos partition/ETag/transaction/multi-instance/restart/RU/failover evidence; production JWT issuer/audience/signing secrets, Cosmos credentials, API hosting/TLS, trusted proxy/shared rate limiting and any required provider/account migration; product-approved dispatch zones/radius/location freshness/negotiation lifetime/internal FIFO fairness; maps/routing and SignalR/call/chat/push providers; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; Android/iOS physical-device, signing, store and TestFlight evidence.
+
+---
+
 ## Run 143 — 2026-11-24 — Canonical persisted identity and OpenAPI authentication contract
 
 - **Platform phase:** API remains in progress; Android and iOS remain not started. PR #200 is the sole active feature PR.

@@ -1,3 +1,16 @@
+# Run 144 handoff — 2026-11-24 (API phase)
+
+- Active phase: API in progress. Android/iOS remain not started. PR #200 is the sole ready/active feature PR.
+- Main: e5366ad58a2f3ff1d39c9c0641fbb74a1d348860. Source/test head 41cbbad47e5ab89951ff072df46e897f0b272d1d passed exact-head API-only CI #45453041386: 1,511/1,511 tests, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier, artifact 14948084053.
+- Run 144: JwtBearerOptions.IncludeErrorDetails=false prevents parser/signature/issuer/audience diagnostics from appearing in public WWW-Authenticate challenges. AUTH-API-063 proves malformed bearer tokens still return generic 401/no-store and no error/error_description. The Run144 documentation-bearing head still needs exact-head CI.
+- Run 143 remains in the source/test history: AUTH-COSMOS-029 rejects malformed/noncanonical persisted email before refresh ETag access/token rotation; AUTH-API-062 corrected the OpenAPI Bearer description to a locally issued TurnOva JWT. Run143 docs head 70f0b8a4039680cc5e3b2905f67602acde23bc07 passed CI #45452154161 (1,510/1,510).
+- PR #200 review gate: three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads and no independent reviewer requested. Never self-approve or merge. PRs #196/#198/#205/#206 remain Draft/parked; #206 labels do not authorize Android. Historical PR #197/#207 merges without independent approval are process exceptions, not precedent.
+- Strict acceptance: 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos and production readiness are unproven.
+- External gates: live Cosmos transaction/partition/ETag/multi-instance/restart/RU/failover; production JWT/Cosmos credentials, hosting/TLS, trusted proxy/shared rate limiting and required provider/account migration; approved dispatch zones/radius/location freshness/negotiation lifetime/FIFO fairness; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device/signing/store/TestFlight evidence.
+- Next exact action: verify Run144 documentation-bearing exact-head API-only CI; continue API-only authentication/authorization/privacy and Cosmos persistence audits; obtain independent human approval; after a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and Driver.
+
+---
+
 # Run 143 handoff — 2026-11-24 (API phase)
 
 - Active phase: API in progress. Android/iOS remain not started. PR #200 is the sole ready/active feature PR.
