@@ -273,6 +273,8 @@ public sealed class UnionStatusUpdaterTests
 
         read.VerifyGet(value => value.Resource, Times.Once);
         read.VerifyGet(value => value.ETag, Times.Never);
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -295,6 +297,8 @@ public sealed class UnionStatusUpdaterTests
 
         read.VerifyGet(value => value.Resource, Times.Once);
         read.VerifyGet(value => value.ETag, Times.Once);
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
