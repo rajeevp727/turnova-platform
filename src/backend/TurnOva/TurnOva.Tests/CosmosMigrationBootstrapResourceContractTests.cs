@@ -251,16 +251,210 @@ public sealed class CosmosMigrationBootstrapResourceContractTests
         leaseStore.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("UnexpectedHistory")]
+    public async Task HistoryBootstrapRejectsBlankOrMismatchedContainerHandleIdentity(string? returnedHandleId)
+    {
+        var historyResponse = CreateResponse(
+            "MigrationHistory", "/id", includeContainer: true,
+            handleId: returnedHandleId, overrideHandleId: true);
+        var lockResponse = CreateResponse("MigrationLocks", "/id", includeContainer: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync());
+
+        Assert.Equal(
+            "Cosmos returned a migration container handle that does not match the requested name after bootstrap.",
+            exception.Message);
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        database.VerifyNoOtherCalls();
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("UnexpectedLocks")]
+    public async Task LockBootstrapRejectsBlankOrMismatchedContainerHandleIdentity(string? returnedHandleId)
+    {
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var lockResponse = CreateResponse(
+            "MigrationLocks", "/id", includeContainer: true,
+            handleId: returnedHandleId, overrideHandleId: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync());
+
+        Assert.Equal(
+            "Cosmos returned a migration container handle that does not match the requested name after bootstrap.",
+            exception.Message);
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.VerifyNoOtherCalls();
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationDuringHistoryContainerHandleIdentityHydrationStopsBeforeLockContainerCreation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var historyResponse = CreateResponse(
+            "MigrationHistory", "/id", includeContainer: true,
+            onHandleIdRead: cancellation.Cancel);
+        var lockResponse = CreateResponse("MigrationLocks", "/id", includeContainer: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationTakesPrecedenceWhenHistoryContainerHandleIdentityHydrationThrows()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var historyResponse = CreateResponse(
+            "MigrationHistory", "/id", includeContainer: true,
+            onHandleIdRead: () =>
+            {
+                cancellation.Cancel();
+                throw new InvalidOperationException("history container ID hydration failed");
+            });
+        var lockResponse = CreateResponse("MigrationLocks", "/id", includeContainer: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task HistoryContainerHandleIdentityHydrationFailurePropagatesWithoutCancellation()
+    {
+        var expected = new InvalidOperationException("history container ID hydration failed");
+        var historyResponse = CreateResponse(
+            "MigrationHistory", "/id", includeContainer: true,
+            onHandleIdRead: () => throw expected);
+        var lockResponse = CreateResponse("MigrationLocks", "/id", includeContainer: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync());
+
+        Assert.Same(expected, actual);
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationDuringLockContainerHandleIdentityHydrationStopsBeforeLeaseAcquisition()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var lockResponse = CreateResponse(
+            "MigrationLocks", "/id", includeContainer: true,
+            onHandleIdRead: cancellation.Cancel);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationTakesPrecedenceWhenLockContainerHandleIdentityHydrationThrows()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var lockResponse = CreateResponse(
+            "MigrationLocks", "/id", includeContainer: true,
+            onHandleIdRead: () =>
+            {
+                cancellation.Cancel();
+                throw new InvalidOperationException("lock container ID hydration failed");
+            });
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
     private static Mock<ContainerResponse> CreateResponse(
         string? id,
         string partitionKeyPath,
-        bool includeContainer)
+        bool includeContainer,
+        string? handleId = null,
+        bool overrideHandleId = false,
+        Action? onHandleIdRead = null)
     {
         var response = new Mock<ContainerResponse>(MockBehavior.Strict);
         response.SetupGet(value => value.Resource).Returns(
             id is null ? null! : new ContainerProperties(id, partitionKeyPath));
-        response.SetupGet(value => value.Container).Returns(
-            includeContainer ? new Mock<Container>(MockBehavior.Strict).Object : null!);
+
+        if (includeContainer)
+        {
+            var container = new Mock<Container>(MockBehavior.Strict);
+            container.SetupGet(value => value.Id).Returns(() =>
+            {
+                onHandleIdRead?.Invoke();
+                return overrideHandleId ? handleId! : id!;
+            });
+            response.SetupGet(value => value.Container).Returns(container.Object);
+        }
+        else
+        {
+            response.SetupGet(value => value.Container).Returns(null!);
+        }
+
         return response;
     }
 
