@@ -88,7 +88,23 @@ public static class CosmosReadResponseGuard
         if (response is null)
             throw new InvalidOperationException($"Cosmos returned an empty {resourceDescription} response.");
 
-        return RequireResource(response.Resource, identityMatches, resourceDescription);
+        T? resource;
+        try
+        {
+            resource = response.Resource;
+        }
+        catch
+        {
+            // Resource hydration/deserialization can fail while the request is cancelled.
+            // Preserve cancellation precedence just as we do for the provider read itself.
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
+
+        // Cancellation may arrive from a lazy/overridden Resource getter after the
+        // provider task has already completed successfully.
+        cancellationToken.ThrowIfCancellationRequested();
+        return RequireResource(resource, identityMatches, resourceDescription);
     }
 
     public static async Task<IReadOnlyList<T>> ReadAllAsync<T>(

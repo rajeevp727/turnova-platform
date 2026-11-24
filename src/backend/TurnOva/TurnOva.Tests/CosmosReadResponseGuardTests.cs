@@ -219,6 +219,38 @@ public sealed class CosmosReadResponseGuardTests
     }
 
     [Fact]
+    public async Task ReadItemHonorsCancellationDuringResourceHydration()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var union = CreateUnion();
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return union;
+        });
+        var container = CreateReadContainer<DriverUnion>(
+            UnionId,
+            UnionId,
+            () => Task.FromResult(response.Object));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
+                container.Object,
+                UnionId,
+                new PartitionKey(UnionId),
+                item => item.UnionId == UnionId,
+                "Union",
+                cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task ReadItemCancellationTakesPrecedenceOverOtherProviderFailure()
     {
         using var cancellation = new CancellationTokenSource();
