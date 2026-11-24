@@ -74,6 +74,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
         try
         {
             var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
@@ -100,6 +101,8 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         bool allowExpiredForAuthoritativeActiveRide = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         for (var attempt = 0; attempt < 3; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -164,6 +167,8 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         for (var attempt = 0; attempt < 3; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
