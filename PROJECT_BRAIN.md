@@ -1,6 +1,16 @@
+## Run 135 — Cosmos migration TTL container-handle identity and cancellation (2026-11-24)
+
+- API remains `in_progress`; Android/iOS remain `not_started`. No mobile completion work started.
+- The migration TTL bootstrap validates the SDK container handle's `Id` against the requested container name before TTL read-back. Null/blank/mismatched handles fail closed.
+- Added deterministic cases for null/empty/whitespace/wrong handle IDs, cancellation during identity hydration, cancellation precedence over a getter exception, and propagation of an unrelated getter failure. Existing strict mocks explicitly verify the one expected `Container.Id` read. Test-plan IDs: `COSMOS-BOOTSTRAP-011..014`.
+- Merge-ref CI #45392545742 failed 5/1,423 because four strict-mock tests had not verified the new property read; this was a test-only fixture omission. Exact-head API-only CI [#45393945604](https://github.com/rajeevp727/turnova-platform/actions/runs/45393945604) passed **1,430/1,430 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier (11 negative fixtures plus valid fixture), artifact [14920910597](https://github.com/rajeevp727/turnova-platform/actions/runs/45393945604/artifacts/14920910597).
+- PR #200 remains the sole active API PR. At the verified checkpoint it was 1,017 ahead / 0 behind main, open/non-draft/mergeable; 3 owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Deterministic Cosmos mocks do not establish live Cosmos or production readiness.
+- Next: verify the final docs-head CI; continue API-only persistence audit at migration lease ETag hydration/cancellation, then auth/authorization/privacy/contract gaps; obtain independent human approval; re-audit main/API phase exit before Android Rider.
+
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 134)
+Last updated: 2026-11-24 (Run 135)
 
 ## Run 134 — Cosmos migration database handle identity and cancellation (2026-11-24)
 
