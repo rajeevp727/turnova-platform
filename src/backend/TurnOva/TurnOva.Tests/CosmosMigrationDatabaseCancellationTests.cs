@@ -89,6 +89,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
             It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceContainerAsync(
             It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyGet(value => value.Id, Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -163,6 +164,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
             It.Is<ContainerProperties>(properties => properties.DefaultTimeToLive == 604800),
             It.IsAny<ContainerRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyGet(value => value.Id, Times.Once);
         container.VerifyNoOtherCalls();
     }
 
@@ -205,6 +207,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         createResponse.VerifyGet(value => value.Resource, Times.Once);
         readResponse.VerifyGet(value => value.Resource, Times.Once);
         database.VerifyNoOtherCalls();
+        container.VerifyGet(value => value.Id, Times.Once);
         container.VerifyNoOtherCalls();
         createResponse.VerifyNoOtherCalls();
         readResponse.VerifyNoOtherCalls();
@@ -257,6 +260,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         createResponse.VerifyGet(value => value.Resource, Times.Once);
         readResponse.VerifyGet(value => value.Resource, Times.Once);
         database.VerifyNoOtherCalls();
+        container.VerifyGet(value => value.Id, Times.Once);
         container.VerifyNoOtherCalls();
         createResponse.VerifyNoOtherCalls();
         readResponse.VerifyNoOtherCalls();
