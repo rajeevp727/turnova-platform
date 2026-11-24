@@ -1319,13 +1319,17 @@ public sealed class CosmosIdentityServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
             "rider", new CosmosLoginRequest("rider@example.com", Password), cts.Token));
 
+        // The strict Container mock rejects unconfigured calls; avoid VerifyNoOtherCalls because
+        // Moq recursively inspects the returned FeedIterator and counts its required Dispose as unexpected.
         container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Never);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -1356,7 +1360,9 @@ public sealed class CosmosIdentityServiceTests
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -1392,7 +1398,6 @@ public sealed class CosmosIdentityServiceTests
         container.Verify(value => value.ReplaceItemAsync(
             It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
         iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -1422,7 +1427,9 @@ public sealed class CosmosIdentityServiceTests
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Never);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -1453,7 +1460,9 @@ public sealed class CosmosIdentityServiceTests
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -1489,7 +1498,6 @@ public sealed class CosmosIdentityServiceTests
         container.Verify(value => value.ReplaceItemAsync(
             It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
         iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
