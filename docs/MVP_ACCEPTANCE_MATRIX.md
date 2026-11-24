@@ -1,3 +1,13 @@
+## Run 134 — API Cosmos migration database handle evidence (2026-11-24)
+
+- **PLATFORM-01 implementation evidence:** `CosmosMigrationRunner.RunAsync` now obtains `DatabaseResponse.Database` through the shared cancellation-aware response-property guard and validates nonblank, exact ordinal `Database.Id` against the configured database name before creating migration containers or acquiring a lease.
+- **Fail-closed behavior:** missing handles and null/blank/whitespace/mismatched database IDs are rejected. Cancellation is checked before/after handle hydration and identity validation; a cancellation signal takes precedence over exceptions thrown by either getter.
+- **Deterministic tests:** `DatabaseBootstrapRejectsMissingDatabaseHandle`; `DatabaseBootstrapRejectsBlankOrMismatchedDatabaseHandleIdentity`; `CancellationDuringDatabaseHandleHydrationStopsBeforeHistoryContainerCreation`; `CancellationTakesPrecedenceWhenDatabaseHandleHydrationThrows`; `CancellationDuringDatabaseIdentityHydrationStopsBeforeHistoryContainerCreation`; `CancellationTakesPrecedenceWhenDatabaseIdentityHydrationThrows`.
+- **Exact-head evidence:** source/test head [`efea5975efd5d1f388a59cb054e3d5440c28b81e`](https://github.com/rajeevp727/turnova-platform/commit/efea5975efd5d1f388a59cb054e3d5440c28b81e) passed API-only CI [#45390511523](https://github.com/rajeevp727/turnova-platform/actions/runs/45390511523): **1,423/1,423 backend tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier, artifact [14918093019](https://github.com/rajeevp727/turnova-platform/actions/runs/45390511523/artifacts/14918093019). Mobile jobs were intentionally skipped.
+- **Acceptance status unchanged:** PLATFORM-01 remains **In Progress**. This is deterministic SDK-mock and native publish evidence only; live Cosmos ETag/transaction/partition/multi-instance/restart/RU and production/telemetry/auth/device gates remain open. No row is promoted to Verified. The official denominator remains **19 rows; 0 Verified, 16 In Progress, 3 Blocked** (`DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`).
+
+---
+
 ## Run 133 — API Cosmos migration bootstrap cancellation evidence (2026-11-24)
 
 - **PLATFORM-01 implementation evidence:** `CosmosReadResponseGuard.ReadResponseResource<TResponse,TResource>` now protects lazy SDK response-property hydration, cancellation precedence and identity validation. Migration container bootstrap applies it to both `ContainerResponse.Resource` and `ContainerResponse.Container`.
