@@ -189,6 +189,7 @@ public sealed class CosmosMigrationRunnerTests
         containerResponse.VerifyGet(value => value.Resource, Times.Once);
         containerResponse.VerifyNoOtherCalls();
         client.VerifyNoOtherCalls();
+        database.VerifyGet(value => value.Id, Times.Once);
         database.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
@@ -234,6 +235,7 @@ public sealed class CosmosMigrationRunnerTests
         containerResponse.VerifyGet(value => value.Resource, Times.Once);
         containerResponse.VerifyNoOtherCalls();
         client.VerifyNoOtherCalls();
+        database.VerifyGet(value => value.Id, Times.Once);
         database.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
@@ -282,6 +284,7 @@ public sealed class CosmosMigrationRunnerTests
         containerResponse.VerifyGet(value => value.Container, Times.Once);
         containerResponse.VerifyNoOtherCalls();
         client.VerifyNoOtherCalls();
+        database.VerifyGet(value => value.Id, Times.Once);
         database.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
@@ -330,6 +333,7 @@ public sealed class CosmosMigrationRunnerTests
         containerResponse.VerifyGet(value => value.Container, Times.Once);
         containerResponse.VerifyNoOtherCalls();
         client.VerifyNoOtherCalls();
+        database.VerifyGet(value => value.Id, Times.Once);
         database.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
