@@ -225,6 +225,12 @@ public sealed class CosmosMigrationRunnerTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
 
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         containerResponse.VerifyGet(value => value.Resource, Times.Once);
         containerResponse.VerifyNoOtherCalls();
         client.VerifyNoOtherCalls();
@@ -266,6 +272,12 @@ public sealed class CosmosMigrationRunnerTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
 
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         containerResponse.VerifyGet(value => value.Resource, Times.Once);
         containerResponse.VerifyGet(value => value.Container, Times.Once);
         containerResponse.VerifyNoOtherCalls();
@@ -308,6 +320,12 @@ public sealed class CosmosMigrationRunnerTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
 
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         containerResponse.VerifyGet(value => value.Resource, Times.Once);
         containerResponse.VerifyGet(value => value.Container, Times.Once);
         containerResponse.VerifyNoOtherCalls();
