@@ -130,6 +130,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+            // TurnOva issues HS256 tokens; reject other otherwise-valid HMAC algorithms.
+            ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 },
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30),
             RoleClaimType = "role",
