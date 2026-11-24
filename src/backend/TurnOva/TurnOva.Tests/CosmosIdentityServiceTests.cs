@@ -1319,6 +1319,8 @@ public sealed class CosmosIdentityServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
             "rider", new CosmosLoginRequest("rider@example.com", Password), cts.Token));
 
+        container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Never);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
@@ -1349,6 +1351,8 @@ public sealed class CosmosIdentityServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
             "rider", new CosmosLoginRequest("rider@example.com", Password), cts.Token));
 
+        container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
@@ -1382,6 +1386,8 @@ public sealed class CosmosIdentityServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
             "rider", new CosmosLoginRequest(user.Email, Password), cts.Token));
 
+        container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
         page.As<IEnumerable<CosmosIdentityService.IdentityDocument>>().Verify(value => value.GetEnumerator(), Times.Once);
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
