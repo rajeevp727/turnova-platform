@@ -1300,6 +1300,198 @@ public sealed class CosmosIdentityServiceTests
             It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task LoginCancellationTakesPrecedenceOverHasMoreResultsHydrationFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(() =>
+        {
+            cts.Cancel();
+            throw new InvalidOperationException("has-more-results hydration failed");
+        });
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider", new CosmosLoginRequest("rider@example.com", Password), cts.Token));
+
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task LoginCancellationTakesPrecedenceOverQueryPageReadFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<FeedResponse<CosmosIdentityService.IdentityDocument>>(
+                    new InvalidOperationException("identity query page read failed"));
+            });
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider", new CosmosLoginRequest("rider@example.com", Password), cts.Token));
+
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task LoginCancellationTakesPrecedenceOverQueryPageEnumerationFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var user = CreateIdentity();
+        var page = new Mock<FeedResponse<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        page.As<IEnumerable<CosmosIdentityService.IdentityDocument>>()
+            .Setup(value => value.GetEnumerator())
+            .Returns(() =>
+            {
+                cts.Cancel();
+                throw new InvalidOperationException("identity query page enumeration failed");
+            });
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>())).ReturnsAsync(page.Object);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider", new CosmosLoginRequest(user.Email, Password), cts.Token));
+
+        page.Verify(value => ((IEnumerable<CosmosIdentityService.IdentityDocument>)value).GetEnumerator(), Times.Once);
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RefreshCancellationTakesPrecedenceOverHasMoreResultsHydrationFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(() =>
+        {
+            cts.Cancel();
+            throw new InvalidOperationException("has-more-results hydration failed");
+        });
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest("refresh-token"), cts.Token));
+
+        container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RefreshCancellationTakesPrecedenceOverQueryPageReadFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cts.Cancel();
+                return Task.FromException<FeedResponse<CosmosIdentityService.IdentityDocument>>(
+                    new InvalidOperationException("identity query page read failed"));
+            });
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest("refresh-token"), cts.Token));
+
+        container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RefreshCancellationTakesPrecedenceOverQueryPageEnumerationFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var user = CreateIdentity(refreshTokenHash: HashRefreshToken("refresh-token"));
+        var page = new Mock<FeedResponse<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        page.As<IEnumerable<CosmosIdentityService.IdentityDocument>>()
+            .Setup(value => value.GetEnumerator())
+            .Returns(() =>
+            {
+                cts.Cancel();
+                throw new InvalidOperationException("identity query page enumeration failed");
+            });
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>())).ReturnsAsync(page.Object);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RefreshAsync(
+            new CosmosRefreshRequest("refresh-token"), cts.Token));
+
+        container.Verify(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        page.Verify(value => ((IEnumerable<CosmosIdentityService.IdentityDocument>)value).GetEnumerator(), Times.Once);
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+    }
+
     private static CosmosIdentityService CreateService(Container container) =>
         new(null, CreateConfiguration(), container);
 
