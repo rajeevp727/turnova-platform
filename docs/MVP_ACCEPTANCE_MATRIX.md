@@ -1,13 +1,14 @@
-## Run 119 engineering evidence update — validate Rider reservation RequestHash at read and acquire boundaries (2026-11-24)
+## Run 119 engineering evidence update — Rider reservation RequestHash integrity (2026-11-24)
 
-- **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started` for completion work. No mobile implementation/build work was started.
-- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head [`c5c69fef055d67d14a3f64b88c8c164c9516904f`](https://github.com/rajeevp727/turnova-platform/commit/c5c69fef055d67d14a3f64b88c8c164c9516904f), 908 ahead / 0 behind main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
-- **Persisted/input identity correction:** Rider active-booking reads now reject blank persisted RequestHash. Cosmos and in-memory acquisition reject blank/whitespace RequestHash before creating a reservation or audit event. Valid replay and write/ETag/transaction semantics are unchanged.
-- **Tests:** `RiderActiveReadRejectsBlankRequestHash`, `CosmosAcquireRejectsBlankRequestHashBeforeCallingCosmos`, and `InMemoryAcquireRejectsBlankRequestHashBeforeStoringReservation`; Cosmos no-call and in-memory no-mutation assertions are included.
-- **CI:** exact-head API-only CI [#45294834351](https://github.com/rajeevp727/turnova-platform/actions/runs/45294834351) is pending on `c5c69fef055d67d14a3f64b88c8c164c9516904f`; no pass is claimed. The intermediate `cbcef7d` CI was cancelled by the successor; the earlier 1,267-test pass was on an older head.
-- **Acceptance:** no row status changed. Strict fully verified remains **0/19** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. Live Cosmos/production readiness is not established.
-
----
+- **Phase:** API `in_progress`; Android/iOS `not_started`. No mobile completion work started.
+- **Main / PR:** main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; sole active PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`. Corrected source/test head [`126de8b11170eeae9cbb7152ac80b38824ec0ade`](https://github.com/rajeevp727/turnova-platform/commit/126de8b11170eeae9cbb7152ac80b38824ec0ade), 909 ahead / 0 behind main.
+- **Change:** persisted Rider reservation reads reject blank/whitespace RequestHash; Cosmos and in-memory acquire paths reject blank/whitespace RequestHash before reservation/audit writes. Valid replay, ETag, transaction, audit and expiry behavior is unchanged.
+- **Tests:** `RiderActiveReadRejectsBlankRequestHash`, `CosmosAcquireRejectsBlankRequestHashBeforeCallingCosmos`, `InMemoryAcquireRejectsBlankRequestHashBeforeStoringReservation`.
+- **CI correction:** [#45294834351](https://github.com/rajeevp727/turnova-platform/actions/runs/45294834351) failed at compile/analyzer time because the in-memory async test used `Assert.Throws` instead of `Assert.ThrowsAsync`. This was test-only; commit [`126de8b`](https://github.com/rajeevp727/turnova-platform/commit/126de8b11170eeae9cbb7152ac80b38824ec0ade) corrected it. Exact-head CI on 126de8b is pending; no pass is claimed. Intermediate cbcef7d CI was cancelled. Earlier 1,267/1,267 pass #45285221683 was on older head 3932577 and does not verify these changes.
+- **Review gate:** three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is trusted-LAN Android HTTP configuration only. PRs #197/#207 were historical merges without independent approval, not precedent.
+- **Acceptance:** strict 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); no row status changed. This is not an implementation percentage.
+- **External gates:** live Cosmos transaction/partition/ETag/multi-instance/restart; production JWT/Cosmos credentials and non-container hosting; existing-account migration/profile-edit decisions; shared auth rate limiting/trusted proxy; Product dispatch radius/zones/location freshness/negotiation lifetime; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/reconciliation policy; Union legal approval; later physical-device/signing/store/TestFlight evidence.
+- **Next:** verify exact-head CI on 126de8b and the documentation successor; continue API-only reservation/idempotency/persisted-identity audits; obtain independent human approval. Never self-approve or bypass protection. Re-read main and run a fresh API phase-exit audit before Android Rider after any permitted merge.
 
 ## Run 118 engineering evidence update — preserve cancellation precedence across reservation reads (2026-11-24)
 
