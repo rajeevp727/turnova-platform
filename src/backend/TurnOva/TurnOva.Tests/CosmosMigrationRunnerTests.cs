@@ -106,12 +106,16 @@ public sealed class CosmosMigrationRunnerTests
         var database = CreateStrictDatabase();
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
+        var historyContainer = new Mock<Container>();
+        historyContainer.SetupGet(value => value.Id).Returns(CosmosMigrationRunner.HistoryContainerName);
         var historyResponse = new Mock<ContainerResponse>();
-        historyResponse.SetupGet(value => value.Container).Returns(new Mock<Container>().Object);
+        historyResponse.SetupGet(value => value.Container).Returns(historyContainer.Object);
         historyResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties(
             CosmosMigrationRunner.HistoryContainerName, "/id"));
+        var lockContainer = new Mock<Container>();
+        lockContainer.SetupGet(value => value.Id).Returns(CosmosMigrationRunner.LockContainerName);
         var lockResponse = new Mock<ContainerResponse>();
-        lockResponse.SetupGet(value => value.Container).Returns(new Mock<Container>().Object);
+        lockResponse.SetupGet(value => value.Container).Returns(lockContainer.Object);
         lockResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties(
             CosmosMigrationRunner.LockContainerName, "/id"));
         using var cancellation = new CancellationTokenSource();
