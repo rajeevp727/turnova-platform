@@ -281,6 +281,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                         readResponse, static response => response.Resource, ct);
                     if (user is null ||
                         !IsExpectedIdentity(user, candidate.Id, role) ||
+                        !HasCanonicalEmail(user.Email) ||
                         !FixedTimeEquals(user.RefreshTokenHash, tokenHash) ||
                         user.RefreshTokenExpiresAtUtc is null ||
                         user.RefreshTokenExpiresAtUtc.GetValueOrDefault() <= DateTimeOffset.UtcNow)
@@ -426,6 +427,14 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         string.Equals(user.Role, expectedRole, StringComparison.Ordinal) &&
         string.Equals(user.DocumentType, "user", StringComparison.Ordinal) &&
         !string.IsNullOrWhiteSpace(user.Email);
+
+    private static bool HasCanonicalEmail(string? email)
+    {
+        var normalizedEmail = NormalizeEmail(email);
+        return normalizedEmail is not null &&
+            string.Equals(email, normalizedEmail, StringComparison.Ordinal) &&
+            IsValidEmail(normalizedEmail);
+    }
 
     private static bool HasUsableEtag(string? etag) => !string.IsNullOrWhiteSpace(etag);
 
