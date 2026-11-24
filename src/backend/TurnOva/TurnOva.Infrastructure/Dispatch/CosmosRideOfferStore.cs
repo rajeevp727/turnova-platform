@@ -164,6 +164,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
     public async Task<bool> TryCreateAsync(RideOfferState state, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(state);
         try
         {
             var response = await container.CreateItemAsync(state with { ETag = null }, new PartitionKey(state.RideId), cancellationToken: cancellationToken);
@@ -179,6 +180,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
     public async Task<bool> TryReplaceAsync(RideOfferState state, string expectedETag, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(state);
 
         // A missing observed ETag must never degrade into an unconditional Cosmos replacement.
         if (!CosmosEtagPolicy.HasObservedEtag(expectedETag))
