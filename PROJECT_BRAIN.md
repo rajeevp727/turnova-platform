@@ -1,3 +1,16 @@
+# Run 147 handoff — 2026-11-25 (API phase)
+
+- Active phase: API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR on `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Source/test head [`5abd5104`](https://github.com/rajeevp727/turnova-platform/commit/5abd51049fd500251561a2bd4d9a3f144711d9d4) adds nine deterministic migration database-handle regressions (`COSMOS-BOOTSTRAP-027..033`). The existing runner guard validates non-null `DatabaseResponse.Database` and exact `Database.Id`; new tests cover blank/mismatched/null handles, cancellation during lazy response/ID hydration, cancellation precedence and unrelated exception propagation. No runtime code change.
+- Exact-head API-only CI [#45471860183](https://github.com/rajeevp727/turnova-platform/actions/runs/45471860183) is in progress: scope and Release build passed; backend tests are running; publish/verifier remain pending. Do not claim it green yet.
+- Source increment changes one backend test file only; no mobile paths, Docker/container build/deployment or infrastructure changes.
+- PR #200 remains open/non-draft/mergeable with 3 owner-authored `COMMENTED` reviews, 0 independent approvals and 0 unresolved threads. Do not self-approve, bypass protection or merge. PRs #196/#198/#205/#206 remain Draft/parked.
+- Main phase metadata remains stale (`API complete`/`Android in_progress`); PR #200 branch phase metadata correctly records API `in_progress`, Android/iOS `not_started`. Follow the API→Android→iOS gate.
+- Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). Live Cosmos ETag/partition/transaction/multi-instance/restart/failover, production identity/hosting/providers, product/legal policies and mobile device/signing evidence remain external gates.
+- Next: verify exact-head CI #45471860183; fix any test failure before further changes. Once green, complete the documentation synchronization and verify its exact head. Continue API-only auth/authorization/privacy/OpenAPI and Cosmos persistence audits; independent human approval is still required before any permitted merge.
+
+## Previous handoff — Run 146
+
 # Run 146 handoff — 2026-11-25 (API phase)
 
 - Active phase: API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR on `test/api-nondev-support-readiness-20261120`; current source/test head [262baa15](https://github.com/rajeevp727/turnova-platform/commit/262baa15020d25ff468bf1bc5ec2a68f2029da1d), base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
