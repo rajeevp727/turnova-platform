@@ -98,4 +98,66 @@ public sealed class RiderActiveBookingReservationStoreInputValidationTests
         Assert.Empty(store.GetAuditEvents("rider-1"));
     }
 
+
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task ActiveReadRejectsBlankRiderIdBeforeCallingCosmos(string riderId)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object).GetActiveAsync(riderId));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("rider-1", "")]
+    [InlineData("rider-1", " ")]
+    public async Task PromoteRejectsBlankRiderOrRideIdBeforeCallingCosmos(string riderId, string rideId)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object).TryMakePermanentAsync(riderId, rideId));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("rider-1", "")]
+    [InlineData("rider-1", " ")]
+    public async Task ReleaseRejectsBlankRiderOrRideIdBeforeCallingCosmos(string riderId, string rideId)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object).TryReleaseAsync(riderId, rideId));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task NonAcquireOperationsHonorPreCancelledTokenBeforeInputValidation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var store = new CosmosRiderActiveBookingReservationStore(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.GetActiveAsync(" ", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryMakePermanentAsync(" ", "ride-1", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryReleaseAsync("rider-1", " ", cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
 }
