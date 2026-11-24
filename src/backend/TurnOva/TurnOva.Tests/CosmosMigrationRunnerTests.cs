@@ -169,18 +169,26 @@ public sealed class CosmosMigrationRunnerTests
     }
 
     [Fact]
-    public async Task CancellationAfterSuccessfulHistoryReadDoesNotSkipAsApplied()
+    public async Task CancellationDuringHistoryResourceHydrationDoesNotSkipAsApplied()
     {
         var (client, historyContainer) = CreateCosmosClient();
         using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return new CosmosMigrationRunner.MigrationHistoryDocument
+            {
+                Id = "test-counting-migration",
+                Description = "Already applied",
+                AppliedAtUtc = DateTimeOffset.Parse("2026-11-24T00:00:00Z"),
+                AppliedBy = "test"
+            };
+        });
         historyContainer.Setup(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
                 It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
-            .Returns(() =>
-            {
-                cancellation.Cancel();
-                return Task.FromResult(Mock.Of<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>());
-            });
+            .ReturnsAsync(response.Object);
         var leaseStore = new LeaseLostStore();
         var migration = new CountingMigration();
         var runner = new CosmosMigrationRunner(
@@ -195,6 +203,8 @@ public sealed class CosmosMigrationRunnerTests
 
         Assert.Equal(0, migration.CallCount);
         Assert.NotNull(leaseStore.ReleasedLease);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
     }
 
     [Fact]

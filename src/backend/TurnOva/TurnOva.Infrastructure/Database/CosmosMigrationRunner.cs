@@ -136,13 +136,12 @@ public sealed class CosmosMigrationRunner(
         {
             var response = await history.ReadItemAsync<MigrationHistoryDocument>(
                 migrationId, new PartitionKey(migrationId), cancellationToken: cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var marker = response.Resource;
-            if (marker is null ||
-                !string.Equals(marker.Id, migrationId, StringComparison.Ordinal))
-                throw new InvalidOperationException(
-                    "Cosmos returned a migration history marker that does not match the requested ID.");
+            _ = CosmosReadResponseGuard.ReadResource(
+                response,
+                marker => string.Equals(marker.Id, migrationId, StringComparison.Ordinal),
+                "migration history marker",
+                cancellationToken,
+                "Cosmos returned a migration history marker that does not match the requested ID.");
 
             return true;
         }

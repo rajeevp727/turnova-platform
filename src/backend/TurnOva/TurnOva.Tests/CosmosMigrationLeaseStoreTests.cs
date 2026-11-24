@@ -650,28 +650,28 @@ public sealed class CosmosMigrationLeaseStoreTests
     }
 
     [Fact]
-    public async Task ReadChecksCancellationAfterSuccessfulPointRead()
+    public async Task ReadChecksCancellationDuringResourceHydration()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
-        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>();
-        response.SetupGet(value => value.Resource).Returns(new CosmosMigrationLeaseDocument
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
         {
-            Id = "schema-migrations",
-            Owner = "owner-1",
-            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+            cancellation.Cancel();
+            return new CosmosMigrationLeaseDocument
+            {
+                Id = "schema-migrations",
+                Owner = "owner-1",
+                ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+            };
         });
         response.SetupGet(value => value.ETag).Returns("etag-read");
-        using var cancellation = new CancellationTokenSource();
         container.Setup(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
                 "schema-migrations",
                 It.IsAny<PartitionKey>(),
                 It.IsAny<ItemRequestOptions?>(),
                 It.IsAny<CancellationToken>()))
-            .Returns(() =>
-            {
-                cancellation.Cancel();
-                return Task.FromResult(response.Object);
-            });
+            .ReturnsAsync(response.Object);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new CosmosMigrationLeaseStore(container.Object).ReadAsync(cancellation.Token));
@@ -681,7 +681,9 @@ public sealed class CosmosMigrationLeaseStoreTests
             It.IsAny<PartitionKey>(),
             It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
         container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
     }
 
     [Fact]

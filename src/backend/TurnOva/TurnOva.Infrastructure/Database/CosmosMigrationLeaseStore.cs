@@ -49,8 +49,14 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         {
             var response = await locks.ReadItemAsync<CosmosMigrationLeaseDocument>(
                 LeaseId, new PartitionKey(LeaseId), cancellationToken: cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            return ToLease(response.Resource, response.ETag);
+            var document = CosmosReadResponseGuard.ReadResource(
+                response,
+                item => string.Equals(item.Id, LeaseId, StringComparison.Ordinal) &&
+                    !string.IsNullOrWhiteSpace(item.Owner),
+                "migration lease",
+                cancellationToken,
+                "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.");
+            return ToLease(document, response.ETag);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
