@@ -71,7 +71,7 @@ public sealed class AuthApiIntegrationTests
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsJsonAsync("/api/v1/auth/{role}/register",
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/rider/register",
             new { email = "new.user@example.com", password = "weak", name = "Test User" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -160,7 +160,7 @@ public sealed class AuthApiIntegrationTests
         var lastStatus = HttpStatusCode.OK;
         for (var attempt = 0; attempt < 11; attempt++)
         {
-            using var response = await client.PostAsJsonAsync("/api/v1/auth/{role}/login", new { email = "rider@example.com", password = "SecurePass123" });
+            using var response = await client.PostAsJsonAsync("/api/v1/auth/rider/login", new { email = "rider@example.com", password = "SecurePass123" });
             lastStatus = response.StatusCode;
             if (attempt < 10) Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
             if (attempt == 10) AssertNoStoreHeaders(response);
