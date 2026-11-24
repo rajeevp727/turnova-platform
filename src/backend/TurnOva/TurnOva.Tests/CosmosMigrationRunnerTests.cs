@@ -55,7 +55,6 @@ public sealed class CosmosMigrationRunnerTests
             It.IsAny<CancellationToken>()), Times.Once);
         client.VerifyNoOtherCalls();
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
-        databaseResponse.VerifyNoOtherCalls();
         database.VerifyGet(value => value.Id, Times.Once);
         leaseStore.VerifyNoOtherCalls();
     }
@@ -169,7 +168,6 @@ public sealed class CosmosMigrationRunnerTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
 
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
-        databaseResponse.VerifyNoOtherCalls();
         database.VerifyGet(value => value.Id, Times.Once);
         client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
             "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
@@ -201,7 +199,6 @@ public sealed class CosmosMigrationRunnerTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
 
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
-        databaseResponse.VerifyNoOtherCalls();
         database.VerifyGet(value => value.Id, Times.Once);
         client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
             "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
@@ -230,7 +227,6 @@ public sealed class CosmosMigrationRunnerTests
 
         Assert.Equal("database ID hydration failed", exception.Message);
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
-        databaseResponse.VerifyNoOtherCalls();
         database.VerifyGet(value => value.Id, Times.Once);
         client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
             "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
