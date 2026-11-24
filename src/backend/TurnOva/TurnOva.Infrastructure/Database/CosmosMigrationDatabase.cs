@@ -25,26 +25,40 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
             properties,
             cancellationToken: cancellationToken);
 
-        var createdProperties = response.Resource ?? throw new InvalidOperationException(
+        // Container creation is a committed write. Validate its response without
+        // retroactively turning a successful create into cancellation.
+        var createdProperties = CosmosReadResponseGuard.ReadResponseResource(
+            response,
+            static containerResponse => containerResponse.Resource,
+            value => string.Equals(value.Id, containerName, StringComparison.Ordinal) &&
+                string.Equals(value.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal),
+            "container",
+            CancellationToken.None,
+            "Cosmos returned a container resource that does not match the requested name and partition-key path after container creation.",
             "Cosmos returned an empty container resource after container creation.");
-        if (!string.Equals(createdProperties.Id, containerName, StringComparison.Ordinal) ||
-            !string.Equals(createdProperties.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal))
-            throw new InvalidOperationException(
-                "Cosmos returned a container resource that does not match the requested name and partition-key path after container creation.");
 
         if (defaultTimeToLive.HasValue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var container = response.Container ?? throw new InvalidOperationException(
+            var container = CosmosReadResponseGuard.ReadResponseResource(
+                response,
+                static containerResponse => containerResponse.Container,
+                value => string.Equals(value.Id, containerName, StringComparison.Ordinal),
+                "container handle",
+                cancellationToken,
+                "Cosmos returned a container handle that does not match the requested name for TTL configuration.",
                 "Cosmos returned an empty container handle for TTL configuration.");
             var current = await container.ReadContainerAsync(cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var currentProperties = current.Resource ?? throw new InvalidOperationException(
+            var currentProperties = CosmosReadResponseGuard.ReadResponseResource(
+                current,
+                static containerResponse => containerResponse.Resource,
+                value => string.Equals(value.Id, containerName, StringComparison.Ordinal) &&
+                    string.Equals(value.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal),
+                "container",
+                cancellationToken,
+                "Cosmos returned a container resource that does not match the requested name and partition-key path for TTL configuration.",
                 "Cosmos returned an empty container resource for TTL configuration.");
-            if (!string.Equals(currentProperties.Id, containerName, StringComparison.Ordinal) ||
-                !string.Equals(currentProperties.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal))
-                throw new InvalidOperationException(
-                    "Cosmos returned a container resource that does not match the requested name and partition-key path for TTL configuration.");
 
             if (currentProperties.DefaultTimeToLive != defaultTimeToLive)
             {
