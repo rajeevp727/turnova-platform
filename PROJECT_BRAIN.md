@@ -1,3 +1,13 @@
+# Run 139 handoff — 2026-11-24 (API phase)
+
+Current phase: **API in progress**. Active PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch test/api-nondev-support-readiness-20261120, final source/test head [af2126b9](https://github.com/rajeevp727/turnova-platform/commit/af2126b90459cba26b012d0bde85002b5178d940). Exact-head API-only [CI #45427779499](https://github.com/rajeevp727/turnova-platform/actions/runs/45427779499) passed **1,494/1,494 backend tests (0 failed/0 skipped), 0 build warnings/errors**, .NET 10 Release build, native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture); artifact [14938620647](https://github.com/rajeevp727/turnova-platform/actions/runs/45427779499/artifacts/14938620647), 17,032,638 bytes.
+
+Run 139 guards Cosmos query iterator metadata and page enumeration with cancellation precedence. ReadHasMoreResults protects FeedIterator.HasMoreResults; ReadPageItems protects FeedResponse enumerator creation/MoveNext/Current/Dispose. Applied across queue/audit, RideOffer, Driver reservation and nine Program.cs query loops. Seven deterministic tests COSMOS-READ-036..042 pass. The API OpenAPI security contract integration test was restored and now verifies route inventory, Bearer vs OpsAdminKey, public anonymous routes and test-route exclusion; the transformer recognizes IAllowAnonymous. The intermediate #454270 failure was limited to two test fixtures using template paths for concrete runtime auth requests; af2126b9 restored concrete routes and final #454277 passed.
+
+Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); implementation evidence is tracked separately. Live Cosmos ETag/partition/multi-instance/restart, production auth/hosting/provider, product policy, legal review and physical-device/signing gates remain external. Do not claim production readiness or start Android before the API engineering phase exit and independent PR approval.
+
+---
+
 # Run 138 handoff — 2026-11-24 (API phase)
 
 Current phase: **API in progress**. Active PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch test/api-nondev-support-readiness-20261120, final source/test head [f37c85b4](https://github.com/rajeevp727/turnova-platform/commit/f37c85b4d48682e03e55d44d77638182ae441ab7). Exact-head API-only [CI #45423196213](https://github.com/rajeevp727/turnova-platform/actions/runs/45423196213) passed **1,486/1,486 backend tests (0 failed/0 skipped), 0 build warnings/errors**, .NET 10 Release build, native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture); artifact [14936131549](https://github.com/rajeevp727/turnova-platform/actions/runs/45423196213/artifacts/14936131549), 17,030,355 bytes. Documentation checkpoint [bd32cf7e](https://github.com/rajeevp727/turnova-platform/commit/bd32cf7ec30d68db66ab1f832aa7e334b7b8eb22) passed CI #45422380548 with 1,479/1,479 tests and artifact [14935806239](https://github.com/rajeevp727/turnova-platform/actions/runs/45422380548/artifacts/14935806239).
@@ -39,7 +49,7 @@ Next exact task: continue API-only auth/authorization/privacy/OpenAPI and remain
 
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 138)
+Last updated: 2026-11-24 (Run 139)
 
 ## Run 134 — Cosmos migration database handle identity and cancellation (2026-11-24)
 
