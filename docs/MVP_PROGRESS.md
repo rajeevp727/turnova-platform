@@ -12,6 +12,7 @@
 - **Acceptance/readiness:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. The API has meaningful deterministic evidence, but API phase exit and production readiness are not claimed.
 - **External gates:** live Cosmos ETag/partition/transaction/multi-instance/restart/failover; production identity/key custody and API hosting/TLS; shared rate-limit/proxy validation; maps/routing; SignalR/call/chat/push; private document storage/scanning/retention/consent; support/escalation and reconciliation policies; approved dispatch radius/zones/location freshness/FIFO policy; Union legal terms; Android/iOS physical devices, signing and store/TestFlight evidence.
 - **Next exact action:** continue API-only source/test/docs audits (auth/authorization, privacy and remaining Cosmos persistence contracts), keep PR #200 as the only active feature PR, and obtain independent human review. Merge only after independent approval, final-head checks and repository policy permit it; then re-read main and perform a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver in order.
+
 ## Run 145 — 2026-11-24 — Pin JWT bearer validation to HS256
 
 - **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`. PR #200 is the sole active feature PR.
