@@ -1,6 +1,18 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 133)
+Last updated: 2026-11-24 (Run 134)
+
+## Run 134 — Cosmos migration database handle identity and cancellation (2026-11-24)
+
+- API remains `in_progress`; Android/iOS remain `not_started`. No mobile completion work started.
+- `CosmosMigrationRunner.RunAsync` now reads `DatabaseResponse.Database` via `CosmosReadResponseGuard.ReadResponseResource`, validates a nonblank configured database name against exact ordinal `Database.Id`, and fails closed before migration container creation/lease acquisition when the handle is absent or mismatched.
+- Cancellation is checked around both the response handle getter and `Database.Id` identity getter; cancellation takes precedence if either getter throws while the token is cancelled.
+- Six deterministic test methods (nine test cases) cover missing handle, null/blank/whitespace/unexpected IDs, cancellation during both getters, and cancellation precedence over both getter exceptions. Four existing strict-mock tests explicitly verify the new identity read.
+- Initial CI #45390009512 found four strict-mock verification omissions on intermediate head 84ddbce; these were test assertions, not runtime failures. The corrected source/test head [`efea5975efd5d1f388a59cb054e3d5440c28b81e`](https://github.com/rajeevp727/turnova-platform/commit/efea5975efd5d1f388a59cb054e3d5440c28b81e) passed [CI #45390511523](https://github.com/rajeevp727/turnova-platform/actions/runs/45390511523): **1,423/1,423 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier (11 negative fixtures plus valid fixture), artifact [14918093019](https://github.com/rajeevp727/turnova-platform/actions/runs/45390511523/artifacts/14918093019).
+- PR #200 remains sole active API PR; three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. Final documentation-bearing head must pass its own exact-head CI. PRs #196/#198/#205/#206 remain Draft/parked.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Deterministic Cosmos mocks do not establish live Cosmos or production readiness.
+- Next: verify final docs-head CI; continue API-only persistence/bootstrap/auth/authorization/privacy/contract audits; obtain independent human approval; re-audit main/API phase exit before Android Rider.
+
 
 ## Run 133 — Cosmos migration container bootstrap cancellation (2026-11-24)
 
