@@ -786,7 +786,9 @@ public sealed class CosmosMigrationRunnerTests
         database.SetupGet(value => value.Id).Returns("TurnOvaMigrationTest");
         var databaseResponse = new Mock<DatabaseResponse>();
         var historyContainer = new Mock<Container>();
+        historyContainer.SetupGet(value => value.Id).Returns(CosmosMigrationRunner.HistoryContainerName);
         var lockContainer = new Mock<Container>();
+        lockContainer.SetupGet(value => value.Id).Returns(CosmosMigrationRunner.LockContainerName);
         var historyResponse = new Mock<ContainerResponse>();
         var lockResponse = new Mock<ContainerResponse>();
 
