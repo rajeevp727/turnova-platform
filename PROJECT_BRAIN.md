@@ -1,3 +1,15 @@
+# Run 140 handoff — 2026-11-24 (API phase)
+
+Current phase: **API in progress**. Active PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`. Source/test head [916e749e](https://github.com/rajeevp727/turnova-platform/commit/916e749e939853c47a7c6eda21bd3345fed4039) adds cancellation-precedence protection to Cosmos-native Login/Refresh query HasMoreResults, ReadNextAsync and FeedResponse enumeration, with six deterministic AUTH-COSMOS-019..024 regressions. Exact-head CI is pending; previous verified docs head a8092eb7 passed CI #45428726767 with 1,494/1,494 tests, Release build and native non-container publish/verifier.
+
+Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos and production readiness remain unproven. Three owner-authored COMMENTED reviews, 0 independent approvals and 0 unresolved threads; do not self-approve or merge. PRs #196/#198/#205/#206 remain Draft/parked. Main phase metadata is stale; PR branch metadata remains API in_progress, Android/iOS not_started.
+
+Next: verify exact-head API CI; continue API-only auth/authorization/privacy and persistence-contract audits. After independent human approval and a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider, then Android Driver, then iOS Rider and Driver. Historical PR #197/#207 merges lacked independent approval and are not precedent.
+
+External gates remain live Cosmos ETag/partition/transaction/multi-instance/restart/RU; production identity/JWT secrets/API hosting/TLS/trusted proxy/shared rate limiting/live TriSend; Product dispatch radius/zones/location freshness/negotiation lifetime/internal FIFO fairness; maps/routing/SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal terms; Android/iOS physical-device/signing/store/TestFlight evidence.
+
+---
+
 # Run 139 handoff — 2026-11-24 (API phase)
 
 Documentation checkpoint: [a8092eb7](https://github.com/rajeevp727/turnova-platform/commit/a8092eb741336f6070c1b779808b972856955e69) passed exact-head API-only [CI #45428726767](https://github.com/rajeevp727/turnova-platform/actions/runs/45428726767), 1,494/1,494 tests, 0 warnings/errors and native publish/verifier (artifact [14938016598](https://github.com/rajeevp727/turnova-platform/actions/runs/45428726767/artifacts/14938016598).
