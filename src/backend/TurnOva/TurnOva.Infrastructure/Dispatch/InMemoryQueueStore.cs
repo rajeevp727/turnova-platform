@@ -53,6 +53,7 @@ public sealed class InMemoryQueueStore : IQueueStore
 
         lock (queue)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var removed = queue.Remove(driverId);
             if (removed)
                 RecordAudit(key, driverId, QueueAuditEventTypes.Left);
@@ -70,6 +71,7 @@ public sealed class InMemoryQueueStore : IQueueStore
 
         lock (queue)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var current = queue.Entries.FirstOrDefault(entry => entry.DriverId == driverId);
             if (current is null) return Task.FromResult(false);
             queue.Remove(driverId);
@@ -91,6 +93,7 @@ public sealed class InMemoryQueueStore : IQueueStore
         if (!_queues.TryGetValue(key, out var queue)) return Task.FromResult(false);
         lock (queue)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var current = queue.Entries.FirstOrDefault(entry => entry.DriverId == driverId);
             if (current is null) return Task.FromResult(false);
             var rotationKey = $"{key}|{driverId}";
