@@ -23,6 +23,35 @@ public sealed class CosmosRideOfferCancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.GetPendingNotificationsAsync(1, cancellation.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.TryCreateAsync(CreateState(), cancellation.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.TryReplaceAsync(CreateState(), "observed-etag", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.TryCreateAsync(null!, cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.TryReplaceAsync(null!, "observed-etag", cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TryCreateRejectsNullStateBeforeCallingCosmos()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var store = new CosmosRideOfferStore(container.Object);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => store.TryCreateAsync(
+            null!,
+            CancellationToken.None));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TryReplaceRejectsNullStateBeforeCallingCosmos()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var store = new CosmosRideOfferStore(container.Object);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => store.TryReplaceAsync(
+            null!,
+            "observed-etag",
+            CancellationToken.None));
 
         container.VerifyNoOtherCalls();
     }
