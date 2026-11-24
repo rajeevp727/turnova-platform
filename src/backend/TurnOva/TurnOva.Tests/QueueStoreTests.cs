@@ -22,6 +22,23 @@ public sealed class QueueStoreTests
     }
 
     [Fact]
+    public async Task GetEligibleAsyncHonorsCancellationAfterWaitingForQueueLockWithoutReturningSnapshot()
+    {
+        var store = new InMemoryQueueStore();
+        await store.AddAsync(Entry("driver-1", "zone-a", "Cab", DateTimeOffset.UtcNow), CancellationToken.None);
+        using var cancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            InvokeWhileQueueLockHeldAsync(
+                store,
+                () => store.GetEligibleAsync("zone-a", "Cab", cancellation.Token),
+                cancellation));
+
+        Assert.Equal(new[] { "driver-1" },
+            (await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None)).Select(entry => entry.DriverId));
+    }
+
+    [Fact]
     public async Task AddAsyncHonorsPreCancelledTokenBeforeQueueOrAuditMutation()
     {
         var store = new InMemoryQueueStore();

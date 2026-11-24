@@ -24,7 +24,7 @@ public sealed class InMemoryQueueStore : IQueueStore
         lock (queue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(queue.Entries);
+            return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(queue.GetEntries(cancellationToken));
         }
     }
 
@@ -37,7 +37,7 @@ public sealed class InMemoryQueueStore : IQueueStore
         lock (queue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            queue.Enqueue(entry with { Sequence = Interlocked.Increment(ref _sequence) });
+            queue.Enqueue(entry with { Sequence = Interlocked.Increment(ref _sequence) }, cancellationToken);
             RecordAudit(key, entry.DriverId, QueueAuditEventTypes.Joined);
         }
         return Task.CompletedTask;
@@ -54,7 +54,7 @@ public sealed class InMemoryQueueStore : IQueueStore
         lock (queue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var removed = queue.Remove(driverId);
+            var removed = queue.Remove(driverId, cancellationToken);
             if (removed)
                 RecordAudit(key, driverId, QueueAuditEventTypes.Left);
             return Task.FromResult(removed);
@@ -72,8 +72,12 @@ public sealed class InMemoryQueueStore : IQueueStore
         lock (queue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var current = queue.Entries.FirstOrDefault(entry => entry.DriverId == driverId);
+            var current = queue.FindEligible(driverId, cancellationToken);
             if (current is null) return Task.FromResult(false);
+
+            // Once the mutation starts, finish the queue/audit update as one synchronous
+            // critical section even if cancellation arrives during the non-awaiting writes.
+            cancellationToken.ThrowIfCancellationRequested();
             queue.Remove(driverId);
             queue.Enqueue(current with
             {
@@ -94,11 +98,18 @@ public sealed class InMemoryQueueStore : IQueueStore
         lock (queue)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var current = queue.Entries.FirstOrDefault(entry => entry.DriverId == driverId);
+            var current = queue.FindEligible(driverId, cancellationToken);
             if (current is null) return Task.FromResult(false);
             var rotationKey = $"{key}|{driverId}";
             if (_rotations.TryGetValue(rotationKey, out var lastOfferId) && lastOfferId == offerId)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(true);
+            }
+
+            // Keep the queue rotation, idempotency marker and audit fact together once
+            // the synchronous mutation begins.
+            cancellationToken.ThrowIfCancellationRequested();
             queue.Remove(driverId);
             queue.Enqueue(current with { JoinedAt = DateTimeOffset.UtcNow, Sequence = Interlocked.Increment(ref _sequence) });
             _rotations[rotationKey] = offerId;
@@ -128,8 +139,11 @@ public sealed class InMemoryQueueStore : IQueueStore
             TraceId: traceId,
             ReasonCategory: reasonCategory);
 
+        cancellationToken.ThrowIfCancellationRequested();
         if (_exceptionAuditEvents.TryAdd(deduplicationKey, audit))
         {
+            // Complete the paired in-memory audit append after the deduplication marker
+            // is committed; cancellation must not leave only half of the write visible.
             _auditEvents.Enqueue(audit);
         }
         else if (_exceptionAuditEvents.TryGetValue(deduplicationKey, out var existing) &&
