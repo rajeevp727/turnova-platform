@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -189,6 +190,66 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySchemes()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        var schemes = root.GetProperty("components").GetProperty("securitySchemes");
+
+        var bearer = schemes.GetProperty("Bearer");
+        Assert.Equal("http", bearer.GetProperty("type").GetString());
+        Assert.Equal("bearer", bearer.GetProperty("scheme").GetString());
+        Assert.Equal("JWT", bearer.GetProperty("bearerFormat").GetString());
+
+        var operationsKey = schemes.GetProperty("OpsAdminKey");
+        Assert.Equal("apiKey", operationsKey.GetProperty("type").GetString());
+        Assert.Equal("header", operationsKey.GetProperty("in").GetString());
+        Assert.Equal("X-Driver-Admin-Key", operationsKey.GetProperty("name").GetString());
+
+        var paths = root.GetProperty("paths");
+        var pathNames = paths.EnumerateObject().Select(path => path.Name).ToArray();
+        Assert.Contains("/api/v1/auth/rider/register", pathNames);
+        Assert.Contains("/api/v1/auth/rider/login", pathNames);
+        Assert.Contains("/api/v1/auth/refresh", pathNames);
+        Assert.Contains("/api/v1/auth/me", pathNames);
+        Assert.Contains("/api/v1/rider/discovery", pathNames);
+        Assert.Contains("/api/v1/rider/bookings", pathNames);
+        Assert.Contains("/api/v1/union/reconciliation", pathNames);
+        Assert.Contains("/api/v1/driver/rides/{rideId}/payment-report", pathNames);
+        Assert.DoesNotContain(pathNames, path => path.Contains("/__test/throw", StringComparison.Ordinal));
+
+        Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/auth/me").GetProperty("get"), "Bearer"));
+        Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/rider/discovery").GetProperty("get"), "Bearer"));
+        Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/rider/bookings").GetProperty("post"), "Bearer"));
+        Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/union/reconciliation").GetProperty("get"), "Bearer"));
+        Assert.True(HasSecurityScheme(
+            paths.GetProperty("/api/v1/driver/rides/{rideId}/payment-report").GetProperty("post"),
+            "Bearer"));
+
+        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/rider/login").GetProperty("post")));
+        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/rider/register").GetProperty("post")));
+        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/refresh").GetProperty("post")));
+
+        var operations = paths.EnumerateObject()
+            .Where(path => path.Name.StartsWith("/api/v1/ops/", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path => path.Value.EnumerateObject())
+            .Select(operation => operation.Value)
+            .ToArray();
+        Assert.NotEmpty(operations);
+        Assert.All(operations, operation =>
+        {
+            Assert.True(HasSecurityScheme(operation, "OpsAdminKey"));
+            Assert.False(HasSecurityScheme(operation, "Bearer"));
+        });
+    }
+
+    [Fact]
     public async Task OpenApiDocumentIsNotMappedInStaging()
     {
         using var factory = new AuthApiFactory(environmentName: "Staging");
@@ -196,6 +257,16 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.GetAsync("/openapi/v1.json");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    private static bool HasSecurityScheme(JsonElement operation, string schemeName) =>
+        operation.TryGetProperty("security", out var security) &&
+        security.ValueKind == JsonValueKind.Array &&
+        security.EnumerateArray().Any(requirement => requirement.TryGetProperty(schemeName, out _));
+
+    private static bool HasAnySecurityRequirement(JsonElement operation) =>
+        operation.TryGetProperty("security", out var security) &&
+        security.ValueKind == JsonValueKind.Array &&
+        security.GetArrayLength() > 0;
 
     private static void AssertNoStoreHeaders(HttpResponseMessage response)
     {
