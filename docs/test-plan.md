@@ -5306,6 +5306,14 @@ JwtBearerOptions.IncludeErrorDetails is explicitly false. Invalid-token status a
 `TokenValidationParameters.ValidAlgorithms` explicitly allowlists `SecurityAlgorithms.HmacSha256`, matching the algorithm used by `CosmosIdentityService.CreateSession`. The regression signs a valid-issuer/audience/claims HS384 token with the same integration-test key and proves it cannot authenticate. This prevents accidental acceptance of additional signing algorithms if token-validation defaults or dependencies change. Exact source/test head [d52862d2](https://github.com/rajeevp727/turnova-platform/commit/d52862d2e312c7ee9a78a581dfa30d03de7d2c99) passed API-only CI [#45454857745](https://github.com/rajeevp727/turnova-platform/actions/runs/45454857745): **1,512/1,512 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture), artifact [14949468476](https://github.com/rajeevp727/turnova-platform/actions/runs/45454857745/artifacts/14949468476). The documentation-bearing head requires its own exact-head CI.
 
 
+## AUTH-API-065 — reject ambiguous JWT role claims
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| AUTH-API-065 | A correctly signed HS256 JWT contains more than one role claim | Reject with HTTP 401 before the authenticated handler runs; retain no-store/no-cache headers and a generic Bearer challenge without validation details | `AuthApiIntegrationTests.MultipleRoleClaimsAreRejectedByJwtValidation` | P1 |
+
+The bearer middleware requires exactly one non-empty `role` claim before endpoint authorization. The regression signs an otherwise valid TurnOva HS256 token containing both Rider and Driver roles and asserts HTTP 401, cache protection and no error/error_description challenge details. The existing valid Rider HS256 token remains the positive control. This is supplemental authentication hardening; it does not promote an MVP acceptance row or establish production signing-key custody.
+
 ## Cosmos migration database handle identity and cancellation (COSMOS-BOOTSTRAP-027..033)
 
 Before migration bootstrap creates either `MigrationHistory` or `MigrationLocks`, the `DatabaseResponse.Database` handle must be non-null and its `Database.Id` must exactly match the configured database name. Lazy response/identity getters must preserve caller cancellation; a non-cancellation identity getter failure must propagate unchanged. Invalid handles must stop before container creation and lease acquisition.
