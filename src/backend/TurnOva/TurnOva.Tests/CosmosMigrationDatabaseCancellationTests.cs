@@ -524,4 +524,124 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         createResponse.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task CancellationDuringCommittedCreateResourceHydrationStopsBeforeTtlHandleRead()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return new ContainerProperties("SupportRequests", "/reporterId");
+        });
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", cancellation.Token, defaultTimeToLive: 604800));
+
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties =>
+                properties.Id == "SupportRequests" && properties.PartitionKeyPath == "/reporterId"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Never);
+        container.VerifyGet(value => value.Id, Times.Never);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        database.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CommittedCreateResourceGetterExceptionIsNotReplacedByCancellation()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var expected = new InvalidOperationException("created container resource hydration failed");
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw expected;
+        });
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", cancellation.Token, defaultTimeToLive: 604800));
+
+        Assert.Same(expected, actual);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Never);
+        container.VerifyGet(value => value.Id, Times.Never);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        database.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CommittedCreateResourceHydrationFailurePropagatesWithoutCancellation()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var expected = new InvalidOperationException("created container resource hydration failed");
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Resource).Returns(() => throw expected);
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", CancellationToken.None, defaultTimeToLive: 604800));
+
+        Assert.Same(expected, actual);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Never);
+        container.VerifyGet(value => value.Id, Times.Never);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        database.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
 }
