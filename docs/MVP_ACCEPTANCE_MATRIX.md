@@ -1,3 +1,14 @@
+## Run 119 engineering evidence update — fail closed on blank persisted Rider reservation hash (2026-11-24)
+
+- **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started` for completion work. No mobile implementation/build work was started.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head [`cbcef7d75f51d76bb7b4ecea17b64d4d0002ca80`](https://github.com/rajeevp727/turnova-platform/commit/cbcef7d75f51d76bb7b4ecea17b64d4d0002ca80), 906 ahead / 0 behind main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- **Persisted identity correction:** Rider active-booking resource validation now requires a nonblank RequestHash in addition to the expected RiderId and nonblank RideId. A malformed stored idempotency identity fails closed before being returned. No valid replay, reservation write, ETag, transaction or audit semantics changed.
+- **Test:** `CosmosReservationResourceContractTests.RiderActiveReadRejectsBlankRequestHash` verifies the generic integrity failure and one-read/no-extra-call behavior. Source guard commit [`02337266086707235b5e77343477a6fe8d447768`](https://github.com/rajeevp727/turnova-platform/commit/02337266086707235b5e77343477a6fe8d447768); test commit [`cbcef7d75f51d76bb7b4ecea17b64d4d0002ca80`](https://github.com/rajeevp727/turnova-platform/commit/cbcef7d75f51d76bb7b4ecea17b64d4d0002ca80).
+- **CI:** exact-head API-only CI [#45294471693](https://github.com/rajeevp727/turnova-platform/actions/runs/45294471693) is in progress; no pass is claimed for this head yet. Prior run #45285221683 passed 1,267/1,267 tests and native non-container publish/verifier on its own older head.
+- **Acceptance:** no row status changed. Strict fully verified remains **0/19** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. Live Cosmos/production readiness is not established.
+
+---
+
 ## Run 118 engineering evidence update — preserve cancellation precedence across reservation reads (2026-11-24)
 
 - **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started` for completion work. No mobile implementation/build work was started.

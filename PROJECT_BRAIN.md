@@ -1,5 +1,43 @@
 # PROJECT BRAIN — TurnOva
 
+Last updated: 2026-11-24 (Run 119)
+
+## Platform phase
+
+- API: `in_progress`
+- Android: `not_started`
+- iOS: `not_started`
+- Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
+- No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
+## Run 119 — persisted Rider reservation identity
+
+- Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
+- Source/test head: [`cbcef7d75f51d76bb7b4ecea17b64d4d0002ca80`](https://github.com/rajeevp727/turnova-platform/commit/cbcef7d75f51d76bb7b4ecea17b64d4d0002ca80), 906 ahead / 0 behind main.
+- `CosmosRiderActiveBookingReservationStore.RequireResource` now rejects a blank/whitespace RequestHash as malformed persisted idempotency identity, in addition to mismatched RiderId or blank RideId. Valid same-ride replay and all write/ETag/audit behavior are unchanged.
+- `RiderActiveReadRejectsBlankRequestHash` covers fail-closed behavior. Exact-head API-only CI [#45294471693](https://github.com/rajeevp727/turnova-platform/actions/runs/45294471693) is in progress; no pass is claimed yet.
+- The preceding Run 119 acquisition conflict-read cancellation tests passed in CI [#45285221683](https://github.com/rajeevp727/turnova-platform/actions/runs/45285221683): 1,267/1,267 tests, Release build (0 warnings/0 errors), native non-container Linux x64 publish/verifier, artifact [14870974964](https://github.com/rajeevp727/turnova-platform/actions/runs/45285221683/artifacts/14870974964). That run was on older head `3932577ab558a73d5e9cade13454e8561c069902`.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Mocked Cosmos tests do not establish live Cosmos/production readiness.
+- Review gate remains three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked. PRs #197 and #207 were historical merges without independent human approval; not approval precedent.
+
+## Live repository state
+
+- Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
+- The latest Run 119 source/test head is above; the documentation-bearing successor must pass its own exact-head API-only CI.
+- The branch diff remains API/docs/tests only; no mobile paths or Docker/container build/deployment files were introduced.
+- Main phase metadata remains stale (`api=complete`, `android=in_progress`); PR #200 branch metadata remains API `in_progress`, Android/iOS `not_started`.
+
+## Current API engineering
+
+- Cosmos-native auth and its transactional/ETag/cancellation tests remain part of the API-only branch.
+- Runs 114–118 add cancellation precedence and identity validation across Union assignment/status, Union/Driver/Cab discovery reads, ride-offer reads, support/queue reads and Driver/Rider reservation reads.
+- Run 119 adds cancellation-race tests for both reservation acquisition conflict-read paths and rejects blank persisted Rider reservation RequestHash.
+- Live Cosmos ETag/transaction/partition/multi-instance/restart, production identity/hosting/provider, Product dispatch/location/expiry, realtime/maps, private media, support/reconciliation, legal and later device/signing gates remain external.
+
+# PROJECT BRAIN — TurnOva
+
 Last updated: 2026-11-24 (Run 118)
 
 ## Platform phase
