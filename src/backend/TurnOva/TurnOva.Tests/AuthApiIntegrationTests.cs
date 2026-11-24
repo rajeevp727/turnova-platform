@@ -152,6 +152,48 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task MissingRoleClaimIsRejectedByJwtValidation()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken(includeRole: false));
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(value => value.ToString()));
+        Assert.Contains("Bearer", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error=", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error_description", challenge, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task BlankRoleClaimIsRejectedByJwtValidation(string roleValue)
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken(roleValue: roleValue));
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(value => value.ToString()));
+        Assert.Contains("Bearer", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error=", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error_description", challenge, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task MultipleRoleClaimsAreRejectedByJwtValidation()
     {
         using var factory = new AuthApiFactory();
@@ -357,16 +399,16 @@ public sealed class AuthApiIntegrationTests
         Assert.Contains("Auth:Jwt", exception.ToString(), StringComparison.Ordinal);
     }
 
-    private static string CreateToken(bool includeSubject = true, bool includeNameId = false, string algorithm = SecurityAlgorithms.HmacSha256, bool includeSecondRole = false)
+    private static string CreateToken(bool includeSubject = true, bool includeNameId = false, string algorithm = SecurityAlgorithms.HmacSha256, bool includeSecondRole = false, bool includeRole = true, string roleValue = "Rider")
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey));
         var credentials = new SigningCredentials(key, algorithm);
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Email, "rider@example.com"),
-            new Claim("name", "Test Rider"),
-            new Claim("role", "Rider")
+            new Claim("name", "Test Rider")
         };
+        if (includeRole) claims.Add(new Claim("role", roleValue));
         if (includeSubject) claims.Add(new Claim(JwtRegisteredClaimNames.Sub, "rider-123"));
         if (includeNameId) claims.Add(new Claim("nameid", "second-subject"));
         if (includeSecondRole) claims.Add(new Claim("role", "Driver"));
