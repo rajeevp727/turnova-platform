@@ -853,4 +853,116 @@ public sealed class CosmosReadResponseGuardTests
 
     private static CosmosException Unavailable() =>
         new("Cosmos is unavailable.", HttpStatusCode.ServiceUnavailable, 0, "union-read-guard", 0);
+
+    [Fact]
+    public async Task ConditionalReplacementDoesNotStartWhenResourceHydrationCancels()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var assignment = CreateAssignment(DriverId);
+        var response = new Mock<ItemResponse<DriverUnionAssignment>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return assignment;
+        });
+        response.SetupGet(value => value.ETag).Returns("observed-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        async Task ReplaceAfterGuardAsync()
+        {
+            var resource = CosmosReadResponseGuard.ReadResource(
+                response.Object,
+                item => item.DriverId == DriverId,
+                "Union assignment",
+                cancellation.Token);
+            var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                response.Object, static itemResponse => itemResponse.ETag, cancellation.Token);
+            await container.Object.ReplaceItemAsync(
+                resource,
+                DriverId,
+                new PartitionKey(DriverId),
+                new ItemRequestOptions { IfMatchEtag = etag },
+                cancellation.Token);
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(ReplaceAfterGuardAsync);
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Never);
+        response.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ConditionalReplacementDoesNotStartWhenEtagHydrationCancels()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var assignment = CreateAssignment(DriverId);
+        var response = new Mock<ItemResponse<DriverUnionAssignment>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(assignment);
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            return "observed-etag";
+        });
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        async Task ReplaceAfterGuardAsync()
+        {
+            var resource = CosmosReadResponseGuard.ReadResource(
+                response.Object,
+                item => item.DriverId == DriverId,
+                "Union assignment",
+                cancellation.Token);
+            var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                response.Object, static itemResponse => itemResponse.ETag, cancellation.Token);
+            await container.Object.ReplaceItemAsync(
+                resource,
+                DriverId,
+                new PartitionKey(DriverId),
+                new ItemRequestOptions { IfMatchEtag = etag },
+                cancellation.Token);
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(ReplaceAfterGuardAsync);
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        response.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ConditionalReplacementDoesNotStartWhenResourceIdentityIsMismatched()
+    {
+        var response = new Mock<ItemResponse<DriverUnionAssignment>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(CreateAssignment("driver-other"));
+        response.SetupGet(value => value.ETag).Returns("observed-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        async Task ReplaceAfterGuardAsync()
+        {
+            var resource = CosmosReadResponseGuard.ReadResource(
+                response.Object,
+                item => item.DriverId == DriverId,
+                "Union assignment",
+                CancellationToken.None);
+            var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                response.Object, static itemResponse => itemResponse.ETag, CancellationToken.None);
+            await container.Object.ReplaceItemAsync(
+                resource,
+                DriverId,
+                new PartitionKey(DriverId),
+                new ItemRequestOptions { IfMatchEtag = etag },
+                CancellationToken.None);
+        }
+
+        await Assert.ThrowsAsync<InvalidOperationException>(ReplaceAfterGuardAsync);
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Never);
+        response.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
 }

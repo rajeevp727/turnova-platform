@@ -503,9 +503,22 @@ async Task ReconcileSelectedRideWorkActivitiesAsync(
 
 async Task<DriverMonthlyPayslip?> FindPayslipAsync(string driverId, string payslipId, CancellationToken ct)
 {
-    if (payslipContainer is null)
+    var container = payslipContainer;
+    if (container is null)
         return monthlyPayslips.TryGetValue($"{driverId}|{payslipId}", out var value) ? value : null;
-    try { return (await payslipContainer.ReadItemAsync<DriverMonthlyPayslip>(payslipId, new PartitionKey(driverId), cancellationToken: ct)).Resource; }
+    try
+    {
+        var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => container.ReadItemAsync<DriverMonthlyPayslip>(
+                payslipId, new PartitionKey(driverId), cancellationToken: ct),
+            ct);
+        return CosmosReadResponseGuard.ReadResource(
+            response,
+            item => string.Equals(item.PayslipId, payslipId, StringComparison.Ordinal) &&
+                string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+            "Driver payslip",
+            ct);
+    }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
@@ -890,15 +903,22 @@ async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
         ItemResponse<DriverUnionAssignment> response;
         try
         {
-            response = await unionAssignmentContainer.ReadItemAsync<DriverUnionAssignment>(
-                assignment.DriverId, new PartitionKey(assignment.DriverId), cancellationToken: ct);
+            response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => unionAssignmentContainer!.ReadItemAsync<DriverUnionAssignment>(
+                    assignment.DriverId, new PartitionKey(assignment.DriverId), cancellationToken: ct),
+                ct);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             throw new InvalidOperationException("The Union assignment disappeared before its audit snapshot could be completed.");
         }
 
-        var current = response.Resource;
+        var current = CosmosReadResponseGuard.ReadResource(
+            response,
+            item => string.Equals(item.DriverId, assignment.DriverId, StringComparison.Ordinal) &&
+                string.Equals(item.id, assignment.DriverId, StringComparison.Ordinal),
+            "Union assignment",
+            ct);
         if (!string.Equals(current.AuditEventId, expected.EventId, StringComparison.Ordinal))
             return;
         if (!current.AuditSnapshotPending)
@@ -912,15 +932,16 @@ async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
         if (!DriverUnionAuditSnapshotRecovery.Matches(expected, currentExpected))
             throw new InvalidOperationException("The Union assignment audit snapshot changed before completion. Refusing to clear it.");
 
-        ct.ThrowIfCancellationRequested();
-        if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, ct);
+        if (!CosmosEtagPolicy.HasObservedEtag(etag))
             throw new InvalidOperationException("The Union assignment cannot be safely completed without an observed Cosmos ETag.");
 
         try
         {
-            await unionAssignmentContainer.ReplaceItemAsync(
+            await unionAssignmentContainer!.ReplaceItemAsync(
                 Complete(current), current.id, new PartitionKey(current.DriverId),
-                new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+                new ItemRequestOptions { IfMatchEtag = etag }, ct);
             return;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -1162,27 +1183,36 @@ async Task<bool> TryUpdateDriverProfileAsync(
         ItemResponse<DriverOnboardingProfile> response;
         try
         {
-            response = await driverContainer.ReadItemAsync<DriverOnboardingProfile>(
-                driverId, new PartitionKey(driverId), cancellationToken: ct);
+            response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => driverContainer!.ReadItemAsync<DriverOnboardingProfile>(
+                    driverId, new PartitionKey(driverId), cancellationToken: ct),
+                ct);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return false;
         }
 
-        var updated = update(response.Resource);
+        var profile = CosmosReadResponseGuard.ReadResource(
+            response,
+            item => string.Equals(item.Id, driverId, StringComparison.Ordinal) &&
+                string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+            "Driver profile",
+            ct);
+        var updated = update(profile);
         if (updated is null)
             return false;
 
-        ct.ThrowIfCancellationRequested();
-        if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, ct);
+        if (!CosmosEtagPolicy.HasObservedEtag(etag))
             return false;
 
         try
         {
-            await driverContainer.ReplaceItemAsync(
+            await driverContainer!.ReplaceItemAsync(
                 updated, driverId, new PartitionKey(driverId),
-                new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+                new ItemRequestOptions { IfMatchEtag = etag }, ct);
             return true;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -1264,8 +1294,12 @@ async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
     {
         try
         {
-            item = (await rideContainer.ReadItemAsync<DemoRide>(
-                rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource;
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => rideContainer!.ReadItemAsync<DemoRide>(
+                    rideId, new PartitionKey(rideId), cancellationToken: ct),
+                ct);
+            item = CosmosReadResponseGuard.ReadResponseValue(
+                response, static itemResponse => itemResponse.Resource, ct);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -3607,9 +3641,17 @@ app.MapPost("/api/v1/rider/bookings", async (
     {
         try
         {
-            var existingRecord = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
-                keyId, new PartitionKey(riderId), cancellationToken: ct);
-            var existingResult = await ResolveExistingBookingIdempotencyAsync(existingRecord.Resource);
+            var existingResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => idempotencyContainer!.ReadItemAsync<RideIdempotencyRecord>(
+                    keyId, new PartitionKey(riderId), cancellationToken: ct),
+                ct);
+            var existingRecord = CosmosReadResponseGuard.ReadResource(
+                existingResponse,
+                item => string.Equals(item.id, keyId, StringComparison.Ordinal) &&
+                    string.Equals(item.riderId, riderId, StringComparison.Ordinal),
+                "Rider booking idempotency record",
+                ct);
+            var existingResult = await ResolveExistingBookingIdempotencyAsync(existingRecord);
             if (existingResult is not null) return existingResult;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -4326,31 +4368,38 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
     }
     try
     {
-        var response = await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct);
-        if (!string.Equals(response.Resource.RideId, rideId, StringComparison.Ordinal))
+        var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => rideContainer!.ReadItemAsync<DemoRide>(
+                rideId, new PartitionKey(rideId), cancellationToken: ct),
+            ct);
+        var requestedRide = CosmosReadResponseGuard.ReadResponseValue(
+            response, static itemResponse => itemResponse.Resource, ct);
+        if (requestedRide is null ||
+            !string.Equals(requestedRide.RideId, rideId, StringComparison.Ordinal))
             return Results.NotFound(new { message = "Ride not found." });
-        if (response.Resource.Status != "Requested")
+        if (requestedRide.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
-        if (!string.Equals(response.Resource.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(response.Resource.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(requestedRide.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(requestedRide.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "This ride belongs to a different dispatch zone or vehicle queue." });
-        if (response.Resource.Passengers > approvedProfile.PassengerCapacity)
+        if (requestedRide.Passengers > approvedProfile.PassengerCapacity)
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
-        ct.ThrowIfCancellationRequested();
-        if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, ct);
+        if (!CosmosEtagPolicy.HasObservedEtag(etag))
             return Results.Conflict(new { message = "This ride cannot be accepted safely right now. Refresh and retry." });
         if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct,
             new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.LegacyRideAccept)))
             return Results.Conflict(new { message = "You already have an active ride. Complete or cancel it before accepting another ride." });
         var acceptedAtUtc = DateTimeOffset.UtcNow;
-        var accepted = response.Resource with
+        var accepted = requestedRide with
         {
             Status = "Accepted", DriverId = driverId, AcceptedAt = acceptedAtUtc, LocationSharingActive = true,
-            AuditEvents = AppendRideAuditEvent(response.Resource, "RideStatusChanged", driverId, "Driver",
-                response.Resource.Status, "Accepted", occurredAtUtc: acceptedAtUtc)
+            AuditEvents = AppendRideAuditEvent(requestedRide, "RideStatusChanged", driverId, "Driver",
+                requestedRide.Status, "Accepted", occurredAtUtc: acceptedAtUtc)
         };
-        await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
-            new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+        await rideContainer!.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
+            new ItemRequestOptions { IfMatchEtag = etag }, ct);
         if (pendingOffer is not null && !string.IsNullOrWhiteSpace(pendingOffer.ETag))
         {
             var resolvedAttempts = pendingOffer.Attempts.Select(attempt =>
@@ -5074,23 +5123,31 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
         }
         else
         {
-            var response = await rideContainer.ReadItemAsync<DemoRide>(
-                current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
-            ct.ThrowIfCancellationRequested();
-            if (!IsSameRideSnapshot(response.Resource, current))
-            {
-                replaced = false;
-            }
-            else if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => rideContainer!.ReadItemAsync<DemoRide>(
+                    current.RideId, new PartitionKey(current.RideId), cancellationToken: ct),
+                ct);
+            var observedRide = CosmosReadResponseGuard.ReadResponseValue(
+                response, static itemResponse => itemResponse.Resource, ct);
+            if (observedRide is null || !IsSameRideSnapshot(observedRide, current))
             {
                 replaced = false;
             }
             else
             {
-                await rideContainer.ReplaceItemAsync(
-                    updated, current.RideId, new PartitionKey(current.RideId),
-                    new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
-                replaced = true;
+                var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                    response, static itemResponse => itemResponse.ETag, ct);
+                if (!CosmosEtagPolicy.HasObservedEtag(etag))
+                {
+                    replaced = false;
+                }
+                else
+                {
+                    await rideContainer!.ReplaceItemAsync(
+                        updated, current.RideId, new PartitionKey(current.RideId),
+                        new ItemRequestOptions { IfMatchEtag = etag }, ct);
+                    replaced = true;
+                }
             }
         }
 
