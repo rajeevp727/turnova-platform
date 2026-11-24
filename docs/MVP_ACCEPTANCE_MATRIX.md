@@ -1,3 +1,13 @@
+## Run 133 — API Cosmos migration bootstrap cancellation evidence (2026-11-24)
+
+- **PLATFORM-01 implementation evidence:** `CosmosReadResponseGuard.ReadResponseResource<TResponse,TResource>` now protects lazy SDK response-property hydration, cancellation precedence and identity validation. Migration container bootstrap applies it to both `ContainerResponse.Resource` and `ContainerResponse.Container`.
+- **Deterministic regressions:** `CancellationDuringHistoryContainerResourceHydrationStopsBeforeReadingHandleOrAcquiringLease`, `CancellationTakesPrecedenceWhenHistoryContainerResourceHydrationThrows`, `CancellationDuringHistoryContainerHandleHydrationStopsBeforeLeaseAcquisition`, and `CancellationTakesPrecedenceWhenHistoryContainerHandleHydrationThrows`.
+- **Exact-head evidence:** Source/test head [`e0f19459356a46bdfc66553f6ee1f9821722cce6`](https://github.com/rajeevp727/turnova-platform/commit/e0f19459356a46bdfc66553f6ee1f9821722cce6) passed exact-head API-only CI [#45385345419](https://github.com/rajeevp727/turnova-platform/actions/runs/45385345419): **1,414/1,414 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings, 0 errors), native non-container Linux x64 publish, publish-script syntax and publish verifier (11 negative fixtures plus the valid fixture). Artifact [14916905435](https://github.com/rajeevp727/turnova-platform/actions/runs/45385345419/artifacts/14916905435) is 17,022,973 bytes (SHA-256 `8145add9530c321ae4d60a362090637e5f4e9f5370ba5b96fb0b3f07f7c8c3fe`). Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-first phase gate.
+- **Scope/review:** API-only CI; mobile jobs intentionally skipped. PR #200 remains the sole active API PR; three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. No mobile/container paths changed.
+- **Strict acceptance:** **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No acceptance row is promoted by mock-only evidence; production readiness/live Cosmos validation remain unestablished.
+
+---
+
 ## Run 132 — API Cosmos point-read cancellation evidence (2026-11-24)
 
 - **PLATFORM-01:** shared `ReadResource<T>` now checks cancellation around ItemResponse resource hydration and identity validation; migration lease/history point reads use the same guard. Final exact-head API-only CI [#45382609587](https://github.com/rajeevp727/turnova-platform/actions/runs/45382609587) passed 1,410/1,410 backend tests, Release build (0 warnings/0 errors), native non-container publish/verifier; artifact [14915226391](https://github.com/rajeevp727/turnova-platform/actions/runs/45382609587/artifacts/14915226391).
