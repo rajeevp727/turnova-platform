@@ -113,18 +113,117 @@ public sealed class CosmosIdentityContainerBootstrapTests
             cts.Token));
     }
 
+    [Fact]
+    public async Task RegisterRejectsMismatchedContainerHandleIdentityBeforeWriting()
+    {
+        var (service, _, container) = CreateService(
+            "TurnOvaUsers", "/role", includeContainer: true, returnedContainerId: "UnexpectedUsers");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            CancellationToken.None));
+
+        Assert.Equal(
+            "Cosmos returned an identity container handle that does not match the requested name after bootstrap.",
+            exception.Message);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterPreservesCancellationWhenContainerResourceHydrationCompletesAfterCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        var (service, _, container) = CreateService(
+            "TurnOvaUsers", "/role", includeContainer: true, onResourceRead: cts.Cancel);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            cts.Token));
+
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterPreservesCancellationWhenContainerHandleHydrationCompletesAfterCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        var (service, _, container) = CreateService(
+            "TurnOvaUsers", "/role", includeContainer: true, onContainerRead: cts.Cancel);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            cts.Token));
+
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterPreservesCancellationWhenContainerHandleIdentityHydrationCompletesAfterCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        var (service, _, container) = CreateService(
+            "TurnOvaUsers", "/role", includeContainer: true, onContainerIdRead: cts.Cancel);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            cts.Token));
+
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterCancellationTakesPrecedenceOverContainerHandleIdentityHydrationFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var (service, _, container) = CreateService(
+            "TurnOvaUsers",
+            "/role",
+            includeContainer: true,
+            onContainerIdRead: () =>
+            {
+                cts.Cancel();
+                throw new InvalidOperationException("container identity hydration failed");
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            cts.Token));
+
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
     private static (CosmosIdentityService Service, Mock<Database> Database, Mock<Container> Container) CreateService(
         string? returnedId,
         string returnedPartitionKeyPath,
         bool includeContainer,
-        bool successfulBatch = false)
+        bool successfulBatch = false,
+        string returnedContainerId = "TurnOvaUsers",
+        Action? onResourceRead = null,
+        Action? onContainerRead = null,
+        Action? onContainerIdRead = null)
     {
         var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns(() =>
+        {
+            onContainerIdRead?.Invoke();
+            return returnedContainerId;
+        });
         var response = new Mock<ContainerResponse>(MockBehavior.Strict);
-        response.SetupGet(value => value.Resource).Returns(
-            returnedId is null ? null! : new ContainerProperties(returnedId, returnedPartitionKeyPath));
-        response.SetupGet(value => value.Container).Returns(
-            includeContainer ? container.Object : null!);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            onResourceRead?.Invoke();
+            return returnedId is null ? null! : new ContainerProperties(returnedId, returnedPartitionKeyPath);
+        });
+        response.SetupGet(value => value.Container).Returns(() =>
+        {
+            onContainerRead?.Invoke();
+            return includeContainer ? container.Object : null!;
+        });
         if (successfulBatch)
         {
             var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
