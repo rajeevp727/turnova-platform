@@ -1,3 +1,13 @@
+## Run 146 — 2026-11-25 — Cosmos migration handle identity (supporting API evidence)
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR #200 remains the sole active feature PR.
+- **PLATFORM-01 supporting evidence:** migration bootstrap now validates `Container.Id` against the exact requested `MigrationHistory`/`MigrationLocks` names after validating `ContainerProperties`. Invalid History identity stops before lock creation; invalid Lock identity stops before lease acquisition.
+- **Automated evidence:** COSMOS-BOOTSTRAP-020..026 (13 deterministic cases) covers null/blank/mismatched handles, cancellation during lazy ID hydration, cancellation precedence over getter exceptions and propagation of unrelated getter failures. Existing runner fixtures were aligned with the stricter handle contract.
+- **Source/test head:** [262baa15](https://github.com/rajeevp727/turnova-platform/commit/262baa15020d25ff468bf1bc5ec2a68f2029da1d); exact-head API-only CI [#45468330918](https://github.com/rajeevp727/turnova-platform/actions/runs/45468330918) passed **1,525/1,525 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier, artifact [14956426108](https://github.com/rajeevp727/turnova-platform/actions/runs/45468330918/artifacts/14956426108).
+- **Status accounting:** no acceptance row is promoted to Verified by deterministic mocks alone. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01).
+- **Review/phase gate:** PR #200 has 3 owner-authored COMMENTED reviews, 0 independent approvals and 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked. Do not begin Android or merge without independent approval and a fresh API phase-exit audit.
+- **Production gate:** live Cosmos multi-instance/ETag/restart/failover, production identity/hosting, providers, product policies, legal review and device/signing evidence remain unverified.
+- This matrix snapshot records supporting engineering evidence only; it does not claim strict acceptance or production readiness.
 ## Run 145 — 2026-11-24 — JWT HS256 algorithm allowlist (supporting API evidence)
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR #200 remains the sole active feature PR.
