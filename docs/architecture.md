@@ -267,7 +267,7 @@ The bootstrap path validates both the returned container properties (requested n
 
 `GET /health/live` is the process liveness endpoint. `GET /health/ready` performs a Cosmos database read in Cosmos mode and returns 503 when the configured database is unavailable. In-memory demo mode reports ready without a Cosmos dependency. The readiness endpoint does not replace monitoring of request-level Cosmos throttling, latency, RU consumption, or data-plane operations.
 
-The migration lease currently has a 30-minute expiry and is not renewed. Keep migrations short and controlled; migrations expected to exceed this duration require lease renewal before rollout to multiple API instances. Validate the lease and migration behaviour against a real Cosmos development account before production deployment.
+The migration lease expires after 30 minutes and is renewed every 10 minutes using the latest ETag. Renewal loss cancels migration execution; the runner stops and awaits the heartbeat before releasing with the latest ETag. Deterministic tests cover renewal, cancellation, lost-lease handling and release, but live multi-instance contention, process restart/failover and Cosmos ETag behavior still require a configured development account before production deployment.
 
 ## 19. Driver onboarding and dispatch eligibility
 
