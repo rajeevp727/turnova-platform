@@ -118,7 +118,34 @@ public static class CosmosReadResponseGuard
         return resource;
     }
 
-    public static async Task<T?> ReadItemAsync<T>(
+    public static string ReadResponseEtag<TResponse>(
+        TResponse response,
+        Func<TResponse, string> etagAccessor,
+        CancellationToken cancellationToken)
+        where TResponse : class
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(etagAccessor);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string etag;
+        try
+        {
+            // Cosmos SDK response metadata can hydrate lazily after the provider task
+            // completes, just like Resource. Keep read cancellation observable here.
+            etag = etagAccessor(response);
+        }
+        catch
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return etag;
+    }
+
+    public static async Task<T?> ReadItemAsync<T>
         Container container,
         string id,
         PartitionKey partitionKey,

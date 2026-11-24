@@ -377,6 +377,99 @@ public sealed class CosmosRideOfferCancellationTests
         container.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task GetByRideHonorsCancellationDuringEtagHydration()
+    {
+        var state = CreateState();
+        var response = new Mock<ItemResponse<RideOfferState>>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        response.SetupGet(value => value.Resource).Returns(state);
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            return "observed-etag";
+        });
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RideOfferState>(
+                state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).GetByRideAsync(state.RideId, cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        response.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetExpiredCancellationTakesPrecedenceOverEtagHydrationFailure()
+    {
+        var state = CreateState();
+        var page = CreatePage([state]);
+        var iterator = CreateIterator(page);
+        var response = new Mock<ItemResponse<RideOfferState>>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        response.SetupGet(value => value.Resource).Returns(state);
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("etag hydration failed");
+        });
+        var container = CreateQueryContainer(iterator);
+        container.Setup(value => value.ReadItemAsync<RideOfferState>(
+                state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).GetExpiredAsync(
+                DateTimeOffset.UtcNow, 1, cancellation.Token));
+
+        container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        response.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetPendingNotificationsCancellationTakesPrecedenceOverEtagHydrationFailure()
+    {
+        var state = CreateState();
+        var page = CreatePage([state]);
+        var iterator = CreateIterator(page);
+        var response = new Mock<ItemResponse<RideOfferState>>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        response.SetupGet(value => value.Resource).Returns(state);
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("etag hydration failed");
+        });
+        var container = CreateQueryContainer(iterator);
+        container.Setup(value => value.ReadItemAsync<RideOfferState>(
+                state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).GetPendingNotificationsAsync(1, cancellation.Token));
+
+        container.Verify(value => value.GetItemQueryIterator<RideOfferState>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<RideOfferState>(
+            state.RideId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        response.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
     private static Mock<Container> CreateQueryContainer(Mock<FeedIterator<RideOfferState>> iterator)
     {
         var container = new Mock<Container>(MockBehavior.Strict);

@@ -17,7 +17,10 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                     rideId, new PartitionKey(rideId), cancellationToken: cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            return RequireResource(response, rideId, cancellationToken: cancellationToken) with { ETag = response.ETag };
+            var offer = RequireResource(response, rideId, cancellationToken: cancellationToken);
+            var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                response, static itemResponse => itemResponse.ETag, cancellationToken);
+            return offer with { ETag = etag };
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -79,7 +82,10 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                         candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken),
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                results.Add(RequireResource(response, candidate.RideId, cancellationToken, candidate.DriverId) with { ETag = response.ETag });
+                var offer = RequireResource(response, candidate.RideId, cancellationToken, candidate.DriverId);
+                var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                    response, static itemResponse => itemResponse.ETag, cancellationToken);
+                results.Add(offer with { ETag = etag });
                 if (results.Count >= maxItems) break;
             }
         }
@@ -112,7 +118,10 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                         candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken),
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                results.Add(RequireResource(response, candidate.RideId, cancellationToken, candidate.DriverId) with { ETag = response.ETag });
+                var offer = RequireResource(response, candidate.RideId, cancellationToken, candidate.DriverId);
+                var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                    response, static itemResponse => itemResponse.ETag, cancellationToken);
+                results.Add(offer with { ETag = etag });
                 if (results.Count >= maxItems) break;
             }
         }

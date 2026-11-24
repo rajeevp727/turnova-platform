@@ -145,28 +145,9 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
             cancellationToken,
             invalidMetadataMessage,
             invalidMetadataMessage);
-        var etag = ReadEtag(response, cancellationToken);
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, cancellationToken);
         return ToLease(document, etag, expectedOwner);
-    }
-
-    private static string ReadEtag(
-        ItemResponse<CosmosMigrationLeaseDocument> response,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        try
-        {
-            var etag = response.ETag;
-            cancellationToken.ThrowIfCancellationRequested();
-            return etag;
-        }
-        catch
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            throw;
-        }
     }
 
     private static CosmosMigrationLease ToLease(

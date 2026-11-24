@@ -46,6 +46,74 @@ public sealed class CosmosReadResponseGuardTests
         Assert.Same(exception, actual);
     }
 
+    [Fact]
+    public void ReadResponseEtagReturnsHydratedValue()
+    {
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.ETag).Returns("observed-etag");
+
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response.Object, static itemResponse => itemResponse.ETag, CancellationToken.None);
+
+        Assert.Equal("observed-etag", etag);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResponseEtagChecksCancellationAfterSuccessfulHydration()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            return "observed-etag";
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadResponseEtag(
+                response.Object, static itemResponse => itemResponse.ETag, cancellation.Token));
+
+        response.VerifyGet(value => value.ETag, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResponseEtagCancellationTakesPrecedenceOverHydrationFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("etag hydration failed");
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadResponseEtag(
+                response.Object, static itemResponse => itemResponse.ETag, cancellation.Token));
+
+        response.VerifyGet(value => value.ETag, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResponseEtagPreservesHydrationFailureWhenNotCancelled()
+    {
+        var exception = new InvalidOperationException("etag hydration failed");
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.ETag).Returns(() => throw exception);
+
+        var actual = Assert.Throws<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.ReadResponseEtag(
+                response.Object, static itemResponse => itemResponse.ETag, CancellationToken.None));
+
+        Assert.Same(exception, actual);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
     private const string UnionId = "union-read-guard";
     private const string DriverId = "driver-read-guard";
 
