@@ -224,7 +224,7 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(driverIds);
         var reservations = new List<DriverRideReservation>();
-        foreach (var batch in DriverIdBatching.Chunk(driverIds))
+        foreach (var batch in DriverIdBatching.Chunk(driverIds, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var iterator = container.GetItemQueryIterator<DriverRideReservation>(
