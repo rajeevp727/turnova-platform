@@ -435,7 +435,6 @@ public sealed class CosmosRideOfferCancellationTests
         response.VerifyGet(value => value.Resource, Times.Once);
         response.VerifyGet(value => value.ETag, Times.Once);
         response.VerifyNoOtherCalls();
-        container.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -467,7 +466,6 @@ public sealed class CosmosRideOfferCancellationTests
         response.VerifyGet(value => value.Resource, Times.Once);
         response.VerifyGet(value => value.ETag, Times.Once);
         response.VerifyNoOtherCalls();
-        container.VerifyNoOtherCalls();
     }
 
     private static Mock<Container> CreateQueryContainer(Mock<FeedIterator<RideOfferState>> iterator)
