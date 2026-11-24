@@ -152,6 +152,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             return StorageUnavailable();
         }
 
+        ct.ThrowIfCancellationRequested();
         if (candidate is null ||
             !IsExpectedIdentity(candidate, candidate.Id, normalizedRole) ||
             !string.Equals(candidate.Email, email, StringComparison.Ordinal))
@@ -224,6 +225,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         var tokenHash = HashRefreshToken(request.RefreshToken);
         foreach (var role in new[] { "Rider", "Driver" })
         {
+            ct.ThrowIfCancellationRequested();
             try
             {
                 var query = new QueryDefinition("SELECT * FROM c WHERE c.refreshTokenHash = @hash AND c.documentType = 'user'")
@@ -238,7 +240,10 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                     var candidate = page.FirstOrDefault();
                     if (candidate is null) continue;
                     if (!IsExpectedIdentity(candidate, candidate.Id, role))
+                    {
+                        ct.ThrowIfCancellationRequested();
                         return InvalidRefreshToken();
+                    }
 
                     ItemResponse<IdentityDocument> readResponse;
                     try
@@ -263,7 +268,10 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                         !FixedTimeEquals(user.RefreshTokenHash, tokenHash) ||
                         user.RefreshTokenExpiresAtUtc is null ||
                         user.RefreshTokenExpiresAtUtc.GetValueOrDefault() <= DateTimeOffset.UtcNow)
+                    {
+                        ct.ThrowIfCancellationRequested();
                         return InvalidRefreshToken();
+                    }
                     if (!HasUsableEtag(readResponse.ETag)) return StorageUnavailable();
 
                     var nextRefresh = CreateRefreshToken();
@@ -300,6 +308,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             }
         }
 
+        ct.ThrowIfCancellationRequested();
         return InvalidRefreshToken();
     }
 
