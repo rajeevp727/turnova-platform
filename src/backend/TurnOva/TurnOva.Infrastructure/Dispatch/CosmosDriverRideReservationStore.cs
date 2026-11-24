@@ -113,8 +113,9 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             if (currentReservation.ExpiresAtUtc is null)
                 return true;
 
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
+            var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                current, static itemResponse => itemResponse.ETag, cancellationToken);
+            if (!CosmosEtagPolicy.HasObservedEtag(etag))
                 return false;
 
             var updated = currentReservation with { ExpiresAtUtc = null };
@@ -166,8 +167,9 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             if (currentReservation.ExpiresAtUtc == expiresAtUtc)
                 return true;
 
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
+            var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                current, static itemResponse => itemResponse.ETag, cancellationToken);
+            if (!CosmosEtagPolicy.HasObservedEtag(etag))
                 return false;
 
             var updated = currentReservation with { ExpiresAtUtc = expiresAtUtc };
@@ -275,8 +277,9 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             if (currentReservation.RideId != rideId)
                 return false;
 
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
+            var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                current, static itemResponse => itemResponse.ETag, cancellationToken);
+            if (!CosmosEtagPolicy.HasObservedEtag(etag))
                 return false;
 
             var auditEvent = DriverRideReservationAuditEvent.Create(
