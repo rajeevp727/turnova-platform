@@ -33,7 +33,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         {
             var response = await locks.CreateItemAsync(
                 document, new PartitionKey(document.Id), cancellationToken: cancellationToken);
-            return ToLease(response.Resource, response.ETag, owner);
+            return ReadLeaseResponse(response, owner, CancellationToken.None);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
@@ -49,15 +49,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         {
             var response = await locks.ReadItemAsync<CosmosMigrationLeaseDocument>(
                 LeaseId, new PartitionKey(LeaseId), cancellationToken: cancellationToken);
-            var document = CosmosReadResponseGuard.ReadResource(
-                response,
-                item => string.Equals(item.Id, LeaseId, StringComparison.Ordinal) &&
-                    !string.IsNullOrWhiteSpace(item.Owner),
-                "migration lease",
-                cancellationToken,
-                "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.",
-                "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.");
-            return ToLease(document, response.ETag);
+            return ReadLeaseResponse(response, expectedOwner: null, cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
@@ -96,7 +88,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
                 new PartitionKey(replacement.Id),
                 new ItemRequestOptions { IfMatchEtag = expected.ETag },
                 cancellationToken);
-            return ToLease(response.Resource, response.ETag, newOwner);
+            return ReadLeaseResponse(response, newOwner, CancellationToken.None);
         }
         catch (CosmosException ex) when (
             ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed)
@@ -134,6 +126,46 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
             cancellationToken.ThrowIfCancellationRequested();
             // Never delete a lease that another API instance has replaced.
             return false;
+        }
+    }
+
+    private static CosmosMigrationLease ReadLeaseResponse(
+        ItemResponse<CosmosMigrationLeaseDocument> response,
+        string? expectedOwner,
+        CancellationToken cancellationToken)
+    {
+        const string invalidMetadataMessage =
+            "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.";
+
+        var document = CosmosReadResponseGuard.ReadResource(
+            response,
+            item => string.Equals(item.Id, LeaseId, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(item.Owner),
+            "migration lease",
+            cancellationToken,
+            invalidMetadataMessage,
+            invalidMetadataMessage);
+        var etag = ReadEtag(response, cancellationToken);
+        return ToLease(document, etag, expectedOwner);
+    }
+
+    private static string ReadEtag(
+        ItemResponse<CosmosMigrationLeaseDocument> response,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            var etag = response.ETag;
+            cancellationToken.ThrowIfCancellationRequested();
+            return etag;
+        }
+        catch
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
         }
     }
 
