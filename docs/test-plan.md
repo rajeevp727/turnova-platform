@@ -5151,6 +5151,21 @@ Four existing strict-mock cases (`CancellationAfterTtlReadStopsBeforeReplace`, `
 
 **Failure correction transparency:** the earlier PR merge-ref run [#45392545742](https://github.com/rajeevp727/turnova-platform/actions/runs/45392545742) failed 5/1,423 tests because four strict-mock fixtures (one two-case theory) had not verified the new expected `Container.Id` getter call. Test-only correction [`6ed461b0a32102f3e2a0ffadce4b0ff57522e1a9`](https://github.com/rajeevp727/turnova-platform/commit/6ed461b0a32102f3e2a0ffadce4b0ff57522e1a9) added explicit `VerifyGet` assertions; no runtime failure was reported. The later exact-head run above includes the correction and all seven new cases. Mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under the API-first phase gate.
 
+## COSMOS-BOOTSTRAP-020..026 — migration-runner container handle identity/cancellation
+
+The migration runner validates both the returned `ContainerProperties` and the actual `ContainerResponse.Container` handle before using each bootstrap handle. `MigrationHistory` must be validated before `MigrationLocks` is created; `MigrationLocks` must be validated before the migration lease is acquired. Each handle ID must exactly match its requested container name. Lazy ID hydration preserves cancellation precedence, while unrelated getter failures propagate unchanged.
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| COSMOS-BOOTSTRAP-020 | History `Container.Id` is null, empty, whitespace or differs from `MigrationHistory` | Fail closed before creating `MigrationLocks`, acquiring the lease or applying migrations | `CosmosMigrationBootstrapResourceContractTests.HistoryBootstrapRejectsBlankOrMismatchedContainerHandleIdentity` (four cases) | P0 |
+| COSMOS-BOOTSTRAP-021 | Lock `Container.Id` is null, empty, whitespace or differs from `MigrationLocks` | Fail closed before acquiring the migration lease or applying migrations | `CosmosMigrationBootstrapResourceContractTests.LockBootstrapRejectsBlankOrMismatchedContainerHandleIdentity` (four cases) | P0 |
+| COSMOS-BOOTSTRAP-022 | Caller cancellation occurs while hydrating the history `Container.Id` | Throw cancellation before creating the lock container or acquiring the lease | `CancellationDuringHistoryContainerHandleIdentityHydrationStopsBeforeLockContainerCreation` | P0 |
+| COSMOS-BOOTSTRAP-023 | History `Container.Id` getter throws while cancellation is signalled | Cancellation takes precedence; no lock container creation or lease acquisition occurs | `CancellationTakesPrecedenceWhenHistoryContainerHandleIdentityHydrationThrows` | P0 |
+| COSMOS-BOOTSTRAP-024 | History `Container.Id` getter throws without cancellation | Preserve the original getter exception; do not create the lock container or acquire the lease | `HistoryContainerHandleIdentityHydrationFailurePropagatesWithoutCancellation` | P1 |
+| COSMOS-BOOTSTRAP-025 | Caller cancellation occurs while hydrating the lock `Container.Id` | Throw cancellation before acquiring the migration lease or applying migrations | `CancellationDuringLockContainerHandleIdentityHydrationStopsBeforeLeaseAcquisition` | P0 |
+| COSMOS-BOOTSTRAP-026 | Lock `Container.Id` getter throws while cancellation is signalled | Cancellation takes precedence; no migration lease is acquired and no migration executes | `CancellationTakesPrecedenceWhenLockContainerHandleIdentityHydrationThrows` | P0 |
+
+The source/test checkpoint and this documentation-bearing checkpoint each require exact-head API-only CI. All cases use deterministic Cosmos SDK mocks; live Cosmos multi-instance, partition, ETag, restart and failover validation remain external.
 ## COSMOS-MIG-044..048 — migration lease ETag hydration and cancellation
 
 The migration lease store reads `ItemResponse.ETag` after the Cosmos response task completes. Read operations must observe cancellation after ETag hydration and preserve cancellation precedence if the lazy ETag getter throws while cancelled. A non-cancellation getter failure must propagate unchanged. Successful create/replace operations are already committed writes: cancellation arriving during response ETag hydration must not retroactively hide the committed lease result, so those response metadata reads remain cancellation-independent.
