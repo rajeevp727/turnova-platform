@@ -25,6 +25,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
     {
         var database = new Mock<Database>(MockBehavior.Strict);
         var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
         var createResponse = new Mock<ContainerResponse>();
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
@@ -58,6 +59,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
     {
         var database = new Mock<Database>(MockBehavior.Strict);
         var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
         var createResponse = new Mock<ContainerResponse>();
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
@@ -124,6 +126,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
     {
         var database = new Mock<Database>(MockBehavior.Strict);
         var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
         var createResponse = new Mock<ContainerResponse>();
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
@@ -168,6 +171,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
     {
         var database = new Mock<Database>(MockBehavior.Strict);
         var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
         var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
@@ -215,6 +219,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
     {
         var database = new Mock<Database>(MockBehavior.Strict);
         var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
         var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         createResponse.SetupGet(value => value.Container).Returns(container.Object);
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
