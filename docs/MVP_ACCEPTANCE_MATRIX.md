@@ -1,3 +1,14 @@
+## Run 132 — API Cosmos point-read cancellation evidence (2026-11-24)
+
+- **PLATFORM-01:** shared `ReadResource<T>` now checks cancellation around ItemResponse resource hydration and identity validation; migration lease/history point reads use the same guard. Final exact-head API-only CI [#45382609587](https://github.com/rajeevp727/turnova-platform/actions/runs/45382609587) passed 1,410/1,410 backend tests, Release build (0 warnings/0 errors), native non-container publish/verifier; artifact [14915226391](https://github.com/rajeevp727/turnova-platform/actions/runs/45382609587/artifacts/14915226391).
+- **DISPATCH-02 implementation evidence:** Cosmos queue leave/rotation point reads now use the shared cancellation-aware resource/identity guard before their existing conditional batch paths. Queue ordering, rider discovery ranking and explicit rider selection are unchanged.
+- **SUPPORT-01 implementation evidence:** support-request canonical conflict replay uses the shared guard and cannot return a replay/conflict after cancellation during hydration. Product/Operations approval for support categories, fields, escalation, hours/targets, attachments, consent and retention remains outstanding; SUPPORT-01 stays Blocked.
+- **Deterministic test coverage:** `ReadResourceHonorsCancellationDuringResourceHydration`, `ReadResourceCancellationTakesPrecedenceOverHydrationFailure`, `ReadResourceCancellationTakesPrecedenceOverIdentityValidationFailure`, `ReadResourceChecksCancellationAfterIdentityValidation`, `ReadChecksCancellationDuringResourceHydration`, and `CancellationDuringHistoryResourceHydrationDoesNotSkipAsApplied`.
+- **Phase/review:** API remains `in_progress`; Android/iOS remain `not_started`. PR #200 is open/non-draft/mergeable at `925d389272d0933d29af05d853a526c6e01f39cf`, 986 ahead / 0 behind main. Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. No mobile or container build/deployment paths changed.
+- **Strict acceptance:** **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). Production readiness and live Cosmos validation are not established.
+
+---
+
 ## Run 131 — API resource-hydration cancellation evidence (2026-11-24)
 
 - **PLATFORM-01:** shared Cosmos point-read identity validation now preserves cancellation after `ItemResponse.Resource` hydration and during hydration failures; exact-head API-only CI [#45370865455](https://github.com/rajeevp727/turnova-platform/actions/runs/45370865455) passed 1,406/1,406 backend tests, Release build (0 warnings/0 errors), native non-container publish/verifier; artifact [14908539664](https://github.com/rajeevp727/turnova-platform/actions/runs/45370865455/artifacts/14908539664).

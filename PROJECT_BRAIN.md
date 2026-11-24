@@ -1,6 +1,15 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 131)
+Last updated: 2026-11-24 (Run 132)
+
+## Run 132 — Cosmos ItemResponse hydration cancellation (2026-11-24)
+
+- API remains `in_progress`; Android/iOS remain `not_started`. No mobile completion work started.
+- Shared `CosmosReadResponseGuard.ReadResource<T>` preserves cancellation around ItemResponse resource hydration and identity validation, with exact prior empty/mismatch messages preserved.
+- Applied to support canonical conflict replay, queue/audit, RideOffer, Rider/Driver reservation, migration lease and migration-history reads. Successful writes/commits remain authoritative.
+- Final source/test head [`925d389272d0933d29af05d853a526c6e01f39cf`](https://github.com/rajeevp727/turnova-platform/commit/925d389272d0933d29af05d853a526c6e01f39cf) passed [CI #45382609587](https://github.com/rajeevp727/turnova-platform/actions/runs/45382609587): 1,410/1,410 tests, Release build (0 warnings/0 errors), native non-container Linux x64 publish/verifier, artifact [14915226391](https://github.com/rajeevp727/turnova-platform/actions/runs/45382609587/artifacts/14915226391).
+- PR #200 remains the sole active API PR at `925d389...`, 986 ahead / 0 behind main `e5366ad...`, 209 files, mergeable. Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. No mobile/container changes.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked); live Cosmos/production readiness not established.
 
 ## Run 131 — Cosmos resource-hydration cancellation (2026-11-24)
 
@@ -206,16 +215,16 @@ Last updated: 2026-11-24 (Run 131)
 ## Live repository state
 
 - Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
-- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`.
-- Latest source/test head is above; documentation-bearing successor requires its own exact-head API-only CI.
-- Diff remains API/docs/tests only; no mobile paths or Docker/container build/deployment files.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, source/test head `925d389272d0933d29af05d853a526c6e01f39cf`.
+- Compare: 986 commits ahead / 0 behind main, 209 changed files, mergeable. Diff remains API/docs/tests only; no mobile paths or Docker/container build/deployment files.
+- Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked.
 - Main phase metadata remains stale (`api=complete`, `android=in_progress`); PR #200 branch metadata remains API `in_progress`, Android/iOS `not_started`.
 
 ## Current API engineering
 
 - Cosmos-native auth and its transactional/ETag/cancellation tests remain part of the API-only branch.
-- Runs 114–118 add cancellation precedence and identity validation across Union assignment/status, Union/Driver/Cab discovery reads, ride-offer reads, support/queue reads and Driver/Rider reservation reads.
-- Run 119 adds acquisition conflict-read cancellation regressions, persisted RequestHash validation, pre-write RequestHash validation and cancellation-precedence tests in both Cosmos and in-memory Rider reservation stores.
+- Runs 114–131 add cancellation precedence and identity validation across Union assignment/status, Union/Driver/Cab discovery, ride-offer, support/queue and Driver/Rider reservation reads.
+- Run 132 centralizes ItemResponse resource hydration cancellation across those adapters plus migration lease/history reads; exact-head CI [#45382609587](https://github.com/rajeevp727/turnova-platform/actions/runs/45382609587) passed 1,410/1,410, Release build (0 warnings/0 errors), native non-container publish/verifier.
 - Live Cosmos ETag/transaction/partition/multi-instance/restart, production identity/hosting/provider, Product dispatch/location/expiry, realtime/maps, private media, support/reconciliation, legal and later device/signing gates remain external.
 
 # PROJECT BRAIN — TurnOva
