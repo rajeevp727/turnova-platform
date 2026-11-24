@@ -1,6 +1,6 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 121)
+Last updated: 2026-11-24 (Run 122)
 
 ## Platform phase
 
@@ -9,6 +9,17 @@ Last updated: 2026-11-24 (Run 121)
 - iOS: `not_started`
 - Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
 - No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
+## Run 122 — bulk Driver reservation query cancellation precedence
+
+- Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; source/test head [`e4515555c3d51b47533cc91fc5357597cddc9a8a`](https://github.com/rajeevp727/turnova-platform/commit/e4515555c3d51b47533cc91fc5357597cddc9a8a).
+- `CosmosDriverRideReservationStore.GetActiveForDriversAsync` now checks cancellation before validating a null DriverId collection, matching the cancellation-first contract of the other reservation operations. Valid query batching/filtering is unchanged.
+- Two deterministic tests prove a pre-cancelled/null request yields OperationCanceledException and an uncancelled/null request yields ArgumentNullException; neither calls Cosmos.
+- Exact-head API-only CI [#45316137669](https://github.com/rajeevp727/turnova-platform/actions/runs/45316137669) passed 1,346/1,346 tests, Release build (0 warnings/0 errors), native non-container publish and verifier; artifact [14885432455](https://github.com/rajeevp727/turnova-platform/actions/runs/45316137669/artifacts/14885432455).
+- API remains `in_progress`; Android/iOS remain `not_started`. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). No live Cosmos or production readiness is claimed.
+- PR #200 still has no independent human approval; never self-approve or bypass protection. Historical PR #197/#207 merges without independent approval remain disclosed exceptions.
+
 
 ## Run 121 — reservation identity validation across read/mutation paths
 
