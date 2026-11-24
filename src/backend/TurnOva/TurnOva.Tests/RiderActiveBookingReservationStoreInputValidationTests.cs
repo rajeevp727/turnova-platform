@@ -27,7 +27,7 @@ public sealed class RiderActiveBookingReservationStoreInputValidationTests
         var reservation = new RiderActiveBookingReservation(
             "rider-1", "ride-1", " ", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5));
 
-        Assert.Throws<ArgumentException>(() => store.TryAcquireAsync(reservation));
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryAcquireAsync(reservation));
 
         Assert.Null(await store.GetActiveAsync("rider-1"));
         Assert.Empty(store.GetAuditEvents("rider-1"));
