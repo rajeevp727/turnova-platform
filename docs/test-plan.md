@@ -4928,7 +4928,7 @@ Exact source/test evidence: [CI #45260778123](https://github.com/rajeevp727/turn
 
 
 
-## COSMOS-RES-014..021 — Driver/Rider reservation read cancellation precedence
+## COSMOS-RES-014..025 — Driver/Rider reservation read cancellation precedence
 
 The Driver ride-reservation and Rider active-booking reservation stores preserve request cancellation when a Cosmos read fails concurrently with cancellation. The guard is applied to point reads, the Driver multi-Driver query-page read and both acquisition create-conflict readbacks. Dedicated fixtures now cover cancellation racing a provider failure in each conflict-readback path; separate 404 fixtures prove the bounded acquisition loops retry when the conflicting record disappears. The bulk Driver query checks cancellation before null-collection validation. Existing missing-resource mapping, resource identity checks, observed ETags, transactional-batch/audit atomicity, expiry behavior, query shape and successful durable writes remain unchanged.
 
