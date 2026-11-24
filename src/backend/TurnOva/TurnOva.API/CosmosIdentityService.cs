@@ -140,11 +140,13 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                 query,
                 requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(normalizedRole), MaxItemCount = 1 });
             candidate = null;
-            while (iterator.HasMoreResults && candidate is null)
+            while (candidate is null && CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
             {
-                var page = await iterator.ReadNextAsync(ct);
+                var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => iterator.ReadNextAsync(ct),
+                    ct);
                 ct.ThrowIfCancellationRequested();
-                candidate = page.FirstOrDefault();
+                candidate = CosmosReadResponseGuard.ReadPageItems(page, ct).FirstOrDefault();
             }
         }
         catch (CosmosException)
@@ -241,11 +243,13 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                 using var iterator = container.GetItemQueryIterator<IdentityDocument>(
                     query,
                     requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(role), MaxItemCount = 1 });
-                while (iterator.HasMoreResults)
+                while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
                 {
-                    var page = await iterator.ReadNextAsync(ct);
+                    var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                        () => iterator.ReadNextAsync(ct),
+                        ct);
                     ct.ThrowIfCancellationRequested();
-                    var candidate = page.FirstOrDefault();
+                    var candidate = CosmosReadResponseGuard.ReadPageItems(page, ct).FirstOrDefault();
                     if (candidate is null) continue;
                     if (!IsExpectedIdentity(candidate, candidate.Id, role))
                     {
