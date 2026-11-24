@@ -449,6 +449,11 @@ The bearer middleware accepts locally issued TurnOva JWTs only after signature, 
 
 The API validates TurnOva access tokens with inbound claim mapping disabled so role-claim handling remains explicit. In addition to `sub` and the raw `ClaimTypes.NameIdentifier` URI, the subject validator recognizes the standard JWT `nameid` wire alias emitted by `JwtSecurityTokenHandler` for `ClaimTypes.NameIdentifier`. Exactly one non-empty subject is still required; mixed or blank aliases are rejected before authenticated application handlers run. This avoids silently accepting a token whose subject is present only in the mapped legacy wire form.
 
+## JWT signing algorithm allowlist
+
+TurnOva issues access tokens using HMAC-SHA256 (`HS256`). Bearer validation explicitly sets `TokenValidationParameters.ValidAlgorithms` to `SecurityAlgorithms.HmacSha256`; a token signed with another algorithm is rejected even if it has a valid issuer, audience, claims and a signature made with the configured test key. The integration regression `AuthApiIntegrationTests.RejectsSignedJwtUsingNonConfiguredAlgorithm` signs an HS384 token and asserts generic HTTP 401/no-store behavior. The existing HS256 `MeReturnsIdentityFromValidatedTurnOvaJwt` regression confirms the issued algorithm remains accepted. This is deterministic API auth evidence; production signing-key custody and rotation remain deployment gates.
+
+
 
 ## JWT subject principal normalization
 
