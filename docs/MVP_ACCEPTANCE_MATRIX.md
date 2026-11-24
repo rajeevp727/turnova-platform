@@ -1,3 +1,12 @@
+## Run 147 — 2026-11-25 — Cosmos migration database handle bootstrap (supporting API evidence)
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR #200 remains the sole active feature PR on branch `test/api-nondev-support-readiness-20261120`, based on main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- **PLATFORM-01 supporting evidence:** the existing migration bootstrap guard validates `DatabaseResponse.Database` is non-null and `Database.Id` equals the configured database name before creating History/Lock containers. Run147 adds direct runner-level regressions for invalid/null handles and cancellation/error precedence during lazy response and identity hydration; no runtime behavior changed.
+- **Automated evidence:** `COSMOS-BOOTSTRAP-027..033`, nine deterministic cases in `CosmosMigrationRunnerTests`.
+- **Source/test head:** [`5abd5104`](https://github.com/rajeevp727/turnova-platform/commit/5abd51049fd500251561a2bd4d9a3f144711d9d4). Exact-head API-only CI [#45471860183](https://github.com/rajeevp727/turnova-platform/actions/runs/45471860183) is in progress: scope and Release build passed; backend tests remain in progress; publish/verifier not yet complete.
+- **Status accounting:** no acceptance row status changes. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage; live Cosmos/production readiness is not established.
+- **Scope:** source increment touches one backend test file only; no mobile source, Docker/container build/deployment or infrastructure path changed.
+
 ## Run 146 — 2026-11-25 — Cosmos migration handle identity (supporting API evidence)
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR #200 remains the sole active feature PR.
