@@ -11,6 +11,10 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         IReadOnlyList<DriverRideReservationAuditEvent> AuditEvents);
 
     private readonly ConcurrentDictionary<string, ReservationState> _items = new(StringComparer.Ordinal);
+    private readonly TimeProvider _timeProvider;
+
+    public InMemoryDriverRideReservationStore(TimeProvider? timeProvider = null) =>
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
     public Task<bool> TryAcquireAsync(
         string driverId,
@@ -37,18 +41,21 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
         ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
-        if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow)
+        if (expiresAtUtc is not null && expiresAtUtc <= _timeProvider.GetUtcNow())
             return Task.FromResult(false);
 
         while (true)
         {
-            var reservation = new DriverRideReservation(driverId, rideId, DateTimeOffset.UtcNow, expiresAtUtc);
+            cancellationToken.ThrowIfCancellationRequested();
+            var reservation = new DriverRideReservation(driverId, rideId, _timeProvider.GetUtcNow(), expiresAtUtc);
+            cancellationToken.ThrowIfCancellationRequested();
             if (!_items.TryGetValue(driverId, out var currentState))
             {
                 var auditEvent = DriverRideReservationAuditEvent.Create(
                     reservation, DriverRideReservationAuditEventTypes.Acquired, auditContext,
                     previousExpiresAtUtc: null, expiresAtUtc);
                 var initial = new ReservationState(reservation, [auditEvent]);
+                cancellationToken.ThrowIfCancellationRequested();
                 if (_items.TryAdd(driverId, initial))
                     return Task.FromResult(true);
                 continue;
@@ -58,8 +65,12 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
             {
                 // Expiry is reconciled against the ride lifecycle by the API; the store never
                 // steals a lease. An idempotent same-ride retry adds no duplicate audit event.
-                if (current.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+                if (current.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
                     return Task.FromResult(false);
+                }
+                cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(current.RideId == rideId);
             }
 
@@ -71,6 +82,7 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
                 Reservation = reservation,
                 AuditEvents = [.. currentState.AuditEvents, created]
             };
+            cancellationToken.ThrowIfCancellationRequested();
             if (_items.TryUpdate(driverId, nextState, currentState))
                 return Task.FromResult(true);
         }
@@ -85,12 +97,15 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
         ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
-        while (_items.TryGetValue(driverId, out var state))
+        while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_items.TryGetValue(driverId, out var state))
+                return Task.FromResult(false);
             var current = state.Reservation;
             if (current is null || current.RideId != rideId)
                 return Task.FromResult(false);
-            if (current.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+            if (current.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow())
                 return Task.FromResult(false);
             if (current.ExpiresAtUtc is null)
                 return Task.FromResult(true);
@@ -104,6 +119,7 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
                 Reservation = updated,
                 AuditEvents = [.. state.AuditEvents, auditEvent]
             };
+            cancellationToken.ThrowIfCancellationRequested();
             if (_items.TryUpdate(driverId, nextState, state))
                 return Task.FromResult(true);
         }
@@ -121,11 +137,14 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
         ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
-        if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow)
+        if (expiresAtUtc is not null && expiresAtUtc <= _timeProvider.GetUtcNow())
             return Task.FromResult(false);
 
-        while (_items.TryGetValue(driverId, out var state))
+        while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_items.TryGetValue(driverId, out var state))
+                return Task.FromResult(false);
             var current = state.Reservation;
             if (current is null || current.RideId != rideId)
                 return Task.FromResult(false);
@@ -141,6 +160,7 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
                 Reservation = updated,
                 AuditEvents = [.. state.AuditEvents, auditEvent]
             };
+            cancellationToken.ThrowIfCancellationRequested();
             if (_items.TryUpdate(driverId, nextState, state))
                 return Task.FromResult(true);
         }
@@ -201,8 +221,11 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
         ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
-        while (_items.TryGetValue(driverId, out var state))
+        while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_items.TryGetValue(driverId, out var state))
+                return Task.FromResult(false);
             var current = state.Reservation;
             if (current is null || current.RideId != rideId)
                 return Task.FromResult(false);
@@ -215,6 +238,7 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
                 Reservation = null,
                 AuditEvents = [.. state.AuditEvents, auditEvent]
             };
+            cancellationToken.ThrowIfCancellationRequested();
             if (_items.TryUpdate(driverId, nextState, state))
                 return Task.FromResult(true);
         }

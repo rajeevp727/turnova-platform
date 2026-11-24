@@ -117,6 +117,31 @@ public sealed class DriverRideReservationStoreTests
     }
 
     [Fact]
+    public async Task PromotionObservesCancellationWhenConcurrentReleaseInvalidatesItsSnapshot()
+    {
+        var clock = new CallbackTimeProvider(DateTimeOffset.UtcNow);
+        var store = new InMemoryDriverRideReservationStore(clock);
+        Assert.True(await store.TryAcquireTemporaryAsync(
+            "driver-cancel-race", "ride-cancel-race", clock.GetUtcNow().AddMinutes(5)));
+
+        using var cancellation = new CancellationTokenSource();
+        clock.OnGetUtcNow = () =>
+        {
+            cancellation.Cancel();
+            Assert.True(store.TryReleaseAsync("driver-cancel-race", "ride-cancel-race")
+                .GetAwaiter().GetResult());
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryMakePermanentAsync("driver-cancel-race", "ride-cancel-race", cancellation.Token));
+
+        Assert.Null(await store.GetActiveAsync("driver-cancel-race"));
+        Assert.Equal(
+            new[] { DriverRideReservationAuditEventTypes.Acquired, DriverRideReservationAuditEventTypes.Released },
+            store.GetAuditEvents("driver-cancel-race").Select(item => item.EventType));
+    }
+
+    [Fact]
     public async Task ExpiredTemporaryReservationRemainsHeldUntilRideLifecycleReconciliation()
     {
         var store = new InMemoryDriverRideReservationStore();
@@ -457,6 +482,24 @@ public sealed class DriverRideReservationStoreTests
         Assert.Null(await store.GetActiveAsync("driver-1"));
         Assert.Empty(store.GetAuditEvents("driver-1"));
     }
+    private sealed class CallbackTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private Action? _onGetUtcNow;
+        public override DateTimeOffset GetUtcNow()
+        {
+            var callback = _onGetUtcNow;
+            _onGetUtcNow = null;
+            callback?.Invoke();
+            return utcNow;
+        }
+
+        public Action? OnGetUtcNow
+        {
+            get => _onGetUtcNow;
+            set => _onGetUtcNow = value;
+        }
+    }
+
     private sealed class CancellingDriverIds(
         CancellationTokenSource cancellation,
         bool yieldSecond) : IReadOnlyCollection<string>

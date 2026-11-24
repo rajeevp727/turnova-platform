@@ -123,6 +123,34 @@ public sealed class RiderActiveBookingReservationStoreTests
     }
 
     [Fact]
+    public async Task PromotionObservesCancellationWhenConcurrentReleaseInvalidatesItsSnapshot()
+    {
+        var clock = new CallbackTimeProvider(DateTimeOffset.UtcNow);
+        var store = new InMemoryRiderActiveBookingReservationStore(clock);
+        var now = clock.GetUtcNow();
+        var reservation = new RiderActiveBookingReservation(
+            "rider-cancel-race", "RIDE-CANCEL-RACE", "HASH-CANCEL-RACE",
+            now, now.AddMinutes(5));
+        Assert.Equal(RiderBookingReservationAcquireResult.Acquired, await store.TryAcquireAsync(reservation));
+
+        using var cancellation = new CancellationTokenSource();
+        clock.OnGetUtcNow = () =>
+        {
+            cancellation.Cancel();
+            Assert.True(store.TryReleaseAsync(reservation.RiderId, reservation.RideId)
+                .GetAwaiter().GetResult());
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryMakePermanentAsync(reservation.RiderId, reservation.RideId, cancellation.Token));
+
+        Assert.Null(await store.GetActiveAsync(reservation.RiderId));
+        Assert.Equal(
+            new[] { RiderActiveBookingReservationAuditEventTypes.Acquired, RiderActiveBookingReservationAuditEventTypes.Released },
+            store.GetAuditEvents(reservation.RiderId).Select(item => item.EventType));
+    }
+
+    [Fact]
     public async Task ExpiredReservationIsNotStolenUntilApiReconcilesTheRide()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
@@ -169,6 +197,24 @@ public sealed class RiderActiveBookingReservationStoreTests
                 RiderActiveBookingReservationAuditEventTypes.MadePermanent
             },
             store.GetAuditEvents(reservation.RiderId).Select(item => item.EventType));
+    }
+
+    private sealed class CallbackTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private Action? _onGetUtcNow;
+        public override DateTimeOffset GetUtcNow()
+        {
+            var callback = _onGetUtcNow;
+            _onGetUtcNow = null;
+            callback?.Invoke();
+            return utcNow;
+        }
+
+        public Action? OnGetUtcNow
+        {
+            get => _onGetUtcNow;
+            set => _onGetUtcNow = value;
+        }
     }
 
     private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
