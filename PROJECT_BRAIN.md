@@ -1,3 +1,7 @@
+## Run 151 — API persistence bootstrap regression evidence (2026-11-25)
+
+PR #200 source/test commit [`32cd8fc4`](https://github.com/rajeevp727/turnova-platform/commit/32cd8fc4f71de8be7c4a4d7eb2dfb600b44e0da3) adds COSMOS-BOOTSTRAP-036..038 for History `ContainerResponse.Resource` hydration: cancellation during the getter, cancellation precedence when it throws, and unchanged exception propagation without cancellation. Each path proves no History handle read, Lock-container creation/read or lease acquisition. Exact-head API-only CI [#45506915901](https://github.com/rajeevp727/turnova-platform/actions/runs/45506915901) passed **1,543/1,543 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier, artifact [14974630028](https://github.com/rajeevp727/turnova-platform/actions/runs/45506915901/artifacts/14974630028). No production runtime or mobile code changed; strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked), and live Cosmos/production readiness remains unproven. API stays `in_progress`; Android/iOS stay `not_started`.
+
 ## Run 150 — 2026-11-25 — Cosmos migration lock resource cancellation
 
 - **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR on `test/api-nondev-support-readiness-20261120`; main/base is `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.

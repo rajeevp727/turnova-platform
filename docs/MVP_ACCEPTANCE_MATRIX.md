@@ -1,3 +1,7 @@
+## Run 151 — supporting PLATFORM-01 persistence/bootstrap evidence (2026-11-25)
+
+PR #200 adds COSMOS-BOOTSTRAP-036..038: deterministic migration-runner tests for cancellation during the History `ContainerResponse.Resource` getter, cancellation precedence when the getter throws, and exact exception propagation when not cancelled. The tests prove no History handle read, no Lock-container creation/read and no migration-lease acquisition. Source/test commit [`32cd8fc4`](https://github.com/rajeevp727/turnova-platform/commit/32cd8fc4f71de8be7c4a4d7eb2dfb600b44e0da3) passed exact-head API-only CI [#45506915901](https://github.com/rajeevp727/turnova-platform/actions/runs/45506915901): **1,543/1,543 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture), artifact [14974630028](https://github.com/rajeevp727/turnova-platform/actions/runs/45506915901/artifacts/14974630028). This is deterministic SDK-mock evidence, not live Cosmos proof. No acceptance row is promoted: strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01).
+
 ## Run 150 — 2026-11-25 — Cosmos migration lock resource cancellation
 
 - **Platform phase:** API remains `in_progress`; Android/iOS remain `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR on `test/api-nondev-support-readiness-20261120`; main/base is `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
