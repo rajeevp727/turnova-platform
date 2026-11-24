@@ -1,3 +1,15 @@
+# PROJECT BRAIN — TurnOva
+
+Last updated: 2026-11-24 (Run 126)
+
+## Platform phase
+
+- API: `in_progress`
+- Android: `not_started`
+- iOS: `not_started`
+- Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
+- No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
 ## Run 126 — queue cancellation and input-contract parity (2026-11-24)
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. No mobile completion work started.
@@ -14,18 +26,6 @@
 - **External gates remain:** live Cosmos ETag/transaction/multi-instance/restart and partition/RU validation; production identity, secrets, API hosting and live TriSend; Product-approved radius/zones/location freshness/negotiation lifetime and internal FIFO fairness; maps/routing, SignalR/call/chat/push; private-media provider/scanning/consent/retention; support/escalation and reconciliation policies; Union legal approval; Android/iOS device, signing, store and TestFlight evidence.
 
 **Next exact actions:** verify the documentation-bearing head's own exact-head CI; refresh PR/main/reviews; continue API-only Cosmos persistence/idempotency/authorization/privacy audits; obtain independent human review and approval. After a permitted approved merge, re-read main and perform a fresh API phase-exit audit before Android Rider → Android Driver → iOS Rider → iOS Driver.
-
-# PROJECT BRAIN — TurnOva
-
-Last updated: 2026-11-24 (Run 126)
-
-## Platform phase
-
-- API: `in_progress`
-- Android: `not_started`
-- iOS: `not_started`
-- Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
-- No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
 
 ## Run 125 — preserve cancellation through empty identity queries and validate Cosmos ride-offer writes (2026-11-24)
 
