@@ -1,6 +1,6 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 127)
+Last updated: 2026-11-24 (Run 128)
 
 ## Platform phase
 
@@ -9,6 +9,21 @@ Last updated: 2026-11-24 (Run 127)
 - iOS: `not_started`
 - Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
 - No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
+## Run 128 — honor cancellation during Cosmos Driver reservation ID batching (2026-11-24)
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. No mobile completion work started.
+- **Audit finding:** `CosmosDriverRideReservationStore.GetActiveForDriversAsync` called `DriverIdBatching.Chunk`, which eagerly enumerated and materialized all requested Driver IDs without observing the caller's cancellation token. A large or custom enumerable could keep running after request cancellation and delay the first Cosmos query.
+- **Implementation:** added a cancellation-aware `DriverIdBatching.Chunk(IEnumerable<string>, CancellationToken)` overload; it checks cancellation before each enumerated ID and after the final `MoveNext` reports end-of-input. The Cosmos reservation adapter now passes its request token into the helper. Cancellation during or at completion of ID enumeration throws before any Cosmos query iterator is created. Existing ordinal de-duplication and 100-ID batch boundaries are unchanged.
+- **Deterministic tests:** two helper tests cover cancellation during enumeration and at end-of-input; a strict Cosmos-container theory covers both cases and proves there are zero Cosmos calls. Test-plan IDs: `COSMOS-DRIVER-RES-005..006`.
+- **Exact-head API-only CI:** [#45353297828](https://github.com/rajeevp727/turnova-platform/actions/runs/45353297828) passed **1,384/1,384 backend tests (0 failed, 0 skipped)**; .NET 10 Release build succeeded with **0 warnings / 0 errors**; native non-container Linux x64 framework-dependent publish passed (44,028,820 bytes); publish-script syntax and verifier passed (11 negative fixtures plus valid fixture). Artifact [14900784344](https://github.com/rajeevp727/turnova-platform/actions/runs/45353297828/artifacts/14900784344), 17,019,352 bytes; archive SHA-256 `95856fc8290ca9f702f44773a62075fd8f1408210a1e30b235743f19fea1612c`.
+- **Repository state:** main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; PR #200 remains the sole ready/active API PR on `test/api-nondev-support-readiness-20261120`, current source/test head [`c1ea7a47102809e56f12ec768597ed5565fabea8`](https://github.com/rajeevp727/turnova-platform/commit/c1ea7a47102809e56f12ec768597ed5565fabea8); 955 commits ahead / 0 behind, 196 changed files, mergeable. No mobile app paths or container build/deployment files are in the PR diff.
+- **Acceptance:** strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). This is full-evidence accounting, not an implementation percentage.
+- **Review/phase gate:** three owner-authored `COMMENTED` reviews, **0 independent approvals**, 0 unresolved review threads. PRs #196/#198/#205/#206 remain Draft/parked. PRs #197/#207 remain disclosed historical merges without independent approval; these exceptions are not precedent. Do not self-approve, bypass protection or merge.
+- **Build/scope policy:** scope/backend passed; mobile-auth/mobile/Android/emulator/iOS jobs were intentionally skipped under API-first gating. No mobile completion work, Dockerfiles, container CI, images, registries or deployments were added.
+- **External gates:** live Cosmos ETag/transaction/multi-instance/restart and partition/RU evidence; production identity/secrets/hosting/live TriSend; Product-approved radius/zones/location freshness/negotiation lifetime/internal FIFO fairness; maps/routing, SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policies; Union legal approval; Android/iOS physical-device, signing, store and TestFlight evidence.
+
+**Next exact actions:** synchronize progress, matrix, test plan, PROJECT_BRAIN and this handoff; verify the documentation-bearing head's own exact-head API-only CI; continue API-only persistence/idempotency/authorization/privacy audits; obtain independent human review and approval. After a permitted approved merge, re-read main and perform a fresh API phase-exit audit before Android Rider → Android Driver → iOS Rider → iOS Driver.
 
 ## Run 127 follow-on — preserve cancellation during in-memory Driver bulk reservation reads (2026-11-24)
 
