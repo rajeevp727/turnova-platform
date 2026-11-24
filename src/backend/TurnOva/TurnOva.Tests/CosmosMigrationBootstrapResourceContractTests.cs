@@ -452,7 +452,7 @@ public sealed class CosmosMigrationBootstrapResourceContractTests
         }
         else
         {
-            response.SetupGet(value => value.Container).Returns(null!);
+            response.SetupGet(value => value.Container).Returns((Container)null!);
         }
 
         return response;
