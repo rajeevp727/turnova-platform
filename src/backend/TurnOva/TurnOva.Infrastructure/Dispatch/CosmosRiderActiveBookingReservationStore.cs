@@ -218,7 +218,8 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
 
         if (string.IsNullOrWhiteSpace(expectedRiderId) ||
             !string.Equals(reservation.RiderId, expectedRiderId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(reservation.RideId))
+            string.IsNullOrWhiteSpace(reservation.RideId) ||
+            string.IsNullOrWhiteSpace(reservation.RequestHash))
             throw new InvalidOperationException("Cosmos returned a malformed Rider booking reservation resource.");
 
         return reservation;
