@@ -138,10 +138,11 @@ public sealed class CosmosMigrationRunner(
         return CosmosReadResponseGuard.ReadResponseResource(
             response,
             static containerResponse => containerResponse.Container,
-            static _ => true,
+            value => string.Equals(value.Id, containerName, StringComparison.Ordinal),
             "migration container handle",
             cancellationToken,
-            emptyResourceMessage: "Cosmos returned an empty migration container handle after bootstrap.");
+            "Cosmos returned a migration container handle that does not match the requested name after bootstrap.",
+            "Cosmos returned an empty migration container handle after bootstrap.");
     }
 
     private static async Task<bool> IsAppliedAsync(
