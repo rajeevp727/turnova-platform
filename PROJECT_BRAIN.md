@@ -1,6 +1,6 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 129)
+Last updated: 2026-11-24 (Run 130)
 
 ## Platform phase
 
@@ -9,6 +9,18 @@ Last updated: 2026-11-24 (Run 129)
 - iOS: `not_started`
 - Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
 - No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
+## Run 130 — cancellation-aware legacy FIFO queue and Cosmos queue boundaries
+
+- **Platform phase:** API \`in_progress\`; Android/iOS \`not_started\`. No mobile completion work started.
+- **DISPATCH-02 audit:** legacy FIFO snapshots and membership scans did not observe cancellation during enumeration; Cosmos queue discovery sorted full results without cancellation-aware comparison, and point-read-to-batch operations lacked a final cancellation fence after resource hydration.
+- **Implementation:** shared \`FifoQueueSnapshots\` preserves stable Sequence/JoinedAt order while checking cancellation during snapshot and lookup; in-memory enqueue/remove scan before mutation and queue/rotation/audit updates complete synchronously once mutation begins. Cosmos queue discovery uses the same sorter, and leave/rotation paths check cancellation after point reads and before transactional batches.
+- **Tests:** \`FIFO-SNAPSHOT-001..006\`, \`QUEUE-STORE-015\`, \`COSMOS-QUEUE-CANCEL-011..013\`. Exact source/test CI [#45367571845](https://github.com/rajeevp727/turnova-platform/actions/runs/45367571845) passed 1,404/1,404 backend tests, Release build (0 warnings/0 errors), native non-container publish/verifier; artifact [14908365487](https://github.com/rajeevp727/turnova-platform/actions/runs/45367571845/artifacts/14908365487).
+- **Exact source/test head:** [\`ec1dbb53084b21ad3760d7fa26ab7589dd18150b\`](https://github.com/rajeevp727/turnova-platform/commit/ec1dbb53084b21ad3760d7fa26ab7589dd18150b).
+- **Strict acceptance:** 0/19 Verified; 16 In Progress, 3 Blocked (\`DISPATCH-01\`, \`DRIVER-04\`, \`SUPPORT-01\`). This is full-evidence accounting, not an implementation percentage.
+- **Review gate:** PR #200 remains the sole ready/active API PR; 3 owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked. Do not self-approve or merge without independent approval and repository permission.
+- **External gates:** live Cosmos ETag/transaction/multi-instance/restart and partition/RU evidence; production identity/secrets/hosting/live TriSend; approved dispatch radius/zones, location freshness, negotiation lifetime and internal FIFO fairness; maps/realtime providers; private-media storage/scanning/consent/retention; support/reconciliation policy; Union legal approval; Android/iOS device/signing/store/TestFlight evidence.
+- **Next:** verify the documentation-bearing head's exact-head API-only CI; continue API-only source/test/docs work and obtain independent human review. Re-audit main/API phase exit after an approved permitted merge before starting Android Rider.
 
 ## Run 129 — cancellation-safe in-memory reservation, RideOffer and queue-audit snapshots (2026-11-24)
 
