@@ -114,6 +114,74 @@ public sealed class CosmosReadResponseGuardTests
         response.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public void ReadResponseValuePreservesNullValues()
+    {
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns((DriverUnion)null!);
+
+        var resource = CosmosReadResponseGuard.ReadResponseValue(
+            response.Object, static itemResponse => itemResponse.Resource, CancellationToken.None);
+
+        Assert.Null(resource);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResponseValueChecksCancellationAfterSuccessfulHydration()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return CreateUnion();
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadResponseValue(
+                response.Object, static itemResponse => itemResponse.Resource, cancellation.Token));
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResponseValueCancellationTakesPrecedenceOverHydrationFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("resource hydration failed");
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadResponseValue(
+                response.Object, static itemResponse => itemResponse.Resource, cancellation.Token));
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResponseValuePreservesHydrationFailureWhenNotCancelled()
+    {
+        var exception = new InvalidOperationException("resource hydration failed");
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() => throw exception);
+
+        var actual = Assert.Throws<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.ReadResponseValue(
+                response.Object, static itemResponse => itemResponse.Resource, CancellationToken.None));
+
+        Assert.Same(exception, actual);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
     private const string UnionId = "union-read-guard";
     private const string DriverId = "driver-read-guard";
 
