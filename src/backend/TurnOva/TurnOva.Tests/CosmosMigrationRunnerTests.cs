@@ -149,6 +149,174 @@ public sealed class CosmosMigrationRunnerTests
     }
 
     [Fact]
+    public async Task CancellationDuringHistoryContainerResourceHydrationStopsBeforeReadingHandleOrAcquiringLease()
+    {
+        var client = new Mock<CosmosClient>(MockBehavior.Strict);
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var databaseResponse = new Mock<DatabaseResponse>();
+        databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
+        using var cancellation = new CancellationTokenSource();
+        var containerResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        containerResponse.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return new ContainerProperties(CosmosMigrationRunner.HistoryContainerName, "/id");
+        });
+        client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
+                "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(databaseResponse.Object);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerResponse.Object);
+        var leaseStore = new Mock<ICosmosMigrationLeaseStore>(MockBehavior.Strict);
+        var runner = new CosmosMigrationRunner(
+            client.Object,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [],
+            CreateCoordinator(leaseStore.Object, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        containerResponse.VerifyGet(value => value.Resource, Times.Once);
+        containerResponse.VerifyNoOtherCalls();
+        client.VerifyNoOtherCalls();
+        database.VerifyNoOtherCalls();
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationTakesPrecedenceWhenHistoryContainerResourceHydrationThrows()
+    {
+        var client = new Mock<CosmosClient>(MockBehavior.Strict);
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var databaseResponse = new Mock<DatabaseResponse>();
+        databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
+        using var cancellation = new CancellationTokenSource();
+        var containerResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        containerResponse.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("container resource hydration failed");
+        });
+        client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
+                "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(databaseResponse.Object);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerResponse.Object);
+        var leaseStore = new Mock<ICosmosMigrationLeaseStore>(MockBehavior.Strict);
+        var runner = new CosmosMigrationRunner(
+            client.Object,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [],
+            CreateCoordinator(leaseStore.Object, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        containerResponse.VerifyGet(value => value.Resource, Times.Once);
+        containerResponse.VerifyNoOtherCalls();
+        client.VerifyNoOtherCalls();
+        database.VerifyNoOtherCalls();
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationDuringHistoryContainerHandleHydrationStopsBeforeLeaseAcquisition()
+    {
+        var client = new Mock<CosmosClient>(MockBehavior.Strict);
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var databaseResponse = new Mock<DatabaseResponse>();
+        databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
+        using var cancellation = new CancellationTokenSource();
+        var containerResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        containerResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties(
+            CosmosMigrationRunner.HistoryContainerName, "/id"));
+        containerResponse.SetupGet(value => value.Container).Returns(() =>
+        {
+            cancellation.Cancel();
+            return new Mock<Container>().Object;
+        });
+        client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
+                "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(databaseResponse.Object);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerResponse.Object);
+        var leaseStore = new Mock<ICosmosMigrationLeaseStore>(MockBehavior.Strict);
+        var runner = new CosmosMigrationRunner(
+            client.Object,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [],
+            CreateCoordinator(leaseStore.Object, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        containerResponse.VerifyGet(value => value.Resource, Times.Once);
+        containerResponse.VerifyGet(value => value.Container, Times.Once);
+        containerResponse.VerifyNoOtherCalls();
+        client.VerifyNoOtherCalls();
+        database.VerifyNoOtherCalls();
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationTakesPrecedenceWhenHistoryContainerHandleHydrationThrows()
+    {
+        var client = new Mock<CosmosClient>(MockBehavior.Strict);
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var databaseResponse = new Mock<DatabaseResponse>();
+        databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
+        using var cancellation = new CancellationTokenSource();
+        var containerResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        containerResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties(
+            CosmosMigrationRunner.HistoryContainerName, "/id"));
+        containerResponse.SetupGet(value => value.Container).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("container handle hydration failed");
+        });
+        client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
+                "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(databaseResponse.Object);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerResponse.Object);
+        var leaseStore = new Mock<ICosmosMigrationLeaseStore>(MockBehavior.Strict);
+        var runner = new CosmosMigrationRunner(
+            client.Object,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [],
+            CreateCoordinator(leaseStore.Object, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        containerResponse.VerifyGet(value => value.Resource, Times.Once);
+        containerResponse.VerifyGet(value => value.Container, Times.Once);
+        containerResponse.VerifyNoOtherCalls();
+        client.VerifyNoOtherCalls();
+        database.VerifyNoOtherCalls();
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task CancellationAfterLeaseAcquisitionStillReleasesWhenThereAreNoMigrations()
     {
         var (client, _) = CreateCosmosClient();
