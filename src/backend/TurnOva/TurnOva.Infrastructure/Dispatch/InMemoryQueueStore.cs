@@ -146,11 +146,7 @@ public sealed class InMemoryQueueStore : IQueueStore
     {
         cancellationToken.ThrowIfCancellationRequested();
         var key = Key(zoneId, serviceClass);
-        IReadOnlyList<QueueAuditEvent> events = _auditEvents
-            .Where(item => item.ZoneServiceKey == key)
-            .OrderByDescending(item => item.OccurredAtUtc)
-            .ThenByDescending(item => item.EventId, StringComparer.Ordinal)
-            .ToArray();
+        var events = InMemoryQueueAuditSnapshots.GetForZoneService(_auditEvents, key, cancellationToken);
         return Task.FromResult(events);
     }
 
