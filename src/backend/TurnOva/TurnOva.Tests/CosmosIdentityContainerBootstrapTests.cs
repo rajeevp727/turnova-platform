@@ -40,6 +40,35 @@ public sealed class CosmosIdentityContainerBootstrapTests
         container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("UnexpectedDb")]
+    public async Task RegisterRejectsNullOrMismatchedDatabaseHandleBeforeContainerBootstrap(string? returnedDatabaseId)
+    {
+        var (service, database, container) = CreateService(
+            "TurnOvaUsers",
+            "/role",
+            includeContainer: true,
+            returnedDatabaseId: returnedDatabaseId);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            CancellationToken.None));
+
+        Assert.Equal(
+            "Cosmos returned a database handle that does not match the configured database name.",
+            exception.Message);
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
     [Fact]
     public async Task RegisterRejectsMissingContainerHandleBeforeWriting()
     {
@@ -70,6 +99,7 @@ public sealed class CosmosIdentityContainerBootstrapTests
             CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status200OK, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        database.VerifyGet(value => value.Id, Times.Once);
         database.Verify(value => value.CreateContainerIfNotExistsAsync(
             It.Is<ContainerProperties>(properties =>
                 properties.Id == "TurnOvaUsers" && properties.PartitionKeyPath == "/role"),
@@ -85,6 +115,7 @@ public sealed class CosmosIdentityContainerBootstrapTests
     {
         using var cts = new CancellationTokenSource();
         var database = new Mock<Database>(MockBehavior.Strict);
+        database.SetupGet(value => value.Id).Returns("TurnOvaDb");
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(),
                 It.IsAny<int?>(),
@@ -127,6 +158,58 @@ public sealed class CosmosIdentityContainerBootstrapTests
         Assert.Equal(
             "Cosmos returned an identity container handle that does not match the requested name after bootstrap.",
             exception.Message);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterPreservesCancellationWhenDatabaseHandleIdentityHydrationCompletesAfterCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        var (service, database, container) = CreateService(
+            "TurnOvaUsers",
+            "/role",
+            includeContainer: true,
+            onDatabaseIdRead: cts.Cancel);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            cts.Token));
+
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterCancellationTakesPrecedenceOverDatabaseHandleIdentityHydrationFailure()
+    {
+        using var cts = new CancellationTokenSource();
+        var (service, database, container) = CreateService(
+            "TurnOvaUsers",
+            "/role",
+            includeContainer: true,
+            onDatabaseIdRead: () =>
+            {
+                cts.Cancel();
+                throw new InvalidOperationException("database identity hydration failed");
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            cts.Token));
+
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
         container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
     }
 
@@ -205,7 +288,9 @@ public sealed class CosmosIdentityContainerBootstrapTests
         string returnedContainerId = "TurnOvaUsers",
         Action? onResourceRead = null,
         Action? onContainerRead = null,
-        Action? onContainerIdRead = null)
+        Action? onContainerIdRead = null,
+        string? returnedDatabaseId = "TurnOvaDb",
+        Action? onDatabaseIdRead = null)
     {
         var container = new Mock<Container>(MockBehavior.Strict);
         container.SetupGet(value => value.Id).Returns(() =>
@@ -245,6 +330,11 @@ public sealed class CosmosIdentityContainerBootstrapTests
         }
 
         var database = new Mock<Database>(MockBehavior.Strict);
+        database.SetupGet(value => value.Id).Returns(() =>
+        {
+            onDatabaseIdRead?.Invoke();
+            return returnedDatabaseId!;
+        });
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(),
                 It.IsAny<int?>(),

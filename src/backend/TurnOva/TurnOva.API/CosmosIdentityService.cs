@@ -452,7 +452,15 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         try
         {
             if (_container is not null) return _container;
-            var database = cosmosClient!.GetDatabase(configuration?["CosmosDb:DatabaseName"] ?? DatabaseNameDefault);
+            var databaseName = configuration?["CosmosDb:DatabaseName"] ?? DatabaseNameDefault;
+            var database = cosmosClient!.GetDatabase(databaseName);
+            var returnedDatabaseName = CosmosReadResponseGuard.ReadResponseValue(
+                database,
+                static databaseHandle => databaseHandle.Id,
+                ct);
+            if (!string.Equals(returnedDatabaseName, databaseName, StringComparison.Ordinal))
+                throw new InvalidOperationException("Cosmos returned a database handle that does not match the configured database name.");
+
             var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
                 () => database.CreateContainerIfNotExistsAsync(
                     new ContainerProperties(ContainerName, "/role"),
