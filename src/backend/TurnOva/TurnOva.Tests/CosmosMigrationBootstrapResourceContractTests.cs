@@ -229,6 +229,63 @@ public sealed class CosmosMigrationBootstrapResourceContractTests
     }
 
     [Fact]
+    public async Task CancellationDuringLockContainerResourceHydrationStopsBeforeReadingHandleOrAcquiringLease()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var lockResponse = CreateResponse(
+            "MigrationLocks", "/id", includeContainer: true,
+            onResourceRead: cancellation.Cancel);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        historyResponse.VerifyGet(value => value.Resource, Times.Once);
+        historyResponse.VerifyGet(value => value.Container, Times.Once);
+        lockResponse.VerifyGet(value => value.Resource, Times.Once);
+        lockResponse.VerifyGet(value => value.Container, Times.Never);
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationTakesPrecedenceWhenLockContainerResourceHydrationThrows()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var expected = new InvalidOperationException("lock container resource hydration failed");
+        var lockResponse = CreateResponse(
+            "MigrationLocks", "/id", includeContainer: true,
+            onResourceRead: () =>
+            {
+                cancellation.Cancel();
+                throw expected;
+            });
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(cancellation.Token));
+
+        historyResponse.VerifyGet(value => value.Resource, Times.Once);
+        historyResponse.VerifyGet(value => value.Container, Times.Once);
+        lockResponse.VerifyGet(value => value.Resource, Times.Once);
+        lockResponse.VerifyGet(value => value.Container, Times.Never);
+        database.VerifyGet(value => value.Id, Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationHistory"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == "MigrationLocks"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task LockBootstrapRejectsMissingContainerHandle()
     {
         var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
@@ -434,11 +491,15 @@ public sealed class CosmosMigrationBootstrapResourceContractTests
         bool includeContainer,
         string? handleId = null,
         bool overrideHandleId = false,
-        Action? onHandleIdRead = null)
+        Action? onHandleIdRead = null,
+        Action? onResourceRead = null)
     {
         var response = new Mock<ContainerResponse>(MockBehavior.Strict);
-        response.SetupGet(value => value.Resource).Returns(
-            id is null ? null! : new ContainerProperties(id, partitionKeyPath));
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            onResourceRead?.Invoke();
+            return id is null ? null! : new ContainerProperties(id, partitionKeyPath);
+        });
 
         if (includeContainer)
         {
