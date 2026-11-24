@@ -145,7 +145,7 @@ public static class CosmosReadResponseGuard
         return etag;
     }
 
-    public static async Task<T?> ReadItemAsync<T>
+    public static async Task<T?> ReadItemAsync<T>(
         Container container,
         string id,
         PartitionKey partitionKey,
