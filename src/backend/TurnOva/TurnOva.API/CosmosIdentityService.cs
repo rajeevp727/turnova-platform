@@ -453,6 +453,9 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         {
             if (_container is not null) return _container;
             var databaseName = configuration?["CosmosDb:DatabaseName"] ?? DatabaseNameDefault;
+            if (string.IsNullOrWhiteSpace(databaseName))
+                throw new InvalidOperationException("Cosmos database name must be configured.");
+
             var database = cosmosClient!.GetDatabase(databaseName);
             var returnedDatabaseName = CosmosReadResponseGuard.ReadResponseValue(
                 database,

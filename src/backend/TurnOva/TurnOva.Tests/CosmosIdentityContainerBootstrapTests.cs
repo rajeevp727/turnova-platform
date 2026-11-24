@@ -41,6 +41,31 @@ public sealed class CosmosIdentityContainerBootstrapTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RegisterRejectsBlankConfiguredDatabaseNameBeforeResolvingHandle(string configuredDatabaseName)
+    {
+        var client = new Mock<CosmosClient>(MockBehavior.Strict);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["CosmosDb:DatabaseName"] = configuredDatabaseName,
+            ["Auth:Jwt:Issuer"] = "turnova-auth-tests",
+            ["Auth:Jwt:Audience"] = "turnova-api",
+            ["Auth:Jwt:SigningKey"] = SigningKey
+        }).Build();
+        var service = new CosmosIdentityService(client.Object, configuration);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            CancellationToken.None));
+
+        Assert.Equal("Cosmos database name must be configured.", exception.Message);
+        client.Verify(value => value.GetDatabase(It.IsAny<string>()), Times.Never);
+        client.VerifyNoOtherCalls();
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("UnexpectedDb")]
