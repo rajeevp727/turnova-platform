@@ -117,15 +117,23 @@ public sealed class CosmosMigrationRunner(
             cancellationToken: cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var properties = response.Resource ?? throw new InvalidOperationException(
+        var properties = CosmosReadResponseGuard.ReadResponseResource(
+            response,
+            static containerResponse => containerResponse.Resource,
+            value => string.Equals(value.Id, containerName, StringComparison.Ordinal) &&
+                string.Equals(value.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal),
+            "migration container",
+            cancellationToken,
+            "Cosmos returned a migration container resource that does not match the requested name and partition-key path after bootstrap.",
             "Cosmos returned an empty migration container resource after bootstrap.");
-        if (!string.Equals(properties.Id, containerName, StringComparison.Ordinal) ||
-            !string.Equals(properties.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal))
-            throw new InvalidOperationException(
-                "Cosmos returned a migration container resource that does not match the requested name and partition-key path after bootstrap.");
 
-        return response.Container ?? throw new InvalidOperationException(
-            "Cosmos returned an empty migration container handle after bootstrap.");
+        return CosmosReadResponseGuard.ReadResponseResource(
+            response,
+            static containerResponse => containerResponse.Container,
+            static _ => true,
+            "migration container handle",
+            cancellationToken,
+            emptyResourceMessage: "Cosmos returned an empty migration container handle after bootstrap.");
     }
 
     private static async Task<bool> IsAppliedAsync(
