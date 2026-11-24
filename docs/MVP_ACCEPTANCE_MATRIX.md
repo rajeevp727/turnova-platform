@@ -1,3 +1,13 @@
+## Run 135 — Cosmos migration TTL container-handle identity evidence (2026-11-24)
+
+- **PLATFORM-01 implementation evidence:** migration bootstrap validates the returned `ContainerResponse.Container` handle's `Id` against the requested container before TTL read-back. Null, empty, whitespace or mismatched IDs fail closed.
+- **Cancellation/error behavior:** cancellation during `Container.Id` hydration is propagated before TTL read/replacement; cancellation takes precedence over a getter exception; a non-cancellation getter exception is preserved.
+- **Deterministic tests:** `TtlContainerHandleRejectsBlankOrMismatchedIdentityBeforeTtlRead` (four cases), `CancellationDuringContainerHandleIdentityHydrationStopsBeforeTtlRead`, `CancellationTakesPrecedenceWhenContainerHandleIdentityHydrationThrows`, and `ContainerHandleIdentityHydrationFailurePropagatesWithoutCancellation`. Four existing strict-mock cases now verify the exact expected handle-ID getter call. Test-plan IDs: `COSMOS-BOOTSTRAP-011..014`.
+- **Exact-head evidence:** [CI #45393945604](https://github.com/rajeevp727/turnova-platform/actions/runs/45393945604) passed on documentation-bearing checkpoint [`e2cc35c184a4ea452eb481ce8409fa1165f28ac4`](https://github.com/rajeevp727/turnova-platform/commit/e2cc35c184a4ea452eb481ce8409fa1165f28ac4): **1,430/1,430 backend tests**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish/verifier, artifact [14920910597](https://github.com/rajeevp727/turnova-platform/actions/runs/45393945604/artifacts/14920910597). The subsequent progress/matrix/brain/handoff synchronization is documentation-only and requires its own exact-head CI.
+- **Acceptance status unchanged:** PLATFORM-01 remains **In Progress**. The official denominator remains **19 rows; 0 Verified, 16 In Progress, 3 Blocked** (`DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). Mock-only evidence does not satisfy live Cosmos/production acceptance.
+
+---
+
 ## Run 134 — API Cosmos migration database handle evidence (2026-11-24)
 
 - **PLATFORM-01 implementation evidence:** `CosmosMigrationRunner.RunAsync` now obtains `DatabaseResponse.Database` through the shared cancellation-aware response-property guard and validates nonblank, exact ordinal `Database.Id` against the configured database name before creating migration containers or acquiring a lease.
