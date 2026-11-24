@@ -8,6 +8,7 @@
 - **Review/phase gate:** PR #200 has 3 owner-authored COMMENTED reviews, 0 independent approvals and 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked. Do not begin Android or merge without independent approval and a fresh API phase-exit audit.
 - **Production gate:** live Cosmos multi-instance/ETag/restart/failover, production identity/hosting, providers, product policies, legal review and device/signing evidence remain unverified.
 - This matrix snapshot records supporting engineering evidence only; it does not claim strict acceptance or production readiness.
+
 ## Run 145 — 2026-11-24 — JWT HS256 algorithm allowlist (supporting API evidence)
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR #200 remains the sole active feature PR.
