@@ -687,6 +687,212 @@ public sealed class CosmosMigrationLeaseStoreTests
     }
 
     [Fact]
+    public async Task ReadChecksCancellationDuringEtagHydration()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(new CosmosMigrationLeaseDocument
+        {
+            Id = "schema-migrations",
+            Owner = "owner-1",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+        });
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            return "etag-read";
+        });
+        container.Setup(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosMigrationLeaseStore(container.Object).ReadAsync(cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+            "schema-migrations",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReadCancellationTakesPrecedenceWhenEtagHydrationThrows()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(new CosmosMigrationLeaseDocument
+        {
+            Id = "schema-migrations",
+            Owner = "owner-1",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+        });
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("etag hydration failed");
+        });
+        container.Setup(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosMigrationLeaseStore(container.Object).ReadAsync(cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+            "schema-migrations",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReadEtagHydrationFailurePropagatesWithoutCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(new CosmosMigrationLeaseDocument
+        {
+            Id = "schema-migrations",
+            Owner = "owner-1",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+        });
+        response.SetupGet(value => value.ETag).Returns(() =>
+            throw new InvalidOperationException("etag hydration failed"));
+        container.Setup(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationLeaseStore(container.Object).ReadAsync(CancellationToken.None));
+
+        Assert.Equal("etag hydration failed", exception.Message);
+        container.Verify(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+            "schema-migrations",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task SuccessfulCreateRemainsAuthoritativeWhenCancellationArrivesDuringEtagHydration()
+    {
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(new CosmosMigrationLeaseDocument
+        {
+            Id = "schema-migrations",
+            Owner = "owner-1",
+            ExpiresAtUtc = expiresAt
+        });
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            return "etag-created";
+        });
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<CosmosMigrationLeaseDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        var created = await new CosmosMigrationLeaseStore(container.Object).TryCreateAsync(
+            "owner-1", expiresAt, cancellation.Token);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.NotNull(created);
+        Assert.Equal("schema-migrations", created!.Id);
+        Assert.Equal("owner-1", created.Owner);
+        Assert.Equal("etag-created", created.ETag);
+        container.Verify(value => value.CreateItemAsync(
+            It.Is<CosmosMigrationLeaseDocument>(document =>
+                document.Id == "schema-migrations" && document.Owner == "owner-1"),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task SuccessfulReplaceRemainsAuthoritativeWhenCancellationArrivesDuringEtagHydration()
+    {
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<CosmosMigrationLeaseDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(new CosmosMigrationLeaseDocument
+        {
+            Id = "schema-migrations",
+            Owner = "owner-2",
+            ExpiresAtUtc = expiresAt
+        });
+        response.SetupGet(value => value.ETag).Returns(() =>
+        {
+            cancellation.Cancel();
+            return "etag-replaced";
+        });
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosMigrationLeaseDocument>(),
+                "schema-migrations",
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        var expected = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-observed", DateTimeOffset.UtcNow.AddMinutes(10));
+
+        var renewed = await new CosmosMigrationLeaseStore(container.Object).TryReplaceAsync(
+            expected, "owner-2", expiresAt, cancellation.Token);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.NotNull(renewed);
+        Assert.Equal("schema-migrations", renewed!.Id);
+        Assert.Equal("owner-2", renewed.Owner);
+        Assert.Equal("etag-replaced", renewed.ETag);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.Is<CosmosMigrationLeaseDocument>(document =>
+                document.Id == "schema-migrations" && document.Owner == "owner-2"),
+            "schema-migrations",
+            It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(options =>
+                options != null && options.IfMatchEtag == "etag-observed"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task CreateConflictDoesNotHideCancellation()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
