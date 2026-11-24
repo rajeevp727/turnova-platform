@@ -130,6 +130,31 @@ public sealed class CosmosReservationReadCancellationPrecedenceTests
         VerifySingleRead<RiderActiveBookingReservation>(container, RiderActiveBookingReservation.DocumentId);
     }
 
+    [Fact]
+    public async Task DriverBulkQueryCancellationPrecedesNullCollectionValidation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosDriverRideReservationStore(container.Object)
+                .GetActiveForDriversAsync(null!, cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DriverBulkQueryRejectsNullCollectionBeforeCallingCosmos()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            new CosmosDriverRideReservationStore(container.Object).GetActiveForDriversAsync(null!));
+
+        container.VerifyNoOtherCalls();
+    }
+
     private static Mock<Container> CreateFailingReadContainer<T>(
         string id,
         CancellationTokenSource cancellation)

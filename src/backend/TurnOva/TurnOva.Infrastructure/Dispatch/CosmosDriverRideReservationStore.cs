@@ -221,8 +221,8 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
         IReadOnlyCollection<string> driverIds,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(driverIds);
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(driverIds);
         var reservations = new List<DriverRideReservation>();
         foreach (var batch in DriverIdBatching.Chunk(driverIds))
         {
