@@ -4952,3 +4952,17 @@ The Driver ride-reservation and Rider active-booking reservation stores preserve
 
 Additional exact-head evidence: source/test head [`e4515555c3d51b47533cc91fc5357597cddc9a8a`](https://github.com/rajeevp727/turnova-platform/commit/e4515555c3d51b47533cc91fc5357597cddc9a8a) passed [CI #45316137669](https://github.com/rajeevp727/turnova-platform/actions/runs/45316137669) with **1,346/1,346 backend tests**, Release build (0 warnings/0 errors), native non-container Linux x64 publish (44,029,040 bytes) and verifier (11 negative fixtures plus valid fixture); artifact [14885432455](https://github.com/rajeevp727/turnova-platform/actions/runs/45316137669/artifacts/14885432455), 17,019,219 bytes, SHA-256 `85ca213d6c90fbefad4f6de76d1293d7694b9d62b69958f0ed42f62c848497f7`.
 
+
+
+## COSMOS-RES-026..029 — null Rider reservation cancellation precedence
+
+The Cosmos and in-memory Rider active-booking reservation acquire stores check caller cancellation before validating the reservation object. A pre-cancelled request with a null reservation preserves `OperationCanceledException`; without cancellation, null is rejected with `ArgumentNullException`. Neither path may call Cosmos or mutate in-memory reservation/audit state. Valid reservation, same-partition audit, ETag, expiry, idempotency and locking semantics are unchanged.
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| COSMOS-RES-026 | Cosmos Rider acquire receives a null reservation with a pre-cancelled token | Propagate OperationCanceledException before argument validation; no Cosmos call | `RiderActiveBookingReservationStoreInputValidationTests.CosmosAcquireHonorsPreCancelledTokenBeforeNullReservationValidation` | P1 |
+| COSMOS-RES-027 | In-memory Rider acquire receives a null reservation with a pre-cancelled token | Propagate OperationCanceledException; no reservation or audit mutation | `RiderActiveBookingReservationStoreInputValidationTests.InMemoryAcquireHonorsPreCancelledTokenBeforeNullReservationValidation` | P1 |
+| COSMOS-RES-028 | Cosmos Rider acquire receives a null reservation without cancellation | Throw ArgumentNullException before Cosmos access | `RiderActiveBookingReservationStoreInputValidationTests.CosmosAcquireRejectsNullReservationBeforeCallingCosmos` | P1 |
+| COSMOS-RES-029 | In-memory Rider acquire receives a null reservation without cancellation | Throw ArgumentNullException without reservation or audit mutation | `RiderActiveBookingReservationStoreInputValidationTests.InMemoryAcquireRejectsNullReservationBeforeStoringReservation` | P1 |
+
+**Evidence:** source/test head [`3eb9b49b188e9f48595c966d7b189ce5a7853492`](https://github.com/rajeevp727/turnova-platform/commit/3eb9b49b188e9f48595c966d7b189ce5a7853492) passed exact-head API-only CI [#45316862617](https://github.com/rajeevp727/turnova-platform/actions/runs/45316862617): **1,350/1,350 backend tests (0 failed, 0 skipped)**, Release build (0 warnings/0 errors), native non-container Linux x64 publish (44,029,056 bytes), publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14886790068](https://github.com/rajeevp727/turnova-platform/actions/runs/45316862617/artifacts/14886790068), 17,019,245 bytes, SHA-256 `ecba03f75c9b4804b3a1ce55649b790be88c5b49932d6259837e58b64c1dc66e`. These are deterministic unit/SDK-mock tests, not live Cosmos partition/ETag/multi-instance/restart evidence.

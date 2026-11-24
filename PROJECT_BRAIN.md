@@ -1,6 +1,6 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 122)
+Last updated: 2026-11-24 (Run 123)
 
 ## Platform phase
 
@@ -9,6 +9,16 @@ Last updated: 2026-11-24 (Run 122)
 - iOS: `not_started`
 - Required order: API → Android Rider → Android Driver → iOS Rider → iOS Driver.
 - No Android completion work is authorized until API implementation, deterministic evidence, API contract/docs, available API acceptance checks, independent human review/permitted merge and a fresh main/API phase-exit audit pass.
+
+## Run 123 — Rider reservation null-input cancellation precedence
+
+- Main: `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Sole active API PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; source/test head [`3eb9b49b188e9f48595c966d7b189ce5a7853492`](https://github.com/rajeevp727/turnova-platform/commit/3eb9b49b188e9f48595c966d7b189ce5a7853492).
+- Cosmos and in-memory Rider reservation acquire now check cancellation before null-reservation validation. Four deterministic tests cover pre-cancelled/null and uncancelled/null behavior with no Cosmos call or in-memory mutation.
+- Exact-head API-only CI [#45316862617](https://github.com/rajeevp727/turnova-platform/actions/runs/45316862617) passed 1,350/1,350 backend tests, Release build (0 warnings/0 errors), native non-container Linux x64 publish and verifier; artifact [14886790068](https://github.com/rajeevp727/turnova-platform/actions/runs/45316862617/artifacts/14886790068).
+- API remains `in_progress`; Android/iOS remain `not_started`. Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). Live Cosmos and production readiness are not established.
+- PR #200 still has no independent human approval; never self-approve or bypass protection. Historical PR #197/#207 merges without independent approval remain disclosed exceptions.
+
 
 ## Run 122 — bulk Driver reservation query cancellation precedence
 
