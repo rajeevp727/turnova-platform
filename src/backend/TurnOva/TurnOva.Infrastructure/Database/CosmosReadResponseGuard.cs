@@ -50,6 +50,52 @@ public static class CosmosReadResponseGuard
         return resource;
     }
 
+    public static T ReadResource<T>(
+        ItemResponse<T> response,
+        Func<T, bool> identityMatches,
+        string resourceDescription,
+        CancellationToken cancellationToken,
+        string? identityMismatchMessage = null)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(identityMatches);
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceDescription);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        T? resource;
+        try
+        {
+            resource = response.Resource;
+        }
+        catch
+        {
+            // Cosmos may hydrate/deserialise a point-read resource after the provider task
+            // has completed. Preserve request cancellation if hydration itself fails.
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            if (resource is null)
+                throw new InvalidOperationException($"Cosmos returned an empty {resourceDescription} resource.");
+
+            if (!identityMatches(resource))
+                throw new InvalidOperationException(identityMismatchMessage ??
+                    $"Cosmos returned a mismatched {resourceDescription} resource.");
+        }
+        catch
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return resource;
+    }
+
     public static async Task<T?> ReadItemAsync<T>(
         Container container,
         string id,
@@ -88,23 +134,7 @@ public static class CosmosReadResponseGuard
         if (response is null)
             throw new InvalidOperationException($"Cosmos returned an empty {resourceDescription} response.");
 
-        T? resource;
-        try
-        {
-            resource = response.Resource;
-        }
-        catch
-        {
-            // Resource hydration/deserialization can fail while the request is cancelled.
-            // Preserve cancellation precedence just as we do for the provider read itself.
-            cancellationToken.ThrowIfCancellationRequested();
-            throw;
-        }
-
-        // Cancellation may arrive from a lazy/overridden Resource getter after the
-        // provider task has already completed successfully.
-        cancellationToken.ThrowIfCancellationRequested();
-        return RequireResource(resource, identityMatches, resourceDescription);
+        return ReadResource(response, identityMatches, resourceDescription, cancellationToken);
     }
 
     public static async Task<IReadOnlyList<T>> ReadAllAsync<T>(

@@ -44,12 +44,13 @@ internal sealed class CosmosQueueAuditEventStore(Container container) : IQueueAu
                     new PartitionKey(partitionKey),
                     cancellationToken: cancellationToken),
                 cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            var auditEvent = response.Resource ?? throw new InvalidOperationException(
-                "Cosmos returned an empty queue audit event resource.");
-            if (!string.Equals(auditEvent.EventId, eventId, StringComparison.Ordinal) ||
-                !string.Equals(auditEvent.ZoneServiceKey, partitionKey, StringComparison.Ordinal))
-                throw new InvalidOperationException("Cosmos returned a malformed queue audit event resource.");
+            var auditEvent = CosmosReadResponseGuard.ReadResource(
+                response,
+                item => string.Equals(item.EventId, eventId, StringComparison.Ordinal) &&
+                    string.Equals(item.ZoneServiceKey, partitionKey, StringComparison.Ordinal),
+                "queue audit event",
+                cancellationToken,
+                "Cosmos returned a malformed queue audit event resource.");
 
             return auditEvent;
         }

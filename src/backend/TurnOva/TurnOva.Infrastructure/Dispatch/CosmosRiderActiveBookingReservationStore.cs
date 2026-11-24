@@ -47,7 +47,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
                         RiderActiveBookingReservation.DocumentId,
                         new PartitionKey(reservation.RiderId),
                         cancellationToken: cancellationToken),
-                    cancellationToken), reservation.RiderId);
+                    cancellationToken), reservation.RiderId, cancellationToken);
             }
             catch (CosmosException missing) when (missing.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -84,7 +84,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
                         cancellationToken: cancellationToken),
                     cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            return RequireResource(current, riderId);
+            return RequireResource(current, riderId, cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -123,7 +123,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var currentReservation = RequireResource(current, riderId);
+            var currentReservation = RequireResource(current, riderId, cancellationToken);
             if (currentReservation.RideId != rideId)
                 return false;
             if (currentReservation.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow &&
@@ -189,7 +189,7 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var currentReservation = RequireResource(current, riderId);
+            var currentReservation = RequireResource(current, riderId, cancellationToken);
             if (currentReservation.RideId != rideId)
                 return false;
 
@@ -220,19 +220,17 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
 
     private static RiderActiveBookingReservation RequireResource(
         ItemResponse<RiderActiveBookingReservation> response,
-        string expectedRiderId)
-    {
-        var reservation = response.Resource ?? throw new InvalidOperationException(
-            "Cosmos returned an empty Rider booking reservation resource.");
-
-        if (string.IsNullOrWhiteSpace(expectedRiderId) ||
-            !string.Equals(reservation.RiderId, expectedRiderId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(reservation.RideId) ||
-            string.IsNullOrWhiteSpace(reservation.RequestHash))
-            throw new InvalidOperationException("Cosmos returned a malformed Rider booking reservation resource.");
-
-        return reservation;
-    }
+        string expectedRiderId,
+        CancellationToken cancellationToken) =>
+        CosmosReadResponseGuard.ReadResource(
+            response,
+            reservation => !string.IsNullOrWhiteSpace(expectedRiderId) &&
+                string.Equals(reservation.RiderId, expectedRiderId, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(reservation.RideId) &&
+                !string.IsNullOrWhiteSpace(reservation.RequestHash),
+            "Rider booking reservation",
+            cancellationToken,
+            "Cosmos returned a malformed Rider booking reservation resource.");
 
     private static bool IsReservationWriteConflict(TransactionalBatchResponse batch) =>
         batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed;

@@ -17,7 +17,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                     rideId, new PartitionKey(rideId), cancellationToken: cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            return RequireResource(response, rideId) with { ETag = response.ETag };
+            return RequireResource(response, rideId, cancellationToken: cancellationToken) with { ETag = response.ETag };
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -79,7 +79,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                         candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken),
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                results.Add(RequireResource(response, candidate.RideId, candidate.DriverId) with { ETag = response.ETag });
+                results.Add(RequireResource(response, candidate.RideId, cancellationToken, candidate.DriverId) with { ETag = response.ETag });
                 if (results.Count >= maxItems) break;
             }
         }
@@ -112,7 +112,7 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
                         candidate.RideId, new PartitionKey(candidate.RideId), cancellationToken: cancellationToken),
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                results.Add(RequireResource(response, candidate.RideId, candidate.DriverId) with { ETag = response.ETag });
+                results.Add(RequireResource(response, candidate.RideId, cancellationToken, candidate.DriverId) with { ETag = response.ETag });
                 if (results.Count >= maxItems) break;
             }
         }
@@ -146,20 +146,18 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
     private static RideOfferState RequireResource(
         ItemResponse<RideOfferState> response,
         string expectedRideId,
-        string? expectedDriverId = null)
-    {
-        var offer = response.Resource ?? throw new InvalidOperationException(
-            "Cosmos returned an empty ride offer resource.");
-
-        if (string.IsNullOrWhiteSpace(offer.RideId) ||
-            !string.Equals(offer.RideId, expectedRideId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(offer.DriverId) ||
-            (expectedDriverId is not null &&
-             !string.Equals(offer.DriverId, expectedDriverId, StringComparison.Ordinal)))
-            throw new InvalidOperationException("Cosmos returned a malformed ride offer resource.");
-
-        return offer;
-    }
+        CancellationToken cancellationToken,
+        string? expectedDriverId = null) =>
+        CosmosReadResponseGuard.ReadResource(
+            response,
+            offer => !string.IsNullOrWhiteSpace(offer.RideId) &&
+                string.Equals(offer.RideId, expectedRideId, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(offer.DriverId) &&
+                (expectedDriverId is null ||
+                 string.Equals(offer.DriverId, expectedDriverId, StringComparison.Ordinal)),
+            "ride offer",
+            cancellationToken,
+            "Cosmos returned a malformed ride offer resource.");
 
     public async Task<bool> TryCreateAsync(RideOfferState state, CancellationToken cancellationToken = default)
     {

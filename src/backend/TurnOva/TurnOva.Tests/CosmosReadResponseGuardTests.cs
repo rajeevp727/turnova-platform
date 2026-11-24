@@ -324,6 +324,93 @@ public sealed class CosmosReadResponseGuardTests
     }
 
     [Fact]
+    public void ReadResourceHonorsCancellationDuringResourceHydration()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var union = CreateUnion();
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return union;
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadResource(
+                response.Object,
+                item => item.UnionId == UnionId,
+                "Union",
+                cancellation.Token));
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResourceCancellationTakesPrecedenceOverHydrationFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("resource hydration failed");
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadResource(
+                response.Object,
+                item => item.UnionId == UnionId,
+                "Union",
+                cancellation.Token));
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResourceCancellationTakesPrecedenceOverIdentityValidationFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var response = CreateResponse(CreateUnion());
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadResource(
+                response.Object,
+                _ =>
+                {
+                    cancellation.Cancel();
+                    throw new InvalidOperationException("identity validation failed");
+                },
+                "Union",
+                cancellation.Token));
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadResourceChecksCancellationAfterIdentityValidation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var response = CreateResponse(CreateUnion());
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadResource(
+                response.Object,
+                _ =>
+                {
+                    cancellation.Cancel();
+                    return true;
+                },
+                "Union",
+                cancellation.Token));
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task ReadAllReturnsIdentityMatchedResourcesAcrossPages()
     {
         var first = CreateUnion("union-page-1");

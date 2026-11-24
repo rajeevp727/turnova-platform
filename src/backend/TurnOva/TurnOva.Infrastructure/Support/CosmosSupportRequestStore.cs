@@ -34,14 +34,13 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
                         new PartitionKey(request.ReporterId),
                         cancellationToken: cancellationToken),
                     cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                var existingResource = existingResponse.Resource;
-                cancellationToken.ThrowIfCancellationRequested();
-                var existing = existingResource ?? throw new InvalidOperationException(
-                    "Cosmos returned an empty support request resource.");
-                if (!string.Equals(existing.Id, request.Id, StringComparison.Ordinal) ||
-                    !string.Equals(existing.ReporterId, request.ReporterId, StringComparison.Ordinal))
-                    throw new InvalidOperationException("Cosmos returned a malformed support request resource.");
+                var existing = CosmosReadResponseGuard.ReadResource(
+                    existingResponse,
+                    item => string.Equals(item.Id, request.Id, StringComparison.Ordinal) &&
+                        string.Equals(item.ReporterId, request.ReporterId, StringComparison.Ordinal),
+                    "support request",
+                    cancellationToken,
+                    "Cosmos returned a malformed support request resource.");
 
                 var sameSubmission =
                     string.Equals(existing.ReporterId, request.ReporterId, StringComparison.Ordinal) &&

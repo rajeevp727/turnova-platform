@@ -85,7 +85,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                     driverId, new PartitionKey(key), cancellationToken: cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            _ = RequireResource(current, driverId, key);
+            _ = RequireResource(current, driverId, key, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
             // A leave must not delete a queue entry that was replaced or rejoined after
@@ -130,7 +130,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                     driverId, new PartitionKey(key), cancellationToken: cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var document = RequireResource(response, driverId, key);
+            var document = RequireResource(response, driverId, key, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
             {
@@ -171,7 +171,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                     driverId, new PartitionKey(key), cancellationToken: cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var document = RequireResource(response, driverId, key);
+            var document = RequireResource(response, driverId, key, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (document.LastRotationOfferId == offerId)
             {
@@ -293,23 +293,21 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     private static QueueEntryDocument RequireResource(
         ItemResponse<QueueEntryDocument> response,
         string expectedDriverId,
-        string expectedZoneServiceKey)
-    {
-        var document = response.Resource ?? throw new InvalidOperationException(
-            "Cosmos returned an empty queue entry resource.");
-
-        if (string.IsNullOrWhiteSpace(document.Id) ||
-            string.IsNullOrWhiteSpace(document.DriverId) ||
-            !string.Equals(document.Id, expectedDriverId, StringComparison.Ordinal) ||
-            !string.Equals(document.DriverId, expectedDriverId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(document.ZoneId) ||
-            string.IsNullOrWhiteSpace(document.ServiceClass) ||
-            !string.Equals(document.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal) ||
-            !string.Equals(QueueKey(document.ZoneId, document.ServiceClass), expectedZoneServiceKey, StringComparison.Ordinal))
-            throw new InvalidOperationException("Cosmos returned a malformed queue entry resource.");
-
-        return document;
-    }
+        string expectedZoneServiceKey,
+        CancellationToken cancellationToken) =>
+        CosmosReadResponseGuard.ReadResource(
+            response,
+            document => !string.IsNullOrWhiteSpace(document.Id) &&
+                !string.IsNullOrWhiteSpace(document.DriverId) &&
+                string.Equals(document.Id, expectedDriverId, StringComparison.Ordinal) &&
+                string.Equals(document.DriverId, expectedDriverId, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(document.ZoneId) &&
+                !string.IsNullOrWhiteSpace(document.ServiceClass) &&
+                string.Equals(document.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal) &&
+                string.Equals(QueueKey(document.ZoneId, document.ServiceClass), expectedZoneServiceKey, StringComparison.Ordinal),
+            "queue entry",
+            cancellationToken,
+            "Cosmos returned a malformed queue entry resource.");
 
     private static string QueueKey(string zoneId, string serviceClass) =>
         $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
