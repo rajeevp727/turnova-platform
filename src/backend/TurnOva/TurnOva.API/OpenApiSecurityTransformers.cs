@@ -26,7 +26,7 @@ public sealed class TurnOvaOpenApiDocumentTransformer : IOpenApiDocumentTransfor
                 Type = SecuritySchemeType.Http,
                 Scheme = "bearer",
                 BearerFormat = "JWT",
-                Description = "TriSend-issued TurnOva access token."
+                Description = "TurnOva-issued JWT access token."
             },
             ["OpsAdminKey"] = new OpenApiSecurityScheme
             {

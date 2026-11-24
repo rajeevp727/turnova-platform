@@ -206,6 +206,7 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal("http", bearer.GetProperty("type").GetString());
         Assert.Equal("bearer", bearer.GetProperty("scheme").GetString());
         Assert.Equal("JWT", bearer.GetProperty("bearerFormat").GetString());
+        Assert.Equal("TurnOva-issued JWT access token.", bearer.GetProperty("description").GetString());
 
         var operationsKey = schemes.GetProperty("OpsAdminKey");
         Assert.Equal("apiKey", operationsKey.GetProperty("type").GetString());

@@ -1,3 +1,15 @@
+# Run 143 handoff — 2026-11-24 (API phase)
+
+- Active phase: API in progress. Android/iOS remain not started. PR #200 is the sole ready/active feature PR.
+- Main: e5366ad58a2f3ff1d39c9c0641fbb74a1d348860. PR #200 branch: test/api-nondev-support-readiness-20261120. Source/test head 0f3b70a48b595d56abf5a692c67c8753f70586fc passed exact-head API-only CI #45450460987: 1,510/1,510 tests, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier, artifact 14946659170.
+- Run 143: AUTH-COSMOS-029 rejects malformed/noncanonical persisted identity email before refresh ETag access/token rotation (three deterministic cases). AUTH-API-062 corrects the OpenAPI Bearer description to a locally issued TurnOva JWT and asserts the exact description. Architecture sections 15–17 and auth/test-plan docs are aligned; the new documentation-bearing head still needs exact-head CI.
+- PR #200 review gate: three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads and no reviewer requested. Never self-approve or merge. PRs #196/#198/#205/#206 remain Draft/parked; #206 labels do not authorize Android. Historical PR #197/#207 merges without independent approval are process exceptions, not precedent.
+- Strict acceptance: 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is not an implementation percentage. Live Cosmos and production readiness are unproven.
+- External gates: live Cosmos transaction/partition/ETag/multi-instance/restart/RU/failover; production JWT/Cosmos credentials, hosting/TLS, trusted proxy/shared rate limiting and required provider/account migration; approved dispatch zones/radius/location freshness/negotiation lifetime/FIFO fairness; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device/signing/store/TestFlight evidence.
+- Next exact action: verify documentation-bearing exact-head API-only CI; continue API-only auth/authorization/privacy/OpenAPI and Cosmos persistence audits; obtain independent human approval; after a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver.
+
+---
+
 # Run 142 handoff — 2026-11-24 (API phase)
 
 Current phase: **API in progress**. Active PR: [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`. Source/test head [ba2c01ca](https://github.com/rajeevp727/turnova-platform/commit/ba2c01cab000dacf891ef4b626f8665c3b98b577) rejects empty/whitespace CosmosDb:DatabaseName before CosmosClient.GetDatabase; AUTH-COSMOS-028 adds deterministic no-SDK-call evidence. Exact-head API-only CI [#45448071821](https://github.com/rajeevp727/turnova-platform/actions/runs/45448071821) passed 1,507/1,507 tests, Release build (0 warnings/errors), native non-container publish and verifier.

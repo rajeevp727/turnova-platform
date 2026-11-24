@@ -1,3 +1,29 @@
+## Run 143 — 2026-11-24 — Canonical persisted identity and OpenAPI authentication contract
+
+- **Platform phase:** API remains in progress; Android and iOS remain not started. PR #200 is the sole active feature PR.
+- **Audit finding:** Cosmos-native Refresh validated the persisted identity ID/role/document type and refresh-token hash, but did not require the stored email to remain in the normalized valid form that registration writes. A malformed persisted email could therefore be returned in a newly issued JWT after refresh.
+- **Implementation:** Refresh now validates that the persisted email is syntactically valid and exactly equals its trimmed lowercase canonical form before reading the ETag or rotating the refresh-token hash. Invalid records return the generic invalid-refresh response without a write. Login's existing normalized-email comparison and Logout's ability to revoke a malformed record are unchanged.
+- **Deterministic tests:** AUTH-COSMOS-029 adds three cases (uppercase, surrounding whitespace and malformed email) and asserts HTTP 401, one point read, no ETag read and no refresh-token write.
+- **OpenAPI contract correction:** the Bearer scheme description now says “TurnOva-issued JWT access token” instead of the stale “TriSend-issued” wording. The existing OpenAPI integration test asserts the exact description (AUTH-API-062). No auth route, JWT format or authorization behavior changed.
+- **Source/test head:** [0f3b70a4](https://github.com/rajeevp727/turnova-platform/commit/0f3b70a48b595d56abf5a692c67c8753f70586fc), exact-head API-only CI [#45450460987](https://github.com/rajeevp727/turnova-platform/actions/runs/45450460987) passed **1,510/1,510 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish (44,065,984 bytes), publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14946659170](https://github.com/rajeevp727/turnova-platform/actions/runs/45450460987/artifacts/14946659170).
+- **Documentation sync:** architecture sections 15–17, API auth wording, test plan, acceptance evidence, progress and Project Brain are aligned with the active Cosmos-native/selected-Cab implementation. The documentation-bearing commit below still requires its own exact-head API-only CI.
+- **Repository/review:** main is e5366ad58a2f3ff1d39c9c0641fbb74a1d348860. PR #200 remains open/non-draft; three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads and no independent reviewer requested. PRs #196/#198/#205/#206 remain Draft/parked; #206 labels do not authorize Android. Historical PR #197/#207 merges without independent approval remain disclosed exceptions, not precedent.
+- **Acceptance:** strict status remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). The new auth tests do not promote a row. Live Cosmos and production readiness remain unproven.
+- **Scope:** no mobile source, Dockerfile, container CI, image, registry or container deployment changed.
+
+## Next exact action
+
+1. Verify exact-head API-only CI for the documentation-bearing head; do not reuse the source/test result as final-head evidence.
+2. Continue API-only authorization/privacy/OpenAPI and Cosmos persistence-contract audits.
+3. Obtain independent human review/approval for PR #200; never self-approve, bypass protections or merge without repository permission.
+4. After a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider, then Android Driver, then iOS Rider and iOS Driver.
+
+## External gates
+
+Live Cosmos partition/ETag/transaction/multi-instance/restart/RU and failover evidence; production JWT issuer/audience/signing secrets, Cosmos credentials, API hosting/TLS, trusted proxy/shared rate limiting and any required live TriSend/provider integration or account migration; product-approved dispatch zones/radius/location freshness/negotiation lifetime/internal FIFO fairness; maps/routing and SignalR/call/chat/push providers; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; Android/iOS physical-device, signing, store and TestFlight evidence.
+
+---
+
 ## Run 142 — 2026-11-24 — Reject blank Cosmos identity database configuration
 
 - **Platform phase:** API remains in progress; Android and iOS remain not started. PR #200 remains the sole active feature PR.
