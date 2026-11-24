@@ -193,6 +193,27 @@ Cosmos queue operations must preserve cancellation before any query, point read 
 
 **Evidence:** `CosmosQueueCancellationTests`; queue adapter commit [939cc9d72c669119ea9619086b1e7d863194754d](https://github.com/rajeevp727/turnova-platform/commit/939cc9d72c669119ea9619086b1e7d863194754d); dispatch audit writer commit [2456068273a43100fb240c878796b91d3e7a0868](https://github.com/rajeevp727/turnova-platform/commit/2456068273a43100fb240c878796b91d3e7a0868); test head [0645e5ddb6f360e9264097498b263382fc1f114d](https://github.com/rajeevp727/turnova-platform/commit/0645e5ddb6f360e9264097498b263382fc1f114d); exact-head API-only CI [#45054753224](https://github.com/rajeevp727/turnova-platform/actions/runs/45054753224) passed **1,214/1,214 tests**, Release build and native non-container Linux x64 publish/verifier; artifact [14767660148](https://github.com/rajeevp727/turnova-platform/actions/runs/45054753224/artifacts/14767660148). No live Cosmos or production validation is implied.
 
+## Queue service and in-memory adapter cancellation/input parity (QUEUE-STORE-001..011)
+
+The in-memory queue adapter must preserve cancellation semantics instead of returning or mutating state after cancellation. Queue-service entry points must check cancellation before validating arguments, matching the cancellation-first Cosmos adapter contract. Null queue-entry writes fail fast before any queue, audit or Cosmos mutation. Successful valid queue operations and legacy FIFO compatibility semantics remain unchanged.
+
+| ID | Scenario | Expected result | Automated evidence | Priority |
+|---|---|---|---|---|
+| QUEUE-STORE-001 | In-memory eligible queue read receives a pre-cancelled token | Throw before returning an empty or populated snapshot | `GetEligibleAsyncHonorsPreCancelledTokenBeforeReturningQueue` | P1 |
+| QUEUE-STORE-002 | In-memory queue join receives a pre-cancelled token | Throw before queue or audit mutation | `AddAsyncHonorsPreCancelledTokenBeforeQueueOrAuditMutation` | P1 |
+| QUEUE-STORE-003 | In-memory queue join receives a null entry without cancellation | Throw `ArgumentNullException` before queue or audit mutation | `AddAsyncRejectsNullEntryBeforeQueueOrAuditMutation` | P1 |
+| QUEUE-STORE-004 | In-memory queue join receives a null entry with cancellation | Cancellation wins over null-input validation; no mutation | `AddAsyncCancellationTakesPrecedenceOverNullEntry` | P1 |
+| QUEUE-STORE-005 | QueueService Join receives a null entry | Throw `ArgumentNullException` before store mutation | `QueueServiceJoinRejectsNullEntryBeforeStoreMutation` | P1 |
+| QUEUE-STORE-006 | QueueService Join receives a null entry and pre-cancelled token | Throw cancellation before dereferencing/validating entry | `QueueServiceJoinHonorsCancellationBeforeNullValidation` | P1 |
+| QUEUE-STORE-007 | Cosmos queue join receives a null entry without cancellation | Throw `ArgumentNullException` before transactional batch creation | `AddRejectsNullEntryBeforeCreatingTransactionalBatch` | P1 |
+| QUEUE-STORE-008 | Cosmos queue join receives a null entry with cancellation | Cancellation wins before null validation or Cosmos access | `AddCancellationTakesPrecedenceOverNullEntry` | P1 |
+| QUEUE-STORE-009 | QueueService MoveToBack receives invalid input and a pre-cancelled token | Throw cancellation before argument validation or store access | `QueueServiceMoveToBackHonorsCancellationBeforeInputValidation` | P1 |
+| QUEUE-STORE-010 | QueueService Leave receives invalid input and a pre-cancelled token | Throw cancellation before argument validation or store access | `QueueServiceLeaveHonorsCancellationBeforeInputValidation` | P1 |
+| QUEUE-STORE-011 | QueueService dispatch-exception audit receives invalid input and a pre-cancelled token | Throw cancellation before validation or audit write | `QueueServiceRecordDispatchExceptionHonorsCancellationBeforeInputValidation` | P1 |
+
+**Evidence:** source/test head [`934a39ed60a8329b9fb2733257482b2b66144257`](https://github.com/rajeevp727/turnova-platform/commit/934a39ed60a8329b9fb2733257482b2b66144257) passed exact-head API-only CI [#45338387286](https://github.com/rajeevp727/turnova-platform/actions/runs/45338387286): **1,373/1,373 backend tests (0 failed, 0 skipped)**, Release build (0 warnings/0 errors), native non-container Linux x64 publish (44,029,168 bytes), publish verifier (11 negative fixtures plus valid fixture), artifact [14894956714](https://github.com/rajeevp727/turnova-platform/actions/runs/45338387286/artifacts/14894956714) (17,019,387 bytes; SHA-256 `bd4c24dd39290f8caf586977bd66f54fcf58bff899901db694657d45fae5fa86`). These deterministic tests do not establish live Cosmos or production readiness.
+
+
 ## Cosmos Driver/Rider reservation cancellation precedence (COSMOS-RES-005..013)
 
 The Cosmos Driver and Rider reservation adapters must preserve the in-memory cancellation contract. A pre-cancelled token is observed before local expiry/validation no-ops. After an awaited point read, cancellation is rechecked before deciding that a reservation is already permanent, has an unchanged expiry, belongs to another RideId, or is absent. After an unsuccessful transactional batch, cancellation is checked before conflict/retry handling. A successful transactional batch remains authoritative and is returned as committed; cancellation is not checked after a durable write succeeds.
