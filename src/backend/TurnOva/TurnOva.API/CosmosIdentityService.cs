@@ -47,6 +47,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
     public async Task<IResult> RegisterAsync(string role, CosmosRegisterRequest request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
         var normalizedRole = NormalizeRole(role);
         if (normalizedRole is null) return Results.NotFound();
         var email = NormalizeEmail(request.Email);
@@ -116,6 +118,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
     public async Task<IResult> LoginAsync(string role, CosmosLoginRequest request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
         var normalizedRole = NormalizeRole(role);
         if (normalizedRole is null) return Results.NotFound();
         var email = NormalizeEmail(request.Email);
@@ -210,6 +214,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
     public async Task<IResult> RefreshAsync(CosmosRefreshRequest? request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(request?.RefreshToken))
             return Results.BadRequest(new { message = "Refresh token is required." });
         var container = await GetContainerAsync(ct);
@@ -300,6 +305,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
     public async Task<IResult> LogoutAsync(ClaimsPrincipal principal, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(principal);
         var userId = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
         var role = NormalizeRole(principal.FindFirstValue("role"));
         if (string.IsNullOrWhiteSpace(userId) || role is null) return Results.Unauthorized();
