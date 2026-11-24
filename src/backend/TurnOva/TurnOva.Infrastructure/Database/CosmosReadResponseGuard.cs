@@ -118,22 +118,22 @@ public static class CosmosReadResponseGuard
         return resource;
     }
 
-    public static string ReadResponseEtag<TResponse>(
+    public static TValue ReadResponseValue<TResponse, TValue>(
         TResponse response,
-        Func<TResponse, string> etagAccessor,
+        Func<TResponse, TValue> valueAccessor,
         CancellationToken cancellationToken)
         where TResponse : class
     {
         ArgumentNullException.ThrowIfNull(response);
-        ArgumentNullException.ThrowIfNull(etagAccessor);
+        ArgumentNullException.ThrowIfNull(valueAccessor);
         cancellationToken.ThrowIfCancellationRequested();
 
-        string etag;
+        TValue value;
         try
         {
-            // Cosmos SDK response metadata can hydrate lazily after the provider task
-            // completes, just like Resource. Keep read cancellation observable here.
-            etag = etagAccessor(response);
+            // Cosmos SDK response properties can hydrate lazily after the provider task
+            // completes. Preserve caller cancellation even when the getter itself fails.
+            value = valueAccessor(response);
         }
         catch
         {
@@ -142,8 +142,15 @@ public static class CosmosReadResponseGuard
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return etag;
+        return value;
     }
+
+    public static string ReadResponseEtag<TResponse>(
+        TResponse response,
+        Func<TResponse, string> etagAccessor,
+        CancellationToken cancellationToken)
+        where TResponse : class =>
+        ReadResponseValue(response, etagAccessor, cancellationToken);
 
     public static async Task<T?> ReadItemAsync<T>(
         Container container,
