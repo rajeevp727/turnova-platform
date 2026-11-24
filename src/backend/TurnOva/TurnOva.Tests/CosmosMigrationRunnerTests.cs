@@ -57,7 +57,6 @@ public sealed class CosmosMigrationRunnerTests
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
         databaseResponse.VerifyNoOtherCalls();
         database.VerifyGet(value => value.Id, Times.Once);
-        database.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
 
@@ -79,6 +78,9 @@ public sealed class CosmosMigrationRunnerTests
         Assert.Contains("empty migration database handle", exception.Message, StringComparison.Ordinal);
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
         databaseResponse.VerifyNoOtherCalls();
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         client.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
@@ -107,7 +109,13 @@ public sealed class CosmosMigrationRunnerTests
 
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
         databaseResponse.VerifyNoOtherCalls();
-        database.VerifyNoOtherCalls();
+        database.Verify(value => value.Id, Times.Never);
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         client.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
@@ -134,6 +142,9 @@ public sealed class CosmosMigrationRunnerTests
 
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
         databaseResponse.VerifyNoOtherCalls();
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         client.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
@@ -163,7 +174,9 @@ public sealed class CosmosMigrationRunnerTests
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
         databaseResponse.VerifyNoOtherCalls();
         database.VerifyGet(value => value.Id, Times.Once);
-        database.VerifyNoOtherCalls();
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         client.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
@@ -193,7 +206,9 @@ public sealed class CosmosMigrationRunnerTests
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
         databaseResponse.VerifyNoOtherCalls();
         database.VerifyGet(value => value.Id, Times.Once);
-        database.VerifyNoOtherCalls();
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         client.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
@@ -220,7 +235,9 @@ public sealed class CosmosMigrationRunnerTests
         databaseResponse.VerifyGet(value => value.Database, Times.Once);
         databaseResponse.VerifyNoOtherCalls();
         database.VerifyGet(value => value.Id, Times.Once);
-        database.VerifyNoOtherCalls();
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         client.VerifyNoOtherCalls();
         leaseStore.VerifyNoOtherCalls();
     }
