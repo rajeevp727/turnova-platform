@@ -83,6 +83,8 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         while (_items.TryGetValue(driverId, out var state))
         {
             var current = state.Reservation;
@@ -117,6 +119,8 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         if (expiresAtUtc is not null && expiresAtUtc <= DateTimeOffset.UtcNow)
             return Task.FromResult(false);
 
@@ -149,6 +153,7 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
         return Task.FromResult(
             _items.TryGetValue(driverId, out var state) ? state.Reservation : null);
     }
@@ -182,6 +187,8 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(driverId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
         while (_items.TryGetValue(driverId, out var state))
         {
             var current = state.Reservation;
