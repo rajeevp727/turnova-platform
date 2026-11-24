@@ -32,7 +32,7 @@ public sealed class CosmosMigrationRunnerTests
     public async Task CancellationAfterDatabaseCreateStopsBeforeHistoryContainerCreation()
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
-        var database = new Mock<Database>(MockBehavior.Strict);
+        var database = CreateStrictDatabase();
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
         using var cancellation = new CancellationTokenSource();
@@ -65,7 +65,7 @@ public sealed class CosmosMigrationRunnerTests
     public async Task CancellationAfterHistoryContainerCreateStopsBeforeLockContainerCreation()
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
-        var database = new Mock<Database>(MockBehavior.Strict);
+        var database = CreateStrictDatabase();
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
         var containerResponse = new Mock<ContainerResponse>();
@@ -103,7 +103,7 @@ public sealed class CosmosMigrationRunnerTests
     public async Task CancellationAfterLockContainerCreateStopsBeforeLeaseAcquisition()
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
-        var database = new Mock<Database>(MockBehavior.Strict);
+        var database = CreateStrictDatabase();
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
         var historyResponse = new Mock<ContainerResponse>();
@@ -152,7 +152,7 @@ public sealed class CosmosMigrationRunnerTests
     public async Task CancellationDuringHistoryContainerResourceHydrationStopsBeforeReadingHandleOrAcquiringLease()
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
-        var database = new Mock<Database>(MockBehavior.Strict);
+        var database = CreateStrictDatabase();
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
         using var cancellation = new CancellationTokenSource();
@@ -197,7 +197,7 @@ public sealed class CosmosMigrationRunnerTests
     public async Task CancellationTakesPrecedenceWhenHistoryContainerResourceHydrationThrows()
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
-        var database = new Mock<Database>(MockBehavior.Strict);
+        var database = CreateStrictDatabase();
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
         using var cancellation = new CancellationTokenSource();
@@ -242,7 +242,7 @@ public sealed class CosmosMigrationRunnerTests
     public async Task CancellationDuringHistoryContainerHandleHydrationStopsBeforeLeaseAcquisition()
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
-        var database = new Mock<Database>(MockBehavior.Strict);
+        var database = CreateStrictDatabase();
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
         using var cancellation = new CancellationTokenSource();
@@ -290,7 +290,7 @@ public sealed class CosmosMigrationRunnerTests
     public async Task CancellationTakesPrecedenceWhenHistoryContainerHandleHydrationThrows()
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
-        var database = new Mock<Database>(MockBehavior.Strict);
+        var database = CreateStrictDatabase();
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
         using var cancellation = new CancellationTokenSource();
@@ -743,6 +743,13 @@ public sealed class CosmosMigrationRunnerTests
         Assert.Equal("lease-etag-1", leaseStore.ReleasedLease.ETag);
     }
 
+    private static Mock<Database> CreateStrictDatabase()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        database.SetupGet(value => value.Id).Returns("TurnOvaMigrationTest");
+        return database;
+    }
+
     private static CosmosMigrationLeaseCoordinator CreateCoordinator(
         ICosmosMigrationLeaseStore store,
         ICosmosMigrationDelay delay) =>
@@ -772,6 +779,7 @@ public sealed class CosmosMigrationRunnerTests
     {
         var client = new Mock<CosmosClient>();
         var database = new Mock<Database>();
+        database.SetupGet(value => value.Id).Returns("TurnOvaMigrationTest");
         var databaseResponse = new Mock<DatabaseResponse>();
         var historyContainer = new Mock<Container>();
         var lockContainer = new Mock<Container>();
