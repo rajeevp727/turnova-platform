@@ -1,6 +1,18 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 132)
+Last updated: 2026-11-24 (Run 133)
+
+## Run 133 — Cosmos migration container bootstrap cancellation (2026-11-24)
+
+- API remains `in_progress`; Android/iOS remain `not_started`. No mobile completion work started.
+- Generalized `CosmosReadResponseGuard.ReadResponseResource<TResponse,TResource>` checks cancellation before/after SDK response-property hydration and identity validation; cancellation wins over getter/validator exceptions when signalled.
+- Migration container bootstrap now validates `ContainerResponse.Resource` identity/partition path through the guard and retrieves `ContainerResponse.Container` through the same guard. Existing fail-closed integrity messages and successful persistence semantics are preserved.
+- Four deterministic migration-runner regressions cover cancellation during Resource/Container getters and cancellation precedence when either getter throws.
+- Source/test head [`e0f19459356a46bdfc66553f6ee1f9821722cce6`](https://github.com/rajeevp727/turnova-platform/commit/e0f19459356a46bdfc66553f6ee1f9821722cce6) passed [CI #45385345419](https://github.com/rajeevp727/turnova-platform/actions/runs/45385345419): 1,414/1,414 tests (0 failed/skipped), .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture), artifact [14916905435](https://github.com/rajeevp727/turnova-platform/actions/runs/45385345419/artifacts/14916905435).
+- PR #200 remains sole active API PR; three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. The final documentation-bearing head from Run 133 requires exact-head CI. PRs #196/#198/#205/#206 remain Draft/parked.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). Production readiness/live Cosmos are not established.
+- Next: verify final docs-head CI; continue API-only bootstrap/persistence/auth/authorization/privacy/contract audits; obtain independent human approval; re-audit main/API phase exit before Android Rider.
+
 
 ## Run 132 — Cosmos ItemResponse hydration cancellation (2026-11-24)
 
