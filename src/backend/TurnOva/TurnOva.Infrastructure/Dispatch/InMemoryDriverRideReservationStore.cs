@@ -162,16 +162,28 @@ public sealed class InMemoryDriverRideReservationStore : IDriverRideReservationS
         IReadOnlyCollection<string> driverIds,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(driverIds);
         cancellationToken.ThrowIfCancellationRequested();
-        var requestedDrivers = driverIds
-            .Where(driverId => !string.IsNullOrWhiteSpace(driverId))
-            .ToHashSet(StringComparer.Ordinal);
-        IReadOnlyList<DriverRideReservation> reservations = _items
-            .Where(item => requestedDrivers.Contains(item.Key) && item.Value.Reservation is not null)
-            .Select(item => item.Value.Reservation!)
-            .ToArray();
-        return Task.FromResult(reservations);
+        ArgumentNullException.ThrowIfNull(driverIds);
+
+        var requestedDrivers = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var driverId in driverIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!string.IsNullOrWhiteSpace(driverId))
+                requestedDrivers.Add(driverId);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var reservations = new List<DriverRideReservation>();
+        foreach (var item in _items)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (requestedDrivers.Contains(item.Key) && item.Value.Reservation is { } reservation)
+                reservations.Add(reservation);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<DriverRideReservation>>(reservations.ToArray());
     }
 
     public Task<bool> HasActiveAsync(string driverId, CancellationToken cancellationToken = default) =>
