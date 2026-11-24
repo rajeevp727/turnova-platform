@@ -71,7 +71,7 @@ public sealed class AuthApiIntegrationTests
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsJsonAsync("/api/v1/auth/rider/register",
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/{role}/register",
             new { email = "new.user@example.com", password = "weak", name = "Test User" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -160,7 +160,7 @@ public sealed class AuthApiIntegrationTests
         var lastStatus = HttpStatusCode.OK;
         for (var attempt = 0; attempt < 11; attempt++)
         {
-            using var response = await client.PostAsJsonAsync("/api/v1/auth/rider/login", new { email = "rider@example.com", password = "SecurePass123" });
+            using var response = await client.PostAsJsonAsync("/api/v1/auth/{role}/login", new { email = "rider@example.com", password = "SecurePass123" });
             lastStatus = response.StatusCode;
             if (attempt < 10) Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
             if (attempt == 10) AssertNoStoreHeaders(response);
@@ -214,8 +214,8 @@ public sealed class AuthApiIntegrationTests
 
         var paths = root.GetProperty("paths");
         var pathNames = paths.EnumerateObject().Select(path => path.Name).ToArray();
-        Assert.Contains("/api/v1/auth/rider/register", pathNames);
-        Assert.Contains("/api/v1/auth/rider/login", pathNames);
+        Assert.Contains("/api/v1/auth/{role}/register", pathNames);
+        Assert.Contains("/api/v1/auth/{role}/login", pathNames);
         Assert.Contains("/api/v1/auth/refresh", pathNames);
         Assert.Contains("/api/v1/auth/me", pathNames);
         Assert.Contains("/api/v1/rider/discovery", pathNames);
@@ -232,8 +232,8 @@ public sealed class AuthApiIntegrationTests
             paths.GetProperty("/api/v1/driver/rides/{rideId}/payment-report").GetProperty("post"),
             "Bearer"));
 
-        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/rider/login").GetProperty("post")));
-        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/rider/register").GetProperty("post")));
+        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/{role}/login").GetProperty("post")));
+        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/{role}/register").GetProperty("post")));
         Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/refresh").GetProperty("post")));
 
         var operations = paths.EnumerateObject()
