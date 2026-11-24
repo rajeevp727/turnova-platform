@@ -141,6 +141,7 @@ public sealed class CosmosMigrationRunner(
                 marker => string.Equals(marker.Id, migrationId, StringComparison.Ordinal),
                 "migration history marker",
                 cancellationToken,
+                "Cosmos returned a migration history marker that does not match the requested ID.",
                 "Cosmos returned a migration history marker that does not match the requested ID.");
 
             return true;

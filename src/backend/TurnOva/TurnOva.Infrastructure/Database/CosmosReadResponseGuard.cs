@@ -55,7 +55,8 @@ public static class CosmosReadResponseGuard
         Func<T, bool> identityMatches,
         string resourceDescription,
         CancellationToken cancellationToken,
-        string? identityMismatchMessage = null)
+        string? identityMismatchMessage = null,
+        string? emptyResourceMessage = null)
         where T : class
     {
         ArgumentNullException.ThrowIfNull(response);
@@ -80,7 +81,8 @@ public static class CosmosReadResponseGuard
         try
         {
             if (resource is null)
-                throw new InvalidOperationException($"Cosmos returned an empty {resourceDescription} resource.");
+                throw new InvalidOperationException(emptyResourceMessage ??
+                    $"Cosmos returned an empty {resourceDescription} resource.");
 
             if (!identityMatches(resource))
                 throw new InvalidOperationException(identityMismatchMessage ??

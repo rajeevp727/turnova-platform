@@ -55,6 +55,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
                     !string.IsNullOrWhiteSpace(item.Owner),
                 "migration lease",
                 cancellationToken,
+                "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.",
                 "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.");
             return ToLease(document, response.ETag);
         }
