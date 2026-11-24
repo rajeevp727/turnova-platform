@@ -1,3 +1,16 @@
+## Run 145 — 2026-11-24 — JWT HS256 algorithm allowlist (supporting API evidence)
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR #200 remains the sole active feature PR.
+- **Implementation:** JWT bearer validation now explicitly allowlists HS256, the algorithm used by TurnOva token issuance. Other signed HMAC algorithms are rejected.
+- **Test evidence:** AUTH-API-064 uses a correctly signed HS384 token and asserts 401/no-store/generic Bearer challenge; the existing valid HS256 `/me` test is the positive control.
+- **Source/test head:** [d52862d2](https://github.com/rajeevp727/turnova-platform/commit/d52862d2e312c7ee9a78a581dfa30d03de7d2c99), exact-head API-only CI [#45454857745](https://github.com/rajeevp727/turnova-platform/actions/runs/45454857745) passed **1,512/1,512 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier, artifact [14949468476](https://github.com/rajeevp727/turnova-platform/actions/runs/45454857745/artifacts/14949468476).
+- **Documentation:** test plan, API contract README and architecture now record the allowlist. This matrix/progress/Project Brain sync requires its own exact-head CI.
+- **Scope/review:** no mobile source or container build/deployment path changed. PR #200 remains open/non-draft; 3 owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked.
+- **Strict acceptance:** **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). AUTH-API-064 is supporting API security evidence only; no acceptance row is promoted. Live Cosmos and production readiness remain unproven.
+- **Next:** verify exact-head API-only CI for the documentation-bearing commit, continue API-only audits and obtain independent human review. Do not merge or begin Android without independent approval, permitted merge and a fresh main/API phase-exit audit.
+
+---
+
 ## Run 144 — 2026-11-24 — Suppress JWT validation details in Bearer challenges
 
 - **Platform phase:** API remains in progress; Android and iOS remain not started. PR #200 remains the sole active feature PR.
