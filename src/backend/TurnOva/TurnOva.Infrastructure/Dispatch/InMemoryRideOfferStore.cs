@@ -12,28 +12,24 @@ public sealed class InMemoryRideOfferStore : IRideOfferStore
     public Task<RideOfferState?> GetByRideAsync(string rideId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(_states.TryGetValue(rideId, out var state) ? state : null);
+        var found = _states.TryGetValue(rideId, out var state);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(found ? state : null);
     }
 
     public Task<RideOfferState?> GetPendingForDriverAsync(string driverId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var pendingOffers = _states.Values
-            .Where(x => x.IsPending && x.DriverId == driverId)
-            .Take(2)
-            .ToArray();
-        if (pendingOffers.Length > 1)
-            throw new InvalidOperationException("Multiple pending ride offers exist for the driver.");
-
-        return Task.FromResult(pendingOffers.SingleOrDefault());
+        return Task.FromResult(InMemoryRideOfferStoreSnapshots.GetPendingForDriver(
+            _states.Values, driverId, cancellationToken));
     }
 
     public Task<IReadOnlyList<RideOfferState>> GetExpiredAsync(DateTimeOffset nowUtc, int maxItems, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (maxItems < 1) throw new ArgumentOutOfRangeException(nameof(maxItems));
-        IReadOnlyList<RideOfferState> result = _states.Values.Where(x => x.IsExpiredAt(nowUtc))
-            .OrderBy(x => x.ExpiresAtUtc).Take(maxItems).ToArray();
+        var result = InMemoryRideOfferStoreSnapshots.GetExpired(
+            _states.Values, nowUtc, maxItems, cancellationToken);
         return Task.FromResult(result);
     }
 
@@ -41,9 +37,8 @@ public sealed class InMemoryRideOfferStore : IRideOfferStore
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (maxItems < 1) throw new ArgumentOutOfRangeException(nameof(maxItems));
-        IReadOnlyList<RideOfferState> result = _states.Values
-            .Where(x => x.IsPending && x.NotificationStatus == "Pending")
-            .OrderBy(x => x.OfferedAtUtc).Take(maxItems).ToArray();
+        var result = InMemoryRideOfferStoreSnapshots.GetPendingNotifications(
+            _states.Values, maxItems, cancellationToken);
         return Task.FromResult(result);
     }
 
@@ -52,6 +47,7 @@ public sealed class InMemoryRideOfferStore : IRideOfferStore
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(state);
         var versioned = state with { ETag = NextETag() };
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(_states.TryAdd(state.RideId, versioned));
     }
 
@@ -60,8 +56,12 @@ public sealed class InMemoryRideOfferStore : IRideOfferStore
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(state);
         if (!_states.TryGetValue(state.RideId, out var current) || current.ETag != expectedETag)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(false);
+        }
         var replacement = state with { ETag = NextETag() };
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(_states.TryUpdate(state.RideId, replacement, current));
     }
 
