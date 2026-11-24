@@ -129,6 +129,7 @@ public sealed class CosmosMigrationBootstrapResourceContractTests
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
         var database = new Mock<Database>(MockBehavior.Strict);
+        database.SetupGet(value => value.Id).Returns("TurnOvaMigrationTest");
         var databaseResponse = new Mock<DatabaseResponse>();
         databaseResponse.SetupGet(value => value.Database).Returns(database.Object);
         client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
