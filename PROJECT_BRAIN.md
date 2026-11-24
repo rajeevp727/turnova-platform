@@ -1,6 +1,14 @@
 # PROJECT BRAIN — TurnOva
 
-Last updated: 2026-11-24 (Run 130)
+Last updated: 2026-11-24 (Run 131)
+
+## Run 131 — Cosmos resource-hydration cancellation (2026-11-24)
+
+- API remains `in_progress`; Android/iOS remain `not_started` until the API phase exit, independent human review/permitted merge and fresh main audit pass.
+- Support-request canonical conflict readback now checks cancellation after `ItemResponse.Resource` hydration. Shared `CosmosReadResponseGuard.ReadItemAsync<T>` does the same and preserves cancellation precedence if hydration throws while the token is cancelled.
+- Deterministic source/test CI: [#45369982147](https://github.com/rajeevp727/turnova-platform/actions/runs/45369982147) passed 1,405/1,405 (artifact 14908542557); [#45370865455](https://github.com/rajeevp727/turnova-platform/actions/runs/45370865455) passed 1,406/1,406 (artifact 14908539664). Both used .NET 10 Release build and native non-container Linux x64 publish/verifier.
+- PR #200 remains open at `2dacc61812567ee1fe3689a3b9b223aca500528e`, 980 ahead / 0 behind main; 3 owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. No mobile/container changes.
+- Strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); production readiness/live Cosmos are not established.
 
 ## Platform phase
 
