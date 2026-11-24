@@ -297,6 +297,8 @@ public sealed class UnionAssignmentWriterTests
 
         read.VerifyGet(value => value.Resource, Times.Once);
         read.VerifyGet(value => value.ETag, Times.Never);
+        container.Verify(value => value.ReadItemAsync<DriverUnionAssignment>(
+            DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnionAssignment>(
             It.IsAny<DriverUnionAssignment>(), DriverId, It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -320,6 +322,8 @@ public sealed class UnionAssignmentWriterTests
 
         read.VerifyGet(value => value.Resource, Times.Once);
         read.VerifyGet(value => value.ETag, Times.Once);
+        container.Verify(value => value.ReadItemAsync<DriverUnionAssignment>(
+            DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnionAssignment>(
             It.IsAny<DriverUnionAssignment>(), DriverId, It.IsAny<PartitionKey?>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
