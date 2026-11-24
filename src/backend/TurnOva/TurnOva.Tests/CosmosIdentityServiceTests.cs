@@ -1000,6 +1000,109 @@ public sealed class CosmosIdentityServiceTests
         batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task RegisterHonorsPreCancelledTokenBeforeRequestValidation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            null!,
+            cts.Token));
+
+        Assert.Empty(container.Invocations);
+    }
+
+    [Fact]
+    public async Task RegisterRejectsNullRequestBeforeCallingCosmos()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => service.RegisterAsync(
+            "rider",
+            null!,
+            CancellationToken.None));
+
+        Assert.Empty(container.Invocations);
+    }
+
+    [Fact]
+    public async Task LoginHonorsPreCancelledTokenBeforeRequestValidation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider",
+            null!,
+            cts.Token));
+
+        Assert.Empty(container.Invocations);
+    }
+
+    [Fact]
+    public async Task LoginRejectsNullRequestBeforeCallingCosmos()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => service.LoginAsync(
+            "rider",
+            null!,
+            CancellationToken.None));
+
+        Assert.Empty(container.Invocations);
+    }
+
+    [Fact]
+    public async Task RefreshHonorsPreCancelledTokenBeforeMissingRequestValidation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.RefreshAsync(
+            null,
+            cts.Token));
+
+        Assert.Empty(container.Invocations);
+    }
+
+    [Fact]
+    public async Task LogoutHonorsPreCancelledTokenBeforePrincipalValidation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.LogoutAsync(
+            null!,
+            cts.Token));
+
+        Assert.Empty(container.Invocations);
+    }
+
+    [Fact]
+    public async Task LogoutRejectsNullPrincipalBeforeCallingCosmos()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => service.LogoutAsync(
+            null!,
+            CancellationToken.None));
+
+        Assert.Empty(container.Invocations);
+    }
+
     private static CosmosIdentityService CreateService(Container container) =>
         new(null, CreateConfiguration(), container);
 
