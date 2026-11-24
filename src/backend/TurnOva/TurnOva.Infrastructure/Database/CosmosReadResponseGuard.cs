@@ -152,6 +152,99 @@ public static class CosmosReadResponseGuard
         where TResponse : class =>
         ReadResponseValue(response, etagAccessor, cancellationToken);
 
+    public static bool ReadHasMoreResults<T>(
+        FeedIterator<T> iterator,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(iterator);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            var hasMoreResults = iterator.HasMoreResults;
+            cancellationToken.ThrowIfCancellationRequested();
+            return hasMoreResults;
+        }
+        catch
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
+    }
+
+    public static IReadOnlyList<T> ReadPageItems<T>(
+        FeedResponse<T> page,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var results = new List<T>();
+        IEnumerator<T>? enumerator = null;
+        try
+        {
+            enumerator = ((IEnumerable<T>)page).GetEnumerator();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                bool hasNext;
+                try
+                {
+                    hasNext = enumerator.MoveNext();
+                }
+                catch
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    throw;
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!hasNext)
+                    break;
+
+                T item;
+                try
+                {
+                    item = enumerator.Current;
+                }
+                catch
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    throw;
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                results.Add(item);
+            }
+        }
+        catch
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
+        finally
+        {
+            if (enumerator is not null)
+            {
+                try
+                {
+                    enumerator.Dispose();
+                }
+                catch
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    throw;
+                }
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return results;
+    }
+
     public static async Task<T?> ReadItemAsync<T>(
         Container container,
         string id,
@@ -209,7 +302,7 @@ public static class CosmosReadResponseGuard
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!iterator.HasMoreResults) break;
+            if (!ReadHasMoreResults(iterator, cancellationToken)) break;
 
             FeedResponse<T> page;
             try
@@ -226,10 +319,18 @@ public static class CosmosReadResponseGuard
             if (page is null)
                 throw new InvalidOperationException($"Cosmos returned an empty {resourceDescription} query page.");
 
-            foreach (var resource in page)
+            foreach (var resource in ReadPageItems(page, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                results.Add(RequireResource(resource, identityMatches, resourceDescription));
+                try
+                {
+                    results.Add(RequireResource(resource, identityMatches, resourceDescription));
+                }
+                catch
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    throw;
+                }
             }
         }
 

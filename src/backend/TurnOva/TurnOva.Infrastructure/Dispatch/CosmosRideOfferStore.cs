@@ -36,14 +36,14 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
             .WithParameter("@driverId", driverId).WithParameter("@status", RideOfferStatuses.Pending);
         using var iterator = container.GetItemQueryIterator<RideOfferState>(query);
         RideOfferState? pendingOffer = null;
-        while (iterator.HasMoreResults)
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
                 () => iterator.ReadNextAsync(cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (var item in page)
+            foreach (var item in CosmosReadResponseGuard.ReadPageItems(page, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var candidate = RequirePendingForDriverQueryItem(item, driverId);
@@ -66,14 +66,14 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
             .WithParameter("@limit", maxItems).WithParameter("@status", RideOfferStatuses.Pending).WithParameter("@now", nowUtc);
         using var iterator = container.GetItemQueryIterator<RideOfferState>(query);
         var results = new List<RideOfferState>();
-        while (iterator.HasMoreResults && results.Count < maxItems)
+        while (results.Count < maxItems && CosmosReadResponseGuard.ReadHasMoreResults(iterator, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
                 () => iterator.ReadNextAsync(cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (var item in page)
+            foreach (var item in CosmosReadResponseGuard.ReadPageItems(page, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var candidate = RequireQueryItem(item);
@@ -102,14 +102,14 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
             .WithParameter("@notificationStatus", "Pending");
         using var iterator = container.GetItemQueryIterator<RideOfferState>(query);
         var results = new List<RideOfferState>();
-        while (iterator.HasMoreResults && results.Count < maxItems)
+        while (results.Count < maxItems && CosmosReadResponseGuard.ReadHasMoreResults(iterator, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
                 () => iterator.ReadNextAsync(cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (var item in page)
+            foreach (var item in CosmosReadResponseGuard.ReadPageItems(page, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var candidate = RequireQueryItem(item);

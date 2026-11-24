@@ -667,6 +667,160 @@ public sealed class CosmosReadResponseGuardTests
     }
 
     [Fact]
+    public void ReadHasMoreResultsCancellationTakesPrecedenceOverGetterFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<DriverUnion>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("iterator state failed");
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadHasMoreResults(iterator.Object, cancellation.Token));
+
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadHasMoreResultsPreservesGetterFailureWhenNotCancelled()
+    {
+        var failure = new InvalidOperationException("iterator state failed");
+        var iterator = new Mock<FeedIterator<DriverUnion>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(() => throw failure);
+
+        var actual = Assert.Throws<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.ReadHasMoreResults(iterator.Object, CancellationToken.None));
+
+        Assert.Same(failure, actual);
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadPageItemsCancellationTakesPrecedenceOverEnumeratorCreationFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("page enumerator failed");
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, cancellation.Token));
+
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadPageItemsCancellationTakesPrecedenceOverMoveNextFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var failure = new InvalidOperationException("page enumeration failed");
+        var enumerator = new Mock<IEnumerator<DriverUnion>>(MockBehavior.Strict);
+        enumerator.Setup(value => value.MoveNext()).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw failure;
+        });
+        enumerator.Setup(value => value.Dispose());
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(enumerator.Object);
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, cancellation.Token));
+
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerator.Verify(value => value.MoveNext(), Times.Once);
+        enumerator.Verify(value => value.Dispose(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+        enumerator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadPageItemsPreservesEnumerationFailureWhenNotCancelled()
+    {
+        var failure = new InvalidOperationException("page enumeration failed");
+        var enumerator = new Mock<IEnumerator<DriverUnion>>(MockBehavior.Strict);
+        enumerator.Setup(value => value.MoveNext()).Returns(() => throw failure);
+        enumerator.Setup(value => value.Dispose());
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(enumerator.Object);
+
+        var actual = Assert.Throws<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, CancellationToken.None));
+
+        Assert.Same(failure, actual);
+        enumerator.Verify(value => value.MoveNext(), Times.Once);
+        enumerator.Verify(value => value.Dispose(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+        enumerator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReadAllCancellationTakesPrecedenceOverHasMoreResultsFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<DriverUnion>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("iterator state failed");
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadAllAsync(
+                iterator.Object,
+                item => item.UnionId == UnionId,
+                "Union",
+                cancellation.Token));
+
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReadAllCancellationTakesPrecedenceOverPageEnumerationFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var iterator = new Mock<FeedIterator<DriverUnion>>(MockBehavior.Strict);
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw new InvalidOperationException("page enumerator failed");
+        });
+        iterator.Setup(value => value.ReadNextAsync(cancellation.Token)).ReturnsAsync(page.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadAllAsync(
+                iterator.Object,
+                item => item.UnionId == UnionId,
+                "Union",
+                cancellation.Token));
+
+        iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(cancellation.Token), Times.Once);
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        iterator.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task ReadItemReturnsDriverProfileOnlyWhenDocumentAndDriverIdsMatch()
     {
         var profile = CreateDriverProfile();

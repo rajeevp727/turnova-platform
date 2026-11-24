@@ -24,13 +24,13 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!iterator.HasMoreResults) break;
+            if (!CosmosReadResponseGuard.ReadHasMoreResults(iterator, cancellationToken)) break;
 
             var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
                 () => iterator.ReadNextAsync(cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (var item in page)
+            foreach (var item in CosmosReadResponseGuard.ReadPageItems(page, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var entry = RequireEligibleQueryItem(item, key);
@@ -232,13 +232,13 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!iterator.HasMoreResults) break;
+            if (!CosmosReadResponseGuard.ReadHasMoreResults(iterator, cancellationToken)) break;
 
             var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
                 () => iterator.ReadNextAsync(cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (var item in page)
+            foreach (var item in CosmosReadResponseGuard.ReadPageItems(page, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 events.Add(RequireAuditQueryItem(item, key));

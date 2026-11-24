@@ -234,13 +234,13 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!iterator.HasMoreResults) break;
+                if (!CosmosReadResponseGuard.ReadHasMoreResults(iterator, cancellationToken)) break;
 
                 var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
                     () => iterator.ReadNextAsync(cancellationToken),
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                foreach (var reservation in page)
+                foreach (var reservation in CosmosReadResponseGuard.ReadPageItems(page, cancellationToken))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     reservations.Add(RequireQueryItem(reservation, batch));
