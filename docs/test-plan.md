@@ -24,8 +24,6 @@ TurnOva delivery is gated in this order: (1) complete API source/tests/OpenAPI d
 
 **Evidence:** source/test head [`0050aab3ecd76c0b82289737380b196e5cd2ffdc`](https://github.com/rajeevp727/turnova-platform/commit/0050aab3ecd76c0b82289737380b196e5cd2ffdc) passed exact-head API-only CI [#45308873205](https://github.com/rajeevp727/turnova-platform/actions/runs/45308873205): 1,344/1,344 backend tests, .NET 10 Release build (0 warnings/0 errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14882551446](https://github.com/rajeevp727/turnova-platform/actions/runs/45308873205/artifacts/14882551446). This is deterministic adapter evidence, not live Cosmos ETag/multi-instance/restart validation.
 
-
-
 ## Cosmos read identity and cancellation (COSMOS-READ-001..017)
 
 The API now uses `CosmosReadResponseGuard` for Union, Driver-to-Union assignment, Union audit, Union-list, Driver profile and eligible Cab discovery reads. Point reads reject null or mismatched resources; query pages reject null or mismatched rows. Cancellation is checked before provider work, after successful reads/pages, and when provider failures race a cancelled request. A mapped 404 remains a normal missing-resource result only when the caller has not cancelled. The same cancellation-precedence rule now covers support-request conflict readback, queue eligible/audit query pages, queue leave/rotation point reads, and queue-audit event readback. Durable queue/support writes remain authoritative when committed; the new guard is applied only to read operations.
