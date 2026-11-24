@@ -22,6 +22,7 @@ public sealed class QueueService(IQueueStore store)
     public Task<bool> MoveToBackAsync(
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(driverId) || string.IsNullOrWhiteSpace(zoneId) ||
             string.IsNullOrWhiteSpace(serviceClass))
             throw new ArgumentException("Driver, zone and service class are required.");
@@ -32,6 +33,7 @@ public sealed class QueueService(IQueueStore store)
     public Task<bool> LeaveAsync(
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(driverId) || string.IsNullOrWhiteSpace(zoneId) ||
             string.IsNullOrWhiteSpace(serviceClass))
             throw new ArgumentException("Driver, zone and service class are required.");
@@ -47,6 +49,7 @@ public sealed class QueueService(IQueueStore store)
         string reasonCategory,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(zoneId) ||
             string.IsNullOrWhiteSpace(serviceClass) || string.IsNullOrWhiteSpace(traceId) ||
             traceId.Length > 128 ||

@@ -60,6 +60,42 @@ public sealed class QueueStoreTests
     }
 
     [Fact]
+    public async Task QueueServiceMoveToBackHonorsCancellationBeforeInputValidation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new QueueService(store).MoveToBackAsync(" ", "zone-a", "Cab", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task QueueServiceLeaveHonorsCancellationBeforeInputValidation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new QueueService(store).LeaveAsync(" ", "zone-a", "Cab", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task QueueServiceRecordDispatchExceptionHonorsCancellationBeforeInputValidation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new QueueService(store).RecordDispatchExceptionAsync(
+                " ", " ", " ", " ", "unknown", cancellation.Token));
+
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task QueueServiceJoinRejectsNullEntryBeforeStoreMutation()
     {
         var store = new InMemoryQueueStore();
