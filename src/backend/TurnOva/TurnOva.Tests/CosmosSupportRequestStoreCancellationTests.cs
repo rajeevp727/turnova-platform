@@ -237,6 +237,47 @@ public sealed class CosmosSupportRequestStoreCancellationTests
         container.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task CanonicalReadHonorsCancellationDuringResourceHydrationBeforeReturningReplayOrConflict()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var conflict = new CosmosException(
+            "support request already exists", HttpStatusCode.Conflict, 0, "support-request-test", 0);
+        var request = CreateRequest();
+        var response = new Mock<ItemResponse<SupportRequest>>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return request;
+        });
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<SupportRequest>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(conflict);
+        container.Setup(value => value.ReadItemAsync<SupportRequest>(
+                request.Id,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosSupportRequestStore(container.Object).CreateOrGetAsync(request, cancellation.Token));
+
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<SupportRequest>(
+            request.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        container.VerifyNoOtherCalls();
+        response.VerifyNoOtherCalls();
+    }
+
     private static SupportRequest CreateRequest() =>
         new(
             "request-1",
