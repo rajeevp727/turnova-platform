@@ -22,6 +22,8 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         CancellationToken cancellationToken = default,
         DriverRideReservationAuditContext? auditContext = null)
     {
+        ArgumentNullException.ThrowIfNull(reservation);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RequestHash);
         cancellationToken.ThrowIfCancellationRequested();
         if (reservation.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow())
             return Task.FromResult(RiderBookingReservationAcquireResult.Conflict);
