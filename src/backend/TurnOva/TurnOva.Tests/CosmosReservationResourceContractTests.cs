@@ -218,6 +218,29 @@ public sealed class CosmosReservationResourceContractTests
     }
 
     [Fact]
+    public async Task RiderActiveReadRejectsBlankRequestHash()
+    {
+        var response = new Mock<ItemResponse<RiderActiveBookingReservation>>();
+        response.SetupGet(value => value.Resource)
+            .Returns(new RiderActiveBookingReservation(
+                "rider-1", "ride-1", " ", DateTimeOffset.UtcNow, null));
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+                RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object).GetActiveAsync("rider-1"));
+
+        Assert.Equal("Cosmos returned a malformed Rider booking reservation resource.", exception.Message);
+        container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+            RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task RiderReleaseRejectsResourceForDifferentRiderBeforeStartingDeleteBatch()
     {
         var response = new Mock<ItemResponse<RiderActiveBookingReservation>>();
