@@ -1,3 +1,11 @@
+## Run 148 — 2026-11-25 — supporting API security/persistence evidence (no acceptance promotion)
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR #200 remains the sole active feature PR; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- **AUTH-API-065:** deterministic integration evidence rejects a correctly signed HS256 token with multiple Rider/Driver role claims before `/api/v1/auth/me` can return an identity. The test asserts HTTP 401, no-store/no-cache and a generic Bearer challenge. Source/test head [bbbadb3d](https://github.com/rajeevp727/turnova-platform/commit/bbbadb3df0c2f92ed20ffb69ccf92250096ac1c5); exact-head API-only CI [#45476271703](https://github.com/rajeevp727/turnova-platform/actions/runs/45476271703) passed **1,535/1,535 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier; artifact [14960240985](https://github.com/rajeevp727/turnova-platform/actions/runs/45476271703/artifacts/14960240985).
+- **PLATFORM-01 supporting evidence:** the Run147 migration database-handle tests remain green after correcting four recursive Moq verification assertions. Exact-head CI [#45475672647](https://github.com/rajeevp727/turnova-platform/actions/runs/45475672647) passed **1,534/1,534 tests**, Release build and native non-container publish/verifier; artifact [14960900190](https://github.com/rajeevp727/turnova-platform/actions/runs/45475672647/artifacts/14960900190).
+- No acceptance row status changes. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). These supplemental tests do not establish live Cosmos or production readiness.
+- No mobile source or Docker/container build/deployment paths changed. Documentation-bearing head requires its own exact-head API-only CI.
+
 ## Run 147 — 2026-11-25 — Cosmos migration database handle bootstrap (supporting API evidence)
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR #200 remains the sole active feature PR on branch `test/api-nondev-support-readiness-20261120`, based on main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
