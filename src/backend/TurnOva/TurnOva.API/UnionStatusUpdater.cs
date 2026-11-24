@@ -46,8 +46,10 @@ public static class UnionStatusUpdater
         ItemResponse<DriverUnion> currentResponse;
         try
         {
-            currentResponse = await unionContainer.ReadItemAsync<DriverUnion>(
-                unionId, new PartitionKey(unionId), cancellationToken: cancellationToken);
+            currentResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => unionContainer.ReadItemAsync<DriverUnion>(
+                    unionId, new PartitionKey(unionId), cancellationToken: cancellationToken),
+                cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
@@ -55,14 +57,18 @@ public static class UnionStatusUpdater
             return new UnionStatusUpdateResult(UnionStatusUpdateOutcome.NotFound, null);
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-        var currentUnion = currentResponse.Resource;
+        var currentUnion = CosmosReadResponseGuard.ReadResponseValue(
+            currentResponse, static response => response.Resource, cancellationToken);
         if (currentUnion is null ||
-            !string.Equals(currentUnion.UnionId, unionId, StringComparison.Ordinal) ||
-            !CosmosEtagPolicy.HasObservedEtag(currentResponse.ETag))
+            !string.Equals(currentUnion.UnionId, unionId, StringComparison.Ordinal))
         {
             return new UnionStatusUpdateResult(UnionStatusUpdateOutcome.Conflict, null);
         }
+
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            currentResponse, static response => response.ETag, cancellationToken);
+        if (!CosmosEtagPolicy.HasObservedEtag(etag))
+            return new UnionStatusUpdateResult(UnionStatusUpdateOutcome.Conflict, null);
 
         var updatedUnion = currentUnion with { Status = status, UpdatedAtUtc = updatedAtUtc };
         cancellationToken.ThrowIfCancellationRequested();
@@ -73,7 +79,7 @@ public static class UnionStatusUpdater
                 updatedUnion,
                 unionId,
                 new PartitionKey(unionId),
-                new ItemRequestOptions { IfMatchEtag = currentResponse.ETag },
+                new ItemRequestOptions { IfMatchEtag = etag },
                 cancellationToken);
             return new UnionStatusUpdateResult(UnionStatusUpdateOutcome.Updated, updatedUnion);
         }
