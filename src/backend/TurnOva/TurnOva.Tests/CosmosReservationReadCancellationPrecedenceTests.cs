@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Net;
 using Microsoft.Azure.Cosmos;
 using Moq;
@@ -153,6 +154,40 @@ public sealed class CosmosReservationReadCancellationPrecedenceTests
             new CosmosDriverRideReservationStore(container.Object).GetActiveForDriversAsync(null!));
 
         container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DriverBulkQueryHonorsCancellationDuringOrAfterDriverIdEnumerationBeforeCallingCosmos(
+        bool yieldSecond)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var driverIds = new CancellingDriverIdCollection(cancellation, yieldSecond);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosDriverRideReservationStore(container.Object)
+                .GetActiveForDriversAsync(driverIds, cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    private sealed class CancellingDriverIdCollection(
+        CancellationTokenSource cancellation,
+        bool yieldSecond) : IReadOnlyCollection<string>
+    {
+        public int Count => yieldSecond ? 2 : 1;
+
+        public IEnumerator<string> GetEnumerator()
+        {
+            yield return "driver-a";
+            cancellation.Cancel();
+            if (yieldSecond)
+                yield return "driver-b";
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private static Mock<Container> CreateFailingReadContainer<T>(
