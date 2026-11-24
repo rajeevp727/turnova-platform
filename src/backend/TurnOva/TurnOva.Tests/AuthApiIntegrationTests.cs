@@ -132,6 +132,26 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task RejectsSignedJwtUsingNonConfiguredAlgorithm()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken(algorithm: SecurityAlgorithms.HmacSha384));
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(value => value.ToString()));
+        Assert.Contains("Bearer", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error=", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error_description", challenge, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task MeReturnsIdentityFromValidatedTurnOvaJwt()
     {
         using var factory = new AuthApiFactory();
@@ -317,10 +337,10 @@ public sealed class AuthApiIntegrationTests
         Assert.Contains("Auth:Jwt", exception.ToString(), StringComparison.Ordinal);
     }
 
-    private static string CreateToken(bool includeSubject = true, bool includeNameId = false)
+    private static string CreateToken(bool includeSubject = true, bool includeNameId = false, string algorithm = SecurityAlgorithms.HmacSha256)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var credentials = new SigningCredentials(key, algorithm);
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Email, "rider@example.com"),
