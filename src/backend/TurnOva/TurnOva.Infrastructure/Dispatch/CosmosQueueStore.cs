@@ -40,7 +40,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return entries.OrderBy(x => x.Sequence).ThenBy(x => x.JoinedAt).ToArray();
+        return FifoQueueSnapshots.GetEligible(entries, cancellationToken);
     }
 
     public async Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken)
@@ -60,6 +60,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         };
 
         var audit = CreateAuditEvent(document.ZoneServiceKey, entry.DriverId, QueueAuditEventTypes.Joined);
+        cancellationToken.ThrowIfCancellationRequested();
         var response = await queueContainer.CreateTransactionalBatch(new PartitionKey(document.ZoneServiceKey))
             .CreateItem(document)
             .CreateItem(audit)
@@ -85,14 +86,19 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             _ = RequireResource(current, driverId, key);
+            cancellationToken.ThrowIfCancellationRequested();
 
             // A leave must not delete a queue entry that was replaced or rejoined after
             // this read. Without an observed ETag, fail closed rather than issuing an
             // unconditional transactional delete.
             if (!CosmosEtagPolicy.HasObservedEtag(current.ETag))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return false;
+            }
 
             var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.Left);
+            cancellationToken.ThrowIfCancellationRequested();
             var response = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
                 .DeleteItem(driverId, new TransactionalBatchItemRequestOptions { IfMatchEtag = current.ETag })
                 .CreateItem(audit)
@@ -125,11 +131,16 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var document = RequireResource(response, driverId, key);
+            cancellationToken.ThrowIfCancellationRequested();
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return false;
+            }
             document.JoinedAt = DateTimeOffset.UtcNow;
             document.Sequence = document.JoinedAt.UtcTicks;
             var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.MovedToBack);
+            cancellationToken.ThrowIfCancellationRequested();
             var batch = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
                 .ReplaceItem(driverId, document, new TransactionalBatchItemRequestOptions { IfMatchEtag = response.ETag })
                 .CreateItem(audit)
@@ -161,13 +172,22 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var document = RequireResource(response, driverId, key);
-            if (document.LastRotationOfferId == offerId) return true;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (document.LastRotationOfferId == offerId)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return true;
+            }
             if (!CosmosEtagPolicy.HasObservedEtag(response.ETag))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return false;
+            }
             document.JoinedAt = DateTimeOffset.UtcNow;
             document.Sequence = document.JoinedAt.UtcTicks;
             document.LastRotationOfferId = offerId;
             var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.RotatedToBack, offerId);
+            cancellationToken.ThrowIfCancellationRequested();
             var batch = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
                 .ReplaceItem(driverId, document, new TransactionalBatchItemRequestOptions { IfMatchEtag = response.ETag })
                 .CreateItem(audit)

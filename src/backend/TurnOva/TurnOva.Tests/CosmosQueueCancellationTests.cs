@@ -453,6 +453,92 @@ public sealed class CosmosQueueCancellationTests
         container.VerifyNoOtherCalls();
     }
 
+    private static Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>> CreateCancellingQueueResponse(
+        CancellationTokenSource cancellation)
+    {
+        var response = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return new CosmosQueueStore.QueueEntryDocument
+            {
+                Id = "driver-1",
+                DriverId = "driver-1",
+                ZoneId = "zone-a",
+                ServiceClass = "Cab",
+                ZoneServiceKey = "zone-a|cab",
+                JoinedAt = DateTimeOffset.Parse("2026-11-23T00:00:00Z"),
+                Sequence = 1,
+                IsEligible = true
+            };
+        });
+        return response;
+    }
+
+    [Fact]
+    public async Task RemoveHonorsCancellationAfterSuccessfulPointReadBeforeBatch()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var response = CreateCancellingQueueResponse(cancellation);
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).RemoveAsync("driver-1", "zone-a", "Cab", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task MoveToBackHonorsCancellationAfterSuccessfulPointReadBeforeBatch()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var response = CreateCancellingQueueResponse(cancellation);
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).MoveToBackAsync("driver-1", "zone-a", "Cab", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task MoveToBackOnceHonorsCancellationAfterSuccessfulPointReadBeforeBatch()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var response = CreateCancellingQueueResponse(cancellation);
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).MoveToBackOnceAsync(
+                "driver-1", "zone-a", "Cab", "offer-1", cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+    }
+
     private static CosmosException Unavailable() =>
         new("Cosmos is unavailable.", System.Net.HttpStatusCode.ServiceUnavailable, 0, "queue-cancellation-test", 0);
 
