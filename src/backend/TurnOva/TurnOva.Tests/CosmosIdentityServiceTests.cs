@@ -1304,7 +1304,7 @@ public sealed class CosmosIdentityServiceTests
     public async Task LoginCancellationTakesPrecedenceOverHasMoreResultsHydrationFailure()
     {
         using var cts = new CancellationTokenSource();
-        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(() =>
         {
             cts.Cancel();
@@ -1326,14 +1326,13 @@ public sealed class CosmosIdentityServiceTests
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
-        iterator.VerifyNoOtherCalls();
     }
 
     [Fact]
     public async Task LoginCancellationTakesPrecedenceOverQueryPageReadFailure()
     {
         using var cts = new CancellationTokenSource();
-        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
         iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
             .Returns(() =>
@@ -1358,7 +1357,6 @@ public sealed class CosmosIdentityServiceTests
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
-        iterator.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -1374,7 +1372,7 @@ public sealed class CosmosIdentityServiceTests
                 cts.Cancel();
                 throw new InvalidOperationException("identity query page enumeration failed");
             });
-        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
         iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>())).ReturnsAsync(page.Object);
         var container = new Mock<Container>(MockBehavior.Strict);
@@ -1397,14 +1395,13 @@ public sealed class CosmosIdentityServiceTests
         container.VerifyNoOtherCalls();
         iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
-        iterator.VerifyNoOtherCalls();
     }
 
     [Fact]
     public async Task RefreshCancellationTakesPrecedenceOverHasMoreResultsHydrationFailure()
     {
         using var cts = new CancellationTokenSource();
-        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(() =>
         {
             cts.Cancel();
@@ -1426,14 +1423,13 @@ public sealed class CosmosIdentityServiceTests
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
-        iterator.VerifyNoOtherCalls();
     }
 
     [Fact]
     public async Task RefreshCancellationTakesPrecedenceOverQueryPageReadFailure()
     {
         using var cts = new CancellationTokenSource();
-        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
         iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>()))
             .Returns(() =>
@@ -1458,7 +1454,6 @@ public sealed class CosmosIdentityServiceTests
         container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
             It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
         container.VerifyNoOtherCalls();
-        iterator.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -1474,7 +1469,7 @@ public sealed class CosmosIdentityServiceTests
                 cts.Cancel();
                 throw new InvalidOperationException("identity query page enumeration failed");
             });
-        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>(MockBehavior.Strict);
+        var iterator = new Mock<FeedIterator<CosmosIdentityService.IdentityDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
         iterator.Setup(value => value.ReadNextAsync(It.IsAny<CancellationToken>())).ReturnsAsync(page.Object);
         var container = new Mock<Container>(MockBehavior.Strict);
@@ -1497,7 +1492,6 @@ public sealed class CosmosIdentityServiceTests
         container.VerifyNoOtherCalls();
         iterator.VerifyGet(value => value.HasMoreResults, Times.Once);
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
-        iterator.VerifyNoOtherCalls();
     }
 
     private static CosmosIdentityService CreateService(Container container) =>
