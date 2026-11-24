@@ -1,3 +1,16 @@
+# Run 145 handoff — 2026-11-24 (API phase)
+
+- Active phase: API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR; branch `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Run 145 source/test head [d52862d2](https://github.com/rajeevp727/turnova-platform/commit/d52862d2e312c7ee9a78a581dfa30d03de7d2c99) pins JWT bearer validation to HS256 and adds AUTH-API-064. Exact-head API-only CI [#45454857745](https://github.com/rajeevp727/turnova-platform/actions/runs/45454857745) passed **1,512/1,512 backend tests**, Release build (0 warnings/errors), native non-container Linux x64 publish/verifier; artifact [14949468476](https://github.com/rajeevp727/turnova-platform/actions/runs/45454857745/artifacts/14949468476).
+- Run 144 documentation head [8495afa0](https://github.com/rajeevp727/turnova-platform/commit/8495afa05e476861343f0982098befea523f6f53) passed exact-head CI [#45453978657](https://github.com/rajeevp727/turnova-platform/actions/runs/45453978657), 1,511/1,511 tests and native non-container publish/verifier. Run145 docs now synchronize test plan, API contract, architecture, progress and acceptance matrix; this final docs head still requires its own exact-head CI.
+- Run 145 change is API-only. No `src/mobile/` paths, Dockerfiles, container CI, images, registries or container deployments were added.
+- Review gate: three owner-authored COMMENTED reviews, **0 independent approvals**, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked. Do not self-approve, bypass protections or merge.
+- Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage. Live Cosmos and production readiness remain unproven.
+- External gates: live Cosmos transaction/partition/ETag/multi-instance/restart/RU/failover; production JWT/Cosmos credentials, signing-key custody/rotation, API hosting/TLS, trusted proxy/shared rate limiting and provider/account migration; approved dispatch zones/radius/location freshness/negotiation lifetime/FIFO fairness; maps/routing/SignalR/call/chat/push; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device/signing/store/TestFlight evidence.
+- Next: verify exact-head CI for the Run145 documentation-bearing head; continue API-only security/authorization/privacy/persistence audits; obtain independent human approval. After a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver.
+
+---
+
 # Run 144 handoff — 2026-11-24 (API phase)
 
 - Active phase: API in progress. Android/iOS remain not started. PR #200 is the sole ready/active feature PR.
