@@ -20,7 +20,15 @@ public sealed class CosmosMigrationRunner(
         var databaseResponse = await client.CreateDatabaseIfNotExistsAsync(
             options.DatabaseName, throughput: 400, cancellationToken: cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var database = databaseResponse.Database;
+        var database = CosmosReadResponseGuard.ReadResponseResource(
+            databaseResponse,
+            static response => response.Database,
+            value => !string.IsNullOrWhiteSpace(options.DatabaseName) &&
+                string.Equals(value.Id, options.DatabaseName, StringComparison.Ordinal),
+            "migration database handle",
+            cancellationToken,
+            "Cosmos returned a migration database handle that does not match the configured database name after bootstrap.",
+            "Cosmos returned an empty migration database handle after bootstrap.");
 
         var history = await CreateValidatedContainerAsync(
             database, HistoryContainerName, cancellationToken);
