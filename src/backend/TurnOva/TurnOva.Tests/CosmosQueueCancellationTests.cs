@@ -35,6 +35,30 @@ public sealed class CosmosQueueCancellationTests
     }
 
     [Fact]
+    public async Task AddRejectsNullEntryBeforeCreatingTransactionalBatch()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            new CosmosQueueStore(container.Object).AddAsync(null!, CancellationToken.None));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task AddCancellationTakesPrecedenceOverNullEntry()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).AddAsync(null!, cancellation.Token));
+
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task RemoveHonorsPreCancelledTokenBeforeReadingQueueEntry()
     {
         var container = new Mock<Container>(MockBehavior.Strict);

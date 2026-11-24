@@ -16,20 +16,27 @@ public sealed class InMemoryQueueStore : IQueueStore
     public Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = Key(zoneId, serviceClass);
         if (!_queues.TryGetValue(key, out var queue))
             return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(Array.Empty<DriverQueueEntry>());
 
         lock (queue)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(queue.Entries);
+        }
     }
 
     public Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(entry);
         var key = Key(entry.ZoneId, entry.ServiceClass);
         var queue = _queues.GetOrAdd(key, _ => new FifoQueue());
         lock (queue)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             queue.Enqueue(entry with { Sequence = Interlocked.Increment(ref _sequence) });
             RecordAudit(key, entry.DriverId, QueueAuditEventTypes.Joined);
         }

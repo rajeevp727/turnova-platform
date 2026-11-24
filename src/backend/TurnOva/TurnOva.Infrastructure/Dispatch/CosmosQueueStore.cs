@@ -46,6 +46,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     public async Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(entry);
         var document = new QueueEntryDocument
         {
             Id = entry.DriverId,

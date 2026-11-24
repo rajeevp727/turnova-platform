@@ -10,6 +10,8 @@ public sealed class QueueService(IQueueStore store)
 
     public async Task JoinAsync(DriverQueueEntry entry, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(entry);
         if (string.IsNullOrWhiteSpace(entry.DriverId) || string.IsNullOrWhiteSpace(entry.ZoneId) ||
             string.IsNullOrWhiteSpace(entry.ServiceClass))
             throw new ArgumentException("Driver, zone and service class are required.");

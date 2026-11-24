@@ -8,6 +8,84 @@ namespace TurnOva.Tests;
 public sealed class QueueStoreTests
 {
     [Fact]
+    public async Task GetEligibleAsyncHonorsPreCancelledTokenBeforeReturningQueue()
+    {
+        var store = new InMemoryQueueStore();
+        await store.AddAsync(Entry("driver-1", "zone-a", "Cab", DateTimeOffset.UtcNow), CancellationToken.None);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.GetEligibleAsync("zone-a", "Cab", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task AddAsyncHonorsPreCancelledTokenBeforeQueueOrAuditMutation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.AddAsync(Entry("driver-1", "zone-a", "Cab", DateTimeOffset.UtcNow), cancellation.Token));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AddAsyncRejectsNullEntryBeforeQueueOrAuditMutation()
+    {
+        var store = new InMemoryQueueStore();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            store.AddAsync(null!, CancellationToken.None));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AddAsyncCancellationTakesPrecedenceOverNullEntry()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.AddAsync(null!, cancellation.Token));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task QueueServiceJoinRejectsNullEntryBeforeStoreMutation()
+    {
+        var store = new InMemoryQueueStore();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            new QueueService(store).JoinAsync(null!, CancellationToken.None));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task QueueServiceJoinHonorsCancellationBeforeNullValidation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new QueueService(store).JoinAsync(null!, cancellation.Token));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task RemoveAsync_RemovesOnlyTheMatchingQueueMembership()
     {
         var store = new InMemoryQueueStore();
