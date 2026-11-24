@@ -75,6 +75,106 @@ public sealed class CosmosReservationAcquireConflictReadCancellationTests
             It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Once);
     }
 
+    [Fact]
+    public async Task DriverAcquireRetriesWhenConflictReadbackIsNotFound()
+    {
+        var (container, batch) = CreateRetryableConflictBatch();
+        container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.FromException<ItemResponse<DriverRideReservation>>(NotFound()));
+
+        var acquired = await new CosmosDriverRideReservationStore(container.Object)
+            .TryAcquireAsync("driver-1", "ride-1");
+
+        Assert.True(acquired);
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("driver-1")))), Times.Exactly(2));
+        container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        batch.Verify(value => value.CreateItem(
+            It.IsAny<DriverRideReservation>(),
+            It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Exactly(2));
+        batch.Verify(value => value.CreateItem(
+            It.IsAny<DriverRideReservationAuditEvent>(),
+            It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task RiderAcquireRetriesWhenConflictReadbackIsNotFound()
+    {
+        var (container, batch) = CreateRetryableConflictBatch();
+        var reservation = new RiderActiveBookingReservation(
+            "rider-1", "ride-1", "request-hash",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(15));
+        container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+                RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromException<ItemResponse<RiderActiveBookingReservation>>(NotFound()));
+
+        var acquired = await new CosmosRiderActiveBookingReservationStore(container.Object)
+            .TryAcquireAsync(reservation);
+
+        Assert.Equal(RiderBookingReservationAcquireResult.Acquired, acquired);
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("rider-1")))), Times.Exactly(2));
+        container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+            RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        batch.Verify(value => value.CreateItem(
+            It.IsAny<RiderActiveBookingReservation>(),
+            It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Exactly(2));
+        batch.Verify(value => value.CreateItem(
+            It.IsAny<RiderActiveBookingReservationAuditEvent>(),
+            It.IsAny<TransactionalBatchItemRequestOptions?>()), Times.Exactly(2));
+    }
+
+    private static (Mock<Container> Container, Mock<TransactionalBatch> Batch) CreateRetryableConflictBatch()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        var operation = new Mock<TransactionalBatchOperationResult>(MockBehavior.Strict);
+        operation.SetupGet(value => value.StatusCode).Returns(HttpStatusCode.Conflict);
+
+        var conflict = new Mock<TransactionalBatchResponse>();
+        conflict.SetupGet(value => value.IsSuccessStatusCode).Returns(false);
+        conflict.Setup(value => value[0]).Returns(operation.Object);
+
+        var success = new Mock<TransactionalBatchResponse>();
+        success.SetupGet(value => value.IsSuccessStatusCode).Returns(true);
+
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions?>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions?>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions?>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions?>()))
+            .Returns(batch.Object);
+        batch.SetupSequence(value => value.ExecuteAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(conflict.Object)
+            .ReturnsAsync(success.Object);
+        container.Setup(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()))
+            .Returns(batch.Object);
+
+        return (container, batch);
+    }
+
+    private static CosmosException NotFound() =>
+        new("Reservation disappeared after the create conflict.",
+            HttpStatusCode.NotFound, 0, "reservation-acquire-conflict-readback-test", 0);
+
     private static (Mock<Container> Container, Mock<TransactionalBatch> Batch) CreateConflictBatch()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
