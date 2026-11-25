@@ -166,7 +166,10 @@ public sealed class CosmosQueueCancellationTests
             It.Is<PartitionKey>(key => key.Equals(new PartitionKey("zone-a|cab")))), Times.Once);
         batch.Verify(value => value.CreateItem(
             It.Is<CosmosQueueStore.QueueEntryDocument>(item =>
-                item.DriverId == "driver-1" && item.ZoneServiceKey == "zone-a|cab"),
+                item.DriverId == "driver-1" &&
+                item.ZoneServiceKey == "zone-a|cab" &&
+                item.JoinedAt == entry.JoinedAt &&
+                item.Sequence == entry.JoinedAt.UtcTicks),
             It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
         batch.Verify(value => value.CreateItem(
             It.Is<QueueAuditEvent>(item =>
