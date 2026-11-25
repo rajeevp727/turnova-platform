@@ -116,6 +116,7 @@ public sealed class CosmosQueueResourceContractTests
     {
         var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
         iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
+        var joinedAt = DateTimeOffset.Parse("2026-11-23T00:00:00Z");
         var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
         {
             Id = "driver-1",
@@ -123,8 +124,8 @@ public sealed class CosmosQueueResourceContractTests
             ZoneId = "Hyderabad-Central",
             ServiceClass = "Cab",
             ZoneServiceKey = "hyderabad-central|cab",
-            JoinedAt = DateTimeOffset.Parse("2026-11-23T00:00:00Z"),
-            Sequence = 1,
+            JoinedAt = joinedAt,
+            Sequence = joinedAt.UtcTicks,
             IsEligible = true
         });
         iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
@@ -169,6 +170,7 @@ public sealed class CosmosQueueResourceContractTests
     {
         var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var joinedAt = DateTimeOffset.UtcNow;
         var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
         {
             Id = "different-driver",
@@ -176,8 +178,8 @@ public sealed class CosmosQueueResourceContractTests
             ZoneId = "hyderabad-central",
             ServiceClass = "cab",
             ZoneServiceKey = "hyderabad-central|cab",
-            JoinedAt = DateTimeOffset.UtcNow,
-            Sequence = 1,
+            JoinedAt = joinedAt,
+            Sequence = joinedAt.UtcTicks,
             IsEligible = true
         });
         iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
@@ -199,6 +201,7 @@ public sealed class CosmosQueueResourceContractTests
     {
         var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var joinedAt = DateTimeOffset.UtcNow;
         var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
         {
             Id = "driver-1",
@@ -206,8 +209,8 @@ public sealed class CosmosQueueResourceContractTests
             ZoneId = "hyderabad-central",
             ServiceClass = "Bike",
             ZoneServiceKey = "hyderabad-central|cab",
-            JoinedAt = DateTimeOffset.UtcNow,
-            Sequence = 1,
+            JoinedAt = joinedAt,
+            Sequence = joinedAt.UtcTicks,
             IsEligible = true
         });
         iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
@@ -229,6 +232,7 @@ public sealed class CosmosQueueResourceContractTests
     {
         var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var joinedAt = DateTimeOffset.UtcNow;
         var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
         {
             Id = "driver-1",
@@ -236,8 +240,8 @@ public sealed class CosmosQueueResourceContractTests
             ZoneId = "hyderabad-central",
             ServiceClass = "cab",
             ZoneServiceKey = "another-zone|cab",
-            JoinedAt = DateTimeOffset.UtcNow,
-            Sequence = 1,
+            JoinedAt = joinedAt,
+            Sequence = joinedAt.UtcTicks,
             IsEligible = true
         });
         iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
@@ -259,6 +263,7 @@ public sealed class CosmosQueueResourceContractTests
     {
         var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
         iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var joinedAt = DateTimeOffset.UtcNow;
         var page = CreatePage(new CosmosQueueStore.QueueEntryDocument
         {
             Id = "driver-1",
@@ -266,8 +271,8 @@ public sealed class CosmosQueueResourceContractTests
             ZoneId = "hyderabad-central",
             ServiceClass = "cab",
             ZoneServiceKey = "hyderabad-central|cab",
-            JoinedAt = DateTimeOffset.UtcNow,
-            Sequence = 1,
+            JoinedAt = joinedAt,
+            Sequence = joinedAt.UtcTicks,
             IsEligible = false
         });
         iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
@@ -288,7 +293,7 @@ public sealed class CosmosQueueResourceContractTests
     [InlineData(true, 1)]
     [InlineData(false, 0)]
     [InlineData(false, -1)]
-    public async Task QueueEligibilityRejectsMissingJoinTimestampOrInvalidSequence(
+    public async Task QueueEligibilityRejectsMissingJoinTimestampOrSequenceThatDoesNotMatchUtcTicks(
         bool useDefaultJoinedAt, long sequence)
     {
         var iterator = new Mock<FeedIterator<CosmosQueueStore.QueueEntryDocument>>();
@@ -328,6 +333,8 @@ public sealed class CosmosQueueResourceContractTests
         iterator.SetupSequence(value => value.HasMoreResults)
             .Returns(true)
             .Returns(true);
+        var validJoinedAt = DateTimeOffset.Parse("2026-11-25T00:00:00Z");
+        var malformedJoinedAt = DateTimeOffset.Parse("2026-11-25T00:01:00Z");
         var validPage = CreatePage(new CosmosQueueStore.QueueEntryDocument
         {
             Id = "driver-1",
@@ -335,8 +342,8 @@ public sealed class CosmosQueueResourceContractTests
             ZoneId = "hyderabad-central",
             ServiceClass = "cab",
             ZoneServiceKey = "hyderabad-central|cab",
-            JoinedAt = DateTimeOffset.Parse("2026-11-25T00:00:00Z"),
-            Sequence = 1,
+            JoinedAt = validJoinedAt,
+            Sequence = validJoinedAt.UtcTicks,
             IsEligible = true
         });
         var malformedPage = CreatePage(new CosmosQueueStore.QueueEntryDocument
@@ -346,8 +353,8 @@ public sealed class CosmosQueueResourceContractTests
             ZoneId = "hyderabad-central",
             ServiceClass = "cab",
             ZoneServiceKey = "another-zone|cab",
-            JoinedAt = DateTimeOffset.Parse("2026-11-25T00:01:00Z"),
-            Sequence = 2,
+            JoinedAt = malformedJoinedAt,
+            Sequence = malformedJoinedAt.UtcTicks,
             IsEligible = true
         });
         iterator.SetupSequence(value => value.ReadNextAsync(CancellationToken.None))
