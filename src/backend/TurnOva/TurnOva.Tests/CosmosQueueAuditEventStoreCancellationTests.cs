@@ -117,6 +117,35 @@ public sealed class CosmosQueueAuditEventStoreCancellationTests
     }
 
     [Fact]
+    public async Task CreateProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<QueueAuditEvent>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<QueueAuditEvent>>(
+                    new InvalidOperationException("queue audit create failed"));
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueAuditEventStore(container.Object)
+                .TryCreateAsync(CreateEvent(), "zone-a|cab", cancellation.Token));
+
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<QueueAuditEvent>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task SuccessfulCreateRemainsAuthoritativeWhenCancellationArrivesAfterCommit()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
