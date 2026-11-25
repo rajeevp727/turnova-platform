@@ -100,9 +100,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (!identity.IsAuthenticated ||
                     nonEmptySubjectClaims.Length > 1 ||
                     roleClaims.Length != 1 ||
-                    string.IsNullOrWhiteSpace(roleClaims[0].Value))
+                    roleClaims[0].Value is not ("Rider" or "Driver" or "UnionManager"))
                 {
-                    context.Fail("The token must contain at most one non-empty subject and exactly one non-empty role claim.");
+                    context.Fail("The token must contain at most one non-empty subject and exactly one supported role claim.");
                     return Task.CompletedTask;
                 }
 
