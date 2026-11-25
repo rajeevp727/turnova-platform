@@ -127,6 +127,19 @@ public sealed class QueueStoreTests
     }
 
     [Fact]
+    public async Task QueueServiceJoinRejectsDefaultTimestampBeforeStoreMutation()
+    {
+        var store = new InMemoryQueueStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new QueueService(store).JoinAsync(
+                Entry("driver-1", "zone-a", "Cab", default), CancellationToken.None));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task QueueServiceJoinHonorsCancellationBeforeNullValidation()
     {
         var store = new InMemoryQueueStore();
