@@ -6,7 +6,20 @@ public sealed record DriverQueueEntry(
     string ServiceClass,
     DateTimeOffset JoinedAt,
     long Sequence,
-    bool IsEligible);
+    bool IsEligible)
+{
+    public static void ValidateForJoin(DriverQueueEntry? entry, string parameterName = "entry")
+    {
+        ArgumentNullException.ThrowIfNull(entry, parameterName);
+        if (string.IsNullOrWhiteSpace(entry.DriverId) ||
+            string.IsNullOrWhiteSpace(entry.ZoneId) ||
+            string.IsNullOrWhiteSpace(entry.ServiceClass) ||
+            entry.JoinedAt == default)
+            throw new ArgumentException(
+                "Driver, zone, service class and join timestamp are required.",
+                parameterName);
+    }
+}
 
 public sealed class FifoQueue
 {
@@ -26,7 +39,7 @@ public sealed class FifoQueue
     internal void Enqueue(DriverQueueEntry entry, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ArgumentNullException.ThrowIfNull(entry);
+        DriverQueueEntry.ValidateForJoin(entry);
 
         foreach (var existing in _entries)
         {
