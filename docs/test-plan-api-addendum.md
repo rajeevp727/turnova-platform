@@ -362,3 +362,17 @@ Source/test commit [`bb21a4f1`](https://github.com/rajeevp727/turnova-platform/c
 
 Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No row is promoted. PR #200 remains open and requires independent human maintainer approval; the three owner-authored COMMENTED reviews are not approvals. PR #196/#198/#205/#206 remain Draft/parked. Android/iOS remain gated. No live Cosmos or production readiness is claimed.
 
+
+
+## Run 186 — eligible queue partition-key isolation
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| COSMOS-STORE-031 | Cosmos returns an eligible queue item whose ZoneId and ServiceClass match the requested Cab queue but whose stored ZoneServiceKey belongs to a different partition | `CosmosQueueResourceContractTests.QueueEligibilityRejectsQueryItemWithWrongPartitionKeyEvenWhenZoneAndServiceMatch` | The malformed item throws `InvalidOperationException` and is not returned to the caller; query enumeration stops at the invalid item |
+
+This closes a distinct partition-identity regression gap: wrong-zone/service coverage alone could fail without proving that the stored partition-key field is checked independently when the remaining routing fields match. The deterministic FeedIterator/FeedResponse mock exercises the query-result validation boundary. It does not establish live Cosmos cross-partition behavior or production RU/transaction behavior. Test-only change; no runtime source, queue ordering, schema, mobile behavior or acceptance-row status changed.
+
+Source/test commit [`e4ac79ddfa23ed8924cd49c4df7e6c4bdef5d8b7`](https://github.com/rajeevp727/turnova-platform/commit/e4ac79ddfa23ed8924cd49c4df7e6c4bdef5d8b7) passed exact-head API-only CI [#45663377134](https://github.com/rajeevp727/turnova-platform/actions/runs/45663377134): **1,692/1,692 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish (44,086,068 bytes); publish-script syntax; native verifier (11 negative fixtures plus valid fixture). Artifact [15046621981](https://github.com/rajeevp727/turnova-platform/actions/runs/45663377134/artifacts/15046621981), 17,040,774 bytes; ZIP SHA-256 `cc3fec9380e72a9655c618ac3925f0b1d3a4a5da528b702926e295ac09496ac6`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
+
+Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No row is promoted. PR #200 remains open and requires independent human maintainer approval; the three owner-authored COMMENTED reviews are not approvals. PR #196/#198/#205/#206 remain Draft/parked. Android/iOS remain gated. No live Cosmos or production readiness is claimed.
+
