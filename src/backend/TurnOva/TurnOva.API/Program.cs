@@ -669,25 +669,37 @@ bool IsUnionManagerFor(ClaimsPrincipal user, string unionId) =>
     user.IsInRole("UnionManager") &&
     user.FindAll("unionId").Any(claim => string.Equals(claim.Value, unionId, StringComparison.Ordinal));
 
+static bool HasValidUnionCoverageCollections(DriverUnion union) =>
+    union.ZoneIds is not null && union.ServiceClasses is not null;
+
 async Task<DriverUnion?> FindUnionAsync(string unionId, CancellationToken ct)
 {
     ct.ThrowIfCancellationRequested();
     if (unionContainer is null)
     {
-        if (!unions.TryGetValue(unionId, out var value)) return null;
+        if (!unions.TryGetValue(unionId, out var value) ||
+            !HasValidUnionCoverageCollections(value))
+            return null;
+
         return CosmosReadResponseGuard.RequireResource(
             value,
             item => string.Equals(item.UnionId, unionId, StringComparison.Ordinal),
             "Union");
     }
 
-    return await CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
+    var persisted = await CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
         unionContainer,
         unionId,
         new PartitionKey(unionId),
         item => string.Equals(item.UnionId, unionId, StringComparison.Ordinal),
         "Union",
         ct);
+
+    // Zone/service collections are required by every eligibility path. Treat a
+    // malformed persisted Union as unavailable rather than dereferencing null.
+    return persisted is not null && HasValidUnionCoverageCollections(persisted)
+        ? persisted
+        : null;
 }
 
 static string NormalizeUnionCode(string? code) =>
@@ -1022,6 +1034,9 @@ async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
         foreach (var pair in unions.ToArray())
         {
             ct.ThrowIfCancellationRequested();
+            if (!HasValidUnionCoverageCollections(pair.Value))
+                continue;
+
             inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
                 pair.Value,
                 item => string.Equals(pair.Key, item.UnionId, StringComparison.Ordinal),
@@ -1037,7 +1052,10 @@ async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
         item => !string.IsNullOrWhiteSpace(item.UnionId),
         "Union",
         ct);
-    return results.OrderBy(item => item.Name).ToArray();
+    return results
+        .Where(HasValidUnionCoverageCollections)
+        .OrderBy(item => item.Name)
+        .ToArray();
 }
 
 async Task<IReadOnlyList<DriverOnboardingProfile>> ListOnlineCabProfilesForDiscoveryAsync(string zoneId, CancellationToken ct)
@@ -2571,11 +2589,13 @@ unionManagerApi.MapGet("/drivers/{driverId}/documents/{documentType}", async (
         return Results.NotFound();
     var union = await FindUnionAsync(assignment.UnionId, ct);
     if (union is null || union.Status != "Active" ||
+        union.ServiceClasses is null ||
         !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
         return Results.NotFound();
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null || profile.Status != "Approved" ||
         !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+        union.ZoneIds is null ||
         !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
         return Results.NotFound();
     var document = profile.Documents?.FirstOrDefault(item =>

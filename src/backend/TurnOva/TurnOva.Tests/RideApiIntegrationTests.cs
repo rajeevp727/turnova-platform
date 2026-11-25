@@ -2579,13 +2579,35 @@ public sealed partial class RideApiIntegrationTests
     [Theory]
     [InlineData("service-classes")]
     [InlineData("zone-ids")]
-    public async Task UnionManagerSelfieReviewFailsClosedWhenUnionCoverageMetadataIsMissing(string missingField)
+    public async Task MalformedUnionCoverageMetadataIsExcludedFromDiscoveryAndPartnerActions(string missingField)
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
         const string unionId = "union-review-missing-coverage";
         const string driverId = "union-review-missing-coverage-driver";
         using var driver = factory.CreateClient("Driver", driverId);
+        using var rider = factory.CreateClient("Rider", "union-review-missing-coverage-rider");
         SeedBookableDriver(factory, driverId, unionId);
+
+        var pdf = Encoding.ASCII.GetBytes("%PDF-1.4\nunion-review-document");
+        using var upload = await driver.PostAsJsonAsync("/api/v1/driver/onboarding/media", new
+        {
+            documentType = "DrivingLicence",
+            contentType = "application/pdf",
+            contentBase64 = Convert.ToBase64String(pdf)
+        });
+        Assert.Equal(HttpStatusCode.Created, upload.StatusCode);
+        using var uploadJson = JsonDocument.Parse(await upload.Content.ReadAsStringAsync());
+        var documentReference = uploadJson.RootElement.GetProperty("storageReference").GetString()!;
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", documentReference, "Approved"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
 
         var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
         var union = unions[unionId];
@@ -2597,19 +2619,37 @@ public sealed partial class RideApiIntegrationTests
         };
 
         using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-missing-coverage");
-        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
         var profileBefore = profiles[driverId];
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var assignmentBefore = assignments[driverId];
         var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
         var auditBefore = unionAudit.Values.Where(item => item.DriverId == driverId).ToArray();
         var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
 
-        using var response = await manager.PutAsJsonAsync(
+        using var review = await manager.PutAsJsonAsync(
             $"/api/v1/union/drivers/{driverId}/selfie-review",
             new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.NotFound, review.StatusCode);
+        Assert.True(review.Headers.CacheControl?.NoStore);
+        Assert.Contains(review.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        AssertNoStore(response);
+        using var privateDocument = await manager.GetAsync(
+            $"/api/v1/union/drivers/{driverId}/documents/DrivingLicence");
+        Assert.Equal(HttpStatusCode.NotFound, privateDocument.StatusCode);
+
+        using var membersResponse = await manager.GetAsync("/api/v1/union/drivers");
+        Assert.Equal(HttpStatusCode.OK, membersResponse.StatusCode);
+        Assert.Empty(await membersResponse.Content.ReadFromJsonAsync<List<JsonElement>>() ?? []);
+
+        using var discovery = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
+        using var discoveryJson = JsonDocument.Parse(await discovery.Content.ReadAsStringAsync());
+        Assert.Equal(0, discoveryJson.RootElement.GetProperty("unions").GetArrayLength());
+
         Assert.Equal(profileBefore, profiles[driverId]);
+        Assert.Equal(assignmentBefore, assignments[driverId]);
         Assert.Equal(auditBefore, unionAudit.Values.Where(item => item.DriverId == driverId).ToArray());
         Assert.False(await reservations.HasActiveAsync(driverId));
     }
