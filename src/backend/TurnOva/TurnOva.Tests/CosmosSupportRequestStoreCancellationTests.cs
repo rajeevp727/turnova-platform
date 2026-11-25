@@ -278,6 +278,61 @@ public sealed class CosmosSupportRequestStoreCancellationTests
         response.VerifyNoOtherCalls();
     }
 
+
+    [Fact]
+    public async Task CreateProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var unavailable = new CosmosException(
+            "support request create unavailable", HttpStatusCode.ServiceUnavailable, 0, "support-request-test", 0);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<SupportRequest>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<SupportRequest>>(unavailable);
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosSupportRequestStore(container.Object).CreateOrGetAsync(
+                CreateRequest(), cancellation.Token));
+
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReadItemAsync<SupportRequest>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CreateProviderFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var unavailable = new CosmosException(
+            "support request create unavailable", HttpStatusCode.ServiceUnavailable, 0, "support-request-test", 0);
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<SupportRequest>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(unavailable);
+
+        var exception = await Assert.ThrowsAsync<CosmosException>(() =>
+            new CosmosSupportRequestStore(container.Object).CreateOrGetAsync(CreateRequest()));
+
+        Assert.Same(unavailable, exception);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<SupportRequest>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static SupportRequest CreateRequest() =>
         new(
             "request-1",

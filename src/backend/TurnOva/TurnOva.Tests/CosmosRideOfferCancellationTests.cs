@@ -468,6 +468,98 @@ public sealed class CosmosRideOfferCancellationTests
         response.VerifyNoOtherCalls();
     }
 
+
+    [Fact]
+    public async Task TryCreateProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var state = CreateState();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<RideOfferState>(), It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<RideOfferState>>(Unavailable());
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).TryCreateAsync(state, cancellation.Token));
+
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<RideOfferState>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TryCreateProviderFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var state = CreateState();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var unavailable = Unavailable();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<RideOfferState>(), It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(unavailable);
+
+        var exception = await Assert.ThrowsAsync<CosmosException>(() =>
+            new CosmosRideOfferStore(container.Object).TryCreateAsync(state));
+
+        Assert.Same(unavailable, exception);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<RideOfferState>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TryReplaceProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var state = CreateState();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<RideOfferState>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<RideOfferState>>(Unavailable());
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRideOfferStore(container.Object).TryReplaceAsync(
+                state, "observed-etag", cancellation.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<RideOfferState>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TryReplaceProviderFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var state = CreateState();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var unavailable = Unavailable();
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<RideOfferState>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(unavailable);
+
+        var exception = await Assert.ThrowsAsync<CosmosException>(() =>
+            new CosmosRideOfferStore(container.Object).TryReplaceAsync(state, "observed-etag"));
+
+        Assert.Same(unavailable, exception);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<RideOfferState>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static Mock<Container> CreateQueryContainer(Mock<FeedIterator<RideOfferState>> iterator)
     {
         var container = new Mock<Container>(MockBehavior.Strict);

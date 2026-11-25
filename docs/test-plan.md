@@ -244,6 +244,21 @@ The Cosmos ride-offer adapter must preserve cancellation through point reads, qu
 
 **Evidence:** `CosmosRideOfferCancellationTests`; implementation commit [cc105d3b4c0d5ad53a0b24b8667c40019df375b4](https://github.com/rajeevp727/turnova-platform/commit/cc105d3b4c0d5ad53a0b24b8667c40019df375b4); test setup corrections [61b86a200aca36e2e2d38a34ae4881c9ef2fd823](https://github.com/rajeevp727/turnova-platform/commit/61b86a200aca36e2e2d38a34ae4881c9ef2fd823) and [37e865288e66867890d19b1246a9ebb97826402b](https://github.com/rajeevp727/turnova-platform/commit/37e865288e66867890d19b1246a9ebb97826402b); exact-head API-only CI [#45057488397](https://github.com/rajeevp727/turnova-platform/actions/runs/45057488397) passed **1,224/1,224 tests**, Release build and native non-container Linux x64 publish/verifier; artifact [14767803681](https://github.com/rajeevp727/turnova-platform/actions/runs/45057488397/artifacts/14767803681). No live Cosmos or production validation is implied.
 
+## Cosmos support and ride-offer committed-write cancellation precedence (COSMOS-SUPPORT-CANCEL-001..002; COSMOS-OFFER-CANCEL-011..014)
+
+Committed support-request and ride-offer create/replace writes must preserve the same cancellation contract as migration writes: if the provider task fails while the caller is cancelling, surface caller cancellation; without cancellation, preserve the exact provider exception. A successful durable write remains authoritative when cancellation arrives after commit. Existing 409/404/412 conflict translation and observed-ETag fencing remain unchanged.
+
+| ID | Scenario | Expected result | Type | Priority |
+|---|---|---|---|---|
+| COSMOS-SUPPORT-CANCEL-001 | Support-request CreateItem provider task fails while caller cancellation is signalled | Throw caller cancellation and do not start canonical read-back | Unit | P1 |
+| COSMOS-SUPPORT-CANCEL-002 | Support-request CreateItem provider task fails without caller cancellation | Propagate the exact provider exception unchanged | Unit | P1 |
+| COSMOS-OFFER-CANCEL-011 | Ride-offer TryCreate provider task fails while caller cancellation is signalled | Throw caller cancellation instead of leaking the provider failure | Unit | P1 |
+| COSMOS-OFFER-CANCEL-012 | Ride-offer TryCreate provider task fails without caller cancellation | Propagate the exact provider exception unchanged | Unit | P1 |
+| COSMOS-OFFER-CANCEL-013 | Ride-offer TryReplace provider task fails while caller cancellation is signalled | Throw caller cancellation instead of leaking the provider failure; retain the observed If-Match ETag | Unit | P1 |
+| COSMOS-OFFER-CANCEL-014 | Ride-offer TryReplace provider task fails without caller cancellation | Propagate the exact provider exception unchanged | Unit | P1 |
+
+**Evidence:** CosmosSupportRequestStoreCancellationTests.CreateProviderFailureTakesPrecedenceOverCancellation and CreateProviderFailurePropagatesUnchangedWithoutCancellation; CosmosRideOfferCancellationTests.TryCreateProviderFailureTakesPrecedenceOverCancellation, TryCreateProviderFailurePropagatesUnchangedWithoutCancellation, TryReplaceProviderFailureTakesPrecedenceOverCancellation, and TryReplaceProviderFailurePropagatesUnchangedWithoutCancellation. Exact-head CI is pending; do not claim these cases passed until the updated branch head completes API-only CI.
+
 ## Cosmos queue and dispatch-audit cancellation precedence (COSMOS-QUEUE-CANCEL-003..010)
 
 Cosmos queue operations must preserve cancellation before any query, point read or transactional batch is created. Long-running page loops and return paths must recheck cancellation. A failed conditional batch or a Cosmos 404/412 translation must not hide a requested cancellation. Dispatch-exception audit retries must recheck cancellation after a create conflict and after canonical read-back before returning an idempotent result. Successful durable writes remain authoritative; do not throw cancellation after a committed write.

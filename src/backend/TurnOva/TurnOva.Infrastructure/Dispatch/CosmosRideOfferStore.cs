@@ -174,7 +174,12 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
         ArgumentNullException.ThrowIfNull(state);
         try
         {
-            var response = await container.CreateItemAsync(state with { ETag = null }, new PartitionKey(state.RideId), cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateItemAsync(
+                    state with { ETag = null },
+                    new PartitionKey(state.RideId),
+                    cancellationToken: cancellationToken),
+                cancellationToken);
             return response.StatusCode == System.Net.HttpStatusCode.Created;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -195,8 +200,14 @@ public sealed class CosmosRideOfferStore(Container container) : IRideOfferStore
 
         try
         {
-            await container.ReplaceItemAsync(state with { ETag = null }, state.RideId, new PartitionKey(state.RideId),
-                new ItemRequestOptions { IfMatchEtag = expectedETag }, cancellationToken);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.ReplaceItemAsync(
+                    state with { ETag = null },
+                    state.RideId,
+                    new PartitionKey(state.RideId),
+                    new ItemRequestOptions { IfMatchEtag = expectedETag },
+                    cancellationToken),
+                cancellationToken);
             return true;
         }
         catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.PreconditionFailed or System.Net.HttpStatusCode.NotFound)

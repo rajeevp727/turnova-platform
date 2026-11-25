@@ -17,10 +17,12 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
 
         try
         {
-            await container.CreateItemAsync(
-                request,
-                new PartitionKey(request.ReporterId),
-                cancellationToken: cancellationToken);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateItemAsync(
+                    request,
+                    new PartitionKey(request.ReporterId),
+                    cancellationToken: cancellationToken),
+                cancellationToken);
             return new SupportRequestWriteResult(SupportRequestWriteStatus.Created, request);
         }
         catch (CosmosException exception) when (exception.StatusCode == HttpStatusCode.Conflict)
