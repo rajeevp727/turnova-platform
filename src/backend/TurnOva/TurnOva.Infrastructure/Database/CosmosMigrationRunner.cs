@@ -151,8 +151,10 @@ public sealed class CosmosMigrationRunner(
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var response = await history.ReadItemAsync<MigrationHistoryDocument>(
-                migrationId, new PartitionKey(migrationId), cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => history.ReadItemAsync<MigrationHistoryDocument>(
+                    migrationId, new PartitionKey(migrationId), cancellationToken: cancellationToken),
+                cancellationToken);
             _ = CosmosReadResponseGuard.ReadResource(
                 response,
                 marker => string.Equals(marker.Id, migrationId, StringComparison.Ordinal),
