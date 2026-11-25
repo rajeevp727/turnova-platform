@@ -315,7 +315,7 @@ public sealed class RideTrackingHubTests
         return hub;
     }
 
-    private static IServiceProvider CreateCosmosServices(CosmosClient cosmosClient)
+    private static ServiceProvider CreateCosmosServices(CosmosClient cosmosClient)
     {
         var services = new ServiceCollection();
         services.AddSingleton(cosmosClient);
