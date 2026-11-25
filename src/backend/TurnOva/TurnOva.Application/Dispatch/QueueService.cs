@@ -47,19 +47,7 @@ public sealed class QueueService(IQueueStore store)
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(zoneId) ||
-            string.IsNullOrWhiteSpace(serviceClass) || string.IsNullOrWhiteSpace(traceId) ||
-            traceId.Length > 128 ||
-            traceId.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not ':' and not '-' and not '_'))
-            throw new ArgumentException("A valid actor, queue scope and server trace identifier are required.");
-
-        if (!string.Equals(serviceClass, "cab", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("Dispatch exception auditing is limited to the Cab MVP.");
-
-        if (reasonCategory is not QueueAuditReasonCategories.QueueReadFailed and
-            not QueueAuditReasonCategories.DriverReservationFailed and
-            not QueueAuditReasonCategories.DriverReservationPromotionRecovered)
-            throw new ArgumentException("The dispatch exception category is not allow-listed.");
+        DispatchExceptionAuditInput.Validate(actorId, zoneId, serviceClass, traceId, reasonCategory);
 
         return store.RecordDispatchExceptionAsync(
             actorId, zoneId, serviceClass, traceId, reasonCategory, cancellationToken);
