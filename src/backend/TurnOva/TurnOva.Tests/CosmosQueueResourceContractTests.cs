@@ -379,6 +379,103 @@ public sealed class CosmosQueueResourceContractTests
     }
 
     [Fact]
+    public async Task QueueAuditReadAcceptsEverySupportedEventShape()
+    {
+        const string key = "hyderabad-central|cab";
+        var occurredAt = DateTimeOffset.Parse("2026-11-25T00:00:00Z");
+        var expected = new[]
+        {
+            new QueueAuditEvent("joined-1", key, "driver-1", QueueAuditEventTypes.Joined, occurredAt),
+            new QueueAuditEvent("left-1", key, "driver-1", QueueAuditEventTypes.Left, occurredAt),
+            new QueueAuditEvent("moved-1", key, "driver-1", QueueAuditEventTypes.MovedToBack, occurredAt),
+            new QueueAuditEvent("rotated-1", key, "driver-1", QueueAuditEventTypes.RotatedToBack, occurredAt, OfferId: "offer-1"),
+            new QueueAuditEvent(
+                "exception-1", key, "driver-1", QueueAuditEventTypes.DispatchException, occurredAt,
+                TraceId: "trace-1", ReasonCategory: QueueAuditReasonCategories.QueueReadFailed)
+        };
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupSequence(value => value.HasMoreResults).Returns(true).Returns(false);
+        var page = CreatePage(expected);
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var events = await new CosmosQueueStore(container.Object).GetAuditEventsAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+
+        Assert.Equal(expected, events);
+        iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("UnknownEvent", null, null, null)]
+    [InlineData("Joined", "offer-1", null, null)]
+    [InlineData("RotatedToBack", null, null, null)]
+    [InlineData("DispatchException", null, null, null)]
+    [InlineData("DispatchException", "offer-1", "trace-1", "QueueReadFailed")]
+    [InlineData("Joined", null, "trace-1", "QueueReadFailed")]
+    [InlineData("DispatchException", null, " ", "QueueReadFailed")]
+    public async Task QueueAuditReadRejectsUnknownEventTypesOrInvalidEventSpecificMetadata(
+        string eventType, string? offerId, string? traceId, string? reasonCategory)
+    {
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage(new QueueAuditEvent(
+            "event-1",
+            "hyderabad-central|cab",
+            "driver-1",
+            eventType,
+            DateTimeOffset.Parse("2026-11-25T00:00:00Z"),
+            offerId,
+            traceId,
+            reasonCategory));
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue audit event query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task QueueAuditReadRejectsMissingOrNonUtcTimestamp(bool useDefaultTimestamp)
+    {
+        var occurredAt = useDefaultTimestamp
+            ? default
+            : DateTimeOffset.Parse("2026-11-25T05:30:00+05:30");
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage(new QueueAuditEvent(
+            "event-1",
+            "hyderabad-central|cab",
+            "driver-1",
+            QueueAuditEventTypes.Joined,
+            occurredAt));
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue audit event query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
+    [Fact]
     public async Task QueueAuditReadRejectsMalformedLaterPageInsteadOfReturningPartialHistory()
     {
         var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
