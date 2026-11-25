@@ -80,6 +80,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ValidateDriverId(driverId);
         var key = QueueKey(zoneId, serviceClass);
         try
         {
@@ -128,6 +129,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ValidateDriverId(driverId);
         var key = QueueKey(zoneId, serviceClass);
         try
         {
@@ -172,6 +174,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(offerId)) throw new ArgumentException("Offer ID is required.", nameof(offerId));
+        ValidateDriverId(driverId);
         var key = QueueKey(zoneId, serviceClass);
         try
         {
@@ -357,8 +360,21 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             cancellationToken,
             "Cosmos returned a malformed queue entry resource.");
 
-    private static string QueueKey(string zoneId, string serviceClass) =>
-        $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
+    private static string QueueKey(string zoneId, string serviceClass)
+    {
+        if (string.IsNullOrWhiteSpace(zoneId))
+            throw new ArgumentException("Zone ID is required.", nameof(zoneId));
+        if (string.IsNullOrWhiteSpace(serviceClass))
+            throw new ArgumentException("Service class is required.", nameof(serviceClass));
+
+        return $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
+    }
+
+    private static void ValidateDriverId(string driverId)
+    {
+        if (string.IsNullOrWhiteSpace(driverId))
+            throw new ArgumentException("Driver ID is required.", nameof(driverId));
+    }
 
     internal sealed class QueueEntryDocument
     {
