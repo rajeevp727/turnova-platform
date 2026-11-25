@@ -92,7 +92,7 @@ public sealed class AiAssistanceServiceTests
             CancellationToken.None);
 
         Assert.Equal("Nizampet", result.Pickup);
-        Assert.Equal("Secret Clinic", result.Dropoff);
+        Assert.Equal("HITEC City", result.Dropoff);
         Assert.Equal("Cab", result.ServiceClass);
         Assert.Equal(2, result.PassengerCount);
         Assert.False(result.NeedsClarification);
@@ -138,7 +138,7 @@ public sealed class AiAssistanceServiceTests
             CancellationToken.None);
 
         Assert.Equal("12 Main Road", result.Pickup);
-        Assert.Equal("HITEC City", result.Dropoff);
+        Assert.Equal("Secret Clinic", result.Dropoff);
         Assert.Equal(4, result.PassengerCount);
         Assert.Equal("provider", result.Source);
     }
