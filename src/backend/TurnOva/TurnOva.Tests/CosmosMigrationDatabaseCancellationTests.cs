@@ -118,6 +118,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var readResponse = new Mock<ContainerResponse>();
         readResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        readResponse.SetupGet(value => value.ETag).Returns("container-etag");
         using var cancellation = new CancellationTokenSource();
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(),
@@ -186,6 +187,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var readResponse = new Mock<ContainerResponse>();
         readResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        readResponse.SetupGet(value => value.ETag).Returns("container-etag");
         var replaceResponse = new Mock<ContainerResponse>();
         using var cancellation = new CancellationTokenSource();
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
@@ -944,6 +946,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var readResponse = new Mock<ContainerResponse>();
         readResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        readResponse.SetupGet(value => value.ETag).Returns("container-etag");
         using var cancellation = new CancellationTokenSource();
         var providerFailure = new InvalidOperationException("TTL replace failed");
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
@@ -990,6 +993,7 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
         var readResponse = new Mock<ContainerResponse>();
         readResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        readResponse.SetupGet(value => value.ETag).Returns("container-etag");
         var providerFailure = new InvalidOperationException("TTL replace failed");
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
