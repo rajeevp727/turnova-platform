@@ -179,3 +179,26 @@ The PRD permits a UnionManager JWT to carry one or more signed `unionId` claims.
 **Exact source/test evidence:** [commit `3c8e8e38`](https://github.com/rajeevp727/turnova-platform/commit/3c8e8e384d1b2900454ce7c85ab19a5da2e0d27b) passed API-only CI [#45594320195](https://github.com/rajeevp727/turnova-platform/actions/runs/45594320195): **1,651/1,651 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15012387518](https://github.com/rajeevp727/turnova-platform/actions/runs/45594320195/artifacts/15012387518), 17,040,288 bytes; ZIP SHA-256 `cbaf1367c7b37a58ce0cf9cbcbd84f010df1b388d492fb3d2464ad99c42cc625`.
 
 This is deterministic API integration evidence for signed-claim scoping, not live production identity-provider claim issuance evidence. No acceptance row is promoted.
+
+
+## Run 170 — Cosmos migration container TTL ETag fencing
+
+A full production-source callsite inventory covered all 63 C# files under `TurnOva.API` and `TurnOva.Infrastructure`; no unguarded direct Cosmos SDK write remained. The TTL metadata path was the remaining read/replace sequence without conditional ETag protection. It now requires the ETag from the exact `ReadContainerAsync` response and uses `ContainerRequestOptions.IfMatchEtag` for the metadata replace. Missing/blank ETag fails closed; a stale ETag/412 is not retried. The SDK's conditional If-Match property is documented by [Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/microsoft.azure.cosmos.requestoptions.ifmatchetag?view=azure-dotnet).
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| COSMOS-MIG-056 | Container-create response returns a different container ID | `CosmosMigrationDatabaseTests.CreateRejectsMismatchedCreatedContainerIdentity` | Fail closed before TTL or follow-up work |
+| COSMOS-MIG-057 | Container-create response returns a different partition-key path | `CosmosMigrationDatabaseTests.CreateRejectsMismatchedCreatedPartitionKeyPath` | Fail closed before TTL or follow-up work |
+| COSMOS-MIG-058 | Container create commits while cancellation arrives before response hydration | `CosmosMigrationDatabaseTests.CreateDoesNotRetroactivelyCancelACommittedContainerCreate` | Successful create remains authoritative; response identity is validated without retroactive cancellation |
+| COSMOS-MIG-059 | TTL change reads a matching container and replaces only the requested TTL using the observed ETag | `CosmosMigrationDatabaseTests.TtlUpdateValidatesCreatedAndCurrentContainerThenReplacesOnlyTtl` | Exact current ETag is passed as `IfMatchEtag`; updated properties retain the requested container ID/partition path |
+| COSMOS-MIG-060 | Current TTL already matches the requested TTL | `CosmosMigrationDatabaseTests.TtlUpdateDoesNotReplaceWhenExistingTtlAlreadyMatches` | No ETag hydration or container replace occurs |
+| COSMOS-MIG-061 | Created container handle ID differs from the requested container | `CosmosMigrationDatabaseTests.TtlUpdateRejectsMismatchedContainerHandleBeforeReadingIt` | Fail closed before `ReadContainerAsync` |
+| COSMOS-MIG-062 | TTL read response returns a mismatched container resource | `CosmosMigrationDatabaseTests.TtlUpdateRejectsMismatchedCurrentContainerBeforeReplacingIt` | Fail closed before `ReplaceContainerAsync` |
+| COSMOS-MIG-063 | TTL update requires an observed nonblank container ETag | `CosmosMigrationDatabaseTests.TtlUpdateRequiresObservedEtagBeforeReplacingContainer` | Missing ETag fails closed; no replace is attempted |
+| COSMOS-MIG-064 | TTL replace commits while caller cancellation arrives after the provider returns success | `CosmosMigrationDatabaseTests.TtlReplaceRemainsAuthoritativeWhenCancellationArrivesAfterCommit` | Conditional replace remains authoritative; no retroactive cancellation |
+
+**Exact final-head evidence:** [commit `ce50a09d`](https://github.com/rajeevp727/turnova-platform/commit/ce50a09d213c87d3ce6a45c0b76d12ca3222ca56) passed API-only CI [#45598764966](https://github.com/rajeevp727/turnova-platform/actions/runs/45598764966): **1,660/1,660 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15014069031](https://github.com/rajeevp727/turnova-platform/actions/runs/45598764966/artifacts/15014069031), 17,040,514 bytes; ZIP SHA-256 `21705bc2d97cd241e29e15481c49b53d9b1b5620de38b8148b8c9f3ef429d734`.
+
+Intermediate test-only CI failures [#45597246954](https://github.com/rajeevp727/turnova-platform/actions/runs/45597246954) and [#45598123283](https://github.com/rajeevp727/turnova-platform/actions/runs/45598123283) were corrected by narrowing test assertions/verification and supplying the observed ETag in the existing TTL cancellation fixtures. The final exact-head CI above is green. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
+
+This is deterministic SDK-mock and native-publish evidence only. It does not establish live Cosmos 412 contention, partition/transaction behavior, multi-instance/restart/failover/RU, or production readiness. No acceptance row is promoted.
