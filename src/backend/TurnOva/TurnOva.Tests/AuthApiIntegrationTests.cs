@@ -359,6 +359,24 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task OpsJwtIsNonPrivilegedAndDoesNotReplaceOperationsAdminKey()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateToken(roleValue: "Ops"));
+
+        using var zones = await client.GetAsync("/api/v1/zones");
+        Assert.Equal(HttpStatusCode.OK, zones.StatusCode);
+        AssertNoStoreHeaders(zones);
+
+        using var operations = await client.GetAsync("/api/v1/ops/unions");
+        Assert.Equal(HttpStatusCode.Unauthorized, operations.StatusCode);
+        AssertNoStoreHeaders(operations);
+    }
+
+    [Fact]
     public async Task PublicAuthEndpointsAreRateLimitedByServerObservedRemoteAddress()
     {
         using var factory = new AuthApiFactory();
