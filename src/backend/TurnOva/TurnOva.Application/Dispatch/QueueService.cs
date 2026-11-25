@@ -13,8 +13,8 @@ public sealed class QueueService(IQueueStore store)
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(entry);
         if (string.IsNullOrWhiteSpace(entry.DriverId) || string.IsNullOrWhiteSpace(entry.ZoneId) ||
-            string.IsNullOrWhiteSpace(entry.ServiceClass))
-            throw new ArgumentException("Driver, zone and service class are required.");
+            string.IsNullOrWhiteSpace(entry.ServiceClass) || entry.JoinedAt == default)
+            throw new ArgumentException("Driver, zone, service class and join timestamp are required.");
 
         await store.AddAsync(entry, cancellationToken);
     }
