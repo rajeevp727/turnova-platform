@@ -607,6 +607,51 @@ public sealed class UnionAssignmentWriterTests
         container.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task CosmosReplacementReturnsCommittedAssignmentWhenCancellationArrivesAfterWrite()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var current = CreateAssignment();
+        var read = CreateReadResponse(current, "union-assignment-etag");
+        var response = new Mock<ItemResponse<DriverUnionAssignment>>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        SetupRead(container, read.Object);
+        container.Setup(value => value.ReplaceItemAsync<DriverUnionAssignment>(
+                It.Is<DriverUnionAssignment>(assignment => assignment.UnionId == "union-next"),
+                DriverId,
+                It.IsAny<PartitionKey?>(),
+                It.Is<ItemRequestOptions?>(options =>
+                    options != null && options.IfMatchEtag == "union-assignment-etag"),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(response.Object);
+            });
+
+        var result = await UnionAssignmentWriter.TrySaveAsync(
+            container.Object,
+            new ConcurrentDictionary<string, DriverUnionAssignment>(),
+            current with { UnionId = "union-next" },
+            current,
+            cancellation.Token);
+
+        Assert.True(result);
+        read.VerifyGet(value => value.Resource, Times.Once);
+        read.VerifyGet(value => value.ETag, Times.Once);
+        read.VerifyNoOtherCalls();
+        container.Verify(value => value.ReadItemAsync<DriverUnionAssignment>(
+            DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceItemAsync<DriverUnionAssignment>(
+            It.Is<DriverUnionAssignment>(assignment => assignment.UnionId == "union-next"),
+            DriverId,
+            It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(options =>
+                options != null && options.IfMatchEtag == "union-assignment-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static DriverUnionAssignment CreateAssignment()
     {
         var assignedAt = DateTimeOffset.Parse("2026-11-22T18:00:00Z");
