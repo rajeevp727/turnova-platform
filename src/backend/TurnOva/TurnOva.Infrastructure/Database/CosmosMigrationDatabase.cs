@@ -67,9 +67,11 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
             {
                 currentProperties.DefaultTimeToLive = defaultTimeToLive;
                 cancellationToken.ThrowIfCancellationRequested();
-                await container.ReplaceContainerAsync(
-                    currentProperties,
-                    cancellationToken: cancellationToken);
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => container.ReplaceContainerAsync(
+                        currentProperties,
+                        cancellationToken: cancellationToken),
+                    cancellationToken);
             }
         }
     }
