@@ -483,3 +483,18 @@ Last updated: 2026-11-24 (Run 142)
 4. Re-read main and perform a fresh API phase-exit audit before Android Rider; then Android Driver, iOS Rider and iOS Driver.
 
 No Docker/container builds or deployments. Never claim production/device/live Cosmos validation unless performed.
+
+
+## Run 152 — API Cosmos response-hydration regression evidence (2026-11-25)
+
+- Active phase remains API `in_progress`; Android/iOS remain `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) remains the sole ready/active feature PR on `test/api-nondev-support-readiness-20261120`, based on main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- Added COSMOS-MIG-049..051 covering lazy TTL-read `ContainerResponse.Resource` hydration: cancellation during a successful getter, cancellation precedence when the getter throws, and unchanged exception propagation without cancellation. All cases assert that no `ReplaceContainerAsync` follows failed/cancelled hydration.
+- Added COSMOS-BOOTSTRAP-041 covering unchanged propagation of a non-cancelled `DatabaseResponse.Database` getter failure before any database identity/container/lease work.
+- No production runtime code changed; existing `CosmosReadResponseGuard.ReadResponseResource` already enforces the tested behavior.
+- Final exact-head API-only CI [#45516145585](https://github.com/rajeevp727/turnova-platform/actions/runs/45516145585) passed **1,552/1,552 tests**, Release build (0 warnings/errors), native non-container Linux x64 publish, script syntax and verifier (11 negative fixtures plus valid fixture), artifact [14978136104](https://github.com/rajeevp727/turnova-platform/actions/runs/45516145585/artifacts/14978136104).
+- Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No acceptance row is promoted. Deterministic mocks and native publish do not establish live Cosmos or production readiness.
+- Review gate: PR #200 still has three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads and no requested reviewer. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is configuration-only. Historical PR #197/#207 merges without independent human approval remain disclosed process exceptions, not precedent.
+- Main phase metadata is stale (`api=complete`, `android=in_progress`); PR #200 branch metadata remains authoritative for this work (`api=in_progress`, Android/iOS `not_started`). Do not begin Android.
+- External gates remain live Cosmos transaction/partition/ETag/multi-instance/restart/failover/RU validation; production JWT key custody/rotation, Cosmos credentials, API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch zones/radius/location freshness/negotiation lifetime/FIFO policy; maps/routing and SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- Next exact action: audit cancellation precedence around the TTL `ReadContainerAsync` provider await; then continue API-only auth/authorization/privacy/OpenAPI and persistence-contract work. Obtain independent human approval before any merge; after a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver in order.
+
