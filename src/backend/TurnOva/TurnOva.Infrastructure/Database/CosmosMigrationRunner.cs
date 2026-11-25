@@ -79,9 +79,11 @@ public sealed class CosmosMigrationRunner(
 
                 try
                 {
-                    await history.CreateItemAsync(
-                        historyDocument, new PartitionKey(historyDocument.Id),
-                        cancellationToken: migrationToken);
+                    _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                        () => history.CreateItemAsync(
+                            historyDocument, new PartitionKey(historyDocument.Id),
+                            cancellationToken: migrationToken),
+                        migrationToken);
                 }
                 catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
                 {
