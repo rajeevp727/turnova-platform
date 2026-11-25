@@ -8257,6 +8257,51 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionManagerWithMultipleSignedUnionClaimsSeesOnlyClaimedUnionDrivers()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionA = "multi-union-a";
+        const string unionB = "multi-union-b";
+        const string outsideUnion = "multi-union-outside";
+        const string driverA = "multi-union-driver-a";
+        const string driverB = "multi-union-driver-b";
+        const string outsideDriver = "multi-union-driver-outside";
+
+        using var driverAClient = factory.CreateClient("Driver", driverA);
+        using var driverBClient = factory.CreateClient("Driver", driverB);
+        using var outsideDriverClient = factory.CreateClient("Driver", outsideDriver);
+        SeedBookableDriver(factory, driverA, unionA);
+        SeedBookableDriver(factory, driverB, unionB);
+        SeedBookableDriver(factory, outsideDriver, outsideUnion);
+
+        using var manager = factory.CreateUnionManagerClient(
+            new[] { unionA, unionB }, "multi-union-manager");
+        using var response = await manager.GetAsync(
+            $"/api/v1/union/drivers?unionId={Uri.EscapeDataString(outsideUnion)}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var members = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        Assert.NotNull(members);
+
+        var actualDriverIds = members
+            .Select(member => member.GetProperty("driverId").GetString()!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[] { driverA, driverB }.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            actualDriverIds);
+
+        var actualUnionIds = members
+            .Select(member => member.GetProperty("unionId").GetString()!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[] { unionA, unionB }.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            actualUnionIds);
+        Assert.DoesNotContain(actualDriverIds, value => value == outsideDriver);
+    }
+
+    [Fact]
     public async Task UnionManagerSeesOnlyItsMinimalPaymentReconciliationRecords()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
@@ -9152,7 +9197,12 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
             }
         }
 
-        public HttpClient CreateClient(string role, string subject, string? unionId = null, string subjectClaimType = "sub")
+        public HttpClient CreateClient(
+            string role,
+            string subject,
+            string? unionId = null,
+            string subjectClaimType = "sub",
+            IReadOnlyList<string>? unionIds = null)
         {
             var client = CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -9160,7 +9210,7 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
                 BaseAddress = new Uri("https://localhost")
             });
             client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject, unionId, subjectClaimType));
+                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject, unionId, subjectClaimType, unionIds));
             if (role == "Driver")
             {
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -9183,7 +9233,12 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
         public HttpClient CreateUnionManagerClient(string unionId, string subject, string subjectClaimType = "sub") =>
             CreateClient("UnionManager", subject, unionId, subjectClaimType);
 
-        private static string CreateToken(string role, string subject, string? unionId, string subjectClaimType)
+        public HttpClient CreateUnionManagerClient(
+            IReadOnlyList<string> unionIds, string subject, string subjectClaimType = "sub") =>
+            CreateClient("UnionManager", subject, subjectClaimType: subjectClaimType, unionIds: unionIds);
+
+        private static string CreateToken(
+            string role, string subject, string? unionId, string subjectClaimType, IReadOnlyList<string>? unionIds)
         {
             var credentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)),
@@ -9196,6 +9251,11 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
             };
             if (!string.IsNullOrWhiteSpace(unionId))
                 claims.Add(new Claim("unionId", unionId));
+            if (unionIds is not null)
+            {
+                foreach (var scopedUnionId in unionIds.Where(value => !string.IsNullOrWhiteSpace(value)))
+                    claims.Add(new Claim("unionId", scopedUnionId));
+            }
             var token = new JwtSecurityToken(
                 issuer: Issuer,
                 audience: Audience,
