@@ -277,3 +277,11 @@ Exact source/test API-only CI [#45620586804](https://github.com/rajeevp727/turno
 
 
 - **Documentation checkpoint:** [`ee00375d`](https://github.com/rajeevp727/turnova-platform/commit/ee00375d48ad508f36c6c32bc4220227568adbb4) passed exact-head API-only CI [#45621736867](https://github.com/rajeevp727/turnova-platform/actions/runs/45621736867): **1,666/1,666 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish (44,086,080 bytes); publish-script syntax; native verifier (11 negative fixtures plus valid fixture); artifact [15024249523](https://github.com/rajeevp727/turnova-platform/actions/runs/45621736867/artifacts/15024249523), 17,040,799 bytes, ZIP SHA-256 `1638e451107c2f8c5cf984b5579c4059eeb75b77e081095683bf6c16157eab6f`. Scope/backend passed; mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first gate. This checkpoint is superseded only by the final documentation-sync head below.
+
+## Run 179 — malformed public-auth payload cache-safety
+
+| ID | Scenario | Test | Expected result |
+|---|---|---|---|
+| AUTH-API-078 | Malformed JSON body sent to Rider registration, Driver login or refresh | `AuthApiIntegrationTests.MalformedJsonOnPublicAuthEndpointsIsRejectedWithoutCaching` (three theory cases) | Minimal-API body binding returns HTTP 400 and the API response policy retains `Cache-Control: no-store` plus `Pragma: no-cache`; no auth handler/storage work is reached |
+
+Source/test head `5bb43ebcbd0f0ce7db84a99eee8d74f0e6ecba0e` passed exact-head API-only CI [#45625067412](https://github.com/rajeevp727/turnova-platform/actions/runs/45625067412): 1,669/1,669 backend tests, Release build, native non-container publish/verifier and artifact [15028747138](https://github.com/rajeevp727/turnova-platform/actions/runs/45625067412/artifacts/15028747138). Mobile jobs were intentionally skipped under the API-first gate.
