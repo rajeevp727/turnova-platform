@@ -140,6 +140,23 @@ public sealed class AuthApiIntegrationTests
         AssertNoStoreHeaders(response);
     }
 
+    [Theory]
+    [InlineData("/api/v1/auth/rider/register")]
+    [InlineData("/api/v1/auth/driver/register")]
+    [InlineData("/api/v1/auth/rider/login")]
+    [InlineData("/api/v1/auth/driver/login")]
+    [InlineData("/api/v1/auth/refresh")]
+    public async Task UnsupportedMethodOnPublicAuthEndpointsReturnsMethodNotAllowedWithoutCaching(string path)
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        AssertNoStoreHeaders(response);
+    }
+
     [Fact]
     public async Task RefreshRequiresConfiguredCosmosStorage()
     {
