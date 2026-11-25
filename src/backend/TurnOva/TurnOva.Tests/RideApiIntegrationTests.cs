@@ -2576,6 +2576,44 @@ public sealed partial class RideApiIntegrationTests
             item.GetProperty("eventId").GetString() == originalEventId);
     }
 
+    [Theory]
+    [InlineData("service-classes")]
+    [InlineData("zone-ids")]
+    public async Task UnionManagerSelfieReviewFailsClosedWhenUnionCoverageMetadataIsMissing(string missingField)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "union-review-missing-coverage";
+        const string driverId = "union-review-missing-coverage-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        var union = unions[unionId];
+        unions[unionId] = missingField switch
+        {
+            "service-classes" => union with { ServiceClasses = null! },
+            "zone-ids" => union with { ZoneIds = null! },
+            _ => throw new ArgumentOutOfRangeException(nameof(missingField), missingField, "Unknown missing Union coverage field.")
+        };
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-missing-coverage");
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var profileBefore = profiles[driverId];
+        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var auditBefore = unionAudit.Values.Where(item => item.DriverId == driverId).ToArray();
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+
+        using var response = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertNoStore(response);
+        Assert.Equal(profileBefore, profiles[driverId]);
+        Assert.Equal(auditBefore, unionAudit.Values.Where(item => item.DriverId == driverId).ToArray());
+        Assert.False(await reservations.HasActiveAsync(driverId));
+    }
+
     [Fact]
     public async Task UnionManagerSelfieAuditRetryReconstructsMissingEventWithOriginalActor()
     {

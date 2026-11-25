@@ -2719,7 +2719,9 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             profile.Documents is null ||
             !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
             !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved") ||
+            union.ServiceClasses is null ||
             !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase) ||
+            union.ZoneIds is null ||
             !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "The active union, Cab driver profile and required licence/vehicle documents must be approved before selfie review." });
 
