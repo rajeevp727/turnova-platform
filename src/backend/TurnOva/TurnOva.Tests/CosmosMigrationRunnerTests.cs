@@ -1332,4 +1332,69 @@ public sealed class CosmosMigrationRunnerTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task HistoryCreateProviderFailureTakesPrecedenceOverCancellationAndReleasesLease()
+    {
+        var (client, historyContainer) = CreateCosmosClient();
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new CosmosException(
+            "migration history create unavailable", HttpStatusCode.ServiceUnavailable, 0, "migration-history-test", 0);
+        historyContainer.Setup(container => container.CreateItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+                It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+                It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>(providerFailure);
+            });
+        var leaseStore = new LeaseLostStore();
+        var migration = new CountingMigration();
+        var runner = new CosmosMigrationRunner(
+            client,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [migration],
+            CreateCoordinator(leaseStore, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runner.RunAsync(cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.True(actual.CancellationToken.IsCancellationRequested);
+        Assert.Equal(1, migration.CallCount);
+        Assert.NotNull(leaseStore.ReleasedLease);
+        historyContainer.Verify(container => container.CreateItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HistoryCreateProviderFailurePropagatesUnchangedWithoutCancellationAndReleasesLease()
+    {
+        var (client, historyContainer) = CreateCosmosClient();
+        var providerFailure = new CosmosException(
+            "migration history create unavailable", HttpStatusCode.ServiceUnavailable, 0, "migration-history-test", 0);
+        historyContainer.Setup(container => container.CreateItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+                It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+                It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() => Task.FromException<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>(providerFailure));
+        var leaseStore = new LeaseLostStore();
+        var migration = new CountingMigration();
+        var runner = new CosmosMigrationRunner(
+            client,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [migration],
+            CreateCoordinator(leaseStore, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        var actual = await Assert.ThrowsAsync<CosmosException>(() =>
+            runner.RunAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Same(providerFailure, actual);
+        Assert.Equal(1, migration.CallCount);
+        Assert.NotNull(leaseStore.ReleasedLease);
+        historyContainer.Verify(container => container.CreateItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
 }
