@@ -122,6 +122,24 @@ public sealed class AuthApiIntegrationTests
         AssertNoStoreHeaders(response);
     }
 
+    [Theory]
+    [InlineData("/api/v1/auth/rider/register")]
+    [InlineData("/api/v1/auth/driver/register")]
+    [InlineData("/api/v1/auth/rider/login")]
+    [InlineData("/api/v1/auth/driver/login")]
+    [InlineData("/api/v1/auth/refresh")]
+    public async Task UnsupportedMediaTypeOnPublicAuthEndpointsIsRejectedWithoutCaching(string path)
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        using var content = new StringContent("{}", Encoding.UTF8, "text/plain");
+
+        using var response = await client.PostAsync(path, content);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        AssertNoStoreHeaders(response);
+    }
+
     [Fact]
     public async Task RefreshRequiresConfiguredCosmosStorage()
     {
