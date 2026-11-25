@@ -3471,6 +3471,11 @@ public sealed partial class RideApiIntegrationTests
 
         using var response = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.Private);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Contains(response.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         var pdfBytes = await response.Content.ReadAsByteArrayAsync();
         var pdfHeader = Encoding.ASCII.GetString(pdfBytes);
         Assert.StartsWith("%PDF-1.4", pdfHeader);
@@ -3489,6 +3494,11 @@ public sealed partial class RideApiIntegrationTests
 
         using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.True(repeated.Headers.CacheControl?.Private);
+        Assert.True(repeated.Headers.CacheControl?.NoStore);
+        Assert.Contains(repeated.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("nosniff", repeated.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal(
             ExtractPayslipPdfText(pdfBytes),
             ExtractPayslipPdfText(await repeated.Content.ReadAsByteArrayAsync()));
