@@ -1157,4 +1157,96 @@ public sealed class CosmosMigrationLeaseStoreTests
         container.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task CreateProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new CosmosException(
+            "lease create unavailable", HttpStatusCode.ServiceUnavailable, 0, "migration-lease-test", 0);
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<CosmosMigrationLeaseDocument>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosMigrationLeaseDocument>>(providerFailure);
+            });
+        var store = new CosmosMigrationLeaseStore(container.Object);
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryCreateAsync("owner-1", DateTimeOffset.UtcNow.AddMinutes(30), cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<CosmosMigrationLeaseDocument>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReplaceProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new CosmosException(
+            "lease replace unavailable", HttpStatusCode.ServiceUnavailable, 0, "migration-lease-test", 0);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosMigrationLeaseDocument>(),
+                It.IsAny<string>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosMigrationLeaseDocument>>(providerFailure);
+            });
+        var store = new CosmosMigrationLeaseStore(container.Object);
+        var expected = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-current", DateTimeOffset.UtcNow.AddMinutes(10));
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryReplaceAsync(expected, "owner-2", DateTimeOffset.UtcNow.AddMinutes(30), cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosMigrationLeaseDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReleaseProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new CosmosException(
+            "lease release unavailable", HttpStatusCode.ServiceUnavailable, 0, "migration-lease-test", 0);
+        container.Setup(value => value.DeleteItemAsync<CosmosMigrationLeaseDocument>(
+                It.IsAny<string>(),
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosMigrationLeaseDocument>>(providerFailure);
+            });
+        var store = new CosmosMigrationLeaseStore(container.Object);
+        var expected = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-current", DateTimeOffset.UtcNow.AddMinutes(10));
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryReleaseAsync(expected, cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        container.Verify(value => value.DeleteItemAsync<CosmosMigrationLeaseDocument>(
+            "schema-migrations", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
 }
