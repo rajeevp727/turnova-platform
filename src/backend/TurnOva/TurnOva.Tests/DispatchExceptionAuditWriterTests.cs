@@ -59,6 +59,8 @@ public sealed class DispatchExceptionAuditWriterTests
     [InlineData("trace")]
     [InlineData("reason")]
     [InlineData("offer")]
+    [InlineData("timestamp-default")]
+    [InlineData("timestamp-offset")]
     public async Task RecordAsync_DoesNotAcceptConflictWhenCanonicalMetadataDiffers(string mismatch)
     {
         var existing = ExpectedAudit();
@@ -71,6 +73,11 @@ public sealed class DispatchExceptionAuditWriterTests
             "trace" => existing with { TraceId = "different-trace" },
             "reason" => existing with { ReasonCategory = QueueAuditReasonCategories.DriverReservationFailed },
             "offer" => existing with { OfferId = "offer-1" },
+            "timestamp-default" => existing with { OccurredAtUtc = default },
+            "timestamp-offset" => existing with
+            {
+                OccurredAtUtc = DateTimeOffset.Parse("2026-11-08T12:00:00+05:30")
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
         };
 
