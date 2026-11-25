@@ -280,6 +280,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             string.IsNullOrWhiteSpace(document.ServiceClass) ||
             document.JoinedAt == default ||
             document.Sequence <= 0 ||
+            document.Sequence != document.JoinedAt.UtcTicks ||
             !document.IsEligible ||
             !string.Equals(document.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal) ||
             !string.Equals(QueueKey(document.ZoneId, document.ServiceClass), expectedZoneServiceKey, StringComparison.Ordinal))
