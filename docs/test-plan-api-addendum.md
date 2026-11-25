@@ -202,3 +202,12 @@ A full production-source callsite inventory covered all 63 C# files under `TurnO
 Intermediate test-only CI failures [#45597246954](https://github.com/rajeevp727/turnova-platform/actions/runs/45597246954) and [#45598123283](https://github.com/rajeevp727/turnova-platform/actions/runs/45598123283) were corrected by narrowing test assertions/verification and supplying the observed ETag in the existing TTL cancellation fixtures. The final exact-head CI above is green. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
 
 This is deterministic SDK-mock and native-publish evidence only. It does not establish live Cosmos 412 contention, partition/transaction behavior, multi-instance/restart/failover/RU, or production readiness. No acceptance row is promoted.
+
+
+## Run 171 — AI-01 provider data-minimization regression
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| AI-PRIVACY-001 | Rider trip-intent text contains synthetic identity, contact, precise coordinates, licence/KYC, bank-account, payment-token and bearer-token-shaped values | `AiAssistanceServiceTests.ProviderReceivesOnlyRedactedTripTokensAndCannotReplaceRoute` | The provider receives only the fixed `[PICKUP]`/`[DROPOFF]` placeholders and allow-listed generic trip-action words; none of the synthetic sensitive values or raw pickup/destination text appears in the provider prompt. The local editable Cab draft retains its parsed pickup/dropoff and still requires Rider confirmation. |
+
+Source/test commit [`952d8a6d3bf23464de3b58cec44d3d660a8577d8`](https://github.com/rajeevp727/turnova-platform/commit/952d8a6d3bf23464de3b58cec44d3d660a8577d8). Fresh exact-head API-only CI is pending; the prior passing run [#45598764966](https://github.com/rajeevp727/turnova-platform/actions/runs/45598764966) applies to the previous head only. This supplemental AI-01 evidence does not promote any of the 19 acceptance rows. No live AI provider, model or credentials are configured.
