@@ -293,10 +293,31 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
         if (auditEvent is null)
             throw new InvalidOperationException("Cosmos returned an empty queue audit event query item.");
 
+        var hasValidMetadata = auditEvent.EventType switch
+        {
+            QueueAuditEventTypes.Joined or
+            QueueAuditEventTypes.Left or
+            QueueAuditEventTypes.MovedToBack =>
+                auditEvent.OfferId is null &&
+                auditEvent.TraceId is null &&
+                auditEvent.ReasonCategory is null,
+            QueueAuditEventTypes.RotatedToBack =>
+                !string.IsNullOrWhiteSpace(auditEvent.OfferId) &&
+                auditEvent.TraceId is null &&
+                auditEvent.ReasonCategory is null,
+            QueueAuditEventTypes.DispatchException =>
+                auditEvent.OfferId is null &&
+                !string.IsNullOrWhiteSpace(auditEvent.TraceId) &&
+                !string.IsNullOrWhiteSpace(auditEvent.ReasonCategory),
+            _ => false
+        };
+
         if (string.IsNullOrWhiteSpace(auditEvent.EventId) ||
             string.IsNullOrWhiteSpace(auditEvent.DriverId) ||
-            string.IsNullOrWhiteSpace(auditEvent.EventType) ||
-            !string.Equals(auditEvent.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal))
+            !string.Equals(auditEvent.ZoneServiceKey, expectedZoneServiceKey, StringComparison.Ordinal) ||
+            auditEvent.OccurredAtUtc == default ||
+            auditEvent.OccurredAtUtc.Offset != TimeSpan.Zero ||
+            !hasValidMetadata)
             throw new InvalidOperationException("Cosmos returned a malformed queue audit event query item.");
 
         return auditEvent;
