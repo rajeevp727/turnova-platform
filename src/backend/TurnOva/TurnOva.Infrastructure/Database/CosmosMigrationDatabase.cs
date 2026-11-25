@@ -65,12 +65,19 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
 
             if (currentProperties.DefaultTimeToLive != defaultTimeToLive)
             {
+                var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                    current, static containerResponse => containerResponse.ETag, cancellationToken);
+                if (!CosmosEtagPolicy.HasObservedEtag(etag))
+                    throw new InvalidOperationException(
+                        "Cosmos did not return an ETag for the container before applying its TTL configuration.");
+
                 currentProperties.DefaultTimeToLive = defaultTimeToLive;
                 cancellationToken.ThrowIfCancellationRequested();
                 _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
                     () => container.ReplaceContainerAsync(
                         currentProperties,
-                        cancellationToken: cancellationToken),
+                        new ContainerRequestOptions { IfMatchEtag = etag },
+                        cancellationToken),
                     cancellationToken);
             }
         }
