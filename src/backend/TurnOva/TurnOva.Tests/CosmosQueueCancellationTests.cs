@@ -623,6 +623,115 @@ public sealed class CosmosQueueCancellationTests
         container.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("remove")]
+    [InlineData("move-to-back")]
+    [InlineData("move-to-back-once")]
+    public async Task QueueMutationsRemainSuccessfulWhenCancellationArrivesAfterAtomicCommit(string operation)
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        var batchResponse = new Mock<TransactionalBatchResponse>();
+        batchResponse.SetupGet(value => value.IsSuccessStatusCode).Returns(true);
+        var readResponse = new Mock<ItemResponse<CosmosQueueStore.QueueEntryDocument>>(MockBehavior.Strict);
+        readResponse.SetupGet(value => value.Resource).Returns(new CosmosQueueStore.QueueEntryDocument
+        {
+            Id = "driver-1",
+            DriverId = "driver-1",
+            ZoneId = "zone-a",
+            ServiceClass = "Cab",
+            ZoneServiceKey = "zone-a|cab",
+            JoinedAt = DateTimeOffset.Parse("2026-11-23T00:00:00Z"),
+            Sequence = 1,
+            IsEligible = true
+        });
+        readResponse.SetupGet(value => value.ETag).Returns("observed-etag");
+        using var cancellation = new CancellationTokenSource();
+
+        container.Setup(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+                "driver-1",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                cancellation.Token))
+            .ReturnsAsync(readResponse.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<QueueAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        if (operation == "remove")
+        {
+            batch.Setup(value => value.DeleteItem(
+                    "driver-1",
+                    It.Is<TransactionalBatchItemRequestOptions>(options => options.IfMatchEtag == "observed-etag")))
+                .Returns(batch.Object);
+        }
+        else
+        {
+            batch.Setup(value => value.ReplaceItem(
+                    "driver-1",
+                    It.Is<CosmosQueueStore.QueueEntryDocument>(item => item.DriverId == "driver-1"),
+                    It.Is<TransactionalBatchItemRequestOptions>(options => options.IfMatchEtag == "observed-etag")))
+                .Returns(batch.Object);
+        }
+
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(batchResponse.Object);
+            });
+        container.Setup(value => value.CreateTransactionalBatch(
+                It.Is<PartitionKey>(key => key.Equals(new PartitionKey("zone-a|cab")))))
+            .Returns(batch.Object);
+
+        var store = new CosmosQueueStore(container.Object);
+        var result = operation switch
+        {
+            "remove" => await store.RemoveAsync("driver-1", "zone-a", "Cab", cancellation.Token),
+            "move-to-back" => await store.MoveToBackAsync("driver-1", "zone-a", "Cab", cancellation.Token),
+            "move-to-back-once" => await store.MoveToBackOnceAsync(
+                "driver-1", "zone-a", "Cab", "offer-1", cancellation.Token),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+        Assert.True(result);
+        readResponse.VerifyGet(value => value.Resource, Times.Once);
+        readResponse.VerifyGet(value => value.ETag, Times.Once);
+        readResponse.VerifyNoOtherCalls();
+        container.Verify(value => value.ReadItemAsync<CosmosQueueStore.QueueEntryDocument>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), cancellation.Token), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("zone-a|cab")))), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<QueueAuditEvent>(audit => audit.ZoneServiceKey == "zone-a|cab"),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        if (operation == "remove")
+        {
+            batch.Verify(value => value.DeleteItem(
+                "driver-1",
+                It.Is<TransactionalBatchItemRequestOptions>(options => options.IfMatchEtag == "observed-etag")), Times.Once);
+            batch.Verify(value => value.ReplaceItem(
+                It.IsAny<string>(),
+                It.IsAny<CosmosQueueStore.QueueEntryDocument>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Never);
+        }
+        else
+        {
+            batch.Verify(value => value.ReplaceItem(
+                "driver-1",
+                It.Is<CosmosQueueStore.QueueEntryDocument>(item => item.DriverId == "driver-1"),
+                It.Is<TransactionalBatchItemRequestOptions>(options => options.IfMatchEtag == "observed-etag")), Times.Once);
+            batch.Verify(value => value.DeleteItem(
+                It.IsAny<string>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Never);
+        }
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        batchResponse.VerifyGet(value => value.IsSuccessStatusCode, Times.Once);
+        batch.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
     private static CosmosException Unavailable() =>
         new("Cosmos is unavailable.", System.Net.HttpStatusCode.ServiceUnavailable, 0, "queue-cancellation-test", 0);
 
