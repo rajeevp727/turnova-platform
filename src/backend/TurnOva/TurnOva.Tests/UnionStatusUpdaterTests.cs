@@ -447,6 +447,47 @@ public sealed class UnionStatusUpdaterTests
             .ReturnsAsync(response);
     }
 
+    [Fact]
+    public async Task CosmosStatusUpdateReturnsCommittedUnionWhenCancellationArrivesAfterReplace()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var original = CreateUnion();
+        var read = CreateReadResponse(original, "union-status-committed-etag");
+        var replacement = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        SetupRead(container, read.Object);
+        container.Setup(value => value.ReplaceItemAsync<DriverUnion>(
+                It.IsAny<DriverUnion>(),
+                UnionId,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(replacement.Object);
+            });
+
+        var updatedAt = DateTimeOffset.Parse("2026-11-25T03:30:00Z");
+        var result = await UnionStatusUpdater.TryUpdateStatusAsync(
+            container.Object,
+            new ConcurrentDictionary<string, DriverUnion>(),
+            UnionId,
+            "Suspended",
+            updatedAt,
+            cancellation.Token);
+
+        Assert.Equal(UnionStatusUpdateOutcome.Updated, result.Outcome);
+        Assert.Equal(original with { Status = "Suspended", UpdatedAtUtc = updatedAt }, result.Union);
+        container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
+            It.IsAny<DriverUnion>(),
+            UnionId,
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static DriverUnion CreateUnion()
     {
         var createdAt = DateTimeOffset.Parse("2026-11-20T12:00:00Z");
