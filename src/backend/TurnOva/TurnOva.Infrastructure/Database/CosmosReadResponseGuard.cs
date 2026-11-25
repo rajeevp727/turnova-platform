@@ -32,6 +32,29 @@ public static class CosmosReadResponseGuard
         }
     }
 
+    /// <summary>
+    /// Awaits a committed Cosmos write without converting a successful commit into
+    /// cancellation. If the provider fails while the caller is cancelling, cancellation
+    /// takes precedence over the provider failure.
+    /// </summary>
+    public static async Task<T> AwaitCommittedWriteWithCancellationPrecedenceAsync<T>(
+        Func<Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            return await operation();
+        }
+        catch
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
+    }
+
     public static T RequireResource<T>(
         T? resource,
         Func<T, bool> identityMatches,
