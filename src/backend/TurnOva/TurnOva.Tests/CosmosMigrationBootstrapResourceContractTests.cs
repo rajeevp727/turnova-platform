@@ -8,6 +8,120 @@ namespace TurnOva.Tests;
 public sealed class CosmosMigrationBootstrapResourceContractTests
 {
     [Fact]
+    public async Task HistoryContainerCreateProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var lockResponse = CreateResponse("MigrationLocks", "/id", includeContainer: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new InvalidOperationException("history container create failed");
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.Is<ContainerProperties>(properties =>
+                    properties.Id == CosmosMigrationRunner.HistoryContainerName && properties.PartitionKeyPath == "/id"),
+                It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ContainerResponse>(providerFailure);
+            });
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runner.RunAsync(cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == CosmosMigrationRunner.HistoryContainerName),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == CosmosMigrationRunner.LockContainerName),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task HistoryContainerCreateProviderFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var lockResponse = CreateResponse("MigrationLocks", "/id", includeContainer: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+        var providerFailure = new InvalidOperationException("history container create failed");
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.Is<ContainerProperties>(properties =>
+                    properties.Id == CosmosMigrationRunner.HistoryContainerName && properties.PartitionKeyPath == "/id"),
+                It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() => Task.FromException<ContainerResponse>(providerFailure));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runner.RunAsync(CancellationToken.None));
+
+        Assert.Same(providerFailure, actual);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == CosmosMigrationRunner.HistoryContainerName),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == CosmosMigrationRunner.LockContainerName),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task LockContainerCreateProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var lockResponse = CreateResponse("MigrationLocks", "/id", includeContainer: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new InvalidOperationException("lock container create failed");
+        database.SetupSequence(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(historyResponse.Object)
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ContainerResponse>(providerFailure);
+            });
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runner.RunAsync(cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == CosmosMigrationRunner.HistoryContainerName),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == CosmosMigrationRunner.LockContainerName),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task LockContainerCreateProviderFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
+        var lockResponse = CreateResponse("MigrationLocks", "/id", includeContainer: true);
+        var (runner, database, leaseStore, _) = CreateRunner(historyResponse, lockResponse);
+        var providerFailure = new InvalidOperationException("lock container create failed");
+        database.SetupSequence(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(historyResponse.Object)
+            .Returns(() => Task.FromException<ContainerResponse>(providerFailure));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runner.RunAsync(CancellationToken.None));
+
+        Assert.Same(providerFailure, actual);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == CosmosMigrationRunner.HistoryContainerName),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties => properties.Id == CosmosMigrationRunner.LockContainerName),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task DatabaseBootstrapRejectsMissingDatabaseHandle()
     {
         var historyResponse = CreateResponse("MigrationHistory", "/id", includeContainer: true);
