@@ -27,10 +27,12 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             var audit = RiderActiveBookingReservationAuditEvent.Create(
                 reservation, RiderActiveBookingReservationAuditEventTypes.Acquired,
                 auditContext, previousExpiresAtUtc: null, reservation.ExpiresAtUtc);
-            using var batch = await container.CreateTransactionalBatch(new PartitionKey(reservation.RiderId))
-                .CreateItem(reservation)
-                .CreateItem(audit)
-                .ExecuteAsync(cancellationToken);
+            using var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateTransactionalBatch(new PartitionKey(reservation.RiderId))
+                    .CreateItem(reservation)
+                    .CreateItem(audit)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
 
             if (batch.IsSuccessStatusCode)
                 return RiderBookingReservationAcquireResult.Acquired;
@@ -141,13 +143,15 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             var audit = RiderActiveBookingReservationAuditEvent.Create(
                 updated, RiderActiveBookingReservationAuditEventTypes.MadePermanent,
                 auditContext, currentReservation.ExpiresAtUtc, expiresAtUtc: null);
-            using var batch = await container.CreateTransactionalBatch(new PartitionKey(riderId))
-                .ReplaceItem(
-                    RiderActiveBookingReservation.DocumentId,
-                    updated,
-                    new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
-                .CreateItem(audit)
-                .ExecuteAsync(cancellationToken);
+            using var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateTransactionalBatch(new PartitionKey(riderId))
+                    .ReplaceItem(
+                        RiderActiveBookingReservation.DocumentId,
+                        updated,
+                        new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
+                    .CreateItem(audit)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
 
             if (batch.IsSuccessStatusCode)
                 return true;
@@ -202,12 +206,14 @@ public sealed class CosmosRiderActiveBookingReservationStore(Container container
             var audit = RiderActiveBookingReservationAuditEvent.Create(
                 currentReservation, RiderActiveBookingReservationAuditEventTypes.Released,
                 auditContext, currentReservation.ExpiresAtUtc, expiresAtUtc: null);
-            using var batch = await container.CreateTransactionalBatch(new PartitionKey(riderId))
-                .DeleteItem(
-                    RiderActiveBookingReservation.DocumentId,
-                    new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
-                .CreateItem(audit)
-                .ExecuteAsync(cancellationToken);
+            using var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateTransactionalBatch(new PartitionKey(riderId))
+                    .DeleteItem(
+                        RiderActiveBookingReservation.DocumentId,
+                        new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
+                    .CreateItem(audit)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
 
             if (batch.IsSuccessStatusCode)
                 return true;
