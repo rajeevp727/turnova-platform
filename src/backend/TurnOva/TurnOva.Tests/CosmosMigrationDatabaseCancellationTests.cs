@@ -790,4 +790,94 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         readResponse.VerifyNoOtherCalls();
     }
 
+
+    [Fact]
+    public async Task TtlReadProviderTaskFailureTakesPrecedenceOverCancellation()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new InvalidOperationException("TTL container read failed");
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+        container.Setup(value => value.ReadContainerAsync(
+                It.IsAny<ContainerRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ContainerResponse>(providerFailure);
+            });
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", cancellation.Token, defaultTimeToLive: 604800));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyGet(value => value.Id, Times.Once);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Once);
+        database.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TtlReadProviderTaskFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        var expected = new InvalidOperationException("TTL container read failed");
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+        container.Setup(value => value.ReadContainerAsync(
+                It.IsAny<ContainerRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() => Task.FromException<ContainerResponse>(expected));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", CancellationToken.None, defaultTimeToLive: 604800));
+
+        Assert.Same(expected, actual);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyGet(value => value.Id, Times.Once);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Once);
+        database.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+    }
+
 }
