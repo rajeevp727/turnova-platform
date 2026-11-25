@@ -17,6 +17,7 @@ public sealed class DispatchExceptionAuditWriter(IQueueAuditEventStore store)
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        DispatchExceptionAuditInput.Validate(actorId, zoneId, serviceClass, traceId, reasonCategory);
         var partitionKey = $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
         var auditEvent = new QueueAuditEvent(
             $"dispatch-exception-{traceId}",
