@@ -509,6 +509,8 @@ public sealed class UnionAssignmentWriterTests
                 container.Object, new ConcurrentDictionary<string, DriverUnionAssignment>(),
                 current with { UnionId = "union-next" }, current, cancellation.Token));
 
+        container.Verify(value => value.ReadItemAsync<DriverUnionAssignment>(
+            DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnionAssignment>(
             It.IsAny<DriverUnionAssignment>(), DriverId, It.IsAny<PartitionKey?>(),
             It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "union-assignment-etag"),
@@ -535,6 +537,8 @@ public sealed class UnionAssignmentWriterTests
                 current with { UnionId = "union-next" }, current, CancellationToken.None));
 
         Assert.Same(unavailable, exception);
+        container.Verify(value => value.ReadItemAsync<DriverUnionAssignment>(
+            DriverId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnionAssignment>(
             It.IsAny<DriverUnionAssignment>(), DriverId, It.IsAny<PartitionKey?>(),
             It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "union-assignment-etag"),

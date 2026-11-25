@@ -384,6 +384,8 @@ public sealed class UnionStatusUpdaterTests
                 container.Object, new ConcurrentDictionary<string, DriverUnion>(),
                 UnionId, "Suspended", DateTimeOffset.UtcNow, cancellation.Token));
 
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
             It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "union-status-etag"),
@@ -409,6 +411,8 @@ public sealed class UnionStatusUpdaterTests
                 UnionId, "Suspended", DateTimeOffset.UtcNow, CancellationToken.None));
 
         Assert.Same(unavailable, exception);
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
             It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "union-status-etag"),
