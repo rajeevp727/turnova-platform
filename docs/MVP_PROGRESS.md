@@ -1,3 +1,12 @@
+## Run 154 — 2026-11-25 — CORS preflight cache-safety regression
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; source/test head `2c2ebfc4e73c7972126f52cefd1193a2c780da9f`.
+- **Audit:** `UseApiResponseCachePolicy` is intentionally registered before `UseCors` because CORS preflight short-circuits before authentication and endpoint handlers. Added `AuthApiIntegrationTests.CorsPreflightForPublicAuthRouteReceivesNoStoreHeaders`, exercising the real `AuthApiFactory` pipeline with an allowed origin and OPTIONS preflight to `/api/v1/auth/rider/login`. It asserts 204, exact allow-origin/method, and `Cache-Control: no-store` plus `Pragma: no-cache`.
+- **Exact-head API-only CI:** [#45523802687](https://github.com/rajeevp727/turnova-platform/actions/runs/45523802687) passed **1,557/1,557 tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 API publish; publish-script syntax and verifier. Artifact [14980862824](https://github.com/rajeevp727/turnova-platform/actions/runs/45523802687/artifacts/14980862824), 17,033,472 bytes, SHA-256 `19460fba573d0f321e5ef332b8c12b11ef8600965132324afb0dd7fbe1585a88`.
+- **Scope/acceptance:** one backend integration test; no runtime source change, no mobile/container/secrets/production change. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); this supplemental AUTH-API-067 evidence does not promote a row. No live Cosmos/provider/production evidence.
+- **PR/review:** PR #200 remains sole ready/active API PR; three owner-authored COMMENTED reviews, zero independent approvals, zero unresolved threads. Android remains gated by API phase exit.
+- **Next exact action:** continue API-only authorization/privacy/OpenAPI and persistence-contract audit; obtain independent maintainer review/approval. Re-audit main after any permitted merge before Android Rider.
+
 ## Run 153 — 2026-11-25 — migration read cancellation precedence
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
