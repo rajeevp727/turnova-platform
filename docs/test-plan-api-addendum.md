@@ -152,3 +152,17 @@ These cases are deterministic integration/SDK-mock evidence. They do not establi
 **Correction disclosed:** intermediate [CI #45581912648](https://github.com/rajeevp727/turnova-platform/actions/runs/45581912648) failed 17/1,647 tests because the first role allow-list omitted the existing non-privileged `Ops` actor identity used by API-key-protected Operations review/audit tests. The final allow-list preserves `Ops` as non-privileged while keeping the admin-key boundary explicit; the final 1,648-test source/test head above is green.
 
 No acceptance row is promoted. These tests do not establish live Cosmos partition/ETag/transaction/multi-instance/restart behavior or production identity-provider mapping.
+
+
+## Run 168 — JWT role-claim alias ambiguity
+
+The bearer validator now treats `role`, `roles` and the `ClaimTypes.Role` URI as role representations, and accepts exactly one canonical `role` claim. A token containing a valid canonical role plus a competing alias is rejected before authorization policy evaluation.
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| AUTH-API-074 | A signed JWT contains canonical `role=Rider` plus a competing `roles=Rider` alias | `AuthApiIntegrationTests.AlternateRoleClaimAliasesAreRejectedAlongsideCanonicalRole("roles")` | HTTP 401 with no-store/no-cache and a generic Bearer challenge; competing role representations are rejected |
+| AUTH-API-075 | A signed JWT contains canonical `role=Rider` plus the `ClaimTypes.Role` URI alias | `AuthApiIntegrationTests.AlternateRoleClaimAliasesAreRejectedAlongsideCanonicalRole("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")` | HTTP 401 with no-store/no-cache and a generic Bearer challenge; competing role representations are rejected |
+
+**Exact source/test evidence:** [commit `fb0c85d2`](https://github.com/rajeevp727/turnova-platform/commit/fb0c85d26e4ea255eebfa29a40f4d329412b781a) passed API-only CI [#45592523126](https://github.com/rajeevp727/turnova-platform/actions/runs/45592523126): **1,650/1,650 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15010434175](https://github.com/rajeevp727/turnova-platform/actions/runs/45592523126/artifacts/15010434175), 17,040,300 bytes; ZIP SHA-256 `668b3549e899c2e32ca3a355fa4e9de4396ca99774b35b10fb84c068f04fadbc`.
+
+No acceptance row is promoted. This is deterministic integration evidence, not live production identity-provider claim-mapping evidence.

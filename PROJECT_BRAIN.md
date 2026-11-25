@@ -1,3 +1,18 @@
+# Run 168 current handoff — 2026-11-25
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`. Main phase metadata remains stale and must not authorize Android.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test head [`fb0c85d2`](https://github.com/rajeevp727/turnova-platform/commit/fb0c85d26e4ea255eebfa29a40f4d329412b781a).
+- **Run 168:** JWT validation now counts `role`, `roles` and the `ClaimTypes.Role` URI as role representations, and accepts exactly one canonical `role` claim. Two deterministic cases reject canonical-plus-alias tokens with generic 401/no-store/no-cache.
+- **Exact source/test CI:** [#45592523126](https://github.com/rajeevp727/turnova-platform/actions/runs/45592523126) passed **1,650/1,650 tests**, Release build, native non-container Linux x64 publish and verifier; artifact [15010434175](https://github.com/rajeevp727/turnova-platform/actions/runs/45592523126/artifacts/15010434175), 17,040,300 bytes, SHA-256 `668b3549e899c2e32ca3a355fa4e9de4396ca99774b35b10fb84c068f04fadbc`.
+- **Scope:** two API/backend files; 0 mobile paths, no container build/deployment, secrets or infrastructure change. API-only CI intentionally skipped mobile jobs.
+- **Acceptance:** strict 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No row promoted.
+- **Review gate:** three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads, no requested reviewer. Never self-approve or bypass protection.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft; #204 is trusted-LAN Android configuration only. Historical #197/#207 merges without independent approval are disclosed exceptions, not precedent.
+- **External gates:** live Cosmos ETag/partition/transaction/multi-instance/restart/failover/RU; production identity/UnionManager claim mapping and key custody, Cosmos credentials, API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch policy; maps/realtime providers; private-media storage/scanning/consent/retention; support/escalation, reconciliation and Union legal approval; later Android/iOS device/signing/store/TestFlight evidence.
+- **Next:** audit UnionManager partner endpoint authorization and cross-Union scoping; continue API-only persistence/idempotency/privacy checks; obtain independent human maintainer approval. After a permitted merge, re-read main and run a fresh API phase-exit audit before Android Rider → Android Driver → iOS Rider → iOS Driver.
+
+---
+
 # Run 167 current handoff — 2026-11-25
 
 - **Phase:** API `in_progress`; Android/iOS `not_started`. Main phase metadata remains stale and must not authorize Android.

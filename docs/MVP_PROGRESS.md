@@ -1,3 +1,21 @@
+## Run 168 — 2026-11-25 — JWT role-claim alias ambiguity
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first sequencing remains enforced.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test commit [`fb0c85d2`](https://github.com/rajeevp727/turnova-platform/commit/fb0c85d26e4ea255eebfa29a40f4d329412b781a). PR remains API-only with 0 `src/mobile/` paths.
+- **Security finding:** JWT validation previously counted only the canonical `role` claim. A token could carry a valid canonical role plus a competing `roles` or `ClaimTypes.Role` URI claim, which other JWT consumers may interpret differently.
+- **Implementation:** the API now treats `role`, `roles` and the `ClaimTypes.Role` URI as role representations, and accepts only exactly one canonical `role` claim with the existing Rider/Driver/UnionManager/Ops allow-list. Existing `Ops` remains non-privileged and still requires `X-Driver-Admin-Key` for Operations routes.
+- **Deterministic tests:** `AuthApiIntegrationTests.AlternateRoleClaimAliasesAreRejectedAlongsideCanonicalRole` covers both alternate aliases and asserts generic 401, `Cache-Control: no-store`, `Pragma: no-cache`, and no JWT error detail. Test-plan IDs: `AUTH-API-074..075`.
+- **Exact source/test API-only CI:** [#45592523126](https://github.com/rajeevp727/turnova-platform/actions/runs/45592523126) passed **1,650/1,650 backend tests (0 failed, 0 skipped)**; .NET 10 Release build; native non-container Linux x64 publish; publish-script syntax; native publish verifier (11 negative fixtures plus valid fixture). Artifact [15010434175](https://github.com/rajeevp727/turnova-platform/actions/runs/45592523126/artifacts/15010434175), 17,040,300 bytes; ZIP SHA-256 `668b3549e899c2e32ca3a355fa4e9de4396ca99774b35b10fb84c068f04fadbc`.
+- **CI phase gate:** scope/backend passed. Mobile-auth, mobile, Android/emulator and iOS/simulator jobs were intentionally skipped; this is API evidence only.
+- **Scope/risk:** two backend files only; no mobile source, API route/response, accepted role value, data model, infrastructure, secrets, Docker/container build or deployment changed.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No row is promoted; substantial engineering implementation remains distinct from strict acceptance.
+- **Review:** three owner-authored `COMMENTED` reviews, 0 independent approvals, 0 unresolved review threads and no requested reviewer. Do not self-approve, bypass protection or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval remain disclosed exceptions, not precedent.
+- **External gates:** live Cosmos partition/ETag/transaction/multi-instance/restart/failover/RU; production identity-provider role/UnionManager claim mapping and key custody; Cosmos credentials, API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing and SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence. No production readiness is claimed.
+- **Next exact action:** audit UnionManager partner endpoint authorization and cross-Union scoping (including caller-supplied `unionId` handling), then continue API-only persistence/idempotency/privacy checks. Obtain independent human maintainer approval; after a permitted merge, re-read main and run a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver.
+
+No Docker/container builds or deployments. Never claim live Cosmos, production-provider or device validation unless performed.
+
 ## Run 167 — 2026-11-25 — strict JWT role boundary and Cosmos identity contract
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first gate remains in force.
