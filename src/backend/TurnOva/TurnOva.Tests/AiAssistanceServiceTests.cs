@@ -110,8 +110,17 @@ public sealed class AiAssistanceServiceTests
             Assert.Equal("[DROPOFF]", prompt.DropoffToken);
             Assert.DoesNotContain("12 Main Road", prompt.IntentSummary);
             Assert.DoesNotContain("HITEC City", prompt.IntentSummary);
+            Assert.DoesNotContain("Secret Clinic", prompt.IntentSummary);
+            Assert.DoesNotContain("rider-123", prompt.IntentSummary);
             Assert.DoesNotContain("raja@example.com", prompt.IntentSummary);
             Assert.DoesNotContain("+91", prompt.IntentSummary);
+            Assert.DoesNotContain("17.3850", prompt.IntentSummary);
+            Assert.DoesNotContain("78.4867", prompt.IntentSummary);
+            Assert.DoesNotContain("DL-123456789", prompt.IntentSummary);
+            Assert.DoesNotContain("ABCDE1234F", prompt.IntentSummary);
+            Assert.DoesNotContain("123456789012", prompt.IntentSummary);
+            Assert.DoesNotContain("pay_test_123", prompt.IntentSummary);
+            Assert.DoesNotContain("eyJhbGciOiJIUzI1NiJ9", prompt.IntentSummary);
             Assert.DoesNotContain("family", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("child", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("wheelchair", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
@@ -125,7 +134,7 @@ public sealed class AiAssistanceServiceTests
         var service = CreateService(provider, enabled: true);
 
         var result = await service.DraftTripIntentAsync(
-            "Please book a Cab for my family of 4 with a child and wheelchair accessible service, raja@example.com +91 9876543210, from 12 Main Road to HITEC City",
+            "Please book a Cab for my family of 4 with a child and wheelchair accessible service, rider id rider-123, raja@example.com +91 9876543210, coordinates 17.3850,78.4867, licence DL-123456789, PAN ABCDE1234F, bank account 123456789012, payment token pay_test_123, bearer eyJhbGciOiJIUzI1NiJ9, from 12 Main Road to Secret Clinic",
             CancellationToken.None);
 
         Assert.Equal("12 Main Road", result.Pickup);
