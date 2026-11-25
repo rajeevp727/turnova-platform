@@ -219,3 +219,8 @@ Source/test commit [`952d8a6d3bf23464de3b58cec44d3d660a8577d8`](https://github.c
 | UNION-SCOPE-002 | A UnionManager has signed claims for an active Cab-serving Union and an active non-Cab Union that retains a stale active Cab assignment | `RideApiIntegrationTests.UnionManagerMemberListExcludesAssignmentsFromUnionsThatNoLongerServeCab` | `GET /api/v1/union/drivers` returns only the Cab-serving Union's active Cab driver. The non-Cab Union's stale assignment is not exposed. |
 
 The API member-list guard now requires the claimed Union to exist, be Active and explicitly include Cab in its service classes. Runtime commit [`d0ffc527d47e2f1b8833e9dcb38dc13d8846d8d4`](https://github.com/rajeevp727/turnova-platform/commit/d0ffc527d47e2f1b8833e9dcb38dc13d8846d8d4); deterministic regression commit [`6e5d34a1af481cf29e3419158265990bce60ef74`](https://github.com/rajeevp727/turnova-platform/commit/6e5d34a1af481cf29e3419158265990bce60ef74). Exact-head API-only CI is pending. This test does not prove live Cosmos or production identity-provider behavior and does not promote an acceptance row.
+
+
+## Run 173 — UnionManager Cab-scope compile correction
+
+The first Run172 exact-head workflow [#45601521567](https://github.com/rajeevp727/turnova-platform/actions/runs/45601521567) failed in the .NET Release build because `StringComparison` was passed to `IReadOnlyList<string>.Contains`. No backend tests ran in that failed job. The API guard now uses `Contains("cab", StringComparer.OrdinalIgnoreCase)` in commit [`ba03e4ec482c9f6ba919504fe9294acb9897ee0d`](https://github.com/rajeevp727/turnova-platform/commit/ba03e4ec482c9f6ba919504fe9294acb9897ee0d). Fresh exact-head CI is required; the previous passing Run170 workflow is not reused as evidence for the corrected head.
