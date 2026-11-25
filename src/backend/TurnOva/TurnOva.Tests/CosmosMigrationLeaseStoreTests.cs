@@ -1126,4 +1126,35 @@ public sealed class CosmosMigrationLeaseStoreTests
         container.VerifyNoOtherCalls();
     }
 
+
+    [Fact]
+    public async Task ReadProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new CosmosException(
+            "cosmos unavailable during read", HttpStatusCode.ServiceUnavailable, 0, "activity", 0);
+        container.Setup(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                "schema-migrations",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosMigrationLeaseDocument>>(providerFailure);
+            });
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosMigrationLeaseStore(container.Object).ReadAsync(cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        container.Verify(value => value.ReadItemAsync<CosmosMigrationLeaseDocument>(
+            "schema-migrations",
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
 }
