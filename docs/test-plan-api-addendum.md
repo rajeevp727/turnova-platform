@@ -129,3 +129,26 @@ These tests validate the current-Union review snapshot required before a Driver 
 **Exact source/test evidence:** [PR #200 head `74d9f46b9ccbffc4d9a93f3a85896af8b745377e`](https://github.com/rajeevp727/turnova-platform/commit/74d9f46b9ccbffc4d9a93f3a85896af8b745377e) passed API-only CI [#45576488879](https://github.com/rajeevp727/turnova-platform/actions/runs/45576488879): **1,637/1,637 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 API publish, publish-script syntax and native publish verifier (11 negative fixtures plus valid fixture). Artifact [15004243227](https://github.com/rajeevp727/turnova-platform/actions/runs/45576488879/artifacts/15004243227), 17,040,094 bytes; ZIP SHA-256 `d6c93c3c1c74c98b42724a8b486097cc40a097610f1e17ad23d97e2b8a36beed`.
 
 The tests use deterministic profile fixtures and the in-memory API test host. They do not establish live Cosmos consistency, private-media provider retention/scanning, WebSocket, production identity or physical-device behavior. No acceptance row is promoted by this increment.
+
+## Run 167 — strict JWT role boundary and persisted identity contract
+
+These cases are deterministic integration/SDK-mock evidence. They do not establish production identity-provider behavior or live Cosmos behavior.
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| AUTH-API-070 | A valid signed token contains both `sub` and `nameid` subject aliases with the same non-empty value | `AuthApiIntegrationTests.DuplicateSubjectAliasesAreRejectedEvenWhenTheirValuesMatch` | HTTP 401, no-store/no-cache and generic Bearer challenge; duplicate aliases are not silently deduplicated |
+| AUTH-API-071 | A signed token uses a Phase 2 `FleetManager` role or JWT `Operations` role | `AuthApiIntegrationTests.RolesOutsideTheMvpJwtContractAreRejectedByJwtValidation` | HTTP 401 with no-store/no-cache and no validation detail |
+| AUTH-API-072 | A `UnionManager` JWT with a `unionId` claim accesses the partner API | `AuthApiIntegrationTests.UnionManagerRoleRemainsValidForScopedPartnerApi` | HTTP 200; exact partner role remains accepted |
+| AUTH-API-073 | An `Ops` JWT is used without the Operations admin key | `AuthApiIntegrationTests.OpsJwtIsNonPrivilegedAndDoesNotReplaceOperationsAdminKey` | Authenticated non-privileged zone read succeeds; `/api/v1/ops/unions` remains HTTP 401 without `X-Driver-Admin-Key` |
+| AUTH-COSMOS-030 | Login query returns a persisted identity with a mismatched `Role` | `CosmosIdentityServiceTests.LoginRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforePointRead("role")` | HTTP 401; no point read or token write |
+| AUTH-COSMOS-031 | Login query returns a persisted identity with a mismatched `DocumentType` | `CosmosIdentityServiceTests.LoginRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforePointRead("documentType")` | HTTP 401; no point read or token write |
+| AUTH-COSMOS-032 | Refresh query returns a persisted identity with a mismatched `Role` | `CosmosIdentityServiceTests.RefreshRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforePointRead("role")` | HTTP 401; no point read or token rotation |
+| AUTH-COSMOS-033 | Refresh query returns a persisted identity with a mismatched `DocumentType` | `CosmosIdentityServiceTests.RefreshRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforePointRead("documentType")` | HTTP 401; no point read or token rotation |
+| AUTH-COSMOS-034 | Logout point read returns a persisted identity with a mismatched `Role` | `CosmosIdentityServiceTests.LogoutRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforeEtagRead("role")` | HTTP 503; no ETag hydration or revocation write |
+| AUTH-COSMOS-035 | Logout point read returns a persisted identity with a mismatched `DocumentType` | `CosmosIdentityServiceTests.LogoutRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforeEtagRead("documentType")` | HTTP 503; no ETag hydration or revocation write |
+
+**Exact source/test evidence:** [commit 4c453c9b](https://github.com/rajeevp727/turnova-platform/commit/4c453c9bb1bcd71d3e30121072b6ed975e649d9b) passed [API-only CI #45582907257](https://github.com/rajeevp727/turnova-platform/actions/runs/45582907257): **1,648/1,648 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15006429362](https://github.com/rajeevp727/turnova-platform/actions/runs/45582907257/artifacts/15006429362), 17,040,250 bytes, SHA-256 `829cbdb5f5a9ab6d5af277c19d610cb725edcc8885aaf9261120d6dff8cb2272`.
+
+**Correction disclosed:** intermediate [CI #45581912648](https://github.com/rajeevp727/turnova-platform/actions/runs/45581912648) failed 17/1,647 tests because the first role allow-list omitted the existing non-privileged `Ops` actor identity used by API-key-protected Operations review/audit tests. The final allow-list preserves `Ops` as non-privileged while keeping the admin-key boundary explicit; the final 1,648-test source/test head above is green.
+
+No acceptance row is promoted. These tests do not establish live Cosmos partition/ETag/transaction/multi-instance/restart behavior or production identity-provider mapping.

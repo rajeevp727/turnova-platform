@@ -1,3 +1,18 @@
+# Run 167 current handoff — 2026-11-25
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`. Main phase metadata remains stale and must not authorize Android.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test head [`4c453c9b`](https://github.com/rajeevp727/turnova-platform/commit/4c453c9bb1bcd71d3e30121072b6ed975e649d9b).
+- **Run 167:** JWT validation now accepts exactly one role claim with value Rider, Driver, UnionManager or non-privileged Ops. FleetManager/Operations JWT roles are rejected; Ops endpoints still require X-Driver-Admin-Key. Added duplicate-subject-alias coverage and six malformed persisted identity Role/DocumentType cases across login/refresh/logout.
+- **Exact source/test CI:** [#45582907257](https://github.com/rajeevp727/turnova-platform/actions/runs/45582907257) passed **1,648/1,648 tests**, Release build, native non-container Linux x64 publish and verifier; artifact 15006429362 (17,040,250 bytes; SHA-256 `829cbdb5f5a9ab6d5af277c19d610cb725edcc8885aaf9261120d6dff8cb2272`). Intermediate #45581912648 failed 17 tests when the first allow-list excluded the existing Ops audit-actor identity; the correction is included in 4c453c9b and final CI is green.
+- **Scope:** API/backend and contract docs only; 0 mobile paths, no Docker/container build/deployment, secrets or infrastructure change. API-only CI intentionally skipped mobile jobs.
+- **Acceptance:** strict 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No row promoted.
+- **Review gate:** three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads, no independent reviewer requested. Never self-approve or bypass protection.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval are not precedent.
+- **External gates:** live Cosmos ETag/partition/transaction/multi-instance/restart/failover/RU; production identity/key custody, Cosmos credentials, API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing and realtime/call/chat/push providers; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next:** continue API-only security/persistence audits and obtain independent human maintainer review. After permitted merge, re-read main and pass a fresh API exit audit before Android Rider → Android Driver → iOS Rider → iOS Driver.
+
+---
+
 # Run 166 current handoff — 2026-11-25
 
 - **Phase:** API `in_progress`; Android/iOS `not_started`. Main phase metadata is stale and cannot authorize Android.
