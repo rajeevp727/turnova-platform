@@ -1,3 +1,11 @@
+## Queue store read and mutation input validation — Run 194
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| QUEUE-STORE-017 | Queue store read and mutation operations receive blank zone/service scope or blank DriverId | `QueueStoreInputValidationTests.CosmosQueueReadsRejectBlankScopeBeforeCallingCosmos`; `QueueStoreInputValidationTests.CosmosQueueMutationsRejectBlankDriverOrScopeBeforeCallingCosmos`; `QueueStoreInputValidationTests.InMemoryQueueReadsRejectBlankScope`; `QueueStoreInputValidationTests.InMemoryQueueMutationsRejectBlankDriverOrScopeBeforeStateMutation`; `QueueStoreInputValidationTests.CosmosQueueInputsHonorPreCancelledTokenBeforeValidation`; `QueueStoreInputValidationTests.InMemoryQueueInputsHonorPreCancelledTokenBeforeValidation` | Invalid scope/identity fails before Cosmos calls or in-memory mutation; pre-cancelled tokens take precedence |
+
+`CosmosQueueStore` and `InMemoryQueueStore` now validate nonblank zone/service scope on eligible/audit reads and nonblank DriverId on remove, queue rotation and offer-scoped rotation. This is adapter-boundary validation only; valid legacy service classes remain supported and no FIFO ranking, Rider assignment or schema changes. Exact source/test API-only CI [#45702855191](https://github.com/rajeevp727/turnova-platform/actions/runs/45702855191) passed **1,738/1,738 backend tests (0 failed, 0 skipped)**, Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture); artifact [15064650726](https://github.com/rajeevp727/turnova-platform/actions/runs/45702855191/artifacts/15064650726), ZIP SHA-256 `01f6a7f31e1f9e06cd2be8df0d13b001d7e2cda896a9c895f11d9bffd4215eeb`.
+
 ## Queue join validation across domain and persistence boundaries — Run 193
 
 | Test-plan ID | Scenario | Automated evidence | Expected result |
