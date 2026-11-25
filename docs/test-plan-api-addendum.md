@@ -392,3 +392,16 @@ Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH
 
 
 Documentation checkpoint [`ee28d68b7dfec30938d0a0a8380f522887ceb503`](https://github.com/rajeevp727/turnova-platform/commit/ee28d68b7dfec30938d0a0a8380f522887ceb503) passed exact-head API-only CI [#45671519619](https://github.com/rajeevp727/turnova-platform/actions/runs/45671519619): 1,693/1,693 backend tests, Release build with 0 warnings/errors, native non-container publish/verifier (11 negative fixtures plus valid fixture), artifact [15050127228](https://github.com/rajeevp727/turnova-platform/actions/runs/45671519619/artifacts/15050127228). Mobile jobs were intentionally skipped under the API-first phase gate.
+
+
+## Run 188 — malformed queue audit event on a later Cosmos query page
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| COSMOS-STORE-033 | A valid first queue-audit page is followed by an event whose stored `ZoneServiceKey` belongs to another partition | `CosmosQueueResourceContractTests.QueueAuditReadRejectsMalformedLaterPageInsteadOfReturningPartialHistory` | `GetAuditEventsAsync` throws on the malformed second page; it never returns the valid first-page event as partial audit history |
+
+This closes the multi-page fail-closed boundary for internal queue audit reads adjacent to COSMOS-STORE-032. The deterministic FeedIterator/FeedResponse mock supplies one valid page and then a malformed cross-partition event. It verifies both pages are read and the query fails before a result is returned. This is SDK-mock evidence only; it does not establish live Cosmos cross-partition, RU, transaction, ETag or multi-instance behavior. Test-only change; no runtime source, audit schema, queue ordering, mobile behavior or acceptance-row status changed.
+
+Source/test commit [`f3c0bb98`](https://github.com/rajeevp727/turnova-platform/commit/f3c0bb9863ea22443558b399ce7ca6c4d27c87f5) passed exact-head API-only CI [#45673119646](https://github.com/rajeevp727/turnova-platform/actions/runs/45673119646): **1,694/1,694 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish (44,086,072 bytes); publish-script syntax; native verifier (11 negative fixtures plus valid fixture). Artifact [15049754253](https://github.com/rajeevp727/turnova-platform/actions/runs/45673119646/artifacts/15049754253) was uploaded (17,040,778 bytes). Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
+
+Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No row is promoted. PR #200 remains the sole ready/active feature PR and requires independent human maintainer approval; the three owner-authored COMMENTED reviews are not approvals. PR #196/#198/#205/#206 remain Draft/parked. Android/iOS remain gated. No live Cosmos or production readiness is claimed.
