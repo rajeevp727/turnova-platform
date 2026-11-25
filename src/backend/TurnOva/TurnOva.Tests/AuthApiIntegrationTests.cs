@@ -346,6 +346,8 @@ public sealed class AuthApiIntegrationTests
         Assert.Contains("/api/v1/rider/bookings", pathNames);
         Assert.Contains("/api/v1/union/reconciliation", pathNames);
         Assert.Contains("/api/v1/driver/rides/{rideId}/payment-report", pathNames);
+        Assert.Contains("/api/v1/assistance/trip-intent", pathNames);
+        Assert.Contains("/api/v1/assistance/help", pathNames);
         Assert.DoesNotContain(pathNames, path => path.Contains("/__test/throw", StringComparison.Ordinal));
 
         Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/auth/me").GetProperty("get"), "Bearer"));
@@ -371,6 +373,43 @@ public sealed class AuthApiIntegrationTests
             Assert.True(HasSecurityScheme(operation, "OpsAdminKey"));
             Assert.False(HasSecurityScheme(operation, "Bearer"));
         });
+
+        var publicAuthPaths = new[]
+        {
+            "/api/v1/auth/{role}/register",
+            "/api/v1/auth/{role}/login",
+            "/api/v1/auth/refresh"
+        };
+        foreach (var path in paths.EnumerateObject().Where(path =>
+                     path.Name.StartsWith("/api/v1/", StringComparison.OrdinalIgnoreCase)))
+        {
+            var isOperationsPath =
+                path.Name.Equals("/api/v1/ops", StringComparison.OrdinalIgnoreCase) ||
+                path.Name.StartsWith("/api/v1/ops/", StringComparison.OrdinalIgnoreCase);
+            foreach (var operation in path.Value.EnumerateObject().Where(operation =>
+                         operation.Name is "get" or "put" or "post" or "delete" or "options" or "head" or "patch" or "trace"))
+            {
+                if (isOperationsPath)
+                {
+                    Assert.True(HasSecurityScheme(operation.Value, "OpsAdminKey"),
+                        $"Missing OpsAdminKey security for {operation.Name} {path.Name}.");
+                    Assert.False(HasSecurityScheme(operation.Value, "Bearer"),
+                        $"Unexpected Bearer security for operations route {operation.Name} {path.Name}.");
+                }
+                else if (publicAuthPaths.Contains(path.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    Assert.False(HasAnySecurityRequirement(operation.Value),
+                        $"Unexpected security requirement for public auth route {operation.Name} {path.Name}.");
+                }
+                else
+                {
+                    Assert.True(HasSecurityScheme(operation.Value, "Bearer"),
+                        $"Missing Bearer security for authenticated route {operation.Name} {path.Name}.");
+                    Assert.False(HasSecurityScheme(operation.Value, "OpsAdminKey"),
+                        $"Unexpected OpsAdminKey security for authenticated route {operation.Name} {path.Name}.");
+                }
+            }
+        }
     }
 
     [Fact]
