@@ -8265,6 +8265,8 @@ public sealed partial class RideApiIntegrationTests
         const string cabDriver = "union-manager-cab-driver";
         const string staleDriver = "union-manager-stale-cab-driver";
 
+        using var cabDriverClient = factory.CreateClient("Driver", cabDriver);
+        using var staleDriverClient = factory.CreateClient("Driver", staleDriver);
         SeedBookableDriver(factory, cabDriver, cabUnion);
         SeedBookableDriver(factory, staleDriver, nonCabUnion);
         var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
