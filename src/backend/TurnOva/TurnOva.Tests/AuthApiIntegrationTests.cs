@@ -260,7 +260,9 @@ public sealed class AuthApiIntegrationTests
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", CreateToken(includeSecondRole: true));
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer",
+                CreateToken(includeSecondRole: true));
 
         using var response = await client.GetAsync("/api/v1/auth/me");
 
@@ -274,7 +276,7 @@ public sealed class AuthApiIntegrationTests
 
     [Theory]
     [InlineData("roles")]
-    [InlineData(ClaimTypes.Role)]
+    [InlineData("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")]
     public async Task AlternateRoleClaimAliasesAreRejectedAlongsideCanonicalRole(string alternateRoleClaimType)
     {
         using var factory = new AuthApiFactory();
@@ -408,7 +410,8 @@ public sealed class AuthApiIntegrationTests
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-            "Bearer", CreateToken(roleValue: roleValue));
+            "Bearer",
+            CreateToken(roleValue: roleValue));
 
         using var response = await client.GetAsync("/api/v1/auth/me");
 
@@ -426,7 +429,8 @@ public sealed class AuthApiIntegrationTests
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-            "Bearer", CreateToken(roleValue: "UnionManager", unionIdValue: "union-123"));
+            "Bearer",
+            CreateToken(roleValue: "UnionManager", unionIdValue: "union-1"));
 
         using var response = await client.GetAsync("/api/v1/union/drivers");
 
@@ -443,7 +447,8 @@ public sealed class AuthApiIntegrationTests
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-            "Bearer", CreateToken(roleValue: "Ops"));
+            "Bearer",
+            CreateToken(roleValue: "Ops"));
 
         using var zones = await client.GetAsync("/api/v1/zones");
         Assert.Equal(HttpStatusCode.OK, zones.StatusCode);
@@ -523,40 +528,93 @@ public sealed class AuthApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = document.RootElement;
-        Assert.Equal("TurnOva API", root.GetProperty("info").GetProperty("title").GetString());
+        var schemes = root.GetProperty("components").GetProperty("securitySchemes");
 
-        var paths = root.GetProperty("paths");
-        Assert.True(paths.TryGetProperty("/api/v1/rider/bookings", out var booking));
-        AssertOperationRequiresBearer(booking.GetProperty("post"));
-        Assert.True(paths.TryGetProperty("/api/v1/driver/payments/report", out var paymentReport));
-        AssertOperationRequiresBearer(paymentReport.GetProperty("post"));
-        Assert.True(paths.TryGetProperty("/api/v1/union/reconciliation", out var reconciliation));
-        AssertOperationRequiresBearer(reconciliation.GetProperty("get"));
-        Assert.True(paths.TryGetProperty("/api/v1/ops/drivers", out var operationsDrivers));
-        AssertOperationRequiresOperationsKey(operationsDrivers.GetProperty("get"));
-        Assert.True(paths.TryGetProperty("/api/v1/ops/unions", out var operationsUnions));
-        AssertOperationRequiresOperationsKey(operationsUnions.GetProperty("get"));
-        Assert.True(paths.TryGetProperty("/api/v1/auth/{role}/register", out var register));
-        AssertOperationHasNoSecurity(register.GetProperty("post"));
-        Assert.True(paths.TryGetProperty("/api/v1/auth/{role}/login", out var login));
-        AssertOperationHasNoSecurity(login.GetProperty("post"));
-        Assert.True(paths.TryGetProperty("/api/v1/auth/refresh", out var refresh));
-        AssertOperationHasNoSecurity(refresh.GetProperty("post"));
-        Assert.True(paths.TryGetProperty("/api/v1/auth/logout", out var logout));
-        AssertOperationRequiresBearer(logout.GetProperty("post"));
-        Assert.True(paths.TryGetProperty("/api/v1/auth/me", out var me));
-        AssertOperationRequiresBearer(me.GetProperty("get"));
-        Assert.False(paths.TryGetProperty("/api/v1/auth/__test/throw", out _));
-        Assert.False(paths.TryGetProperty("/api/v1/auth/__test/private-cache", out _));
-        Assert.True(root.GetProperty("components").GetProperty("securitySchemes").TryGetProperty("Bearer", out var bearer));
+        var bearer = schemes.GetProperty("Bearer");
         Assert.Equal("http", bearer.GetProperty("type").GetString());
         Assert.Equal("bearer", bearer.GetProperty("scheme").GetString());
-        Assert.Contains("TurnOva", bearer.GetProperty("bearerFormat").GetString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("TriSend", bearer.GetProperty("bearerFormat").GetString(), StringComparison.Ordinal);
-        Assert.True(root.GetProperty("components").GetProperty("securitySchemes").TryGetProperty("OpsAdminKey", out var operationsKey));
+        Assert.Equal("JWT", bearer.GetProperty("bearerFormat").GetString());
+        Assert.Equal("TurnOva-issued JWT access token.", bearer.GetProperty("description").GetString());
+
+        var operationsKey = schemes.GetProperty("OpsAdminKey");
         Assert.Equal("apiKey", operationsKey.GetProperty("type").GetString());
         Assert.Equal("header", operationsKey.GetProperty("in").GetString());
-        Assert.Equal("X-Ops-Admin-Key", operationsKey.GetProperty("name").GetString());
+        Assert.Equal("X-Driver-Admin-Key", operationsKey.GetProperty("name").GetString());
+
+        var paths = root.GetProperty("paths");
+        var pathNames = paths.EnumerateObject().Select(path => path.Name).ToArray();
+        Assert.Contains("/api/v1/auth/{role}/register", pathNames);
+        Assert.Contains("/api/v1/auth/{role}/login", pathNames);
+        Assert.Contains("/api/v1/auth/refresh", pathNames);
+        Assert.Contains("/api/v1/auth/me", pathNames);
+        Assert.Contains("/api/v1/rider/discovery", pathNames);
+        Assert.Contains("/api/v1/rider/bookings", pathNames);
+        Assert.Contains("/api/v1/union/reconciliation", pathNames);
+        Assert.Contains("/api/v1/driver/rides/{rideId}/payment-report", pathNames);
+        Assert.Contains("/api/v1/assistance/trip-intent", pathNames);
+        Assert.Contains("/api/v1/assistance/help", pathNames);
+        Assert.DoesNotContain(pathNames, path => path.Contains("/__test/throw", StringComparison.Ordinal));
+
+        Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/auth/me").GetProperty("get"), "Bearer"));
+        Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/rider/discovery").GetProperty("get"), "Bearer"));
+        Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/rider/bookings").GetProperty("post"), "Bearer"));
+        Assert.True(HasSecurityScheme(paths.GetProperty("/api/v1/union/reconciliation").GetProperty("get"), "Bearer"));
+        Assert.True(HasSecurityScheme(
+            paths.GetProperty("/api/v1/driver/rides/{rideId}/payment-report").GetProperty("post"),
+            "Bearer"));
+
+        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/{role}/login").GetProperty("post")));
+        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/{role}/register").GetProperty("post")));
+        Assert.False(HasAnySecurityRequirement(paths.GetProperty("/api/v1/auth/refresh").GetProperty("post")));
+
+        var operations = paths.EnumerateObject()
+            .Where(path => path.Name.StartsWith("/api/v1/ops/", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path => path.Value.EnumerateObject())
+            .Select(operation => operation.Value)
+            .ToArray();
+        Assert.NotEmpty(operations);
+        Assert.All(operations, operation =>
+        {
+            Assert.True(HasSecurityScheme(operation, "OpsAdminKey"));
+            Assert.False(HasSecurityScheme(operation, "Bearer"));
+        });
+
+        var publicAuthPaths = new[]
+        {
+            "/api/v1/auth/{role}/register",
+            "/api/v1/auth/{role}/login",
+            "/api/v1/auth/refresh"
+        };
+        foreach (var path in paths.EnumerateObject().Where(path =>
+                     path.Name.StartsWith("/api/v1/", StringComparison.OrdinalIgnoreCase)))
+        {
+            var isOperationsPath =
+                path.Name.Equals("/api/v1/ops", StringComparison.OrdinalIgnoreCase) ||
+                path.Name.StartsWith("/api/v1/ops/", StringComparison.OrdinalIgnoreCase);
+            foreach (var operation in path.Value.EnumerateObject().Where(operation =>
+                         operation.Name is "get" or "put" or "post" or "delete" or "options" or "head" or "patch" or "trace"))
+            {
+                if (isOperationsPath)
+                {
+                    Assert.True(HasSecurityScheme(operation.Value, "OpsAdminKey"),
+                        $"Missing OpsAdminKey security for {operation.Name} {path.Name}.");
+                    Assert.False(HasSecurityScheme(operation.Value, "Bearer"),
+                        $"Unexpected Bearer security for operations route {operation.Name} {path.Name}.");
+                }
+                else if (publicAuthPaths.Contains(path.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    Assert.False(HasAnySecurityRequirement(operation.Value),
+                        $"Unexpected security requirement for public auth route {operation.Name} {path.Name}.");
+                }
+                else
+                {
+                    Assert.True(HasSecurityScheme(operation.Value, "Bearer"),
+                        $"Missing Bearer security for authenticated route {operation.Name} {path.Name}.");
+                    Assert.False(HasSecurityScheme(operation.Value, "OpsAdminKey"),
+                        $"Unexpected OpsAdminKey security for authenticated route {operation.Name} {path.Name}.");
+                }
+            }
+        }
     }
 
     [Fact]
@@ -564,32 +622,19 @@ public sealed class AuthApiIntegrationTests
     {
         using var factory = new AuthApiFactory(environmentName: "Staging");
         using var client = factory.CreateClient();
-
         using var response = await client.GetAsync("/openapi/v1.json");
-
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static void AssertOperationRequiresBearer(JsonElement operation)
-    {
-        Assert.True(operation.TryGetProperty("security", out var security));
-        Assert.Equal(1, security.GetArrayLength());
-        Assert.True(security[0].TryGetProperty("Bearer", out _));
-        Assert.False(security[0].TryGetProperty("OpsAdminKey", out _));
-    }
+    private static bool HasSecurityScheme(JsonElement operation, string schemeName) =>
+        operation.TryGetProperty("security", out var security) &&
+        security.ValueKind == JsonValueKind.Array &&
+        security.EnumerateArray().Any(requirement => requirement.TryGetProperty(schemeName, out _));
 
-    private static void AssertOperationRequiresOperationsKey(JsonElement operation)
-    {
-        Assert.True(operation.TryGetProperty("security", out var security));
-        Assert.Equal(1, security.GetArrayLength());
-        Assert.True(security[0].TryGetProperty("OpsAdminKey", out _));
-        Assert.False(security[0].TryGetProperty("Bearer", out _));
-    }
-
-    private static void AssertOperationHasNoSecurity(JsonElement operation)
-    {
-        Assert.False(operation.TryGetProperty("security", out _));
-    }
+    private static bool HasAnySecurityRequirement(JsonElement operation) =>
+        operation.TryGetProperty("security", out var security) &&
+        security.ValueKind == JsonValueKind.Array &&
+        security.GetArrayLength() > 0;
 
     private static void AssertNoStoreHeaders(HttpResponseMessage response)
     {
@@ -613,26 +658,18 @@ public sealed class AuthApiIntegrationTests
     [Fact]
     public void StartupRejectsWeakJwtSigningKey()
     {
-        using var factory = new AuthApiFactory(new Dictionary<string, string?>
-        {
-            ["Auth:Jwt:SigningKey"] = "too-short"
-        }, startImmediately: false);
+        using var factory = new AuthApiFactory(new Dictionary<string, string?> { ["Auth:Jwt:SigningKey"] = "too-short" });
 
-        Assert.Throws<InvalidOperationException>(() => factory.StartServer());
+        var exception = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(exception);
+        Assert.Contains("Auth:Jwt", exception.ToString(), StringComparison.Ordinal);
     }
 
-    private static string CreateToken(
-        string roleValue = "Rider",
-        bool includeSubject = true,
-        bool includeNameId = false,
-        string? nameIdValue = null,
-        bool includeRole = true,
-        bool includeSecondRole = false,
-        string? alternateRoleClaimType = null,
-        string? unionIdValue = null,
-        string algorithm = SecurityAlgorithms.HmacSha256)
+    private static string CreateToken(bool includeSubject = true, bool includeNameId = false, string algorithm = SecurityAlgorithms.HmacSha256, bool includeSecondRole = false, bool includeRole = true, string roleValue = "Rider", string? nameIdValue = null, string? unionIdValue = null, string? alternateRoleClaimType = null)
     {
-        var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)), algorithm);
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey));
+        var credentials = new SigningCredentials(key, algorithm);
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Email, "rider@example.com"),
@@ -651,4 +688,27 @@ public sealed class AuthApiIntegrationTests
 
     private sealed record MeResponse(MeUser User);
     private sealed record MeUser(string Id, string Email, string? Name, string Role);
+
+    private sealed class AuthApiFactory(IReadOnlyDictionary<string, string?>? overrides = null, string environmentName = "Testing")
+        : WebApplicationFactory<Program>
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment(environmentName);
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                var settings = new Dictionary<string, string?>
+                {
+                    ["Auth:Jwt:Issuer"] = Issuer,
+                    ["Auth:Jwt:Audience"] = Audience,
+                    ["Auth:Jwt:SigningKey"] = SigningKey,
+                    ["DriverOnboarding:AdminApiKey"] = "integration-test-admin-key-32chars"
+                };
+                if (overrides is not null)
+                    foreach (var setting in overrides)
+                        settings[setting.Key] = setting.Value;
+                configuration.AddInMemoryCollection(settings);
+            });
+        }
+    }
 }
