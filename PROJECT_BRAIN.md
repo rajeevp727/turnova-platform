@@ -1,3 +1,17 @@
+# Run 166 current handoff — 2026-11-25
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`. Main phase metadata is stale and cannot authorize Android.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; source/test head [`74d9f46b9ccbffc4d9a93f3a85896af8b745377e`](https://github.com/rajeevp727/turnova-platform/commit/74d9f46b9ccbffc4d9a93f3a85896af8b745377e); base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`. Exact source/test API-only CI [#45576488879](https://github.com/rajeevp727/turnova-platform/actions/runs/45576488879) passed **1,637/1,637** tests, Release build (0 warnings/errors), native non-container Linux x64 publish and verifier; artifact 15004243227.
+- **Run 166:** added fail-closed Union selfie visibility for Operations Union-driver listing and Rider discovery. Legacy approvals without snapshot metadata remain compatible; when review metadata exists, it must be complete and bound to the current Union, and Operations-review markers fail closed. Three deterministic unit/integration tests are recorded as `UNION-SELFIE-VIS-001..003`. A fixture setup failure on the preceding head was corrected by creating the Driver test client before calling `SeedBookableDriver`; no runtime behavior changed in the correction.
+- **Scope:** API and backend tests only; no mobile source paths, Docker/container builds/deployments, secrets, infrastructure or production configuration. API-only CI intentionally skipped mobile/Android/iOS jobs.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No row promoted.
+- **Review gate:** three owner-authored COMMENTED reviews, zero independent approvals, zero unresolved threads, no requested reviewer. Never self-approve or bypass repository protection.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval are process exceptions, not precedent.
+- **External gates:** live Cosmos ETag/partition/transaction/multi-instance/restart/failover/RU and Staging/QA; production identity/key custody, Cosmos credentials, API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch zones/radius/location freshness/negotiation lifetime/FIFO; maps/routing and realtime/call/chat/push providers; private-media storage/scanning/managed identity/consent/retention; support/escalation and reconciliation policy; Union legal approval; later physical-device/signing/store/TestFlight evidence.
+- **Next:** verify exact-head CI on the documentation-bearing commit, continue API-only auth/privacy/persistence-contract audits, obtain independent human approval; after a permitted merge, re-read main and run a fresh API phase-exit audit before Android Rider.
+
+## Previous handoff
+
 # Run 165 current handoff — 2026-11-25
 
 - **Phase:** API `in_progress`; Android/iOS `not_started`. Main phase metadata is stale and cannot authorize Android.

@@ -115,3 +115,17 @@ These integration tests exercise the real ASP.NET Core SignalR negotiate endpoin
 **Exact source/test evidence:** [PR #200 source/test head `b26063b356003278e5b52e4440256315f1d05968`](https://github.com/rajeevp727/turnova-platform/commit/b26063b356003278e5b52e4440256315f1d05968) passed API-only CI [#45572865415](https://github.com/rajeevp727/turnova-platform/actions/runs/45572865415): 1,634/1,634 backend tests, Release build (0 warnings/errors), native non-container Linux x64 API publish, publish-script syntax and native verifier (11 negative fixtures plus valid fixture). Artifact [15003437229](https://github.com/rajeevp727/turnova-platform/actions/runs/45572865415/artifacts/15003437229), 17,039,981 bytes; ZIP SHA-256 `41967a707e3a5deaf4351b1014563421a2ca0ec522293ef5529c1abbb459779c`.
 
 No runtime source changed. Query-string token logging must be redacted by hosted ingress/proxy/telemetry; live WebSocket/backplane/reconnect and physical-device evidence remain external.
+
+## Run 166 — fail-closed Union selfie visibility
+
+These tests validate the current-Union review snapshot required before a Driver selfie can be returned by public Rider discovery or the Operations Union-driver list. Legacy approvals without immutable review metadata remain compatible; once metadata is present, incomplete, mismatched or Operations-marked snapshots fail closed.
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| UNION-SELFIE-VIS-001 | Legacy profile has `Approved` status and `ProfilePhotoApprovedByUnionId` but no immutable Union-review snapshot | `DriverProfileReviewGuardTests.UnionPhotoVisibilityPreservesLegacyApprovalWithoutReviewSnapshot` | Image remains visible only to the same Union; another Union cannot see it |
+| UNION-SELFIE-VIS-002 | Approved profile has incomplete, cross-Union or Operations-review metadata | `DriverProfileReviewGuardTests.UnionPhotoVisibilityFailsClosedForIncompleteOrMismatchedReviewMetadata` | Visibility is false for incomplete/cross-Union snapshots and any Operations-review marker; rejected status is not visible |
+| UNION-SELFIE-VIS-003 | Rider discovery and Operations Union-driver listing read a profile whose review snapshot names a different Union | `RideApiIntegrationTests.RiderDiscoveryAndOperationsHideSelfieWhenUnionReviewSnapshotConflictsWithCurrentUnion` | Both responses retain the eligible Driver record but return a null selfie; no private image is exposed |
+
+**Exact source/test evidence:** [PR #200 head `74d9f46b9ccbffc4d9a93f3a85896af8b745377e`](https://github.com/rajeevp727/turnova-platform/commit/74d9f46b9ccbffc4d9a93f3a85896af8b745377e) passed API-only CI [#45576488879](https://github.com/rajeevp727/turnova-platform/actions/runs/45576488879): **1,637/1,637 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 API publish, publish-script syntax and native publish verifier (11 negative fixtures plus valid fixture). Artifact [15004243227](https://github.com/rajeevp727/turnova-platform/actions/runs/45576488879/artifacts/15004243227), 17,040,094 bytes; ZIP SHA-256 `d6c93c3c1c74c98b42724a8b486097cc40a097610f1e17ad23d97e2b8a36beed`.
+
+The tests use deterministic profile fixtures and the in-memory API test host. They do not establish live Cosmos consistency, private-media provider retention/scanning, WebSocket, production identity or physical-device behavior. No acceptance row is promoted by this increment.
