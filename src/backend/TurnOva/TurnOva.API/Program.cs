@@ -4494,9 +4494,24 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
     }
     catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
     {
-        await driverRideReservations.TryReleaseAsync(driverId, rideId, ct,
-            new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.RideAcceptConflict));
+        // A definite conditional-write loss must release this Driver's temporary reservation
+        // even when the HTTP request is cancelling; then preserve cancellation for the caller.
+        try
+        {
+            await driverRideReservations.TryReleaseAsync(driverId, rideId, CancellationToken.None,
+                new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.RideAcceptConflict));
+        }
+        finally
+        {
+            ct.ThrowIfCancellationRequested();
+        }
         return Results.Conflict(new { message = "This ride is no longer available." });
+    }
+    catch
+    {
+        // Do not leak a stale provider failure when request cancellation raced the write.
+        ct.ThrowIfCancellationRequested();
+        throw;
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
