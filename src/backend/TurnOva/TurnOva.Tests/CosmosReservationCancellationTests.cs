@@ -22,6 +22,40 @@ public sealed class CosmosReservationCancellationTests
     }
 
     [Fact]
+    public async Task DriverAcquireProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<TransactionalBatchResponse>(
+                    new InvalidOperationException("driver reservation batch failed"));
+            });
+        container.Setup(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()))
+            .Returns(batch.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosDriverRideReservationStore(container.Object).TryAcquireTemporaryAsync(
+                "driver-1", "ride-1", DateTimeOffset.UtcNow.AddMinutes(5), cancellation.Token));
+
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+        batch.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task DriverAcquireRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
@@ -172,6 +206,42 @@ public sealed class CosmosReservationCancellationTests
                 reservation, cancellation.Token));
 
         container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RiderAcquireProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var reservation = new RiderActiveBookingReservation(
+            "rider-1", "ride-1", "request-hash", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5));
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<TransactionalBatchResponse>(
+                    new InvalidOperationException("rider reservation batch failed"));
+            });
+        container.Setup(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()))
+            .Returns(batch.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object)
+                .TryAcquireAsync(reservation, cancellation.Token));
+
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+        batch.VerifyNoOtherCalls();
     }
 
     [Fact]
