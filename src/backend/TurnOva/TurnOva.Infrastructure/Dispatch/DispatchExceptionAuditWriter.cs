@@ -51,5 +51,7 @@ public sealed class DispatchExceptionAuditWriter(IQueueAuditEventStore store)
         existing.DriverId == expected.DriverId &&
         existing.TraceId == expected.TraceId &&
         existing.ReasonCategory == expected.ReasonCategory &&
-        existing.OfferId is null;
+        existing.OfferId is null &&
+        existing.OccurredAtUtc != default &&
+        existing.OccurredAtUtc.Offset == TimeSpan.Zero;
 }
