@@ -5324,6 +5324,14 @@ The bearer middleware requires exactly one non-empty `role` claim. This regressi
 
 Exact documentation-bearing head [`c24dd655`](https://github.com/rajeevp727/turnova-platform/commit/c24dd655632525de6401d72330a3cd6173aa4667) passed API-only CI [#45487017728](https://github.com/rajeevp727/turnova-platform/actions/runs/45487017728): **1,538/1,538 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/0 errors), native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), artifact [14963643538](https://github.com/rajeevp727/turnova-platform/actions/runs/45487017728/artifacts/14963643538) (17,033,092 bytes; SHA-256 `58c1c3a9dc894a1e1bee41808803f52eb48c03cc546274b6ea51a1d603387ae2`). This is deterministic CI evidence only; no live Cosmos or production signing-key validation is implied.
 
+
+## AUTH-API-067 — preserve no-store headers on CORS preflight
+
+| AUTH-API-067 | A browser sends a CORS preflight OPTIONS request to a public authentication route with an explicitly allowed Origin and requested POST/content-type headers | CORS short-circuits before authentication/handler execution but the earlier API cache-policy middleware still adds Cache-Control: no-store and Pragma: no-cache; the response is 204 and contains the configured Access-Control-Allow-Origin and POST method | `AuthApiIntegrationTests.CorsPreflightForPublicAuthRouteReceivesNoStoreHeaders` | P1 |
+
+**Evidence:** test commit [2c2ebfc4](https://github.com/rajeevp727/turnova-platform/commit/2c2ebfc4e73c7972126f52cefd1193a2c780da9f); exact-head API-only CI [#45523802687](https://github.com/rajeevp727/turnova-platform/actions/runs/45523802687) passed **1,557/1,557 tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier. Artifact [14980862824](https://github.com/rajeevp727/turnova-platform/actions/runs/45523802687/artifacts/14980862824), 17,033,472 bytes; SHA-256 `19460fba573d0f321e5ef332b8c12b11ef8600965132324afb0dd7fbe1585a88`. This supplemental test does not change the 19-row MVP denominator.
+
+
 ## Cosmos migration database handle identity and cancellation (COSMOS-BOOTSTRAP-027..033)
 
 Before migration bootstrap creates either `MigrationHistory` or `MigrationLocks`, the `DatabaseResponse.Database` handle must be non-null and its `Database.Id` must exactly match the configured database name. Lazy response/identity getters must preserve caller cancellation; a non-cancellation identity getter failure must propagate unchanged. Invalid handles must stop before container creation and lease acquisition.
