@@ -59,3 +59,19 @@ This addendum supersedes the older Run 157 operational phase-gate note in the ca
 The initial test attempt [#45548881557](https://github.com/rajeevp727/turnova-platform/actions/runs/45548881557) failed compilation because C# expression trees do not support `is null` patterns in Moq predicates. The test was corrected to `== null` in commit [`aa2b8ad3ec9e62c3430b5850471652722b0d2e82`](https://github.com/rajeevp727/turnova-platform/commit/aa2b8ad3ec9e62c3430b5850471652722b0d2e82); the final exact-head build/test/publish above passed.
 
 No runtime source changed and no acceptance row is promoted. These are deterministic mocked Cosmos SDK and OpenAPI contract tests, not live Cosmos ETag/transaction/multi-instance/restart or production identity evidence.
+
+
+## Run 162 — Cosmos query-page enumeration cancellation boundaries
+
+These deterministic tests supplement the Cosmos persistence/query guard evidence. They exercise SDK-mock behavior only; they do not prove live Cosmos partition, ETag, transaction, multi-instance, restart or failover behavior.
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| COSMOS-READ-043 | A page enumerator's `Current` getter throws while caller cancellation is signalled | `CosmosReadResponseGuardTests.ReadPageItemsCancellationTakesPrecedenceOverCurrentGetterFailure` | Cancellation takes precedence; the enumerator is still disposed exactly once |
+| COSMOS-READ-044 | A page enumerator's `Current` getter fails without caller cancellation | `CosmosReadResponseGuardTests.ReadPageItemsPreservesCurrentGetterFailureWhenNotCancelled` | The original provider exception instance is propagated; cleanup still occurs |
+| COSMOS-READ-045 | Cancellation arrives after the `Current` getter returns | `CosmosReadResponseGuardTests.ReadPageItemsHonorsCancellationAfterCurrentGetterReturns` | Cancellation is observed before the item is added or another page-enumerator operation begins |
+| COSMOS-READ-046 | Cancellation arrives during successful enumerator disposal | `CosmosReadResponseGuardTests.ReadPageItemsHonorsCancellationAfterEnumeratorDispose` | Cleanup completes, then caller cancellation is surfaced rather than returning a completed page |
+| COSMOS-READ-047 | Enumerator disposal throws while caller cancellation is signalled | `CosmosReadResponseGuardTests.ReadPageItemsCancellationTakesPrecedenceOverEnumeratorDisposeFailure` | Cancellation takes precedence over the disposal failure; disposal is attempted once |
+| COSMOS-READ-048 | Enumerator disposal fails without caller cancellation | `CosmosReadResponseGuardTests.ReadPageItemsPreservesEnumeratorDisposeFailureWhenNotCancelled` | The original disposal exception instance is propagated |
+
+**Exact source/test evidence:** [PR #200 source/test head `b7d9c08ea4246187d5aafe54113d0ec057320f4e`](https://github.com/rajeevp727/turnova-platform/commit/b7d9c08ea4246187d5aafe54113d0ec057320f4e) passed API-only CI [#45551885376](https://github.com/rajeevp727/turnova-platform/actions/runs/45551885376): 1,626/1,626 tests, Release build with 0 warnings/errors, native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture). Artifact [14994491824](https://github.com/rajeevp727/turnova-platform/actions/runs/45551885376/artifacts/14994491824), 17,039,927 bytes; ZIP SHA-256 `761740b4a6eb4f394b2aff9c956bf15cfbfad132f67d1d2ede21bea8beca6d14`. This is a test-only increment; no acceptance row is promoted.
