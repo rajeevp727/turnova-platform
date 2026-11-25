@@ -8,6 +8,20 @@ namespace TurnOva.Tests;
 public sealed class CosmosQueueResourceContractTests
 {
     [Fact]
+    public async Task QueueJoinRejectsDefaultTimestampBeforeCreatingTransactionalBatch()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var entry = new DriverQueueEntry(
+            "driver-1", "hyderabad-central", "cab", default, 0, true);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            new CosmosQueueStore(container.Object).AddAsync(entry, CancellationToken.None));
+
+        Assert.Equal("entry", exception.ParamName);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task QueueRemovalRejectsNullResourceBeforeStartingDeleteBatch()
     {
         var (container, response) = CreateNullResourceRead();
