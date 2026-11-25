@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
+using TurnOva.Infrastructure.Database;
 
 public static class RideTrackingHubAuthorization
 {
@@ -60,7 +61,7 @@ public sealed class RideTrackingHub(
         var driverGroup = RideTrackingHubAuthorization.ResolveDriverNotificationGroup(user, requestedDriverId, rideId);
         if (driverGroup is not null)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, driverGroup);
+            await Groups.AddToGroupAsync(Context.ConnectionId, driverGroup, Context.ConnectionAborted);
             await base.OnConnectedAsync();
             return;
         }
@@ -79,15 +80,25 @@ public sealed class RideTrackingHub(
         }
         else
         {
+            var databaseName = configuration["CosmosDb:DatabaseName"] ?? "TurnOvaDb";
             try
             {
-                var databaseName = configuration["CosmosDb:DatabaseName"] ?? "TurnOvaDb";
-                ride = (await cosmos.GetContainer(databaseName, "Rides")
-                    .ReadItemAsync<DemoRide>(rideId!, new PartitionKey(rideId))).Resource;
+                // Use the shared point-read guard so a disconnected SignalR client cannot
+                // continue with stale Cosmos work, and only the requested ride aggregate
+                // can authorize membership in its tracking group.
+                ride = await CosmosReadResponseGuard.ReadItemAsync<DemoRide>(
+                    cosmos.GetContainer(databaseName, "Rides"),
+                    rideId!,
+                    new PartitionKey(rideId!),
+                    item => string.Equals(item.RideId, rideId, StringComparison.Ordinal),
+                    "ride",
+                    Context.ConnectionAborted);
             }
-            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            catch (InvalidOperationException)
             {
-                ride = null;
+                // A null or identity-mismatched SDK resource is not a valid group target.
+                Context.Abort();
+                return;
             }
         }
 
@@ -97,7 +108,7 @@ public sealed class RideTrackingHub(
             return;
         }
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, rideId!);
+        await Groups.AddToGroupAsync(Context.ConnectionId, rideId!, Context.ConnectionAborted);
         await base.OnConnectedAsync();
     }
 }
