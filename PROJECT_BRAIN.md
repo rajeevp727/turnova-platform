@@ -1,3 +1,25 @@
+# Run 173 current handoff — 2026-11-25
+
+## Run 173 — 2026-11-25 — UnionManager Cab-scope compile correction and final-head handoff
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. No Android completion work is authorized.
+- **Current item:** `DRIVER-01` / `PLATFORM-01` — least-privilege UnionManager membership visibility; verify the Run172 API-only changes.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`. API-only diff, no `src/mobile/` paths.
+- **Run172 implementation:** `GET /api/v1/union/drivers` now requires the assigned Union to exist, be Active and explicitly Cab-serving, in addition to signed `unionId` scope and a Cab driver profile. This hides stale active Cab assignments under inactive/non-Cab Unions without rewriting history or changing assignment/dispatch.
+- **Compile correction:** exact-head CI [#45601521567](https://github.com/rajeevp727/turnova-platform/actions/runs/45601521567) failed during .NET Release build before tests because the first implementation used a string-only `Contains(..., StringComparison)` overload on `IReadOnlyList<string>`. Corrected to the LINQ comparer overload `Contains("cab", StringComparer.OrdinalIgnoreCase)` in [`ba03e4ec`](https://github.com/rajeevp727/turnova-platform/commit/ba03e4ec482c9f6ba919504fe9294acb9897ee0d). The failed run is recorded as a build failure, not a test failure; no tests executed in it.
+- **Regression:** `RideApiIntegrationTests.UnionManagerMemberListExcludesAssignmentsFromUnionsThatNoLongerServeCab` (`UNION-SCOPE-002`) proves a manager with both Cab and non-Cab union claims sees only the Cab-serving Union's member. Test commit [`6e5d34a1`](https://github.com/rajeevp727/turnova-platform/commit/6e5d34a1af481cf29e3419158265990bce60ef74).
+- **AI-01 supplemental privacy evidence:** [`952d8a6d`](https://github.com/rajeevp727/turnova-platform/commit/952d8a6d3bf23464de3b58cec44d3d660a8577d8) extends the provider-redaction regression to synthetic identity, contact, precise coordinates, licence/KYC, bank-account, payment-token and bearer-token-shaped values (`AI-PRIVACY-001`). API contract docs were synchronized in [`66bc16b8`](https://github.com/rajeevp727/turnova-platform/commit/66bc16b8ebef03060b493471ce33d95913181ab5).
+- **Fresh CI:** a new exact-head API-only workflow is expected from the correction and final documentation-bearing handoff below; its run ID/result must be read from the live branch head before claiming a pass. Prior Run170 CI [#45598764966](https://github.com/rajeevp727/turnova-platform/actions/runs/45598764966) passed 1,660/1,660 tests and native publish on an older head only.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress; 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No row is promoted; AI-01 is supplemental and outside the denominator.
+- **Review:** PR #200 has three owner-authored `COMMENTED` reviews, 0 independent approvals and 0 unresolved threads. No independent reviewer is requested. Do not self-approve, bypass protection or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval remain disclosed process exceptions, not precedent.
+- **External gates:** live Cosmos ETag/412/partition/transaction/multi-instance/restart/failover/RU; production identity/key custody and UnionManager claim mapping; Cosmos credentials, non-container API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing and SignalR/backplane/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; AI provider/model/credentials; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next exact action:** verify the final documentation-bearing head's exact-head API-only CI: scope, .NET 10 Release build, all backend tests, native non-container Linux x64 publish, script syntax, verifier and artifact. Continue API-only auth/authorization/privacy/OpenAPI and remaining contract/idempotency audits; obtain independent human maintainer approval. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver in order.
+
+No Docker/container builds or deployments. No live Cosmos, production-provider or device validation is claimed.
+
+---
+
 # Run 172 current handoff — 2026-11-25
 
 ## Run 172 — 2026-11-25 — Cab-only UnionManager member scope
