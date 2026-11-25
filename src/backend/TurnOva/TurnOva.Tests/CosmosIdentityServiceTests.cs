@@ -795,6 +795,82 @@ public sealed class CosmosIdentityServiceTests
     }
 
     [Theory]
+    [InlineData("role")]
+    [InlineData("documentType")]
+    public async Task LoginRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforePointRead(string invalidField)
+    {
+        var user = CreateIdentity() with
+        {
+            Role = invalidField == "role" ? "Driver" : "Rider",
+            DocumentType = invalidField == "documentType" ? "email-reservation" : "user"
+        };
+        var (container, _) = SetupIdentityQuery(user);
+        var service = CreateService(container.Object);
+
+        var result = await service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, GetStatusCode(result));
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("role")]
+    [InlineData("documentType")]
+    public async Task RefreshRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforePointRead(string invalidField)
+    {
+        const string refreshToken = "refresh-token-malformed-identity-contract";
+        var user = CreateIdentity(refreshTokenHash: HashRefreshToken(refreshToken)) with
+        {
+            Role = invalidField == "role" ? "Driver" : "Rider",
+            DocumentType = invalidField == "documentType" ? "email-reservation" : "user"
+        };
+        var (container, _) = SetupIdentityQuery(user);
+        var service = CreateService(container.Object);
+
+        var result = await service.RefreshAsync(new CosmosRefreshRequest(refreshToken), CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, GetStatusCode(result));
+        container.Verify(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("role")]
+    [InlineData("documentType")]
+    public async Task LogoutRejectsPersistedIdentityWithMismatchedRoleOrDocumentTypeBeforeEtagRead(string invalidField)
+    {
+        var user = CreateIdentity(refreshTokenHash: "active-refresh-hash") with
+        {
+            Role = invalidField == "role" ? "Driver" : "Rider",
+            DocumentType = invalidField == "documentType" ? "email-reservation" : "user"
+        };
+        var read = CreateItemResponse(user, "malformed-logout-identity-etag");
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        var service = CreateService(container.Object);
+
+        var result = await service.LogoutAsync(CreateRiderPrincipal(), CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, GetStatusCode(result));
+        read.VerifyGet(value => value.ETag, Times.Never);
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(), It.IsAny<string>(), It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
     [InlineData("Rider@example.com")]
     [InlineData(" rider@example.com ")]
     [InlineData("not-an-email")]
