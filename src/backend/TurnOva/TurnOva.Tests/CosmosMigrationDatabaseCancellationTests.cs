@@ -644,4 +644,150 @@ public sealed class CosmosMigrationDatabaseCancellationTests
         container.VerifyNoOtherCalls();
     }
 
+
+    [Fact]
+    public async Task CancellationDuringTtlReadResourceHydrationStopsBeforeReplace()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        using var cancellation = new CancellationTokenSource();
+        var readResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        readResponse.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return new ContainerProperties("SupportRequests", "/reporterId");
+        });
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+        container.Setup(value => value.ReadContainerAsync(
+                It.IsAny<ContainerRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(readResponse.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", cancellation.Token, defaultTimeToLive: 604800));
+
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyGet(value => value.Id, Times.Once);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Once);
+        readResponse.VerifyGet(value => value.Resource, Times.Once);
+        database.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+        readResponse.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CancellationTakesPrecedenceWhenTtlReadResourceHydrationThrows()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        using var cancellation = new CancellationTokenSource();
+        var expected = new InvalidOperationException("TTL container resource hydration failed");
+        var readResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        readResponse.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw expected;
+        });
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+        container.Setup(value => value.ReadContainerAsync(
+                It.IsAny<ContainerRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(readResponse.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", cancellation.Token, defaultTimeToLive: 604800));
+
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyGet(value => value.Id, Times.Once);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Once);
+        readResponse.VerifyGet(value => value.Resource, Times.Once);
+        database.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+        readResponse.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TtlReadResourceHydrationFailurePropagatesWithoutCancellation()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns("SupportRequests");
+        var createResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createResponse.SetupGet(value => value.Container).Returns(container.Object);
+        createResponse.SetupGet(value => value.Resource).Returns(new ContainerProperties("SupportRequests", "/reporterId"));
+        var expected = new InvalidOperationException("TTL container resource hydration failed");
+        var readResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        readResponse.SetupGet(value => value.Resource).Returns(() => throw expected);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createResponse.Object);
+        container.Setup(value => value.ReadContainerAsync(
+                It.IsAny<ContainerRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(readResponse.Object);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", CancellationToken.None, defaultTimeToLive: 604800));
+
+        Assert.Same(expected, actual);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyGet(value => value.Id, Times.Once);
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        createResponse.VerifyGet(value => value.Resource, Times.Once);
+        createResponse.VerifyGet(value => value.Container, Times.Once);
+        readResponse.VerifyGet(value => value.Resource, Times.Once);
+        database.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+        createResponse.VerifyNoOtherCalls();
+        readResponse.VerifyNoOtherCalls();
+    }
+
 }
