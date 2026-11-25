@@ -170,6 +170,30 @@ public sealed class CosmosIdentityContainerBootstrapTests
     }
 
     [Fact]
+    public async Task RegisterStopsBeforeIdentityBatchWhenContainerBootstrapCommitsAfterCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        var (service, database, container) = CreateService(
+            "TurnOvaUsers",
+            "/role",
+            includeContainer: true,
+            onContainerBootstrap: cts.Cancel);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", "SecurePass123", "Rider"),
+            cts.Token));
+
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties =>
+                properties.Id == "TurnOvaUsers" && properties.PartitionKeyPath == "/role"),
+            It.IsAny<int?>(),
+            It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+    }
+
+    [Fact]
     public async Task RegisterRejectsMismatchedContainerHandleIdentityBeforeWriting()
     {
         var (service, _, container) = CreateService(
@@ -315,7 +339,8 @@ public sealed class CosmosIdentityContainerBootstrapTests
         Action? onContainerRead = null,
         Action? onContainerIdRead = null,
         string? returnedDatabaseId = "TurnOvaDb",
-        Action? onDatabaseIdRead = null)
+        Action? onDatabaseIdRead = null,
+        Action? onContainerBootstrap = null)
     {
         var container = new Mock<Container>(MockBehavior.Strict);
         container.SetupGet(value => value.Id).Returns(() =>
@@ -365,7 +390,11 @@ public sealed class CosmosIdentityContainerBootstrapTests
                 It.IsAny<int?>(),
                 It.IsAny<RequestOptions?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(response.Object);
+            .Returns(() =>
+            {
+                onContainerBootstrap?.Invoke();
+                return Task.FromResult(response.Object);
+            });
 
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
         client.Setup(value => value.GetDatabase("TurnOvaDb")).Returns(database.Object);
