@@ -96,10 +96,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var nonEmptySubjectClaims = subjectClaims
                     .Where(claim => !string.IsNullOrWhiteSpace(claim.Value))
                     .ToArray();
-                var roleClaims = identity.FindAll("role").ToArray();
+                // Only the canonical role claim is authoritative. Reject common aliases
+                // as well so a token cannot carry competing role representations.
+                var roleClaims = identity.Claims
+                    .Where(claim =>
+                        string.Equals(claim.Type, "role", StringComparison.Ordinal) ||
+                        string.Equals(claim.Type, "roles", StringComparison.Ordinal) ||
+                        string.Equals(claim.Type, ClaimTypes.Role, StringComparison.Ordinal))
+                    .ToArray();
                 if (!identity.IsAuthenticated ||
                     nonEmptySubjectClaims.Length > 1 ||
                     roleClaims.Length != 1 ||
+                    !string.Equals(roleClaims[0].Type, "role", StringComparison.Ordinal) ||
                     roleClaims[0].Value is not ("Rider" or "Driver" or "UnionManager" or "Ops"))
                 {
                     context.Fail("The token must contain at most one non-empty subject and exactly one supported role claim.");
