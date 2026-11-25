@@ -1,3 +1,17 @@
+# Run 164 current handoff — 2026-11-25
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`. Continue API-only work; the main phase file is stale and cannot authorize Android.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`, head `5dbfb67badca92d6a80b0bb9e287ebf675695f65`, base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; compare 1,271 ahead / 0 behind; 256 changed files; 0 mobile paths; mergeable, open and non-draft.
+- **Run 164:** hardened the Cosmos-backed `RideTrackingHub.OnConnectedAsync` path with `CosmosReadResponseGuard.ReadItemAsync`, exact RideId identity validation and `Context.ConnectionAborted` on read/group operations. Four deterministic SignalR/Cosmos tests were added. API/Infrastructure audit covered 35 C# files; no raw Cosmos SDK point-read/page-read/Resource/ETag access remains outside the shared guard.
+- **CI:** exact source/test-head API-only [#45565641809](https://github.com/rajeevp727/turnova-platform/actions/runs/45565641809) passed **1,631/1,631** tests, Release build 0 warnings/errors, native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture). Artifact [14999882815](https://github.com/rajeevp727/turnova-platform/actions/runs/45565641809/artifacts/14999882815), SHA-256 `0fa4962fcf2482d720da17fa7a26465dd4ba0762b4948045252c6ae1969c9528`.
+- **Acceptance:** strict 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01); REALTIME-01 remains In Progress. No row is promoted.
+- **Review gate:** three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads, no requested reviewer. Do not self-approve or merge. PRs #196/#198/#205/#206 remain Draft/parked. Historical PRs #197/#207 merged without independent approval; those exceptions are not precedent.
+- **Phase metadata:** PR branch API in_progress / Android not_started / iOS not_started; main phase file stale (API complete / Android in_progress).
+- **Next exact action:** continue API-only acceptance-row audits and deterministic tests/docs; obtain independent human maintainer review/approval; after a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider.
+- **External gates:** live Cosmos ETag/transaction/partition/multi-instance/restart/failover/RU and Staging/QA; production JWT identity/key custody, Cosmos credentials, trusted proxy/shared rate limiting and API hosting/TLS; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; live SignalR/backplane/maps/routing/call/chat/push; private media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; Android/iOS physical-device/signing/store/TestFlight evidence.
+
+---
+
 ## Run 163 — 2026-11-25 — identity-container bootstrap commit/cancellation boundary
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
