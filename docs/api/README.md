@@ -56,6 +56,8 @@ After authentication, `RideTrackingHub.OnConnectedAsync` grants a ride group onl
 Deterministic regressions `SIGNALR-AUTH-001..003` cover anonymous negotiate denial, hub-only query-token handling and subjectless-token rejection. They do not establish live WebSocket delivery, multi-instance backplane, reconnect or physical-device behavior.
 ### API and realtime response cache policy
 
+Every response under `/api/v1` and `/hubs/rides` is marked non-cacheable with `Cache-Control: no-store` and `Pragma: no-cache`, including successful responses, authorization/validation/not-found/rate-limit failures, framework-generated malformed-body 400 responses, CORS preflight and unhandled 500 responses. The middleware registers an `OnStarting` callback so the exception handler's `Response.Clear()` cannot remove the policy. Endpoint-specific directives such as `private` are preserved. Health checks and Development/Testing OpenAPI remain outside this API/realtime policy. Integration coverage includes `AUTH-API-076..078`, generic exception handling and path-segment boundaries; the latest malformed-body cases are test-only evidence, not a change to the runtime contract.
+
 
 ## Core route catalogue
 
