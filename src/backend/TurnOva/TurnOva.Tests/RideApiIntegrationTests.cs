@@ -4070,6 +4070,7 @@ public sealed partial class RideApiIntegrationTests
         const string driverId = "inconsistent-selfie-driver";
         const string unionId = "inconsistent-selfie-union";
         using var rider = factory.CreateClient("Rider", "inconsistent-selfie-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
         using var ops = factory.CreateClient("Ops", "inconsistent-selfie-ops");
         ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
 
