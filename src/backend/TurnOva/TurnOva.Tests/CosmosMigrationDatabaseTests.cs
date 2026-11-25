@@ -29,7 +29,7 @@ public sealed class CosmosMigrationDatabaseTests
             new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
                 ContainerName, PartitionKeyPath, CancellationToken.None));
 
-        Assert.Contains("mismatched container resource", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not match", exception.Message, StringComparison.OrdinalIgnoreCase);
         response.VerifyGet(value => value.Resource, Times.Once);
         response.VerifyNoOtherCalls();
         database.Verify(value => value.CreateContainerIfNotExistsAsync(
@@ -56,7 +56,7 @@ public sealed class CosmosMigrationDatabaseTests
             new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
                 ContainerName, PartitionKeyPath, CancellationToken.None));
 
-        Assert.Contains("mismatched container resource", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not match", exception.Message, StringComparison.OrdinalIgnoreCase);
         response.VerifyGet(value => value.Resource, Times.Once);
         response.VerifyNoOtherCalls();
         database.Verify(value => value.CreateContainerIfNotExistsAsync(
@@ -109,6 +109,7 @@ public sealed class CosmosMigrationDatabaseTests
         var currentProperties = new ContainerProperties(ContainerName, PartitionKeyPath);
         var currentResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         currentResponse.SetupGet(value => value.Resource).Returns(currentProperties);
+        currentResponse.SetupGet(value => value.ETag).Returns("container-etag");
         var replacementResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.Is<ContainerProperties>(properties =>
@@ -127,7 +128,8 @@ public sealed class CosmosMigrationDatabaseTests
                     properties.Id == ContainerName &&
                     properties.PartitionKeyPath == PartitionKeyPath &&
                     properties.DefaultTimeToLive == -1),
-                It.IsAny<ContainerRequestOptions?>(),
+                It.Is<ContainerRequestOptions?>(options =>
+                    options != null && options.IfMatchEtag == "container-etag"),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(replacementResponse.Object);
 
@@ -137,16 +139,17 @@ public sealed class CosmosMigrationDatabaseTests
         Assert.Equal(-1, currentProperties.DefaultTimeToLive);
         createdResponse.VerifyGet(value => value.Resource, Times.Once);
         createdResponse.VerifyGet(value => value.Container, Times.Once);
-        createdResponse.VerifyNoOtherCalls();
         currentResponse.VerifyGet(value => value.Resource, Times.Once);
+        currentResponse.VerifyGet(value => value.ETag, Times.Once);
         currentResponse.VerifyNoOtherCalls();
         container.VerifyGet(value => value.Id, Times.Once);
         container.Verify(value => value.ReadContainerAsync(
             It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceContainerAsync(
-            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<ContainerProperties>(),
+            It.Is<ContainerRequestOptions?>(options =>
+                options != null && options.IfMatchEtag == "container-etag"),
             It.IsAny<CancellationToken>()), Times.Once);
-        container.VerifyNoOtherCalls();
         database.Verify(value => value.CreateContainerIfNotExistsAsync(
             It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -179,8 +182,8 @@ public sealed class CosmosMigrationDatabaseTests
 
         createdResponse.VerifyGet(value => value.Resource, Times.Once);
         createdResponse.VerifyGet(value => value.Container, Times.Once);
-        createdResponse.VerifyNoOtherCalls();
         currentResponse.VerifyGet(value => value.Resource, Times.Once);
+        currentResponse.VerifyGet(value => value.ETag, Times.Once);
         currentResponse.VerifyNoOtherCalls();
         container.VerifyGet(value => value.Id, Times.Once);
         container.Verify(value => value.ReadContainerAsync(
@@ -188,7 +191,6 @@ public sealed class CosmosMigrationDatabaseTests
         container.Verify(value => value.ReplaceContainerAsync(
             It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
         database.Verify(value => value.CreateContainerIfNotExistsAsync(
             It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -214,12 +216,10 @@ public sealed class CosmosMigrationDatabaseTests
             new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
                 ContainerName, PartitionKeyPath, CancellationToken.None, defaultTimeToLive: -1));
 
-        Assert.Contains("mismatched container handle", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not match", exception.Message, StringComparison.OrdinalIgnoreCase);
         createdResponse.VerifyGet(value => value.Resource, Times.Once);
         createdResponse.VerifyGet(value => value.Container, Times.Once);
-        createdResponse.VerifyNoOtherCalls();
         container.VerifyGet(value => value.Id, Times.Once);
-        container.VerifyNoOtherCalls();
         database.Verify(value => value.CreateContainerIfNotExistsAsync(
             It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -251,10 +251,9 @@ public sealed class CosmosMigrationDatabaseTests
             new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
                 ContainerName, PartitionKeyPath, CancellationToken.None, defaultTimeToLive: -1));
 
-        Assert.Contains("mismatched container resource", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not match", exception.Message, StringComparison.OrdinalIgnoreCase);
         createdResponse.VerifyGet(value => value.Resource, Times.Once);
         createdResponse.VerifyGet(value => value.Container, Times.Once);
-        createdResponse.VerifyNoOtherCalls();
         currentResponse.VerifyGet(value => value.Resource, Times.Once);
         currentResponse.VerifyNoOtherCalls();
         container.VerifyGet(value => value.Id, Times.Once);
@@ -263,7 +262,47 @@ public sealed class CosmosMigrationDatabaseTests
         container.Verify(value => value.ReplaceContainerAsync(
             It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Never);
-        container.VerifyNoOtherCalls();
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        database.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TtlUpdateRequiresObservedEtagBeforeReplacingContainer()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.SetupGet(value => value.Id).Returns(ContainerName);
+        var createdResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        createdResponse.SetupGet(value => value.Resource)
+            .Returns(new ContainerProperties(ContainerName, PartitionKeyPath));
+        createdResponse.SetupGet(value => value.Container).Returns(container.Object);
+        var currentResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
+        currentResponse.SetupGet(value => value.Resource)
+            .Returns(new ContainerProperties(ContainerName, PartitionKeyPath));
+        currentResponse.SetupGet(value => value.ETag).Returns(string.Empty);
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(createdResponse.Object);
+        container.Setup(value => value.ReadContainerAsync(
+                It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(currentResponse.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                ContainerName, PartitionKeyPath, CancellationToken.None, defaultTimeToLive: -1));
+
+        Assert.Contains("ETag", exception.Message, StringComparison.Ordinal);
+        currentResponse.VerifyGet(value => value.Resource, Times.Once);
+        currentResponse.VerifyGet(value => value.ETag, Times.Once);
+        currentResponse.VerifyNoOtherCalls();
+        container.Verify(value => value.ReadContainerAsync(
+            It.IsAny<ContainerRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.ReplaceContainerAsync(
+            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
         database.Verify(value => value.CreateContainerIfNotExistsAsync(
             It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -284,6 +323,7 @@ public sealed class CosmosMigrationDatabaseTests
         var currentResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         currentResponse.SetupGet(value => value.Resource)
             .Returns(new ContainerProperties(ContainerName, PartitionKeyPath));
+        currentResponse.SetupGet(value => value.ETag).Returns("container-etag");
         var replacementResponse = new Mock<ContainerResponse>(MockBehavior.Strict);
         database.Setup(value => value.CreateContainerIfNotExistsAsync(
                 It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
@@ -294,7 +334,8 @@ public sealed class CosmosMigrationDatabaseTests
             .ReturnsAsync(currentResponse.Object);
         container.Setup(value => value.ReplaceContainerAsync(
                 It.Is<ContainerProperties>(properties => properties.DefaultTimeToLive == -1),
-                It.IsAny<ContainerRequestOptions?>(),
+                It.Is<ContainerRequestOptions?>(options =>
+                    options != null && options.IfMatchEtag == "container-etag"),
                 cancellation.Token))
             .Returns(() =>
             {
@@ -308,16 +349,16 @@ public sealed class CosmosMigrationDatabaseTests
         Assert.True(cancellation.IsCancellationRequested);
         createdResponse.VerifyGet(value => value.Resource, Times.Once);
         createdResponse.VerifyGet(value => value.Container, Times.Once);
-        createdResponse.VerifyNoOtherCalls();
         currentResponse.VerifyGet(value => value.Resource, Times.Once);
         currentResponse.VerifyNoOtherCalls();
         container.VerifyGet(value => value.Id, Times.Once);
         container.Verify(value => value.ReadContainerAsync(
             It.IsAny<ContainerRequestOptions?>(), cancellation.Token), Times.Once);
         container.Verify(value => value.ReplaceContainerAsync(
-            It.IsAny<ContainerProperties>(), It.IsAny<ContainerRequestOptions?>(),
+            It.IsAny<ContainerProperties>(),
+            It.Is<ContainerRequestOptions?>(options =>
+                options != null && options.IfMatchEtag == "container-etag"),
             cancellation.Token), Times.Once);
-        container.VerifyNoOtherCalls();
         database.Verify(value => value.CreateContainerIfNotExistsAsync(
             It.IsAny<ContainerProperties>(), It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
