@@ -1164,4 +1164,164 @@ public sealed class CosmosReadResponseGuardTests
         container.VerifyNoOtherCalls();
     }
 
+
+
+    [Fact]
+    public void ReadPageItemsCancellationTakesPrecedenceOverCurrentGetterFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var failure = new InvalidOperationException("page current hydration failed");
+        var enumerator = new Mock<IEnumerator<DriverUnion>>(MockBehavior.Strict);
+        enumerator.Setup(value => value.MoveNext()).Returns(true);
+        enumerator.SetupGet(value => value.Current).Returns(() =>
+        {
+            cancellation.Cancel();
+            throw failure;
+        });
+        enumerator.Setup(value => value.Dispose());
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(enumerator.Object);
+
+        var actual = Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerator.Verify(value => value.MoveNext(), Times.Once);
+        enumerator.VerifyGet(value => value.Current, Times.Once);
+        enumerator.Verify(value => value.Dispose(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+        enumerator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadPageItemsPreservesCurrentGetterFailureWhenNotCancelled()
+    {
+        var failure = new InvalidOperationException("page current hydration failed");
+        var enumerator = new Mock<IEnumerator<DriverUnion>>(MockBehavior.Strict);
+        enumerator.Setup(value => value.MoveNext()).Returns(true);
+        enumerator.SetupGet(value => value.Current).Throws(failure);
+        enumerator.Setup(value => value.Dispose());
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(enumerator.Object);
+
+        var actual = Assert.Throws<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, CancellationToken.None));
+
+        Assert.Same(failure, actual);
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerator.Verify(value => value.MoveNext(), Times.Once);
+        enumerator.VerifyGet(value => value.Current, Times.Once);
+        enumerator.Verify(value => value.Dispose(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+        enumerator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadPageItemsHonorsCancellationAfterCurrentGetterReturns()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var enumerator = new Mock<IEnumerator<DriverUnion>>(MockBehavior.Strict);
+        enumerator.Setup(value => value.MoveNext()).Returns(true);
+        enumerator.SetupGet(value => value.Current).Returns(() =>
+        {
+            cancellation.Cancel();
+            return null!;
+        });
+        enumerator.Setup(value => value.Dispose());
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(enumerator.Object);
+
+        var actual = Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerator.Verify(value => value.MoveNext(), Times.Once);
+        enumerator.VerifyGet(value => value.Current, Times.Once);
+        enumerator.Verify(value => value.Dispose(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+        enumerator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadPageItemsHonorsCancellationAfterEnumeratorDispose()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var enumerator = new Mock<IEnumerator<DriverUnion>>(MockBehavior.Strict);
+        enumerator.Setup(value => value.MoveNext()).Returns(false);
+        enumerator.Setup(value => value.Dispose()).Callback(() => cancellation.Cancel());
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(enumerator.Object);
+
+        var actual = Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerator.Verify(value => value.MoveNext(), Times.Once);
+        enumerator.Verify(value => value.Dispose(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+        enumerator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadPageItemsCancellationTakesPrecedenceOverEnumeratorDisposeFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var failure = new InvalidOperationException("page enumerator disposal failed");
+        var enumerator = new Mock<IEnumerator<DriverUnion>>(MockBehavior.Strict);
+        enumerator.Setup(value => value.MoveNext()).Returns(false);
+        enumerator.Setup(value => value.Dispose()).Callback(() =>
+        {
+            cancellation.Cancel();
+            throw failure;
+        });
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(enumerator.Object);
+
+        var actual = Assert.ThrowsAny<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerator.Verify(value => value.MoveNext(), Times.Once);
+        enumerator.Verify(value => value.Dispose(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+        enumerator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ReadPageItemsPreservesEnumeratorDisposeFailureWhenNotCancelled()
+    {
+        var failure = new InvalidOperationException("page enumerator disposal failed");
+        var enumerator = new Mock<IEnumerator<DriverUnion>>(MockBehavior.Strict);
+        enumerator.Setup(value => value.MoveNext()).Returns(false);
+        enumerator.Setup(value => value.Dispose()).Throws(failure);
+        var page = new Mock<FeedResponse<DriverUnion>>(MockBehavior.Strict);
+        var enumerable = page.As<IEnumerable<DriverUnion>>();
+        enumerable.Setup(value => value.GetEnumerator()).Returns(enumerator.Object);
+
+        var actual = Assert.Throws<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.ReadPageItems(page.Object, CancellationToken.None));
+
+        Assert.Same(failure, actual);
+        enumerable.Verify(value => value.GetEnumerator(), Times.Once);
+        enumerator.Verify(value => value.MoveNext(), Times.Once);
+        enumerator.Verify(value => value.Dispose(), Times.Once);
+        enumerable.VerifyNoOtherCalls();
+        page.VerifyNoOtherCalls();
+        enumerator.VerifyNoOtherCalls();
+    }
+
 }
