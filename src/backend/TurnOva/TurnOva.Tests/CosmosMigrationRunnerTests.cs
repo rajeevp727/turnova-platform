@@ -9,6 +9,67 @@ namespace TurnOva.Tests;
 public sealed class CosmosMigrationRunnerTests
 {
     [Fact]
+    public async Task DatabaseBootstrapProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var client = new Mock<CosmosClient>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new InvalidOperationException("database create failed");
+        client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
+                "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<DatabaseResponse>(providerFailure);
+            });
+        var leaseStore = new Mock<ICosmosMigrationLeaseStore>(MockBehavior.Strict);
+        var runner = new CosmosMigrationRunner(
+            client.Object,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [],
+            CreateCoordinator(leaseStore.Object, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runner.RunAsync(cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.VerifyNoOtherCalls();
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DatabaseBootstrapProviderFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var client = new Mock<CosmosClient>(MockBehavior.Strict);
+        var providerFailure = new InvalidOperationException("database create failed");
+        client.Setup(value => value.CreateDatabaseIfNotExistsAsync(
+                "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() => Task.FromException<DatabaseResponse>(providerFailure));
+        var leaseStore = new Mock<ICosmosMigrationLeaseStore>(MockBehavior.Strict);
+        var runner = new CosmosMigrationRunner(
+            client.Object,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [],
+            CreateCoordinator(leaseStore.Object, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runner.RunAsync(CancellationToken.None));
+
+        Assert.Same(providerFailure, actual);
+        client.Verify(value => value.CreateDatabaseIfNotExistsAsync(
+            "TurnOvaMigrationTest", It.IsAny<int?>(), It.IsAny<RequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.VerifyNoOtherCalls();
+        leaseStore.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task PreCancelledTokenStopsBeforeDatabaseBootstrap()
     {
         var client = new Mock<CosmosClient>(MockBehavior.Strict);
