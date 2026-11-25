@@ -1,7 +1,7 @@
 ## Run 167 — 2026-11-25 — strict JWT role boundary and Cosmos identity contract
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first gate remains in force.
-- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test head [`4c453c9b`](https://github.com/rajeevp727/turnova-platform/commit/4c453c9bb1bcd71d3e30121072b6ed975e649d9b). PR has 261 changed files and 0 `src/mobile/` paths.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test head [`4c453c9b`](https://github.com/rajeevp727/turnova-platform/commit/4c453c9bb1bcd71d3e30121072b6ed975e649d9b). PR remains API-only with 0 `src/mobile/` paths; this increment changes documentation only.
 - **JWT boundary:** exactly one role claim is required. Accepted exact values are `Rider`, `Driver`, `UnionManager` and non-privileged `Ops`. `FleetManager` remains Phase 2 and `Operations` is not a JWT role. `Ops` does not replace the separate `X-Driver-Admin-Key` gate for `/api/v1/ops/*`. Missing, blank and duplicate role claims remain rejected.
 - **Subject boundary:** duplicate subject aliases are rejected even when their values match; no identity handler receives an ambiguous subject.
 - **Cosmos identity contract:** deterministic tests now cover persisted `Role` and `DocumentType` mismatches in login, refresh and logout. Malformed candidates fail closed before point reads/token rotation; malformed logout records fail before ETag hydration/revocation.
